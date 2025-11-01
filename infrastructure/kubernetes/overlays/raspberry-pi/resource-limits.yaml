@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-deployment
+  namespace: production
+spec:
+  replicas: 4
+  template:
+    spec:
+      containers:
+        - name: frontend
+          resources:
+            requests:
+              cpu: "300m"
+              memory: "512Mi"
+            limits:
+              cpu: "800m"
+              memory: "1Gi"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-deployment
+  namespace: production
+spec:
+  replicas: 5
+  template:
+    spec:
+      containers:
+        - name: api
+          resources:
+            requests:
+              cpu: "400m"
+              memory: "800Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1.2Gi"
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: frontend-hpa
+  namespace: production
+spec:
+  minReplicas: 3
+  maxReplicas: 8
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-hpa
+  namespace: production
+spec:
+  minReplicas: 5
+  maxReplicas: 12

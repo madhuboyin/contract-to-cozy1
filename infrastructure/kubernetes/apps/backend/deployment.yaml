@@ -1,0 +1,100 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+  namespace: production
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+  selector:
+    app: api
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-deployment
+  namespace: production
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/madhuboyin/contract-to-cozy/backend:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: NODE_ENV
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: API_PORT
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: DATABASE_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: JWT_SECRET
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: REDIS_HOST
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "800Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1.2Gi"
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-hpa
+  namespace: production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-deployment
+  minReplicas: 5
+  maxReplicas: 12
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60

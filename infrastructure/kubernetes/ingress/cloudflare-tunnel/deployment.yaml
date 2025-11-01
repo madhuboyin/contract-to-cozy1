@@ -1,0 +1,64 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudflared-config
+  namespace: production
+data:
+  config.yml: |
+    tunnel: YOUR_TUNNEL_ID
+    credentials-file: /etc/cloudflared/creds/credentials.json
+    
+    ingress:
+      - hostname: contracttocozy.com
+        service: http://frontend-service.production.svc.cluster.local:3000
+      - hostname: www.contracttocozy.com
+        service: http://frontend-service.production.svc.cluster.local:3000
+      - hostname: api.contracttocozy.com
+        service: http://api-service.production.svc.cluster.local:8080
+      - service: http_status:404
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: production
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cloudflared
+  template:
+    metadata:
+      labels:
+        app: cloudflared
+    spec:
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:latest
+          args:
+            - tunnel
+            - --config
+            - /etc/cloudflared/config.yml
+            - run
+          volumeMounts:
+            - name: config
+              mountPath: /etc/cloudflared
+              readOnly: true
+            - name: creds
+              mountPath: /etc/cloudflared/creds
+              readOnly: true
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+      volumes:
+        - name: config
+          configMap:
+            name: cloudflared-config
+        - name: creds
+          secret:
+            secretName: cloudflared-credentials

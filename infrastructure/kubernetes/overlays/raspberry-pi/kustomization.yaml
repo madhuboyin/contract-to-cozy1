@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: production
+
+resources:
+  - ../../base/namespace.yaml
+  - ../../base/configmap.yaml
+  - ../../data/postgres/statefulset.yaml
+  - ../../data/redis/statefulset.yaml
+  - ../../apps/frontend/deployment.yaml
+  - ../../apps/backend/deployment.yaml
+  - ../../apps/workers/deployment.yaml
+  - ../../ingress/cloudflare-tunnel/deployment.yaml
+
+patchesStrategicMerge:
+  - resource-limits.yaml
+  - node-selector.yaml
+
+images:
+  - name: ghcr.io/madhuboyin/contract-to-cozy/frontend
+    newTag: latest-arm64
+  - name: ghcr.io/madhuboyin/contract-to-cozy/backend
+    newTag: latest-arm64
+  - name: ghcr.io/madhuboyin/contract-to-cozy/workers
+    newTag: latest-arm64
+
+commonLabels:
+  environment: production
+  deployment: raspberry-pi

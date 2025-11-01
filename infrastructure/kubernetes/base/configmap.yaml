@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: production
+data:
+  # Application
+  NODE_ENV: "production"
+  LOG_LEVEL: "info"
+  
+  # API Configuration
+  API_PORT: "8080"
+  API_HOST: "0.0.0.0"
+  
+  # Frontend Configuration
+  NEXT_PUBLIC_API_URL: "https://api.contracttocozy.com"
+  
+  # Database Configuration (non-sensitive)
+  DB_HOST: "postgres.production.svc.cluster.local"
+  DB_PORT: "5432"
+  DB_NAME: "contracttocozy"
+  DB_POOL_MIN: "2"
+  DB_POOL_MAX: "10"
+  
+  # Redis Configuration
+  REDIS_HOST: "redis.production.svc.cluster.local"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  
+  # Application Features
+  ENABLE_SIGNUP: "true"
+  ENABLE_REVIEWS: "true"
+  ENABLE_CHAT: "true"
+  
+  # Rate Limiting
+  RATE_LIMIT_WINDOW_MS: "60000"
+  RATE_LIMIT_MAX_REQUESTS: "100"
+  
+  # Session Configuration
+  SESSION_TIMEOUT_MINUTES: "60"
+  
+  # Email Configuration (non-sensitive)
+  EMAIL_FROM: "noreply@contracttocozy.com"
+  EMAIL_REPLY_TO: "support@contracttocozy.com"
