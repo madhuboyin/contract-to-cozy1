@@ -55,3 +55,33 @@ coverage/
 *.tar
 docker-compose.override.yml
 !docker-compose.override.yml.example
+
+# Node modules
+node_modules/
+
+# Build outputs
+.next/
+dist/
+build/
+*.tsbuildinfo
+
+# Environment files (NEVER commit secrets!)
+.env
+.env.local
+.env.*.local
+apps/*/.env
+apps/*/.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Docker
+.dockerignore
