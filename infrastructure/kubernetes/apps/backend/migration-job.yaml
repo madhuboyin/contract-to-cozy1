@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: prisma-migration
+  namespace: production
+spec:
+  template:
+    spec:
+      containers:
+      - name: migration
+        image: ghcr.io/madhuboyin/contract-to-cozy/backend:latest
+        command: ["npx", "prisma", "migrate", "deploy"]
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: DATABASE_URL
+      restartPolicy: Never
+  backoffLimit: 3
