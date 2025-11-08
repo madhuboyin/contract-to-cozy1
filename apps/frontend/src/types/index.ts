@@ -1,0 +1,242 @@
+// apps/frontend/src/types/index.ts
+
+/**
+ * User Roles
+ */
+export type UserRole = 'HOMEOWNER' | 'PROVIDER' | 'ADMIN';
+
+/**
+ * User Status
+ */
+export type UserStatus = 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING_VERIFICATION';
+
+/**
+ * Booking Status
+ */
+export type BookingStatus = 
+  | 'DRAFT'
+  | 'PENDING' 
+  | 'CONFIRMED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'CANCELLED'
+  | 'DISPUTED';
+
+/**
+ * Service Category
+ */
+export type ServiceCategory = 'INSPECTION' | 'HANDYMAN';
+
+/**
+ * User
+ */
+export interface User {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: UserRole;
+  emailVerified: boolean;
+  status: UserStatus;
+}
+
+/**
+ * Auth Response
+ */
+export interface LoginResponse {
+  accessToken: string;
+  refreshToken: string;
+  user: User;
+}
+
+export interface RegisterResponse {
+  message: string;
+  user: User;
+  emailVerificationToken?: string;
+}
+
+/**
+ * Provider
+ */
+export interface Provider {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string | null;
+  businessName: string;
+  averageRating: number;
+  totalReviews: number;
+  totalCompletedJobs: number;
+  serviceRadius: number;
+  serviceCategories: ServiceCategory[];
+}
+
+/**
+ * Service
+ */
+export interface Service {
+  id: string;
+  name: string;
+  category: ServiceCategory;
+  basePrice: string;
+  priceUnit: string;
+  description: string;
+  estimatedDuration: number | null;
+}
+
+/**
+ * Property
+ */
+export interface Property {
+  id: string;
+  name: string | null;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  isPrimary: boolean;
+}
+
+/**
+ * Booking
+ */
+export interface Booking {
+  id: string;
+  bookingNumber: string;
+  status: BookingStatus;
+  category: ServiceCategory;
+  
+  homeowner: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string | null;
+  };
+  
+  provider: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string | null;
+    businessName: string;
+  };
+  
+  service: {
+    id: string;
+    name: string;
+    category: ServiceCategory;
+    basePrice: string;
+    priceUnit: string;
+  };
+  
+  property: {
+    id: string;
+    name: string | null;
+    address: string;
+    city: string;
+    state: string;
+    zipCode: string;
+  };
+  
+  scheduledDate: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  actualStartTime: string | null;
+  actualEndTime: string | null;
+  
+  estimatedPrice: string;
+  finalPrice: string | null;
+  depositAmount: string | null;
+  
+  description: string;
+  specialRequests: string | null;
+  internalNotes: string | null;
+  
+  cancelledAt: string | null;
+  cancelledBy: string | null;
+  cancellationReason: string | null;
+  
+  completedAt: string | null;
+  
+  timeline: BookingTimelineEntry[];
+  
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BookingTimelineEntry {
+  id: string;
+  status: BookingStatus;
+  note: string | null;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+/**
+ * API Response Types
+ */
+export interface APIError {
+  success: false;
+  message: string;
+  error?: {
+    message: string;
+    code?: string;
+    details?: any;
+  };
+  errors?: any[];
+}
+
+export interface APISuccess<T = any> {
+  success: true;
+  data: T;
+  message?: string;
+}
+
+export type APIResponse<T = any> = APISuccess<T> | APIError;
+
+/**
+ * Pagination
+ */
+export interface PaginationParams {
+  page?: number;
+  limit?: number;
+}
+
+export interface PaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+/**
+ * Form Inputs
+ */
+export interface LoginInput {
+  email: string;
+  password: string;
+}
+
+export interface RegisterInput {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  role: UserRole;
+}
+
+export interface CreateBookingInput {
+  providerId: string;
+  serviceId: string;
+  propertyId: string;
+  scheduledDate?: string;
+  startTime?: string;
+  endTime?: string;
+  description: string;
+  specialRequests?: string;
+  estimatedPrice: number;
+  depositAmount?: number;
+}
