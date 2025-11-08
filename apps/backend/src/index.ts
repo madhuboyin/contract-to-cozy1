@@ -16,6 +16,9 @@ import { errorHandler } from './middleware/error.middleware';
 dotenv.config();
 
 const app = express();
+
+// Trust proxy for Cloudflare Tunnel
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 8080;
 
 // =============================================================================
