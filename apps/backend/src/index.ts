@@ -1,40 +1,56 @@
-import express, { Request, Response } from 'express';
+// apps/backend/src/index.ts
+
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
-import authRoutes from './routes/auth.routes';
-import { errorHandler, notFoundHandler } from './middleware/error.middleware';
-import { apiRateLimiter } from './middleware/rateLimiter.middleware';
+import providerRoutes from './routes/provider.routes';
 
-// Load environment variables
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// Security middleware
+// =============================================================================
+// MIDDLEWARE
+// =============================================================================
+
+// Security headers
 app.use(helmet());
 
 // CORS configuration
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    credentials: true,
+  })
+);
 
-// Body parsing middleware
+// Body parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Global rate limiting
-app.use('/api/', apiRateLimiter);
+// Request logging (development only)
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    console.log(`${req.method} ${req.path}`, {
+      query: req.query,
+      body: req.body,
+    });
+    next();
+  });
+}
 
-// Health check endpoints
+// =============================================================================
+// HEALTH CHECK ENDPOINTS
+// =============================================================================
+
 app.get('/api/health', (req: Request, res: Response) => {
   res.json({
     status: 'healthy',
     service: 'backend',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
   });
 });
 
@@ -42,11 +58,10 @@ app.get('/api/ready', (req: Request, res: Response) => {
   res.json({
     status: 'ready',
     service: 'backend',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
-// Root endpoint
 app.get('/', (req: Request, res: Response) => {
   res.json({
     message: 'Contract to Cozy API',
@@ -55,36 +70,74 @@ app.get('/', (req: Request, res: Response) => {
     endpoints: {
       health: '/api/health',
       ready: '/api/ready',
-      auth: '/api/auth',
-    }
+      providers: {
+        search: 'GET /api/providers/search',
+        details: 'GET /api/providers/:id',
+        services: 'GET /api/providers/:id/services',
+        reviews: 'GET /api/providers/:id/reviews',
+      },
+    },
   });
 });
 
-// API Routes
-app.use('/api/auth', authRoutes);
+// =============================================================================
+// API ROUTES
+// =============================================================================
+
+// Provider routes (public)
+app.use('/api/providers', providerRoutes);
+
+// TODO: Add auth routes
+// app.use('/api/auth', authRoutes);
+
+// TODO: Add booking routes (protected)
+// app.use('/api/bookings', authenticate, bookingRoutes);
+
+// =============================================================================
+// ERROR HANDLING
+// =============================================================================
 
 // 404 handler
-app.use(notFoundHandler);
+app.use((req: Request, res: Response) => {
+  res.status(404).json({
+    success: false,
+    message: 'Route not found',
+    path: req.path,
+  });
+});
 
-// Global error handler (must be last)
-app.use(errorHandler);
+// Global error handler
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error('Error:', err);
 
-// Start server
+  // Don't leak error details in production
+  const message =
+    process.env.NODE_ENV === 'production'
+      ? 'Internal server error'
+      : err.message;
+
+  res.status(500).json({
+    success: false,
+    message,
+    ...(process.env.NODE_ENV !== 'production' && { stack: err.stack }),
+  });
+});
+
+// =============================================================================
+// START SERVER
+// =============================================================================
+
 app.listen(PORT, () => {
-  console.log(`🚀 Backend server running on port ${PORT}`);
+  console.log('🚀 Contract to Cozy Backend Server');
   console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔒 Auth endpoints available at /api/auth`);
-  console.log(`💚 Health check at /api/health`);
+  console.log(`🌐 Server running on http://localhost:${PORT}`);
+  console.log(`\n📚 Available endpoints:`);
+  console.log(`   GET  /api/health - Health check`);
+  console.log(`   GET  /api/providers/search - Search providers`);
+  console.log(`   GET  /api/providers/:id - Get provider details`);
+  console.log(`   GET  /api/providers/:id/services - Get provider services`);
+  console.log(`   GET  /api/providers/:id/reviews - Get provider reviews`);
+  console.log(`\n✨ Ready to accept connections!`);
 });
 
-// Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
-  process.exit(1);
-});
-
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  process.exit(1);
-});
+export default app;
