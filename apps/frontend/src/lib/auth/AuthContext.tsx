@@ -49,6 +49,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await api.login(credentials);
       
       if (response.success) {
+      // Store tokens in localStorage
+        localStorage.setItem('accessToken', response.data.accessToken);
+        localStorage.setItem('refreshToken', response.data.refreshToken);
+        
         setUser(response.data.user);
         return { success: true };
       } else {
@@ -77,6 +81,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
         
         if (loginResponse.success) {
+          // Store tokens in localStorage
+          localStorage.setItem('accessToken', loginResponse.data.accessToken);
+          localStorage.setItem('refreshToken', loginResponse.data.refreshToken);
           setUser(loginResponse.data.user);
           return { success: true };
         }
@@ -100,6 +107,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
+      // Clear tokens from localStorage
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
       setUser(null);
       router.push('/login');
     }
