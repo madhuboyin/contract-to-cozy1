@@ -27,18 +27,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     loadUser();
   }, []);
-
+  
   const loadUser = async () => {
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+  
     try {
       const response = await api.getCurrentUser();
       if (response.success) {
         setUser(response.data);
       } else {
-        setUser(null);
+        // Token is invalid, clear it
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
       }
     } catch (error) {
       console.error('Failed to load user:', error);
-      setUser(null);
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
     } finally {
       setLoading(false);
     }
