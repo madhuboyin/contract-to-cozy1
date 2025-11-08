@@ -154,25 +154,19 @@ async function main() {
   await prisma.service.createMany({
     data: [
       {
-        providerProfileId: inspector1.providerProfile!.id,
         category: 'INSPECTION',
-        inspectionType: 'HOME_INSPECTION',
         name: 'Comprehensive Home Inspection',
         description: 'Complete home inspection covering all major systems and components',
         basePrice: 450,
         priceUnit: 'flat rate',
-        estimatedDuration: 180,
         isActive: true,
       },
       {
-        providerProfileId: inspector1.providerProfile!.id,
         category: 'INSPECTION',
-        inspectionType: 'ROOF_INSPECTION',
         name: 'Roof Inspection',
         description: 'Detailed roof inspection including shingles, flashing, and structural integrity',
         basePrice: 200,
         priceUnit: 'flat rate',
-        estimatedDuration: 60,
         isActive: true,
       },
     ],
@@ -237,39 +231,30 @@ async function main() {
   await prisma.service.createMany({
     data: [
       {
-        providerProfileId: handyman1.providerProfile!.id,
         category: 'HANDYMAN',
-        handymanType: 'MINOR_REPAIRS',  // ✅ FIXED: was 'GENERAL_REPAIR'
         name: 'General Home Repairs',
         description: 'Small repairs around the house including minor fixes and maintenance',
         basePrice: 85,
         priceUnit: 'per hour',
         minimumCharge: 170,
-        estimatedDuration: 120,
         isActive: true,
       },
       {
-        providerProfileId: handyman1.providerProfile!.id,
         category: 'HANDYMAN',
-        handymanType: 'FIXTURE_INSTALLATION',
         name: 'Fixture Installation',
         description: 'Install light fixtures, ceiling fans, shelving, and more',
         basePrice: 95,
         priceUnit: 'per hour',
         minimumCharge: 95,
-        estimatedDuration: 60,
         isActive: true,
       },
       {
-        providerProfileId: handyman1.providerProfile!.id,
         category: 'HANDYMAN',
-        handymanType: 'DRYWALL_REPAIR',
         name: 'Drywall Repair & Painting',
         description: 'Patch holes, repair drywall damage, and paint touch-ups',
         basePrice: 90,
         priceUnit: 'per hour',
         minimumCharge: 180,
-        estimatedDuration: 120,
         isActive: true,
       },
     ],
@@ -329,27 +314,21 @@ async function main() {
   await prisma.service.createMany({
     data: [
       {
-        providerProfileId: handyman2.providerProfile!.id,
         category: 'HANDYMAN',
-        handymanType: 'FURNITURE_ASSEMBLY',  // ✅ FIXED: was 'CARPENTRY'
         name: 'Furniture Assembly',
         description: 'Professional assembly of IKEA and other furniture',
         basePrice: 75,
         priceUnit: 'per hour',
         minimumCharge: 75,
-        estimatedDuration: 90,
         isActive: true,
       },
       {
-        providerProfileId: handyman2.providerProfile!.id,
         category: 'HANDYMAN',
-        handymanType: 'GENERAL_MAINTENANCE',  // ✅ FIXED: was 'PRESSURE_WASHING'
         name: 'Home Maintenance',
         description: 'Regular home maintenance including cleaning gutters, changing filters, etc.',
         basePrice: 80,
         priceUnit: 'per hour',
         minimumCharge: 160,
-        estimatedDuration: 120,
         isActive: true,
       },
     ],
@@ -366,7 +345,6 @@ async function main() {
   // Get the first service from inspector1
   const inspectionService = await prisma.service.findFirst({
     where: {
-      providerProfileId: inspector1.providerProfile!.id,
       category: 'INSPECTION',
     },
   });
@@ -378,13 +356,11 @@ async function main() {
       propertyId: property1.id,
       serviceId: inspectionService!.id,
       category: 'INSPECTION',
-      inspectionType: 'HOME_INSPECTION',
       status: 'CONFIRMED',
       bookingNumber: 'BK-2025-001',
       scheduledDate: new Date('2025-03-20T10:00:00Z'),
-      estimatedDuration: 180,
-      estimatedCost: 450,
-      notes: 'Pre-purchase home inspection for new home',
+      estimatedPrice: 450,
+      description: 'Pre-purchase home inspection for new home',
       timeline: {
         create: [
           {
@@ -404,8 +380,6 @@ async function main() {
   // Get handyman service
   const handymanService = await prisma.service.findFirst({
     where: {
-      providerProfileId: handyman1.providerProfile!.id,
-      handymanType: 'DRYWALL_REPAIR',
     },
   });
 
@@ -416,16 +390,12 @@ async function main() {
       propertyId: property1.id,
       serviceId: handymanService!.id,
       category: 'HANDYMAN',
-      handymanType: 'DRYWALL_REPAIR',
       status: 'COMPLETED',
       bookingNumber: 'BK-2025-002',
       scheduledDate: new Date('2025-02-28T14:00:00Z'),
-      estimatedDuration: 120,
-      estimatedCost: 180,
-      actualCost: 180,
-      actualDuration: 110,
-      notes: 'Repair drywall damage in master bedroom',
-      completedAt: new Date('2025-02-28T15:50:00Z'),
+      estimatedPrice: 180,
+      description: 'Drywall repair in master bedroom',
+      finalPrice: 180,
       timeline: {
         create: [
           {
