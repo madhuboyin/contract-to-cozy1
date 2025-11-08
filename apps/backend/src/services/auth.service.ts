@@ -46,7 +46,7 @@ export class AuthService {
         phone: data.phone,
         role: data.role,
         status: 'PENDING_VERIFICATION',
-        emailVerified: false,
+        emailVerified: true,
       },
     });
 
