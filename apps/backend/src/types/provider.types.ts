@@ -125,7 +125,7 @@ export interface ProviderDetails {
   }[];
 }
 
-export interface ProviderService {
+export interface ProviderServiceDetails {
   id: string;
   category: ServiceCategory;
   inspectionType: InspectionType | null;

@@ -6,7 +6,7 @@ import {
   ProviderSearchResult,
   ProviderWithDistance,
   ProviderDetails,
-  ProviderService,
+  ProviderServiceDetails,
   ProviderReview,
   ProviderReviewsResponse,
   PaginationQuery,
@@ -330,7 +330,7 @@ export class ProviderService {
   static async getProviderServices(
     providerId: string,
     activeOnly: boolean = true
-  ): Promise<ProviderService[]> {
+  ): Promise<ProviderServiceDetails[]> {
     // First verify provider exists
     const provider = await prisma.providerProfile.findUnique({
       where: { id: providerId },
