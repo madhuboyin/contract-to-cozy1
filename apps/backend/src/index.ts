@@ -5,6 +5,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import providerRoutes from './routes/provider.routes';
+import bookingRoutes from './routes/booking.routes';
 
 dotenv.config();
 
@@ -76,6 +77,16 @@ app.get('/', (req: Request, res: Response) => {
         services: 'GET /api/providers/:id/services',
         reviews: 'GET /api/providers/:id/reviews',
       },
+      bookings: {
+        create: 'POST /api/bookings (auth)',
+        list: 'GET /api/bookings (auth)',
+        get: 'GET /api/bookings/:id (auth)',
+        update: 'PUT /api/bookings/:id (auth)',
+        confirm: 'POST /api/bookings/:id/confirm (auth)',
+        start: 'POST /api/bookings/:id/start (auth)',
+        complete: 'POST /api/bookings/:id/complete (auth)',
+        cancel: 'POST /api/bookings/:id/cancel (auth)',
+      },
     },
   });
 });
@@ -86,6 +97,9 @@ app.get('/', (req: Request, res: Response) => {
 
 // Provider routes (public)
 app.use('/api/providers', providerRoutes);
+
+// Booking routes (protected - requires authentication)
+app.use('/api/bookings', bookingRoutes);
 
 // TODO: Add auth routes
 // app.use('/api/auth', authRoutes);
@@ -137,6 +151,15 @@ app.listen(PORT, () => {
   console.log(`   GET  /api/providers/:id - Get provider details`);
   console.log(`   GET  /api/providers/:id/services - Get provider services`);
   console.log(`   GET  /api/providers/:id/reviews - Get provider reviews`);
+  console.log(`\n📅 Booking endpoints (require auth):`);
+  console.log(`   POST /api/bookings - Create booking`);
+  console.log(`   GET  /api/bookings - List bookings`);
+  console.log(`   GET  /api/bookings/:id - Get booking details`);
+  console.log(`   PUT  /api/bookings/:id - Update booking`);
+  console.log(`   POST /api/bookings/:id/confirm - Confirm booking`);
+  console.log(`   POST /api/bookings/:id/start - Start booking`);
+  console.log(`   POST /api/bookings/:id/complete - Complete booking`);
+  console.log(`   POST /api/bookings/:id/cancel - Cancel booking`);
   console.log(`\n✨ Ready to accept connections!`);
 });
 
