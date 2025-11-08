@@ -1,0 +1,772 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prisma-schema
+  namespace: production
+data:
+  schema.prisma: |
+    // Contract to Cozy - Database Schema
+    // Inspection + Handyman Categories
+    // PostgreSQL with Prisma ORM
+
+    generator client {
+      provider = "prisma-client-js"
+    }
+
+    datasource db {
+      provider = "postgresql"
+      url      = env("DATABASE_URL")
+    }
+
+    // ============================================================================
+    // ENUMS
+    // ============================================================================
+
+    enum UserRole {
+      HOMEOWNER
+      PROVIDER
+      ADMIN
+    }
+
+    enum UserStatus {
+      ACTIVE
+      INACTIVE
+      SUSPENDED
+      PENDING_VERIFICATION
+    }
+
+    enum ServiceCategory {
+      INSPECTION
+      HANDYMAN
+    }
+
+    enum InspectionType {
+      HOME_INSPECTION
+      PEST_INSPECTION
+      RADON_TESTING
+      MOLD_INSPECTION
+      WELL_SEPTIC_INSPECTION
+      ROOF_INSPECTION
+      FOUNDATION_INSPECTION
+      ELECTRICAL_INSPECTION
+      PLUMBING_INSPECTION
+    }
+
+    enum HandymanType {
+      MINOR_REPAIRS
+      FIXTURE_INSTALLATION
+      FURNITURE_ASSEMBLY
+      DRYWALL_REPAIR
+      DOOR_WINDOW_REPAIR
+      DECK_FENCE_REPAIR
+      GENERAL_MAINTENANCE
+      PAINTING_TOUCHUP
+      CAULKING_SEALING
+    }
+
+    enum BookingStatus {
+      DRAFT
+      PENDING
+      CONFIRMED
+      IN_PROGRESS
+      COMPLETED
+      CANCELLED
+      DISPUTED
+    }
+
+    enum PaymentStatus {
+      PENDING
+      AUTHORIZED
+      CAPTURED
+      REFUNDED
+      FAILED
+      CANCELLED
+    }
+
+    enum DocumentType {
+      INSPECTION_REPORT
+      ESTIMATE
+      INVOICE
+      CONTRACT
+      PERMIT
+      PHOTO
+      VIDEO
+      INSURANCE_CERTIFICATE
+      LICENSE
+      OTHER
+    }
+
+    enum MessageType {
+      TEXT
+      SYSTEM
+      BOOKING_UPDATE
+      PAYMENT_UPDATE
+    }
+
+    enum ReviewStatus {
+      PENDING
+      APPROVED
+      REJECTED
+      FLAGGED
+    }
+
+    enum ProviderStatus {
+      PENDING_APPROVAL
+      ACTIVE
+      INACTIVE
+      SUSPENDED
+    }
+
+    // ============================================================================
+    // USER MANAGEMENT
+    // ============================================================================
+
+    model User {
+      id        String     @id @default(uuid())
+      email     String     @unique
+      phone     String?
+      firstName String
+      lastName  String
+      role      UserRole   @default(HOMEOWNER)
+      status    UserStatus @default(ACTIVE)
+      
+      // Authentication
+      passwordHash String
+      emailVerified Boolean @default(false)
+      phoneVerified Boolean @default(false)
+      
+      // Profile
+      avatar       String?
+      bio          String?
+      address      Address?
+      
+      // Timestamps
+      createdAt DateTime @default(now())
+      updatedAt DateTime @updatedAt
+      lastLoginAt DateTime?
+      
+      // Relations
+      homeownerProfile HomeownerProfile?
+      providerProfile  ProviderProfile?
+      bookings         Booking[]        @relation("BookingHomeowner")
+      providerBookings Booking[]        @relation("BookingProvider")
+      reviews          Review[]         @relation("ReviewAuthor")
+      receivedReviews  Review[]         @relation("ReviewProvider")
+      messages         Message[]
+      notifications    Notification[]
+      favorites        Favorite[]
+      
+      @@index([email])
+      @@index([role])
+      @@index([status])
+      @@map("users")
+    }
+
+    model Address {
+      id      String  @id @default(uuid())
+      userId  String  @unique
+      
+      // Address components
+      street1     String
+      street2     String?
+      city        String
+      state       String
+      zipCode     String
+      country     String @default("USA")
+      
+      // Geocoding
+      latitude    Float?
+      longitude   Float?
+      
+      // Relations
+      user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+      
+      @@index([zipCode])
+      @@index([city, state])
+      @@map("addresses")
+    }
+
+    // ============================================================================
+    // HOMEOWNER PROFILE
+    // ============================================================================
+
+    model HomeownerProfile {
+      id     String @id @default(uuid())
+      userId String @unique
+      
+      // Property Information
+      propertyType        String?
+      propertySize        Int?
+      yearBuilt           Int?
+      bedrooms            Int?
+      bathrooms           Float?
+      
+      // Purchase Information
+      closingDate         DateTime?
+      purchasePrice       Decimal?  @db.Decimal(12, 2)
+      
+      // Preferences
+      preferredContactMethod String?
+      notificationPreferences Json?
+      
+      // Budget tracking
+      totalBudget         Decimal?  @db.Decimal(12, 2)
+      spentAmount         Decimal   @default(0) @db.Decimal(12, 2)
+      
+      // Relations
+      user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+      properties  Property[]
+      
+      createdAt DateTime @default(now())
+      updatedAt DateTime @updatedAt
+      
+      @@map("homeowner_profiles")
+    }
+
+    model Property {
+      id                 String   @id @default(uuid())
+      homeownerProfileId String
+      
+      // Property details
+      name        String?
+      address     String
+      city        String
+      state       String
+      zipCode     String
+      
+      isPrimary   Boolean  @default(true)
+      
+      // Relations
+      homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+      bookings         Booking[]
+      
+      createdAt DateTime @default(now())
+      updatedAt DateTime @updatedAt
+      
+      @@index([homeownerProfileId])
+      @@map("properties")
+    }
+
+    // ============================================================================
+    // PROVIDER PROFILE
+    // ============================================================================
+
+    model ProviderProfile {
+      id     String @id @default(uuid())
+      userId String @unique
+      
+      // Business Information
+      businessName        String
+      businessType        String?
+      taxId               String?
+      
+      // Service Information
+      serviceCategories   ServiceCategory[]
+      serviceRadius       Int      @default(25)
+      
+      // Verification
+      status              ProviderStatus @default(PENDING_APPROVAL)
+      backgroundCheckDate DateTime?
+      insuranceVerified   Boolean        @default(false)
+      licenseVerified     Boolean        @default(false)
+      
+      // Business Details
+      yearsInBusiness     Int?
+      teamSize            Int?
+      description         String?
+      website             String?
+      
+      // Ratings
+      averageRating       Float    @default(0) @db.Real
+      totalReviews        Int      @default(0)
+      totalCompletedJobs  Int      @default(0)
+      
+      // Availability
+      availabilitySchedule Json?
+      
+      // Stripe Connect
+      stripeAccountId     String?  @unique
+      stripeOnboarded     Boolean  @default(false)
+      
+      // Relations
+      user               User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+      services           Service[]
+      certifications     Certification[]
+      portfolioImages    ProviderPortfolio[]
+      bookings           Booking[]
+      availability       ProviderAvailability[]
+      
+      createdAt DateTime @default(now())
+      updatedAt DateTime @updatedAt
+      
+      @@index([status])
+      @@index([userId])
+      @@map("provider_profiles")
+    }
+
+    model Certification {
+      id                String   @id @default(uuid())
+      providerProfileId String
+      
+      name              String
+      issuingAuthority  String
+      certificateNumber String?
+      issueDate         DateTime
+      expiryDate        DateTime?
+      documentUrl       String?
+      verified          Boolean  @default(false)
+      
+      // Relations
+      providerProfile ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+      
+      createdAt DateTime @default(now())
+      updatedAt DateTime @updatedAt
+      
+      @@index([providerProfileId])
+      @@map("certifications")
+    }
+
+    model ProviderPortfolio {
+      id                String  @id @default(uuid())
+      providerProfileId String
+      
+      title             String
+      description       String?
+      imageUrl          String
+      category          ServiceCategory
+      
+      // Relations
+      providerProfile ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+      
+      createdAt DateTime @default(now())
+      
+      @@index([providerProfileId])
+      @@map("provider_portfolio")
+    }
+
+    model ProviderAvailability {
+      id                String   @id @default(uuid())
+      providerProfileId String
+      
+      // Date range
+      startDate         DateTime
+      endDate           DateTime
+      isAvailable       Boolean  @default(true)
+      reason            String?
+      
+      // Relations
+      providerProfile ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+      
+      createdAt DateTime @default(now())
+      updatedAt DateTime @updatedAt
+      
+      @@index([providerProfileId])
+      @@index([startDate, endDate])
+      @@map("provider_availability")
+    }
+
+    // ============================================================================
+    // SERVICES
+    // ============================================================================
+
+    model Service {
+      id                String          @id @default(uuid())
+      providerProfileId String
+      
+      // Service Details
+      category          ServiceCategory
+      inspectionType    InspectionType?
+      handymanType      HandymanType?
+      
+      name              String
+      description       String
+      
+      // Pricing
+      basePrice         Decimal         @db.Decimal(10, 2)
+      priceUnit         String
+      minimumCharge     Decimal?        @db.Decimal(10, 2)
+      
+      // Availability
+      isActive          Boolean         @default(true)
+      estimatedDuration Int?
+      
+      // Relations
+      providerProfile ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+      bookings        Booking[]
+      
+      createdAt DateTime @default(now())
+      updatedAt DateTime @updatedAt
+      
+      @@index([providerProfileId])
+      @@index([category])
+      @@index([isActive])
+      @@map("services")
+    }
+
+    // ============================================================================
+    // BOOKINGS
+    // ============================================================================
+
+    model Booking {
+      id          String        @id @default(uuid())
+      homeownerId String
+      providerId  String
+      propertyId  String
+      serviceId   String
+      
+      // Service Type
+      category          ServiceCategory
+      inspectionType    InspectionType?
+      handymanType      HandymanType?
+      
+      // Status
+      status            BookingStatus   @default(PENDING)
+      bookingNumber     String          @unique
+      
+      // Scheduling
+      scheduledDate     DateTime
+      estimatedDuration Int
+      actualDuration    Int?
+      
+      // Pricing
+      estimatedCost     Decimal         @db.Decimal(10, 2)
+      actualCost        Decimal?        @db.Decimal(10, 2)
+      
+      // Details
+      notes             String?
+      internalNotes     String?
+      
+      // Completion
+      completedAt       DateTime?
+      cancelledAt       DateTime?
+      cancellationReason String?
+      
+      // Relations
+      homeowner User             @relation("BookingHomeowner", fields: [homeownerId], references: [id])
+      provider  ProviderProfile  @relation(fields: [providerId], references: [id])
+      property  Property         @relation(fields: [propertyId], references: [id])
+      service   Service          @relation(fields: [serviceId], references: [id])
+      payments  Payment[]
+      documents Document[]
+      messages  Message[]
+      review    Review?
+      timeline  BookingTimeline[]
+      
+      createdAt DateTime @default(now())
+      updatedAt DateTime @updatedAt
+      
+      @@index([homeownerId])
+      @@index([providerId])
+      @@index([status])
+      @@index([scheduledDate])
+      @@index([category])
+      @@map("bookings")
+    }
+
+    model BookingTimeline {
+      id        String   @id @default(uuid())
+      bookingId String
+      
+      status    BookingStatus
+      note      String?
+      createdBy String?
+      
+      // Relations
+      booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+      
+      createdAt DateTime @default(now())
+      
+      @@index([bookingId])
+      @@map("booking_timeline")
+    }
+
+    // ============================================================================
+    // PAYMENT MANAGEMENT
+    // ============================================================================
+
+    model Payment {
+      id          String        @id @default(uuid())
+      bookingId   String
+      
+      // Payment Details
+      amount      Decimal       @db.Decimal(10, 2)
+      currency    String        @default("USD")
+      status      PaymentStatus @default(PENDING)
+      
+      // Payment Type
+      isDeposit   Boolean       @default(false)
+      
+      // Stripe
+      stripePaymentIntentId String? @unique
+      stripeChargeId        String? @unique
+      
+      // Metadata
+      description String?
+      failureReason String?
+      
+      // Refund
+      refundedAmount Decimal? @db.Decimal(10, 2)
+      refundedAt     DateTime?
+      
+      // Relations
+      booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+      
+      createdAt DateTime @default(now())
+      updatedAt DateTime @updatedAt
+      
+      @@index([bookingId])
+      @@index([status])
+      @@map("payments")
+    }
+
+    // ============================================================================
+    // DOCUMENT MANAGEMENT
+    // ============================================================================
+
+    model Document {
+      id          String       @id @default(uuid())
+      bookingId   String?
+      uploadedBy  String
+      
+      // Document Details
+      type        DocumentType
+      name        String
+      description String?
+      fileUrl     String
+      fileSize    Int
+      mimeType    String
+      
+      // Metadata
+      metadata    Json?
+      
+      // Relations
+      booking Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+      
+      createdAt DateTime @default(now())
+      updatedAt DateTime @updatedAt
+      
+      @@index([bookingId])
+      @@index([type])
+      @@map("documents")
+    }
+
+    // ============================================================================
+    // MESSAGING SYSTEM
+    // ============================================================================
+
+    model Message {
+      id          String      @id @default(uuid())
+      bookingId   String?
+      senderId    String
+      recipientId String
+      
+      // Message Content
+      type        MessageType @default(TEXT)
+      content     String
+      attachments Json?
+      
+      // Status
+      isRead      Boolean     @default(false)
+      readAt      DateTime?
+      
+      // Relations
+      booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+      sender    User     @relation(fields: [senderId], references: [id])
+      
+      createdAt DateTime @default(now())
+      
+      @@index([bookingId])
+      @@index([senderId])
+      @@index([recipientId])
+      @@index([createdAt])
+      @@map("messages")
+    }
+
+    // ============================================================================
+    // REVIEWS & RATINGS
+    // ============================================================================
+
+    model Review {
+      id          String       @id @default(uuid())
+      bookingId   String       @unique
+      authorId    String
+      providerId  String
+      
+      // Rating (1-5)
+      rating      Int
+      
+      // Review Content
+      title       String?
+      content     String
+      
+      // Review Categories (1-5 each)
+      qualityRating      Int?
+      communicationRating Int?
+      valueRating        Int?
+      professionalismRating Int?
+      
+      // Moderation
+      status      ReviewStatus @default(PENDING)
+      moderatedAt DateTime?
+      moderatedBy String?
+      
+      // Provider Response
+      response    String?
+      respondedAt DateTime?
+      
+      // Relations
+      booking  Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+      author   User    @relation("ReviewAuthor", fields: [authorId], references: [id])
+      provider User    @relation("ReviewProvider", fields: [providerId], references: [id])
+      
+      createdAt DateTime @default(now())
+      updatedAt DateTime @updatedAt
+      
+      @@index([providerId])
+      @@index([rating])
+      @@index([status])
+      @@map("reviews")
+    }
+
+    // ============================================================================
+    // NOTIFICATIONS
+    // ============================================================================
+
+    model Notification {
+      id       String  @id @default(uuid())
+      userId   String
+      
+      // Notification Details
+      type     String
+      title    String
+      message  String
+      
+      // Action
+      actionUrl String?
+      
+      // Status
+      isRead   Boolean @default(false)
+      readAt   DateTime?
+      
+      // Metadata
+      metadata Json?
+      
+      // Relations
+      user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+      
+      createdAt DateTime @default(now())
+      
+      @@index([userId])
+      @@index([isRead])
+      @@index([createdAt])
+      @@map("notifications")
+    }
+
+    // ============================================================================
+    // FAVORITES
+    // ============================================================================
+
+    model Favorite {
+      id                String   @id @default(uuid())
+      userId            String
+      providerProfileId String
+      
+      // Relations
+      user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+      
+      createdAt DateTime @default(now())
+      
+      @@unique([userId, providerProfileId])
+      @@index([userId])
+      @@map("favorites")
+    }
+
+    // ============================================================================
+    // SYSTEM TABLES
+    // ============================================================================
+
+    model AuditLog {
+      id         String   @id @default(uuid())
+      
+      // Who & What
+      userId     String?
+      action     String
+      entityType String
+      entityId   String
+      
+      // Changes
+      oldValues  Json?
+      newValues  Json?
+      
+      // Context
+      ipAddress  String?
+      userAgent  String?
+      
+      createdAt DateTime @default(now())
+      
+      @@index([userId])
+      @@index([entityType, entityId])
+      @@index([createdAt])
+      @@map("audit_logs")
+    }
+
+    model SystemSetting {
+      id    String @id @default(uuid())
+      key   String @unique
+      value Json
+      
+      description String?
+      
+      updatedAt DateTime @updatedAt
+      
+      @@map("system_settings")
+    }
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: prisma-migrate
+  namespace: production
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: migrate
+        image: node:20-alpine
+        command:
+          - sh
+          - -c
+          - |
+            set -e
+            echo "📦 Installing Prisma..."
+            npm install -g prisma@5.22.0
+            
+            echo "📋 Setting up schema..."
+            mkdir -p /app/prisma
+            cp /config/schema.prisma /app/prisma/schema.prisma
+            
+            cd /app
+            
+            echo "🔍 Checking database connection..."
+            npx prisma db execute --stdin <<EOF
+            SELECT version();
+            EOF
+            
+            echo "🚀 Running migration..."
+            npx prisma migrate deploy || npx prisma db push --accept-data-loss
+            
+            echo "✅ Migration complete!"
+        env:
+        - name: DATABASE_URL
+          value: "postgresql://postgres:YOUR_PASSWORD_HERE@postgres.production.svc.cluster.local:5432/contracttocozy?schema=public"
+        volumeMounts:
+        - name: schema
+          mountPath: /config
+      volumes:
+      - name: schema
+        configMap:
+          name: prisma-schema
