@@ -1,11 +1,21 @@
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+
 export default function Home() {
+  const router = useRouter();
+  
+  useEffect(() => {
+    router.push('/login');
+  }, [router]);
+  
   return (
-    <main style={{ padding: '2rem', fontFamily: 'system-ui' }}>
-      <h1>🏠 Contract to Cozy</h1>
-      <p>Welcome to Contract to Cozy!</p>
-      <p>Status: <strong style={{ color: 'green' }}>Running</strong></p>
-      <p>This is a minimal placeholder application.</p>
-      <p>Replace this with your actual frontend code.</p>
-    </main>
-  )
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="mt-4 text-gray-600">Redirecting...</p>
+      </div>
+    </div>
+  );
 }
