@@ -1,4 +1,4 @@
-// Database Seed Script
+// Database Seed Script - FIXED
 // Sample data for Inspection + Handyman categories
 
 import { PrismaClient } from '@prisma/client';
@@ -73,31 +73,46 @@ async function main() {
           preferredContactMethod: 'email',
           totalBudget: 15000,
           spentAmount: 0,
-          properties: {
-            create: {
-              name: 'Main Home',
-              address: '789 Elm Street',
-              city: 'Austin',
-              state: 'TX',
-              zipCode: '78701',
-              isPrimary: true,
-            },
-          },
         },
       },
     },
+    include: {
+      homeownerProfile: true,
+    },
   });
 
-  const homeowner2 = await prisma.user.create({
+  // Create property for homeowner1
+  const property1 = await prisma.property.create({
     data: {
-      email: 'david.chen@example.com',
-      phone: '+1-555-0102',
-      firstName: 'David',
-      lastName: 'Chen',
-      role: 'HOMEOWNER',
+      homeownerProfileId: homeowner1.homeownerProfile!.id,
+      name: 'Main Home',
+      address: '789 Elm Street',
+      city: 'Austin',
+      state: 'TX',
+      zipCode: '78701',
+      isPrimary: true,
+    },
+  });
+
+  console.log('✅ Created 1 homeowner with property');
+
+  // =========================================================================
+  // PROVIDERS - INSPECTORS
+  // =========================================================================
+
+  console.log('🔍 Creating inspection providers...');
+
+  const inspector1 = await prisma.user.create({
+    data: {
+      email: 'mike.anderson@homeinspect.com',
+      phone: '+1-555-0201',
+      firstName: 'Mike',
+      lastName: 'Anderson',
+      role: 'PROVIDER',
       status: 'ACTIVE',
       passwordHash: hashedPassword,
       emailVerified: true,
+      phoneVerified: true,
       address: {
         create: {
           street1: '456 Oak Avenue',
@@ -105,339 +120,167 @@ async function main() {
           state: 'TX',
           zipCode: '78702',
           country: 'USA',
-          latitude: 30.2747,
-          longitude: -97.7294,
-        },
-      },
-      homeownerProfile: {
-        create: {
-          propertyType: 'Condo',
-          propertySize: 1800,
-          yearBuilt: 2020,
-          bedrooms: 3,
-          bathrooms: 2,
-          closingDate: new Date('2025-04-01'),
-          purchasePrice: 385000,
-          preferredContactMethod: 'phone',
-          totalBudget: 8000,
-          spentAmount: 0,
-          properties: {
-            create: {
-              name: 'Downtown Condo',
-              address: '456 Oak Avenue',
-              city: 'Austin',
-              state: 'TX',
-              zipCode: '78702',
-              isPrimary: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  console.log('✅ Created 2 homeowners');
-
-  // =========================================================================
-  // INSPECTION PROVIDERS
-  // =========================================================================
-
-  console.log('🔍 Creating inspection providers...');
-
-  const inspector1 = await prisma.user.create({
-    data: {
-      email: 'mike.thompson@homeinspect.com',
-      phone: '+1-555-0201',
-      firstName: 'Mike',
-      lastName: 'Thompson',
-      role: 'PROVIDER',
-      status: 'ACTIVE',
-      passwordHash: hashedPassword,
-      emailVerified: true,
-      phoneVerified: true,
-      bio: 'Licensed home inspector with 15 years of experience. InterNACHI certified.',
-      address: {
-        create: {
-          street1: '123 Business Park',
-          city: 'Austin',
-          state: 'TX',
-          zipCode: '78703',
-          country: 'USA',
-          latitude: 30.2845,
-          longitude: -97.7560,
+          latitude: 30.2711,
+          longitude: -97.7437,
         },
       },
       providerProfile: {
         create: {
-          businessName: 'Thompson Home Inspections',
+          businessName: 'Austin Home Inspections LLC',
           businessType: 'LLC',
           serviceCategories: ['INSPECTION'],
           serviceRadius: 50,
           status: 'ACTIVE',
-          backgroundCheckDate: new Date('2024-12-01'),
+          backgroundCheckDate: new Date('2024-01-15'),
           insuranceVerified: true,
           licenseVerified: true,
-          yearsInBusiness: 15,
+          yearsInBusiness: 12,
           teamSize: 3,
-          description: 'Full-service home inspection company serving Central Texas. We provide detailed reports with photos within 24 hours.',
-          website: 'https://thompsoninspections.com',
+          description: 'Certified home inspector with over 12 years of experience. Thorough inspections with same-day reports.',
+          website: 'https://austinhomeinspections.com',
           averageRating: 4.8,
-          totalReviews: 127,
-          totalCompletedJobs: 450,
+          totalReviews: 156,
+          totalCompletedJobs: 1248,
           stripeOnboarded: true,
-          services: {
-            create: [
-              {
-                category: 'INSPECTION',
-                inspectionType: 'HOME_INSPECTION',
-                name: 'Complete Home Inspection',
-                description: 'Comprehensive inspection covering structure, roof, HVAC, plumbing, electrical, and more. Includes thermal imaging.',
-                basePrice: 450,
-                priceUnit: 'flat rate',
-                estimatedDuration: 180,
-                isActive: true,
-              },
-              {
-                category: 'INSPECTION',
-                inspectionType: 'PEST_INSPECTION',
-                name: 'Termite & Pest Inspection',
-                description: 'Thorough inspection for termites, carpenter ants, and other wood-destroying insects.',
-                basePrice: 150,
-                priceUnit: 'flat rate',
-                estimatedDuration: 60,
-                isActive: true,
-              },
-              {
-                category: 'INSPECTION',
-                inspectionType: 'RADON_TESTING',
-                name: 'Radon Testing',
-                description: '48-hour radon test with EPA-approved equipment. Results within 72 hours.',
-                basePrice: 175,
-                priceUnit: 'flat rate',
-                estimatedDuration: 30,
-                isActive: true,
-              },
-            ],
-          },
-          certifications: {
-            create: [
-              {
-                name: 'InterNACHI Certified Professional Inspector',
-                issuingAuthority: 'International Association of Certified Home Inspectors',
-                certificateNumber: 'NACHI-12345',
-                issueDate: new Date('2015-03-15'),
-                expiryDate: new Date('2026-03-15'),
-                verified: true,
-              },
-              {
-                name: 'Texas Real Estate Commission License',
-                issuingAuthority: 'TREC',
-                certificateNumber: 'TX-INS-98765',
-                issueDate: new Date('2010-06-01'),
-                verified: true,
-              },
-            ],
-          },
         },
       },
     },
-  });
-
-  const inspector2 = await prisma.user.create({
-    data: {
-      email: 'rachel.martinez@precisioninspect.com',
-      phone: '+1-555-0202',
-      firstName: 'Rachel',
-      lastName: 'Martinez',
-      role: 'PROVIDER',
-      status: 'ACTIVE',
-      passwordHash: hashedPassword,
-      emailVerified: true,
-      phoneVerified: true,
-      bio: 'Structural engineer turned home inspector. Specializing in foundation and structural issues.',
-      address: {
-        create: {
-          street1: '555 Tech Boulevard',
-          city: 'Austin',
-          state: 'TX',
-          zipCode: '78704',
-          country: 'USA',
-          latitude: 30.2515,
-          longitude: -97.7537,
-        },
-      },
-      providerProfile: {
-        create: {
-          businessName: 'Precision Home Inspections',
-          businessType: 'LLC',
-          serviceCategories: ['INSPECTION'],
-          serviceRadius: 40,
-          status: 'ACTIVE',
-          backgroundCheckDate: new Date('2024-11-15'),
-          insuranceVerified: true,
-          licenseVerified: true,
-          yearsInBusiness: 8,
-          teamSize: 2,
-          description: 'Engineer-led inspection services with a focus on structural integrity. Detailed reports with 3D modeling for major issues.',
-          website: 'https://precisioninspect.com',
-          averageRating: 4.9,
-          totalReviews: 89,
-          totalCompletedJobs: 320,
-          stripeOnboarded: true,
-          services: {
-            create: [
-              {
-                category: 'INSPECTION',
-                inspectionType: 'HOME_INSPECTION',
-                name: 'Engineering-Grade Home Inspection',
-                description: 'In-depth structural analysis with engineering perspective. Perfect for older homes or homes with visible issues.',
-                basePrice: 550,
-                priceUnit: 'flat rate',
-                estimatedDuration: 240,
-                isActive: true,
-              },
-              {
-                category: 'INSPECTION',
-                inspectionType: 'FOUNDATION_INSPECTION',
-                name: 'Foundation Inspection',
-                description: 'Comprehensive foundation assessment with elevation measurements and crack mapping.',
-                basePrice: 350,
-                priceUnit: 'flat rate',
-                estimatedDuration: 120,
-                isActive: true,
-              },
-              {
-                category: 'INSPECTION',
-                inspectionType: 'MOLD_INSPECTION',
-                name: 'Mold Inspection & Testing',
-                description: 'Visual inspection plus air quality testing. Lab analysis included.',
-                basePrice: 275,
-                priceUnit: 'flat rate',
-                estimatedDuration: 90,
-                isActive: true,
-              },
-            ],
-          },
-          certifications: {
-            create: [
-              {
-                name: 'Professional Engineer License',
-                issuingAuthority: 'Texas Board of Professional Engineers',
-                certificateNumber: 'PE-54321',
-                issueDate: new Date('2012-01-15'),
-                verified: true,
-              },
-            ],
-          },
-        },
-      },
+    include: {
+      providerProfile: true,
     },
   });
 
-  console.log('✅ Created 2 inspection providers');
+  // Add services for inspector1
+  await prisma.service.createMany({
+    data: [
+      {
+        providerProfileId: inspector1.providerProfile!.id,
+        category: 'INSPECTION',
+        inspectionType: 'HOME_INSPECTION',
+        name: 'Comprehensive Home Inspection',
+        description: 'Complete home inspection covering all major systems and components',
+        basePrice: 450,
+        priceUnit: 'flat rate',
+        estimatedDuration: 180,
+        isActive: true,
+      },
+      {
+        providerProfileId: inspector1.providerProfile!.id,
+        category: 'INSPECTION',
+        inspectionType: 'ROOF_INSPECTION',
+        name: 'Roof Inspection',
+        description: 'Detailed roof inspection including shingles, flashing, and structural integrity',
+        basePrice: 200,
+        priceUnit: 'flat rate',
+        estimatedDuration: 60,
+        isActive: true,
+      },
+    ],
+  });
+
+  console.log('✅ Created 1 inspector with 2 services');
 
   // =========================================================================
-  // HANDYMAN PROVIDERS
+  // PROVIDERS - HANDYMAN
   // =========================================================================
 
   console.log('🔧 Creating handyman providers...');
 
   const handyman1 = await prisma.user.create({
     data: {
-      email: 'james.wilson@fixitall.com',
+      email: 'tom.williams@fixitpro.com',
       phone: '+1-555-0301',
-      firstName: 'James',
-      lastName: 'Wilson',
+      firstName: 'Tom',
+      lastName: 'Williams',
       role: 'PROVIDER',
       status: 'ACTIVE',
       passwordHash: hashedPassword,
       emailVerified: true,
       phoneVerified: true,
-      bio: 'Jack of all trades with 20 years in residential maintenance and repair.',
       address: {
         create: {
-          street1: '321 Repair Lane',
+          street1: '123 Maple Drive',
           city: 'Austin',
           state: 'TX',
-          zipCode: '78705',
+          zipCode: '78703',
           country: 'USA',
-          latitude: 30.2895,
-          longitude: -97.7448,
+          latitude: 30.2849,
+          longitude: -97.7551,
         },
       },
       providerProfile: {
         create: {
-          businessName: 'Fix It All Handyman Services',
+          businessName: 'Fix It Pro Handyman Services',
           businessType: 'Sole Proprietor',
           serviceCategories: ['HANDYMAN'],
           serviceRadius: 30,
           status: 'ACTIVE',
-          backgroundCheckDate: new Date('2024-10-01'),
+          backgroundCheckDate: new Date('2024-02-01'),
           insuranceVerified: true,
-          licenseVerified: true,
-          yearsInBusiness: 20,
+          licenseVerified: false,
+          yearsInBusiness: 8,
           teamSize: 1,
-          description: 'One-call solution for all your home repair needs. No job too small. Same-day service available.',
-          averageRating: 4.7,
-          totalReviews: 203,
-          totalCompletedJobs: 1250,
+          description: 'Experienced handyman for all your home repair needs. Same-day service available.',
+          averageRating: 4.9,
+          totalReviews: 89,
+          totalCompletedJobs: 542,
           stripeOnboarded: true,
-          services: {
-            create: [
-              {
-                category: 'HANDYMAN',
-                handymanType: 'MINOR_REPAIRS',
-                name: 'Minor Home Repairs',
-                description: 'Fix loose handles, squeaky doors, leaky faucets, and other small repairs.',
-                basePrice: 85,
-                priceUnit: 'per hour',
-                minimumCharge: 85,
-                estimatedDuration: 60,
-                isActive: true,
-              },
-              {
-                category: 'HANDYMAN',
-                handymanType: 'FIXTURE_INSTALLATION',
-                name: 'Fixture Installation',
-                description: 'Install light fixtures, ceiling fans, towel bars, shelving, and more.',
-                basePrice: 95,
-                priceUnit: 'per hour',
-                minimumCharge: 95,
-                estimatedDuration: 90,
-                isActive: true,
-              },
-              {
-                category: 'HANDYMAN',
-                handymanType: 'FURNITURE_ASSEMBLY',
-                name: 'Furniture Assembly',
-                description: 'Expert assembly of IKEA and other flat-pack furniture. Tools provided.',
-                basePrice: 75,
-                priceUnit: 'per hour',
-                minimumCharge: 75,
-                estimatedDuration: 120,
-                isActive: true,
-              },
-              {
-                category: 'HANDYMAN',
-                handymanType: 'DRYWALL_REPAIR',
-                name: 'Drywall Repair & Painting',
-                description: 'Patch holes, fix cracks, and match paint. Perfect finish guaranteed.',
-                basePrice: 90,
-                priceUnit: 'per hour',
-                minimumCharge: 150,
-                estimatedDuration: 120,
-                isActive: true,
-              },
-            ],
-          },
         },
       },
     },
+    include: {
+      providerProfile: true,
+    },
   });
 
+  // Add services for handyman1 - FIXED ENUM VALUES
+  await prisma.service.createMany({
+    data: [
+      {
+        providerProfileId: handyman1.providerProfile!.id,
+        category: 'HANDYMAN',
+        handymanType: 'MINOR_REPAIRS',  // ✅ FIXED: was 'GENERAL_REPAIR'
+        name: 'General Home Repairs',
+        description: 'Small repairs around the house including minor fixes and maintenance',
+        basePrice: 85,
+        priceUnit: 'per hour',
+        minimumCharge: 170,
+        estimatedDuration: 120,
+        isActive: true,
+      },
+      {
+        providerProfileId: handyman1.providerProfile!.id,
+        category: 'HANDYMAN',
+        handymanType: 'FIXTURE_INSTALLATION',
+        name: 'Fixture Installation',
+        description: 'Install light fixtures, ceiling fans, shelving, and more',
+        basePrice: 95,
+        priceUnit: 'per hour',
+        minimumCharge: 95,
+        estimatedDuration: 60,
+        isActive: true,
+      },
+      {
+        providerProfileId: handyman1.providerProfile!.id,
+        category: 'HANDYMAN',
+        handymanType: 'DRYWALL_REPAIR',
+        name: 'Drywall Repair & Painting',
+        description: 'Patch holes, repair drywall damage, and paint touch-ups',
+        basePrice: 90,
+        priceUnit: 'per hour',
+        minimumCharge: 180,
+        estimatedDuration: 120,
+        isActive: true,
+      },
+    ],
+  });
+
+  console.log('✅ Created 1 handyman with 3 services');
+
+  // Create another handyman
   const handyman2 = await prisma.user.create({
     data: {
-      email: 'carlos.rodriguez@homepro.com',
+      email: 'carlos.rodriguez@handy.com',
       phone: '+1-555-0302',
       firstName: 'Carlos',
       lastName: 'Rodriguez',
@@ -446,126 +289,111 @@ async function main() {
       passwordHash: hashedPassword,
       emailVerified: true,
       phoneVerified: true,
-      bio: 'Professional handyman specializing in carpentry and exterior work.',
       address: {
         create: {
-          street1: '888 Workshop Drive',
+          street1: '789 Pine Street',
           city: 'Austin',
           state: 'TX',
-          zipCode: '78706',
+          zipCode: '78704',
           country: 'USA',
-          latitude: 30.2801,
-          longitude: -97.7601,
+          latitude: 30.2515,
+          longitude: -97.7559,
         },
       },
       providerProfile: {
         create: {
-          businessName: 'HomePro Handyman',
-          businessType: 'LLC',
+          businessName: 'Rodriguez Handyman & Repair',
+          businessType: 'Sole Proprietor',
           serviceCategories: ['HANDYMAN'],
-          serviceRadius: 35,
+          serviceRadius: 25,
           status: 'ACTIVE',
-          backgroundCheckDate: new Date('2024-09-15'),
+          backgroundCheckDate: new Date('2024-03-01'),
           insuranceVerified: true,
-          licenseVerified: true,
-          yearsInBusiness: 12,
-          teamSize: 2,
-          description: 'Quality craftsmanship for all interior and exterior repairs. Carpentry specialist.',
-          averageRating: 4.9,
-          totalReviews: 156,
-          totalCompletedJobs: 780,
+          licenseVerified: false,
+          yearsInBusiness: 5,
+          teamSize: 1,
+          description: 'Quality handyman services specializing in furniture assembly and home maintenance',
+          averageRating: 4.7,
+          totalReviews: 42,
+          totalCompletedJobs: 187,
           stripeOnboarded: true,
-          services: {
-            create: [
-              {
-                category: 'HANDYMAN',
-                handymanType: 'DECK_FENCE_REPAIR',
-                name: 'Deck & Fence Repair',
-                description: 'Fix broken boards, reinforce posts, staining and sealing available.',
-                basePrice: 95,
-                priceUnit: 'per hour',
-                minimumCharge: 150,
-                estimatedDuration: 180,
-                isActive: true,
-              },
-              {
-                category: 'HANDYMAN',
-                handymanType: 'DOOR_WINDOW_REPAIR',
-                name: 'Door & Window Repair',
-                description: 'Repair sticky doors, broken windows, replace weatherstripping.',
-                basePrice: 90,
-                priceUnit: 'per hour',
-                minimumCharge: 90,
-                estimatedDuration: 90,
-                isActive: true,
-              },
-              {
-                category: 'HANDYMAN',
-                handymanType: 'GENERAL_MAINTENANCE',
-                name: 'General Maintenance',
-                description: 'Preventive maintenance, seasonal prep, honey-do lists.',
-                basePrice: 85,
-                priceUnit: 'per hour',
-                minimumCharge: 170,
-                estimatedDuration: 120,
-                isActive: true,
-              },
-            ],
-          },
         },
       },
     },
+    include: {
+      providerProfile: true,
+    },
   });
 
-  console.log('✅ Created 2 handyman providers');
+  // Add services for handyman2 - FIXED ENUM VALUES
+  await prisma.service.createMany({
+    data: [
+      {
+        providerProfileId: handyman2.providerProfile!.id,
+        category: 'HANDYMAN',
+        handymanType: 'FURNITURE_ASSEMBLY',  // ✅ FIXED: was 'CARPENTRY'
+        name: 'Furniture Assembly',
+        description: 'Professional assembly of IKEA and other furniture',
+        basePrice: 75,
+        priceUnit: 'per hour',
+        minimumCharge: 75,
+        estimatedDuration: 90,
+        isActive: true,
+      },
+      {
+        providerProfileId: handyman2.providerProfile!.id,
+        category: 'HANDYMAN',
+        handymanType: 'GENERAL_MAINTENANCE',  // ✅ FIXED: was 'PRESSURE_WASHING'
+        name: 'Home Maintenance',
+        description: 'Regular home maintenance including cleaning gutters, changing filters, etc.',
+        basePrice: 80,
+        priceUnit: 'per hour',
+        minimumCharge: 160,
+        estimatedDuration: 120,
+        isActive: true,
+      },
+    ],
+  });
+
+  console.log('✅ Created 2nd handyman with 2 services');
 
   // =========================================================================
   // BOOKINGS
   // =========================================================================
 
-  console.log('📅 Creating sample bookings...');
+  console.log('📅 Creating bookings...');
 
-  const homeowner1Property = await prisma.property.findFirst({
-    where: { homeownerProfileId: homeowner1.homeownerProfile!.id },
-  });
-
-  const inspector1Service = await prisma.service.findFirst({
+  // Get the first service from inspector1
+  const inspectionService = await prisma.service.findFirst({
     where: {
       providerProfileId: inspector1.providerProfile!.id,
-      inspectionType: 'HOME_INSPECTION',
+      category: 'INSPECTION',
     },
   });
 
   const booking1 = await prisma.booking.create({
     data: {
-      bookingNumber: 'B-2025-001001',
       homeownerId: homeowner1.id,
       providerId: inspector1.id,
-      providerProfileId: inspector1.providerProfile!.id,
-      propertyId: homeowner1Property!.id,
-      serviceId: inspector1Service!.id,
+      propertyId: property1.id,
+      serviceId: inspectionService!.id,
       category: 'INSPECTION',
+      inspectionType: 'HOME_INSPECTION',
       status: 'CONFIRMED',
-      requestedDate: new Date('2025-03-18'),
-      scheduledDate: new Date('2025-03-18T10:00:00Z'),
-      estimatedPrice: 450,
-      description: 'Pre-purchase home inspection for 2400 sq ft single family home',
-      specialRequests: 'Please focus on foundation and roof condition',
+      bookingNumber: 'BK-2025-001',
+      scheduledDate: new Date('2025-03-20T10:00:00Z'),
+      estimatedDuration: 180,
+      estimatedCost: 450,
+      notes: 'Pre-purchase home inspection for new home',
       timeline: {
         create: [
           {
-            status: 'DRAFT',
-            note: 'Booking created',
-            createdBy: homeowner1.id,
-          },
-          {
             status: 'PENDING',
-            note: 'Submitted for approval',
-            createdBy: homeowner1.id,
+            note: 'Booking requested',
           },
           {
             status: 'CONFIRMED',
-            note: 'Provider confirmed appointment',
+            note: 'Booking confirmed by provider',
             createdBy: inspector1.id,
           },
         ],
@@ -573,47 +401,40 @@ async function main() {
     },
   });
 
-  const handyman1Service = await prisma.service.findFirst({
+  // Get handyman service
+  const handymanService = await prisma.service.findFirst({
     where: {
       providerProfileId: handyman1.providerProfile!.id,
-      handymanType: 'FIXTURE_INSTALLATION',
+      handymanType: 'DRYWALL_REPAIR',
     },
-  });
-
-  const homeowner2Property = await prisma.property.findFirst({
-    where: { homeownerProfileId: homeowner2.homeownerProfile!.id },
   });
 
   const booking2 = await prisma.booking.create({
     data: {
-      bookingNumber: 'B-2025-001002',
-      homeownerId: homeowner2.id,
+      homeownerId: homeowner1.id,
       providerId: handyman1.id,
-      providerProfileId: handyman1.providerProfile!.id,
-      propertyId: homeowner2Property!.id,
-      serviceId: handyman1Service!.id,
+      propertyId: property1.id,
+      serviceId: handymanService!.id,
       category: 'HANDYMAN',
+      handymanType: 'DRYWALL_REPAIR',
       status: 'COMPLETED',
-      requestedDate: new Date('2025-03-01'),
-      scheduledDate: new Date('2025-03-01T14:00:00Z'),
-      startTime: new Date('2025-03-01T14:00:00Z'),
-      endTime: new Date('2025-03-01T16:00:00Z'),
-      actualStartTime: new Date('2025-03-01T14:05:00Z'),
-      actualEndTime: new Date('2025-03-01T16:30:00Z'),
-      estimatedPrice: 190,
-      finalPrice: 237.5,
-      description: 'Install 3 ceiling fans and 2 light fixtures',
-      completedAt: new Date('2025-03-01T16:30:00Z'),
+      bookingNumber: 'BK-2025-002',
+      scheduledDate: new Date('2025-02-28T14:00:00Z'),
+      estimatedDuration: 120,
+      estimatedCost: 180,
+      actualCost: 180,
+      actualDuration: 110,
+      notes: 'Repair drywall damage in master bedroom',
+      completedAt: new Date('2025-02-28T15:50:00Z'),
       timeline: {
         create: [
           {
             status: 'PENDING',
-            note: 'Booking created and submitted',
-            createdBy: homeowner2.id,
+            note: 'Booking requested',
           },
           {
             status: 'CONFIRMED',
-            note: 'Provider confirmed',
+            note: 'Booking confirmed',
             createdBy: handyman1.id,
           },
           {
@@ -623,46 +444,68 @@ async function main() {
           },
           {
             status: 'COMPLETED',
-            note: 'All fixtures installed successfully',
+            note: 'Work completed successfully',
             createdBy: handyman1.id,
           },
         ],
       },
-      payments: {
-        create: {
-          amount: 237.5,
-          currency: 'USD',
-          status: 'CAPTURED',
-          description: 'Payment for fixture installation service',
-        },
-      },
     },
   });
 
-  // Review for completed booking
+  console.log('✅ Created 2 bookings');
+
+  // =========================================================================
+  // PAYMENTS
+  // =========================================================================
+
+  console.log('💳 Creating payments...');
+
+  await prisma.payment.create({
+    data: {
+      bookingId: booking2.id,
+      amount: 180,
+      currency: 'USD',
+      status: 'CAPTURED',
+      isDeposit: false,
+      description: 'Payment for drywall repair',
+      stripePaymentIntentId: 'pi_test_1234567890',
+      stripeChargeId: 'ch_test_0987654321',
+    },
+  });
+
+  console.log('✅ Created 1 payment');
+
+  // =========================================================================
+  // REVIEWS
+  // =========================================================================
+
+  console.log('⭐ Creating reviews...');
+
   await prisma.review.create({
     data: {
       bookingId: booking2.id,
-      authorId: homeowner2.id,
+      authorId: homeowner1.id,
       providerId: handyman1.id,
       rating: 5,
       title: 'Excellent work!',
-      content: 'James did a fantastic job installing all the fixtures. Very professional and cleaned up afterwards. Highly recommend!',
+      content: 'Tom did an amazing job repairing the drywall. Very professional and clean. Highly recommend!',
       qualityRating: 5,
       communicationRating: 5,
       valueRating: 5,
       professionalismRating: 5,
       status: 'APPROVED',
+      response: 'Thank you for the kind words! It was a pleasure working with you.',
+      respondedAt: new Date('2025-03-01T10:00:00Z'),
     },
   });
 
-  console.log('✅ Created 2 sample bookings with timeline');
+  console.log('✅ Created 1 review');
 
   // =========================================================================
   // MESSAGES
   // =========================================================================
 
-  console.log('💬 Creating sample messages...');
+  console.log('💬 Creating messages...');
 
   await prisma.message.createMany({
     data: [
@@ -671,38 +514,29 @@ async function main() {
         senderId: homeowner1.id,
         recipientId: inspector1.id,
         type: 'TEXT',
-        content: 'Hi Mike, looking forward to the inspection on the 18th. What time works best for you?',
+        content: 'Hi Mike, looking forward to the inspection next week!',
         isRead: true,
-        readAt: new Date('2025-03-10T15:30:00Z'),
+        readAt: new Date('2025-03-11T09:30:00Z'),
       },
       {
         bookingId: booking1.id,
         senderId: inspector1.id,
         recipientId: homeowner1.id,
         type: 'TEXT',
-        content: "Hello Sarah! 10 AM works great. I'll plan for 3 hours. Please ensure utilities are on.",
+        content: 'Great! I will arrive at 10 AM sharp. Please ensure all utilities are turned on.',
         isRead: true,
-        readAt: new Date('2025-03-10T16:00:00Z'),
-      },
-      {
-        bookingId: booking1.id,
-        senderId: homeowner1.id,
-        recipientId: inspector1.id,
-        type: 'TEXT',
-        content: 'Perfect! All utilities will be on. See you then!',
-        isRead: true,
-        readAt: new Date('2025-03-10T16:15:00Z'),
+        readAt: new Date('2025-03-11T14:00:00Z'),
       },
     ],
   });
 
-  console.log('✅ Created sample messages');
+  console.log('✅ Created 2 messages');
 
   // =========================================================================
   // NOTIFICATIONS
   // =========================================================================
 
-  console.log('🔔 Creating sample notifications...');
+  console.log('🔔 Creating notifications...');
 
   await prisma.notification.createMany({
     data: [
@@ -710,16 +544,15 @@ async function main() {
         userId: homeowner1.id,
         type: 'booking_confirmed',
         title: 'Booking Confirmed',
-        message: 'Your home inspection with Thompson Home Inspections has been confirmed for March 18, 2025 at 10:00 AM',
+        message: 'Your home inspection has been confirmed for March 20, 2025',
         actionUrl: `/bookings/${booking1.id}`,
-        isRead: true,
-        readAt: new Date('2025-03-10T14:00:00Z'),
+        isRead: false,
       },
       {
-        userId: homeowner2.id,
+        userId: homeowner1.id,
         type: 'booking_completed',
         title: 'Service Completed',
-        message: 'Your handyman service has been completed. Please leave a review!',
+        message: 'Your drywall repair has been completed. Please leave a review!',
         actionUrl: `/bookings/${booking2.id}/review`,
         isRead: true,
         readAt: new Date('2025-03-01T17:00:00Z'),
@@ -736,13 +569,13 @@ async function main() {
     ],
   });
 
-  console.log('✅ Created sample notifications');
+  console.log('✅ Created 3 notifications');
 
   // =========================================================================
   // SYSTEM SETTINGS
   // =========================================================================
 
-  console.log('⚙️ Creating system settings...');
+  console.log('⚙️  Creating system settings...');
 
   await prisma.systemSetting.createMany({
     data: [
@@ -769,7 +602,7 @@ async function main() {
     ],
   });
 
-  console.log('✅ Created system settings');
+  console.log('✅ Created 4 system settings');
 
   // =========================================================================
   // SUMMARY
@@ -783,6 +616,7 @@ async function main() {
     bookings: await prisma.booking.count(),
     reviews: await prisma.review.count(),
     messages: await prisma.message.count(),
+    notifications: await prisma.notification.count(),
   };
 
   console.log('\n🎉 Database seeding complete!\n');
@@ -794,6 +628,7 @@ async function main() {
   console.log(`   Bookings: ${counts.bookings}`);
   console.log(`   Reviews: ${counts.reviews}`);
   console.log(`   Messages: ${counts.messages}`);
+  console.log(`   Notifications: ${counts.notifications}`);
   console.log('\n✅ Ready for development!\n');
 }
 
