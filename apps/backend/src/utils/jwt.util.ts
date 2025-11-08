@@ -18,7 +18,7 @@ export interface TokenPair {
 export const generateAccessToken = (payload: JWTPayload): string => {
   return jwt.sign(payload, jwtConfig.accessToken.secret, {
     expiresIn: jwtConfig.accessToken.expiresIn,
-  });
+  } as jwt.SignOptions);
 };
 
 /**
@@ -27,7 +27,7 @@ export const generateAccessToken = (payload: JWTPayload): string => {
 export const generateRefreshToken = (payload: JWTPayload): string => {
   return jwt.sign(payload, jwtConfig.refreshToken.secret, {
     expiresIn: jwtConfig.refreshToken.expiresIn,
-  });
+  } as jwt.SignOptions);
 };
 
 /**
@@ -71,7 +71,7 @@ export const generateEmailVerificationToken = (userId: string, email: string): s
   return jwt.sign(
     { userId, email, purpose: 'email_verification' },
     jwtConfig.emailVerificationToken.secret,
-    { expiresIn: jwtConfig.emailVerificationToken.expiresIn }
+    { expiresIn: jwtConfig.emailVerificationToken.expiresIn } as jwt.SignOptions
   );
 };
 
@@ -97,7 +97,7 @@ export const generatePasswordResetToken = (userId: string, email: string): strin
   return jwt.sign(
     { userId, email, purpose: 'password_reset' },
     jwtConfig.passwordResetToken.secret,
-    { expiresIn: jwtConfig.passwordResetToken.expiresIn }
+    { expiresIn: jwtConfig.passwordResetToken.expiresIn } as jwt.SignOptions
   );
 };
 
