@@ -28,7 +28,7 @@ export class BookingController {
     next: NextFunction
   ): Promise<void> {
     try {
-      const userId = req.user?.id;
+      const userId = req.user?.userId;
       const userRole = req.user?.role;
 
       if (!userId || userRole !== 'HOMEOWNER') {
