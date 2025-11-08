@@ -36,7 +36,7 @@ export class ProviderController {
         res.status(400).json({
           success: false,
           message: 'Invalid query parameters',
-          errors: error.errors,
+          errors: error.issues,
         });
       } else {
         next(error);
@@ -165,7 +165,7 @@ export class ProviderController {
         res.status(400).json({
           success: false,
           message: 'Invalid pagination parameters',
-          errors: error.errors,
+          errors: error.issues,
         });
       } else {
         next(error);
