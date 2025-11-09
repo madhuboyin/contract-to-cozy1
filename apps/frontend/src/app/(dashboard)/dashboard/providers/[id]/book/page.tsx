@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
-import { Provider, Service, Property, CreateBookingInput } from '@/types';
+import { Provider, Service, CreateBookingInput } from '@/types';
 
 export default function BookProviderPage() {
   const params = useParams();
@@ -12,14 +12,14 @@ export default function BookProviderPage() {
 
   const [provider, setProvider] = useState<Provider | null>(null);
   const [services, setServices] = useState<Service[]>([]);
-  const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string>('');
 
   // Form state
   const [selectedServiceId, setSelectedServiceId] = useState('');
-  const [selectedPropertyId, setSelectedPropertyId] = useState('');
+  // Hardcode a known property ID for now
+  const [propertyId] = useState('59917693-bf50-43f5-b961-dc938021242d');
   const [scheduledDate, setScheduledDate] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
@@ -33,10 +33,9 @@ export default function BookProviderPage() {
 
   const loadData = async () => {
     try {
-      const [providerRes, servicesRes, propertiesRes] = await Promise.all([
+      const [providerRes, servicesRes] = await Promise.all([
         api.getProvider(providerId),
         api.getProviderServices(providerId),
-        api.getProperties(),
       ]);
 
       if (providerRes.success) {
@@ -50,11 +49,6 @@ export default function BookProviderPage() {
           setSelectedServiceId(firstService.id);
           setEstimatedPrice(parseFloat(firstService.basePrice));
         }
-      }
-
-      if (propertiesRes.success && propertiesRes.data.properties.length > 0) {
-        setProperties(propertiesRes.data.properties);
-        setSelectedPropertyId(propertiesRes.data.properties[0].id);
       }
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -81,11 +75,6 @@ export default function BookProviderPage() {
       return;
     }
 
-    if (!selectedPropertyId) {
-      setError('Please select a property');
-      return;
-    }
-
     if (!scheduledDate || !startTime) {
       setError('Please select a date and time');
       return;
@@ -99,7 +88,7 @@ export default function BookProviderPage() {
     const bookingData: CreateBookingInput = {
       providerId,
       serviceId: selectedServiceId,
-      propertyId: selectedPropertyId,
+      propertyId: propertyId,
       scheduledDate,
       startTime,
       endTime: endTime || undefined,
@@ -219,34 +208,19 @@ export default function BookProviderPage() {
           )}
         </div>
 
-        {/* Property Selection */}
+        {/* Property Info (Read-only for now) */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Property *
+            Property
           </label>
-          {properties.length === 0 ? (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-              <p className="text-sm text-yellow-800">
-                ⚠️ No properties found. Please add a property first or contact support.
-              </p>
-              <p className="text-sm text-yellow-800 mt-2">
-                For testing, you can use property ID: <code className="bg-yellow-100 px-1 rounded">59917693-bf50-43f5-b961-dc938021242d</code>
-              </p>
-            </div>
-          ) : (
-            <select
-              value={selectedPropertyId}
-              onChange={(e) => setSelectedPropertyId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            >
-              {properties.map((property) => (
-                <option key={property.id} value={property.id}>
-                  {property.name || property.address} - {property.city}, {property.state}
-                </option>
-              ))}
-            </select>
-          )}
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+            <p className="text-sm text-blue-800">
+              📍 Using property: <span className="font-medium">123 Main Street</span>
+            </p>
+            <p className="text-xs text-blue-600 mt-1">
+              (Property management will be added in a future update)
+            </p>
+          </div>
         </div>
 
         {/* Date & Time */}
