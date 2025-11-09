@@ -12,6 +12,7 @@ import {
   Booking,
   CreateBookingInput,
   PaginationParams,
+  Property,
 } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
@@ -345,6 +346,14 @@ class APIClient {
       body: JSON.stringify({ reason }),
     });
   }
+
+  /**
+   * Get user properties
+   */
+  async getProperties(): Promise<APIResponse<{ properties: Property[] }>> {
+    return this.request('/api/properties');
+  }  
+
 }
 
 // Export singleton instance

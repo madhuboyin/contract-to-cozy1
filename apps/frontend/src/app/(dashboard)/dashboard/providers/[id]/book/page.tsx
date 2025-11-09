@@ -15,6 +15,7 @@ export default function BookProviderPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string>('');
 
   // Form state
   const [selectedServiceId, setSelectedServiceId] = useState('');
@@ -32,9 +33,10 @@ export default function BookProviderPage() {
 
   const loadData = async () => {
     try {
-      const [providerRes, servicesRes] = await Promise.all([
+      const [providerRes, servicesRes, propertiesRes] = await Promise.all([
         api.getProvider(providerId),
         api.getProviderServices(providerId),
+        api.getProperties(),
       ]);
 
       if (providerRes.success) {
@@ -43,7 +45,6 @@ export default function BookProviderPage() {
 
       if (servicesRes.success) {
         setServices(servicesRes.data.services);
-        // Auto-select first service and set its price
         if (servicesRes.data.services.length > 0) {
           const firstService = servicesRes.data.services[0];
           setSelectedServiceId(firstService.id);
@@ -51,11 +52,13 @@ export default function BookProviderPage() {
         }
       }
 
-      // Note: We'll need to add an API endpoint to get user properties
-      // For now, properties will be empty
-      setProperties([]);
+      if (propertiesRes.success && propertiesRes.data.properties.length > 0) {
+        setProperties(propertiesRes.data.properties);
+        setSelectedPropertyId(propertiesRes.data.properties[0].id);
+      }
     } catch (error) {
       console.error('Failed to load data:', error);
+      setError('Failed to load data');
     } finally {
       setLoading(false);
     }
@@ -71,24 +74,25 @@ export default function BookProviderPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
 
     if (!selectedServiceId) {
-      alert('Please select a service');
+      setError('Please select a service');
       return;
     }
 
     if (!selectedPropertyId) {
-      alert('Please select or add a property');
+      setError('Please select a property');
       return;
     }
 
     if (!scheduledDate || !startTime) {
-      alert('Please select a date and time');
+      setError('Please select a date and time');
       return;
     }
 
     if (!description.trim()) {
-      alert('Please provide a description');
+      setError('Please provide a description');
       return;
     }
 
@@ -104,18 +108,23 @@ export default function BookProviderPage() {
       estimatedPrice,
     };
 
+    console.log('Submitting booking:', bookingData);
+
     setSubmitting(true);
     try {
       const response = await api.createBooking(bookingData);
+      console.log('Booking response:', response);
+      
       if (response.success) {
         alert('Booking created successfully!');
         router.push('/dashboard/bookings');
       } else {
-        alert(response.message || 'Failed to create booking');
+        setError(response.message || 'Failed to create booking');
+        console.error('Booking error:', response);
       }
     } catch (error) {
       console.error('Failed to create booking:', error);
-      alert('Failed to create booking. Please try again.');
+      setError('An error occurred. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -137,10 +146,7 @@ export default function BookProviderPage() {
       <div className="px-4 sm:px-6 lg:px-8">
         <div className="text-center py-12">
           <p className="text-gray-600">Provider not found</p>
-          <button
-            onClick={() => router.back()}
-            className="text-blue-600 hover:text-blue-700 mt-4"
-          >
+          <button onClick={() => router.back()} className="text-blue-600 hover:text-blue-700 mt-4">
             ← Go back
           </button>
         </div>
@@ -174,6 +180,20 @@ export default function BookProviderPage() {
         </p>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex">
+            <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+            <div className="ml-3">
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Form */}
       <form onSubmit={handleSubmit} className="bg-white shadow rounded-lg p-6 space-y-6">
         {/* Service Selection */}
@@ -199,24 +219,34 @@ export default function BookProviderPage() {
           )}
         </div>
 
-        {/* Property Selection - Simplified for now */}
+        {/* Property Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Property *
           </label>
-          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-3">
-            <p className="text-sm text-yellow-800">
-              ⚠️ Property management not yet implemented. Please add your property address in the description below.
-            </p>
-          </div>
-          <input
-            type="text"
-            value={selectedPropertyId}
-            onChange={(e) => setSelectedPropertyId(e.target.value)}
-            placeholder="Enter temporary property ID (any text)"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
+          {properties.length === 0 ? (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+              <p className="text-sm text-yellow-800">
+                ⚠️ No properties found. Please add a property first or contact support.
+              </p>
+              <p className="text-sm text-yellow-800 mt-2">
+                For testing, you can use property ID: <code className="bg-yellow-100 px-1 rounded">59917693-bf50-43f5-b961-dc938021242d</code>
+              </p>
+            </div>
+          ) : (
+            <select
+              value={selectedPropertyId}
+              onChange={(e) => setSelectedPropertyId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              {properties.map((property) => (
+                <option key={property.id} value={property.id}>
+                  {property.name || property.address} - {property.city}, {property.state}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Date & Time */}
@@ -270,7 +300,7 @@ export default function BookProviderPage() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={4}
-            placeholder="Describe the work needed and include your property address..."
+            placeholder="Describe the work needed..."
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
           />
