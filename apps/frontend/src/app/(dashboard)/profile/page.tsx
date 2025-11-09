@@ -20,161 +20,89 @@ export default function ProfilePage() {
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold text-gray-900">Profile</h1>
           <p className="mt-2 text-sm text-gray-700">
-            Your account information and settings
+            Your account information
           </p>
         </div>
       </div>
 
-      <div className="mt-8 space-y-6">
+      <div className="mt-8">
         {/* Personal Information */}
         <div className="bg-white shadow rounded-lg">
           <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">
+            <h3 className="text-lg font-medium leading-6 text-gray-900 mb-6">
               Personal Information
             </h3>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   First Name
                 </label>
-                <div className="mt-1 text-sm text-gray-900">{user.firstName}</div>
+                <div className="text-base text-gray-900">{user.firstName}</div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Last Name
                 </label>
-                <div className="mt-1 text-sm text-gray-900">{user.lastName}</div>
+                <div className="text-base text-gray-900">{user.lastName}</div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Email
                 </label>
-                <div className="mt-1 text-sm text-gray-900">{user.email}</div>
+                <div className="text-base text-gray-900">{user.email}</div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Phone
-                </label>
-                <div className="mt-1 text-sm text-gray-900">
-                  {user.phone || 'Not provided'}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Role
                 </label>
-                <div className="mt-1">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                <div>
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
                     {user.role}
                   </span>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Status
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Account Status
                 </label>
-                <div className="mt-1">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                <div>
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
                     user.status === 'ACTIVE' 
                       ? 'bg-green-100 text-green-800'
-                      : 'bg-yellow-100 text-yellow-800'
+                      : user.status === 'PENDING_VERIFICATION'
+                      ? 'bg-yellow-100 text-yellow-800'
+                      : 'bg-red-100 text-red-800'
                   }`}>
-                    {user.status}
+                    {user.status.replace('_', ' ')}
                   </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Account Details */}
-        <div className="bg-white shadow rounded-lg">
-          <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">
-              Account Details
-            </h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-medium text-gray-700">Email Verified</div>
-                  <div className="text-sm text-gray-500">
-                    {user.emailVerified ? 'Verified' : 'Not verified'}
-                  </div>
-                </div>
-                <div>
-                  {user.emailVerified ? (
-                    <span className="text-green-600">✓</span>
-                  ) : (
-                    <button className="text-sm text-blue-600 hover:text-blue-800">
-                      Verify email
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-medium text-gray-700">Phone Verified</div>
-                  <div className="text-sm text-gray-500">
-                    {user.phoneVerified ? 'Verified' : 'Not verified'}
-                  </div>
-                </div>
-                <div>
-                  {user.phoneVerified ? (
-                    <span className="text-green-600">✓</span>
-                  ) : (
-                    <button className="text-sm text-blue-600 hover:text-blue-800">
-                      Verify phone
-                    </button>
-                  )}
                 </div>
               </div>
 
               <div>
-                <div className="text-sm font-medium text-gray-700">Member Since</div>
-                <div className="text-sm text-gray-500">
-                  {new Date(user.createdAt).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email Verified
+                </label>
+                <div className="flex items-center">
+                  {user.emailVerified ? (
+                    <>
+                      <span className="text-green-600 text-xl mr-2">✓</span>
+                      <span className="text-sm text-gray-900">Verified</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-yellow-600 text-xl mr-2">⚠</span>
+                      <span className="text-sm text-gray-900">Not verified</span>
+                    </>
+                  )}
                 </div>
               </div>
-
-              {user.lastLoginAt && (
-                <div>
-                  <div className="text-sm font-medium text-gray-700">Last Login</div>
-                  <div className="text-sm text-gray-500">
-                    {new Date(user.lastLoginAt).toLocaleString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
-
-        {/* Bio Section */}
-        {user.bio && (
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">
-                About
-              </h3>
-              <p className="text-sm text-gray-700">{user.bio}</p>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
