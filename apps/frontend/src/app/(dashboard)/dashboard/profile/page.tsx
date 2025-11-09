@@ -26,7 +26,6 @@ export default function ProfilePage() {
       </div>
 
       <div className="mt-8">
-        {/* Personal Information */}
         <div className="bg-white shadow rounded-lg">
           <div className="px-4 py-5 sm:p-6">
             <h3 className="text-lg font-medium leading-6 text-gray-900 mb-6">
@@ -37,14 +36,18 @@ export default function ProfilePage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   First Name
                 </label>
-                <div className="text-base text-gray-900">{user.firstName}</div>
+                <div className="text-base text-gray-900">
+                  {user.firstName || 'Not provided'}
+                </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Last Name
                 </label>
-                <div className="text-base text-gray-900">{user.lastName}</div>
+                <div className="text-base text-gray-900">
+                  {user.lastName || 'Not provided'}
+                </div>
               </div>
 
               <div className="sm:col-span-2">
@@ -70,15 +73,19 @@ export default function ProfilePage() {
                   Account Status
                 </label>
                 <div>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                    user.status === 'ACTIVE' 
-                      ? 'bg-green-100 text-green-800'
-                      : user.status === 'PENDING_VERIFICATION'
-                      ? 'bg-yellow-100 text-yellow-800'
-                      : 'bg-red-100 text-red-800'
-                  }`}>
-                    {user.status.replace('_', ' ')}
-                  </span>
+                  {user.status ? (
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                      user.status === 'ACTIVE' 
+                        ? 'bg-green-100 text-green-800'
+                        : user.status === 'PENDING_VERIFICATION'
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {user.status.replace(/_/g, ' ')}
+                    </span>
+                  ) : (
+                    <span className="text-sm text-gray-500">Not set</span>
+                  )}
                 </div>
               </div>
 
