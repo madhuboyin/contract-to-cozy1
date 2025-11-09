@@ -18,7 +18,6 @@ export default function BookProviderPage() {
 
   // Form state
   const [selectedServiceId, setSelectedServiceId] = useState('');
-  // Hardcode a known property ID for now
   const [propertyId] = useState('59917693-bf50-43f5-b961-dc938021242d');
   const [scheduledDate, setScheduledDate] = useState('');
   const [startTime, setStartTime] = useState('');
@@ -66,10 +65,17 @@ export default function BookProviderPage() {
     }
   };
 
+  // Convert date and time to ISO datetime format
+  const toISODateTime = (date: string, time: string): string => {
+    // Combine date (YYYY-MM-DD) with time (HH:MM) and convert to ISO format
+    return `${date}T${time}:00Z`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
+    // Validation
     if (!selectedServiceId) {
       setError('Please select a service');
       return;
@@ -80,18 +86,23 @@ export default function BookProviderPage() {
       return;
     }
 
-    if (!description.trim()) {
-      setError('Please provide a description');
+    if (description.trim().length < 10) {
+      setError('Description must be at least 10 characters');
       return;
     }
+
+    // Convert to ISO datetime format
+    const scheduledDateTime = toISODateTime(scheduledDate, startTime);
+    const startDateTime = toISODateTime(scheduledDate, startTime);
+    const endDateTime = endTime ? toISODateTime(scheduledDate, endTime) : undefined;
 
     const bookingData: CreateBookingInput = {
       providerId,
       serviceId: selectedServiceId,
       propertyId: propertyId,
-      scheduledDate,
-      startTime,
-      endTime: endTime || undefined,
+      scheduledDate: scheduledDateTime,
+      startTime: startDateTime,
+      endTime: endDateTime,
       description: description.trim(),
       specialRequests: specialRequests.trim() || undefined,
       estimatedPrice,
@@ -268,16 +279,20 @@ export default function BookProviderPage() {
         {/* Description */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Description *
+            Description * <span className="text-gray-500 font-normal">(minimum 10 characters)</span>
           </label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={4}
-            placeholder="Describe the work needed..."
+            placeholder="Please describe the work needed in detail (at least 10 characters)..."
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
+            minLength={10}
           />
+          <p className="mt-1 text-sm text-gray-500">
+            {description.length}/10 characters minimum
+          </p>
         </div>
 
         {/* Special Requests */}
