@@ -1,4 +1,5 @@
 // apps/frontend/src/types/index.ts
+
 /**
  * User Roles
  */
@@ -12,9 +13,9 @@ export type UserStatus = 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING_VERIFICA
 /**
  * Booking Status
  */
-export type BookingStatus =
+export type BookingStatus = 
   | 'DRAFT'
-  | 'PENDING'
+  | 'PENDING' 
   | 'CONFIRMED'
   | 'IN_PROGRESS'
   | 'COMPLETED'
@@ -22,20 +23,9 @@ export type BookingStatus =
   | 'DISPUTED';
 
 /**
- * Service Category - EXPANDED
+ * Service Category
  */
-export type ServiceCategory = 
-  | 'INSPECTION'
-  | 'HANDYMAN'
-  | 'PLUMBING'
-  | 'ELECTRICAL'
-  | 'HVAC'
-  | 'CARPENTRY'
-  | 'PAINTING'
-  | 'ROOFING'
-  | 'LANDSCAPING'
-  | 'CLEANING'
-  | 'OTHER';
+export type ServiceCategory = 'INSPECTION' | 'HANDYMAN';
 
 /**
  * User
@@ -116,6 +106,7 @@ export interface Booking {
   bookingNumber: string;
   status: BookingStatus;
   category: ServiceCategory;
+  
   homeowner: {
     id: string;
     firstName: string;
@@ -123,6 +114,7 @@ export interface Booking {
     email: string;
     phone: string | null;
   };
+  
   provider: {
     id: string;
     firstName: string;
@@ -131,6 +123,7 @@ export interface Booking {
     phone: string | null;
     businessName: string;
   };
+  
   service: {
     id: string;
     name: string;
@@ -138,6 +131,7 @@ export interface Booking {
     basePrice: string;
     priceUnit: string;
   };
+  
   property: {
     id: string;
     name: string | null;
@@ -146,22 +140,29 @@ export interface Booking {
     state: string;
     zipCode: string;
   };
+  
   scheduledDate: string | null;
   startTime: string | null;
   endTime: string | null;
   actualStartTime: string | null;
   actualEndTime: string | null;
+  
   estimatedPrice: string;
   finalPrice: string | null;
   depositAmount: string | null;
+  
   description: string;
   specialRequests: string | null;
   internalNotes: string | null;
+  
   cancelledAt: string | null;
   cancelledBy: string | null;
   cancellationReason: string | null;
+  
   completedAt: string | null;
+  
   timeline: BookingTimelineEntry[];
+  
   createdAt: string;
   updatedAt: string;
 }
