@@ -47,6 +47,8 @@ export default function LoginPage() {
     const result = await login(formData);
 
     if (result.success) {
+      // Wait for React state to update
+      await new Promise(resolve => setTimeout(resolve, 100));
       router.push('/dashboard');
     } else {
       setApiError(result.error || 'Login failed');
