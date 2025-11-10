@@ -1,46 +1,48 @@
 // apps/frontend/src/lib/auth/AuthContext.tsx
+// UPDATED: Fixed logout redirect to handle both providers and homeowners
 
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import { api } from '@/lib/api/client';
-import { User, LoginInput, RegisterInput } from '@/types';
+import { User } from '@/types';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (credentials: LoginInput) => Promise<{ success: boolean; error?: string }>;
-  register: (data: RegisterInput) => Promise<{ success: boolean; error?: string }>;
+  login: (credentials: { email: string; password: string }) => Promise<{ success: boolean; error?: string }>;
+  register: (data: any) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const pathname = usePathname();
 
   // Load user on mount
   useEffect(() => {
     loadUser();
   }, []);
-  
+
   const loadUser = async () => {
     const token = localStorage.getItem('accessToken');
+    
     if (!token) {
       setLoading(false);
       return;
     }
-  
+
     try {
       const response = await api.getCurrentUser();
       if (response.success) {
         setUser(response.data);
       } else {
-        // Token is invalid, clear it
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
       }
@@ -53,23 +55,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = async (credentials: LoginInput) => {
+  const login = async (credentials: { email: string; password: string }) => {
     try {
       const response = await api.login(credentials);
       
       if (response.success) {
-      // Store tokens in localStorage
-        localStorage.setItem('accessToken', response.data.accessToken);
-        localStorage.setItem('refreshToken', response.data.refreshToken);
-        
         setUser(response.data.user);
         return { success: true };
-      } else {
-        return {
-          success: false,
-          error: response.message || 'Login failed',
-        };
       }
+      
+      return {
+        success: false,
+        error: response.message || 'Login failed',
+      };
     } catch (error) {
       return {
         success: false,
@@ -78,21 +76,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const register = async (data: RegisterInput) => {
+  const register = async (data: any) => {
     try {
       const response = await api.register(data);
       
       if (response.success) {
-        // After registration, log them in
+        // Auto-login after successful registration
         const loginResponse = await api.login({
           email: data.email,
           password: data.password,
         });
         
         if (loginResponse.success) {
-          // Store tokens in localStorage
-          localStorage.setItem('accessToken', loginResponse.data.accessToken);
-          localStorage.setItem('refreshToken', loginResponse.data.refreshToken);
           setUser(loginResponse.data.user);
           return { success: true };
         }
@@ -112,6 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
+      // Call backend logout endpoint
       await api.logout();
     } catch (error) {
       console.error('Logout error:', error);
@@ -119,8 +115,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Clear tokens from localStorage
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
+      
+      // Clear user state
       setUser(null);
-      router.push('/login');
+      
+      // Redirect to login page (FIXED: Use window.location for clean redirect)
+      // This ensures all state is cleared and page fully reloads
+      window.location.href = '/login';
     }
   };
 
