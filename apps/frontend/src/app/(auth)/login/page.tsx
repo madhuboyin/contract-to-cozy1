@@ -10,7 +10,7 @@ import { isValidEmail } from '@/lib/utils';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -47,9 +47,46 @@ export default function LoginPage() {
     const result = await login(formData);
 
     if (result.success) {
-      // Wait for React state to update
-      await new Promise(resolve => setTimeout(resolve, 100));
-      router.push('/dashboard');
+      // After successful login, we need to get the user's role
+      // The AuthContext updates the user state, but we need to wait for it
+      // Using a small delay to allow React state to update
+      await new Promise(resolve => setTimeout(resolve, 150));
+      
+      // Now check user role from context for redirect
+      // If user is not yet available, we'll default to dashboard and let middleware handle it
+      // But typically the user should be available after the setTimeout
+      
+      // Get user role from localStorage as fallback
+      const token = localStorage.getItem('accessToken');
+      let userRole = user?.role;
+      
+      // If user role not in state yet, try to decode from token
+      if (!userRole && token) {
+        try {
+          const base64Url = token.split('.')[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split('')
+              .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+              .join('')
+          );
+          const decoded = JSON.parse(jsonPayload);
+          userRole = decoded.role;
+        } catch (error) {
+          console.error('Error decoding token:', error);
+        }
+      }
+      
+      // Role-based redirect
+      if (userRole === 'PROVIDER') {
+        router.push('/providers/dashboard');
+      } else if (userRole === 'ADMIN') {
+        router.push('/admin/dashboard');
+      } else {
+        // Default to homeowner dashboard
+        router.push('/dashboard');
+      }
     } else {
       setApiError(result.error || 'Login failed');
     }
@@ -95,8 +132,8 @@ export default function LoginPage() {
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 className={`appearance-none relative block w-full px-3 py-2 border ${
                   errors.email ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
-                placeholder="you@example.com"
+                } rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
+                placeholder="Email address"
               />
               {errors.email && (
                 <p className="mt-1 text-sm text-red-600">{errors.email}</p>
@@ -118,8 +155,8 @@ export default function LoginPage() {
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 className={`appearance-none relative block w-full px-3 py-2 border ${
                   errors.password ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
-                placeholder="••••••••"
+                } rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
+                placeholder="Password"
               />
               {errors.password && (
                 <p className="mt-1 text-sm text-red-600">{errors.password}</p>
@@ -127,7 +164,6 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Remember me & Forgot password */}
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <input
@@ -142,13 +178,12 @@ export default function LoginPage() {
             </div>
 
             <div className="text-sm">
-              <Link href="/forgot-password" className="font-medium text-blue-600 hover:text-blue-500">
-                Forgot password?
+              <Link href="/reset-password" className="font-medium text-blue-600 hover:text-blue-500">
+                Forgot your password?
               </Link>
             </div>
           </div>
 
-          {/* Submit button */}
           <div>
             <button
               type="submit"
@@ -159,12 +194,17 @@ export default function LoginPage() {
             </button>
           </div>
 
-          {/* Register link */}
           <div className="text-center">
             <p className="text-sm text-gray-600">
               Don't have an account?{' '}
               <Link href="/signup" className="font-medium text-blue-600 hover:text-blue-500">
-                Sign up
+                Sign up as homeowner
+              </Link>
+            </p>
+            <p className="mt-2 text-sm text-gray-600">
+              Are you a service provider?{' '}
+              <Link href="/providers/join" className="font-medium text-blue-600 hover:text-blue-500">
+                Join as provider
               </Link>
             </p>
           </div>

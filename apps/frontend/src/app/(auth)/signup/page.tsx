@@ -1,4 +1,4 @@
-// apps/frontend/src/app/(auth)/register/page.tsx
+// apps/frontend/src/app/(auth)/signup/page.tsx
 
 'use client';
 
@@ -9,9 +9,9 @@ import { useAuth } from '@/lib/auth/AuthContext';
 import { isValidEmail, isValidPassword } from '@/lib/utils';
 import { UserRole } from '@/types';
 
-export default function RegisterPage() {
+export default function SignupPage() {
   const router = useRouter();
-  const { register } = useAuth();
+  const { register, user } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -67,7 +67,41 @@ export default function RegisterPage() {
     const result = await register(registerData);
 
     if (result.success) {
-      router.push('/dashboard');
+      // After successful registration and auto-login, redirect based on role
+      await new Promise(resolve => setTimeout(resolve, 150));
+      
+      // Get user role from localStorage as fallback
+      const token = localStorage.getItem('accessToken');
+      let userRole = user?.role || formData.role;
+      
+      // If user role not in state yet, try to decode from token
+      if (!userRole && token) {
+        try {
+          const base64Url = token.split('.')[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split('')
+              .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+              .join('')
+          );
+          const decoded = JSON.parse(jsonPayload);
+          userRole = decoded.role;
+        } catch (error) {
+          console.error('Error decoding token:', error);
+        }
+      }
+      
+      // Role-based redirect
+      // Note: Homeowner registration should always go to homeowner dashboard
+      if (userRole === 'PROVIDER') {
+        router.push('/providers/dashboard');
+      } else if (userRole === 'ADMIN') {
+        router.push('/admin/dashboard');
+      } else {
+        // Default to homeowner dashboard
+        router.push('/dashboard');
+      }
     } else {
       setApiError(result.error || 'Registration failed');
     }
@@ -84,7 +118,7 @@ export default function RegisterPage() {
             Contract to Cozy
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Create your account
+            Create your homeowner account
           </p>
         </div>
 
@@ -97,81 +131,49 @@ export default function RegisterPage() {
             </div>
           )}
 
-          <div className="space-y-4">
-            {/* Role Selection */}
+          <div className="rounded-md shadow-sm space-y-4">
+            {/* First Name */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                I am a
+              <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">
+                First Name
               </label>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, role: 'HOMEOWNER' })}
-                  className={`px-4 py-3 border-2 rounded-md text-sm font-medium ${
-                    formData.role === 'HOMEOWNER'
-                      ? 'border-blue-600 bg-blue-50 text-blue-900'
-                      : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-                  }`}
-                >
-                  🏠 Homeowner
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, role: 'PROVIDER' })}
-                  className={`px-4 py-3 border-2 rounded-md text-sm font-medium ${
-                    formData.role === 'PROVIDER'
-                      ? 'border-blue-600 bg-blue-50 text-blue-900'
-                      : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-                  }`}
-                >
-                  👷 Service Provider
-                </button>
-              </div>
+              <input
+                id="firstName"
+                name="firstName"
+                type="text"
+                required
+                value={formData.firstName}
+                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                className={`appearance-none relative block w-full px-3 py-2 border ${
+                  errors.firstName ? 'border-red-300' : 'border-gray-300'
+                } rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
+                placeholder="First name"
+              />
+              {errors.firstName && (
+                <p className="mt-1 text-sm text-red-600">{errors.firstName}</p>
+              )}
             </div>
 
-            {/* Name fields */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">
-                  First name
-                </label>
-                <input
-                  id="firstName"
-                  name="firstName"
-                  type="text"
-                  required
-                  value={formData.firstName}
-                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                  className={`appearance-none block w-full px-3 py-2 border ${
-                    errors.firstName ? 'border-red-300' : 'border-gray-300'
-                  } rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
-                  placeholder="John"
-                />
-                {errors.firstName && (
-                  <p className="mt-1 text-sm text-red-600">{errors.firstName}</p>
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">
-                  Last name
-                </label>
-                <input
-                  id="lastName"
-                  name="lastName"
-                  type="text"
-                  required
-                  value={formData.lastName}
-                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                  className={`appearance-none block w-full px-3 py-2 border ${
-                    errors.lastName ? 'border-red-300' : 'border-gray-300'
-                  } rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
-                  placeholder="Doe"
-                />
-                {errors.lastName && (
-                  <p className="mt-1 text-sm text-red-600">{errors.lastName}</p>
-                )}
-              </div>
+            {/* Last Name */}
+            <div>
+              <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">
+                Last Name
+              </label>
+              <input
+                id="lastName"
+                name="lastName"
+                type="text"
+                required
+                value={formData.lastName}
+                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                className={`appearance-none relative block w-full px-3 py-2 border ${
+                  errors.lastName ? 'border-red-300' : 'border-gray-300'
+                } rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
+                placeholder="Last name"
+              />
+              {errors.lastName && (
+                <p className="mt-1 text-sm text-red-600">{errors.lastName}</p>
+              )}
             </div>
 
             {/* Email */}
@@ -187,10 +189,10 @@ export default function RegisterPage() {
                 required
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className={`appearance-none block w-full px-3 py-2 border ${
+                className={`appearance-none relative block w-full px-3 py-2 border ${
                   errors.email ? 'border-red-300' : 'border-gray-300'
-                } rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
-                placeholder="you@example.com"
+                } rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
+                placeholder="Email address"
               />
               {errors.email && (
                 <p className="mt-1 text-sm text-red-600">{errors.email}</p>
@@ -210,10 +212,10 @@ export default function RegisterPage() {
                 required
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className={`appearance-none block w-full px-3 py-2 border ${
+                className={`appearance-none relative block w-full px-3 py-2 border ${
                   errors.password ? 'border-red-300' : 'border-gray-300'
-                } rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
-                placeholder="••••••••"
+                } rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
+                placeholder="Password"
               />
               {errors.password && (
                 <p className="mt-1 text-sm text-red-600">{errors.password}</p>
@@ -223,7 +225,7 @@ export default function RegisterPage() {
             {/* Confirm Password */}
             <div>
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                Confirm password
+                Confirm Password
               </label>
               <input
                 id="confirmPassword"
@@ -233,10 +235,10 @@ export default function RegisterPage() {
                 required
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                className={`appearance-none block w-full px-3 py-2 border ${
+                className={`appearance-none relative block w-full px-3 py-2 border ${
                   errors.confirmPassword ? 'border-red-300' : 'border-gray-300'
-                } rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
-                placeholder="••••••••"
+                } rounded-md placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
+                placeholder="Confirm password"
               />
               {errors.confirmPassword && (
                 <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>
@@ -244,23 +246,27 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          {/* Submit button */}
           <div>
             <button
               type="submit"
               disabled={isLoading}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Creating account...' : 'Create account'}
+              {isLoading ? 'Creating Account...' : 'Create Account'}
             </button>
           </div>
 
-          {/* Login link */}
           <div className="text-center">
             <p className="text-sm text-gray-600">
               Already have an account?{' '}
               <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500">
                 Sign in
+              </Link>
+            </p>
+            <p className="mt-2 text-sm text-gray-600">
+              Are you a service provider?{' '}
+              <Link href="/providers/join" className="font-medium text-blue-600 hover:text-blue-500">
+                Join as provider
               </Link>
             </p>
           </div>
