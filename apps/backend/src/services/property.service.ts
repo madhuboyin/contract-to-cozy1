@@ -1,4 +1,6 @@
-import { db } from '../config/database';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 interface CreatePropertyData {
   name?: string;
@@ -22,7 +24,7 @@ interface UpdatePropertyData {
  * Get homeowner profile ID for a user
  */
 async function getHomeownerProfileId(userId: string): Promise<string> {
-  const profile = await db.homeowner_profiles.findFirst({
+  const profile = await prisma.homeownerProfile.findFirst({
     where: { userId },
   });
 
@@ -39,7 +41,7 @@ async function getHomeownerProfileId(userId: string): Promise<string> {
 export async function getUserProperties(userId: string) {
   const homeownerProfileId = await getHomeownerProfileId(userId);
 
-  const properties = await db.properties.findMany({
+  const properties = await prisma.property.findMany({
     where: { homeownerProfileId },
     orderBy: [
       { isPrimary: 'desc' },
@@ -58,7 +60,7 @@ export async function createProperty(userId: string, data: CreatePropertyData) {
 
   // If this is set as primary, unset other primary properties
   if (data.isPrimary) {
-    await db.properties.updateMany({
+    await prisma.property.updateMany({
       where: { 
         homeownerProfileId,
         isPrimary: true,
@@ -67,7 +69,7 @@ export async function createProperty(userId: string, data: CreatePropertyData) {
     });
   }
 
-  const property = await db.properties.create({
+  const property = await prisma.property.create({
     data: {
       homeownerProfileId,
       name: data.name || null,
@@ -88,7 +90,7 @@ export async function createProperty(userId: string, data: CreatePropertyData) {
 export async function getPropertyById(propertyId: string, userId: string) {
   const homeownerProfileId = await getHomeownerProfileId(userId);
 
-  const property = await db.properties.findFirst({
+  const property = await prisma.property.findFirst({
     where: {
       id: propertyId,
       homeownerProfileId,
@@ -109,7 +111,7 @@ export async function updateProperty(
   const homeownerProfileId = await getHomeownerProfileId(userId);
 
   // Verify ownership
-  const existingProperty = await db.properties.findFirst({
+  const existingProperty = await prisma.property.findFirst({
     where: {
       id: propertyId,
       homeownerProfileId,
@@ -122,7 +124,7 @@ export async function updateProperty(
 
   // If setting as primary, unset other primary properties
   if (data.isPrimary && !existingProperty.isPrimary) {
-    await db.properties.updateMany({
+    await prisma.property.updateMany({
       where: {
         homeownerProfileId,
         isPrimary: true,
@@ -140,7 +142,7 @@ export async function updateProperty(
   if (data.zipCode !== undefined) updatePayload.zipCode = data.zipCode;
   if (data.isPrimary !== undefined) updatePayload.isPrimary = data.isPrimary;
 
-  const property = await db.properties.update({
+  const property = await prisma.property.update({
     where: { id: propertyId },
     data: updatePayload,
   });
@@ -155,7 +157,7 @@ export async function deleteProperty(propertyId: string, userId: string) {
   const homeownerProfileId = await getHomeownerProfileId(userId);
 
   // Verify ownership
-  const property = await db.properties.findFirst({
+  const property = await prisma.property.findFirst({
     where: {
       id: propertyId,
       homeownerProfileId,
@@ -167,7 +169,7 @@ export async function deleteProperty(propertyId: string, userId: string) {
   }
 
   // Check if property has active bookings
-  const activeBookings = await db.bookings.count({
+  const activeBookings = await prisma.booking.count({
     where: {
       propertyId,
       status: {
@@ -180,7 +182,7 @@ export async function deleteProperty(propertyId: string, userId: string) {
     throw new Error('Cannot delete property with active bookings');
   }
 
-  await db.properties.delete({
+  await prisma.property.delete({
     where: { id: propertyId },
   });
 }
