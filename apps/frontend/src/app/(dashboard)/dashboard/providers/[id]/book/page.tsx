@@ -55,7 +55,6 @@ export default function BookProviderPage() {
 
       if (propertiesRes.success && propertiesRes.data.properties.length > 0) {
         setProperties(propertiesRes.data.properties);
-        // Auto-select primary property or first property
         const primaryProperty = propertiesRes.data.properties.find(p => p.isPrimary);
         setSelectedPropertyId(primaryProperty?.id || propertiesRes.data.properties[0].id);
       }
@@ -82,6 +81,11 @@ export default function BookProviderPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!provider) {
+      setError('Provider information not loaded');
+      return;
+    }
 
     if (!selectedServiceId) {
       setError('Please select a service');
@@ -204,7 +208,6 @@ export default function BookProviderPage() {
       )}
 
       <form onSubmit={handleSubmit} className="bg-white shadow rounded-lg p-6 space-y-6">
-        {/* Service Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Service *
@@ -227,7 +230,6 @@ export default function BookProviderPage() {
           )}
         </div>
 
-        {/* Property Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Property *
@@ -271,7 +273,6 @@ export default function BookProviderPage() {
           )}
         </div>
 
-        {/* Date & Time */}
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -313,7 +314,6 @@ export default function BookProviderPage() {
           </div>
         </div>
 
-        {/* Description */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Description * <span className="text-gray-500 font-normal">(minimum 10 characters)</span>
@@ -332,7 +332,6 @@ export default function BookProviderPage() {
           </p>
         </div>
 
-        {/* Special Requests */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Special Requests (Optional)
@@ -346,7 +345,6 @@ export default function BookProviderPage() {
           />
         </div>
 
-        {/* Estimated Price */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Estimated Price *
@@ -368,7 +366,6 @@ export default function BookProviderPage() {
           </p>
         </div>
 
-        {/* Submit Button */}
         <div className="flex items-center justify-between pt-4 border-t border-gray-200">
           <button
             type="button"
