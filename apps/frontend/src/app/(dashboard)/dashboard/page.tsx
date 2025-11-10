@@ -177,7 +177,7 @@ export default function DashboardPage() {
                 </div>
               </Link>
               <Link
-                href="/dashboard/bookings/new"
+                href="/dashboard/providers"
                 className="flex items-center p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
               >
                 <span className="text-2xl mr-3">➕</span>
