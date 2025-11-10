@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.middleware';
-import { validate } from '../middleware/validate.middleware';
+import { validateBody } from '../middleware/validate.middleware';
 import * as propertyController from '../controllers/property.controller';
 
 const router = Router();
@@ -27,9 +27,9 @@ const updatePropertySchema = z.object({
 
 // Routes - all require authentication
 router.get('/', authenticate, propertyController.listProperties);
-router.post('/', authenticate, validate(createPropertySchema), propertyController.createProperty);
+router.post('/', authenticate, validateBody(createPropertySchema), propertyController.createProperty);
 router.get('/:id', authenticate, propertyController.getProperty);
-router.put('/:id', authenticate, validate(updatePropertySchema), propertyController.updateProperty);
+router.put('/:id', authenticate, validateBody(updatePropertySchema), propertyController.updateProperty);
 router.delete('/:id', authenticate, propertyController.deleteProperty);
 
 export default router;
