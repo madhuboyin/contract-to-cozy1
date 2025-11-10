@@ -299,6 +299,37 @@ export class AuthService {
 
     return user;
   }
+  /**
+   * Get current user (for /api/auth/me endpoint)
+   */
+  async getCurrentUser(userId: string) {
+    return this.getUserById(userId);
+  }
+
+  /**
+   * Resend verification email
+   */
+  async resendVerificationEmail(email: string): Promise<void> {
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      // Don't reveal if user exists or not
+      return;
+    }
+
+    if (user.emailVerified) {
+      throw new APIError('Email already verified', 400, 'EMAIL_ALREADY_VERIFIED');
+    }
+
+    const emailVerificationToken = generateEmailVerificationToken(user.id, user.email);
+
+    // TODO: Send verification email
+    // await emailService.sendVerificationEmail(user.email, emailVerificationToken);
+
+    console.log(`Verification token for ${user.email}: ${emailVerificationToken}`);
+  }
 }
 
 export const authService = new AuthService();
