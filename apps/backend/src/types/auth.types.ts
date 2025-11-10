@@ -15,7 +15,7 @@ export enum UserStatus {
   PENDING_VERIFICATION = 'PENDING_VERIFICATION',
 }
 
-// Authenticated user (attached to request)
+// Authenticated user (attached to request after JWT verification)
 export interface AuthUser {
   userId: string;
   email: string;
@@ -31,18 +31,22 @@ export interface AuthRequest extends Request {
   user?: AuthUser;
 }
 
+// User object in API responses (uses 'id' not 'userId')
+export interface UserResponse {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: UserRole;
+  emailVerified: boolean;
+  status: UserStatus;
+}
+
 // Login response
 export interface LoginResponse {
   accessToken: string;
   refreshToken: string;
-  user: {
-    id: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    role: UserRole;
-    emailVerified: boolean;
-  };
+  user: UserResponse;
 }
 
 // Register response
