@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, FormEvent, ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
 
@@ -18,7 +18,7 @@ export default function NewPropertyPage() {
     isPrimary: false,
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -26,10 +26,13 @@ export default function NewPropertyPage() {
     }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
 
+    console.log('Form data:', formData);
+
+    // Validation
     if (!formData.address.trim()) {
       setError('Address is required');
       return;
@@ -47,16 +50,21 @@ export default function NewPropertyPage() {
       return;
     }
 
+    const payload = {
+      name: formData.name.trim() || undefined,
+      address: formData.address.trim(),
+      city: formData.city.trim(),
+      state: formData.state.trim().toUpperCase(),
+      zipCode: formData.zipCode.trim(),
+      isPrimary: formData.isPrimary,
+    };
+
+    console.log('Sending to API:', payload);
+
     setSubmitting(true);
     try {
-      const response = await api.createProperty({
-        name: formData.name.trim() || undefined,
-        address: formData.address.trim(),
-        city: formData.city.trim(),
-        state: formData.state.trim().toUpperCase(),
-        zipCode: formData.zipCode.trim(),
-        isPrimary: formData.isPrimary,
-      });
+      const response = await api.createProperty(payload);
+      console.log('API response:', response);
 
       if (response.success) {
         alert('Property created successfully!');
@@ -64,9 +72,9 @@ export default function NewPropertyPage() {
       } else {
         setError(response.message || 'Failed to create property');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create property:', error);
-      setError('An error occurred. Please try again.');
+      setError(error.message || 'An error occurred. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -106,11 +114,12 @@ export default function NewPropertyPage() {
 
       <form onSubmit={handleSubmit} className="bg-white shadow rounded-lg p-6 space-y-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
             Property Name <span className="text-gray-500 font-normal">(optional)</span>
           </label>
           <input
             type="text"
+            id="name"
             name="name"
             value={formData.name}
             onChange={handleChange}
@@ -120,11 +129,12 @@ export default function NewPropertyPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-2">
             Street Address *
           </label>
           <input
             type="text"
+            id="address"
             name="address"
             value={formData.address}
             onChange={handleChange}
@@ -136,11 +146,12 @@ export default function NewPropertyPage() {
 
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-2">
               City *
             </label>
             <input
               type="text"
+              id="city"
               name="city"
               value={formData.city}
               onChange={handleChange}
@@ -151,27 +162,30 @@ export default function NewPropertyPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="state" className="block text-sm font-medium text-gray-700 mb-2">
               State *
             </label>
             <input
               type="text"
+              id="state"
               name="state"
               value={formData.state}
               onChange={handleChange}
               placeholder="NJ"
               maxLength={2}
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase"
+              style={{ textTransform: 'uppercase' }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="zipCode" className="block text-sm font-medium text-gray-700 mb-2">
               ZIP Code *
             </label>
             <input
               type="text"
+              id="zipCode"
               name="zipCode"
               value={formData.zipCode}
               onChange={handleChange}
@@ -188,6 +202,7 @@ export default function NewPropertyPage() {
           <div className="flex items-center h-5">
             <input
               type="checkbox"
+              id="isPrimary"
               name="isPrimary"
               checked={formData.isPrimary}
               onChange={handleChange}
@@ -195,7 +210,7 @@ export default function NewPropertyPage() {
             />
           </div>
           <div className="ml-3">
-            <label className="text-sm font-medium text-gray-700">
+            <label htmlFor="isPrimary" className="text-sm font-medium text-gray-700">
               Set as primary property
             </label>
             <p className="text-sm text-gray-500">
