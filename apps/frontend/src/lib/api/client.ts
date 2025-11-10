@@ -347,14 +347,71 @@ class APIClient {
     });
   }
 
+  // ==========================================================================
+  // PROPERTY ENDPOINTS
+  // ==========================================================================
+
   /**
-   * Get user properties
+   * Get all user properties
    */
   async getProperties(): Promise<APIResponse<{ properties: Property[] }>> {
     return this.request('/api/properties');
-  }  
+  }
 
+  /**
+   * Get a single property by ID
+   */
+  async getProperty(id: string): Promise<APIResponse<Property>> {
+    return this.request(`/api/properties/${id}`);
+  }
+
+  /**
+   * Create a new property
+   */
+  async createProperty(data: {
+    name?: string;
+    address: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    isPrimary?: boolean;
+  }): Promise<APIResponse<Property>> {
+    return this.request('/api/properties', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Update a property
+   */
+  async updateProperty(
+    id: string,
+    data: {
+      name?: string;
+      address?: string;
+      city?: string;
+      state?: string;
+      zipCode?: string;
+      isPrimary?: boolean;
+    }
+  ): Promise<APIResponse<Property>> {
+    return this.request(`/api/properties/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Delete a property
+   */
+  async deleteProperty(id: string): Promise<APIResponse<void>> {
+    return this.request(`/api/properties/${id}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 // Export singleton instance
-export const api = new APIClient(API_URL);
+export const api = new APIClient(API_URL); 
+

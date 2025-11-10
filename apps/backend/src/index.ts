@@ -12,6 +12,7 @@ import bookingRoutes from './routes/booking.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
+import propertyRoutes from './routes/property.routes';
 
 dotenv.config();
 
@@ -125,6 +126,9 @@ app.use('/api/providers', providerRoutes);
 
 // Booking routes (protected - requires authentication)
 app.use('/api/bookings', bookingRoutes);
+
+// Property routes (protected - requires authentication)\\
+app.use('/api/properties', propertyRoutes);
 
 // =============================================================================
 // ERROR HANDLING
