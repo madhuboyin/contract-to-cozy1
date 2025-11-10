@@ -410,6 +410,72 @@ class APIClient {
       method: 'DELETE',
     });
   }
+
+// ==========================================================================
+  // PROVIDER SERVICE ENDPOINTS (for provider portal)
+  // ==========================================================================
+
+  /**
+   * Get current provider's services
+   */
+  async getMyServices(): Promise<APIResponse<Service[]>> {
+    return this.request<Service[]>('/api/providers/services');
+  }
+
+  /**
+   * Create a new service (provider only)
+   */
+  async createService(data: {
+    category: string;
+    inspectionType?: string;
+    handymanType?: string;
+    name: string;
+    description: string;
+    basePrice: number;
+    priceUnit: string;
+    minimumCharge?: number;
+    estimatedDuration?: number;
+    isActive: boolean;
+  }): Promise<APIResponse<Service>> {
+    return this.request<Service>('/api/providers/services', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Update a service (provider only)
+   */
+  async updateService(
+    id: string,
+    data: Partial<{
+      category: string;
+      inspectionType?: string;
+      handymanType?: string;
+      name: string;
+      description: string;
+      basePrice: number;
+      priceUnit: string;
+      minimumCharge?: number;
+      estimatedDuration?: number;
+      isActive: boolean;
+    }>
+  ): Promise<APIResponse<Service>> {
+    return this.request<Service>(`/api/providers/services/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Delete a service (provider only)
+   */
+  async deleteService(id: string): Promise<APIResponse<void>> {
+    return this.request<void>(`/api/providers/services/${id}`, {
+      method: 'DELETE',
+    });
+  }  
+
 }
 
 // Export singleton instance

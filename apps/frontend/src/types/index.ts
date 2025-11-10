@@ -88,16 +88,22 @@ export interface Provider {
 }
 
 /**
- * Service
+ * Service - Updated to match database schema
  */
 export interface Service {
   id: string;
   name: string;
   category: ServiceCategory;
+  inspectionType?: string | null;  // ADDED
+  handymanType?: string | null;    // ADDED
   basePrice: string;
   priceUnit: string;
   description: string;
+  minimumCharge?: string | null;   // ADDED
   estimatedDuration: number | null;
+  isActive: boolean;               // ADDED - This fixes your error!
+  createdAt?: string;              // ADDED
+  updatedAt?: string;              // ADDED
 }
 
 /**

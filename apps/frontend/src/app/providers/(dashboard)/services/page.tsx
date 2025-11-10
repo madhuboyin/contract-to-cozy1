@@ -4,6 +4,7 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api/client';
+import { Service } from '@/types';
 
 // Service Categories and Types
 const SERVICE_CATEGORIES = [
@@ -41,19 +42,7 @@ const PRICE_UNITS = [
   { value: 'per sqft', label: 'Per Square Foot' },
 ];
 
-interface Service {
-  id: string;
-  name: string;
-  category: string;
-  inspectionType?: string;
-  handymanType?: string;
-  description: string;
-  basePrice: string;
-  priceUnit: string;
-  minimumCharge?: string;
-  estimatedDuration?: number;
-  isActive: boolean;
-}
+// Using Service type from @/types
 
 interface ServiceFormData {
   category: string;
@@ -93,7 +82,7 @@ export default function ProviderServicesPage() {
   const fetchServices = async () => {
     try {
       setLoading(true);
-      const response = await api.request('/api/providers/services');
+      const response = await api.getMyServices();
       
       if (response.success) {
         setServices(response.data);
@@ -182,10 +171,7 @@ export default function ProviderServicesPage() {
         isActive: formData.isActive,
       };
 
-      const response = await api.request('/api/providers/services', {
-        method: 'POST',
-        body: JSON.stringify(serviceData),
-      });
+      const response = await api.createService(serviceData);
 
       if (response.success) {
         setSuccess('Service added successfully!');
@@ -223,9 +209,8 @@ export default function ProviderServicesPage() {
 
   const toggleServiceStatus = async (serviceId: string, currentStatus: boolean) => {
     try {
-      await api.request(`/api/providers/services/${serviceId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ isActive: !currentStatus }),
+      await api.updateService(serviceId, {
+        isActive: !currentStatus,
       });
       
       // Update local state
