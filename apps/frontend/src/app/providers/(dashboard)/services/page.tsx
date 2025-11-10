@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { apiClient } from '@/lib/api-client';
+import { api } from '@/lib/api/client';
 
 // Service Categories and Types
 const SERVICE_CATEGORIES = [
@@ -93,10 +93,10 @@ export default function ProviderServicesPage() {
   const fetchServices = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/providers/services');
+      const response = await api.request('/api/providers/services');
       
-      if (response.data.success) {
-        setServices(response.data.data);
+      if (response.success) {
+        setServices(response.data);
       }
     } catch (err: any) {
       console.error('Error fetching services:', err);
@@ -182,9 +182,12 @@ export default function ProviderServicesPage() {
         isActive: formData.isActive,
       };
 
-      const response = await apiClient.post('/providers/services', serviceData);
+      const response = await api.request('/api/providers/services', {
+        method: 'POST',
+        body: JSON.stringify(serviceData),
+      });
 
-      if (response.data.success) {
+      if (response.success) {
         setSuccess('Service added successfully!');
         setShowAddModal(false);
         resetForm();
@@ -220,8 +223,9 @@ export default function ProviderServicesPage() {
 
   const toggleServiceStatus = async (serviceId: string, currentStatus: boolean) => {
     try {
-      await apiClient.patch(`/providers/services/${serviceId}`, {
-        isActive: !currentStatus,
+      await api.request(`/api/providers/services/${serviceId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ isActive: !currentStatus }),
       });
       
       // Update local state
