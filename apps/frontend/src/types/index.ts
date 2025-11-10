@@ -66,10 +66,15 @@ export interface RegisterResponse {
 }
 
 /**
- * Provider
+ * Provider - UPDATED to match backend response
  */
 export interface Provider {
   id: string;
+  user: {
+    id: string;
+    firstName: string;
+    lastName: string;
+  };
   firstName: string;
   lastName: string;
   email: string;
