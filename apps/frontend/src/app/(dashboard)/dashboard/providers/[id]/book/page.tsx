@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { api } from '@/lib/api/client';
-import { Provider, Service, CreateBookingInput } from '@/types';
+import { Provider, Service, Property, CreateBookingInput } from '@/types';
 
 export default function BookProviderPage() {
   const params = useParams();
@@ -12,13 +13,14 @@ export default function BookProviderPage() {
 
   const [provider, setProvider] = useState<Provider | null>(null);
   const [services, setServices] = useState<Service[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string>('');
 
   // Form state
   const [selectedServiceId, setSelectedServiceId] = useState('');
-  const [propertyId] = useState('59917693-bf50-43f5-b961-dc938021242d');
+  const [selectedPropertyId, setSelectedPropertyId] = useState('');
   const [scheduledDate, setScheduledDate] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
@@ -32,9 +34,10 @@ export default function BookProviderPage() {
 
   const loadData = async () => {
     try {
-      const [providerRes, servicesRes] = await Promise.all([
+      const [providerRes, servicesRes, propertiesRes] = await Promise.all([
         api.getProvider(providerId),
         api.getProviderServices(providerId),
+        api.getProperties(),
       ]);
 
       if (providerRes.success) {
@@ -48,6 +51,13 @@ export default function BookProviderPage() {
           setSelectedServiceId(firstService.id);
           setEstimatedPrice(parseFloat(firstService.basePrice));
         }
+      }
+
+      if (propertiesRes.success && propertiesRes.data.properties.length > 0) {
+        setProperties(propertiesRes.data.properties);
+        // Auto-select primary property or first property
+        const primaryProperty = propertiesRes.data.properties.find(p => p.isPrimary);
+        setSelectedPropertyId(primaryProperty?.id || propertiesRes.data.properties[0].id);
       }
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -65,9 +75,7 @@ export default function BookProviderPage() {
     }
   };
 
-  // Convert date and time to ISO datetime format
   const toISODateTime = (date: string, time: string): string => {
-    // Combine date (YYYY-MM-DD) with time (HH:MM) and convert to ISO format
     return `${date}T${time}:00Z`;
   };
 
@@ -75,9 +83,13 @@ export default function BookProviderPage() {
     e.preventDefault();
     setError('');
 
-    // Validation
     if (!selectedServiceId) {
       setError('Please select a service');
+      return;
+    }
+
+    if (!selectedPropertyId) {
+      setError('Please select a property');
       return;
     }
 
@@ -91,7 +103,6 @@ export default function BookProviderPage() {
       return;
     }
 
-    // Convert to ISO datetime format
     const scheduledDateTime = toISODateTime(scheduledDate, startTime);
     const startDateTime = toISODateTime(scheduledDate, startTime);
     const endDateTime = endTime ? toISODateTime(scheduledDate, endTime) : undefined;
@@ -99,7 +110,7 @@ export default function BookProviderPage() {
     const bookingData: CreateBookingInput = {
       providerId,
       serviceId: selectedServiceId,
-      propertyId: propertyId,
+      propertyId: selectedPropertyId,
       scheduledDate: scheduledDateTime,
       startTime: startDateTime,
       endTime: endDateTime,
@@ -162,7 +173,6 @@ export default function BookProviderPage() {
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto">
-      {/* Header */}
       <div className="mb-6">
         <button
           onClick={() => router.back()}
@@ -180,7 +190,6 @@ export default function BookProviderPage() {
         </p>
       </div>
 
-      {/* Error Message */}
       {error && (
         <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
           <div className="flex">
@@ -194,7 +203,6 @@ export default function BookProviderPage() {
         </div>
       )}
 
-      {/* Form */}
       <form onSubmit={handleSubmit} className="bg-white shadow rounded-lg p-6 space-y-6">
         {/* Service Selection */}
         <div>
@@ -219,19 +227,48 @@ export default function BookProviderPage() {
           )}
         </div>
 
-        {/* Property Info (Read-only for now) */}
+        {/* Property Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Property
+            Property *
           </label>
-          <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-            <p className="text-sm text-blue-800">
-              📍 Using property: <span className="font-medium">123 Main Street</span>
+          {properties.length === 0 ? (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+              <p className="text-sm text-yellow-800 mb-2">
+                ⚠️ No properties found. Please add a property first.
+              </p>
+              <Link
+                href="/dashboard/properties/new"
+                className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700"
+              >
+                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Property
+              </Link>
+            </div>
+          ) : (
+            <select
+              value={selectedPropertyId}
+              onChange={(e) => setSelectedPropertyId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              {properties.map((property) => (
+                <option key={property.id} value={property.id}>
+                  {property.isPrimary && '⭐ '}
+                  {property.name || property.address} - {property.city}, {property.state}
+                </option>
+              ))}
+            </select>
+          )}
+          {properties.length > 0 && (
+            <p className="mt-1 text-sm text-gray-500">
+              <Link href="/dashboard/properties" className="text-blue-600 hover:text-blue-700">
+                Manage properties
+              </Link>
             </p>
-            <p className="text-xs text-blue-600 mt-1">
-              (Property management will be added in a future update)
-            </p>
-          </div>
+          )}
         </div>
 
         {/* Date & Time */}
@@ -343,7 +380,7 @@ export default function BookProviderPage() {
           
           <button
             type="submit"
-            disabled={submitting || services.length === 0}
+            disabled={submitting || services.length === 0 || properties.length === 0}
             className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
             {submitting ? 'Creating Booking...' : 'Create Booking'}
