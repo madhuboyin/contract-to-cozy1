@@ -3,17 +3,18 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api/client';
 
+// Fix: Update Service interface to match API response (allow null values)
 interface Service {
   id: string;
   category: string;
-  inspectionType?: string;
-  handymanType?: string;
+  inspectionType?: string | null;  // Changed: Added null
+  handymanType?: string | null;    // Changed: Added null
   name: string;
   description: string;
   basePrice: string;
   priceUnit: string;
-  minimumCharge?: string;
-  estimatedDuration?: number;
+  minimumCharge?: string | null;   // Changed: Added null
+  estimatedDuration?: number | null; // Changed: Added null
   isActive: boolean;
 }
 
@@ -207,7 +208,7 @@ export default function ProviderServicesPage() {
     resetForm();
   };
 
-  // NEW: Edit handler
+  // Edit handler
   const handleEdit = (service: Service) => {
     setEditingService(service);
     setFormData({
@@ -225,7 +226,7 @@ export default function ProviderServicesPage() {
     setShowEditModal(true);
   };
 
-  // NEW: Delete handlers
+  // Delete handlers
   const handleDeleteClick = (service: Service) => {
     setDeletingService(service);
     setShowDeleteConfirm(true);
