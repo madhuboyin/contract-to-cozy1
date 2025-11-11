@@ -10,7 +10,7 @@ import { useAuth } from '@/lib/auth/AuthContext';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -32,7 +32,12 @@ export default function LoginPage() {
 
     try {
       setLoading(true);
-      const user = await login(formData.email, formData.password);
+      const result = await login(formData.email, formData.password);
+
+      if (!result.success) {
+        setError(result.error || 'Invalid email or password');
+        return;
+      }
 
       // Role-based redirect
       await new Promise(resolve => setTimeout(resolve, 150));

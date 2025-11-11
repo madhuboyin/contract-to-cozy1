@@ -10,7 +10,7 @@ import { useAuth } from '@/lib/auth/AuthContext';
 
 export default function SignupPage() {
   const router = useRouter();
-  const { signup } = useAuth();
+  const { register } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -46,7 +46,7 @@ export default function SignupPage() {
 
     try {
       setLoading(true);
-      await signup({
+      const result = await register({
         email: formData.email,
         password: formData.password,
         firstName: formData.firstName,
@@ -54,8 +54,12 @@ export default function SignupPage() {
         role: 'HOMEOWNER',
       });
 
-      // Redirect will be handled by AuthContext after successful signup
-      router.push('/dashboard');
+      if (result.success) {
+        // Redirect will be handled after successful registration
+        router.push('/dashboard');
+      } else {
+        setError(result.error || 'Failed to create account');
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to create account');
     } finally {
