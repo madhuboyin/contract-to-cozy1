@@ -2,6 +2,7 @@ import PreviewModeWrapper from '@/components/PreviewModeWrapper';
 import Hero from '@/components/landing/Hero';
 import Features from '@/components/landing/Features';
 import HowItWorks from '@/components/landing/HowItWorks';
+import DashboardShowcase from '@/components/landing/DashboardShowcase';
 import Services from '@/components/landing/Services';
 import Neighborhood from '@/components/landing/Neighborhood';
 import SavingsCalculator from '@/components/landing/SavingsCalculator';
@@ -15,6 +16,7 @@ export default function Home() {
       <Hero />
       <Features />
       <HowItWorks />
+      <DashboardShowcase />
       <Services />
       <Neighborhood />
       <SavingsCalculator />
