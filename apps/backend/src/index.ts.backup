@@ -12,10 +12,14 @@ import bookingRoutes from './routes/booking.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
+import propertyRoutes from './routes/property.routes';
 
 dotenv.config();
 
 const app = express();
+
+// Trust proxy for Cloudflare Tunnel
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 8080;
 
 // =============================================================================
@@ -27,7 +31,11 @@ app.use(helmet());
 
 // CORS configuration
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: [
+    'http://localhost:3000',
+    'https://contracttocozy.com',
+    'https://www.contracttocozy.com'
+  ],
   credentials: true,
 }));
 
@@ -118,6 +126,9 @@ app.use('/api/providers', providerRoutes);
 
 // Booking routes (protected - requires authentication)
 app.use('/api/bookings', bookingRoutes);
+
+// Property routes (protected - requires authentication)\\
+app.use('/api/properties', propertyRoutes);
 
 // =============================================================================
 // ERROR HANDLING

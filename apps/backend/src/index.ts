@@ -9,10 +9,11 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes';
 import providerRoutes from './routes/provider.routes';
 import bookingRoutes from './routes/booking.routes';
+import propertyRoutes from './routes/property.routes';
+import userRoutes from './routes/user.routes';  // NEW: User profile routes
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
-import propertyRoutes from './routes/property.routes';
 
 dotenv.config();
 
@@ -78,38 +79,17 @@ app.get('/api/ready', (req: Request, res: Response) => {
 
 app.get('/', (req: Request, res: Response) => {
   res.json({
-    message: 'Contract to Cozy API',
+    service: 'Contract to Cozy API',
     version: '1.0.0',
     status: 'running',
     endpoints: {
       health: '/api/health',
       ready: '/api/ready',
-      auth: {
-        register: 'POST /api/auth/register',
-        login: 'POST /api/auth/login',
-        refresh: 'POST /api/auth/refresh',
-        logout: 'POST /api/auth/logout (auth)',
-        me: 'GET /api/auth/me (auth)',
-        verifyEmail: 'POST /api/auth/verify-email',
-        forgotPassword: 'POST /api/auth/forgot-password',
-        resetPassword: 'POST /api/auth/reset-password',
-      },
-      providers: {
-        search: 'GET /api/providers/search',
-        details: 'GET /api/providers/:id',
-        services: 'GET /api/providers/:id/services',
-        reviews: 'GET /api/providers/:id/reviews',
-      },
-      bookings: {
-        create: 'POST /api/bookings (auth)',
-        list: 'GET /api/bookings (auth)',
-        get: 'GET /api/bookings/:id (auth)',
-        update: 'PUT /api/bookings/:id (auth)',
-        confirm: 'POST /api/bookings/:id/confirm (auth)',
-        start: 'POST /api/bookings/:id/start (auth)',
-        complete: 'POST /api/bookings/:id/complete (auth)',
-        cancel: 'POST /api/bookings/:id/cancel (auth)',
-      },
+      auth: '/api/auth',
+      providers: '/api/providers',
+      bookings: '/api/bookings',
+      properties: '/api/properties',
+      users: '/api/users',  // NEW: Added to endpoint list
     },
   });
 });
@@ -118,32 +98,40 @@ app.get('/', (req: Request, res: Response) => {
 // API ROUTES
 // =============================================================================
 
-// Auth routes (public)
 app.use('/api/auth', authRoutes);
-
-// Provider routes (public)
 app.use('/api/providers', providerRoutes);
-
-// Booking routes (protected - requires authentication)
 app.use('/api/bookings', bookingRoutes);
-
-// Property routes (protected - requires authentication)\\
 app.use('/api/properties', propertyRoutes);
+app.use('/api/users', userRoutes);  // NEW: User profile routes
 
 // =============================================================================
-// ERROR HANDLING
+// 404 HANDLER
 // =============================================================================
 
-// 404 handler
 app.use((req: Request, res: Response) => {
   res.status(404).json({
-    success: false,
-    message: 'Route not found',
-    path: req.path,
+    error: 'Not Found',
+    message: `Route ${req.method} ${req.path} not found`,
+    availableRoutes: [
+      'GET /api/health',
+      'GET /api/ready',
+      'POST /api/auth/register',
+      'POST /api/auth/login',
+      'GET /api/auth/me',
+      'POST /api/auth/logout',
+      'GET /api/providers/search',
+      'GET /api/bookings',
+      'GET /api/properties',
+      'GET /api/users/profile',  // NEW: Added to available routes
+      'PUT /api/users/profile',  // NEW: Added to available routes
+    ],
   });
 });
 
-// Global error handler
+// =============================================================================
+// ERROR HANDLER (MUST BE LAST)
+// =============================================================================
+
 app.use(errorHandler);
 
 // =============================================================================
@@ -151,32 +139,20 @@ app.use(errorHandler);
 // =============================================================================
 
 app.listen(PORT, () => {
-  console.log('🚀 Contract to Cozy Backend Server');
-  console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🌐 Server running on http://localhost:${PORT}`);
-  console.log(`\n📚 Available endpoints:`);
-  console.log(`   GET  /api/health - Health check`);
-  console.log(`\n🔐 Auth endpoints:`);
-  console.log(`   POST /api/auth/register - Register new user`);
-  console.log(`   POST /api/auth/login - Login`);
-  console.log(`   POST /api/auth/refresh - Refresh token`);
-  console.log(`   POST /api/auth/logout - Logout (auth)`);
-  console.log(`   GET  /api/auth/me - Get current user (auth)`);
-  console.log(`\n🔍 Provider endpoints:`);
-  console.log(`   GET  /api/providers/search - Search providers`);
-  console.log(`   GET  /api/providers/:id - Get provider details`);
-  console.log(`   GET  /api/providers/:id/services - Get provider services`);
-  console.log(`   GET  /api/providers/:id/reviews - Get provider reviews`);
-  console.log(`\n📅 Booking endpoints (require auth):`);
-  console.log(`   POST /api/bookings - Create booking`);
-  console.log(`   GET  /api/bookings - List bookings`);
-  console.log(`   GET  /api/bookings/:id - Get booking details`);
-  console.log(`   PUT  /api/bookings/:id - Update booking`);
-  console.log(`   POST /api/bookings/:id/confirm - Confirm booking`);
-  console.log(`   POST /api/bookings/:id/start - Start booking`);
-  console.log(`   POST /api/bookings/:id/complete - Complete booking`);
-  console.log(`   POST /api/bookings/:id/cancel - Cancel booking`);
-  console.log(`\n✨ Ready to accept connections!`);
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔗 API URL: http://localhost:${PORT}`);
+  console.log(`✅ Health check: http://localhost:${PORT}/api/health`);
+  console.log(`\n📋 Available routes:`);
+  console.log(`   - POST /api/auth/register`);
+  console.log(`   - POST /api/auth/login`);
+  console.log(`   - GET  /api/auth/me`);
+  console.log(`   - POST /api/auth/logout`);
+  console.log(`   - GET  /api/providers/search`);
+  console.log(`   - GET  /api/bookings`);
+  console.log(`   - GET  /api/properties`);
+  console.log(`   - GET  /api/users/profile       ← NEW`);
+  console.log(`   - PUT  /api/users/profile       ← NEW`);
 });
 
 export default app;

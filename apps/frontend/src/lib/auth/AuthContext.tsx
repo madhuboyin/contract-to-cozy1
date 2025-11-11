@@ -1,145 +1,154 @@
 // apps/frontend/src/lib/auth/AuthContext.tsx
-// UPDATED: Fixed logout redirect to handle both providers and homeowners
+// Add refreshUser method if not already present
 
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import { api } from '@/lib/api/client';
-import { User } from '@/types';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+
+interface User {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  role: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (credentials: { email: string; password: string }) => Promise<{ success: boolean; error?: string }>;
-  register: (data: any) => Promise<{ success: boolean; error?: string }>;
+  login: (credentials: { email: string; password: string }) => Promise<any>;
+  register: (data: any) => Promise<any>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const pathname = usePathname();
 
-  // Load user on mount
-  useEffect(() => {
-    loadUser();
-  }, []);
-
-  const loadUser = async () => {
-    const token = localStorage.getItem('accessToken');
-    
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-
+  // Fetch current user
+  const fetchUser = async () => {
     try {
-      const response = await api.getCurrentUser();
-      if (response.success) {
-        setUser(response.data);
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUser(data.data);
       } else {
         localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
+        setUser(null);
       }
     } catch (error) {
-      console.error('Failed to load user:', error);
+      console.error('Failed to fetch user:', error);
       localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
+      setUser(null);
     } finally {
       setLoading(false);
     }
   };
 
+  // Refresh user data
+  const refreshUser = async () => {
+    await fetchUser();
+  };
+
+  useEffect(() => {
+    fetchUser();
+  }, []);
+
   const login = async (credentials: { email: string; password: string }) => {
     try {
-      const response = await api.login(credentials);
-      
-      if (response.success) {
-        setUser(response.data.user);
-        return { success: true };
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.data?.accessToken) {
+        localStorage.setItem('accessToken', data.data.accessToken);
+        setUser(data.data.user);
+        return { success: true, data: data.data };
+      } else {
+        return { success: false, error: data.error || 'Login failed' };
       }
-      
-      return {
-        success: false,
-        error: response.message || 'Login failed',
-      };
     } catch (error) {
-      return {
-        success: false,
-        error: 'An unexpected error occurred',
-      };
+      console.error('Login error:', error);
+      return { success: false, error: 'Network error' };
     }
   };
 
   const register = async (data: any) => {
     try {
-      const response = await api.register(data);
-      
-      if (response.success) {
-        // Auto-login after successful registration
-        const loginResponse = await api.login({
-          email: data.email,
-          password: data.password,
-        });
-        
-        if (loginResponse.success) {
-          setUser(loginResponse.data.user);
-          return { success: true };
-        }
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.data?.accessToken) {
+        localStorage.setItem('accessToken', result.data.accessToken);
+        setUser(result.data.user);
+        return { success: true, data: result.data };
+      } else {
+        return { success: false, error: result.error || 'Registration failed' };
       }
-      
-      return {
-        success: false,
-        error: response.message || 'Registration failed',
-      };
     } catch (error) {
-      return {
-        success: false,
-        error: 'An unexpected error occurred',
-      };
+      console.error('Registration error:', error);
+      return { success: false, error: 'Network error' };
     }
   };
 
   const logout = async () => {
     try {
-      // Call backend logout endpoint
-      await api.logout();
+      const token = localStorage.getItem('accessToken');
+      if (token) {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+      }
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      // Clear tokens from localStorage
       localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      
-      // Clear user state
       setUser(null);
-      
-      // Redirect to login page (FIXED: Use window.location for clean redirect)
-      // This ensures all state is cleared and page fully reloads
-      window.location.href = '/login';
+      router.push('/login');
     }
   };
 
-  const refreshUser = async () => {
-    await loadUser();
-  };
-
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        login,
-        register,
-        logout,
-        refreshUser,
-      }}
-    >
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
