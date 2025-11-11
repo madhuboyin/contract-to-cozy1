@@ -10,8 +10,10 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'Contract to Cozy - Home Service Marketplace',
   description: 'Connect with trusted service providers for your home',
+  icons: {
+    icon: '/favicon.svg',
+  },
 };
-
 export default function RootLayout({
   children,
 }: {
