@@ -1,62 +1,65 @@
+// apps/frontend/src/components/landing/Features.tsx
+// Updated with lighter colors and smaller fonts
+
 export default function Features() {
   const features = [
     {
       icon: '🏘️',
-      title: 'Neighborhood Verified',
-      description: 'Book providers your neighbors trust. See real work done on your street.',
+      title: 'Local Experts',
+      description: 'Connect with verified professionals in your neighborhood who know your area best.'
     },
     {
       icon: '💰',
-      title: 'Transparent Savings',
-      description: 'Compare verified quotes. Save an average of $850+ per home transaction.',
+      title: 'Transparent Pricing',
+      description: 'See upfront costs and compare quotes. No surprises, no hidden fees.'
     },
     {
       icon: '⚡',
-      title: 'Lightning Fast',
-      description: 'Book services in minutes, not days. Skip the endless phone calls and quotes.',
+      title: 'Book Fast',
+      description: 'Find and book qualified professionals in minutes, not days or weeks.'
     },
     {
-      icon: '🤝',
-      title: 'Trusted Providers',
-      description: 'Background-checked, insured, and licensed professionals only.',
+      icon: '🛡️',
+      title: 'Trusted & Verified',
+      description: 'All providers are background-checked, licensed, and insured for your peace of mind.'
     },
     {
       icon: '📱',
-      title: 'Mobile First',
-      description: 'Manage everything from your phone. Track progress, message providers, pay securely.',
+      title: 'Easy Management',
+      description: 'Track all your home services in one place. Schedule, manage, and review with ease.'
     },
     {
       icon: '🎯',
       title: 'Complete Journey',
-      description: 'From inspection to move-in. One platform for all your home service needs.',
-    },
+      description: 'From inspection to move-in to maintenance - we cover every step of your home journey.'
+    }
   ];
 
   return (
-    <section id="features" className="py-24 px-4 sm:px-6 lg:px-8 bg-gray-50">
+    <section id="features" className="py-16 md:py-20 px-4 sm:px-6 lg:px-8 bg-white">
       <div className="max-w-7xl mx-auto">
         {/* Section Header */}
-        <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
-            Why Homebuyers Love Us
+        <div className="text-center mb-12 md:mb-16">
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+            Why Choose Contract to Cozy?
           </h2>
-          <p className="text-lg md:text-xl text-gray-600 max-w-3xl mx-auto">
-            Everything you need to turn your new house into a cozy home
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            Everything you need to manage your home services in one simple platform
           </p>
         </div>
 
-        {/* Feature Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {/* Features Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {features.map((feature, index) => (
-            <div
+            <div 
               key={index}
-              className="bg-white rounded-xl p-8 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-2 border border-gray-100"
+              className="p-6 rounded-2xl bg-gray-50 border border-gray-100 hover:border-blue-200 hover:shadow-lg transition-all duration-300"
             >
-              <div className="text-5xl mb-4">{feature.icon}</div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">
+              <div className="text-4xl mb-4">{feature.icon}</div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
                 {feature.title}
               </h3>
-              <p className="text-gray-600 leading-relaxed">
+              <p className="text-sm text-gray-600 leading-relaxed">
                 {feature.description}
               </p>
             </div>

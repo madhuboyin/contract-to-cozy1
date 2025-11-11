@@ -1,99 +1,93 @@
+// apps/frontend/src/components/landing/Services.tsx
+// Updated with lighter colors and smaller fonts
+
 import Link from 'next/link';
 
 export default function Services() {
   const serviceCategories = [
     {
-      icon: '📋',
       title: 'Closing Phase',
+      icon: '📋',
+      color: 'bg-blue-50 border-blue-200 hover:border-blue-300',
       services: [
         'Home Inspection',
         'Insurance',
-        'Title & Escrow',
-        'Attorney',
-        'Appraisal',
-      ],
+        'Title Services',
+        'Real Estate Attorney',
+        'Appraisal'
+      ]
     },
     {
-      icon: '🏡',
       title: 'Move-In',
+      icon: '🚚',
+      color: 'bg-green-50 border-green-200 hover:border-green-300',
       services: [
         'Moving Services',
-        'Utilities Setup',
+        'Utility Setup',
         'Internet & Cable',
         'Locksmith',
-        'House Cleaning',
-      ],
+        'Cleaning Services'
+      ]
     },
     {
-      icon: '🔧',
       title: 'Maintenance',
+      icon: '🔧',
+      color: 'bg-purple-50 border-purple-200 hover:border-purple-300',
       services: [
         'HVAC Service',
         'Dryer Vent Cleaning',
-        'Chimney Sweep',
+        'Chimney Inspection',
         'Gutter Cleaning',
-        'Pest Control',
-      ],
+        'Pest Control'
+      ]
     },
     {
-      icon: '⚡',
       title: 'Upgrades',
+      icon: '⚡',
+      color: 'bg-amber-50 border-amber-200 hover:border-amber-300',
       services: [
         'Solar Installation',
         'Window Replacement',
         'Smart Home Setup',
         'Energy Audit',
-        'Landscaping',
-      ],
-    },
+        'Landscaping'
+      ]
+    }
   ];
 
   return (
-    <section id="services" className="py-24 px-4 sm:px-6 lg:px-8 bg-gray-50">
+    <section id="services" className="py-16 md:py-20 px-4 sm:px-6 lg:px-8 bg-white">
       <div className="max-w-7xl mx-auto">
         {/* Section Header */}
-        <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
-            Complete Home Services
+        <div className="text-center mb-12 md:mb-16">
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+            Services We Cover
           </h2>
-          <p className="text-lg md:text-xl text-gray-600 max-w-3xl mx-auto">
-            Everything you need for your homebuying journey
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            From inspection to move-in and beyond, we've got you covered
           </p>
         </div>
 
-        {/* Service Categories Grid */}
-        <div className="grid md:grid-cols-2 gap-8 mb-12">
+        {/* Services Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {serviceCategories.map((category, index) => (
-            <div
+            <div 
               key={index}
-              className="bg-white rounded-xl p-8 shadow-md hover:shadow-xl transition-all duration-300 border border-gray-100"
+              className={`p-6 rounded-2xl border-2 transition-all duration-300 ${category.color} hover:shadow-lg`}
             >
-              {/* Category Header */}
-              <div className="flex items-center space-x-3 mb-6">
-                <span className="text-4xl">{category.icon}</span>
-                <h3 className="text-2xl font-semibold text-gray-900">
+              {/* Icon & Title */}
+              <div className="text-center mb-4">
+                <div className="text-4xl mb-3">{category.icon}</div>
+                <h3 className="text-lg font-semibold text-gray-900">
                   {category.title}
                 </h3>
               </div>
 
               {/* Services List */}
-              <ul className="space-y-3">
-                {category.services.map((service, serviceIndex) => (
-                  <li
-                    key={serviceIndex}
-                    className="flex items-center text-gray-700"
-                  >
-                    <svg
-                      className="w-5 h-5 text-green-500 mr-3 flex-shrink-0"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
+              <ul className="space-y-2">
+                {category.services.map((service, idx) => (
+                  <li key={idx} className="flex items-start text-sm text-gray-700">
+                    <span className="mr-2 text-blue-600 font-bold">·</span>
                     <span>{service}</span>
                   </li>
                 ))}
@@ -102,23 +96,15 @@ export default function Services() {
           ))}
         </div>
 
-        {/* Browse All Services CTA */}
-        <div className="text-center">
+        {/* CTA */}
+        <div className="text-center mt-12">
           <Link
             href="/providers/search"
-            className="inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-blue-600 bg-white border-2 border-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-colors shadow-md"
+            className="inline-flex items-center px-6 py-3 bg-blue-600 text-white text-base font-medium rounded-lg hover:bg-blue-700 transition-all shadow-md hover:shadow-lg"
           >
             Browse All Services
-            <svg
-              className="ml-2 w-5 h-5"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </Link>
         </div>

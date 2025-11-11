@@ -1,74 +1,49 @@
+// apps/frontend/src/components/landing/CTASection.tsx
+// Updated with lighter colors and smaller fonts
+
 import Link from 'next/link';
 
 export default function CTASection() {
   return (
-    <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-blue-600 to-blue-800">
+    <section className="py-16 md:py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-blue-500 to-indigo-600">
       <div className="max-w-4xl mx-auto text-center">
-        <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">
-          Ready to Save Time & Money?
+        <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+          Ready to Get Started?
         </h2>
-        <p className="text-lg md:text-xl text-blue-100 mb-10 max-w-2xl mx-auto">
-          Join thousands of homebuyers who've made their journey stress-free with Contract to Cozy
+        <p className="text-lg md:text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
+          Join thousands of homeowners who trust Contract to Cozy for all their home service needs
         </p>
-
-        {/* CTA Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+        
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Link
             href="/signup"
-            className="inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-blue-600 bg-white rounded-lg hover:bg-gray-50 transition-colors shadow-lg min-w-[200px]"
+            className="px-8 py-4 bg-white text-blue-600 text-base font-semibold rounded-lg hover:bg-gray-50 transition-all shadow-lg hover:shadow-xl"
           >
-            Get Started Free
-            <svg
-              className="ml-2 w-5 h-5"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
+            Create Free Account
           </Link>
           <Link
             href="/providers/search"
-            className="inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-white border-2 border-white rounded-lg hover:bg-white hover:text-blue-600 transition-colors min-w-[200px]"
+            className="px-8 py-4 bg-blue-700 text-white text-base font-semibold rounded-lg hover:bg-blue-800 transition-all border-2 border-white/20"
           >
-            Browse Providers
+            Browse Services
           </Link>
         </div>
 
-        {/* Trust Indicators */}
-        <div className="mt-12 flex flex-wrap justify-center items-center gap-8 text-white/80 text-sm">
-          <div className="flex items-center space-x-2">
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-              <path
-                fillRule="evenodd"
-                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                clipRule="evenodd"
-              />
-            </svg>
-            <span>No credit card required</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-              <path
-                fillRule="evenodd"
-                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                clipRule="evenodd"
-              />
-            </svg>
-            <span>Free to sign up</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-              <path
-                fillRule="evenodd"
-                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                clipRule="evenodd"
-              />
-            </svg>
-            <span>Cancel anytime</span>
+        {/* Trust indicators */}
+        <div className="mt-12 pt-8 border-t border-blue-400/30">
+          <div className="flex flex-wrap justify-center items-center gap-8 text-blue-100">
+            <div className="flex items-center">
+              <span className="text-2xl mr-2">✓</span>
+              <span className="text-sm">No credit card required</span>
+            </div>
+            <div className="flex items-center">
+              <span className="text-2xl mr-2">✓</span>
+              <span className="text-sm">Free to browse</span>
+            </div>
+            <div className="flex items-center">
+              <span className="text-2xl mr-2">✓</span>
+              <span className="text-sm">Cancel anytime</span>
+            </div>
           </div>
         </div>
       </div>
