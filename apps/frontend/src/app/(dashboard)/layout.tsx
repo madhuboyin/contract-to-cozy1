@@ -7,6 +7,13 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthContext';
 
+export const metadata = {
+  title: 'Contract to Cozy',
+  description: 'Home Services Made Simple',
+  icons: {
+    icon: '/favicon.svg',
+  },
+}
 export default function DashboardLayout({
   children,
 }: {
