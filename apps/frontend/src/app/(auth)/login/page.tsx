@@ -32,7 +32,10 @@ export default function LoginPage() {
 
     try {
       setLoading(true);
-      const result = await login(formData.email, formData.password);
+      const result = await login({ 
+        email: formData.email, 
+        password: formData.password 
+      });
 
       if (!result.success) {
         setError(result.error || 'Invalid email or password');
