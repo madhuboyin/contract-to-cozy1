@@ -1,5 +1,5 @@
 // apps/frontend/src/lib/auth/AuthContext.tsx
-// Add refreshUser method if not already present
+// FIXED: Proper 401 error handling
 
 'use client';
 
@@ -37,7 +37,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  // Fetch current user
   const fetchUser = async () => {
     try {
       const token = localStorage.getItem('accessToken');
@@ -68,7 +67,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Refresh user data
   const refreshUser = async () => {
     await fetchUser();
   };
@@ -87,18 +85,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify(credentials),
       });
 
-      const data = await response.json();
+      // Parse response body first
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        return { 
+          success: false, 
+          error: 'Server error. Please try again.' 
+        };
+      }
 
+      // Handle successful login (200)
       if (response.ok && data.data?.accessToken) {
         localStorage.setItem('accessToken', data.data.accessToken);
         setUser(data.data.user);
         return { success: true, data: data.data };
-      } else {
-        return { success: false, error: data.error || 'Login failed' };
       }
+
+      // Handle error responses (401, 400, etc.)
+      // Backend returns: { success: false, error: { message: "...", code: "..." } }
+      let errorMessage = 'Login failed';
+      
+      if (data.error) {
+        // If error is an object with message property
+        if (typeof data.error === 'object' && data.error.message) {
+          errorMessage = data.error.message;
+        } 
+        // If error is a string
+        else if (typeof data.error === 'string') {
+          errorMessage = data.error;
+        }
+      } 
+      // Fallback to message field
+      else if (data.message) {
+        errorMessage = data.message;
+      }
+
+      // Special handling for 401
+      if (response.status === 401) {
+        errorMessage = 'Invalid email or password';
+      }
+
+      console.error('Login failed:', response.status, data);
+      return { success: false, error: errorMessage };
+
     } catch (error) {
-      console.error('Login error:', error);
-      return { success: false, error: 'Network error' };
+      console.error('Login network error:', error);
+      return { 
+        success: false, 
+        error: 'Network error. Please check your connection.' 
+      };
     }
   };
 
@@ -112,18 +150,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify(data),
       });
 
-      const result = await response.json();
+      let result;
+      try {
+        result = await response.json();
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        return { 
+          success: false, 
+          error: 'Server error. Please try again.' 
+        };
+      }
 
       if (response.ok && result.data?.accessToken) {
         localStorage.setItem('accessToken', result.data.accessToken);
         setUser(result.data.user);
         return { success: true, data: result.data };
-      } else {
-        return { success: false, error: result.error || 'Registration failed' };
       }
+
+      // Extract error message
+      let errorMessage = 'Registration failed';
+      if (result.error) {
+        if (typeof result.error === 'object' && result.error.message) {
+          errorMessage = result.error.message;
+        } else if (typeof result.error === 'string') {
+          errorMessage = result.error;
+        }
+      } else if (result.message) {
+        errorMessage = result.message;
+      }
+
+      console.error('Registration failed:', response.status, result);
+      return { success: false, error: errorMessage };
+
     } catch (error) {
-      console.error('Registration error:', error);
-      return { success: false, error: 'Network error' };
+      console.error('Registration network error:', error);
+      return { 
+        success: false, 
+        error: 'Network error. Please check your connection.' 
+      };
     }
   };
 
