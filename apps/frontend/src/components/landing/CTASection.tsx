@@ -22,7 +22,7 @@ export default function CTASection() {
             Create Free Account
           </Link>
           <Link
-            href="/providers/search"
+            href="/signup"
             className="px-8 py-4 bg-blue-700 text-white text-base font-semibold rounded-lg hover:bg-blue-800 transition-all border-2 border-white/20"
           >
             Browse Services

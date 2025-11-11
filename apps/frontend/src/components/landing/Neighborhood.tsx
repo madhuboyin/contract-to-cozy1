@@ -152,7 +152,7 @@ export default function Neighborhood() {
                   Ask Neighbors
                 </button>
                 <Link
-                  href="/providers/search"
+                  href="/signup"
                   className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors text-center"
                 >
                   Book Now
