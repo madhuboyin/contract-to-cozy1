@@ -1,14 +1,14 @@
 // apps/backend/src/routes/user.routes.ts
 import { Router } from 'express';
-import { authenticateToken } from '../middleware/auth';
-import { updateProfile, getProfile } from '../controllers/user.controller';
+import { authenticate } from '../middleware/auth.middleware';
+import { getProfile, updateProfile } from '../controllers/user.controller';
 
 const router = Router();
 
 // Get current user profile
-router.get('/profile', authenticateToken, getProfile);
+router.get('/profile', authenticate, getProfile);
 
 // Update user profile
-router.put('/profile', authenticateToken, updateProfile);
+router.put('/profile', authenticate, updateProfile);
 
 export default router;

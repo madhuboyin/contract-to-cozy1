@@ -1,7 +1,10 @@
 // apps/backend/src/controllers/user.controller.ts
-import { Request, Response } from 'express';
-import { prisma } from '../config/database';
+import { Response } from 'express';
+import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
+import { AuthRequest } from '../types/auth.types';
+
+const prisma = new PrismaClient();
 
 const updateProfileSchema = z.object({
   firstName: z.string().min(1, 'First name is required').optional(),
@@ -13,7 +16,7 @@ const updateProfileSchema = z.object({
   zipCode: z.string().length(5, 'ZIP code must be 5 digits').optional(),
 });
 
-export const getProfile = async (req: Request, res: Response) => {
+export const getProfile = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.userId;
 
@@ -50,7 +53,7 @@ export const getProfile = async (req: Request, res: Response) => {
   }
 };
 
-export const updateProfile = async (req: Request, res: Response) => {
+export const updateProfile = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.userId;
 
@@ -63,7 +66,7 @@ export const updateProfile = async (req: Request, res: Response) => {
     if (!validation.success) {
       return res.status(400).json({ 
         error: 'Validation failed',
-        details: validation.error.errors 
+        details: validation.error.issues 
       });
     }
 
