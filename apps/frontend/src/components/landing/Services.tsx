@@ -1,94 +1,62 @@
-// apps/frontend/src/components/landing/Services.tsx
-// Updated with lighter colors and smaller fonts
-
-import Link from 'next/link';
-
 export default function Services() {
-  const serviceCategories = [
+  const services = [
     {
-      title: 'Closing Phase',
-      icon: '📋',
-      color: 'bg-blue-50 border-blue-200 hover:border-blue-300',
-      services: [
-        'Home Inspection',
-        'Insurance',
-        'Title Services',
-        'Real Estate Attorney',
-        'Appraisal'
-      ]
+      category: 'Home Inspections',
+      icon: '🏠',
+      items: ['Pre-purchase', 'Annual', 'Pest', 'Radon'],
+      color: 'from-teal-50 to-teal-100',
+      border: 'border-teal-200',
     },
     {
-      title: 'Move-In',
-      icon: '🚚',
-      color: 'bg-green-50 border-green-200 hover:border-green-300',
-      services: [
-        'Moving Services',
-        'Utility Setup',
-        'Internet & Cable',
-        'Locksmith',
-        'Cleaning Services'
-      ]
-    },
-    {
-      title: 'Maintenance',
+      category: 'Repairs & Fixes',
       icon: '🔧',
-      color: 'bg-purple-50 border-purple-200 hover:border-purple-300',
-      services: [
-        'HVAC Service',
-        'Dryer Vent Cleaning',
-        'Chimney Inspection',
-        'Gutter Cleaning',
-        'Pest Control'
-      ]
+      items: ['Plumbing', 'Electrical', 'HVAC', 'Appliances'],
+      color: 'from-primary-50 to-primary-100',
+      border: 'border-primary-200',
     },
     {
-      title: 'Upgrades',
-      icon: '⚡',
-      color: 'bg-amber-50 border-amber-200 hover:border-amber-300',
-      services: [
-        'Solar Installation',
-        'Window Replacement',
-        'Smart Home Setup',
-        'Energy Audit',
-        'Landscaping'
-      ]
-    }
+      category: 'Installations',
+      icon: '⚙️',
+      items: ['Fixtures', 'Appliances', 'Smart Home', 'Upgrades'],
+      color: 'from-coral-50 to-coral-100',
+      border: 'border-coral-200',
+    },
+    {
+      category: 'Maintenance',
+      icon: '✨',
+      items: ['Cleaning', 'Landscaping', 'Seasonal', 'Preventive'],
+      color: 'from-purple-50 to-purple-100',
+      border: 'border-purple-200',
+    },
   ];
 
   return (
-    <section id="services" className="py-16 md:py-20 px-4 sm:px-6 lg:px-8 bg-white">
-      <div className="max-w-7xl mx-auto">
-        {/* Section Header */}
-        <div className="text-center mb-12 md:mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-            Services We Cover
+    <section id="services" className="py-12 bg-gradient-to-br from-white to-teal-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="text-center mb-10">
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
+            All Your Home Services
           </h2>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            From inspection to move-in and beyond, we've got you covered
+            From inspections to repairs, we've got you covered
           </p>
         </div>
 
         {/* Services Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {serviceCategories.map((category, index) => (
-            <div 
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+          {services.map((service, index) => (
+            <div
               key={index}
-              className={`p-6 rounded-2xl border-2 transition-all duration-300 ${category.color} hover:shadow-lg`}
+              className={`p-5 bg-gradient-to-br ${service.color} rounded-xl border ${service.border} hover:shadow-md transition-all group`}
             >
-              {/* Icon & Title */}
-              <div className="text-center mb-4">
-                <div className="text-4xl mb-3">{category.icon}</div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  {category.title}
-                </h3>
-              </div>
-
-              {/* Services List */}
-              <ul className="space-y-2">
-                {category.services.map((service, idx) => (
-                  <li key={idx} className="flex items-start text-sm text-gray-700">
-                    <span className="mr-2 text-blue-600 font-bold">·</span>
-                    <span>{service}</span>
+              <div className="text-3xl mb-3 group-hover:scale-110 transition-transform">{service.icon}</div>
+              <h3 className="text-lg font-bold text-gray-900 mb-3">{service.category}</h3>
+              <ul className="space-y-1.5">
+                {service.items.map((item, idx) => (
+                  <li key={idx} className="text-sm text-gray-700 flex items-center">
+                    <span className="text-teal-600 mr-2 text-xs">✓</span>
+                    {item}
                   </li>
                 ))}
               </ul>
@@ -97,16 +65,10 @@ export default function Services() {
         </div>
 
         {/* CTA */}
-        <div className="text-center mt-12">
-          <Link
-            href="/providers/search"
-            className="inline-flex items-center px-6 py-3 bg-blue-600 text-white text-base font-medium rounded-lg hover:bg-blue-700 transition-all shadow-md hover:shadow-lg"
-          >
-            Browse All Services
-            <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </Link>
+        <div className="text-center mt-8">
+          <button className="px-6 py-2.5 text-teal-600 font-medium hover:text-teal-700 transition-colors">
+            View All Services →
+          </button>
         </div>
       </div>
     </section>
