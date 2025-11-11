@@ -248,7 +248,7 @@ export default function HomeownerBookingsPage() {
           <div className="text-center py-12 bg-white rounded-lg shadow-sm">
             <p className="text-gray-600">No bookings found</p>
             <Link
-              href="/dashboard/book-service"
+              href="/dashboard/providers"
               className="mt-4 inline-block text-blue-600 hover:text-blue-700"
             >
               Book a service
