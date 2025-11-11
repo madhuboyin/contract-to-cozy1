@@ -221,10 +221,12 @@ export default function LoginPage() {
                 </label>
               </div>
 
-              <div className="text-sm">
+              // apps/frontend/src/app/(auth)/login/page.tsx
+              {/* Forgot Password */}
+              <div className="text-right">
                 <Link
-                  href="/reset-password"
-                  className="font-medium text-blue-600 hover:text-blue-500"
+                  href="/forgot-password"
+                  className="text-sm font-medium text-blue-600 hover:text-blue-700"
                 >
                   Forgot password?
                 </Link>

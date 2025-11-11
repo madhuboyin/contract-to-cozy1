@@ -232,14 +232,14 @@ export class AuthService {
   /**
    * Request password reset
    */
-  async forgotPassword(data: ForgotPasswordInput): Promise<void> {
+  async forgotPassword(data: ForgotPasswordInput): Promise<{ message: string; resetToken?: string }> {
     const user = await prisma.user.findUnique({
       where: { email: data.email },
     });
 
+    // Security: Do not reveal if user exists or not
     if (!user) {
-      // Don't reveal if user exists or not
-      return;
+      return { message: 'If an account with that email exists, a password reset link has been sent.' };
     }
 
     const resetToken = generatePasswordResetToken(user.id, user.email);
@@ -248,6 +248,16 @@ export class AuthService {
     // await emailService.sendPasswordResetEmail(user.email, resetToken);
 
     console.log(`Password reset token for ${user.email}: ${resetToken}`);
+    
+    // Return token only in development for easy testing
+    if (process.env.NODE_ENV === 'development') {
+      return { 
+        message: 'If an account with that email exists, a password reset link has been sent.',
+        resetToken: resetToken // For dev/testing purposes
+      };
+    }
+
+    return { message: 'If an account with that email exists, a password reset link has been sent.' };
   }
 
   /**
