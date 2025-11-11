@@ -1,4 +1,3 @@
-// apps/frontend/src/app/(dashboard)/profile/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -22,19 +21,37 @@ export default function ProfilePage() {
   });
 
   useEffect(() => {
-    if (user) {
-      setFormData({
-        firstName: user.firstName || '',
-        lastName: user.lastName || '',
-        email: user.email || '',
-        phone: user.phone || '',
-        address: user.address || '',
-        city: user.city || '',
-        state: user.state || '',
-        zipCode: user.zipCode || '',
-      });
-    }
-  }, [user]);
+    const loadProfile = async () => {
+      try {
+        const token = localStorage.getItem('accessToken');
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/profile`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          const profileData = result.data;
+          
+          setFormData({
+            firstName: profileData.firstName || '',
+            lastName: profileData.lastName || '',
+            email: profileData.email || '',
+            phone: profileData.phone || '',
+            address: profileData.address || '',
+            city: profileData.city || '',
+            state: profileData.state || '',
+            zipCode: profileData.zipCode || '',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load profile:', error);
+      }
+    };
+
+    loadProfile();
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
@@ -63,6 +80,21 @@ export default function ProfilePage() {
       if (response.ok) {
         setMessage({ type: 'success', text: 'Profile updated successfully!' });
         setIsEditing(false);
+        
+        // Update form with returned data
+        if (data.data) {
+          setFormData({
+            firstName: data.data.firstName || '',
+            lastName: data.data.lastName || '',
+            email: data.data.email || '',
+            phone: data.data.phone || '',
+            address: data.data.address || '',
+            city: data.data.city || '',
+            state: data.data.state || '',
+            zipCode: data.data.zipCode || '',
+          });
+        }
+        
         await refreshUser();
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to update profile' });
@@ -75,20 +107,8 @@ export default function ProfilePage() {
   };
 
   const handleCancel = () => {
-    if (user) {
-      setFormData({
-        firstName: user.firstName || '',
-        lastName: user.lastName || '',
-        email: user.email || '',
-        phone: user.phone || '',
-        address: user.address || '',
-        city: user.city || '',
-        state: user.state || '',
-        zipCode: user.zipCode || '',
-      });
-    }
-    setIsEditing(false);
-    setMessage(null);
+    // Reset form - will reload on next useEffect
+    window.location.reload();
   };
 
   const states = [
@@ -101,7 +121,6 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      {/* Page Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Profile Settings</h1>
@@ -117,7 +136,6 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* Message */}
       {message && (
         <div className={`mb-6 p-4 rounded-lg ${
           message.type === 'success' 
@@ -128,9 +146,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Profile Card */}
       <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-        {/* Personal Information */}
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Personal Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -198,7 +214,6 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Address Information */}
         <div className="p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Address Information</h2>
           <div className="grid grid-cols-1 gap-6">
@@ -282,7 +297,6 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Action Buttons */}
         {isEditing && (
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end space-x-3">
             <button
@@ -303,7 +317,6 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* Account Info */}
       <div className="mt-6 bg-white rounded-xl shadow-lg p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Account Information</h2>
         <div className="space-y-3">
