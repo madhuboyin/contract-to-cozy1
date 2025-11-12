@@ -31,8 +31,7 @@ export default function ValuePropositionComparison() {
       competitor: 'Generic city-wide reviews and simple rating systems.'
     },
 
-    // --- CORE CAPABILITIES (The Necessities - Removed Local Experts) ---
-    // Removed: { icon: '🏘️', title: 'Local Experts', ... }
+    // --- CORE CAPABILITIES (The Necessities - Added from Features.tsx) ---
     {
       icon: '💰',
       title: 'Transparent Pricing',
@@ -54,19 +53,22 @@ export default function ValuePropositionComparison() {
   ];
 
   return (
-    <section className="py-16 md:py-20 px-4 sm:px-6 lg:px-8 bg-white">
+    // Reduced vertical padding and changed background to bg-gray-50 for alternating color
+    <section className="py-10 md:py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
       <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+        {/* Reduced header font size and margins */}
+        <div className="text-center mb-10">
+          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
             The Cozy Way vs. The Old Way
           </h2>
-          <p className="text-lg text-gray-600 max-w-3xl mx-auto">
+          <p className="text-base text-gray-600 max-w-3xl mx-auto">
             See how we transform the chaos of home services into a simple, managed experience.
           </p>
         </div>
 
         {/* Comparison Table Structure (Using Grid) */}
-        <div className="border border-gray-200 rounded-xl overflow-hidden shadow-xl">
+        {/* Set bg-white on table for contrast with gray section background */}
+        <div className="border border-gray-200 rounded-xl overflow-hidden shadow-xl bg-white">
           
           {/* Table Header */}
           <div className="grid grid-cols-3 font-bold text-sm sm:text-base bg-gray-100 text-gray-700 uppercase tracking-wider">
@@ -79,6 +81,7 @@ export default function ValuePropositionComparison() {
           {comparisonPoints.map((point, index) => (
             <div 
               key={index} 
+              // Alternating row color is now self-contained in the white-background table
               className={`grid grid-cols-3 items-center ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border-t border-gray-200 transition-all hover:bg-blue-50`}
             >
               
@@ -109,8 +112,8 @@ export default function ValuePropositionComparison() {
           ))}
         </div>
 
-        {/* Final CTA */}
-        <div className="mt-16 text-center">
+        {/* Final CTA - Reduced top margin */}
+        <div className="mt-12 text-center">
           <h3 className="text-2xl font-bold text-gray-900 mb-4">
             Ready to simplify your home management?
           </h3>

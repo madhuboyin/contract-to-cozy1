@@ -2,20 +2,27 @@ import Link from 'next/link';
 
 export default function Neighborhood() {
   return (
-    <section className="py-24 px-4 sm:px-6 lg:px-8 bg-white">
+    // 1. Reduced padding (py-24 to py-10/12)
+    // 2. Changed background (gradient to bg-white) for consistency
+    <section className="py-10 md:py-12 px-4 sm:px-6 lg:px-8 bg-white">
       <div className="max-w-7xl mx-auto">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
+        <div className="grid lg:grid-cols-2 gap-10 items-center"> {/* Reduced gap-12 to gap-10 */}
           {/* Left Column - Text Content */}
-          <div className="space-y-8">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900">
+          <div className="space-y-6"> {/* Reduced space-y-8 to space-y-6 */}
+            
+            {/* 3. Reduced header font size (text-5xl to text-3xl) */}
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
               Book Providers Your Neighbors Trust
             </h2>
             
-            <div className="space-y-6">
+            <div className="space-y-5"> {/* Reduced space-y-6 to space-y-5 */}
+              
+              {/* Feature 1 */}
               <div className="flex items-start space-x-4">
-                <div className="flex-shrink-0 w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
+                {/* 4. Changed icon color (bg-green-500 to bg-blue-600) + Reduced size */}
+                <div className="flex-shrink-0 w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
                   <svg
-                    className="w-6 h-6 text-white"
+                    className="w-5 h-5 text-white" // Reduced icon size
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >
@@ -27,19 +34,23 @@ export default function Neighborhood() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                  {/* 5. Reduced feature title font size (text-xl to text-lg) */}
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1.5">
                     Hyperlocal Matching
                   </h3>
-                  <p className="text-gray-600">
+                  {/* 6. Reduced feature description font size (implicit base to text-sm) */}
+                  <p className="text-sm text-gray-600">
                     See providers who've done great work on your street. Real photos, real reviews from real neighbors.
                   </p>
                 </div>
               </div>
 
+              {/* Feature 2 */}
               <div className="flex items-start space-x-4">
-                <div className="flex-shrink-0 w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
+                {/* 4. Changed icon color (bg-green-500 to bg-blue-600) + Reduced size */}
+                <div className="flex-shrink-0 w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
                   <svg
-                    className="w-6 h-6 text-white"
+                    className="w-5 h-5 text-white"
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >
@@ -51,19 +62,23 @@ export default function Neighborhood() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                  {/* 5. Reduced feature title font size (text-xl to text-lg) */}
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1.5">
                     Ask Your Neighbors
                   </h3>
-                  <p className="text-gray-600">
+                  {/* 6. Reduced feature description font size (implicit base to text-sm) */}
+                  <p className="text-sm text-gray-600">
                     Connect with homeowners nearby who've used these providers. Get the inside scoop before you book.
                   </p>
                 </div>
               </div>
 
+              {/* Feature 3 */}
               <div className="flex items-start space-x-4">
-                <div className="flex-shrink-0 w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
+                {/* 4. Changed icon color (bg-green-500 to bg-blue-600) + Reduced size */}
+                <div className="flex-shrink-0 w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
                   <svg
-                    className="w-6 h-6 text-white"
+                    className="w-5 h-5 text-white"
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >
@@ -75,10 +90,12 @@ export default function Neighborhood() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                  {/* 5. Reduced feature title font size (text-xl to text-lg) */}
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1.5">
                     See Nearby Work
                   </h3>
-                  <p className="text-gray-600">
+                  {/* 6. Reduced feature description font size (implicit base to text-sm) */}
+                  <p className="text-sm text-gray-600">
                     Browse portfolios of completed jobs in your area. See exactly what to expect.
                   </p>
                 </div>
@@ -88,11 +105,13 @@ export default function Neighborhood() {
 
           {/* Right Column - Provider Card */}
           <div className="relative">
-            <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-6">
+            {/* 7. Reduced card padding (p-8 to p-6) and spacing (space-y-6 to space-y-5) */}
+            <div className="bg-white rounded-2xl shadow-2xl p-6 space-y-5">
               {/* Provider Header */}
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                  {/* 8. Reduced card title font size (text-2xl to text-xl) */}
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">
                     Brooklyn Home Inspectors
                   </h3>
                   <div className="flex items-center space-x-2">
@@ -101,17 +120,17 @@ export default function Neighborhood() {
                         <span key={i}>{star}</span>
                       ))}
                     </div>
-                    <span className="text-gray-600 font-semibold">4.9</span>
-                    <span className="text-gray-400">(127 reviews)</span>
+                    <span className="text-sm text-gray-600 font-semibold">4.9</span>
+                    <span className="text-sm text-gray-400">(127 reviews)</span>
                   </div>
                 </div>
-                <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-semibold">
+                <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold"> {/* Reduced font size */}
                   Best Value
                 </div>
               </div>
 
               {/* Neighborhood Stats */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3"> {/* Reduced padding */}
                 <div className="flex items-center space-x-2 text-blue-900">
                   <svg
                     className="w-5 h-5"
@@ -124,23 +143,23 @@ export default function Neighborhood() {
                       clipRule="evenodd"
                     />
                   </svg>
-                  <span className="font-semibold">
+                  <span className="text-sm font-semibold"> {/* Reduced font size */}
                     15 jobs completed in your neighborhood
                   </span>
                 </div>
               </div>
 
               {/* Service Details */}
-              <div className="space-y-3">
-                <div className="flex justify-between">
+              <div className="space-y-2"> {/* Reduced spacing */}
+                <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Service Type</span>
                   <span className="font-semibold text-gray-900">Home Inspection</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Price Range</span>
                   <span className="font-semibold text-green-600">$425 - $550</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Availability</span>
                   <span className="font-semibold text-gray-900">Next 2-3 days</span>
                 </div>
@@ -148,19 +167,20 @@ export default function Neighborhood() {
 
               {/* Action Buttons */}
               <div className="grid grid-cols-2 gap-4">
-                <button className="px-6 py-3 border-2 border-blue-600 text-blue-600 rounded-lg font-semibold hover:bg-blue-50 transition-colors">
+                {/* 10. Reduced button padding/font size */}
+                <button className="px-5 py-2.5 border-2 border-blue-600 text-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-50 transition-colors">
                   Ask Neighbors
                 </button>
                 <Link
                   href="/signup"
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors text-center"
+                  className="px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors text-center"
                 >
                   Book Now
                 </Link>
               </div>
             </div>
 
-            {/* Decorative element */}
+            {/* 11. Changed decorative color (bg-green-200 to bg-blue-200) */}
             <div className="absolute -z-10 top-8 -right-8 w-64 h-64 bg-blue-200 rounded-full opacity-30 blur-3xl"></div>
           </div>
         </div>

@@ -1,5 +1,5 @@
 // apps/frontend/src/components/landing/Services.tsx
-// Updated with lighter colors and smaller fonts
+// Updated with sleek/compact styling, consistent colors, and smaller fonts
 
 import Link from 'next/link';
 
@@ -8,7 +8,7 @@ export default function Services() {
     {
       title: 'Closing Phase',
       icon: '📋',
-      color: 'bg-blue-50 border-blue-200 hover:border-blue-300',
+      // color: 'bg-blue-50 border-blue-200 hover:border-blue-300', // <-- Removed for sleek consistency
       services: [
         'Home Inspection',
         'Insurance',
@@ -20,7 +20,7 @@ export default function Services() {
     {
       title: 'Move-In',
       icon: '🚚',
-      color: 'bg-green-50 border-green-200 hover:border-green-300',
+      // color: 'bg-green-50 border-green-200 hover:border-green-300', // <-- Removed for sleek consistency
       services: [
         'Moving Services',
         'Utility Setup',
@@ -32,7 +32,7 @@ export default function Services() {
     {
       title: 'Maintenance',
       icon: '🔧',
-      color: 'bg-purple-50 border-purple-200 hover:border-purple-300',
+      // color: 'bg-purple-50 border-purple-200 hover:border-purple-300', // <-- Removed for sleek consistency
       services: [
         'HVAC Service',
         'Dryer Vent Cleaning',
@@ -44,7 +44,7 @@ export default function Services() {
     {
       title: 'Upgrades',
       icon: '⚡',
-      color: 'bg-amber-50 border-amber-200 hover:border-amber-300',
+      // color: 'bg-amber-50 border-amber-200 hover:border-amber-300', // <-- Removed for sleek consistency
       services: [
         'Solar Installation',
         'Window Replacement',
@@ -56,37 +56,39 @@ export default function Services() {
   ];
 
   return (
-    <section id="services" className="py-16 md:py-20 px-4 sm:px-6 lg:px-8 bg-white">
+    // Reduced vertical padding
+    <section id="services" className="py-10 md:py-12 px-4 sm:px-6 lg:px-8 bg-white">
       <div className="max-w-7xl mx-auto">
-        {/* Section Header */}
-        <div className="text-center mb-12 md:mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+        {/* Section Header - Reduced font size and margins */}
+        <div className="text-center mb-10">
+          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">
             Services We Cover
           </h2>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+          <p className="text-base text-gray-600 max-w-2xl mx-auto">
             From inspection to move-in and beyond, we've got you covered
           </p>
         </div>
 
-        {/* Services Grid */}
+        {/* Services Grid - Reduced gap */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {serviceCategories.map((category, index) => (
             <div 
               key={index}
-              className={`p-6 rounded-2xl border-2 transition-all duration-300 ${category.color} hover:shadow-lg`}
+              // Standardized card style, removed category.color, reduced padding (p-6 to p-4)
+              className="p-4 rounded-2xl border border-gray-100 transition-all duration-300 bg-white hover:shadow-lg"
             >
-              {/* Icon & Title */}
-              <div className="text-center mb-4">
-                <div className="text-4xl mb-3">{category.icon}</div>
-                <h3 className="text-lg font-semibold text-gray-900">
+              {/* Icon & Title - Reduced icon size and margins */}
+              <div className="text-center mb-3">
+                <div className="text-3xl mb-2">{category.icon}</div>
+                <h3 className="text-base font-semibold text-gray-900">
                   {category.title}
                 </h3>
               </div>
 
-              {/* Services List */}
-              <ul className="space-y-2">
+              {/* Services List - Reduced list item font size (text-sm to text-xs) */}
+              <ul className="space-y-1.5">
                 {category.services.map((service, idx) => (
-                  <li key={idx} className="flex items-start text-sm text-gray-700">
+                  <li key={idx} className="flex items-start text-xs text-gray-700">
                     <span className="mr-2 text-blue-600 font-bold">·</span>
                     <span>{service}</span>
                   </li>
@@ -96,14 +98,15 @@ export default function Services() {
           ))}
         </div>
 
-        {/* CTA */}
-        <div className="text-center mt-12">
+        {/* CTA - Reduced top margin and button size */}
+        <div className="text-center mt-10">
           <Link
             href="/signup"
-            className="inline-flex items-center px-6 py-3 bg-blue-600 text-white text-base font-medium rounded-lg hover:bg-blue-700 transition-all shadow-md hover:shadow-lg"
+            // Reduced padding and font size for a sleeker button
+            className="inline-flex items-center px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-all shadow-md hover:shadow-lg"
           >
             Browse All Services
-            <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </Link>
