@@ -1,10 +1,11 @@
 // apps/frontend/src/components/landing/Hero.tsx
-// Compact version - Angi.com style with reduced height
+// Angi.com-inspired Hero - With "Get Started Free" button, no search box
 
 'use client';
 
 import Link from 'next/link';
 import { useState } from 'react';
+import Image from 'next/image';
 
 export default function Hero() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -18,14 +19,8 @@ export default function Hero() {
   };
 
   return (
-    <div className="relative bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 overflow-hidden">
-      {/* Subtle decorative elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-100 rounded-full opacity-20 blur-3xl"></div>
-        <div className="absolute top-1/2 -left-40 w-96 h-96 bg-purple-100 rounded-full opacity-20 blur-3xl"></div>
-      </div>
-
-      {/* Navigation */}
+    <div className="relative w-full overflow-hidden bg-white">
+      {/* Navigation (Kept as is) */}
       <nav className="relative z-50 bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -151,90 +146,64 @@ export default function Hero() {
         )}
       </nav>
 
-      {/* Hero Content - COMPACT VERSION */}
-      <div className="relative">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
-          <div className="grid lg:grid-cols-2 gap-8 items-center">
-            {/* Left Column - Content */}
-            <div className="text-center lg:text-left">
-              {/* Badge */}
-              <div className="inline-flex items-center px-3 py-1.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium mb-4">
-                <span className="mr-1.5">✨</span>
-                Trusted by 10,000+ homeowners
-              </div>
+      {/* Hero Content - Angi.com Style - MINIMAL HEIGHT */}
+      <div className="relative h-[380px] md:h-[450px] flex items-center justify-center text-center px-4">
+        {/* Background Image */}
+        <div className="absolute inset-0 z-0">
+          <Image
+            src="/contract-to-cozy-dashboard.png" // Your downloaded image
+            alt="Contract to Cozy Dashboard Background"
+            fill
+            style={{ objectFit: 'cover' }}
+            priority
+            className="opacity-50 md:opacity-70"
+          />
+          {/* STRONGER OVERLAY for significantly better text readability */}
+          <div className="absolute inset-0 bg-blue-900 opacity-60"></div> 
+        </div>
 
-              {/* Headline - Compact */}
-              <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 leading-tight mb-4">
-                Home Services Made
-                <span className="block text-blue-600 mt-1">Simple & Affordable</span>
-              </h1>
+        {/* Text and CTA Overlay */}
+        <div className="relative z-10 max-w-3xl text-white">
+          {/* Badge - Tighter margin */}
+          <div className="inline-flex items-center px-3 py-1.5 rounded-full bg-white bg-opacity-30 text-white text-xs font-medium mb-2"> 
+            <span className="mr-1.5">✨</span>
+            Trusted by 10,000+ homeowners
+          </div>
 
-              {/* Subtitle */}
-              <p className="text-base md:text-lg text-gray-600 mb-6 leading-relaxed">
-                Connect with trusted local professionals for inspections, repairs, and upgrades. 
-                Save time and money on every home service.
-              </p>
+          {/* Headline - Tighter margin */}
+          <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold leading-tight mb-2 drop-shadow-lg text-white"> 
+              Home Services Made <span className="text-blue-300">Simple & Affordable</span>
+          </h1>
 
-              {/* CTA Buttons */}
-              <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start mb-6">
-                <Link
-                  href="/signup"
-                  className="px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-all shadow-md hover:shadow-lg"
-                >
-                  Get Started Free
-                </Link>
-                <Link
-                  href="/providers/join"
-                  className="px-5 py-2.5 bg-white text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-all border border-gray-200 shadow-sm"
-                >
-                  I'm a Provider
-                </Link>
-              </div>
+          {/* Subtitle - Tighter margin */}
+          <p className="text-base md:text-lg mb-6 leading-relaxed drop-shadow-md text-white"> {/* Increased mb- to center the single button better */}
+            Connect with trusted local professionals for inspections, repairs, and upgrades. 
+            Save time and money on every home service.
+          </p>
 
-              {/* Stats - Compact */}
-              <div className="grid grid-cols-3 gap-4 pt-6 border-t border-gray-200">
-                <div className="text-center lg:text-left">
-                  <div className="text-xl md:text-2xl font-bold text-blue-600">$850</div>
-                  <div className="text-xs text-gray-500 mt-0.5">Avg Savings</div>
-                </div>
-                <div className="text-center lg:text-left">
-                  <div className="text-xl md:text-2xl font-bold text-blue-600">15hrs</div>
-                  <div className="text-xs text-gray-500 mt-0.5">Time Saved</div>
-                </div>
-                <div className="text-center lg:text-left">
-                  <div className="text-xl md:text-2xl font-bold text-blue-600">98%</div>
-                  <div className="text-xs text-gray-500 mt-0.5">Happy Clients</div>
-                </div>
-              </div>
+          {/* CTA: "Get Started Free" Button (Single CTA) */}
+          <div className="flex justify-center mb-6"> 
+            <Link
+              href="/signup" // Link to your signup page
+              className="px-8 py-3 bg-blue-600 text-white text-lg font-semibold rounded-lg hover:bg-blue-700 transition-all shadow-md hover:shadow-lg"
+            >
+              Get Started Free
+            </Link>
+          </div>
+
+          {/* Stats - Tighter padding */}
+          <div className="grid grid-cols-3 gap-3 max-w-lg mx-auto pt-3 border-t border-white border-opacity-40"> 
+            <div className="text-center">
+              <div className="text-xl md:text-2xl font-bold text-blue-300">$850</div>
+              <div className="text-xs text-white text-opacity-100 mt-0.5">Avg Savings</div>
             </div>
-
-            {/* Right Column - Illustration/Image */}
-            <div className="hidden lg:block">
-              <div className="relative">
-                <div className="aspect-square bg-white rounded-2xl border border-gray-200 shadow-lg flex items-center justify-center p-8">
-                  <div className="text-center">
-                    <div className="text-6xl mb-4">🏡</div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">Your Home Journey</h3>
-                    <p className="text-sm text-gray-600 mb-6">Simplified & Stress-Free</p>
-                    
-                    {/* Feature badges - compact */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-center text-sm text-gray-700">
-                        <span className="mr-2 text-blue-600">✓</span>
-                        Verified Professionals
-                      </div>
-                      <div className="flex items-center justify-center text-sm text-gray-700">
-                        <span className="mr-2 text-blue-600">✓</span>
-                        Transparent Pricing
-                      </div>
-                      <div className="flex items-center justify-center text-sm text-gray-700">
-                        <span className="mr-2 text-blue-600">✓</span>
-                        Book in Minutes
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <div className="text-center">
+              <div className="text-xl md:text-2xl font-bold text-blue-300">15hrs</div>
+              <div className="text-xs text-white text-opacity-100 mt-0.5">Time Saved</div>
+            </div>
+            <div className="text-center">
+              <div className="text-xl md:text-2xl font-bold text-blue-300">98%</div>
+              <div className="text-xs text-white text-opacity-100 mt-0.5">Happy Clients</div>
             </div>
           </div>
         </div>
