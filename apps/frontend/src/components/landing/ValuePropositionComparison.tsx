@@ -1,72 +1,109 @@
 // apps/frontend/src/components/landing/ValuePropositionComparison.tsx
+// Final Integrated Value Section: All differentiators and capabilities in one crisp table.
 
 import Link from 'next/link';
 
 export default function ValuePropositionComparison() {
   const comparisonPoints = [
+    // --- DIFFERENTIATORS (The UVPs) ---
     {
       icon: '🔑',
       title: 'Unified Closure Services',
       cozy: 'One platform for inspection, attorney, and insurance vendor coordination.',
-      competitor: 'Separate vendors, manual communication, and disjointed scheduling.'
+      competitor: 'Separate vendors, manual communication, and disjointed scheduling required.'
     },
     {
       icon: '🖥️',
       title: 'Single Pane Dashboard',
-      cozy: 'Track all bookings, documents, and budget history in one beautiful interface.',
-      competitor: 'Spreadsheets, email inboxes, and notes for tracking home services.'
+      cozy: 'All bookings, property documents, and budget history in one beautiful interface.',
+      competitor: 'Tracking services using spreadsheets, emails, and phone notes.'
     },
     {
       icon: '🔔',
-      title: 'Annual Maintenance Reminders',
-      cozy: 'Automatic reminders for duct cleaning, pest control, chimney sweeping, and re-booking.',
-      competitor: 'No reminders—maintenance cycles are the homeowner’s responsibility.'
+      title: 'Annual Reminders',
+      cozy: 'Automatic reminders for maintenance (e.g., duct cleaning, pest control).',
+      competitor: 'Homeowner must manually track and remember service cycles.'
     },
     {
       icon: '⭐',
-      title: 'Vetted Neighborhood Reviews',
-      cozy: 'Connect with pros rated by your actual neighbors and see local job history.',
-      competitor: 'Generic city-wide reviews or ratings that lack local trust signals.'
+      title: 'Neighborhood Trust',
+      cozy: 'Pros vetted and rated by your actual neighbors with local job history.',
+      competitor: 'Generic city-wide reviews and simple rating systems.'
+    },
+
+    // --- CORE CAPABILITIES (The Necessities - Removed Local Experts) ---
+    // Removed: { icon: '🏘️', title: 'Local Experts', ... }
+    {
+      icon: '💰',
+      title: 'Transparent Pricing',
+      cozy: 'See upfront costs and guaranteed quotes before booking.',
+      competitor: 'Hidden fees, estimated quotes that often change upon arrival.'
+    },
+    {
+      icon: '⚡',
+      title: 'Book Fast',
+      cozy: 'Find, compare, and book qualified pros in minutes.',
+      competitor: 'Calling multiple vendors and waiting days for callbacks or quotes.'
+    },
+    {
+      icon: '🛡️',
+      title: 'Trusted & Verified',
+      cozy: 'All pros are background-checked, licensed, and insured for your peace of mind.',
+      competitor: 'User must manually verify license and insurance details themselves.'
     },
   ];
 
   return (
-    <section className="py-20 md:py-28 px-4 sm:px-6 lg:px-8 bg-gray-50">
+    <section className="py-16 md:py-20 px-4 sm:px-6 lg:px-8 bg-white">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
-            Beyond Booking: What Makes Us Different
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+            The Cozy Way vs. The Old Way
           </h2>
           <p className="text-lg text-gray-600 max-w-3xl mx-auto">
-            We cover the entire home journey, from closing services to long-term maintenance.
+            See how we transform the chaos of home services into a simple, managed experience.
           </p>
         </div>
 
-        {/* Comparison Grid */}
-        <div className="space-y-12">
+        {/* Comparison Table Structure (Using Grid) */}
+        <div className="border border-gray-200 rounded-xl overflow-hidden shadow-xl">
+          
+          {/* Table Header */}
+          <div className="grid grid-cols-3 font-bold text-sm sm:text-base bg-gray-100 text-gray-700 uppercase tracking-wider">
+            <div className="p-4 border-r border-gray-200">Key Feature</div>
+            <div className="p-4 border-r border-gray-200 text-center text-blue-600">The Cozy Way</div>
+            <div className="p-4 text-center text-red-600">The Old Way</div>
+          </div>
+
+          {/* Table Rows */}
           {comparisonPoints.map((point, index) => (
             <div 
               key={index} 
-              className="grid lg:grid-cols-3 gap-8 items-center bg-white p-6 md:p-8 rounded-2xl shadow-lg border border-gray-100"
+              className={`grid grid-cols-3 items-center ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border-t border-gray-200 transition-all hover:bg-blue-50`}
             >
-              {/* Feature Title Column */}
-              <div className="text-center lg:text-left">
-                <span className="text-4xl mb-2 block">{point.icon}</span>
-                <h3 className="text-xl font-bold text-gray-900">{point.title}</h3>
+              
+              {/* Column 1: Feature Title */}
+              <div className="p-4 border-r border-gray-200 flex items-center">
+                <span className="text-2xl mr-3">{point.icon}</span>
+                <h3 className="text-sm font-semibold text-gray-900 leading-snug">
+                  {point.title}
+                </h3>
               </div>
 
-              {/* Contract to Cozy Column */}
-              <div className="p-4 border-l-4 border-blue-600 bg-blue-50/70 rounded-lg shadow-sm h-full flex items-center">
-                <p className="text-sm font-semibold text-gray-800">
-                  <span className="text-blue-600 mr-2">The Cozy Way:</span> {point.cozy}
-                </p>
+              {/* Column 2: The Cozy Way (Thumbs Up) */}
+              <div className="p-4 border-r border-gray-200">
+                <div className="flex items-center space-x-3">
+                  <span className="text-2xl text-green-500">👍</span>
+                  <p className="text-sm text-gray-700 leading-snug">{point.cozy}</p>
+                </div>
               </div>
 
-              {/* Competitor Column */}
-              <div className="p-4 border-l-4 border-gray-300 bg-gray-100/70 rounded-lg shadow-sm h-full flex items-center">
-                <p className="text-sm text-gray-600">
-                  <span className="text-gray-700 mr-2 font-semibold">The Old Way:</span> {point.competitor}
-                </p>
+              {/* Column 3: The Old Way (Thumbs Down) */}
+              <div className="p-4">
+                <div className="flex items-center space-x-3">
+                  <span className="text-2xl text-red-500">👎</span>
+                  <p className="text-sm text-gray-700 leading-snug">{point.competitor}</p>
+                </div>
               </div>
             </div>
           ))}
@@ -75,7 +112,7 @@ export default function ValuePropositionComparison() {
         {/* Final CTA */}
         <div className="mt-16 text-center">
           <h3 className="text-2xl font-bold text-gray-900 mb-4">
-            Stop the Chaos. Start Your Dashboard.
+            Ready to simplify your home management?
           </h3>
           <Link
             href="/signup"
