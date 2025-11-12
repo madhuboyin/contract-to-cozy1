@@ -1,8 +1,11 @@
+// apps/frontend/src/app/page.tsx
+
 import PreviewModeWrapper from '@/components/PreviewModeWrapper';
 import Hero from '@/components/landing/Hero';
 import Features from '@/components/landing/Features';
 import HowItWorks from '@/components/landing/HowItWorks';
 import DashboardShowcase from '@/components/landing/DashboardShowcase';
+import ValuePropositionComparison from '@/components/landing/ValuePropositionComparison'; // NEW IMPORT
 import Services from '@/components/landing/Services';
 import Neighborhood from '@/components/landing/Neighborhood';
 import SavingsCalculator from '@/components/landing/SavingsCalculator';
@@ -17,6 +20,7 @@ export default function Home() {
       <Features />
       <HowItWorks />
       <DashboardShowcase />
+      <ValuePropositionComparison /> {/* NEW COMPONENT PLACED HERE */}
       <Services />
       <Neighborhood />
       <SavingsCalculator />
