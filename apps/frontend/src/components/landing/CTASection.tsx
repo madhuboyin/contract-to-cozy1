@@ -30,7 +30,7 @@ export default function CTASection() {
         </div>
 
         {/* Trust indicators */}
-        <div className="mt-12 pt-8 border-t border-blue-400/30">
+        <div className="mt-12 pt-8 border-t border-blue-400/50">
           <div className="flex flex-wrap justify-center items-center gap-8 text-blue-100">
             <div className="flex items-center">
               <span className="text-2xl mr-2">✓</span>

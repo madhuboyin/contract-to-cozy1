@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 export default function Neighborhood() {
   return (
-    <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-green-50 to-blue-50">
+    <section className="py-24 px-4 sm:px-6 lg:px-8 bg-white">
       <div className="max-w-7xl mx-auto">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           {/* Left Column - Text Content */}
@@ -13,7 +13,7 @@ export default function Neighborhood() {
             
             <div className="space-y-6">
               <div className="flex items-start space-x-4">
-                <div className="flex-shrink-0 w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
+                <div className="flex-shrink-0 w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
                   <svg
                     className="w-6 h-6 text-white"
                     fill="currentColor"
@@ -37,7 +37,7 @@ export default function Neighborhood() {
               </div>
 
               <div className="flex items-start space-x-4">
-                <div className="flex-shrink-0 w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
+                <div className="flex-shrink-0 w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
                   <svg
                     className="w-6 h-6 text-white"
                     fill="currentColor"
@@ -61,7 +61,7 @@ export default function Neighborhood() {
               </div>
 
               <div className="flex items-start space-x-4">
-                <div className="flex-shrink-0 w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
+                <div className="flex-shrink-0 w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
                   <svg
                     className="w-6 h-6 text-white"
                     fill="currentColor"
@@ -161,7 +161,7 @@ export default function Neighborhood() {
             </div>
 
             {/* Decorative element */}
-            <div className="absolute -z-10 top-8 -right-8 w-64 h-64 bg-green-200 rounded-full opacity-30 blur-3xl"></div>
+            <div className="absolute -z-10 top-8 -right-8 w-64 h-64 bg-blue-200 rounded-full opacity-30 blur-3xl"></div>
           </div>
         </div>
       </div>

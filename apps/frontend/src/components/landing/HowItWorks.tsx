@@ -30,7 +30,7 @@ export default function HowItWorks() {
   ];
 
   return (
-    <section id="how-it-works" className="py-16 md:py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-50 to-indigo-50">
+    <section id="how-it-works" className="py-16 md:py-20 px-4 sm:px-6 lg:px-8 bg-gray-50">
       <div className="max-w-7xl mx-auto">
         {/* Section Header */}
         <div className="text-center mb-12 md:mb-16">

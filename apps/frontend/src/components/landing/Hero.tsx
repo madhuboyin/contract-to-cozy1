@@ -220,15 +220,15 @@ export default function Hero() {
                     {/* Feature badges - compact */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-center text-sm text-gray-700">
-                        <span className="mr-2 text-green-600">✓</span>
+                        <span className="mr-2 text-blue-600">✓</span>
                         Verified Professionals
                       </div>
                       <div className="flex items-center justify-center text-sm text-gray-700">
-                        <span className="mr-2 text-green-600">✓</span>
+                        <span className="mr-2 text-blue-600">✓</span>
                         Transparent Pricing
                       </div>
                       <div className="flex items-center justify-center text-sm text-gray-700">
-                        <span className="mr-2 text-green-600">✓</span>
+                        <span className="mr-2 text-blue-600">✓</span>
                         Book in Minutes
                       </div>
                     </div>
