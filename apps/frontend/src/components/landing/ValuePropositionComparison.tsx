@@ -117,9 +117,10 @@ export default function ValuePropositionComparison() {
           <h3 className="text-2xl font-bold text-gray-900 mb-4">
             Ready to simplify your home management?
           </h3>
+          {/* UPDATED BUTTON: Reduced padding (px-8 py-4 to px-6 py-3) and font size (text-lg to text-base) */}
           <Link
             href="/signup"
-            className="inline-block px-8 py-4 bg-blue-600 text-white text-lg font-semibold rounded-xl hover:bg-blue-700 transition-colors shadow-lg"
+            className="inline-block px-6 py-3 bg-blue-600 text-white text-base font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-lg"
           >
             Create Your Free Account →
           </Link>
