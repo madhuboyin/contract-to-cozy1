@@ -118,7 +118,7 @@ export class AuthService {
         role: user.role as any,
         emailVerified: user.emailVerified,
         status: user.status as any,
-        segment: segment, // <-- THIS IS THE FIX
+        segment: segment, // <-- THIS IS THE FIX for signup
       },
     };
   }
@@ -130,7 +130,7 @@ export class AuthService {
     // Find user by email AND include the profile segment
     const user = await prisma.user.findUnique({
       where: { email: data.email },
-      include: { homeownerProfile: { select: { segment: true } } },
+      include: { homeownerProfile: { select: { segment: true } } }, // <-- THIS IS THE FIX
     });
 
     if (!user) {
@@ -172,7 +172,7 @@ export class AuthService {
         role: user.role as any,
         emailVerified: user.emailVerified,
         status: user.status as any,
-        segment: user.homeownerProfile?.segment || 'EXISTING_OWNER',
+        segment: user.homeownerProfile?.segment || 'EXISTING_OWNER', // <-- THIS IS THE FIX for login
       },
     };
   }
@@ -316,7 +316,7 @@ export class AuthService {
         avatar: true,
         bio: true,
         createdAt: true,
-        homeownerProfile: {
+        homeownerProfile: { // <-- THIS IS THE FIX
           select: {
             segment: true,
           },
@@ -332,7 +332,7 @@ export class AuthService {
     const { homeownerProfile, ...userData } = user;
     return {
       ...userData,
-      segment: homeownerProfile?.segment || 'EXISTING_OWNER',
+      segment: homeownerProfile?.segment || 'EXISTING_OWNER', // <-- THIS IS THE FIX
     };
   }
   /**
