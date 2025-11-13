@@ -1,279 +1,232 @@
 // apps/frontend/src/app/(dashboard)/dashboard/page.tsx
-
 'use client';
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { api } from '@/lib/api/client';
-import { Booking } from '@/types';
-import { formatDate, formatCurrency, getBookingStatusColor, getBookingStatusLabel } from '@/lib/utils';
+import Link from 'next/link';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { ArrowRight, CheckCircle, Home, ListChecks } from 'lucide-react';
+import React from 'react';
 
+// --- New Home Buyer Welcome Component ---
+// This is "Screen 1" from your design.
+// We define it here for simplicity, but it could be moved to its own file.
+// ----------------------------------------
+const HomeBuyerWelcome = ({ user }: { user: any }) => {
+  // This is a placeholder. You'll fetch this from the API later.
+  const checklistProgress = { completed: 0, total: 8 };
+  const progressPercent =
+    (checklistProgress.completed / checklistProgress.total) * 100;
+
+  return (
+    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+      <h2 className="text-3xl font-bold tracking-tight">
+        Welcome, {user.firstName}!
+      </h2>
+      <p className="text-lg text-muted-foreground">
+        Let's get you cozy in your new home.
+      </p>
+      
+      <div className="flex-1 space-y-6 pt-6">
+        <Card className="shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <div className="space-y-1.5">
+              <CardTitle className="text-2xl font-bold">
+                Your Closure Checklist
+              </CardTitle>
+              <CardDescription>
+                We're here to guide you through a smooth closing process.
+              </CardDescription>
+            </div>
+            <ListChecks className="h-8 w-8 text-blue-500" />
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-700">
+                {checklistProgress.completed} / {checklistProgress.total} items
+                completed
+              </p>
+              <Progress value={progressPercent} className="w-full" />
+            </div>
+            <Button asChild className="w-full md:w-auto">
+              <Link href="/dashboard/checklist">
+                Start Your Checklist
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* You can add your "Quick Actions" cards here if desired */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Find Services
+              </CardTitle>
+              <Home className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">Book Now</div>
+              <p className="text-xs text-muted-foreground">
+                Inspections, Movers, & More
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                My Bookings
+              </CardTitle>
+              <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">0</div>
+              <p className="text-xs text-muted-foreground">
+                View your scheduled services
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- Main Dashboard Page Component ---
+// This component now acts as a "router"
+// -------------------------------------
 export default function DashboardPage() {
-  const { user } = useAuth();
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    pending: 0,
-    confirmed: 0,
-    completed: 0,
-    total: 0,
-  });
+  const { user, loading } = useAuth();
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
-
-  const loadDashboardData = async () => {
-    try {
-      const response = await api.listBookings({ limit: 5 });
-      if (response.success) {
-        setBookings(response.data.bookings);
-        
-        // Calculate stats
-        if (response.data.summary) {
-          setStats({
-            pending: response.data.summary.byStatus.PENDING || 0,
-            confirmed: response.data.summary.byStatus.CONFIRMED || 0,
-            completed: response.data.summary.byStatus.COMPLETED || 0,
-            total: response.data.summary.totalBookings || 0,
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load dashboard data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // 1. Show a loading state while auth is being checked
   if (loading) {
     return (
-      <div className="px-4 py-8">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-4 mb-8">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-24 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-        </div>
+      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+        <h2 className="text-3xl font-bold tracking-tight">
+          Loading Dashboard...
+        </h2>
       </div>
     );
   }
 
+  // 2. If the user is a HOME_BUYER, show the new Welcome screen
+  if (user && user.segment === 'HOME_BUYER') {
+    return <HomeBuyerWelcome user={user} />;
+  }
+
+  // 3. Otherwise, show the default dashboard for existing owners
   return (
-    <div className="px-4 py-8">
-      {/* Welcome Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">
-          Welcome back, {user?.firstName}! 👋
-        </h1>
-        <p className="mt-2 text-gray-600">
-          {user?.role === 'HOMEOWNER' 
-            ? 'Manage your property services and bookings'
-            : 'View and manage your service requests'
-          }
-        </p>
+    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+      <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+      
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Upcoming Bookings
+            </CardTitle>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              className="h-4 w-4 text-muted-foreground"
+            >
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">5</div>
+            <p className="text-xs text-muted-foreground">+2 this month</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Total Spending
+            </CardTitle>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              className="h-4 w-4 text-muted-foreground"
+            >
+              <rect width="20" height="14" x="2" y="5" rx="2" />
+              <path d="M2 10h20" />
+            </svg>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">$1,250</div>
+            <p className="text-xs text-muted-foreground">+12% from last month</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">My Properties</CardTitle>
+            <Home className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">1</div>
+            <p className="text-xs text-muted-foreground">Manage properties</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Completed Jobs
+            </CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">12</div>
+            <p className="text-xs text-muted-foreground">View service history</p>
+          </CardContent>
+        </Card>
       </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-4 mb-8">
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="text-3xl">📊</div>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    Total Bookings
-                  </dt>
-                  <dd className="text-2xl font-semibold text-gray-900">
-                    {stats.total}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="text-3xl">⏳</div>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    Pending
-                  </dt>
-                  <dd className="text-2xl font-semibold text-yellow-600">
-                    {stats.pending}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="text-3xl">✅</div>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    Confirmed
-                  </dt>
-                  <dd className="text-2xl font-semibold text-blue-600">
-                    {stats.confirmed}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="text-3xl">🎉</div>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    Completed
-                  </dt>
-                  <dd className="text-2xl font-semibold text-green-600">
-                    {stats.completed}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="bg-white shadow rounded-lg p-6 mb-8">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {user?.role === 'HOMEOWNER' && (
-            <>
-              <Link
-                href="/dashboard/providers"
-                className="flex items-center p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
-              >
-                <span className="text-2xl mr-3">🔍</span>
-                <div>
-                  <div className="font-medium text-gray-900">Find Providers</div>
-                  <div className="text-sm text-gray-500">Search for service providers</div>
-                </div>
-              </Link>
-              <Link
-                href="/dashboard/providers"
-                className="flex items-center p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
-              >
-                <span className="text-2xl mr-3">➕</span>
-                <div>
-                  <div className="font-medium text-gray-900">New Booking</div>
-                  <div className="text-sm text-gray-500">Create a service request</div>
-                </div>
-              </Link>
-            </>
-          )}
-          <Link
-            href="/dashboard/bookings"
-            className="flex items-center p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
-          >
-            <span className="text-2xl mr-3">📅</span>
-            <div>
-              <div className="font-medium text-gray-900">View Bookings</div>
-              <div className="text-sm text-gray-500">Manage all bookings</div>
-            </div>
-          </Link>
-        </div>
-      </div>
-
-      {/* Recent Bookings */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-gray-900">Recent Bookings</h2>
-          <Link
-            href="/dashboard/bookings"
-            className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-          >
-            View all →
-          </Link>
-        </div>
-        
-        {bookings.length === 0 ? (
-          <div className="px-6 py-12 text-center">
-            <div className="text-4xl mb-4">📭</div>
-            <p className="text-gray-500">No bookings yet</p>
-            {user?.role === 'HOMEOWNER' && (
-              <Link
-                href="/dashboard/providers"
-                className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
-              >
-                Find a service provider
-              </Link>
-            )}
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-200">
-            {bookings.map((booking) => (
-              <Link
-                key={booking.id}
-                href={`/dashboard/bookings/${booking.id}`}
-                className="block hover:bg-gray-50 transition-colors"
-              >
-                <div className="px-6 py-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3">
-                        <p className="text-sm font-medium text-gray-900">
-                          {booking.bookingNumber}
-                        </p>
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-${getBookingStatusColor(
-                            booking.status
-                          )}-100 text-${getBookingStatusColor(booking.status)}-800`}
-                        >
-                          {getBookingStatusLabel(booking.status)}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-sm text-gray-600">
-                        {booking.service.name} - {booking.property.address}
-                      </p>
-                      <p className="mt-1 text-xs text-gray-500">
-                        {booking.scheduledDate
-                          ? formatDate(booking.scheduledDate)
-                          : 'Not scheduled'}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium text-gray-900">
-                        {formatCurrency(booking.estimatedPrice)}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {user?.role === 'HOMEOWNER'
-                          ? booking.provider.businessName
-                          : `${booking.homeowner.firstName} ${booking.homeowner.lastName}`}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+        <Card className="col-span-4">
+          <CardHeader>
+            <CardTitle>Recent Activity</CardTitle>
+            <CardDescription>
+              You have 3 upcoming bookings this week.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>{/* Placeholder for recent activity */}</CardContent>
+        </Card>
+        <Card className="col-span-3">
+          <CardHeader>
+            <CardTitle>Quick Actions</CardTitle>
+            <CardDescription>
+              Book new services or manage your home.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col space-y-2">
+            <Button asChild>
+              <Link href="/dashboard/providers">Book a New Service</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/dashboard/properties">Manage Properties</Link>
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
