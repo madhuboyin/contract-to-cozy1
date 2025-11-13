@@ -1,6 +1,8 @@
 // apps/frontend/src/app/(dashboard)/dashboard/page.tsx
 'use client';
 
+// 1. Import new hooks and icons
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import Link from 'next/link';
 import {
@@ -12,18 +14,81 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { ArrowRight, CheckCircle, Home, ListChecks } from 'lucide-react';
-import React from 'react';
+import {
+  ArrowRight,
+  CheckCircle,
+  Home,
+  ListChecks,
+  Loader2, // <-- 1. Add this
+} from 'lucide-react';
 
+// --- Types (copied from checklist page) ---
+type ChecklistItemStatus = 'PENDING' | 'COMPLETED' | 'NOT_NEEDED';
+interface ChecklistItemType {
+  id: string;
+  status: ChecklistItemStatus;
+}
+interface ChecklistType {
+  id: string;
+  items: ChecklistItemType[];
+}
+
+// ----------------------------------------
 // --- New Home Buyer Welcome Component ---
-// This is "Screen 1" from your design.
-// We define it here for simplicity, but it could be moved to its own file.
 // ----------------------------------------
 const HomeBuyerWelcome = ({ user }: { user: any }) => {
-  // This is a placeholder. We will make this real in the next step.
-  const checklistProgress = { completed: 0, total: 8 };
-  const progressPercent =
-    (checklistProgress.completed / checklistProgress.total) * 100;
+  // 2. Add state for checklist data and loading
+  const [checklist, setChecklist] = useState<ChecklistType | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // 3. Create a function to fetch the checklist
+  const fetchChecklist = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/checklist`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: 'no-store', // Ensure we always get fresh data
+        }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setChecklist(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch checklist for dashboard', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 4. Fetch data on mount AND when the user navigates back
+  useEffect(() => {
+    fetchChecklist();
+
+    // This is the key: Re-fetch when the user focuses the tab/window
+    // This happens when they use the browser's "back" button
+    const handleFocus = () => {
+      fetchChecklist();
+    };
+
+    window.addEventListener('focus', handleFocus);
+
+    // Clean up the listener
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []); // Empty array means this runs once on mount
+
+  // 5. Calculate real progress
+  const completedItems =
+    checklist?.items.filter((item) => item.status === 'COMPLETED').length || 0;
+  const totalItems = checklist?.items.length || 8; // Default to 8
+  const progressPercent = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -33,7 +98,7 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
       <p className="text-lg text-muted-foreground">
         Let's get you cozy in your new home.
       </p>
-      
+
       <div className="flex-1 space-y-6 pt-6">
         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
@@ -48,13 +113,19 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
             <ListChecks className="h-8 w-8 text-blue-500" />
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-gray-700">
-                {checklistProgress.completed} / {checklistProgress.total} items
-                completed
-              </p>
-              <Progress value={progressPercent} className="w-full" />
-            </div>
+            {/* 6. Show a loading spinner while fetching */}
+            {loading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-gray-700">
+                  {completedItems} / {totalItems} items completed
+                </p>
+                <Progress value={progressPercent} className="w-full" />
+              </div>
+            )}
             <Button asChild className="w-full md:w-auto">
               <Link href="/dashboard/checklist">
                 Start Your Checklist
@@ -64,7 +135,7 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
           </CardContent>
         </Card>
 
-        {/* You can add your "Quick Actions" cards here if desired */}
+        {/* Quick Actions Cards */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -100,8 +171,9 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
   );
 };
 
+// -------------------------------------
 // --- Main Dashboard Page Component ---
-// This component now acts as a "router"
+// (This part remains the same)
 // -------------------------------------
 export default function DashboardPage() {
   const { user, loading } = useAuth();
@@ -126,8 +198,9 @@ export default function DashboardPage() {
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-      
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {/* ... (existing owner cards) ... */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -162,7 +235,7 @@ export default function DashboardPage() {
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
-              fill="none"
+      fill="none"
               stroke="currentColor"
               strokeLinecap="round"
               strokeLinejoin="round"
