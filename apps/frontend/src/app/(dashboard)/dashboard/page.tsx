@@ -20,7 +20,7 @@ import React from 'react';
 // We define it here for simplicity, but it could be moved to its own file.
 // ----------------------------------------
 const HomeBuyerWelcome = ({ user }: { user: any }) => {
-  // This is a placeholder. You'll fetch this from the API later.
+  // This is a placeholder. We will make this real in the next step.
   const checklistProgress = { completed: 0, total: 8 };
   const progressPercent =
     (checklistProgress.completed / checklistProgress.total) * 100;
