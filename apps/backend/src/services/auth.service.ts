@@ -1,7 +1,7 @@
 import { PrismaClient, ProviderStatus } from '@prisma/client';
 import { hashPassword, comparePassword } from '../utils/password.util';
 import {
-  generateTokenPair, // <-- IMPORTED
+  generateTokenPair,
   generateEmailVerificationToken,
   generatePasswordResetToken,
   verifyRefreshToken,
@@ -16,7 +16,7 @@ import {
 } from '../utils/validators';
 import { APIError } from '../middleware/error.middleware';
 import {
-  LoginResponse, // <-- IMPORTED
+  LoginResponse,
   RegisterResponse,
   RefreshTokenResponse,
 } from '../types/auth.types';
@@ -27,7 +27,7 @@ export class AuthService {
   /**
    * Register a new user and auto-login
    */
-  async register(data: RegisterInput): Promise<LoginResponse> { // <-- CHANGED RETURN TYPE
+  async register(data: RegisterInput): Promise<LoginResponse> {
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email: data.email },
@@ -49,10 +49,14 @@ export class AuthService {
         lastName: data.lastName,
         phone: data.phone,
         role: data.role,
-        status: 'ACTIVE', // <-- CHANGED (was PENDING_VERIFICATION)
-        emailVerified: true, // This was already true, so ACTIVE status is correct
+        status: 'ACTIVE',
+        emailVerified: true,
       },
     });
+
+    // Determine the segment
+    // @ts-ignore
+    const segment = data.segment || 'EXISTING_OWNER';
 
     // Auto-create role-specific profile
     try {
@@ -61,13 +65,12 @@ export class AuthService {
           data: {
             userId: user.id,
             spentAmount: 0,
-            // @ts-ignore - This assumes validator.ts has been updated
-            segment: data.segment || 'EXISTING_OWNER', // <-- ADDED
+            segment: segment, // Use the variable
           },
         });
         console.log(`✅ Created homeowner profile for user ${user.id}`);
       } else if (user.role === 'PROVIDER') {
-        // Create provider profile with required fields and sensible defaults
+        // ... (existing provider profile logic)
         await prisma.providerProfile.create({
           data: {
             userId: user.id,
@@ -95,7 +98,7 @@ export class AuthService {
       );
     }
 
-    // --- NEW AUTO-LOGIN LOGIC ---
+    // --- AUTO-LOGIN LOGIC ---
     // Generate access and refresh tokens
     const { accessToken, refreshToken } = generateTokenPair({
       userId: user.id,
@@ -115,67 +118,64 @@ export class AuthService {
         role: user.role as any,
         emailVerified: user.emailVerified,
         status: user.status as any,
+        segment: segment, // <-- THIS IS THE FIX
       },
     };
-    // --- END AUTO-LOGIN LOGIC ---
   }
 
   /**
    * Login user
    */
-/**
-   * Login user
-   */
-async login(data: LoginInput): Promise<LoginResponse> {
-  // Find user by email AND include the profile segment
-  const user = await prisma.user.findUnique({
-    where: { email: data.email },
-    include: { homeownerProfile: { select: { segment: true } } }, // <-- THE FIX
-  });
+  async login(data: LoginInput): Promise<LoginResponse> {
+    // Find user by email AND include the profile segment
+    const user = await prisma.user.findUnique({
+      where: { email: data.email },
+      include: { homeownerProfile: { select: { segment: true } } },
+    });
 
-  if (!user) {
-    throw new APIError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
-  }
+    if (!user) {
+      throw new APIError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
+    }
 
-  // Check password
-  const isPasswordValid = await comparePassword(data.password, user.passwordHash);
+    // Check password
+    const isPasswordValid = await comparePassword(data.password, user.passwordHash);
 
-  if (!isPasswordValid) {
-    throw new APIError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
-  }
+    if (!isPasswordValid) {
+      throw new APIError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
+    }
 
-  // Check if account is suspended
-  if (user.status === 'SUSPENDED') {
-    throw new APIError('Account has been suspended', 403, 'ACCOUNT_SUSPENDED');
-  }
+    // Check if account is suspended
+    if (user.status === 'SUSPENDED') {
+      throw new APIError('Account has been suspended', 403, 'ACCOUNT_SUSPENDED');
+    }
 
-  // Check if account is inactive
-  if (user.status === 'INACTIVE') {
-    throw new APIError('Account is inactive', 403, 'ACCOUNT_INACTIVE');
-  }
+    // Check if account is inactive
+    if (user.status === 'INACTIVE') {
+      throw new APIError('Account is inactive', 403, 'ACCOUNT_INACTIVE');
+    }
 
-  // Generate access and refresh tokens
-  const { accessToken, refreshToken } = generateTokenPair({
-    userId: user.id,
-    email: user.email,
-    role: user.role,
-  });
-
-  return {
-    accessToken,
-    refreshToken,
-    user: {
-      id: user.id,
+    // Generate access and refresh tokens
+    const { accessToken, refreshToken } = generateTokenPair({
+      userId: user.id,
       email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role as any,
-      emailVerified: user.emailVerified,
-      status: user.status as any,
-      segment: user.homeownerProfile?.segment || 'EXISTING_OWNER', // <-- THE FIX
-    },
-  };
-}
+      role: user.role,
+    });
+
+    return {
+      accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role as any,
+        emailVerified: user.emailVerified,
+        status: user.status as any,
+        segment: user.homeownerProfile?.segment || 'EXISTING_OWNER',
+      },
+    };
+  }
 
   /**
    * Logout user
@@ -301,43 +301,40 @@ async login(data: LoginInput): Promise<LoginResponse> {
   /**
    * Get user by ID
    */
-/**
-   * Get user by ID
-   */
-async getUserById(userId: string) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      email: true,
-      firstName: true,
-      lastName: true,
-      phone: true,
-      role: true,
-      emailVerified: true,
-      status: true,
-      avatar: true,
-      bio: true,
-      createdAt: true,
-      homeownerProfile: { // <-- THE FIX
-        select: {
-          segment: true,
+  async getUserById(userId: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        role: true,
+        emailVerified: true,
+        status: true,
+        avatar: true,
+        bio: true,
+        createdAt: true,
+        homeownerProfile: {
+          select: {
+            segment: true,
+          },
         },
       },
-    },
-  });
+    });
 
-  if (!user) {
-    throw new APIError('User not found', 404, 'USER_NOT_FOUND');
+    if (!user) {
+      throw new APIError('User not found', 404, 'USER_NOT_FOUND');
+    }
+
+    // --- Flatten the response ---
+    const { homeownerProfile, ...userData } = user;
+    return {
+      ...userData,
+      segment: homeownerProfile?.segment || 'EXISTING_OWNER',
+    };
   }
-
-  // --- Flatten the response ---
-  const { homeownerProfile, ...userData } = user;
-  return {
-    ...userData,
-    segment: homeownerProfile?.segment || 'EXISTING_OWNER', // <-- THE FIX
-  };
-}
   /**
    * Get current user (for /api/auth/me endpoint)
    */
