@@ -19,6 +19,7 @@ interface User {
   role: string;
   createdAt?: string;
   updatedAt?: string;
+  segment?: string; // <-- ADD THIS LINE
 }
 
 interface AuthContextType {
