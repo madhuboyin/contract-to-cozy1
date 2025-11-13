@@ -10,7 +10,8 @@ import authRoutes from './routes/auth.routes';
 import providerRoutes from './routes/provider.routes';
 import bookingRoutes from './routes/booking.routes';
 import propertyRoutes from './routes/property.routes';
-import userRoutes from './routes/user.routes';  // NEW: User profile routes
+import userRoutes from './routes/user.routes';
+import { checklistRoutes } from './routes/checklist.routes'; // <-- 1. ADD THIS IMPORT
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
@@ -27,10 +28,8 @@ const PORT = process.env.PORT || 8080;
 // MIDDLEWARE
 // =============================================================================
 
-// Security middleware
+// ... (existing middleware: helmet, cors, json, etc.)
 app.use(helmet());
-
-// CORS configuration
 app.use(cors({
   origin: [
     'http://localhost:3000',
@@ -39,12 +38,10 @@ app.use(cors({
   ],
   credentials: true,
 }));
-
-// Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Request logging middleware (development only)
+// ... (existing request logging)
 if (process.env.NODE_ENV === 'development') {
   app.use((req: Request, res: Response, next: NextFunction) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
@@ -56,6 +53,7 @@ if (process.env.NODE_ENV === 'development') {
 // HEALTH CHECK ROUTES
 // =============================================================================
 
+// ... (existing health check routes)
 app.get('/api/health', (req: Request, res: Response) => {
   res.status(200).json({
     status: 'healthy',
@@ -73,6 +71,7 @@ app.get('/api/ready', (req: Request, res: Response) => {
   });
 });
 
+
 // =============================================================================
 // ROOT ENDPOINT
 // =============================================================================
@@ -89,7 +88,8 @@ app.get('/', (req: Request, res: Response) => {
       providers: '/api/providers',
       bookings: '/api/bookings',
       properties: '/api/properties',
-      users: '/api/users',  // NEW: Added to endpoint list
+      users: '/api/users',
+      checklist: '/api/checklist', // <-- 2. ADD THIS (Optional but good)
     },
   });
 });
@@ -102,7 +102,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/providers', providerRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/properties', propertyRoutes);
-app.use('/api/users', userRoutes);  // NEW: User profile routes
+app.use('/api/users', userRoutes);
+app.use(checklistRoutes); // <-- 3. ADD THIS. It already includes the /api prefix
 
 // =============================================================================
 // 404 HANDLER
@@ -122,8 +123,10 @@ app.use((req: Request, res: Response) => {
       'GET /api/providers/search',
       'GET /api/bookings',
       'GET /api/properties',
-      'GET /api/users/profile',  // NEW: Added to available routes
-      'PUT /api/users/profile',  // NEW: Added to available routes
+      'GET /api/users/profile',
+      'PUT /api/users/profile',
+      'GET /api/checklist', // <-- 4. ADD THIS (Optional)
+      'PUT /api/checklist/items/:itemId', // <-- 5. ADD THIS (Optional)
     ],
   });
 });
@@ -151,8 +154,10 @@ app.listen(PORT, () => {
   console.log(`   - GET  /api/providers/search`);
   console.log(`   - GET  /api/bookings`);
   console.log(`   - GET  /api/properties`);
-  console.log(`   - GET  /api/users/profile       ← NEW`);
-  console.log(`   - PUT  /api/users/profile       ← NEW`);
+  console.log(`   - GET  /api/users/profile`);
+  console.log(`   - PUT  /api/users/profile`);
+  console.log(`   - GET  /api/checklist             ← NEW`); // <-- 6. ADD THIS
+  console.log(`   - PUT  /api/checklist/items/:itemId ← NEW`); // <-- 7. ADD THIS
 });
 
 export default app;
