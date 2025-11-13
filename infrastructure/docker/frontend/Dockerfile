@@ -27,7 +27,7 @@ COPY . .
 
 # Build Next.js app
 ENV NEXT_TELEMETRY_DISABLED 1
-ENV NODE_ENV production
+ENV NODE_ENV=production
 
 RUN npm run build
 
@@ -35,7 +35,7 @@ RUN npm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 
-ENV NODE_ENV production
+ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED 1
 
 # Create non-root user
