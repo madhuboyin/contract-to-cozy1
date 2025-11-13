@@ -311,6 +311,11 @@ export class AuthService {
         avatar: true,
         bio: true,
         createdAt: true,
+        homeownerProfile: { // <-- ADD THIS BLOCK
+          select: {
+            segment: true,
+          },
+        },
       },
     });
 
@@ -318,7 +323,13 @@ export class AuthService {
       throw new APIError('User not found', 404, 'USER_NOT_FOUND');
     }
 
-    return user;
+    // --- ADD THIS LOGIC TO FLATTEN THE RESPONSE ---
+    // This makes it easier for the frontend
+    const { homeownerProfile, ...userData } = user;
+    return {
+      ...userData,
+      segment: homeownerProfile?.segment || 'EXISTING_OWNER',
+    };
   }
   /**
    * Get current user (for /api/auth/me endpoint)
