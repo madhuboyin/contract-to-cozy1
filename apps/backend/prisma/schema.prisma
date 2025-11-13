@@ -28,6 +28,12 @@ enum UserStatus {
   PENDING_VERIFICATION
 }
 
+// NEW ENUM to track the homeowner's current goal/state
+enum HomeownerSegment {
+  HOME_BUYER       // Actively in the closing process
+  EXISTING_OWNER   // Standard homeowner focused on maintenance
+}
+
 enum ServiceCategory {
   INSPECTION
   HANDYMAN
@@ -132,7 +138,6 @@ model User {
   avatar       String?
   bio          String?
   address      Address?
-  
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -187,14 +192,18 @@ model HomeownerProfile {
   id     String @id @default(uuid())
   userId String @unique
   
+  // NEW FIELD to identify the user's segment.
+  // Defaults to EXISTING_OWNER for 100% backward compatibility.
+  segment HomeownerSegment @default(EXISTING_OWNER)
+  
   // Property Information
-  propertyType        String?  // Single Family, Condo, Townhouse, etc.
-  propertySize        Int?     // Square footage
+  propertyType        String? // Single Family, Condo, Townhouse, etc.
+  propertySize        Int?    // Square footage
   yearBuilt           Int?
   bedrooms            Int?
   bathrooms           Float?
   
-  // Purchase Information
+  // Purchase Information (for HOME_BUYER segment)
   closingDate         DateTime?
   purchasePrice       Decimal?  @db.Decimal(12, 2)
   
@@ -203,7 +212,7 @@ model HomeownerProfile {
   notificationPreferences Json?  // Flexible JSON for various notification settings
   
   // Budget tracking
-  totalBudget         Decimal?  @db.Decimal(12, 2)
+  totalBudget         Decimal? @db.Decimal(12, 2)
   spentAmount         Decimal   @default(0) @db.Decimal(12, 2)
   
   // Relations
@@ -221,7 +230,7 @@ model Property {
   homeownerProfileId String
   
   // Property details
-  name        String?  // e.g., "Main Home", "Investment Property"
+  name         String?  // e.g., "Main Home", "Investment Property"
   address     String
   city        String
   state       String
@@ -250,7 +259,7 @@ model ProviderProfile {
   
   // Business Information
   businessName        String
-  businessType        String?  // LLC, Sole Proprietor, Corporation
+  businessType        String? // LLC, Sole Proprietor, Corporation
   taxId               String?
   
   // Service Information
@@ -275,10 +284,10 @@ model ProviderProfile {
   totalCompletedJobs  Int      @default(0)
   
   // Availability
-  availabilitySchedule Json?   // Weekly schedule
+  availabilitySchedule Json? // Weekly schedule
   
   // Stripe Connect
-  stripeAccountId     String?  @unique
+  stripeAccountId     String? @unique
   stripeOnboarded     Boolean  @default(false)
   
   // Relations
@@ -345,7 +354,7 @@ model ProviderAvailability {
   startDate         DateTime
   endDate           DateTime
   isAvailable       Boolean  @default(true)
-  reason            String?  // vacation, booked, etc.
+  reason            String? // vacation, booked, etc.
   
   // Relations
   providerProfile ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
@@ -377,11 +386,11 @@ model Service {
   // Pricing
   basePrice         Decimal         @db.Decimal(10, 2)
   priceUnit         String          // "per hour", "per sqft", "flat rate"
-  minimumCharge     Decimal?        @db.Decimal(10, 2)
+  minimumCharge     Decimal? @db.Decimal(10, 2)
   
   // Availability
   isActive          Boolean         @default(true)
-  estimatedDuration Int?            // Minutes
+  estimatedDuration Int? // Minutes
   
   // Relations
   providerProfile   ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
@@ -403,6 +412,7 @@ model Service {
 model Booking {
   id                String        @id @default(uuid())
   bookingNumber     String        @unique // B-2025-001234
+ 
   
   // Parties
   homeownerId       String
@@ -425,7 +435,7 @@ model Booking {
   
   // Pricing
   estimatedPrice    Decimal         @db.Decimal(10, 2)
-  finalPrice        Decimal?        @db.Decimal(10, 2)
+  finalPrice        Decimal? @db.Decimal(10, 2)
   depositAmount     Decimal?        @db.Decimal(10, 2)
   
   // Details
@@ -538,7 +548,7 @@ model Document {
   mimeType    String
   
   // Metadata
-  metadata    Json?        // Flexible storage for document-specific data
+  metadata    Json? // Flexible storage for document-specific data
   
   // Relations
   booking Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
@@ -564,7 +574,7 @@ model Message {
   // Message Content
   type        MessageType @default(TEXT)
   content     String
-  attachments Json?       // Array of file URLs
+  attachments Json? // Array of file URLs
   
   // Status
   isRead      Boolean     @default(false)
@@ -609,7 +619,7 @@ model Review {
   // Moderation
   status      ReviewStatus @default(PENDING)
   moderatedAt DateTime?
-  moderatedBy String?      // admin userId
+  moderatedBy String? // admin userId
   
   // Provider Response
   response    String?
@@ -717,7 +727,6 @@ model SystemSetting {
   value Json
   
   description String?
-  
   updatedAt DateTime @updatedAt
   
   @@map("system_settings")
