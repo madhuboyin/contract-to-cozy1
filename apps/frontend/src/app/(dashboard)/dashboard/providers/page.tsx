@@ -15,9 +15,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Loader2, AlertCircle, Search, Star } from 'lucide-react';
+import { useAuth } from '@/lib/auth/AuthContext'; // <-- 1. IMPORT useAuth
 
 // --- Define the Provider type ---
-// This should match what your API returns
 interface Provider {
   id: string;
   businessName: string;
@@ -29,14 +29,9 @@ interface Provider {
     basePrice: number;
     priceUnit: string;
   }[];
-  // Add other fields you want to display
 }
 
 // --- Helper Function ---
-/**
- * Formats a service category string (e.g., "INSPECTION")
- * into a user-friendly title (e.g., "Inspection").
- */
 function formatServiceCategory(category: string | null): string {
   if (!category) return 'All';
   return category
@@ -46,10 +41,10 @@ function formatServiceCategory(category: string | null): string {
 }
 
 // --- Main Search Component ---
-// We wrap this in <Suspense> so useSearchParams works
 function ProviderSearch() {
   const searchParams = useSearchParams();
   const serviceCategory = searchParams.get('service');
+  const { user } = useAuth(); // <-- 2. GET THE USER
 
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,11 +55,9 @@ function ProviderSearch() {
       try {
         setLoading(true);
         const token = localStorage.getItem('accessToken');
-        
-        // Build the search URL.
-        // Your backend search also accepts `zipCode` and `query`,
-        // but for now, we'll just filter by category.
-        const apiUrl = new URL(`${process.env.NEXT_PUBLIC_API_URL}/api/providers/search`);
+        const apiUrl = new URL(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/providers/search`
+        );
         if (serviceCategory) {
           apiUrl.searchParams.append('category', serviceCategory);
         }
@@ -80,8 +73,7 @@ function ProviderSearch() {
         if (!response.ok) {
           throw new Error('Failed to fetch providers.');
         }
-        
-        // Your API returns { data: [...] }
+
         const data = await response.json();
         setProviders(data.data || []);
       } catch (err: any) {
@@ -94,18 +86,21 @@ function ProviderSearch() {
     fetchProviders();
   }, [serviceCategory]);
 
+  // 3. DETERMINE THE CORRECT "BACK" LINK
+  const isHomeBuyer = user?.segment === 'HOME_BUYER';
+  const backLink = isHomeBuyer ? '/dashboard/checklist' : '/dashboard';
+  const backLinkText = isHomeBuyer ? 'Back to Checklist' : 'Back to Dashboard';
+
   return (
     <div className="flex-1 space-y-4 pt-6">
       <Button asChild variant="link" className="pl-0 text-blue-600">
-        <Link href="/dashboard/checklist">
+        <Link href={backLink}>
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Checklist
+          {backLinkText}
         </Link>
       </Button>
 
-      <h2 className="text-3xl font-bold tracking-tight">
-        Find Providers
-      </h2>
+      <h2 className="text-3xl font-bold tracking-tight">Find Providers</h2>
       <p className="text-gray-600">
         Showing results for:
         <Badge variant="default" className="ml-2 text-base">
@@ -133,11 +128,12 @@ function ProviderSearch() {
 
       {/* --- Empty State --- */}
       {!loading && !error && providers.length === 0 && (
-         <div className="flex h-64 w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center">
+        <div className="flex h-64 w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center">
           <Search className="h-8 w-8 text-gray-400" />
           <h2 className="mt-4 text-xl font-semibold">No Providers Found</h2>
           <p className="mt-2 text-muted-foreground">
-            We couldn't find any providers matching your criteria. Try a different search.
+            We couldn't find any providers matching your criteria. Try a
+            different search.
           </p>
         </div>
       )}
@@ -156,7 +152,6 @@ function ProviderSearch() {
 
 // --- Individual Provider Card Component ---
 function ProviderCard({ provider }: { provider: Provider }) {
-  // Find the cheapest service to show as a preview
   const previewService = provider.services?.sort(
     (a, b) => a.basePrice - b.basePrice
   )[0];
@@ -200,7 +195,6 @@ function ProviderCard({ provider }: { provider: Provider }) {
   );
 }
 
-
 // --- Page Wrapper ---
 // We must wrap the component in <Suspense> for `useSearchParams` to work.
 export default function ProvidersPage() {
@@ -216,5 +210,5 @@ function PageLoader() {
     <div className="flex h-full w-full items-center justify-center p-8">
       <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
     </div>
-  )
+  );
 }
