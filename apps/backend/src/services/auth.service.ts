@@ -1,7 +1,7 @@
 import { PrismaClient, ProviderStatus } from '@prisma/client';
 import { hashPassword, comparePassword } from '../utils/password.util';
 import {
-  generateTokenPair,
+  generateTokenPair, // <-- IMPORTED
   generateEmailVerificationToken,
   generatePasswordResetToken,
   verifyRefreshToken,
@@ -15,15 +15,19 @@ import {
   ResetPasswordInput,
 } from '../utils/validators';
 import { APIError } from '../middleware/error.middleware';
-import { LoginResponse, RegisterResponse, RefreshTokenResponse } from '../types/auth.types';
+import {
+  LoginResponse, // <-- IMPORTED
+  RegisterResponse,
+  RefreshTokenResponse,
+} from '../types/auth.types';
 
 const prisma = new PrismaClient();
 
 export class AuthService {
   /**
-   * Register a new user
+   * Register a new user and auto-login
    */
-  async register(data: RegisterInput): Promise<RegisterResponse> {
+  async register(data: RegisterInput): Promise<LoginResponse> { // <-- CHANGED RETURN TYPE
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email: data.email },
@@ -45,8 +49,8 @@ export class AuthService {
         lastName: data.lastName,
         phone: data.phone,
         role: data.role,
-        status: 'PENDING_VERIFICATION',
-        emailVerified: true,
+        status: 'ACTIVE', // <-- CHANGED (was PENDING_VERIFICATION)
+        emailVerified: true, // This was already true, so ACTIVE status is correct
       },
     });
 
@@ -57,8 +61,8 @@ export class AuthService {
           data: {
             userId: user.id,
             spentAmount: 0,
-            // @ts-ignore - We'll add this to the validator input type next
-            segment: data.segment || 'EXISTING_OWNER', // <-- ADD THIS LINE
+            // @ts-ignore - This assumes validator.ts has been updated
+            segment: data.segment || 'EXISTING_OWNER', // <-- ADDED
           },
         });
         console.log(`✅ Created homeowner profile for user ${user.id}`);
@@ -91,24 +95,29 @@ export class AuthService {
       );
     }
 
-    // Generate email verification token
-    const emailVerificationToken = generateEmailVerificationToken(user.id, user.email);
+    // --- NEW AUTO-LOGIN LOGIC ---
+    // Generate access and refresh tokens
+    const { accessToken, refreshToken } = generateTokenPair({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    });
 
-    // TODO: Send verification email
-    // await emailService.sendVerificationEmail(user.email, emailVerificationToken);
-
+    // Return the same response as the login function
     return {
-      message: 'Registration successful. Please verify your email.',
+      accessToken,
+      refreshToken,
       user: {
         id: user.id,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role as any,
+        emailVerified: user.emailVerified,
+        status: user.status as any,
       },
-      // Include token in response for development/testing
-      ...(process.env.NODE_ENV === 'development' && { emailVerificationToken }),
     };
+    // --- END AUTO-LOGIN LOGIC ---
   }
 
   /**
