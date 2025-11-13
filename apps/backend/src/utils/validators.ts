@@ -14,6 +14,7 @@ export const registerSchema = z.object({
   lastName: z.string().min(1, 'Last name is required').max(50, 'Last name too long'),
   phone: z.string().optional(),
   role: z.enum(['HOMEOWNER', 'PROVIDER']).default('HOMEOWNER'),
+  segment: z.enum(['HOME_BUYER', 'EXISTING_OWNER']).optional(),
 });
 
 // Login schema

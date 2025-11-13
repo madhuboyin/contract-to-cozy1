@@ -17,3 +17,19 @@ PASSWORD=$(kubectl get secret postgres-credentials -n production -o jsonpath='{.
 # Run Prisma Studio with inline DATABASE_URL
 DATABASE_URL="postgresql://postgres:${PASSWORD}@localhost:5432/contracttocozy?schema=public" \
 npx prisma studio
+
+# Backend
+
+docker build -t ghcr.io/madhuboyin/contract-to-cozy/backend:latest -f ../../infrastructure/docker/backend/Dockerfile .
+docker push ghcr.io/madhuboyin/contract-to-cozy/backend:latest
+
+kubectl delete pods -n production -l app=api
+kubectl get pods -n production -l app=api
+
+# Frontend
+
+docker build -t ghcr.io/madhuboyin/contract-to-cozy/frontend:latest -f ../../infrastructure/docker/frontend/Dockerfile .
+docker push ghcr.io/madhuboyin/contract-to-cozy/frontend:latest
+
+kubectl delete pods -n production -l app=frontend
+kubectl get pods -n production -l app=frontend

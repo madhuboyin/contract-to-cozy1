@@ -1,5 +1,5 @@
 // apps/frontend/src/app/(auth)/signup/page.tsx
-// Updated with password visibility toggles
+// Updated with password visibility AND segment radio buttons
 
 'use client';
 
@@ -22,9 +22,12 @@ export default function SignupPage() {
     confirmPassword: '',
     firstName: '',
     lastName: '',
+    segment: 'EXISTING_OWNER', // <-- 1. ADD NEW STATE
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
@@ -54,6 +57,7 @@ export default function SignupPage() {
         firstName: formData.firstName,
         lastName: formData.lastName,
         role: 'HOMEOWNER',
+        segment: formData.segment, // <-- 2. PASS SEGMENT TO API
       });
 
       if (result.success) {
@@ -76,9 +80,14 @@ export default function SignupPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo - Links to Home */}
-            <Link href="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
+            <Link
+              href="/"
+              className="flex items-center space-x-2 hover:opacity-80 transition-opacity"
+            >
               <span className="text-2xl">🏠</span>
-              <span className="text-lg font-semibold text-gray-900">Contract to Cozy</span>
+              <span className="text-lg font-semibold text-gray-900">
+                Contract to Cozy
+              </span>
             </Link>
 
             {/* Right side navigation */}
@@ -107,7 +116,9 @@ export default function SignupPage() {
           <div className="bg-white rounded-2xl shadow-xl p-8">
             {/* Header */}
             <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-gray-900">Create Account</h2>
+              <h2 className="text-3xl font-bold text-gray-900">
+                Create Account
+              </h2>
               <p className="mt-2 text-sm text-gray-600">
                 Start your home service journey today
               </p>
@@ -125,7 +136,10 @@ export default function SignupPage() {
               {/* Name Fields */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    htmlFor="firstName"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
                     First Name
                   </label>
                   <input
@@ -140,7 +154,10 @@ export default function SignupPage() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    htmlFor="lastName"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
                     Last Name
                   </label>
                   <input
@@ -158,7 +175,10 @@ export default function SignupPage() {
 
               {/* Email */}
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
                   Email Address
                 </label>
                 <input
@@ -175,7 +195,10 @@ export default function SignupPage() {
 
               {/* Password with Toggle */}
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  htmlFor="password"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
                   Password
                 </label>
                 <div className="relative">
@@ -193,10 +216,11 @@ export default function SignupPage() {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    aria-label={
+                      showPassword ? 'Hide password' : 'Show password'
+                    }
                   >
                     {showPassword ? (
-                      // Eye Slash Icon (Hide)
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         fill="none"
@@ -212,7 +236,6 @@ export default function SignupPage() {
                         />
                       </svg>
                     ) : (
-                      // Eye Icon (Show)
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         fill="none"
@@ -235,12 +258,17 @@ export default function SignupPage() {
                     )}
                   </button>
                 </div>
-                <p className="mt-1 text-xs text-gray-500">At least 8 characters</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  At least 8 characters
+                </p>
               </div>
 
               {/* Confirm Password with Toggle */}
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  htmlFor="confirmPassword"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
                   Confirm Password
                 </label>
                 <div className="relative">
@@ -258,10 +286,11 @@ export default function SignupPage() {
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
-                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                    aria-label={
+                      showConfirmPassword ? 'Hide password' : 'Show password'
+                    }
                   >
                     {showConfirmPassword ? (
-                      // Eye Slash Icon (Hide)
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         fill="none"
@@ -277,7 +306,6 @@ export default function SignupPage() {
                         />
                       </svg>
                     ) : (
-                      // Eye Icon (Show)
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         fill="none"
@@ -302,6 +330,50 @@ export default function SignupPage() {
                 </div>
               </div>
 
+              {/* --- 3. START: NEW SEGMENT FIELD --- */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  What brings you here?
+                </label>
+                <div className="flex space-x-4">
+                  <label
+                    htmlFor="segment-buyer"
+                    className="flex-1 flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-blue-50"
+                  >
+                    <input
+                      type="radio"
+                      id="segment-buyer"
+                      name="segment"
+                      value="HOME_BUYER"
+                      checked={formData.segment === 'HOME_BUYER'}
+                      onChange={handleChange}
+                      className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                    />
+                    <span className="ml-3 text-sm font-medium text-gray-800">
+                      I'm buying a new home
+                    </span>
+                  </label>
+                  <label
+                    htmlFor="segment-owner"
+                    className="flex-1 flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-blue-50"
+                  >
+                    <input
+                      type="radio"
+                      id="segment-owner"
+                      name="segment"
+                      value="EXISTING_OWNER"
+                      checked={formData.segment === 'EXISTING_OWNER'}
+                      onChange={handleChange}
+                      className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                    />
+                    <span className="ml-3 text-sm font-medium text-gray-800">
+                      I'm an existing homeowner
+                    </span>
+                  </label>
+                </div>
+              </div>
+              {/* --- END: NEW SEGMENT FIELD --- */}
+
               {/* Submit Button */}
               <button
                 type="submit"
@@ -316,13 +388,19 @@ export default function SignupPage() {
             <div className="mt-6 space-y-3 text-center">
               <p className="text-sm text-gray-600">
                 Already have an account?{' '}
-                <Link href="/login" className="font-medium text-blue-600 hover:text-blue-700">
+                <Link
+                  href="/login"
+                  className="font-medium text-blue-600 hover:text-blue-700"
+                >
                   Sign in
                 </Link>
               </p>
               <p className="text-sm text-gray-600">
                 Are you a service provider?{' '}
-                <Link href="/providers/join" className="font-medium text-blue-600 hover:text-blue-700">
+                <Link
+                  href="/providers/join"
+                  className="font-medium text-blue-600 hover:text-blue-700"
+                >
                   Join as provider
                 </Link>
               </p>
@@ -332,11 +410,17 @@ export default function SignupPage() {
           {/* Terms */}
           <p className="mt-6 text-center text-xs text-gray-500">
             By signing up, you agree to our{' '}
-            <Link href="/terms" className="text-blue-600 hover:text-blue-700">
+            <Link
+              href="/terms"
+              className="text-blue-600 hover:text-blue-700"
+            >
               Terms of Service
             </Link>{' '}
             and{' '}
-            <Link href="/privacy" className="text-blue-600 hover:text-blue-700">
+            <Link
+              href="/privacy"
+              className="text-blue-600 hover:text-blue-700"
+            >
               Privacy Policy
             </Link>
           </p>

@@ -57,6 +57,8 @@ export class AuthService {
           data: {
             userId: user.id,
             spentAmount: 0,
+            // @ts-ignore - We'll add this to the validator input type next
+            segment: data.segment || 'EXISTING_OWNER', // <-- ADD THIS LINE
           },
         });
         console.log(`✅ Created homeowner profile for user ${user.id}`);
