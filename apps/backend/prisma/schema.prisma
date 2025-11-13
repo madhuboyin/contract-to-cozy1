@@ -34,6 +34,13 @@ enum HomeownerSegment {
   EXISTING_OWNER   // Standard homeowner focused on maintenance
 }
 
+// ADD THIS NEW ENUM
+enum ChecklistItemStatus {
+  PENDING
+  COMPLETED
+  NOT_NEEDED
+}
+
 enum ServiceCategory {
   INSPECTION
   HANDYMAN
@@ -218,11 +225,48 @@ model HomeownerProfile {
   // Relations
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   properties  Property[]
+  checklist   Checklist?
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
   @@map("homeowner_profiles")
+}
+
+// ============================================================================
+// HOME BUYER CHECKLIST
+// ============================================================================
+
+model Checklist {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  homeownerProfileId String           @unique
+  homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+
+  items ChecklistItem[]
+
+  @@map("checklists")
+}
+
+model ChecklistItem {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  title       String
+  description String?
+  status      ChecklistItemStatus @default(PENDING)
+  
+  // Links to service category
+  serviceCategory String? 
+
+  checklistId String
+  checklist   Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+
+  @@index([checklistId])
+  @@map("checklist_items")
 }
 
 model Property {
