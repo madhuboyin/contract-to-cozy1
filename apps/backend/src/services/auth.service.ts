@@ -123,54 +123,59 @@ export class AuthService {
   /**
    * Login user
    */
-  async login(data: LoginInput): Promise<LoginResponse> {
-    // Find user by email
-    const user = await prisma.user.findUnique({
-      where: { email: data.email },
-    });
+/**
+   * Login user
+   */
+async login(data: LoginInput): Promise<LoginResponse> {
+  // Find user by email AND include the profile segment
+  const user = await prisma.user.findUnique({
+    where: { email: data.email },
+    include: { homeownerProfile: { select: { segment: true } } }, // <-- THE FIX
+  });
 
-    if (!user) {
-      throw new APIError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
-    }
-
-    // Check password
-    const isPasswordValid = await comparePassword(data.password, user.passwordHash);
-
-    if (!isPasswordValid) {
-      throw new APIError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
-    }
-
-    // Check if account is suspended
-    if (user.status === 'SUSPENDED') {
-      throw new APIError('Account has been suspended', 403, 'ACCOUNT_SUSPENDED');
-    }
-
-    // Check if account is inactive
-    if (user.status === 'INACTIVE') {
-      throw new APIError('Account is inactive', 403, 'ACCOUNT_INACTIVE');
-    }
-
-    // Generate access and refresh tokens
-    const { accessToken, refreshToken } = generateTokenPair({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-    });
-
-    return {
-      accessToken,
-      refreshToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role as any,
-        emailVerified: user.emailVerified,
-        status: user.status as any,
-      },
-    };
+  if (!user) {
+    throw new APIError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
   }
+
+  // Check password
+  const isPasswordValid = await comparePassword(data.password, user.passwordHash);
+
+  if (!isPasswordValid) {
+    throw new APIError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
+  }
+
+  // Check if account is suspended
+  if (user.status === 'SUSPENDED') {
+    throw new APIError('Account has been suspended', 403, 'ACCOUNT_SUSPENDED');
+  }
+
+  // Check if account is inactive
+  if (user.status === 'INACTIVE') {
+    throw new APIError('Account is inactive', 403, 'ACCOUNT_INACTIVE');
+  }
+
+  // Generate access and refresh tokens
+  const { accessToken, refreshToken } = generateTokenPair({
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+  });
+
+  return {
+    accessToken,
+    refreshToken,
+    user: {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role as any,
+      emailVerified: user.emailVerified,
+      status: user.status as any,
+      segment: user.homeownerProfile?.segment || 'EXISTING_OWNER', // <-- THE FIX
+    },
+  };
+}
 
   /**
    * Logout user
@@ -296,41 +301,43 @@ export class AuthService {
   /**
    * Get user by ID
    */
-  async getUserById(userId: string) {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        phone: true,
-        role: true,
-        emailVerified: true,
-        status: true,
-        avatar: true,
-        bio: true,
-        createdAt: true,
-        homeownerProfile: { // <-- ADD THIS BLOCK
-          select: {
-            segment: true,
-          },
+/**
+   * Get user by ID
+   */
+async getUserById(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      phone: true,
+      role: true,
+      emailVerified: true,
+      status: true,
+      avatar: true,
+      bio: true,
+      createdAt: true,
+      homeownerProfile: { // <-- THE FIX
+        select: {
+          segment: true,
         },
       },
-    });
+    },
+  });
 
-    if (!user) {
-      throw new APIError('User not found', 404, 'USER_NOT_FOUND');
-    }
-
-    // --- ADD THIS LOGIC TO FLATTEN THE RESPONSE ---
-    // This makes it easier for the frontend
-    const { homeownerProfile, ...userData } = user;
-    return {
-      ...userData,
-      segment: homeownerProfile?.segment || 'EXISTING_OWNER',
-    };
+  if (!user) {
+    throw new APIError('User not found', 404, 'USER_NOT_FOUND');
   }
+
+  // --- Flatten the response ---
+  const { homeownerProfile, ...userData } = user;
+  return {
+    ...userData,
+    segment: homeownerProfile?.segment || 'EXISTING_OWNER', // <-- THE FIX
+  };
+}
   /**
    * Get current user (for /api/auth/me endpoint)
    */

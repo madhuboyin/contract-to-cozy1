@@ -40,6 +40,7 @@ export interface UserResponse {
   role: UserRole;
   emailVerified: boolean;
   status: UserStatus;
+  segment?: string;
 }
 
 // Login response
