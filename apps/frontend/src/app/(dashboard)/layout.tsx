@@ -7,6 +7,31 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthContext';
 
+// Assuming the User type has a 'role' and a 'segment' field for differentiation
+interface UserContext {
+  role: 'HOMEOWNER' | 'PROVIDER';
+  segment?: 'HOME_BUYER' | 'EXISTING_OWNER'; // Assuming these segments exist
+  // other fields like firstName, lastName, etc.
+}
+
+// Helper function to get the correct display name for the user's status
+const getStatusDisplayName = (user: UserContext) => {
+  // 1. Check for specific segment for Homeowners
+  if (user.role === 'HOMEOWNER') {
+    if (user.segment === 'HOME_BUYER') {
+      return 'Home Buyer';
+    }
+    if (user.segment === 'EXISTING_OWNER') {
+      return 'Home Owner';
+    }
+    // Fallback for generic HOMEOWNER
+    return 'Home Owner';
+  }
+  // 2. Default to role for other types (e.g., PROVIDER)
+  return user.role;
+};
+
+
 export default function DashboardLayout({
   children,
 }: {
@@ -36,15 +61,18 @@ export default function DashboardLayout({
   if (!user) {
     return null;
   }
+  
+  // Use the getStatusDisplayName helper to get the descriptive status
+  const userStatus = getStatusDisplayName(user as UserContext);
 
   const navigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: '📊' },
-    { name: 'Bookings', href: '/dashboard/bookings', icon: '📅' },
-    { name: 'Providers', href: '/dashboard/providers', icon: '🔍' },
+    { name: 'Dashboard', href: '/dashboard', icon: '投' },
+    { name: 'Bookings', href: '/dashboard/bookings', icon: '套' },
+    { name: 'Providers', href: '/dashboard/providers', icon: '剥' },
     ...(user.role === 'HOMEOWNER' ? [
-      { name: 'Properties', href: '/dashboard/properties', icon: '🏠' },
+      { name: 'Properties', href: '/dashboard/properties', icon: '匠' },
     ] : []),
-    { name: 'Profile', href: '/dashboard/profile', icon: '👤' },
+    { name: 'Profile', href: '/dashboard/profile', icon: '側' },
   ];
 
   return (
@@ -87,7 +115,8 @@ export default function DashboardLayout({
                   {user.firstName} {user.lastName}
                 </span>
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  {user.role}
+                  {/* FIX: Displaying segment-based status instead of just role */}
+                  {userStatus}
                 </span>
                 <button
                   onClick={logout}
