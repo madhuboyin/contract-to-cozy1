@@ -41,9 +41,45 @@ enum ChecklistItemStatus {
   NOT_NEEDED
 }
 
+// Add after the ChecklistItemStatus enum (around line 50)
+
+// NEW: Service category configuration for segment targeting
+model ServiceCategoryConfig {
+  id            String          @id @default(uuid())
+  category      ServiceCategory @unique
+  
+  // Segment targeting
+  availableForHomeBuyer     Boolean @default(true)
+  availableForExistingOwner Boolean @default(true)
+  
+  // Display properties
+  displayName   String
+  description   String?
+  icon          String?         // Icon identifier for frontend
+  sortOrder     Int    @default(0)
+  
+  // Status
+  isActive      Boolean @default(true)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([category])
+  @@map("service_category_config")
+}
+
+// Expand ServiceCategory enum with new categories
 enum ServiceCategory {
-  INSPECTION
-  HANDYMAN
+  INSPECTION          // HOME_BUYER primary
+  HANDYMAN           // Both segments
+  PLUMBING           // EXISTING_OWNER primary
+  ELECTRICAL         // EXISTING_OWNER primary
+  HVAC               // Both segments
+  LANDSCAPING        // EXISTING_OWNER primary
+  CLEANING           // Both segments (move-in for buyers, maintenance for owners)
+  MOVING             // HOME_BUYER primary
+  PEST_CONTROL       // Both segments
+  LOCKSMITH          // Both segments
 }
 
 enum InspectionType {

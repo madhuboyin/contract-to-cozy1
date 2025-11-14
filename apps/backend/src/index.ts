@@ -11,7 +11,8 @@ import providerRoutes from './routes/provider.routes';
 import bookingRoutes from './routes/booking.routes';
 import propertyRoutes from './routes/property.routes';
 import userRoutes from './routes/user.routes';
-import { checklistRoutes } from './routes/checklist.routes'; // <-- 1. ADD THIS IMPORT
+import { checklistRoutes } from './routes/checklist.routes';
+import serviceCategoryRoutes from './routes/service-category.routes'; // NEW IMPORT
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
@@ -28,7 +29,6 @@ const PORT = process.env.PORT || 8080;
 // MIDDLEWARE
 // =============================================================================
 
-// ... (existing middleware: helmet, cors, json, etc.)
 app.use(helmet());
 app.use(cors({
   origin: [
@@ -41,7 +41,6 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// ... (existing request logging)
 if (process.env.NODE_ENV === 'development') {
   app.use((req: Request, res: Response, next: NextFunction) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
@@ -53,7 +52,6 @@ if (process.env.NODE_ENV === 'development') {
 // HEALTH CHECK ROUTES
 // =============================================================================
 
-// ... (existing health check routes)
 app.get('/api/health', (req: Request, res: Response) => {
   res.status(200).json({
     status: 'healthy',
@@ -71,7 +69,6 @@ app.get('/api/ready', (req: Request, res: Response) => {
   });
 });
 
-
 // =============================================================================
 // ROOT ENDPOINT
 // =============================================================================
@@ -79,7 +76,7 @@ app.get('/api/ready', (req: Request, res: Response) => {
 app.get('/', (req: Request, res: Response) => {
   res.json({
     service: 'Contract to Cozy API',
-    version: '1.0.0',
+    version: '1.3.0',
     status: 'running',
     endpoints: {
       health: '/api/health',
@@ -89,7 +86,8 @@ app.get('/', (req: Request, res: Response) => {
       bookings: '/api/bookings',
       properties: '/api/properties',
       users: '/api/users',
-      checklist: '/api/checklist', // <-- 2. ADD THIS (Optional but good)
+      checklist: '/api/checklist',
+      serviceCategories: '/api/service-categories', // NEW
     },
   });
 });
@@ -103,7 +101,8 @@ app.use('/api/providers', providerRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/properties', propertyRoutes);
 app.use('/api/users', userRoutes);
-app.use(checklistRoutes); // <-- 3. ADD THIS. It already includes the /api prefix
+app.use(checklistRoutes);
+app.use(serviceCategoryRoutes); // NEW ROUTE
 
 // =============================================================================
 // 404 HANDLER
@@ -125,8 +124,10 @@ app.use((req: Request, res: Response) => {
       'GET /api/properties',
       'GET /api/users/profile',
       'PUT /api/users/profile',
-      'GET /api/checklist', // <-- 4. ADD THIS (Optional)
-      'PUT /api/checklist/items/:itemId', // <-- 5. ADD THIS (Optional)
+      'GET /api/checklist',
+      'PUT /api/checklist/items/:itemId',
+      'GET /api/service-categories', // NEW
+      'GET /api/service-categories/all', // NEW
     ],
   });
 });
@@ -156,8 +157,10 @@ app.listen(PORT, () => {
   console.log(`   - GET  /api/properties`);
   console.log(`   - GET  /api/users/profile`);
   console.log(`   - PUT  /api/users/profile`);
-  console.log(`   - GET  /api/checklist             ← NEW`); // <-- 6. ADD THIS
-  console.log(`   - PUT  /api/checklist/items/:itemId ← NEW`); // <-- 7. ADD THIS
+  console.log(`   - GET  /api/checklist`);
+  console.log(`   - PUT  /api/checklist/items/:itemId`);
+  console.log(`   - GET  /api/service-categories       ← NEW`);
+  console.log(`   - GET  /api/service-categories/all   ← NEW`);
 });
 
 export default app;
