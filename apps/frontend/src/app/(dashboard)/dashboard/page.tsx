@@ -189,7 +189,6 @@ const getStatusBadge = (status: string) => {
             return <span className={`${statusClass} bg-blue-500`} title="Confirmed" />;
         case 'COMPLETED':
             return <span className={`${statusClass} bg-green-500`} title="Completed" />;
-        // ✅ ADDED: Red badge for cancelled status
         case 'CANCELLED':
             return <span className={`${statusClass} bg-red-500`} title="Cancelled" />;
         default:
@@ -261,7 +260,7 @@ export default function DashboardPage() {
             });
             
             // --- Logic for Recent Activity List ---
-            // ✅ UPDATED: Include CANCELLED bookings in the activity feed, exclude only DRAFT
+            // Include CANCELLED bookings in the activity feed, exclude only DRAFT
             const relevantBookings = bookingsList.filter(b => b.status !== 'DRAFT');
             
             relevantBookings.sort((a, b) => {
@@ -463,7 +462,6 @@ export default function DashboardPage() {
                             status === 'COMPLETED' 
                                 ? `Finished ${formatActivityTime(booking.completedAt || booking.updatedAt)}`
                                 : status === 'CANCELLED' 
-                                // ✅ Display cancelled time using cancelledAt/updatedAt
                                 ? `Cancelled ${formatActivityTime(booking.cancelledAt || booking.updatedAt)}`
                                 : `Scheduled ${formatActivityTime(booking.scheduledDate)}`
                         );
@@ -531,13 +529,7 @@ export default function DashboardPage() {
                 Manage Properties
               </Link>
             </Button>
-
-            <Button asChild className="w-full justify-start" variant="outline">
-              <Link href="/dashboard/bookings">
-                <ListChecks className="mr-2 h-4 w-4" />
-                View All Bookings
-              </Link>
-            </Button>
+            {/* REMOVED: View All Bookings link */}
           </CardContent>
         </Card>
       </div>
