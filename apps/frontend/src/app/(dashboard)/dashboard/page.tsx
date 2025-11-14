@@ -203,13 +203,16 @@ export default function DashboardPage() {
     const upcomingStatuses = ['PENDING', 'CONFIRMED', 'IN_PROGRESS'];
 
     bookings.forEach(booking => {
+      // ✅ FIX: Ensure status is a valid string before comparison.
+      const status = typeof booking.status === 'string' ? booking.status : '';
+
       // Check for Upcoming Bookings
-      if (upcomingStatuses.includes(booking.status)) {
+      if (upcomingStatuses.includes(status)) {
         upcoming += 1;
       }
       
       // Check for Completed Jobs and Total Spending
-      if (booking.status === 'COMPLETED') {
+      if (status === 'COMPLETED') {
         completed += 1;
         // Use finalPrice if available, otherwise use estimatedPrice 
         const price = parseFloat(booking.finalPrice || booking.estimatedPrice);
