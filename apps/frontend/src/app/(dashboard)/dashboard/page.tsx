@@ -1,7 +1,6 @@
 // apps/frontend/src/app/(dashboard)/dashboard/page.tsx
 'use client';
 
-// 1. Import new hooks and icons
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import Link from 'next/link';
@@ -212,18 +211,15 @@ export default function DashboardPage() {
         let totalSpending = 0;
         let totalProperties = 0;
         
-        // --- FIX: Use a single, defensive loop over the bookings array ---
         if (bookingsRes.success && bookingsRes.data?.bookings) {
             const bookingsList = bookingsRes.data.bookings;
             
             bookingsList.forEach(booking => {
-                // Ensure status is safely accessed and standardized
-                const status = typeof booking.status === 'string' 
-                    ? booking.status.toUpperCase().trim() 
-                    : '';
+                // Ensure status is safely accessed, converted to string, normalized to uppercase, and trimmed.
+                const status = String(booking.status).toUpperCase().trim();
                 
-                // 1. Upcoming Bookings: Robustly check against array of statuses
-                if (['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(status)) {
+                // 1. Upcoming Bookings: Use explicit OR check for maximum compatibility
+                if (status === 'PENDING' || status === 'CONFIRMED' || status === 'IN_PROGRESS') {
                     upcoming += 1;
                 }
                 
@@ -238,8 +234,6 @@ export default function DashboardPage() {
                 }
             });
         }
-        // --- END FIX ---
-
 
         // Property Count
         if (propertiesRes.success && propertiesRes.data?.properties) {
@@ -308,7 +302,7 @@ export default function DashboardPage() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {/* Upcoming Bookings Card (Now uses robust client-side count) */}
+        {/* Upcoming Bookings Card */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -377,7 +371,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
         
-        {/* Completed Jobs Card (Now uses robust client-side count) */}
+        {/* Completed Jobs Card */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -399,6 +393,7 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle>Recent Activity</CardTitle>
             <CardDescription>
+              {/* This description relies on the same value */}
               {dataLoading ? 'Fetching activity...' : `You have ${dashboardData.upcomingBookings} upcoming bookings.`}
             </CardDescription>
           </CardHeader>
