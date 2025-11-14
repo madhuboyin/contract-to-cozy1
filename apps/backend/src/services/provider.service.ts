@@ -59,7 +59,8 @@ export class ProviderService {
     
     // Array to hold all individual filter clauses which will be combined with AND
     const filters: Prisma.ProviderProfileWhereInput[] = [
-        { status: 'ACTIVE' }
+
+        { status: { not: 'INACTIVE' } }
     ];
 
     // Filter by service category: Check denormalized list OR check actual active services
