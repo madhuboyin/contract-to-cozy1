@@ -1,14 +1,28 @@
+// apps/frontend/src/app/(dashboard)/dashboard/providers/[id]/book/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api/client';
 import { Provider, Service, Property, CreateBookingInput } from '@/types';
 
+// --- Helper Function ---
+function formatServiceCategory(category: string | null): string {
+  if (!category) return '';
+  return category
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+// ---
+
 export default function BookProviderPage() {
   const params = useParams();
   const router = useRouter();
+  // New: Get search params and the service category hint
+  const searchParams = useSearchParams();
+  const serviceCategory = searchParams.get('service');
   const providerId = params.id as string;
 
   const [provider, setProvider] = useState<Provider | null>(null);
@@ -29,8 +43,9 @@ export default function BookProviderPage() {
   const [estimatedPrice, setEstimatedPrice] = useState<number>(0);
 
   useEffect(() => {
+    // Added serviceCategory to dependency array
     loadData();
-  }, [providerId]);
+  }, [providerId, serviceCategory]);
 
   const loadData = async () => {
     try {
@@ -47,9 +62,26 @@ export default function BookProviderPage() {
       if (servicesRes.success) {
         setServices(servicesRes.data.services);
         if (servicesRes.data.services.length > 0) {
-          const firstService = servicesRes.data.services[0];
-          setSelectedServiceId(firstService.id);
-          setEstimatedPrice(parseFloat(firstService.basePrice));
+          const servicesList = servicesRes.data.services;
+          let defaultService = servicesList[0];
+          
+          // Logic to pre-select service based on URL category hint
+          if (serviceCategory) {
+            const targetCategory = formatServiceCategory(serviceCategory).toLowerCase();
+
+            // Try to find a service where the name contains the target category word (e.g., 'inspection')
+            const matchedService = servicesList.find(s => 
+              s.name.toLowerCase().includes(targetCategory.split(' ')[0].toLowerCase())
+            );
+
+            if (matchedService) {
+                defaultService = matchedService;
+            }
+          }
+          // ---
+
+          setSelectedServiceId(defaultService.id);
+          setEstimatedPrice(parseFloat(defaultService.basePrice));
         }
       }
 

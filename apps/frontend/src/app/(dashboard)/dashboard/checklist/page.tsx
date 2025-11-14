@@ -294,6 +294,7 @@ function ChecklistItemCard({ item, onUpdateStatus }: ChecklistItemCardProps) {
       <CardFooter className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-gray-50/50 p-4">
         {item.serviceCategory && isPending && (
           <Button asChild variant="outline" className="w-full sm:w-auto">
+            {/* This is the correct link structure to kick off the flow */}
             <Link
               href={`/dashboard/providers?service=${item.serviceCategory}`}
             >

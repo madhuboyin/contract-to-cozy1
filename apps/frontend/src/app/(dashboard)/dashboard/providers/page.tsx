@@ -201,7 +201,7 @@ function ProviderSearch() {
       {!loading && !error && providers.length > 0 && (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {providers.map((provider) => (
-            <ProviderCard key={provider.id} provider={provider} />
+            <ProviderCard key={provider.id} provider={provider} serviceCategory={serviceCategory} />
           ))}
         </div>
       )}
@@ -210,7 +210,7 @@ function ProviderSearch() {
 }
 
 // --- Individual Provider Card Component ---
-function ProviderCard({ provider }: { provider: Provider }) {
+function ProviderCard({ provider, serviceCategory }: { provider: Provider, serviceCategory: string | null }) {
   const previewService = provider.services?.sort(
     (a, b) => a.basePrice - b.basePrice
   )[0];
@@ -244,7 +244,8 @@ function ProviderCard({ provider }: { provider: Provider }) {
       </CardContent>
       <CardFooter className="bg-gray-50/50 p-4">
         <Button asChild className="w-full">
-          <Link href={`/dashboard/providers/${provider.id}`}>
+          {/* Pass the serviceCategory to the book page */}
+          <Link href={`/dashboard/providers/${provider.id}${serviceCategory ? `?service=${serviceCategory}` : ''}`}>
             View Profile & Book
           </Link>
         </Button>
