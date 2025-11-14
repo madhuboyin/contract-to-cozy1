@@ -15,7 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Loader2, AlertCircle, Search, Star } from 'lucide-react';
-import { useAuth } from '@/lib/auth/AuthContext'; // <-- 1. IMPORT useAuth
+import { useAuth } from '@/lib/auth/AuthContext';
 
 // --- Define the Provider type ---
 interface Provider {
@@ -44,8 +44,7 @@ function formatServiceCategory(category: string | null): string {
 function ProviderSearch() {
   const searchParams = useSearchParams();
   const serviceCategory = searchParams.get('service');
-  const { user } = useAuth(); // <-- 2. GET THE USER
-  console.log('USER OBJECT ON PROVIDER PAGE:', user);
+  const { user } = useAuth();
 
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,8 +61,6 @@ function ProviderSearch() {
         if (serviceCategory) {
           apiUrl.searchParams.append('category', serviceCategory);
         }
-        // TODO: Add zipCode from user's profile for better results
-        // apiUrl.searchParams.append('zipCode', 'YOUR_ZIP_CODE');
 
         const response = await fetch(apiUrl.toString(), {
           headers: {
@@ -87,7 +84,6 @@ function ProviderSearch() {
     fetchProviders();
   }, [serviceCategory]);
 
-  // 3. DETERMINE THE CORRECT "BACK" LINK
   const isHomeBuyer = user?.segment === 'HOME_BUYER';
   const backLink = isHomeBuyer ? '/dashboard/checklist' : '/dashboard';
   const backLinkText = isHomeBuyer ? 'Back to Checklist' : 'Back to Dashboard';
@@ -102,12 +98,69 @@ function ProviderSearch() {
       </Button>
 
       <h2 className="text-3xl font-bold tracking-tight">Find Providers</h2>
-      <p className="text-gray-600">
-        Showing results for:
-        <Badge variant="default" className="ml-2 text-base">
-          {formatServiceCategory(serviceCategory)}
-        </Badge>
-      </p>
+
+      {/* NEW: Service Category Selector - Shows when NO category selected */}
+      {!serviceCategory && (
+        <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-white">
+          <CardHeader>
+            <CardTitle className="text-xl">Select a Service Category</CardTitle>
+            <CardDescription>
+              Choose the type of service you need to see available providers
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Button
+                asChild
+                size="lg"
+                variant="default"
+                className="h-24 flex flex-col items-center justify-center space-y-2"
+              >
+                <Link href="/dashboard/providers?service=INSPECTION">
+                  <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  <span className="text-lg font-semibold">Home Inspection</span>
+                </Link>
+              </Button>
+
+              <Button
+                asChild
+                size="lg"
+                variant="outline"
+                className="h-24 flex flex-col items-center justify-center space-y-2"
+              >
+                <Link href="/dashboard/providers?service=HANDYMAN">
+                  <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span className="text-lg font-semibold">Handyman Services</span>
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Current Category Badge - Shows when category IS selected */}
+      {serviceCategory && (
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-gray-600">
+              Showing results for:
+              <Badge variant="default" className="ml-2 text-base">
+                {formatServiceCategory(serviceCategory)}
+              </Badge>
+            </p>
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/dashboard/providers">
+              View All Categories
+            </Link>
+          </Button>
+        </div>
+      )}
 
       {/* --- Loading State --- */}
       {loading && (
@@ -127,15 +180,20 @@ function ProviderSearch() {
         </div>
       )}
 
-      {/* --- Empty State --- */}
-      {!loading && !error && providers.length === 0 && (
+      {/* --- Empty State (when category selected but no providers) --- */}
+      {!loading && !error && serviceCategory && providers.length === 0 && (
         <div className="flex h-64 w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center">
           <Search className="h-8 w-8 text-gray-400" />
           <h2 className="mt-4 text-xl font-semibold">No Providers Found</h2>
           <p className="mt-2 text-muted-foreground">
             We couldn't find any providers matching your criteria. Try a
-            different search.
+            different category.
           </p>
+          <Button asChild variant="outline" className="mt-4">
+            <Link href="/dashboard/providers">
+              View All Categories
+            </Link>
+          </Button>
         </div>
       )}
 
@@ -186,7 +244,6 @@ function ProviderCard({ provider }: { provider: Provider }) {
       </CardContent>
       <CardFooter className="bg-gray-50/50 p-4">
         <Button asChild className="w-full">
-          {/* This links to a page that doesn't exist yet, but matches your design */}
           <Link href={`/dashboard/providers/${provider.id}`}>
             View Profile & Book
           </Link>
@@ -197,7 +254,6 @@ function ProviderCard({ provider }: { provider: Provider }) {
 }
 
 // --- Page Wrapper ---
-// We must wrap the component in <Suspense> for `useSearchParams` to work.
 export default function ProvidersPage() {
   return (
     <Suspense fallback={<PageLoader />}>
