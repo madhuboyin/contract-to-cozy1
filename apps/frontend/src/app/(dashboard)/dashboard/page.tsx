@@ -177,14 +177,42 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
   );
 };
 
-// -------------------------------------
-// --- Main Dashboard Page Component ---
-// -------------------------------------
+// --- HELPER FUNCTIONS FOR EXISTING OWNER DASHBOARD ---
 
+const getStatusBadge = (status: string) => {
+    const statusClass = 'inline-block h-2 w-2 rounded-full mr-2 flex-shrink-0';
+    switch (status.toUpperCase()) {
+        case 'PENDING':
+        case 'IN_PROGRESS':
+            return <span className={`${statusClass} bg-yellow-500`} title="Pending/In Progress" />;
+        case 'CONFIRMED':
+            return <span className={`${statusClass} bg-blue-500`} title="Confirmed" />;
+        case 'COMPLETED':
+            return <span className={`${statusClass} bg-green-500`} title="Completed" />;
+        default:
+            return <span className={`${statusClass} bg-gray-500`} title={status} />;
+    }
+};
+
+const formatActivityTime = (dateString: string) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
+
+// --- MAIN COMPONENT ---
 export default function DashboardPage() {
   const { user, loading } = useAuth();
 
-  // New State for Existing Owner Dashboard Metrics
   const [dashboardData, setDashboardData] = useState({
     upcomingBookings: 0,
     completedJobs: 0,
@@ -192,6 +220,8 @@ export default function DashboardPage() {
     totalProperties: 0,
   });
   const [dataLoading, setDataLoading] = useState(false);
+  // ✅ FIX 4: New state to hold the list of recent activity items
+  const [recentActivityList, setRecentActivityList] = useState<any[]>([]);
 
 
   // Fetch data for Existing Owner Dashboard
@@ -200,9 +230,8 @@ export default function DashboardPage() {
       try {
         setDataLoading(true);
         
-        // Fetch all bookings and properties concurrently
         const [bookingsRes, propertiesRes] = await Promise.all([
-          // ✅ FIX: Change limit to 50 to satisfy API validation (max 50)
+          // Fix: Use safe limit
           api.listBookings({ limit: 50 }), 
           api.getProperties(),
         ]);
@@ -211,15 +240,15 @@ export default function DashboardPage() {
         let completed = 0;
         let totalSpending = 0;
         let totalProperties = 0;
+        let bookingsList: any[] = [];
         
         if (bookingsRes.success && bookingsRes.data?.bookings) {
-            const bookingsList = bookingsRes.data.bookings;
+            bookingsList = bookingsRes.data.bookings;
             
             bookingsList.forEach(booking => {
-                // Ensure status is safely accessed, converted to string, normalized to uppercase, and trimmed.
                 const status = String(booking.status).toUpperCase().trim();
                 
-                // 1. Upcoming Bookings: Robustly check against array of statuses
+                // 1. Upcoming Bookings
                 if (status === 'PENDING' || status === 'CONFIRMED' || status === 'IN_PROGRESS') {
                     upcoming += 1;
                 }
@@ -227,13 +256,37 @@ export default function DashboardPage() {
                 // 2. Completed Jobs & Total Spending
                 if (status === 'COMPLETED') {
                     completed += 1;
-                    // Use finalPrice if available, otherwise use estimatedPrice 
                     const price = parseFloat(booking.finalPrice || booking.estimatedPrice);
                     if (!isNaN(price)) {
                       totalSpending += price;
                     }
                 }
             });
+            
+            // --- Logic for Recent Activity List ---
+            const relevantBookings = bookingsList.filter(b => b.status !== 'CANCELLED' && b.status !== 'DRAFT');
+            
+            relevantBookings.sort((a, b) => {
+                const statusA = String(a.status).toUpperCase().trim();
+                const statusB = String(b.status).toUpperCase().trim();
+                const isUpcomingA = ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(statusA);
+                const isUpcomingB = ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(statusB);
+    
+                // 1. Prioritize upcoming first
+                if (isUpcomingA && !isUpcomingB) return -1;
+                if (!isUpcomingA && isUpcomingB) return 1;
+    
+                // 2. If both are upcoming, sort by soonest scheduled date (ASC)
+                if (isUpcomingA && isUpcomingB) {
+                    return new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime();
+                }
+    
+                // 3. If both are completed/other, sort by most recent update (DESC)
+                return new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime();
+            });
+
+            // Set the top 5 relevant items
+            setRecentActivityList(relevantBookings.slice(0, 5));
         }
 
         // Property Count
@@ -257,11 +310,9 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    // Only run fetchDashboardData if the user is not a Home Buyer
     if (user && user.segment !== 'HOME_BUYER') {
         fetchDashboardData();
     }
-    // Re-fetch when the tab gains focus (e.g., user navigates back)
     const handleFocus = () => {
       if (user && user.segment !== 'HOME_BUYER') {
         fetchDashboardData();
@@ -271,10 +322,9 @@ export default function DashboardPage() {
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
 
-  }, [user]); // Depend on user to ensure it runs after auth loads
+  }, [user]); 
 
 
-  // 1. Show a loading state while auth is being checked
   if (loading) {
     return (
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -285,12 +335,11 @@ export default function DashboardPage() {
     );
   }
 
-  // 2. If the user is a HOME_BUYER, show the new Welcome screen
   if (user && user.segment === 'HOME_BUYER') {
     return <HomeBuyerWelcome user={user} />;
   }
 
-  // 3. Otherwise, show the default dashboard for existing owners
+  // --- EXISTING OWNER RENDER ---
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
@@ -326,7 +375,6 @@ export default function DashboardPage() {
             </svg>
           </CardHeader>
           <CardContent>
-            {/* Display dynamic data */}
             <div className="text-2xl font-bold">{dataLoading ? '-' : dashboardData.upcomingBookings}</div>
             <p className="text-xs text-muted-foreground">Pending / Confirmed</p>
           </CardContent>
@@ -353,7 +401,6 @@ export default function DashboardPage() {
             </svg>
           </CardHeader>
           <CardContent>
-            {/* Display dynamic data */}
             <div className="text-2xl font-bold">{dataLoading ? '-' : `$${dashboardData.totalSpending.toFixed(2)}`}</div>
             <p className="text-xs text-muted-foreground">On completed services</p>
           </CardContent>
@@ -366,7 +413,6 @@ export default function DashboardPage() {
             <Home className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {/* Display dynamic data */}
             <div className="text-2xl font-bold">{dataLoading ? '-' : dashboardData.totalProperties}</div>
             <p className="text-xs text-muted-foreground">Properties added</p>
           </CardContent>
@@ -381,23 +427,63 @@ export default function DashboardPage() {
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {/* Display dynamic data */}
             <div className="text-2xl font-bold">{dataLoading ? '-' : dashboardData.completedJobs}</div>
             <p className="text-xs text-muted-foreground">Total services finished</p>
           </CardContent>
         </Card>
       </div>
       
-      {/* Recent Activity Card with dynamic update */}
+      {/* Recent Activity Card - ENHANCED */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4">
           <CardHeader>
             <CardTitle>Recent Activity</CardTitle>
             <CardDescription>
-              {dataLoading ? 'Fetching activity...' : `You have ${dashboardData.upcomingBookings} upcoming bookings.`}
+              {dataLoading 
+                ? 'Fetching activity...' 
+                : recentActivityList.length > 0 
+                    ? `Showing ${recentActivityList.length} most recent activities.`
+                    : `No recent activity found. You have ${dashboardData.upcomingBookings} upcoming bookings.`
+              }
             </CardDescription>
           </CardHeader>
-          <CardContent>{/* Placeholder for recent activity */}</CardContent>
+          <CardContent className="space-y-4">
+            {dataLoading ? (
+                <div className="flex items-center justify-center py-4 text-gray-500">
+                    <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading recent activity...
+                </div>
+            ) : recentActivityList.length === 0 ? (
+                <p className="text-sm text-gray-500 pt-2">Your recent activity feed is empty. Get started by booking a service!</p>
+            ) : (
+                <ul className="divide-y divide-gray-100 -mx-4">
+                    {recentActivityList.map((booking) => (
+                        <li key={booking.id} className="py-2.5 px-4 hover:bg-gray-50 transition-colors cursor-pointer">
+                            <Link href={`/dashboard/bookings/${booking.id}`}>
+                                <div className="flex items-start justify-between">
+                                    <p className="text-sm font-medium text-gray-900 truncate flex items-center">
+                                        {getStatusBadge(booking.status)}
+                                        {booking.service.name}
+                                    </p>
+                                    <p className="ml-2 text-xs text-gray-500 flex-shrink-0">
+                                        {booking.status.toUpperCase() === 'COMPLETED'
+                                            ? `Finished ${formatActivityTime(booking.completedAt || booking.updatedAt)}`
+                                            : `Scheduled ${formatActivityTime(booking.scheduledDate)}`}
+                                    </p>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-0.5 ml-4 truncate">
+                                    Provider: {booking.provider.businessName || `${booking.provider.firstName} ${booking.provider.lastName}`}
+                                </p>
+                            </Link>
+                        </li>
+                    ))}
+                </ul>
+            )}
+            <Button asChild variant="ghost" className="w-full text-blue-600 justify-end mt-2">
+                <Link href="/dashboard/bookings">
+                    View All Bookings <ArrowRight className="ml-1 h-4 w-4" />
+                </Link>
+            </Button>
+          </CardContent>
         </Card>
         {/* NEW: Service Category Quick Actions */}
         <Card className="col-span-3">
