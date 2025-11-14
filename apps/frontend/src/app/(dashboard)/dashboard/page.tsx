@@ -200,14 +200,16 @@ export default function DashboardPage() {
     let totalSpending = 0;
     
     // Statuses that count as "upcoming"
-    const upcomingStatuses = ['PENDING', 'CONFIRMED', 'IN_PROGRESS'];
+    const upcomingStatuses = new Set(['PENDING', 'CONFIRMED', 'IN_PROGRESS']); // Using Set for quick lookup
 
     bookings.forEach(booking => {
-      // ✅ FIX: Ensure status is a valid string before comparison.
-      const status = typeof booking.status === 'string' ? booking.status : '';
+      // ✅ FIX: Force status to be a clean, uppercase string for reliable comparison
+      const status = typeof booking.status === 'string' 
+        ? booking.status.toUpperCase().trim() 
+        : '';
 
       // Check for Upcoming Bookings
-      if (upcomingStatuses.includes(status)) {
+      if (upcomingStatuses.has(status)) {
         upcoming += 1;
       }
       
