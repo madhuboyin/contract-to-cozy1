@@ -182,27 +182,6 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
 // --- Main Dashboard Page Component ---
 // -------------------------------------
 
-// Helper function to process data and calculate total spending
-const calculateTotalSpending = (bookings: any[]) => {
-    let totalSpending = 0;
-    
-    bookings.forEach(booking => {
-      // Ensure status is safely accessed
-      const status = typeof booking.status === 'string' ? booking.status.toUpperCase().trim() : '';
-
-      // Only count spending for COMPLETED jobs
-      if (status === 'COMPLETED') {
-        // Use finalPrice if available, otherwise use estimatedPrice 
-        const price = parseFloat(booking.finalPrice || booking.estimatedPrice);
-        if (!isNaN(price)) {
-          totalSpending += price;
-        }
-      }
-    });
-    return totalSpending;
-}
-
-
 export default function DashboardPage() {
   const { user, loading } = useAuth();
 
@@ -224,7 +203,6 @@ export default function DashboardPage() {
         
         // Fetch all bookings and properties concurrently
         const [bookingsRes, propertiesRes] = await Promise.all([
-          // Fetch a generous limit of bookings to process locally
           api.listBookings({ limit: 100 }), 
           api.getProperties(),
         ]);
@@ -232,31 +210,40 @@ export default function DashboardPage() {
         let upcoming = 0;
         let completed = 0;
         let totalSpending = 0;
-        let bookings: any[] = [];
         let totalProperties = 0;
         
-        // ✅ FIX 1: Safely access data only after checking success
-        if (bookingsRes.success) {
-            bookings = bookingsRes.data?.bookings || [];
-            const summary = bookingsRes.data?.summary?.byStatus;
+        // --- FIX: Use a single, defensive loop over the bookings array ---
+        if (bookingsRes.success && bookingsRes.data?.bookings) {
+            const bookingsList = bookingsRes.data.bookings;
             
-            if (summary) {
-                // Upcoming Bookings = PENDING + CONFIRMED + IN_PROGRESS
-                upcoming = (summary.PENDING || 0) + (summary.CONFIRMED || 0) + (summary.IN_PROGRESS || 0);
-    
-                // Completed Jobs = COMPLETED
-                completed = summary.COMPLETED || 0;
-    
-                // Calculate Total Spending (requires loop over the actual bookings)
-                totalSpending = calculateTotalSpending(bookings);
-            } else {
-                console.warn("Bookings summary data not available.");
-            }
+            bookingsList.forEach(booking => {
+                // Ensure status is safely accessed and standardized
+                const status = typeof booking.status === 'string' 
+                    ? booking.status.toUpperCase().trim() 
+                    : '';
+                
+                // 1. Upcoming Bookings
+                if (['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(status)) {
+                    upcoming += 1;
+                }
+                
+                // 2. Completed Jobs & Total Spending
+                if (status === 'COMPLETED') {
+                    completed += 1;
+                    // Use finalPrice if available, otherwise use estimatedPrice 
+                    const price = parseFloat(booking.finalPrice || booking.estimatedPrice);
+                    if (!isNaN(price)) {
+                      totalSpending += price;
+                    }
+                }
+            });
         }
-        
-        // ✅ FIX 2: Safely access data only after checking success
-        if (propertiesRes.success) {
-            totalProperties = propertiesRes.data?.properties?.length || 0;
+        // --- END FIX ---
+
+
+        // Property Count
+        if (propertiesRes.success && propertiesRes.data?.properties) {
+            totalProperties = propertiesRes.data.properties.length;
         }
 
         setDashboardData({
@@ -321,7 +308,7 @@ export default function DashboardPage() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {/* Upcoming Bookings Card (Now using summary count) */}
+        {/* Upcoming Bookings Card (Now uses robust client-side count) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -390,7 +377,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
         
-        {/* Completed Jobs Card (Now using summary count) */}
+        {/* Completed Jobs Card (Now uses robust client-side count) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
