@@ -45,6 +45,7 @@ function ProviderSearch() {
   const searchParams = useSearchParams();
   const serviceCategory = searchParams.get('service');
   const { user } = useAuth(); // <-- 2. GET THE USER
+  console.log('USER OBJECT ON PROVIDER PAGE:', user);
 
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
