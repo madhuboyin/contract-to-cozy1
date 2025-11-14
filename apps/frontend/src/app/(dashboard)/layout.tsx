@@ -6,28 +6,26 @@ import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthContext';
+// ✅ FIX 1: Import necessary icons from Lucide React
+import { Home, Calendar, Users, ListChecks, User, KeyRound } from 'lucide-react'; 
 
-// Assuming the User type has a 'role' and a 'segment' field for differentiation
+// --- Helper Types (from prior context) ---
 interface UserContext {
   role: 'HOMEOWNER' | 'PROVIDER';
-  segment?: 'HOME_BUYER' | 'EXISTING_OWNER'; // Assuming these segments exist
-  // other fields like firstName, lastName, etc.
+  segment?: 'HOME_BUYER' | 'EXISTING_OWNER';
+  firstName: string;
+  lastName: string;
 }
 
-// Helper function to get the correct display name for the user's status
+// ✅ FIX 2: Helper function to get the correct display name for the user's status
 const getStatusDisplayName = (user: UserContext) => {
-  // 1. Check for specific segment for Homeowners
   if (user.role === 'HOMEOWNER') {
     if (user.segment === 'HOME_BUYER') {
       return 'Home Buyer';
     }
-    if (user.segment === 'EXISTING_OWNER') {
-      return 'Home Owner';
-    }
-    // Fallback for generic HOMEOWNER
+    // Fallback for generic HOMEOWNER or existing owner segment
     return 'Home Owner';
   }
-  // 2. Default to role for other types (e.g., PROVIDER)
   return user.role;
 };
 
@@ -62,17 +60,24 @@ export default function DashboardLayout({
     return null;
   }
   
-  // Use the getStatusDisplayName helper to get the descriptive status
-  const userStatus = getStatusDisplayName(user as UserContext);
-
+  // Cast user for segment/role check
+  const currentUser = user as UserContext;
+  const userStatus = getStatusDisplayName(currentUser);
+  
+  // ✅ FIX 3: Replace distorted icon characters with Lucide components
   const navigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: '投' },
-    { name: 'Bookings', href: '/dashboard/bookings', icon: '套' },
-    { name: 'Providers', href: '/dashboard/providers', icon: '剥' },
-    ...(user.role === 'HOMEOWNER' ? [
-      { name: 'Properties', href: '/dashboard/properties', icon: '匠' },
+    // Dashboard: Home icon
+    { name: 'Dashboard', href: '/dashboard', icon: Home }, 
+    // Bookings: ListChecks icon
+    { name: 'Bookings', href: '/dashboard/bookings', icon: ListChecks }, 
+    // Providers: Users icon
+    { name: 'Providers', href: '/dashboard/providers', icon: Users }, 
+    // Properties: Home icon (for property management)
+    ...(currentUser.role === 'HOMEOWNER' ? [
+      { name: 'Properties', href: '/dashboard/properties', icon: Home }, 
     ] : []),
-    { name: 'Profile', href: '/dashboard/profile', icon: '側' },
+    // Profile: User icon
+    { name: 'Profile', href: '/dashboard/profile', icon: User }, 
   ];
 
   return (
@@ -101,7 +106,8 @@ export default function DashboardLayout({
                         : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
                     } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
                   >
-                    <span className="mr-2">{item.icon}</span>
+                    {/* Render Lucide Icon component */}
+                    <item.icon className="mr-2 h-4 w-4" />
                     {item.name}
                   </Link>
                 ))}
@@ -112,10 +118,10 @@ export default function DashboardLayout({
             <div className="flex items-center">
               <div className="ml-3 relative flex items-center space-x-4">
                 <span className="text-sm text-gray-700">
-                  {user.firstName} {user.lastName}
+                  {currentUser.firstName} {currentUser.lastName}
                 </span>
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  {/* FIX: Displaying segment-based status instead of just role */}
+                  {/* FIX 4: Display segment-based status */}
                   {userStatus}
                 </span>
                 <button
@@ -142,7 +148,8 @@ export default function DashboardLayout({
                     : 'border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700'
                 } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
               >
-                <span className="mr-2">{item.icon}</span>
+                {/* Render Lucide Icon component for mobile */}
+                <item.icon className="mr-2 h-4 w-4 inline-block" />
                 {item.name}
               </Link>
             ))}
