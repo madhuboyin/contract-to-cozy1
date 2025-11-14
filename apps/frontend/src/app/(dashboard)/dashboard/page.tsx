@@ -222,7 +222,7 @@ export default function DashboardPage() {
                     ? booking.status.toUpperCase().trim() 
                     : '';
                 
-                // 1. Upcoming Bookings
+                // 1. Upcoming Bookings: Robustly check against array of statuses
                 if (['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(status)) {
                     upcoming += 1;
                 }
