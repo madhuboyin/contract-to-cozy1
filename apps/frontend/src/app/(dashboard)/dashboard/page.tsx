@@ -89,6 +89,23 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
     checklist?.items.filter((item) => item.status === 'COMPLETED').length || 0;
   const totalItems = checklist?.items.length || 8; // Default to 8
   const progressPercent = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
+  
+  // --- FIX: Logic to determine completion and set button text ---
+  const isChecklistComplete = totalItems > 0 && completedItems === totalItems;
+
+  const cardTitle = isChecklistComplete
+    ? 'Checklist Completed 🎉'
+    : 'Your Closure Checklist';
+  
+  const cardDescription = isChecklistComplete
+    ? 'Congratulations! Review your steps or find more services.'
+    : 'We\'re here to guide you through a smooth closing process.';
+  
+  const buttonText = isChecklistComplete
+    ? 'Review Your Checklist'
+    : 'Start Your Checklist';
+  // --- END FIX ---
+
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -103,11 +120,13 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
             <div className="space-y-1.5">
+              {/* Using conditional card title */}
               <CardTitle className="text-2xl font-bold">
-                Your Closure Checklist
+                {cardTitle}
               </CardTitle>
+              {/* Using conditional card description */}
               <CardDescription>
-                We're here to guide you through a smooth closing process.
+                {cardDescription}
               </CardDescription>
             </div>
             <ListChecks className="h-8 w-8 text-blue-500" />
@@ -128,7 +147,8 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
             )}
             <Button asChild className="w-full md:w-auto">
               <Link href="/dashboard/checklist">
-                Start Your Checklist
+                {/* Using conditional button text */}
+                {buttonText}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
