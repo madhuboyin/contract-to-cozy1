@@ -189,6 +189,9 @@ const getStatusBadge = (status: string) => {
             return <span className={`${statusClass} bg-blue-500`} title="Confirmed" />;
         case 'COMPLETED':
             return <span className={`${statusClass} bg-green-500`} title="Completed" />;
+        // ✅ ADDED: Red badge for cancelled status
+        case 'CANCELLED':
+            return <span className={`${statusClass} bg-red-500`} title="Cancelled" />;
         default:
             return <span className={`${statusClass} bg-gray-500`} title={status} />;
     }
@@ -208,7 +211,6 @@ const formatActivityTime = (dateString: string) => {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
-
 // --- MAIN COMPONENT ---
 export default function DashboardPage() {
   const { user, loading } = useAuth();
@@ -220,9 +222,7 @@ export default function DashboardPage() {
     totalProperties: 0,
   });
   const [dataLoading, setDataLoading] = useState(false);
-  // ✅ FIX 4: New state to hold the list of recent activity items
   const [recentActivityList, setRecentActivityList] = useState<any[]>([]);
-
 
   // Fetch data for Existing Owner Dashboard
   const fetchDashboardData = async () => {
@@ -231,7 +231,6 @@ export default function DashboardPage() {
         setDataLoading(true);
         
         const [bookingsRes, propertiesRes] = await Promise.all([
-          // Fix: Use safe limit
           api.listBookings({ limit: 50 }), 
           api.getProperties(),
         ]);
@@ -248,12 +247,10 @@ export default function DashboardPage() {
             bookingsList.forEach(booking => {
                 const status = String(booking.status).toUpperCase().trim();
                 
-                // 1. Upcoming Bookings
                 if (status === 'PENDING' || status === 'CONFIRMED' || status === 'IN_PROGRESS') {
                     upcoming += 1;
                 }
                 
-                // 2. Completed Jobs & Total Spending
                 if (status === 'COMPLETED') {
                     completed += 1;
                     const price = parseFloat(booking.finalPrice || booking.estimatedPrice);
@@ -264,7 +261,8 @@ export default function DashboardPage() {
             });
             
             // --- Logic for Recent Activity List ---
-            const relevantBookings = bookingsList.filter(b => b.status !== 'CANCELLED' && b.status !== 'DRAFT');
+            // ✅ UPDATED: Include CANCELLED bookings in the activity feed, exclude only DRAFT
+            const relevantBookings = bookingsList.filter(b => b.status !== 'DRAFT');
             
             relevantBookings.sort((a, b) => {
                 const statusA = String(a.status).toUpperCase().trim();
@@ -281,8 +279,11 @@ export default function DashboardPage() {
                     return new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime();
                 }
     
-                // 3. If both are completed/other, sort by most recent update (DESC)
-                return new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime();
+                // 3. If both are completed/cancelled, sort by most recent update/completion/cancellation date (DESC)
+                const dateA = new Date(a.cancelledAt || a.completedAt || a.updatedAt || a.createdAt).getTime();
+                const dateB = new Date(b.cancelledAt || b.completedAt || b.updatedAt || b.createdAt).getTime();
+                
+                return dateB - dateA;
             });
 
             // Set the top 5 relevant items
@@ -442,7 +443,7 @@ export default function DashboardPage() {
               {dataLoading 
                 ? 'Fetching activity...' 
                 : recentActivityList.length > 0 
-                    ? `Showing ${recentActivityList.length} most recent activities.`
+                    ? `Showing ${recentActivityList.length} most relevant activities.`
                     : `No recent activity found. You have ${dashboardData.upcomingBookings} upcoming bookings.`
               }
             </CardDescription>
@@ -456,28 +457,39 @@ export default function DashboardPage() {
                 <p className="text-sm text-gray-500 pt-2">Your recent activity feed is empty. Get started by booking a service!</p>
             ) : (
                 <ul className="divide-y divide-gray-100 -mx-4">
-                    {recentActivityList.map((booking) => (
-                        <li key={booking.id} className="py-2.5 px-4 hover:bg-gray-50 transition-colors cursor-pointer">
-                            <Link href={`/dashboard/bookings/${booking.id}`}>
-                                <div className="flex items-start justify-between">
-                                    <p className="text-sm font-medium text-gray-900 truncate flex items-center">
-                                        {getStatusBadge(booking.status)}
-                                        {booking.service.name}
+                    {recentActivityList.map((booking) => {
+                        const status = booking.status.toUpperCase();
+                        const timeText = (
+                            status === 'COMPLETED' 
+                                ? `Finished ${formatActivityTime(booking.completedAt || booking.updatedAt)}`
+                                : status === 'CANCELLED' 
+                                // ✅ Display cancelled time using cancelledAt/updatedAt
+                                ? `Cancelled ${formatActivityTime(booking.cancelledAt || booking.updatedAt)}`
+                                : `Scheduled ${formatActivityTime(booking.scheduledDate)}`
+                        );
+                        
+                        return (
+                            <li key={booking.id} className="py-2.5 px-4 hover:bg-gray-50 transition-colors cursor-pointer">
+                                <Link href={`/dashboard/bookings/${booking.id}`}>
+                                    <div className="flex items-start justify-between">
+                                        <p className="text-sm font-medium text-gray-900 truncate flex items-center">
+                                            {getStatusBadge(status)}
+                                            {booking.service.name}
+                                        </p>
+                                        <p className="ml-2 text-xs text-gray-500 flex-shrink-0">
+                                            {timeText}
+                                        </p>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-0.5 ml-4 truncate">
+                                        Provider: {booking.provider.businessName || `${booking.provider.firstName} ${booking.provider.lastName}`}
                                     </p>
-                                    <p className="ml-2 text-xs text-gray-500 flex-shrink-0">
-                                        {booking.status.toUpperCase() === 'COMPLETED'
-                                            ? `Finished ${formatActivityTime(booking.completedAt || booking.updatedAt)}`
-                                            : `Scheduled ${formatActivityTime(booking.scheduledDate)}`}
-                                    </p>
-                                </div>
-                                <p className="text-xs text-gray-500 mt-0.5 ml-4 truncate">
-                                    Provider: {booking.provider.businessName || `${booking.provider.firstName} ${booking.provider.lastName}`}
-                                </p>
-                            </Link>
-                        </li>
-                    ))}
+                                </Link>
+                            </li>
+                        );
+                    })}
                 </ul>
             )}
+            {/* The "View All Bookings" link remains as a necessary summary navigation element */}
             <Button asChild variant="ghost" className="w-full text-blue-600 justify-end mt-2">
                 <Link href="/dashboard/bookings">
                     View All Bookings <ArrowRight className="ml-1 h-4 w-4" />
