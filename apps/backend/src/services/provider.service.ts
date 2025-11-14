@@ -55,35 +55,63 @@ export class ProviderService {
     const { page, limit, radius, sortBy, sortOrder } = query;
     const skip = (page - 1) * limit;
 
-    // Build where clause for filtering
-    const where: Prisma.ProviderProfileWhereInput = {
-      status: 'ACTIVE',
-    };
+    // --- FIX START: Restructure WHERE clause to ensure category filtering checks actual services ---
+    
+    // Array to hold all individual filter clauses which will be combined with AND
+    const filters: Prisma.ProviderProfileWhereInput[] = [
+        { status: 'ACTIVE' }
+    ];
 
-    // Filter by service category
+    // Filter by service category: Check denormalized list OR check actual active services
     if (query.category) {
-      where.serviceCategories = {
-        has: query.category,
-      };
+      filters.push({
+        OR: [
+          // 1. Filter by denormalized serviceCategories list (Original filter)
+          {
+            serviceCategories: {
+              has: query.category,
+            },
+          },
+          // 2. FIX: Fallback/check against the actual active Service records for the Provider
+          {
+            services: {
+              some: {
+                isActive: true,
+                category: query.category,
+              },
+            },
+          },
+        ],
+      });
     }
 
-    // Filter by specific service types
+    // Filter by specific service types (original logic, now correctly integrated)
     if (query.inspectionType || query.handymanType) {
-      where.services = {
-        some: {
-          isActive: true,
-          ...(query.inspectionType && { inspectionType: query.inspectionType }),
-          ...(query.handymanType && { handymanType: query.handymanType }),
+      filters.push({
+        services: {
+          some: {
+            isActive: true,
+            ...(query.inspectionType && { inspectionType: query.inspectionType }),
+            ...(query.handymanType && { handymanType: query.handymanType }),
+          },
         },
-      };
+      });
     }
 
-    // Filter by minimum rating
+    // Filter by minimum rating (original logic, now correctly integrated)
     if (query.minRating) {
-      where.averageRating = {
-        gte: query.minRating,
-      };
+      filters.push({
+        averageRating: {
+          gte: query.minRating,
+        },
+      });
     }
+
+    // Combine all filters into the final WHERE clause
+    const where: Prisma.ProviderProfileWhereInput = { AND: filters };
+
+    // --- FIX END ---
+    
 
     // Get location coordinates for distance filtering
     let searchLat: number | undefined;
