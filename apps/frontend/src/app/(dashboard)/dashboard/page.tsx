@@ -5,6 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import Link from 'next/link';
+import { api } from '@/lib/api/client'; // <-- Import API client
 import {
   Card,
   CardContent,
@@ -19,7 +20,7 @@ import {
   CheckCircle,
   Home,
   ListChecks,
-  Loader2, // <-- 1. Add this
+  Loader2,
 } from 'lucide-react';
 
 // --- Types (copied from checklist page) ---
@@ -37,11 +38,9 @@ interface ChecklistType {
 // --- New Home Buyer Welcome Component ---
 // ----------------------------------------
 const HomeBuyerWelcome = ({ user }: { user: any }) => {
-  // 2. Add state for checklist data and loading
   const [checklist, setChecklist] = useState<ChecklistType | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // 3. Create a function to fetch the checklist
   const fetchChecklist = async () => {
     try {
       setLoading(true);
@@ -66,31 +65,25 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
     }
   };
 
-  // 4. Fetch data on mount AND when the user navigates back
   useEffect(() => {
     fetchChecklist();
 
-    // This is the key: Re-fetch when the user focuses the tab/window
-    // This happens when they use the browser's "back" button
     const handleFocus = () => {
       fetchChecklist();
     };
 
     window.addEventListener('focus', handleFocus);
 
-    // Clean up the listener
     return () => {
       window.removeEventListener('focus', handleFocus);
     };
-  }, []); // Empty array means this runs once on mount
+  }, []);
 
-  // 5. Calculate real progress
   const completedItems =
     checklist?.items.filter((item) => item.status === 'COMPLETED').length || 0;
   const totalItems = checklist?.items.length || 8; // Default to 8
   const progressPercent = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
   
-  // --- FIX: Logic to determine completion and set button text ---
   const isChecklistComplete = totalItems > 0 && completedItems === totalItems;
 
   const cardTitle = isChecklistComplete
@@ -104,8 +97,6 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
   const buttonText = isChecklistComplete
     ? 'Review Your Checklist'
     : 'Start Your Checklist';
-  // --- END FIX ---
-
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -120,11 +111,9 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
             <div className="space-y-1.5">
-              {/* Using conditional card title */}
               <CardTitle className="text-2xl font-bold">
                 {cardTitle}
               </CardTitle>
-              {/* Using conditional card description */}
               <CardDescription>
                 {cardDescription}
               </CardDescription>
@@ -132,7 +121,6 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
             <ListChecks className="h-8 w-8 text-blue-500" />
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* 6. Show a loading spinner while fetching */}
             {loading ? (
               <div className="flex items-center justify-center py-4">
                 <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
@@ -147,7 +135,6 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
             )}
             <Button asChild className="w-full md:w-auto">
               <Link href="/dashboard/checklist">
-                {/* Using conditional button text */}
                 {buttonText}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
@@ -193,10 +180,102 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
 
 // -------------------------------------
 // --- Main Dashboard Page Component ---
-// (This part remains the same)
 // -------------------------------------
 export default function DashboardPage() {
   const { user, loading } = useAuth();
+
+  // New State for Existing Owner Dashboard Metrics
+  const [dashboardData, setDashboardData] = useState({
+    upcomingBookings: 0,
+    completedJobs: 0,
+    totalSpending: 0,
+    totalProperties: 0,
+  });
+  const [dataLoading, setDataLoading] = useState(false);
+
+  // Helper function to process data and calculate metrics
+  const processBookings = (bookings: any[]) => {
+    let upcoming = 0;
+    let completed = 0;
+    let totalSpending = 0;
+    
+    // Statuses that count as "upcoming"
+    const upcomingStatuses = ['PENDING', 'CONFIRMED', 'IN_PROGRESS'];
+
+    bookings.forEach(booking => {
+      // Check for Upcoming Bookings
+      if (upcomingStatuses.includes(booking.status)) {
+        upcoming += 1;
+      }
+      
+      // Check for Completed Jobs and Total Spending
+      if (booking.status === 'COMPLETED') {
+        completed += 1;
+        // Use finalPrice if available, otherwise use estimatedPrice 
+        const price = parseFloat(booking.finalPrice || booking.estimatedPrice);
+        if (!isNaN(price)) {
+          totalSpending += price;
+        }
+      }
+    });
+
+    return { upcoming, completed, totalSpending };
+  }
+
+  // Fetch data for Existing Owner Dashboard
+  const fetchDashboardData = async () => {
+    if (user && user.segment !== 'HOME_BUYER') {
+      try {
+        setDataLoading(true);
+        
+        // Fetch all bookings and properties concurrently
+        const [bookingsRes, propertiesRes] = await Promise.all([
+          // Fetch a generous limit of bookings to process locally
+          api.listBookings({ limit: 100 }), 
+          api.getProperties(),
+        ]);
+        
+        let processedBookings = { upcoming: 0, completed: 0, totalSpending: 0 };
+        if (bookingsRes.success && bookingsRes.data.bookings) {
+          processedBookings = processBookings(bookingsRes.data.bookings);
+        }
+
+        const totalProperties = propertiesRes.success 
+          ? propertiesRes.data.properties.length 
+          : 0;
+
+        setDashboardData({
+          upcomingBookings: processedBookings.upcoming,
+          completedJobs: processedBookings.completed,
+          totalSpending: processedBookings.totalSpending,
+          totalProperties: totalProperties,
+        });
+
+      } catch (error) {
+        console.error('Failed to fetch existing owner dashboard data:', error);
+      } finally {
+        setDataLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    // Only run fetchDashboardData if the user is not a Home Buyer
+    if (user && user.segment !== 'HOME_BUYER') {
+        fetchDashboardData();
+    }
+    // Re-fetch when the tab gains focus (e.g., user navigates back)
+    const handleFocus = () => {
+      if (user && user.segment !== 'HOME_BUYER') {
+        fetchDashboardData();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+
+  }, [user]); // Depend on user to ensure it runs after auth loads
+
 
   // 1. Show a loading state while auth is being checked
   if (loading) {
@@ -218,9 +297,16 @@ export default function DashboardPage() {
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+      
+      {dataLoading && (
+        <div className="flex items-center justify-center py-4">
+            <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+            <p className="ml-2 text-gray-600">Loading metrics...</p>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {/* ... (existing owner cards) ... */}
+        {/* Upcoming Bookings Card */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -243,10 +329,13 @@ export default function DashboardPage() {
             </svg>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">5</div>
-            <p className="text-xs text-muted-foreground">+2 this month</p>
+            {/* Display dynamic data */}
+            <div className="text-2xl font-bold">{dataLoading ? '-' : dashboardData.upcomingBookings}</div>
+            <p className="text-xs text-muted-foreground">Pending / Confirmed</p>
           </CardContent>
         </Card>
+        
+        {/* Total Spending Card */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -255,7 +344,7 @@ export default function DashboardPage() {
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
-      fill="none"
+              fill="none"
               stroke="currentColor"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -267,20 +356,26 @@ export default function DashboardPage() {
             </svg>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$1,250</div>
-            <p className="text-xs text-muted-foreground">+12% from last month</p>
+            {/* Display dynamic data */}
+            <div className="text-2xl font-bold">{dataLoading ? '-' : `$${dashboardData.totalSpending.toFixed(2)}`}</div>
+            <p className="text-xs text-muted-foreground">On completed services</p>
           </CardContent>
         </Card>
+        
+        {/* My Properties Card */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">My Properties</CardTitle>
             <Home className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1</div>
-            <p className="text-xs text-muted-foreground">Manage properties</p>
+            {/* Display dynamic data */}
+            <div className="text-2xl font-bold">{dataLoading ? '-' : dashboardData.totalProperties}</div>
+            <p className="text-xs text-muted-foreground">Properties added</p>
           </CardContent>
         </Card>
+        
+        {/* Completed Jobs Card */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -289,17 +384,20 @@ export default function DashboardPage() {
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12</div>
-            <p className="text-xs text-muted-foreground">View service history</p>
+            {/* Display dynamic data */}
+            <div className="text-2xl font-bold">{dataLoading ? '-' : dashboardData.completedJobs}</div>
+            <p className="text-xs text-muted-foreground">Total services finished</p>
           </CardContent>
         </Card>
       </div>
+      
+      {/* Recent Activity Card with dynamic update */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4">
           <CardHeader>
             <CardTitle>Recent Activity</CardTitle>
             <CardDescription>
-              You have 3 upcoming bookings this week.
+              {dataLoading ? 'Fetching activity...' : `You have ${dashboardData.upcomingBookings} upcoming bookings.`}
             </CardDescription>
           </CardHeader>
           <CardContent>{/* Placeholder for recent activity */}</CardContent>
