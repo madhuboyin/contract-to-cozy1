@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import Link from 'next/link';
-import { api } from '@/lib/api/client'; // <-- Import API client
+import { api } from '@/lib/api/client'; 
 import {
   Card,
   CardContent,
@@ -202,7 +202,8 @@ export default function DashboardPage() {
         
         // Fetch all bookings and properties concurrently
         const [bookingsRes, propertiesRes] = await Promise.all([
-          api.listBookings({ limit: 100 }), 
+          // ✅ FIX: Change limit to 50 to satisfy API validation (max 50)
+          api.listBookings({ limit: 50 }), 
           api.getProperties(),
         ]);
         
@@ -218,7 +219,7 @@ export default function DashboardPage() {
                 // Ensure status is safely accessed, converted to string, normalized to uppercase, and trimmed.
                 const status = String(booking.status).toUpperCase().trim();
                 
-                // 1. Upcoming Bookings: Use explicit OR check for maximum compatibility
+                // 1. Upcoming Bookings: Robustly check against array of statuses
                 if (status === 'PENDING' || status === 'CONFIRMED' || status === 'IN_PROGRESS') {
                     upcoming += 1;
                 }
@@ -393,7 +394,6 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle>Recent Activity</CardTitle>
             <CardDescription>
-              {/* This description relies on the same value */}
               {dataLoading ? 'Fetching activity...' : `You have ${dashboardData.upcomingBookings} upcoming bookings.`}
             </CardDescription>
           </CardHeader>
