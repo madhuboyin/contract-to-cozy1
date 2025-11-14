@@ -16,6 +16,18 @@ interface EditFormData {
   specialRequests: string;
 }
 
+// ✅ NEW HELPER: Converts ISO string to the local date/time format required by <input type="datetime-local">
+const toLocalDatetimeInput = (isoString: string | null): string => {
+  if (!isoString) return '';
+  const date = new Date(isoString);
+  // Get time zone offset in minutes
+  const offset = date.getTimezoneOffset() * 60000;
+  // Adjust to local time
+  const localTime = new Date(date.getTime() - offset);
+  // Return in YYYY-MM-DDTHH:MM format
+  return localTime.toISOString().slice(0, 16);
+};
+
 export default function HomeownerBookingsPage() {
   const { user } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -96,7 +108,8 @@ export default function HomeownerBookingsPage() {
   const handleEditClick = (booking: Booking) => {
     setEditingBooking(booking);
     setEditFormData({
-      scheduledDate: booking.scheduledDate || '',
+      // ✅ FIX: Use new helper for correct date/time input format initialization
+      scheduledDate: toLocalDatetimeInput(booking.scheduledDate),
       description: booking.description,
       specialRequests: booking.specialRequests || '',
     });
@@ -123,6 +136,7 @@ export default function HomeownerBookingsPage() {
       };
 
       if (editFormData.scheduledDate) {
+        // This converts the local datetime string back to an ISO UTC string for the backend
         updates.scheduledDate = new Date(editFormData.scheduledDate).toISOString();
       }
 
@@ -400,9 +414,10 @@ export default function HomeownerBookingsPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Scheduled Date *
                   </label>
+                  {/* FIX: Simplified value prop now that initialization sets the correct format */}
                   <input
                     type="datetime-local"
-                    value={editFormData.scheduledDate ? new Date(editFormData.scheduledDate).toISOString().slice(0, 16) : ''}
+                    value={editFormData.scheduledDate}
                     onChange={(e) => setEditFormData({ ...editFormData, scheduledDate: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required
@@ -539,3 +554,6 @@ export default function HomeownerBookingsPage() {
     </div>
   );
 }
+
+// Full code for bookings/[id]/page.tsx is not strictly required for this specific review 
+// but is provided in the prompt for context.
