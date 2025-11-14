@@ -181,6 +181,28 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
 // -------------------------------------
 // --- Main Dashboard Page Component ---
 // -------------------------------------
+
+// Helper function to process data and calculate total spending
+const calculateTotalSpending = (bookings: any[]) => {
+    let totalSpending = 0;
+    
+    bookings.forEach(booking => {
+      // Ensure status is safely accessed
+      const status = typeof booking.status === 'string' ? booking.status.toUpperCase().trim() : '';
+
+      // Only count spending for COMPLETED jobs
+      if (status === 'COMPLETED') {
+        // Use finalPrice if available, otherwise use estimatedPrice 
+        const price = parseFloat(booking.finalPrice || booking.estimatedPrice);
+        if (!isNaN(price)) {
+          totalSpending += price;
+        }
+      }
+    });
+    return totalSpending;
+}
+
+
 export default function DashboardPage() {
   const { user, loading } = useAuth();
 
@@ -193,39 +215,6 @@ export default function DashboardPage() {
   });
   const [dataLoading, setDataLoading] = useState(false);
 
-  // Helper function to process data and calculate metrics
-  const processBookings = (bookings: any[]) => {
-    let upcoming = 0;
-    let completed = 0;
-    let totalSpending = 0;
-    
-    // Statuses that count as "upcoming"
-    const upcomingStatuses = new Set(['PENDING', 'CONFIRMED', 'IN_PROGRESS']); // Using Set for quick lookup
-
-    bookings.forEach(booking => {
-      // ✅ FIX: Force status to be a clean, uppercase string for reliable comparison
-      const status = typeof booking.status === 'string' 
-        ? booking.status.toUpperCase().trim() 
-        : '';
-
-      // Check for Upcoming Bookings
-      if (upcomingStatuses.has(status)) {
-        upcoming += 1;
-      }
-      
-      // Check for Completed Jobs and Total Spending
-      if (status === 'COMPLETED') {
-        completed += 1;
-        // Use finalPrice if available, otherwise use estimatedPrice 
-        const price = parseFloat(booking.finalPrice || booking.estimatedPrice);
-        if (!isNaN(price)) {
-          totalSpending += price;
-        }
-      }
-    });
-
-    return { upcoming, completed, totalSpending };
-  }
 
   // Fetch data for Existing Owner Dashboard
   const fetchDashboardData = async () => {
@@ -240,19 +229,40 @@ export default function DashboardPage() {
           api.getProperties(),
         ]);
         
-        let processedBookings = { upcoming: 0, completed: 0, totalSpending: 0 };
-        if (bookingsRes.success && bookingsRes.data.bookings) {
-          processedBookings = processBookings(bookingsRes.data.bookings);
+        let upcoming = 0;
+        let completed = 0;
+        let totalSpending = 0;
+        let bookings: any[] = [];
+        let totalProperties = 0;
+        
+        // ✅ FIX 1: Safely access data only after checking success
+        if (bookingsRes.success) {
+            bookings = bookingsRes.data?.bookings || [];
+            const summary = bookingsRes.data?.summary?.byStatus;
+            
+            if (summary) {
+                // Upcoming Bookings = PENDING + CONFIRMED + IN_PROGRESS
+                upcoming = (summary.PENDING || 0) + (summary.CONFIRMED || 0) + (summary.IN_PROGRESS || 0);
+    
+                // Completed Jobs = COMPLETED
+                completed = summary.COMPLETED || 0;
+    
+                // Calculate Total Spending (requires loop over the actual bookings)
+                totalSpending = calculateTotalSpending(bookings);
+            } else {
+                console.warn("Bookings summary data not available.");
+            }
+        }
+        
+        // ✅ FIX 2: Safely access data only after checking success
+        if (propertiesRes.success) {
+            totalProperties = propertiesRes.data?.properties?.length || 0;
         }
 
-        const totalProperties = propertiesRes.success 
-          ? propertiesRes.data.properties.length 
-          : 0;
-
         setDashboardData({
-          upcomingBookings: processedBookings.upcoming,
-          completedJobs: processedBookings.completed,
-          totalSpending: processedBookings.totalSpending,
+          upcomingBookings: upcoming,
+          completedJobs: completed,
+          totalSpending: totalSpending,
           totalProperties: totalProperties,
         });
 
@@ -311,7 +321,7 @@ export default function DashboardPage() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {/* Upcoming Bookings Card */}
+        {/* Upcoming Bookings Card (Now using summary count) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -380,7 +390,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
         
-        {/* Completed Jobs Card */}
+        {/* Completed Jobs Card (Now using summary count) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
