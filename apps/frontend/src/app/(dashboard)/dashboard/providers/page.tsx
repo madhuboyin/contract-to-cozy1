@@ -26,7 +26,7 @@ interface Provider {
   services: {
     id: string;
     name: string;
-    basePrice: number;
+    basePrice: string; // BasePrice is a string from the API
     priceUnit: string;
   }[];
 }
@@ -73,7 +73,7 @@ function ProviderSearch() {
         }
 
         const data = await response.json();
-        setProviders(data.data || []);
+        setProviders(data.data.providers || []);
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -198,6 +198,7 @@ function ProviderSearch() {
       )}
 
       {/* --- Results List --- */}
+      {/* This condition will now execute since providers.length > 0 */}
       {!loading && !error && providers.length > 0 && (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {providers.map((provider) => (
@@ -211,9 +212,13 @@ function ProviderSearch() {
 
 // --- Individual Provider Card Component ---
 function ProviderCard({ provider, serviceCategory }: { provider: Provider, serviceCategory: string | null }) {
+  // Sort services to find the lowest price (preview service)
   const previewService = provider.services?.sort(
-    (a, b) => a.basePrice - b.basePrice
+    (a, b) => parseFloat(a.basePrice) - parseFloat(b.basePrice)
   )[0];
+
+  // Defensive check for basePrice value and conversion
+  const basePriceValue = previewService?.basePrice ? parseFloat(previewService.basePrice) : null;
 
   return (
     <Card className="flex flex-col justify-between transition-all hover:shadow-lg">
@@ -228,11 +233,12 @@ function ProviderCard({ provider, serviceCategory }: { provider: Provider, servi
         </div>
       </CardHeader>
       <CardContent>
-        {previewService ? (
+        {/* ✅ FIX: Use basePriceValue to check existence and display cleanly */}
+        {previewService && basePriceValue !== null && !isNaN(basePriceValue) ? ( 
           <div>
             <p className="text-sm text-muted-foreground">Services starting at</p>
             <p className="text-2xl font-bold">
-              ${previewService.basePrice.toString()}
+              ${basePriceValue.toFixed(2)}
               <span className="text-sm font-normal text-muted-foreground">
                 /{previewService.priceUnit}
               </span>
@@ -244,7 +250,6 @@ function ProviderCard({ provider, serviceCategory }: { provider: Provider, servi
       </CardContent>
       <CardFooter className="bg-gray-50/50 p-4">
         <Button asChild className="w-full">
-          {/* Pass the serviceCategory to the book page */}
           <Link href={`/dashboard/providers/${provider.id}${serviceCategory ? `?service=${serviceCategory}` : ''}`}>
             View Profile & Book
           </Link>
