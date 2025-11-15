@@ -42,6 +42,11 @@ spec:
               value: "True"
             - name: PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION
               value: "False"
+            - name: PGADMIN_CONFIG_WTF_CSRF_ENABLED
+              value: "False"
+            - name: PGADMIN_CONFIG_WTF_CSRF_CHECK_DEFAULT
+              value: "False"
+
           ports:
             - containerPort: 80
 
