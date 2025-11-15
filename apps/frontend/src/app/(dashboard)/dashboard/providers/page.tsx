@@ -111,6 +111,19 @@ function ProviderSearch() {
   const backLink = isHomeBuyer ? '/dashboard/checklist' : '/dashboard';
   const backLinkText = isHomeBuyer ? 'Back to Checklist' : 'Back to Dashboard';
 
+  // --- CHANGE: Added logic for dynamic page title ---
+  let pageTitle = "Find Providers";
+  if (serviceCategory && !categoriesLoading) {
+    const selectedCategoryName = serviceCategories.find(
+      c => c.category === serviceCategory
+    )?.displayName;
+    
+    if (selectedCategoryName) {
+      pageTitle = `${selectedCategoryName} Providers`;
+    }
+  }
+  // --- END CHANGE ---
+
   return (
     <div className="flex-1 space-y-4 pt-6">
       <Button asChild variant="link" className="pl-0 text-blue-600">
@@ -120,7 +133,19 @@ function ProviderSearch() {
         </Link>
       </Button>
 
-      <h2 className="text-3xl font-bold tracking-tight">Find Providers</h2>
+      {/* --- CHANGE: Dynamic title and "View All" link --- */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <h2 className="text-3xl font-bold tracking-tight">{pageTitle}</h2>
+        {serviceCategory && !loading && (
+          <Button asChild variant="link" className="p-0 h-auto text-blue-600 self-start sm:self-center">
+            <Link href="/dashboard/providers">
+              View All Categories
+            </Link>
+          </Button>
+        )}
+      </div>
+      {/* --- END CHANGE --- */}
+
 
       {/* NEW: Dynamic Service Category Selector */}
       {!serviceCategory && (
@@ -201,7 +226,7 @@ function ProviderSearch() {
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         strokeWidth={2}
-                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0 3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
                       />
                       <path
                         strokeLinecap="round"
