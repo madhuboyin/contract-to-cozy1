@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-headers
+  namespace: admin-tools
+data:
+  X-Forwarded-Proto: "https"
+  X-Forwarded-Ssl: "on"
+  X-Forwarded-Port: "443"
+  X-Frame-Options: "SAMEORIGIN"
