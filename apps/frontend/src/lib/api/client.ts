@@ -23,8 +23,39 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 class APIClient {
   private baseURL: string;
 
+  // --- NEW ---
+  // Add state to prevent multiple refresh attempts at the same time
+  private isRefreshing = false;
+  private failedQueue: {
+    resolve: (value: any) => void;
+    reject: (reason?: any) => void;
+    endpoint: string;
+    options: RequestInit;
+    headers: Record<string, string>;
+  }[] = [];
+
   constructor(baseURL: string) {
     this.baseURL = baseURL;
+  }
+
+  // --- HELPER TO PROCESS WAITING REQUESTS ---
+  private processFailedQueue(error: Error | null, token: string | null = null) {
+    this.failedQueue.forEach(prom => {
+      if (error) {
+        prom.reject(error);
+      } else {
+        // Re-run the original request with the new token
+        const newHeaders = { ...prom.headers, 'Authorization': `Bearer ${token}` };
+        fetch(`${this.baseURL}${prom.endpoint}`, { ...prom.options, headers: newHeaders })
+          .then(res => res.json())
+          .then(data => {
+            // We resolve with the JSON data, assuming the retry was successful.
+            prom.resolve(data);
+          })
+          .catch(err => prom.reject(err));
+      }
+    });
+    this.failedQueue = [];
   }
 
   /**
@@ -71,11 +102,57 @@ class APIClient {
     }
 
     try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      let response = await fetch(`${this.baseURL}${endpoint}`, {
         ...options,
         headers,
       });
 
+      // --- START: MODIFIED LOGIC ---
+
+      if (response.status === 401 && !endpoint.startsWith('/api/auth/')) {
+        // Token expired or invalid, and it's not an auth endpoint
+        
+        if (this.isRefreshing) {
+          // A refresh is already in progress. Add this request to the queue.
+          return new Promise((resolve, reject) => {
+            this.failedQueue.push({ resolve, reject, endpoint, options, headers });
+          });
+        }
+
+        this.isRefreshing = true;
+        
+        const refreshResponse = await this.refreshToken();
+
+        if (refreshResponse.success) {
+          // Refresh was successful. 
+          const newToken = refreshResponse.data.accessToken;
+          this.isRefreshing = false;
+          // Process all waiting requests
+          this.processFailedQueue(null, newToken);
+
+          // Retry the original request with the new token
+          const newHeaders = { ...headers, 'Authorization': `Bearer ${newToken}` };
+          response = await fetch(`${this.baseURL}${endpoint}`, {
+            ...options,
+            headers: newHeaders,
+          });
+
+        } else {
+          // Refresh failed. Log user out.
+          this.isRefreshing = false;
+          const error = new Error('Session expired. Please log in again.');
+          // Reject all waiting requests
+          this.processFailedQueue(error, null);
+          
+          this.removeToken();
+          if (typeof window !== 'undefined') {
+            window.location.href = '/login';
+          }
+          return { success: false, message: 'Session expired. Please log in again.' };
+        }
+      }
+
+      // Process the final response (original, retry, or non-401 error)
       const data = await response.json();
 
       if (!response.ok) {
@@ -86,7 +163,10 @@ class APIClient {
         };
       }
 
-      return data;
+      return data; // This is the APIResponse, which should have { success: true, ... }
+      
+      // --- END: MODIFIED LOGIC ---
+
     } catch (error) {
       console.error('API Request Error:', error);
       return {
@@ -162,22 +242,33 @@ class APIClient {
       };
     }
 
-    const response = await this.request<{ accessToken: string; refreshToken: string }>(
-      '/api/auth/refresh',
-      {
+    // Use fetch directly here to avoid circular dependency in request()
+    // and to ensure we don't try to refresh a failed refresh token
+    const response = await fetch(`${this.baseURL}/api/auth/refresh`, {
         method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
         body: JSON.stringify({ refreshToken }),
-      }
-    );
+    });
 
-    if (response.success) {
-      this.setToken(response.data.accessToken);
+    const data = await response.json();
+
+    if (!response.ok) {
+        return {
+            success: false,
+            message: data.message || 'Failed to refresh token',
+        };
+    }
+
+    if (data.success) {
+      this.setToken(data.data.accessToken);
       if (typeof window !== 'undefined') {
-        localStorage.setItem('refreshToken', response.data.refreshToken);
+        localStorage.setItem('refreshToken', data.data.refreshToken);
       }
     }
 
-    return response;
+    return data;
   }
 
   // ==========================================================================
@@ -492,5 +583,4 @@ class APIClient {
 }
 
 // Export singleton instance
-export const api = new APIClient(API_URL); 
-
+export const api = new APIClient(API_URL);
