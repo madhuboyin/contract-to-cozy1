@@ -50,10 +50,8 @@ export class ProviderService {
    * Search for providers based on location and service filters
    */
   static async searchProviders(
-    // --- FIX: Add userId to signature ---
     query: ProviderSearchQuery,
     userId?: string
-    // --- END FIX ---
   ): Promise<ProviderSearchResult> {
     const { page, limit, radius, sortBy, sortOrder } = query;
     const skip = (page - 1) * limit;
@@ -73,74 +71,106 @@ export class ProviderService {
     }
     const isHomeBuyer = userSegment === 'HOME_BUYER';
 
-    // 2. Check if the requested category is allowed for this segment
-    if (query.category) {
-      const allowedCategory = await prisma.serviceCategoryConfig.findFirst({
-        where: {
-          category: query.category,
-          isActive: true,
-          ...(isHomeBuyer
-            ? { availableForHomeBuyer: true }
-            : { availableForExistingOwner: true }),
-        },
-      });
+    // 2. Get a list of ALL categories allowed for this segment
+    const allowedCategories = await prisma.serviceCategoryConfig.findMany({
+      where: {
+        isActive: true,
+        ...(isHomeBuyer
+          ? { availableForHomeBuyer: true }
+          : { availableForExistingOwner: true }),
+      },
+      select: { category: true },
+    });
+    const allowedCategoryNames = allowedCategories.map((c) => c.category);
 
-      // 3. If category is not allowed, return empty results immediately
-      if (!allowedCategory) {
-        return {
-          providers: [],
-          pagination: {
-            page,
-            limit,
-            total: 0,
-            totalPages: 0,
-          },
-          filters: {
-            category: query.category,
-          },
-        };
-      }
+    // 3. Permission Check:
+    // If a specific category is requested, check if it's in the allowed list.
+    // If not, return empty results immediately.
+    if (query.category && !allowedCategoryNames.includes(query.category)) {
+      return {
+        providers: [],
+        pagination: {
+          page,
+          limit,
+          total: 0,
+          totalPages: 0,
+        },
+        filters: {
+          category: query.category,
+        },
+      };
     }
     // --- END FIX ---
 
 
-    // --- Original filter logic (now safe to run) ---
+    // --- Original filter logic (now with segment-awareness) ---
     // Array to hold all individual filter clauses
     const filters: Prisma.ProviderProfileWhereInput[] = [
         // Relax status filter: exclude only 'INACTIVE'.
         { status: { not: 'INACTIVE' } } 
     ];
 
-    // Filter by service category: Check denormalized list OR check actual active services
+    // --- FIX: This logic is now segment-aware ---
     if (query.category) {
+      // Case 1: A specific (and now verified) category is requested
       filters.push({
         OR: [
-          // 1. Filter by denormalized serviceCategories list (Original filter)
           {
             serviceCategories: {
               has: query.category,
             },
           },
-          // 2. Fallback/check against the actual active Service records for the Provider
           {
             services: {
               some: {
-                isActive: true, // Only show providers with active services
+                isActive: true,
                 category: query.category,
               },
             },
           },
         ],
       });
+    } else {
+      // Case 2: No category requested. Show all providers that match
+      // ANY of the allowed categories for the user's segment.
+      if (allowedCategoryNames.length > 0) {
+        filters.push({
+          OR: [
+            // Check denormalized list for *any* overlap
+            {
+              serviceCategories: {
+                hasSome: allowedCategoryNames,
+              },
+            },
+            // Check active services for *any* service in the allowed list
+            {
+              services: {
+                some: {
+                  isActive: true,
+                  category: {
+                    in: allowedCategoryNames,
+                  },
+                },
+              },
+            },
+          ],
+        });
+      } else {
+        // User's segment has no allowed categories, return nothing.
+        return {
+          providers: [],
+          pagination: { page, limit, total: 0, totalPages: 0 },
+          filters: {},
+        };
+      }
     }
+    // --- END FIX ---
 
     // IMPORTANT: Temporarily skipping all other complex filters (inspectionType, handymanType, minRating)
     // to ensure category matching works first.
 
     // Combine all filters into the final WHERE clause
     const where: Prisma.ProviderProfileWhereInput = { AND: filters };
-
-    // --- End Original filter logic ---
 
 
     // TEMPORARILY COMMENT OUT ALL LOCATION FINDING LOGIC FOR DEBUGGING
@@ -467,7 +497,7 @@ export class ProviderService {
             select: {
               id: true,
               firstName: true,
-lastName: true,
+              lastName: true,
               avatar: true,
             },
           },

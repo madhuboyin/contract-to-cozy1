@@ -72,23 +72,22 @@ function ProviderSearch() {
     fetchCategories();
   }, []);
 
-  // Fetch providers based on selected category
+  // --- FIX: This hook is updated to always fetch ---
+  // Fetch providers based on selected category (or all if none selected)
   useEffect(() => {
     const fetchProviders = async () => {
       try {
         setLoading(true);
         setError(null); // Clear previous errors
 
-        // Replace manual fetch with authenticated API client
-        // The api client will handle auth automatically.
+        // Always fetch. Pass 'category: undefined' if serviceCategory is null.
         const response = await api.searchProviders({
-          category: serviceCategory!, // We know serviceCategory is not null here
+          category: serviceCategory || undefined,
         });
 
         if (response.success) {
-          // --- FIX: Use double assertion 'as unknown as Provider[]' ---
+          // Use double assertion 'as unknown as Provider[]'
           setProviders((response.data.providers as unknown as Provider[]) || []);
-          // --- END FIX ---
         } else {
           throw new Error(response.message || 'Failed to fetch providers.');
         }
@@ -100,16 +99,11 @@ function ProviderSearch() {
       }
     };
 
-    // Only fetch providers if a service category is selected
-    if (serviceCategory) {
-      fetchProviders();
-    } else {
-      // No category selected, so we are not loading anything.
-      // This allows the category picker to show.
-      setLoading(false);
-      setProviders([]); // Clear any previous provider list
-    }
-  }, [serviceCategory]);
+    // We no longer check if serviceCategory exists. We always fetch.
+    fetchProviders();
+    
+  }, [serviceCategory]); // This effect re-runs when serviceCategory changes
+  // --- END FIX ---
 
   const isHomeBuyer = user?.segment === 'HOME_BUYER';
   const backLink = isHomeBuyer ? '/dashboard/checklist' : '/dashboard';
@@ -153,12 +147,14 @@ function ProviderSearch() {
       {/* --- END CHANGE --- */}
 
       {/* NEW: Dynamic Service Category Selector */}
-      {!serviceCategory && (
+      {/* --- FIX: Only show category picker if NOT loading and no category is selected --- */}
+      {!serviceCategory && !loading && (
         <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-white">
           <CardHeader>
             <CardTitle className="text-xl">Select a Service Category</CardTitle>
             <CardDescription>
-              Choose the type of service you need to see available providers
+              Choose the type of service you need to see available providers or
+              browse all providers below.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -248,7 +244,7 @@ function ProviderSearch() {
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         strokeWidth={2}
-                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0 3.35a1.724 1.JUL 1.066-2.573c-.94-1.543.826 3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0 3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826 3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
                       />
                       <path
                         strokeLinecap="round"
@@ -286,25 +282,34 @@ function ProviderSearch() {
       )}
 
       {/* Empty State */}
-      {!loading && !error && serviceCategory && providers.length === 0 && (
+      {/* --- FIX: Updated empty state logic --- */}
+      {!loading && !error && providers.length === 0 && (
         <div className="flex h-64 w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center">
           <Search className="h-8 w-8 text-gray-400" />
           <h2 className="mt-4 text-xl font-semibold">No Providers Found</h2>
-          <p className="mt-2 text-muted-foreground">
-            We couldn't find any providers for this category. Try a different
-            service.
-          </p>
+          {serviceCategory ? (
+            <p className="mt-2 text-muted-foreground">
+              We couldn't find any providers for this category. Try a different
+              service.
+            </p>
+          ) : (
+            <p className="mt-2 text-muted-foreground">
+              We couldn't find any providers for your segment at this time.
+            </p>
+          )}
           <Button asChild variant="outline" className="mt-4">
             <Link href="/dashboard/providers">View All Categories</Link>
           </Button>
         </div>
       )}
+      {/* --- END FIX --- */}
+
 
       {/* Results List */}
       {!loading && !error && providers.length > 0 && (
         // --- START: MODIFIED GRID LAYOUT ---
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {/* --- END: MODIFIED GRID LAYTYP -- */}
+          {/* --- END: MODIFIED GRID LAYOUT --- */}
           {providers.map((provider) => (
             <ProviderCard
               key={provider.id}
