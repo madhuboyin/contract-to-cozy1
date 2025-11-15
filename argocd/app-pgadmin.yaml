@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: pgadmin
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/madhuboyin/contract-to-cozy1.git # Or your repo URL
+    targetRevision: HEAD
+    # POINTER 1: This time, just a plain path
+    path: infrastructure/admin-tools/pgadmin 
+  destination:
+    server: https://kubernetes.default.svc
+    # POINTER 2: Deploy to the 'admin-tools' namespace
+    namespace: admin-tools
+  syncPolicy:
+    syncOptions:
+    - CreateNamespace=true
