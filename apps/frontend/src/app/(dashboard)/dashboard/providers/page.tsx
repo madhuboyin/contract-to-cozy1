@@ -277,7 +277,9 @@ function ProviderSearch() {
 
       {/* Results List */}
       {!loading && !error && providers.length > 0 && (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        // --- START: MODIFIED GRID LAYOUT ---
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {/* --- END: MODIFIED GRID LAYOUT --- */}
           {providers.map((provider) => (
             <ProviderCard
               key={provider.id}
@@ -310,8 +312,8 @@ function ProviderCard({
   return (
     <Card className="flex flex-col justify-between transition-all hover:shadow-lg">
       <CardHeader className="pb-4">
-        {/* Title font size changed from text-xl to text-lg */}
-        <CardTitle className="text-lg">{provider.businessName}</CardTitle>
+        {/* Title font size changed from text-lg to text-base */}
+        <CardTitle className="text-base truncate">{provider.businessName}</CardTitle>
         <div className="flex items-center gap-1 pt-1">
           <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
           <span className="font-medium">{provider.averageRating.toFixed(1)}</span>
@@ -329,9 +331,10 @@ function ProviderCard({
           {previewService && basePriceValue !== null && !isNaN(basePriceValue) ? (
             <>
               <p className="text-xs text-muted-foreground">Services starting at</p>
-              <p className="text-base font-semibold">
+              {/* Price font size changed from text-base to text-sm */}
+              <p className="text-sm font-semibold">
                 ${basePriceValue.toFixed(2)}
-                <span className="text-sm font-normal text-muted-foreground">
+                <span className="text-xs font-normal text-muted-foreground">
                   /{previewService.priceUnit}
                 </span>
               </p>
@@ -346,7 +349,8 @@ function ProviderCard({
               serviceCategory ? `?service=${serviceCategory}` : ''
             }`}
           >
-            View Profile
+            {/* Button text changed from "View Profile" to "View" */}
+            View
           </Link>
         </Button>
       </CardFooter>
