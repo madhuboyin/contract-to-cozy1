@@ -9,7 +9,7 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter, // --- CHANGE: Ensure CardFooter is imported
+  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -18,14 +18,14 @@ import { Progress } from '@/components/ui/progress';
 import {
   ArrowRight,
   CheckCircle,
-  Grid, // --- CHANGE: Import Grid icon
+  Grid,
   Home,
   ListChecks,
   Loader2,
 } from 'lucide-react';
-import { ServiceCategoryIcon } from '@/components/ServiceCategoryIcon'; // NEW IMPORT
+import { ServiceCategoryIcon } from '@/components/ServiceCategoryIcon';
 
-// --- Types (copied from checklist page) ---
+// --- Types ---
 type ChecklistItemStatus = 'PENDING' | 'COMPLETED' | 'NOT_NEEDED';
 interface ChecklistItemType {
   id: string;
@@ -35,18 +35,67 @@ interface ChecklistType {
   id: string;
   items: ChecklistItemType[];
 }
+// Define type for service categories (mirroring API response)
+interface ServiceCategoryConfig {
+  category: string;
+  displayName: string;
+  description: string;
+  icon: string;
+}
+
+// --- HELPER FUNCTIONS (Moved to top for use in all components) ---
+
+const getStatusBadge = (status: string) => {
+    const statusClass = 'inline-block h-2 w-2 rounded-full mr-2 flex-shrink-0';
+    switch (status.toUpperCase()) {
+        case 'PENDING':
+        case 'IN_PROGRESS':
+            return <span className={`${statusClass} bg-yellow-500`} title="Pending/In Progress" />;
+        case 'CONFIRMED':
+            return <span className={`${statusClass} bg-blue-500`} title="Confirmed" />;
+        case 'COMPLETED':
+            return <span className={`${statusClass} bg-green-500`} title="Completed" />;
+        case 'CANCELLED':
+            return <span className={`${statusClass} bg-red-500`} title="Cancelled" />;
+        default:
+            return <span className={`${statusClass} bg-gray-500`} title={status} />;
+    }
+};
+
+const formatActivityTime = (dateString: string) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
 
 // ----------------------------------------
-// --- New Home Buyer Welcome Component ---
+// --- Home Buyer Welcome Component ---
 // ----------------------------------------
 const HomeBuyerWelcome = ({ user }: { user: any }) => {
   const [checklist, setChecklist] = useState<ChecklistType | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingChecklist, setLoadingChecklist] = useState(true);
 
+  // --- START: Added state for dynamic cards ---
+  const [recentActivityList, setRecentActivityList] = useState<any[]>([]);
+  const [dataLoading, setDataLoading] = useState(false);
+  const [serviceCategories, setServiceCategories] = useState<ServiceCategoryConfig[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  // --- END: Added state for dynamic cards ---
+
+  // --- START: Added data fetching functions ---
   const fetchChecklist = async () => {
     try {
-      setLoading(true);
-      const token = localStorage.getItem('accessToken');
+      setLoadingChecklist(true);
+      const token = localStorage.getItem('accessToken'); // Note: api client handles this, but this is legacy fetch
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/checklist`,
         {
@@ -63,15 +112,86 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
     } catch (error) {
       console.error('Failed to fetch checklist for dashboard', error);
     } finally {
-      setLoading(false);
+      setLoadingChecklist(false);
     }
   };
 
+  // Fetch bookings for "Recent Activity"
+  const fetchHomeBuyerBookings = async () => {
+    try {
+      setDataLoading(true);
+      
+      // Home buyers just need their bookings
+      const bookingsRes = await Promise.all([
+        api.listBookings({ limit: 5, sortBy: 'createdAt', sortOrder: 'desc' }), 
+      ]);
+      
+      let bookingsList: any[] = [];
+      
+      if (bookingsRes[0].success && bookingsRes[0].data?.bookings) {
+          bookingsList = bookingsRes[0].data.bookings;
+          
+          // --- Logic for Recent Activity List ---
+          const relevantBookings = bookingsList.filter(b => b.status !== 'DRAFT');
+          
+          relevantBookings.sort((a, b) => {
+              const statusA = String(a.status).toUpperCase().trim();
+              const statusB = String(b.status).toUpperCase().trim();
+              const isUpcomingA = ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(statusA);
+              const isUpcomingB = ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(statusB);
+  
+              if (isUpcomingA && !isUpcomingB) return -1;
+              if (!isUpcomingA && isUpcomingB) return 1;
+  
+              if (isUpcomingA && isUpcomingB) {
+                  return new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime();
+              }
+  
+              const dateA = new Date(a.cancelledAt || a.completedAt || a.updatedAt || a.createdAt).getTime();
+              const dateB = new Date(b.cancelledAt || b.completedAt || b.updatedAt || b.createdAt).getTime();
+              
+              return dateB - dateA;
+          });
+
+          setRecentActivityList(relevantBookings.slice(0, 5));
+      }
+    } catch (error) {
+      console.error('Failed to fetch home buyer bookings:', error);
+    } finally {
+      setDataLoading(false);
+    }
+  };
+
+  // Fetch service categories
+  const fetchServiceCategories = async () => {
+    try {
+      setCategoriesLoading(true);
+      // The API will correctly return *only* HOME_BUYER categories
+      // because the user's token is sent with the request.
+      const response = await api.getServiceCategories();
+      if (response.success) {
+        setServiceCategories(response.data.categories);
+      }
+    } catch (error) {
+      console.error('Failed to fetch service categories:', error);
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
+  // --- END: Added data fetching functions ---
+
+
   useEffect(() => {
+    // Fetch all data on load
     fetchChecklist();
+    fetchHomeBuyerBookings();
+    fetchServiceCategories();
 
     const handleFocus = () => {
+      // Re-fetch all data on focus
       fetchChecklist();
+      fetchHomeBuyerBookings();
+      fetchServiceCategories();
     };
 
     window.addEventListener('focus', handleFocus);
@@ -123,7 +243,7 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
             <ListChecks className="h-8 w-8 text-blue-500" />
           </CardHeader>
           <CardContent className="space-y-6">
-            {loading ? (
+            {loadingChecklist ? (
               <div className="flex items-center justify-center py-4">
                 <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
               </div>
@@ -144,76 +264,130 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
           </CardContent>
         </Card>
 
-        {/* Quick Actions Cards */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Find Services
-              </CardTitle>
-              <Home className="h-4 w-4 text-muted-foreground" />
+        {/* --- START: Replaced static cards with dynamic grid --- */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+          
+          {/* Dynamic Recent Activity Card */}
+          <Card className="col-span-4">
+            <CardHeader>
+              <CardTitle>Recent Activity</CardTitle>
+              <CardDescription>
+                {dataLoading 
+                  ? 'Fetching activity...' 
+                  : recentActivityList.length > 0 
+                      ? `Showing ${recentActivityList.length} most relevant activities.`
+                      : `No recent activity found.`
+                }
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">Book Now</div>
-              <p className="text-xs text-muted-foreground">
-                Inspections, Movers, & More
-              </p>
+            <CardContent className="space-y-4">
+              {dataLoading ? (
+                  <div className="flex items-center justify-center py-4 text-gray-500">
+                      <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading recent activity...
+                  </div>
+              ) : recentActivityList.length === 0 ? (
+                  <p className="text-sm text-gray-500 pt-2">Your recent activity feed is empty. Get started by booking a service!</p>
+              ) : (
+                  <ul className="divide-y divide-gray-100 -mx-4">
+                      {recentActivityList.map((booking) => {
+                          const status = booking.status.toUpperCase();
+                          const timeText = (
+                              status === 'COMPLETED' 
+                                  ? `Finished ${formatActivityTime(booking.completedAt || booking.updatedAt)}`
+                                  : status === 'CANCELLED' 
+                                  ? `Cancelled ${formatActivityTime(booking.cancelledAt || booking.updatedAt)}`
+                                  : `Scheduled ${formatActivityTime(booking.scheduledDate)}`
+                          );
+                          
+                          return (
+                              <li key={booking.id} className="py-2.5 px-4 hover:bg-gray-50 transition-colors cursor-pointer">
+                                  <Link href={`/dashboard/bookings/${booking.id}`}>
+                                      <div className="flex items-start justify-between">
+                                          <p className="text-sm font-medium text-gray-900 truncate flex items-center">
+                                              {getStatusBadge(status)}
+                                              {booking.service.name}
+                                          </p>
+                                          <p className="ml-2 text-xs text-gray-500 flex-shrink-0">
+                                              {timeText}
+                                          </p>
+                                      </div>
+                                      <p className="text-xs text-gray-500 mt-0.5 ml-4 truncate">
+                                          Provider: {booking.provider.businessName || `${booking.provider.firstName} ${booking.provider.lastName}`}
+                                      </p>
+                                  </Link>
+                              </li>
+                          );
+                      })}
+                  </ul>
+              )}
+              <Button asChild variant="ghost" className="w-full text-blue-600 justify-end mt-2">
+                  <Link href="/dashboard/bookings">
+                      View All Bookings <ArrowRight className="ml-1 h-4 w-4" />
+                  </Link>
+              </Button>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                My Bookings
-              </CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
+
+          {/* Dynamic Book Services Card */}
+          <Card className="col-span-3">
+            <CardHeader>
+              <CardTitle>Book Services</CardTitle>
+              <CardDescription>
+                Find providers for your new home
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">0</div>
-              <p className="text-xs text-muted-foreground">
-                View your scheduled services
-              </p>
+            <CardContent className="space-y-2">
+              {categoriesLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                </div>
+              ) : serviceCategories.length > 0 ? (
+                <>
+                  {/* Show top 3 HOME_BUYER categories */}
+                  {serviceCategories.slice(0, 3).map((category, index) => (
+                    <Button
+                      key={category.category}
+                      asChild
+                      className="w-full justify-start"
+                      variant={index === 0 ? 'default' : 'outline'}
+                    >
+                      <Link href={`/dashboard/providers?service=${category.category}`}>
+                        <ServiceCategoryIcon icon={category.icon} className="mr-2 h-4 w-4" />
+                        {category.displayName}
+                      </Link>
+                    </Button>
+                  ))}
+                  {serviceCategories.length > 3 && (
+                    <Button asChild className="w-full justify-start" variant="outline">
+                      <Link href="/dashboard/providers">
+                        <Grid className="mr-2 h-4 w-4" />
+                        View All Services
+                      </Link>
+                    </Button>
+                  )}
+                </>
+              ) : (
+                // Fallback: Static buttons if API fails
+                <Button asChild className="w-full justify-start" variant="default">
+                  <Link href="/dashboard/providers?service=INSPECTION">
+                    <ServiceCategoryIcon icon="INSPECTION" className="mr-2 h-4 w-4" />
+                    Home Inspection
+                  </Link>
+                </Button>
+              )}
             </CardContent>
           </Card>
         </div>
+        {/* --- END: Replaced static cards with dynamic grid --- */}
       </div>
     </div>
   );
 };
 
-// --- HELPER FUNCTIONS FOR EXISTING OWNER DASHBOARD ---
 
-const getStatusBadge = (status: string) => {
-    const statusClass = 'inline-block h-2 w-2 rounded-full mr-2 flex-shrink-0';
-    switch (status.toUpperCase()) {
-        case 'PENDING':
-        case 'IN_PROGRESS':
-            return <span className={`${statusClass} bg-yellow-500`} title="Pending/In Progress" />;
-        case 'CONFIRMED':
-            return <span className={`${statusClass} bg-blue-500`} title="Confirmed" />;
-        case 'COMPLETED':
-            return <span className={`${statusClass} bg-green-500`} title="Completed" />;
-        case 'CANCELLED':
-            return <span className={`${statusClass} bg-red-500`} title="Cancelled" />;
-        default:
-            return <span className={`${statusClass} bg-gray-500`} title={status} />;
-    }
-};
-
-const formatActivityTime = (dateString: string) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-};
-
-// --- MAIN COMPONENT ---
+// ----------------------------------------
+// --- MAIN COMPONENT (Existing Owner) ---
+// ----------------------------------------
 export default function DashboardPage() {
   const { user, loading } = useAuth();
 
@@ -226,12 +400,12 @@ export default function DashboardPage() {
   const [dataLoading, setDataLoading] = useState(false);
   const [recentActivityList, setRecentActivityList] = useState<any[]>([]);
 
-  // NEW: Service categories state
-  const [serviceCategories, setServiceCategories] = useState<any[]>([]);
+  const [serviceCategories, setServiceCategories] = useState<ServiceCategoryConfig[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
 
   // Fetch data for Existing Owner Dashboard
   const fetchDashboardData = async () => {
+    // This check ENSURES this code only runs for EXISTING OWNERS
     if (user && user.segment !== 'HOME_BUYER') {
       try {
         setDataLoading(true);
@@ -266,8 +440,6 @@ export default function DashboardPage() {
                 }
             });
             
-            // --- Logic for Recent Activity List ---
-            // Include CANCELLED bookings in the activity feed, exclude only DRAFT
             const relevantBookings = bookingsList.filter(b => b.status !== 'DRAFT');
             
             relevantBookings.sort((a, b) => {
@@ -276,27 +448,22 @@ export default function DashboardPage() {
                 const isUpcomingA = ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(statusA);
                 const isUpcomingB = ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(statusB);
     
-                // 1. Prioritize upcoming first
                 if (isUpcomingA && !isUpcomingB) return -1;
                 if (!isUpcomingA && isUpcomingB) return 1;
     
-                // 2. If both are upcoming, sort by soonest scheduled date (ASC)
                 if (isUpcomingA && isUpcomingB) {
                     return new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime();
                 }
     
-                // 3. If both are completed/cancelled, sort by most recent update/completion/cancellation date (DESC)
                 const dateA = new Date(a.cancelledAt || a.completedAt || a.updatedAt || a.createdAt).getTime();
                 const dateB = new Date(b.cancelledAt || b.completedAt || b.updatedAt || b.createdAt).getTime();
                 
                 return dateB - dateA;
             });
 
-            // Set the top 5 relevant items
             setRecentActivityList(relevantBookings.slice(0, 5));
         }
 
-        // Property Count
         if (propertiesRes.success && propertiesRes.data?.properties) {
             totalProperties = propertiesRes.data.properties.length;
         }
@@ -316,8 +483,9 @@ export default function DashboardPage() {
     }
   };
 
-  // NEW: Fetch service categories
+  // Fetch service categories
   const fetchServiceCategories = async () => {
+    // This check ENSURES this code only runs for EXISTING OWNERS
     if (user && user.segment !== 'HOME_BUYER') {
       try {
         setCategoriesLoading(true);
@@ -327,7 +495,6 @@ export default function DashboardPage() {
         }
       } catch (error) {
         console.error('Failed to fetch service categories:', error);
-        // Fallback to empty array - will show static buttons
       } finally {
         setCategoriesLoading(false);
       }
@@ -335,11 +502,13 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
+    // This logic correctly ensures it only runs for non-home-buyers
     if (user && user.segment !== 'HOME_BUYER') {
         fetchDashboardData();
-        fetchServiceCategories(); // NEW: Fetch service categories
+        fetchServiceCategories();
     }
     const handleFocus = () => {
+      // This logic also correctly ensures it only runs for non-home-buyers
       if (user && user.segment !== 'HOME_BUYER') {
         fetchDashboardData();
       }
@@ -361,11 +530,14 @@ export default function DashboardPage() {
     );
   }
 
+  // --- ROUTER LOGIC ---
+  // If user is HOME_BUYER, render the HomeBuyerWelcome component
   if (user && user.segment === 'HOME_BUYER') {
     return <HomeBuyerWelcome user={user} />;
   }
 
   // --- EXISTING OWNER RENDER ---
+  // This JSX will only be reached if user is NOT a HOME_BUYER
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
@@ -442,7 +614,6 @@ export default function DashboardPage() {
             <div className="text-2xl font-bold">{dataLoading ? '-' : dashboardData.totalProperties}</div>
             <p className="text-xs text-muted-foreground">Properties added</p>
           </CardContent>
-          {/* --- CHANGE: Added CardFooter with relocated Manage Properties link --- */}
           <CardFooter className="pt-0 pb-3 px-6">
             <Button
               asChild
@@ -526,7 +697,6 @@ export default function DashboardPage() {
                     })}
                 </ul>
             )}
-            {/* The "View All Bookings" link remains as a necessary summary navigation element */}
             <Button asChild variant="ghost" className="w-full text-blue-600 justify-end mt-2">
                 <Link href="/dashboard/bookings">
                     View All Bookings <ArrowRight className="ml-1 h-4 w-4" />
@@ -535,7 +705,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* NEW: Dynamic Service Category Quick Actions */}
+        {/* Dynamic Service Category Quick Actions */}
         <Card className="col-span-3">
           <CardHeader>
             <CardTitle>Book Services</CardTitle>
@@ -549,9 +719,7 @@ export default function DashboardPage() {
                 <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
               </div>
             ) : serviceCategories.length > 0 ? (
-              // NEW: Dynamic category buttons
               <>
-                {/* --- CHANGE: Updated slice(0, 2) to slice(0, 3) --- */}
                 {serviceCategories.slice(0, 3).map((category, index) => (
                   <Button
                     key={category.category}
@@ -565,11 +733,9 @@ export default function DashboardPage() {
                     </Link>
                   </Button>
                 ))}
-                {/* --- CHANGE: Updated length > 2 to length > 3 --- */}
                 {serviceCategories.length > 3 && (
                   <Button asChild className="w-full justify-start" variant="outline">
                     <Link href="/dashboard/providers">
-                      {/* --- CHANGE: Replaced Home icon with Grid icon --- */}
                       <Grid className="mr-2 h-4 w-4" />
                       View All Services
                     </Link>
@@ -591,7 +757,7 @@ export default function DashboardPage() {
                 <Button asChild className="w-full justify-start" variant="outline">
                   <Link href="/dashboard/providers?service=HANDYMAN">
                     <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0 3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826 3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                     Handyman Services
@@ -599,16 +765,6 @@ export default function DashboardPage() {
                 </Button>
               </>
             )}
-            
-            {/* --- CHANGE: Removed "Manage Properties" button from this card --- */}
-            {/*
-            <Button asChild className="w-full justify-start" variant="outline">
-              <Link href="/dashboard/properties">
-                <Home className="mr-2 h-4 w-4" />
-                Manage Properties
-              </Link>
-            </Button>
-            */}
           </CardContent>
         </Card>
       </div>
