@@ -5,6 +5,8 @@ metadata:
   namespace: admin-tools
 data:
   X-Forwarded-Proto: "https"
-  X-Forwarded-Ssl: "on"
   X-Forwarded-Port: "443"
+  X-Forwarded-SSL: "on"
+  X-Forwarded-For: "$proxy_add_x_forwarded_for"
   X-Frame-Options: "SAMEORIGIN"
+
