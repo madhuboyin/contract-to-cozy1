@@ -32,20 +32,17 @@ spec:
 
           # PgAdmin hardening / behavior tweaks
           env:
-            # Extra protection on cookies; helps behind proxies
+            # already using this in hardened version, good to keep
             - name: PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION
               value: "True"
 
-            # Optional: don’t let PgAdmin store DB passwords in its own config
-            # Turn this to "True" if you prefer to force entering passwords manually
-            - name: PGADMIN_CONFIG_ALLOW_SAVE_PASSWORD
-              value: "False"
-
-            # Optional: if you ever enable SSL/HTTPS all the way to PgAdmin
-            # you can also enforce secure cookies:
-            # - name: PGADMIN_CONFIG_COOKIE_SECURE
-            #   value: "True"
-
+            # tell pgAdmin to respect X-Forwarded-* headers
+            - name: PGADMIN_CONFIG_USE_X_FORWARDED_HOST
+              value: "True"
+            - name: PGADMIN_CONFIG_USE_X_FORWARDED_PORT
+              value: "True"
+            - name: PGADMIN_CONFIG_USE_X_FORWARDED_PROTO
+              value: "True"
           ports:
             - containerPort: 80
 
