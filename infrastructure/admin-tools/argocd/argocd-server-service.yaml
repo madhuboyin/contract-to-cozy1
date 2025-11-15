@@ -5,14 +5,14 @@ metadata:
   namespace: argocd
   labels:
     app.kubernetes.io/name: argocd-server
-    app.kubernetes.io/part-of: argocd
 spec:
-  ports:
-  - name: http
-    port: 80
-    targetPort: 8080
-  - name: https
-    port: 443
-    targetPort: 8083
   selector:
     app.kubernetes.io/name: argocd-server
+  ports:
+  - name: https
+    port: 443
+    targetPort: 8080   # ArgoCD HTTPS
+  - name: http
+    port: 80
+    targetPort: 8083   # ArgoCD HTTP → auto-redirects to 8080
+  type: ClusterIP
