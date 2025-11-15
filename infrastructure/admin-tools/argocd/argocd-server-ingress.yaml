@@ -7,13 +7,13 @@ metadata:
     kubernetes.io/ingress.class: traefik
 spec:
   rules:
-  - host: argocd.contracttocozy.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: argocd-server
-            port:
-              number: 80
+    - host: argocd.contracttocozy.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 80
