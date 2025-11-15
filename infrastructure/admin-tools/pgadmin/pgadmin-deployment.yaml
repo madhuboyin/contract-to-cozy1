@@ -33,9 +33,6 @@ spec:
           # PgAdmin hardening / behavior tweaks
           env:
             # already using this in hardened version, good to keep
-            - name: PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION
-              value: "True"
-
             # tell pgAdmin to respect X-Forwarded-* headers
             - name: PGADMIN_CONFIG_USE_X_FORWARDED_HOST
               value: "True"
@@ -43,6 +40,8 @@ spec:
               value: "True"
             - name: PGADMIN_CONFIG_USE_X_FORWARDED_PROTO
               value: "True"
+            - name: PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION
+              value: "False"
           ports:
             - containerPort: 80
 
