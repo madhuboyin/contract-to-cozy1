@@ -226,7 +226,7 @@ function ProviderSearch() {
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         strokeWidth={2}
-                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0 3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0 3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826 3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
                       />
                       <path
                         strokeLinecap="round"
@@ -291,7 +291,7 @@ function ProviderSearch() {
   );
 }
 
-// --- Individual Provider Card Component ---
+// --- START: MODIFIED ProviderCard Component ---
 function ProviderCard({
   provider,
   serviceCategory,
@@ -309,8 +309,9 @@ function ProviderCard({
 
   return (
     <Card className="flex flex-col justify-between transition-all hover:shadow-lg">
-      <CardHeader>
-        <CardTitle className="text-xl">{provider.businessName}</CardTitle>
+      <CardHeader className="pb-4">
+        {/* Title font size changed from text-xl to text-lg */}
+        <CardTitle className="text-lg">{provider.businessName}</CardTitle>
         <div className="flex items-center gap-1 pt-1">
           <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
           <span className="font-medium">{provider.averageRating.toFixed(1)}</span>
@@ -319,35 +320,41 @@ function ProviderCard({
           </span>
         </div>
       </CardHeader>
-      <CardContent>
-        {previewService && basePriceValue !== null && !isNaN(basePriceValue) ? (
-          <div>
-            <p className="text-sm text-muted-foreground">Services starting at</p>
-            <p className="text-2xl font-bold">
-              ${basePriceValue.toFixed(2)}
-              <span className="text-sm font-normal text-muted-foreground">
-                /{previewService.priceUnit}
-              </span>
-            </p>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">No pricing available.</p>
-        )}
-      </CardContent>
-      <CardFooter className="bg-gray-50/50 p-4">
-        <Button asChild className="w-full">
+
+      {/* CardContent has been removed */}
+
+      {/* CardFooter is now the primary info/action area */}
+      <CardFooter className="flex justify-between items-center bg-gray-50/50 p-4">
+        <div>
+          {previewService && basePriceValue !== null && !isNaN(basePriceValue) ? (
+            <>
+              <p className="text-xs text-muted-foreground">Services starting at</p>
+              <p className="text-base font-semibold">
+                ${basePriceValue.toFixed(2)}
+                <span className="text-sm font-normal text-muted-foreground">
+                  /{previewService.priceUnit}
+                </span>
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">No pricing available.</p>
+          )}
+        </div>
+        <Button asChild size="sm">
           <Link
             href={`/dashboard/providers/${provider.id}${
               serviceCategory ? `?service=${serviceCategory}` : ''
             }`}
           >
-            View Profile & Book
+            View Profile
           </Link>
         </Button>
       </CardFooter>
     </Card>
   );
 }
+// --- END: MODIFIED ProviderCard Component ---
+
 
 // --- Page Wrapper ---
 export default function ProvidersPage() {
