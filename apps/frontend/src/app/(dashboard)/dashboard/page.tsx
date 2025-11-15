@@ -9,6 +9,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter, // --- CHANGE: Ensure CardFooter is imported
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -17,6 +18,7 @@ import { Progress } from '@/components/ui/progress';
 import {
   ArrowRight,
   CheckCircle,
+  Grid, // --- CHANGE: Import Grid icon
   Home,
   ListChecks,
   Loader2,
@@ -436,10 +438,23 @@ export default function DashboardPage() {
             <CardTitle className="text-sm font-medium">My Properties</CardTitle>
             <Home className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="pb-3">
             <div className="text-2xl font-bold">{dataLoading ? '-' : dashboardData.totalProperties}</div>
             <p className="text-xs text-muted-foreground">Properties added</p>
           </CardContent>
+          {/* --- CHANGE: Added CardFooter with relocated Manage Properties link --- */}
+          <CardFooter className="pt-0 pb-3 px-6">
+            <Button
+              asChild
+              variant="link"
+              size="sm"
+              className="p-0 h-auto text-xs text-blue-600"
+            >
+              <Link href="/dashboard/properties">
+                Manage Properties <ArrowRight className="ml-1 h-3 w-3" />
+              </Link>
+            </Button>
+          </CardFooter>
         </Card>
         
         {/* Completed Jobs Card */}
@@ -536,7 +551,8 @@ export default function DashboardPage() {
             ) : serviceCategories.length > 0 ? (
               // NEW: Dynamic category buttons
               <>
-                {serviceCategories.slice(0, 2).map((category, index) => (
+                {/* --- CHANGE: Updated slice(0, 2) to slice(0, 3) --- */}
+                {serviceCategories.slice(0, 3).map((category, index) => (
                   <Button
                     key={category.category}
                     asChild
@@ -549,10 +565,12 @@ export default function DashboardPage() {
                     </Link>
                   </Button>
                 ))}
-                {serviceCategories.length > 2 && (
+                {/* --- CHANGE: Updated length > 2 to length > 3 --- */}
+                {serviceCategories.length > 3 && (
                   <Button asChild className="w-full justify-start" variant="outline">
                     <Link href="/dashboard/providers">
-                      <Home className="mr-2 h-4 w-4" />
+                      {/* --- CHANGE: Replaced Home icon with Grid icon --- */}
+                      <Grid className="mr-2 h-4 w-4" />
                       View All Services
                     </Link>
                   </Button>
@@ -581,13 +599,16 @@ export default function DashboardPage() {
                 </Button>
               </>
             )}
-
+            
+            {/* --- CHANGE: Removed "Manage Properties" button from this card --- */}
+            {/*
             <Button asChild className="w-full justify-start" variant="outline">
               <Link href="/dashboard/properties">
                 <Home className="mr-2 h-4 w-4" />
                 Manage Properties
               </Link>
             </Button>
+            */}
           </CardContent>
         </Card>
       </div>
