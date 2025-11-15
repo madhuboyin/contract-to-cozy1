@@ -50,13 +50,61 @@ export class ProviderService {
    * Search for providers based on location and service filters
    */
   static async searchProviders(
-    query: ProviderSearchQuery
+    // --- FIX: Add userId to signature ---
+    query: ProviderSearchQuery,
+    userId?: string
+    // --- END FIX ---
   ): Promise<ProviderSearchResult> {
     const { page, limit, radius, sortBy, sortOrder } = query;
     const skip = (page - 1) * limit;
 
-    // --- FIX START: Temporarily remove auxiliary filters to isolate category matching ---
+    // --- FIX: ADD SEGMENT-BASED PERMISSION CHECK ---
     
+    // 1. Get user segment
+    let userSegment: string = 'EXISTING_OWNER'; // Default segment
+    if (userId) {
+      const homeownerProfile = await prisma.homeownerProfile.findUnique({
+        where: { userId },
+        select: { segment: true },
+      });
+      if (homeownerProfile) {
+        userSegment = homeownerProfile.segment;
+      }
+    }
+    const isHomeBuyer = userSegment === 'HOME_BUYER';
+
+    // 2. Check if the requested category is allowed for this segment
+    if (query.category) {
+      const allowedCategory = await prisma.serviceCategoryConfig.findFirst({
+        where: {
+          category: query.category,
+          isActive: true,
+          ...(isHomeBuyer
+            ? { availableForHomeBuyer: true }
+            : { availableForExistingOwner: true }),
+        },
+      });
+
+      // 3. If category is not allowed, return empty results immediately
+      if (!allowedCategory) {
+        return {
+          providers: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            totalPages: 0,
+          },
+          filters: {
+            category: query.category,
+          },
+        };
+      }
+    }
+    // --- END FIX ---
+
+
+    // --- Original filter logic (now safe to run) ---
     // Array to hold all individual filter clauses
     const filters: Prisma.ProviderProfileWhereInput[] = [
         // Relax status filter: exclude only 'INACTIVE'.
@@ -92,7 +140,7 @@ export class ProviderService {
     // Combine all filters into the final WHERE clause
     const where: Prisma.ProviderProfileWhereInput = { AND: filters };
 
-    // --- FIX END ---
+    // --- End Original filter logic ---
 
 
     // TEMPORARILY COMMENT OUT ALL LOCATION FINDING LOGIC FOR DEBUGGING
@@ -419,7 +467,7 @@ export class ProviderService {
             select: {
               id: true,
               firstName: true,
-              lastName: true,
+lastName: true,
               avatar: true,
             },
           },

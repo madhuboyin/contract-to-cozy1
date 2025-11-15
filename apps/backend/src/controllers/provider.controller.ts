@@ -34,7 +34,9 @@ export class ProviderController {
    * GET /api/providers/search
    */
   static async searchProviders(
-    req: Request,
+    // --- FIX: Changed 'Request' to 'AuthRequest' ---
+    req: AuthRequest,
+    // --- END FIX ---
     res: Response,
     next: NextFunction
   ): Promise<void> {
@@ -42,8 +44,13 @@ export class ProviderController {
       // Validate query parameters
       const query = providerSearchSchema.parse(req.query) as ProviderSearchQuery;
 
-      // Search providers
-      const result = await ProviderService.searchProviders(query);
+      // --- FIX: Get userId from authenticated request ---
+      const userId = req.user?.userId;
+      // --- END FIX ---
+
+      // --- FIX: Pass userId to the service ---
+      const result = await ProviderService.searchProviders(query, userId);
+      // --- END FIX ---
 
       res.status(200).json({
         success: true,
