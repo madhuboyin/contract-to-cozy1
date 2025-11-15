@@ -476,6 +476,19 @@ class APIClient {
     });
   }  
 
+  // Add this method to your api client
+  async getServiceCategories() {
+    return this.request<{
+      segment: string;
+      categories: Array<{
+        category: string;
+        displayName: string;
+        description: string;
+        icon: string;
+      }>;
+    }>('/api/service-categories');
+  }
+
 }
 
 // Export singleton instance

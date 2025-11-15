@@ -13,9 +13,10 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Loader2, AlertCircle, Search, Star } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { api } from '@/lib/api/client';
+import { ServiceCategoryIcon } from '@/components/ServiceCategoryIcon';
 
 // --- Define the Provider type ---
 interface Provider {
@@ -26,18 +27,16 @@ interface Provider {
   services: {
     id: string;
     name: string;
-    basePrice: string; // BasePrice is a string from the API
+    basePrice: string;
     priceUnit: string;
   }[];
 }
 
-// --- Helper Function ---
-function formatServiceCategory(category: string | null): string {
-  if (!category) return 'All';
-  return category
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
+interface ServiceCategoryConfig {
+  category: string;
+  displayName: string;
+  description: string;
+  icon: string;
 }
 
 // --- Main Search Component ---
@@ -50,6 +49,30 @@ function ProviderSearch() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // NEW: Service categories state
+  const [serviceCategories, setServiceCategories] = useState<ServiceCategoryConfig[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+
+  // Fetch service categories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setCategoriesLoading(true);
+        const response = await api.getServiceCategories();
+        if (response.success) {
+          setServiceCategories(response.data.categories);
+        }
+      } catch (error) {
+        console.error('Failed to fetch service categories:', error);
+      } finally {
+        setCategoriesLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
+  // Fetch providers based on selected category
   useEffect(() => {
     const fetchProviders = async () => {
       try {
@@ -99,7 +122,7 @@ function ProviderSearch() {
 
       <h2 className="text-3xl font-bold tracking-tight">Find Providers</h2>
 
-      {/* NEW: Service Category Selector - Shows when NO category selected */}
+      {/* NEW: Dynamic Service Category Selector */}
       {!serviceCategory && (
         <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-white">
           <CardHeader>
@@ -109,100 +132,133 @@ function ProviderSearch() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Button
-                asChild
-                size="lg"
-                variant="default"
-                className="h-24 flex flex-col items-center justify-center space-y-2"
-              >
-                <Link href="/dashboard/providers?service=INSPECTION">
-                  <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
-                  <span className="text-lg font-semibold">Home Inspection</span>
-                </Link>
-              </Button>
+            {categoriesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                <p className="ml-3 text-gray-600">Loading categories...</p>
+              </div>
+            ) : serviceCategories.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {serviceCategories.map((category) => (
+                  <Button
+                    key={category.category}
+                    asChild
+                    size="lg"
+                    variant="outline"
+                    className="h-auto py-6 flex flex-col items-start justify-start space-y-2 text-left hover:bg-blue-50 hover:border-blue-300 transition-all"
+                  >
+                    <Link href={`/dashboard/providers?service=${category.category}`}>
+                      <div className="flex items-center space-x-3 w-full">
+                        <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <ServiceCategoryIcon icon={category.icon} className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-base text-gray-900">
+                            {category.displayName}
+                          </div>
+                          {category.description && (
+                            <div className="text-xs text-gray-500 mt-1 line-clamp-2">
+                              {category.description}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
+                  </Button>
+                ))}
+              </div>
+            ) : (
+              // Fallback: Static categories if API fails
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Button
+                  asChild
+                  size="lg"
+                  variant="default"
+                  className="h-24 flex flex-col items-center justify-center space-y-2"
+                >
+                  <Link href="/dashboard/providers?service=INSPECTION">
+                    <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                      />
+                    </svg>
+                    <span className="text-lg font-semibold">Home Inspection</span>
+                  </Link>
+                </Button>
 
-              <Button
-                asChild
-                size="lg"
-                variant="outline"
-                className="h-24 flex flex-col items-center justify-center space-y-2"
-              >
-                <Link href="/dashboard/providers?service=HANDYMAN">
-                  <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  <span className="text-lg font-semibold">Handyman Services</span>
-                </Link>
-              </Button>
-            </div>
+                <Button
+                  asChild
+                  size="lg"
+                  variant="outline"
+                  className="h-24 flex flex-col items-center justify-center space-y-2"
+                >
+                  <Link href="/dashboard/providers?service=HANDYMAN">
+                    <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                    </svg>
+                    <span className="text-lg font-semibold">Handyman</span>
+                  </Link>
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {/* Current Category Badge - Shows when category IS selected */}
-      {serviceCategory && (
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-gray-600">
-              Showing results for:
-              <Badge variant="default" className="ml-2 text-base">
-                {formatServiceCategory(serviceCategory)}
-              </Badge>
-            </p>
-          </div>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/dashboard/providers">
-              View All Categories
-            </Link>
-          </Button>
-        </div>
-      )}
-
-      {/* --- Loading State --- */}
+      {/* Loading State */}
       {loading && (
-        <div className="flex h-64 w-full items-center justify-center">
+        <div className="flex h-64 w-full flex-col items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <p className="mt-4 text-muted-foreground">Finding providers...</p>
         </div>
       )}
 
-      {/* --- Error State --- */}
+      {/* Error State */}
       {!loading && error && (
-        <div className="flex h-64 w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-red-300 bg-red-50 p-8 text-center">
+        <div className="flex h-64 w-full flex-col items-center justify-center rounded-lg border-2 border-red-200 bg-red-50 p-8 text-center">
           <AlertCircle className="h-8 w-8 text-red-600" />
-          <h2 className="mt-4 text-xl font-semibold text-red-700">
-            Oops, something went wrong.
-          </h2>
+          <h2 className="mt-4 text-xl font-semibold text-red-900">Error Loading Providers</h2>
           <p className="mt-2 text-muted-foreground">{error}</p>
         </div>
       )}
 
-      {/* --- Empty State (when category selected but no providers) --- */}
+      {/* Empty State */}
       {!loading && !error && serviceCategory && providers.length === 0 && (
         <div className="flex h-64 w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center">
           <Search className="h-8 w-8 text-gray-400" />
           <h2 className="mt-4 text-xl font-semibold">No Providers Found</h2>
           <p className="mt-2 text-muted-foreground">
-            We couldn't find any providers matching your criteria. Try a
-            different category.
+            We couldn't find any providers for this category. Try a different service.
           </p>
           <Button asChild variant="outline" className="mt-4">
-            <Link href="/dashboard/providers">
-              View All Categories
-            </Link>
+            <Link href="/dashboard/providers">View All Categories</Link>
           </Button>
         </div>
       )}
 
-      {/* --- Results List --- */}
-      {/* This condition will now execute since providers.length > 0 */}
+      {/* Results List */}
       {!loading && !error && providers.length > 0 && (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {providers.map((provider) => (
-            <ProviderCard key={provider.id} provider={provider} serviceCategory={serviceCategory} />
+            <ProviderCard
+              key={provider.id}
+              provider={provider}
+              serviceCategory={serviceCategory}
+            />
           ))}
         </div>
       )}
@@ -211,14 +267,20 @@ function ProviderSearch() {
 }
 
 // --- Individual Provider Card Component ---
-function ProviderCard({ provider, serviceCategory }: { provider: Provider, serviceCategory: string | null }) {
-  // Sort services to find the lowest price (preview service)
+function ProviderCard({
+  provider,
+  serviceCategory,
+}: {
+  provider: Provider;
+  serviceCategory: string | null;
+}) {
   const previewService = provider.services?.sort(
     (a, b) => parseFloat(a.basePrice) - parseFloat(b.basePrice)
   )[0];
 
-  // Defensive check for basePrice value and conversion
-  const basePriceValue = previewService?.basePrice ? parseFloat(previewService.basePrice) : null;
+  const basePriceValue = previewService?.basePrice
+    ? parseFloat(previewService.basePrice)
+    : null;
 
   return (
     <Card className="flex flex-col justify-between transition-all hover:shadow-lg">
@@ -233,8 +295,7 @@ function ProviderCard({ provider, serviceCategory }: { provider: Provider, servi
         </div>
       </CardHeader>
       <CardContent>
-        {/* ✅ FIX: Use basePriceValue to check existence and display cleanly */}
-        {previewService && basePriceValue !== null && !isNaN(basePriceValue) ? ( 
+        {previewService && basePriceValue !== null && !isNaN(basePriceValue) ? (
           <div>
             <p className="text-sm text-muted-foreground">Services starting at</p>
             <p className="text-2xl font-bold">
@@ -250,7 +311,11 @@ function ProviderCard({ provider, serviceCategory }: { provider: Provider, servi
       </CardContent>
       <CardFooter className="bg-gray-50/50 p-4">
         <Button asChild className="w-full">
-          <Link href={`/dashboard/providers/${provider.id}${serviceCategory ? `?service=${serviceCategory}` : ''}`}>
+          <Link
+            href={`/dashboard/providers/${provider.id}${
+              serviceCategory ? `?service=${serviceCategory}` : ''
+            }`}
+          >
             View Profile & Book
           </Link>
         </Button>
