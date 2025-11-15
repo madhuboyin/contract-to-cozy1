@@ -5,14 +5,11 @@ metadata:
   namespace: admin-tools
   annotations:
     kubernetes.io/ingress.class: nginx
-    
-    # Disable SSL redirect because Cloudflare already terminates HTTPS
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
-
-    # Optional but recommended: increase timeout for PgAdmin
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy_set_header: "X-Forwarded-Proto https"
 spec:
   ingressClassName: nginx
   rules:
