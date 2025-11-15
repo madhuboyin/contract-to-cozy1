@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudflared-config
+  namespace: production
+data:
+  config.yml: |
+    tunnel: YOUR_TUNNEL_ID
+    credentials-file: /etc/cloudflared/creds/credentials.json
+
+    ingress:
+      # Main website
+      - hostname: contracttocozy.com
+        service: http://frontend-service.production.svc.cluster.local:3000
+
+      # www subdomain
+      - hostname: www.contracttocozy.com
+        service: http://frontend-service.production.svc.cluster.local:3000
+
+      # API subdomain
+      - hostname: api.contracttocozy.com
+        service: http://api-service.production.svc.cluster.local:8080
+
+      # Grafana
+      - hostname: grafana.contracttocozy.com
+        service: http://prometheus-grafana.monitoring.svc.cluster.local:80
+
+      # PgAdmin (NEW)
+      - hostname: pgadmin.contracttocozy.com
+        service: http://pgadmin.admin-tools.svc.cluster.local:80
+
+      # rancher (NEW)
+      - hostname: rancher.contracttocozy.com
+        service: http://rancher.cattle-system.svc.cluster.local:80
+
+      # argocd (NEW)
+      - hostname: argocd.contracttocozy.com
+        service: http://argocd-server.argocd.svc.cluster.local:80
+
+      # Catch-all
+      - service: "http_status:404"
