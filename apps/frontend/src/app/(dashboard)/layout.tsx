@@ -1,166 +1,236 @@
 // apps/frontend/src/app/(dashboard)/layout.tsx
-
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import React, { useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
-// ✅ FIX 1: Import necessary icons from Lucide React
-import { Home, Calendar, Users, ListChecks, User, KeyRound } from 'lucide-react'; 
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import {
+  Home,
+  Calendar,
+  Building,
+  Search,
+  ListChecks,
+  UserCircle,
+  LogOut,
+  PanelLeft,
+  Settings,
+  Wrench, // <-- 1. IMPORT THE NEW ICON
+} from 'lucide-react';
 
-// --- Helper Types (from prior context) ---
-interface UserContext {
-  role: 'HOMEOWNER' | 'PROVIDER';
-  segment?: 'HOME_BUYER' | 'EXISTING_OWNER';
-  firstName: string;
-  lastName: string;
+interface NavLink {
+  name: string;
+  href: string;
+  icon: React.ElementType;
 }
 
-// ✅ FIX 2: Helper function to get the correct display name for the user's status
-const getStatusDisplayName = (user: UserContext) => {
-  if (user.role === 'HOMEOWNER') {
-    if (user.segment === 'HOME_BUYER') {
-      return 'Home Buyer';
-    }
-    // Fallback for generic HOMEOWNER or existing owner segment
-    return 'Home Owner';
-  }
-  return user.role;
-};
-
-
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const { user, loading, logout } = useAuth();
-  const router = useRouter();
-  const pathname = usePathname();
-
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
-    }
-  }, [user, loading, router]);
+/**
+ * Main layout for the authenticated dashboard.
+ * Includes sidebar, header, and content area.
+ */
+function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
+      <div className="flex h-screen items-center justify-center">
+        {/* You can replace this with a more sophisticated loading spinner */}
+        <p>Loading user data...</p>
       </div>
     );
   }
 
-  if (!user) {
-    return null;
+  // If user is a PROVIDER, redirect them to the provider dashboard
+  // This layout is for HOMEOWNERS only.
+  if (user && user.role === 'PROVIDER') {
+    if (typeof window !== 'undefined') {
+      window.location.href = '/providers/dashboard';
+    }
+    return null; // Render nothing while redirecting
   }
-  
-  // Cast user for segment/role check
-  const currentUser = user as UserContext;
-  const userStatus = getStatusDisplayName(currentUser);
-  
-  // ✅ FIX 3: Replace distorted icon characters with Lucide components
-  const navigation = [
-    // Dashboard: Home icon
-    { name: 'Dashboard', href: '/dashboard', icon: Home }, 
-    // Bookings: ListChecks icon
-    { name: 'Bookings', href: '/dashboard/bookings', icon: ListChecks }, 
-    // Providers: Users icon
-    { name: 'Providers', href: '/dashboard/providers', icon: Users }, 
-    // Properties: Home icon (for property management)
-    ...(currentUser.role === 'HOMEOWNER' ? [
-      { name: 'Properties', href: '/dashboard/properties', icon: Home }, 
-    ] : []),
-    // Profile: User icon
-    { name: 'Profile', href: '/dashboard/profile', icon: User }, 
-  ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Top Navigation */}
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex">
-              {/* Logo */}
-              <div className="flex-shrink-0 flex items-center">
-                <Link href="/dashboard" className="text-xl font-bold text-blue-600">
-                  Contract to Cozy
+    <div className="grid min-h-screen w-full lg:grid-cols-[280px_1fr]">
+      {/* --- Sidebar (Desktop) --- */}
+      <div className="hidden border-r bg-gray-100/40 lg:block dark:bg-gray-800/40">
+        <div className="flex h-full max-h-screen flex-col gap-2">
+          <div className="flex h-[60px] items-center border-b px-6">
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-2 font-semibold"
+            >
+              <span className="text-xl font-bold text-blue-600">Cozy</span>
+            </Link>
+          </div>
+          <div className="flex-1 overflow-auto py-2">
+            <SidebarNav />
+          </div>
+        </div>
+      </div>
+
+      {/* --- Main Content Area --- */}
+      <div className="flex flex-col">
+        {/* --- Header (Mobile + Desktop User Menu) --- */}
+        <header className="flex h-14 items-center gap-4 border-b bg-white px-6 dark:bg-gray-800">
+          {/* Mobile Nav Toggle */}
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="shrink-0 lg:hidden"
+              >
+                <PanelLeft className="h-5 w-5" />
+                <span className="sr-only">Toggle navigation menu</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-[280px] p-0">
+              <div className="flex h-[60px] items-center border-b px-6">
+                <Link
+                  href="/dashboard"
+                  className="flex items-center gap-2 font-semibold"
+                >
+                  <span className="text-xl font-bold text-blue-600">Cozy</span>
                 </Link>
               </div>
-
-              {/* Navigation Links */}
-              <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-                {navigation.map((item) => (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={`${
-                      pathname === item.href
-                        ? 'border-blue-500 text-gray-900'
-                        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                    } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
-                  >
-                    {/* Render Lucide Icon component */}
-                    <item.icon className="mr-2 h-4 w-4" />
-                    {item.name}
-                  </Link>
-                ))}
+              <div className="py-2">
+                <SidebarNav />
               </div>
-            </div>
+            </SheetContent>
+          </Sheet>
 
-            {/* User Menu */}
-            <div className="flex items-center">
-              <div className="ml-3 relative flex items-center space-x-4">
-                <span className="text-sm text-gray-700">
-                  {currentUser.firstName} {currentUser.lastName}
-                </span>
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  {/* FIX 4: Display segment-based status */}
-                  {userStatus}
-                </span>
-                <button
-                  onClick={logout}
-                  className="text-sm text-gray-500 hover:text-gray-700"
-                >
-                  Logout
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+          {/* Spacer */}
+          <div className="flex-1" />
 
-        {/* Mobile menu */}
-        <div className="sm:hidden border-t border-gray-200">
-          <div className="pt-2 pb-3 space-y-1">
-            {navigation.map((item) => (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={`${
-                  pathname === item.href
-                    ? 'bg-blue-50 border-blue-500 text-blue-700'
-                    : 'border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700'
-                } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
-              >
-                {/* Render Lucide Icon component for mobile */}
-                <item.icon className="mr-2 h-4 w-4 inline-block" />
-                {item.name}
-              </Link>
-            ))}
-          </div>
-        </div>
-      </nav>
+          {/* User Menu */}
+          <UserMenu />
+        </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        {children}
-      </main>
+        {/* --- Page Content --- */}
+        <main className="flex-1 bg-gray-50 p-4 md:p-8">{children}</main>
+      </div>
     </div>
   );
 }
+
+/**
+ * Renders the primary navigation links in the sidebar.
+ * Dynamically shows "Checklist" for Home Buyers and "Maintenance" for Existing Owners.
+ */
+function SidebarNav() {
+  const pathname = usePathname();
+  const { user } = useAuth();
+
+  // --- 2. DYNAMICALLY BUILD THE NAV LINKS ---
+  const navLinks: NavLink[] = [
+    { name: 'Dashboard', href: '/dashboard', icon: Home },
+    { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
+    { name: 'Properties', href: '/dashboard/properties', icon: Building },
+    { name: 'Find Providers', href: '/dashboard/providers', icon: Search },
+  ];
+
+  if (user) {
+    if (user.segment === 'HOME_BUYER') {
+      navLinks.push({
+        name: 'Checklist',
+        href: '/dashboard/checklist',
+        icon: ListChecks,
+      });
+    } else if (user.segment === 'EXISTING_OWNER') {
+      // --- THIS IS THE NEWLY ADDED LINK ---
+      navLinks.push({
+        name: 'Maintenance',
+        href: '/dashboard/maintenance-setup',
+        icon: Wrench,
+      });
+    }
+  }
+  // --- END OF DYNAMIC LOGIC ---
+
+  return (
+    <nav className="grid items-start px-4 text-sm font-medium">
+      {navLinks.map((link) => (
+        <Link
+          key={link.name}
+          href={link.href}
+          className={cn(
+            'flex items-center gap-3 rounded-lg px-3 py-2 text-gray-700 transition-all hover:text-blue-600 hover:bg-gray-100',
+            pathname === link.href && 'bg-blue-100 text-blue-700 hover:text-blue-700',
+            'dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800',
+            pathname === link.href && 'dark:bg-gray-800 dark:text-white'
+          )}
+        >
+          <link.icon className="h-4 w-4" />
+          {link.name}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+/**
+ * Renders the user dropdown menu in the header.
+ */
+function UserMenu() {
+  const { user, logout } = useAuth();
+  const router = usePathname();
+
+  const handleLogout = () => {
+    logout();
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="rounded-full border w-8 h-8"
+        >
+          <UserCircle className="h-5 w-5" />
+          <span className="sr-only">Toggle user menu</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>
+          <div className="flex flex-col">
+            <span className="font-medium">
+              {user?.firstName} {user?.lastName}
+            </span>
+            <span className="text-xs font-normal text-gray-500">
+              {user?.email}
+            </span>
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/dashboard/profile">
+            <Settings className="mr-2 h-4 w-4" />
+            Profile
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+          <LogOut className="mr-2 h-4 w-4" />
+          Log out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export default DashboardLayout;
