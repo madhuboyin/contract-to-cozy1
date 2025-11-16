@@ -8,7 +8,7 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
+  // CardFooter, // No longer used by new row component
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -17,13 +17,22 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import {
   ArrowLeft,
-  Check,
+  Check, // Kept for 'Mark as Complete' in mobile menu (fallback)
   Loader2,
   AlertCircle,
   Search,
   X,
+  MoreVertical, // <-- NEW: For dropdown menu
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox'; // <-- This will now be found
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'; // <-- This will now be found
+import { CheckedState } from '@radix-ui/react-checkbox'; // <-- NEW: Import type for 'checked'
 
 // --- Types ---
 // These types should match your Prisma schema
@@ -223,117 +232,150 @@ export default function ChecklistPage() {
         </CardContent>
       </Card>
 
-      {/* Checklist Items */}
-      <div className="space-y-4">
-        {checklist.items.map((item) => (
-          <ChecklistItemCard
-            key={item.id}
-            item={item}
-            onUpdateStatus={handleUpdateStatus}
-          />
-        ))}
-      </div>
+      {/* --- START: Checklist Items Redesign --- */}
+      {/* Replaced <div className="space-y-4"> with a Card-backed list */}
+      <Card>
+        <CardContent className="p-0">
+          <ul className="divide-y divide-gray-200">
+            {checklist.items.map((item) => (
+              <ChecklistItemRow
+                key={item.id}
+                item={item}
+                onUpdateStatus={handleUpdateStatus}
+              />
+            ))}
+          </ul>
+        </CardContent>
+      </Card>
+      {/* --- END: Checklist Items Redesign --- */}
     </div>
   );
 }
 
-// --- Sub-Component for each Item ---
+// --- START: Replaced ChecklistItemCard with ChecklistItemRow ---
 
-interface ChecklistItemCardProps {
+interface ChecklistItemRowProps {
   item: ChecklistItemType & { isUpdating?: boolean };
   onUpdateStatus: (itemId: string, status: ChecklistItemStatus) => void;
 }
 
-function ChecklistItemCard({ item, onUpdateStatus }: ChecklistItemCardProps) {
+function ChecklistItemRow({ item, onUpdateStatus }: ChecklistItemRowProps) {
   const isPending = item.status === 'PENDING';
   const isCompleted = item.status === 'COMPLETED';
 
   return (
-    <Card
+    <li
       className={cn(
-        'transition-all',
-        isCompleted && 'bg-gray-50/70',
-        item.isUpdating && 'opacity-60'
+        'flex items-center justify-between p-4',
+        item.isUpdating && 'opacity-60 pointer-events-none'
       )}
     >
-      <CardHeader>
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-          <CardTitle
+      {/* Left side: Checkbox and Text */}
+      <div className="flex items-start space-x-4 flex-1 min-w-0">
+        <Checkbox
+          id={item.id}
+          checked={isCompleted}
+          // --- FIX: Explicitly type 'checked' parameter ---
+          onCheckedChange={(checked: CheckedState) =>
+            onUpdateStatus(item.id, checked ? 'COMPLETED' : 'PENDING')
+          }
+          disabled={item.isUpdating}
+          className="mt-1" // Aligns checkbox with the first line of text
+        />
+        <div
+          className={cn(
+            'grid gap-0.5 flex-1 min-w-0', // min-w-0 ensures truncation works
+            isCompleted && 'text-muted-foreground'
+          )}
+        >
+          <label
+            htmlFor={item.id}
             className={cn(
-              'text-lg md:text-xl',
-              isCompleted && 'text-gray-500 line-through'
+              'font-medium cursor-pointer truncate',
+              isCompleted && 'line-through'
             )}
           >
             {item.title}
-          </CardTitle>
+          </label>
+          {item.description && (
+            <p
+              className={cn(
+                'text-sm text-muted-foreground',
+                isCompleted && 'line-through'
+              )}
+            >
+              {item.description}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Right side: Actions */}
+      <div className="flex items-center space-x-2 ml-4 flex-shrink-0">
+        {isPending ? (
+          <>
+            {/* Show "Find Provider" button if a category exists */}
+            {item.serviceCategory && (
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="hidden sm:flex" // Hide on mobile, show on sm screens up
+              >
+                <Link
+                  href={`/dashboard/providers?service=${item.serviceCategory}`}
+                >
+                  <Search className="mr-2 h-4 w-4" />
+                  Find Provider
+                </Link>
+              </Button>
+            )}
+            {/* "..." menu for secondary actions */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={item.isUpdating}
+                  className="h-8 w-8"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                  <span className="sr-only">More actions</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                {/* Show "Find Provider" in menu on mobile screens */}
+                {item.serviceCategory && (
+                  <DropdownMenuItem asChild className="sm:hidden">
+                    <Link
+                      href={`/dashboard/providers?service=${item.serviceCategory}`}
+                    >
+                      <Search className="mr-2 h-4 w-4" />
+                      Find Provider
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+                {/* "I don't need this" action */}
+                <DropdownMenuItem
+                  onSelect={() => onUpdateStatus(item.id, 'NOT_NEEDED')}
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  I don't need this
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        ) : (
+          // Show status badge if not pending
           <Badge
-            variant={
-              isCompleted
-                ? 'success'
-                : item.status === 'NOT_NEEDED'
-                ? 'outline'
-                : 'default'
-            }
+            variant={isCompleted ? 'success' : 'outline'}
             className="w-fit"
           >
-            {item.status === 'COMPLETED'
-              ? 'Completed'
-              : item.status === 'NOT_NEEDED'
-              ? 'Not Needed'
-              : 'Pending'}
+            {isCompleted ? 'Completed' : 'Not Needed'}
           </Badge>
-        </div>
-        {item.description && (
-          <CardDescription
-            className={cn(isCompleted && 'text-gray-400 line-through')}
-          >
-            {item.description}
-          </CardDescription>
         )}
-      </CardHeader>
-      <CardFooter className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-gray-50/50 p-4">
-        {item.serviceCategory && isPending && (
-          <Button asChild variant="outline" className="w-full sm:w-auto">
-            {/* This is the correct link structure to kick off the flow */}
-            <Link
-              href={`/dashboard/providers?service=${item.serviceCategory}`}
-            >
-              <Search className="mr-2 h-4 w-4" />
-              Find {formatServiceCategory(item.serviceCategory)} Provider
-            </Link>
-          </Button>
-        )}
-        {!item.serviceCategory && isPending && (
-          <div /> /* Spacer */
-        )}
-
-        {isPending ? (
-          <div className="flex w-full sm:w-auto gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full sm:w-auto text-gray-600"
-              onClick={() => onUpdateStatus(item.id, 'NOT_NEEDED')}
-              disabled={item.isUpdating}
-            >
-              <X className="mr-2 h-4 w-4" />
-              I don't need this
-            </Button>
-            <Button
-              className="w-full sm:w-auto"
-              onClick={() => onUpdateStatus(item.id, 'COMPLETED')}
-              disabled={item.isUpdating}
-            >
-              <Check className="mr-2 h-4 w-4" />
-              Mark as Complete
-            </Button>
-          </div>
-        ) : (
-          <div className="text-sm font-medium text-green-700">
-            {isCompleted ? 'All set!' : 'Marked as not needed.'}
-          </div>
-        )}
-      </CardFooter>
-    </Card>
+      </div>
+    </li>
   );
 }
+// --- END: Replaced ChecklistItemCard with ChecklistItemRow ---
