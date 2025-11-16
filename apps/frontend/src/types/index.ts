@@ -250,3 +250,13 @@ export interface CreateBookingInput {
   estimatedPrice: number;
   depositAmount?: number;
 }
+
+// --- NEW TYPE FOR PHASE 3 ---
+export interface MaintenanceTaskTemplate {
+  id: string;
+  title: string;
+  description: string | null;
+  serviceCategory: string | null;
+  defaultFrequency: string; // e.g., "annually"
+  sortOrder: number;
+}

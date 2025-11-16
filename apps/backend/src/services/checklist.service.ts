@@ -1,10 +1,55 @@
 // apps/backend/src/services/checklist.service.ts
 // Complete working version - copy this entire file
 
-import { PrismaClient, Checklist, ChecklistItemStatus } from '@prisma/client';
+import {
+  PrismaClient,
+  Checklist,
+  ChecklistItemStatus, // --- FIX: Import the enum ---
+  ServiceCategory,
+} from '@prisma/client';
 import { ChecklistItem } from '@prisma/client';
 
 const prisma = new PrismaClient();
+
+// --- NEW HELPER FUNCTION ---
+/**
+ * Calculates the next due date based on a frequency string.
+ * @param frequency - e.g., "annually", "semi-annually", "monthly"
+ * @returns A Date object for the next due date.
+ */
+const calculateNextDueDate = (
+  frequency: string | null,
+  startDate: Date = new Date()
+): Date => {
+  const nextDate = new Date(startDate);
+  switch (frequency) {
+    case 'annually':
+      nextDate.setFullYear(nextDate.getFullYear() + 1);
+      break;
+    case 'semi-annually':
+      nextDate.setMonth(nextDate.getMonth() + 6);
+      break;
+    case 'quarterly':
+      nextDate.setMonth(nextDate.getMonth() + 3);
+      break;
+    case 'monthly':
+      nextDate.setMonth(nextDate.getMonth() + 1);
+      break;
+    default:
+      // Default to one year if frequency is null or unknown
+      nextDate.setFullYear(nextDate.getFullYear() + 1);
+  }
+  return nextDate;
+};
+// --- END HELPER FUNCTION ---
+
+// Define type for the itemsToCreate array
+interface ChecklistItemTemplate {
+  title: string;
+  description?: string | null;
+  serviceCategory: ServiceCategory | null;
+  sortOrder: number;
+}
 
 export class ChecklistService {
   /**
@@ -21,6 +66,8 @@ export class ChecklistService {
       include: {
         items: {
           orderBy: {
+            // Order by due date for recurring, and sortOrder for one-time
+            nextDueDate: 'asc',
             sortOrder: 'asc',
           },
         },
@@ -51,10 +98,10 @@ export class ChecklistService {
 
     const segment = homeownerProfile?.segment || 'EXISTING_OWNER';
 
-    // Define items
-    let itemsToCreate = [];
+    let itemsToCreate: ChecklistItemTemplate[] = [];
 
     if (segment === 'HOME_BUYER') {
+      // HOME_BUYER checklist is unaffected
       itemsToCreate = [
         {
           title: 'Schedule a Home Inspection',
@@ -106,27 +153,9 @@ export class ChecklistService {
         },
       ];
     } else {
-      // (EXISTING_OWNER) - Define a default checklist for existing owners
-      itemsToCreate = [
-        {
-          title: 'Bi-Annual HVAC Maintenance',
-          description: 'Schedule a check-up for your furnace and A/C.',
-          serviceCategory: 'HVAC',
-          sortOrder: 1,
-        },
-        {
-          title: 'Gutter Cleaning',
-          description: 'Clean gutters in the fall and spring.',
-          serviceCategory: 'LANDSCAPING', // or HANDYMAN
-          sortOrder: 2,
-        },
-        {
-          title: 'Pest Control Inspection',
-          description: 'Get an annual check for termites and other pests.',
-          serviceCategory: 'PEST_CONTROL',
-          sortOrder: 3,
-        },
-      ];
+      // EXISTING_OWNERs now get an EMPTY checklist by default.
+      // Items will be added by the new maintenance setup flow.
+      itemsToCreate = [];
     }
 
     // Create the checklist
@@ -138,8 +167,11 @@ export class ChecklistService {
             title: item.title,
             description: item.description,
             serviceCategory: item.serviceCategory,
-            status: 'PENDING',
+            // --- FIX: Use the enum ---
+            status: ChecklistItemStatus.PENDING,
+            // --- END FIX ---
             sortOrder: item.sortOrder,
+            isRecurring: false, // Default one-time items
           })),
         },
       },
@@ -154,6 +186,59 @@ export class ChecklistService {
 
     return newChecklist;
   }
+
+  // --- NEW FUNCTION for Phase 3 ---
+  /**
+   * Adds new recurring maintenance items to a user's checklist.
+   * @param userId The ID of the user.
+   * @param templateIds An array of MaintenanceTaskTemplate IDs to add.
+   */
+  static async addMaintenanceItemsToChecklist(
+    userId: string,
+    templateIds: string[]
+  ): Promise<{ count: number }> {
+    // 1. Get the user's checklist (or create one if it doesn't exist)
+    const checklist = await this.getOrCreateChecklist(userId);
+    if (!checklist) {
+      throw new Error('Could not find or create a checklist for the user.');
+    }
+
+    // 2. Fetch the templates the user selected
+    const templates = await prisma.maintenanceTaskTemplate.findMany({
+      where: {
+        id: { in: templateIds },
+        isActive: true,
+      },
+    });
+
+    if (templates.length === 0) {
+      return { count: 0 }; // Nothing to add
+    }
+
+    // 3. Transform templates into new checklist items
+    const newItemsData = templates.map((template) => ({
+      checklistId: checklist.id,
+      title: template.title,
+      description: template.description,
+      serviceCategory: template.serviceCategory,
+      // --- FIX: Use the enum ---
+      status: ChecklistItemStatus.PENDING,
+      // --- END FIX ---
+      isRecurring: true,
+      frequency: template.defaultFrequency,
+      nextDueDate: calculateNextDueDate(template.defaultFrequency),
+      sortOrder: template.sortOrder || 0,
+    }));
+
+    // 4. Create all new items in the database
+    const result = await prisma.checklistItem.createMany({
+      data: newItemsData,
+      skipDuplicates: true, // Prevents errors if user adds the same item twice
+    });
+
+    return { count: result.count };
+  }
+  // --- END NEW FUNCTION ---
 
   /**
    * Update the status of a specific checklist item.
@@ -179,14 +264,25 @@ export class ChecklistService {
       throw new Error('Checklist item not found or user does not have access.');
     }
 
+    let dataToUpdate: any = { status: status };
+
+    if (item.isRecurring && status === 'COMPLETED') {
+      // If a recurring item is "completed", reset its due date for the next cycle
+      dataToUpdate = {
+        // --- FIX: Use the enum ---
+        status: ChecklistItemStatus.PENDING,
+        // --- END FIX ---
+        lastCompletedDate: new Date(),
+        nextDueDate: calculateNextDueDate(item.frequency),
+      };
+    }
+
     // Update the item
     const updatedItem = await prisma.checklistItem.update({
       where: {
         id: itemId,
       },
-      data: {
-        status: status,
-      },
+      data: dataToUpdate,
     });
 
     return updatedItem;

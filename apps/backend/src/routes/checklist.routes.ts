@@ -1,36 +1,40 @@
+// apps/backend/src/routes/checklist.routes.ts
 import { Router } from 'express';
 import { checklistController } from '../controllers/checklist.controller';
 import { authenticate } from '../middleware/auth.middleware';
-import { requireRole } from '../middleware/auth.middleware';
-import { UserRole } from '../types/auth.types'; // <-- THE FIX IS HERE
 
 const router = Router();
 
-// Apply authentication middleware to all routes in this file
-router.use(authenticate);
-
-// --- Checklist Routes ---
-
 /**
- * @route GET /api/checklist
- * @desc Get the authenticated homeowner's checklist
- * @access Private (Homeowner)
+ * @route   GET /api/checklist
+ * @desc    Get the user's checklist
+ * @access  Private
  */
-router.get(
-  '/api/checklist',
-  requireRole(UserRole.HOMEOWNER), // This will now work
-  checklistController.handleGetChecklist
-);
+router.get('/', authenticate, checklistController.handleGetChecklist);
 
 /**
- * @route PUT /api/checklist/items/:itemId
- * @desc Update the status of a checklist item
- * @access Private (Homeowner)
+ * @route   PUT /api/checklist/items/:itemId
+ * @desc    Update a checklist item's status
+ * @access  Private
  */
 router.put(
-  '/api/checklist/items/:itemId',
-  requireRole(UserRole.HOMEOWNER), // This will also work
+  '/items/:itemId',
+  authenticate,
   checklistController.handleUpdateChecklistItem
 );
 
-export const checklistRoutes = router;
+// --- NEW ROUTE for Phase 3 ---
+/**
+ * @route   POST /api/checklist/maintenance-items
+ * @desc    Add new recurring maintenance items to user's checklist
+ * @access  Private
+ * @body    { templateIds: string[] }
+ */
+router.post(
+  '/maintenance-items',
+  authenticate,
+  checklistController.handleCreateMaintenanceItems
+);
+// --- END NEW ROUTE ---
+
+export default router;

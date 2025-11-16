@@ -13,6 +13,7 @@ import {
   CreateBookingInput,
   PaginationParams,
   Property,
+  MaintenanceTaskTemplate, // <-- 1. ADDED THIS IMPORT
 } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
@@ -501,8 +502,34 @@ class APIClient {
       method: 'DELETE',
     });
   }
+  
+  // ==========================================================================
+  // CHECKLIST & MAINTENANCE ENDPOINTS (PHASE 3)
+  // ==========================================================================
 
-// ==========================================================================
+  /**
+   * Fetches the list of available maintenance task templates.
+   */
+  async getMaintenanceTemplates(): Promise<
+    APIResponse<{ templates: MaintenanceTaskTemplate[] }>
+  > {
+    return this.request('/api/maintenance-templates');
+  }
+
+  /**
+   * Creates new maintenance checklist items for the user.
+   * @param data An object containing an array of template IDs.
+   */
+  async createMaintenanceItems(data: {
+    templateIds: string[];
+  }): Promise<APIResponse<{ count: number }>> {
+    return this.request('/api/checklist/maintenance-items', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // ==========================================================================
   // PROVIDER SERVICE ENDPOINTS (for provider portal)
   // ==========================================================================
 
