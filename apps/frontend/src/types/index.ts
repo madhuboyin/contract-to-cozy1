@@ -260,3 +260,22 @@ export interface MaintenanceTaskTemplate {
   defaultFrequency: string; // e.g., "annually"
   sortOrder: number;
 }
+
+// --- ADD THESE NEW EXPORTS ---
+
+/**
+ * Defines the user's current goal (e.g., buying or managing).
+ * This MUST match the enum in the Prisma schema.
+ */
+export type HomeownerSegment = 'HOME_BUYER' | 'EXISTING_OWNER';
+
+/**
+ * Defines the shape of a service category object
+ * returned by the /api/service-categories endpoint.
+ */
+export interface ServiceCategoryConfig {
+  category: string;
+  displayName: string;
+  description: string;
+  icon: string;
+}

@@ -25,30 +25,17 @@ import {
   CalendarCheck,
   Check,
   Search,
-  PlusCircle, // Added for the setup button
+  PlusCircle,
+  Settings,
 } from 'lucide-react';
 import { ServiceCategoryIcon } from '@/components/ServiceCategoryIcon';
 import { cn } from '@/lib/utils';
+import { ServiceCategoryConfig } from '@/types'; // <-- 1. IMPORTED FROM GLOBAL TYPES
 
 // --- Types ---
 type ChecklistItemStatus = 'PENDING' | 'COMPLETED' | 'NOT_NEEDED';
 
-// Types for HomeBuyerWelcome component
-interface HBChecklistItemType {
-  id: string;
-  status: ChecklistItemStatus;
-}
-interface HBChecklistType {
-  id: string;
-  items: HBChecklistItemType[];
-}
-// Define type for service categories (mirroring API response)
-interface ServiceCategoryConfig {
-  category: string;
-  displayName: string;
-  description: string;
-  icon: string;
-}
+// --- 2. REMOVED HBChecklistType and ServiceCategoryConfig from here ---
 
 // --- NEW TYPES FOR EXISTING_OWNER ---
 interface MaintenanceTaskItem {
@@ -66,9 +53,10 @@ interface FullChecklist {
 }
 // --- END NEW TYPES ---
 
-// --- HELPER FUNCTIONS (Moved to top for use in all components) ---
+// --- HELPER FUNCTIONS ---
 
 const getStatusBadge = (status: string) => {
+  // ... (this function is unchanged)
   const statusClass = 'inline-block h-2 w-2 rounded-full mr-2 flex-shrink-0';
   switch (status.toUpperCase()) {
     case 'PENDING':
@@ -86,16 +74,15 @@ const getStatusBadge = (status: string) => {
 };
 
 const formatActivityTime = (dateString: string) => {
+  // ... (this function is unchanged)
   if (!dateString) return '';
   const date = new Date(dateString);
   const now = new Date();
   const diffTime = Math.abs(now.getTime() - date.getTime());
   const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
   if (diffDays === 0) return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   if (diffDays === 1) return 'Yesterday';
   if (diffDays < 7) return `${diffDays} days ago`;
-
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
@@ -103,17 +90,26 @@ const formatActivityTime = (dateString: string) => {
 // --- Home Buyer Welcome Component ---
 // ----------------------------------------
 const HomeBuyerWelcome = ({ user }: { user: any }) => {
+  // --- 3. MOVED TYPES INSIDE THE COMPONENT ---
+  interface HBChecklistItemType {
+    id: string;
+    status: ChecklistItemStatus;
+  }
+  interface HBChecklistType {
+    id: string;
+    items: HBChecklistItemType[];
+  }
+  // --- END OF MOVE ---
+
   const [checklist, setChecklist] = useState<HBChecklistType | null>(null);
   const [loadingChecklist, setLoadingChecklist] = useState(true);
 
-  // --- START: Added state for dynamic cards ---
   const [recentActivityList, setRecentActivityList] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [serviceCategories, setServiceCategories] = useState<ServiceCategoryConfig[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
-  // --- END: Added state for dynamic cards ---
 
-  // --- START: Added data fetching functions ---
+  // ... (rest of HomeBuyerWelcome component is unchanged) ...
   const fetchChecklist = async () => {
     try {
       setLoadingChecklist(true);
@@ -124,7 +120,7 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-          cache: 'no-store', // Ensure we always get fresh data
+          cache: 'no-store',
         }
       );
       if (response.ok) {
@@ -137,43 +133,30 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
       setLoadingChecklist(false);
     }
   };
-
-  // Fetch bookings for "Recent Activity"
   const fetchHomeBuyerBookings = async () => {
     try {
       setDataLoading(true);
-
       const bookingsRes = await Promise.all([
         api.listBookings({ limit: 5, sortBy: 'createdAt', sortOrder: 'desc' }),
       ]);
-
       let bookingsList: any[] = [];
-
       if (bookingsRes[0].success && bookingsRes[0].data?.bookings) {
         bookingsList = bookingsRes[0].data.bookings;
-
-        // --- Logic for Recent Activity List ---
         const relevantBookings = bookingsList.filter(b => b.status !== 'DRAFT');
-
         relevantBookings.sort((a, b) => {
           const statusA = String(a.status).toUpperCase().trim();
           const statusB = String(b.status).toUpperCase().trim();
           const isUpcomingA = ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(statusA);
           const isUpcomingB = ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(statusB);
-
           if (isUpcomingA && !isUpcomingB) return -1;
           if (!isUpcomingA && isUpcomingB) return 1;
-
           if (isUpcomingA && isUpcomingB) {
             return new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime();
           }
-
           const dateA = new Date(a.cancelledAt || a.completedAt || a.updatedAt || a.createdAt).getTime();
           const dateB = new Date(b.cancelledAt || b.completedAt || b.updatedAt || b.createdAt).getTime();
-
           return dateB - dateA;
         });
-
         setRecentActivityList(relevantBookings.slice(0, 5));
       }
     } catch (error) {
@@ -182,8 +165,6 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
       setDataLoading(false);
     }
   };
-
-  // Fetch service categories
   const fetchServiceCategories = async () => {
     try {
       setCategoriesLoading(true);
@@ -197,41 +178,31 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
       setCategoriesLoading(false);
     }
   };
-  // --- END: Added data fetching functions ---
-
   useEffect(() => {
     fetchChecklist();
     fetchHomeBuyerBookings();
     fetchServiceCategories();
-
     const handleFocus = () => {
       fetchChecklist();
       fetchHomeBuyerBookings();
       fetchServiceCategories();
     };
-
     window.addEventListener('focus', handleFocus);
-
     return () => {
       window.removeEventListener('focus', handleFocus);
     };
   }, []);
-
   const completedItems =
     checklist?.items.filter((item) => item.status === 'COMPLETED').length || 0;
-  const totalItems = checklist?.items.length || 8; // Default to 8
+  const totalItems = checklist?.items.length || 8;
   const progressPercent = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
-
   const isChecklistComplete = totalItems > 0 && completedItems === totalItems;
-
   const cardTitle = isChecklistComplete
     ? 'Checklist Completed 🎉'
     : 'Your Closure Checklist';
-
   const cardDescription = isChecklistComplete
     ? 'Congratulations! Review your steps or find more services.'
     : "We're here to guide you through a smooth closing process.";
-
   const buttonText = isChecklistComplete
     ? 'Review Your Checklist'
     : 'Start Your Checklist';
@@ -244,7 +215,6 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
       <p className="text-lg text-muted-foreground">
         Let's get you cozy in your new home.
       </p>
-
       <div className="flex-1 space-y-6 pt-6">
         <Card className="shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
@@ -279,9 +249,7 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
             </Button>
           </CardContent>
         </Card>
-
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-          {/* Dynamic Recent Activity Card */}
           <Card className="col-span-4">
             <CardHeader>
               <CardTitle>Recent Activity</CardTitle>
@@ -312,7 +280,6 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
                           ? `Cancelled ${formatActivityTime(booking.cancelledAt || booking.updatedAt)}`
                           : `Scheduled ${formatActivityTime(booking.scheduledDate)}`
                     );
-
                     return (
                       <li key={booking.id} className="py-2.5 px-4 hover:bg-gray-50 transition-colors cursor-pointer">
                         <Link href={`/dashboard/bookings/${booking.id}`}>
@@ -341,8 +308,6 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
               </Button>
             </CardContent>
           </Card>
-
-          {/* Dynamic Book Services Card */}
           <Card className="col-span-3">
             <CardHeader>
               <CardTitle>Book Services</CardTitle>
@@ -395,39 +360,30 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
   );
 };
 
-/**
- * Formats a due date string into a user-friendly relative time.
- */
+// ... (formatDueDate helper is unchanged) ...
 const formatDueDate = (dateString: string | null) => {
   if (!dateString) return 'Upcoming';
   const date = new Date(dateString);
   const now = new Date();
-
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
   const diffTime = date.getTime() - today.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
   if (diffDays <= 0) return 'Due today';
   if (diffDays === 1) return 'Due tomorrow';
   if (diffDays <= 7) return `Due in ${diffDays} days`;
   return `Due on ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
 };
 
-/**
- * Renders the list of upcoming maintenance tasks.
- */
+// ... (UpcomingMaintenanceList is unchanged) ...
 interface UpcomingMaintenanceListProps {
   items: MaintenanceTaskItem[];
   onComplete: (itemId: string) => void;
   updatingItems: Record<string, boolean>;
 }
-
 const UpcomingMaintenanceList = ({ items, onComplete, updatingItems }: UpcomingMaintenanceListProps) => {
   const upcomingTasks = items
     .filter(item => item.isRecurring && item.status === 'PENDING')
     .slice(0, 4);
-
   if (upcomingTasks.length === 0) {
     return (
       <div className="text-center text-gray-500 py-4 space-y-3">
@@ -436,7 +392,6 @@ const UpcomingMaintenanceList = ({ items, onComplete, updatingItems }: UpcomingM
         <p className="text-sm">
           You have no upcoming maintenance tasks.
         </p>
-        {/* --- Button to guide user to setup page --- */}
         <Button asChild variant="outline">
           <Link href="/dashboard/maintenance-setup">
             <PlusCircle className="mr-2 h-4 w-4" />
@@ -446,7 +401,6 @@ const UpcomingMaintenanceList = ({ items, onComplete, updatingItems }: UpcomingM
       </div>
     );
   }
-
   return (
     <ul className="divide-y divide-gray-100">
       {upcomingTasks.map(item => {
@@ -465,7 +419,6 @@ const UpcomingMaintenanceList = ({ items, onComplete, updatingItems }: UpcomingM
                 {formatDueDate(item.nextDueDate)}
               </p>
             </div>
-
             <div className="ml-4 flex-shrink-0 flex items-center space-x-2">
               {item.serviceCategory && (
                 <Button
@@ -517,22 +470,22 @@ export default function DashboardPage() {
   const [dataLoading, setDataLoading] = useState(false);
   const [recentActivityList, setRecentActivityList] = useState<any[]>([]);
 
+  // Use the imported global type
   const [serviceCategories, setServiceCategories] = useState<ServiceCategoryConfig[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
 
+  // Use the local type
   const [checklist, setChecklist] = useState<FullChecklist | null>(null);
   const [checklistLoading, setChecklistLoading] = useState(true);
   const [updatingItems, setUpdatingItems] = useState<Record<string, boolean>>({});
 
-  // Fetch data for Existing Owner Dashboard
+  // ... (All functions: fetchDashboardData, fetchServiceCategories, handleCompleteTask, useEffect... are unchanged) ...
   const fetchDashboardData = async () => {
     if (user && user.segment !== 'HOME_BUYER') {
       try {
         setDataLoading(true);
         setChecklistLoading(true);
-
         const token = localStorage.getItem('accessToken');
-
         const [bookingsRes, propertiesRes, checklistRes] = await Promise.all([
           api.listBookings({ limit: 50 }),
           api.getProperties(),
@@ -541,23 +494,18 @@ export default function DashboardPage() {
             cache: 'no-store',
           }),
         ]);
-
         let upcoming = 0;
         let completed = 0;
         let totalSpending = 0;
         let totalProperties = 0;
         let bookingsList: any[] = [];
-
         if (bookingsRes.success && bookingsRes.data?.bookings) {
           bookingsList = bookingsRes.data.bookings;
-
           bookingsList.forEach(booking => {
             const status = String(booking.status).toUpperCase().trim();
-
             if (status === 'PENDING' || status === 'CONFIRMED' || status === 'IN_PROGRESS') {
               upcoming += 1;
             }
-
             if (status === 'COMPLETED') {
               completed += 1;
               const price = parseFloat(booking.finalPrice || booking.estimatedPrice);
@@ -566,42 +514,32 @@ export default function DashboardPage() {
               }
             }
           });
-
           const relevantBookings = bookingsList.filter(b => b.status !== 'DRAFT');
-
           relevantBookings.sort((a, b) => {
             const statusA = String(a.status).toUpperCase().trim();
             const statusB = String(b.status).toUpperCase().trim();
             const isUpcomingA = ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(statusA);
             const isUpcomingB = ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(statusB);
-
             if (isUpcomingA && !isUpcomingB) return -1;
             if (!isUpcomingA && isUpcomingB) return 1;
-
             if (isUpcomingA && isUpcomingB) {
               return new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime();
             }
-
             const dateA = new Date(a.cancelledAt || a.completedAt || a.updatedAt || a.createdAt).getTime();
             const dateB = new Date(b.cancelledAt || b.completedAt || b.updatedAt || b.createdAt).getTime();
-
             return dateB - dateA;
           });
-
           setRecentActivityList(relevantBookings.slice(0, 5));
         }
-
         if (propertiesRes.success && propertiesRes.data?.properties) {
           totalProperties = propertiesRes.data.properties.length;
         }
-
         setDashboardData({
           upcomingBookings: upcoming,
           completedJobs: completed,
           totalSpending: totalSpending,
           totalProperties: totalProperties,
         });
-
         if (checklistRes.ok) {
           const checklistData = await checklistRes.json();
           setChecklist(checklistData);
@@ -609,7 +547,6 @@ export default function DashboardPage() {
           console.error('Failed to fetch checklist');
           setChecklist(null);
         }
-
       } catch (error) {
         console.error('Failed to fetch existing owner dashboard data:', error);
       } finally {
@@ -618,8 +555,6 @@ export default function DashboardPage() {
       }
     }
   };
-
-  // Fetch service categories
   const fetchServiceCategories = async () => {
     if (user && user.segment !== 'HOME_BUYER') {
       try {
@@ -635,21 +570,15 @@ export default function DashboardPage() {
       }
     }
   };
-
   const handleCompleteTask = async (itemId: string) => {
     if (!checklist) return;
-
     const originalItem = checklist.items.find((item) => item.id === itemId);
     if (!originalItem) return;
-
     setUpdatingItems(prev => ({ ...prev, [itemId]: true }));
-
-    // Optimistic update: Filter the item from the list
     setChecklist(prev => ({
       ...prev!,
       items: prev!.items.filter(i => i.id !== itemId),
     }));
-
     try {
       const token = localStorage.getItem('accessToken');
       const response = await fetch(
@@ -663,13 +592,10 @@ export default function DashboardPage() {
           body: JSON.stringify({ status: 'COMPLETED' }),
         }
       );
-
       if (!response.ok) {
         throw new Error('Failed to update item.');
       }
-
       const updatedItem = await response.json();
-
       if (updatedItem.isRecurring && updatedItem.status === 'PENDING') {
         setChecklist(prev => ({
           ...prev!,
@@ -678,7 +604,6 @@ export default function DashboardPage() {
       }
     } catch (err: any) {
       console.error('Failed to update task', err);
-      // Rollback on error
       setChecklist(prev => ({
         ...prev!,
         items: [...prev!.items, originalItem],
@@ -687,7 +612,6 @@ export default function DashboardPage() {
       setUpdatingItems(prev => ({ ...prev, [itemId]: false }));
     }
   };
-
   useEffect(() => {
     if (user && user.segment !== 'HOME_BUYER') {
       fetchDashboardData();
@@ -698,11 +622,9 @@ export default function DashboardPage() {
         fetchDashboardData();
       }
     };
-
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, [user]);
-
   if (loading) {
     return (
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -712,8 +634,6 @@ export default function DashboardPage() {
       </div>
     );
   }
-
-  // --- ROUTER LOGIC ---
   if (user && user.segment === 'HOME_BUYER') {
     return <HomeBuyerWelcome user={user} />;
   }
@@ -724,7 +644,7 @@ export default function DashboardPage() {
       <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
 
       <Card className="shadow-lg">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
           <div className="space-y-1.5">
             <CardTitle className="text-2xl font-bold">
               Upcoming Maintenance
@@ -733,7 +653,12 @@ export default function DashboardPage() {
               Your home's schedule of upcoming tasks.
             </CardDescription>
           </div>
-          <CalendarCheck className="h-8 w-8 text-blue-500" />
+          <Button asChild variant="outline" size="sm">
+            <Link href="/dashboard/maintenance-setup">
+              <Settings className="mr-2 h-4 w-4" />
+              Manage Plan
+            </Link>
+          </Button>
         </CardHeader>
         <CardContent>
           {checklistLoading ? (
@@ -757,6 +682,7 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* ... (Rest of the file is unchanged) ... */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -765,7 +691,7 @@ export default function DashboardPage() {
             </CardTitle>
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
+              viewBox="0 0 24"
               fill="none"
               stroke="currentColor"
               strokeLinecap="round"
@@ -784,7 +710,6 @@ export default function DashboardPage() {
             <p className="text-xs text-muted-foreground">Pending / Confirmed</p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -792,7 +717,7 @@ export default function DashboardPage() {
             </CardTitle>
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
+              viewBox="0 0 24"
               fill="none"
               stroke="currentColor"
               strokeLinecap="round"
@@ -809,7 +734,6 @@ export default function DashboardPage() {
             <p className="text-xs text-muted-foreground">On completed services</p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">My Properties</CardTitle>
@@ -832,7 +756,6 @@ export default function DashboardPage() {
             </Button>
           </CardFooter>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -846,7 +769,6 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
-
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4">
           <CardHeader>
@@ -878,7 +800,6 @@ export default function DashboardPage() {
                         ? `Cancelled ${formatActivityTime(booking.cancelledAt || booking.updatedAt)}`
                         : `Scheduled ${formatActivityTime(booking.scheduledDate)}`
                   );
-
                   return (
                     <li key={booking.id} className="py-2.5 px-4 hover:bg-gray-50 transition-colors cursor-pointer">
                       <Link href={`/dashboard/bookings/${booking.id}`}>
@@ -907,7 +828,6 @@ export default function DashboardPage() {
             </Button>
           </CardContent>
         </Card>
-
         <Card className="col-span-3">
           <CardHeader>
             <CardTitle>Book Services</CardTitle>
@@ -954,7 +874,6 @@ export default function DashboardPage() {
                     Home Inspection
                   </Link>
                 </Button>
-
                 <Button asChild className="w-full justify-start" variant="outline">
                   <Link href="/dashboard/providers?service=HANDYMAN">
                     <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

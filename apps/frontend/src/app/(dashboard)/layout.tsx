@@ -26,8 +26,7 @@ import {
   LogOut,
   PanelLeft,
   Settings,
-  Wrench, // <-- 1. IMPORT THE NEW ICON
-} from 'lucide-react';
+} from 'lucide-react'; // <-- Wrench icon import removed
 
 interface NavLink {
   name: string;
@@ -45,14 +44,12 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
-        {/* You can replace this with a more sophisticated loading spinner */}
         <p>Loading user data...</p>
       </div>
     );
   }
 
   // If user is a PROVIDER, redirect them to the provider dashboard
-  // This layout is for HOMEOWNERS only.
   if (user && user.role === 'PROVIDER') {
     if (typeof window !== 'undefined') {
       window.location.href = '/providers/dashboard';
@@ -126,13 +123,12 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 
 /**
  * Renders the primary navigation links in the sidebar.
- * Dynamically shows "Checklist" for Home Buyers and "Maintenance" for Existing Owners.
+ * Dynamically shows "Checklist" for Home Buyers.
  */
 function SidebarNav() {
   const pathname = usePathname();
   const { user } = useAuth();
 
-  // --- 2. DYNAMICALLY BUILD THE NAV LINKS ---
   const navLinks: NavLink[] = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
@@ -140,23 +136,16 @@ function SidebarNav() {
     { name: 'Find Providers', href: '/dashboard/providers', icon: Search },
   ];
 
-  if (user) {
-    if (user.segment === 'HOME_BUYER') {
-      navLinks.push({
-        name: 'Checklist',
-        href: '/dashboard/checklist',
-        icon: ListChecks,
-      });
-    } else if (user.segment === 'EXISTING_OWNER') {
-      // --- THIS IS THE NEWLY ADDED LINK ---
-      navLinks.push({
-        name: 'Maintenance',
-        href: '/dashboard/maintenance-setup',
-        icon: Wrench,
-      });
-    }
+  // --- REVERTED LOGIC ---
+  // Only show Checklist for Home Buyers
+  if (user && user.segment === 'HOME_BUYER') {
+    navLinks.push({
+      name: 'Checklist',
+      href: '/dashboard/checklist',
+      icon: ListChecks,
+    });
   }
-  // --- END OF DYNAMIC LOGIC ---
+  // --- END OF REVERT ---
 
   return (
     <nav className="grid items-start px-4 text-sm font-medium">
@@ -184,7 +173,6 @@ function SidebarNav() {
  */
 function UserMenu() {
   const { user, logout } = useAuth();
-  const router = usePathname();
 
   const handleLogout = () => {
     logout();
