@@ -31,6 +31,8 @@ RUN npm ci
 
 # Copy source code
 COPY . .
+COPY prisma ./prisma
+RUN npx prisma generate --schema=./prisma/schema.prisma
 
 # Build TypeScript
 RUN npm run build
