@@ -80,6 +80,7 @@ enum ServiceCategory {
   MOVING             // HOME_BUYER primary
   PEST_CONTROL       // Both segments
   LOCKSMITH          // Both segments
+  INSURANCE 
 }
 
 enum InspectionType {
