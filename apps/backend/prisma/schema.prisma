@@ -676,6 +676,54 @@ model Message {
   @@map("messages")
 }
 
+// Add new enum for frequency
+enum RecurrenceFrequency {
+  MONTHLY
+  QUARTERLY
+  SEMI_ANNUALLY
+  ANNUALLY
+}
+
+// Update ChecklistItem model - add these fields:
+model ChecklistItem {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  title       String
+  description String?
+  status      ChecklistItemStatus @default(PENDING)
+  
+  serviceCategory String?
+  
+  // NEW: Recurring task fields
+  isRecurring        Boolean   @default(false)
+  frequency          RecurrenceFrequency?
+  nextDueDate        DateTime?
+  lastCompletedDate  DateTime?
+
+  checklistId String
+  checklist   Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  sortOrder   Int @default(0)
+
+  @@index([checklistId])
+  @@map("checklist_items")
+}
+
+// NEW: Master task template
+model MaintenanceTaskTemplate {
+  id               String               @id @default(uuid())
+  title            String
+  description      String?
+  defaultFrequency RecurrenceFrequency
+  serviceCategory  ServiceCategory?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("maintenance_task_templates")
+}
+
 // ============================================================================
 // REVIEWS & RATINGS
 // ============================================================================
