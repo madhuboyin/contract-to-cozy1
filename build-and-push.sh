@@ -60,6 +60,7 @@ echo ""
 print_header "Building Frontend (Next.js)"
 
 docker build \
+    --no-cache \
     --platform $PLATFORM \
     -t $REGISTRY/$USERNAME/$REPO/frontend:$VERSION \
     -t $REGISTRY/$USERNAME/$REPO/frontend:latest \
@@ -75,6 +76,7 @@ print_success "Frontend built successfully"
 print_header "Building Backend (Node.js API)"
 
 docker build \
+    --no-cache \
     --platform $PLATFORM \
     -t $REGISTRY/$USERNAME/$REPO/backend:$VERSION \
     -t $REGISTRY/$USERNAME/$REPO/backend:latest \
@@ -90,6 +92,7 @@ print_success "Backend built successfully"
 print_header "Building Workers"
 
 docker build \
+    --no-cache \
     --platform $PLATFORM \
     -t $REGISTRY/$USERNAME/$REPO/workers:$VERSION \
     -t $REGISTRY/$USERNAME/$REPO/workers:latest \

@@ -33,3 +33,9 @@ docker push ghcr.io/madhuboyin/contract-to-cozy/frontend:latest
 
 kubectl delete pods -n production -l app=frontend
 kubectl get pods -n production -l app=frontend
+
+#cloudfared configmap
+
+nano /tmp/kubectl-edit-243034315.yaml
+kubectl apply -f /tmp/kubectl-edit-243034315.yaml
+kubectl -n production rollout restart deploy/cloudflared
