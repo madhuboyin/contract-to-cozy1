@@ -13,6 +13,7 @@ import propertyRoutes from './routes/property.routes';
 import userRoutes from './routes/user.routes';
 import { checklistRoutes } from './routes/checklist.routes';
 import serviceCategoryRoutes from './routes/service-category.routes'; // NEW IMPORT
+import maintenanceRoutes from './routes/maintenance.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
@@ -103,6 +104,8 @@ app.use('/api/properties', propertyRoutes);
 app.use('/api/users', userRoutes);
 app.use(checklistRoutes);
 app.use(serviceCategoryRoutes); // NEW ROUTE
+// --- 2. Add the new maintenance routes ---
+app.use('/api/maintenance-templates', maintenanceRoutes);
 
 // =============================================================================
 // 404 HANDLER
