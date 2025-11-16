@@ -58,9 +58,7 @@ export class ChecklistService {
       itemsToCreate = [
         {
           title: 'Schedule a Home Inspection',
-          // --- FIX: Was 'HOME_INSPECTION' ---
           serviceCategory: 'INSPECTION',
-          // --- END FIX ---
           sortOrder: 1,
         },
         {
@@ -77,9 +75,7 @@ export class ChecklistService {
         },
         {
           title: 'Obtain Homeowners Insurance',
-          // --- FIX: Was 'HOME_INSURANCE' ---
           serviceCategory: 'INSURANCE',
-          // --- END FIX ---
           sortOrder: 4,
         },
         {
@@ -98,9 +94,7 @@ export class ChecklistService {
         },
         {
           title: 'Coordinate Moving Services',
-          // --- FIX: Was 'MOVING_SERVICES' ---
           serviceCategory: 'MOVING',
-          // --- END FIX ---
           sortOrder: 7,
         },
         {
