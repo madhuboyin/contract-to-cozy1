@@ -56,7 +56,7 @@ export class ProviderService {
     const { page, limit, radius, sortBy, sortOrder } = query;
     const skip = (page - 1) * limit;
 
-    // --- FIX: ADD SEGMENT-BASED PERMISSION CHECK ---
+    // --- SEGMENT-BASED PERMISSION CHECK ---
     
     // 1. Get user segment
     let userSegment: string = 'EXISTING_OWNER'; // Default segment
@@ -81,11 +81,9 @@ export class ProviderService {
       },
       select: { category: true },
     });
-    const allowedCategoryNames = allowedCategories.map((c) => c.category);
+    const allowedCategoryNames = allowedCategories.map((c) => c.category as ServiceCategory);
 
     // 3. Permission Check:
-    // If a specific category is requested, check if it's in the allowed list.
-    // If not, return empty results immediately.
     if (query.category && !allowedCategoryNames.includes(query.category)) {
       return {
         providers: [],
@@ -100,17 +98,14 @@ export class ProviderService {
         },
       };
     }
-    // --- END FIX ---
 
-
-    // --- Original filter logic (now with segment-awareness) ---
-    // Array to hold all individual filter clauses
+    // --- Filter logic (now with segment-awareness) ---
     const filters: Prisma.ProviderProfileWhereInput[] = [
-        // Relax status filter: exclude only 'INACTIVE'.
-        { status: { not: 'INACTIVE' } } 
+        // --- FIX: Change filter from { status: { not: 'INACTIVE' } } to { status: 'ACTIVE' } ---
+        { status: 'ACTIVE' } 
+        // --- END FIX ---
     ];
 
-    // --- FIX: This logic is now segment-aware ---
     if (query.category) {
       // Case 1: A specific (and now verified) category is requested
       filters.push({
@@ -136,13 +131,11 @@ export class ProviderService {
       if (allowedCategoryNames.length > 0) {
         filters.push({
           OR: [
-            // Check denormalized list for *any* overlap
             {
               serviceCategories: {
                 hasSome: allowedCategoryNames,
               },
             },
-            // Check active services for *any* service in the allowed list
             {
               services: {
                 some: {
@@ -164,11 +157,7 @@ export class ProviderService {
         };
       }
     }
-    // --- END FIX ---
-
-    // IMPORTANT: Temporarily skipping all other complex filters (inspectionType, handymanType, minRating)
-    // to ensure category matching works first.
-
+    
     // Combine all filters into the final WHERE clause
     const where: Prisma.ProviderProfileWhereInput = { AND: filters };
 
@@ -245,7 +234,6 @@ export class ProviderService {
     let providersWithDistance: ProviderWithDistance[] = providers.map((provider) => {
       let distance: number | undefined;
 
-      // Distance calculation logic remains, but will likely result in 'distance: undefined'
       if (
         searchLat &&
         searchLon &&

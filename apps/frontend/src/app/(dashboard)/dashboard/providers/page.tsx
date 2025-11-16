@@ -13,6 +13,9 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+// --- FIX: Import Badge ---
+import { Badge } from '@/components/ui/badge';
+// --- END FIX ---
 import { ArrowLeft, Loader2, AlertCircle, Search, Star } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
@@ -30,6 +33,9 @@ interface Provider {
     basePrice: string;
     priceUnit: string;
   }[];
+  // --- FIX: Add missing field that the API is sending ---
+  serviceCategories: string[];
+  // --- END FIX ---
 }
 
 interface ServiceCategoryConfig {
@@ -38,6 +44,20 @@ interface ServiceCategoryConfig {
   description: string;
   icon: string;
 }
+
+// --- FIX: Add helper function from checklist page ---
+/**
+ * Formats a service category string (e.g., "LANDSCAPING")
+ * into a user-friendly title (e.g., "Landscaping").
+ */
+function formatServiceCategory(category: string | null): string {
+  if (!category) return '';
+  return category
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+// --- END FIX ---
 
 // --- Main Search Component ---
 function ProviderSearch() {
@@ -49,8 +69,9 @@ function ProviderSearch() {
   const [loading, setLoading] = useState(true); // Default to true for initial load
   const [error, setError] = useState<string | null>(null);
 
-  // NEW: Service categories state
-  const [serviceCategories, setServiceCategories] = useState<ServiceCategoryConfig[]>([]);
+  const [serviceCategories, setServiceCategories] = useState<
+    ServiceCategoryConfig[]
+  >([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
 
   // Fetch service categories
@@ -72,7 +93,6 @@ function ProviderSearch() {
     fetchCategories();
   }, []);
 
-  // --- FIX: This hook is updated to always fetch ---
   // Fetch providers based on selected category (or all if none selected)
   useEffect(() => {
     const fetchProviders = async () => {
@@ -99,17 +119,13 @@ function ProviderSearch() {
       }
     };
 
-    // We no longer check if serviceCategory exists. We always fetch.
     fetchProviders();
-    
   }, [serviceCategory]); // This effect re-runs when serviceCategory changes
-  // --- END FIX ---
 
   const isHomeBuyer = user?.segment === 'HOME_BUYER';
   const backLink = isHomeBuyer ? '/dashboard/checklist' : '/dashboard';
   const backLinkText = isHomeBuyer ? 'Back to Checklist' : 'Back to Dashboard';
 
-  // --- CHANGE: Added logic for dynamic page title ---
   let pageTitle = 'Find Providers';
   if (serviceCategory && !categoriesLoading) {
     const selectedCategoryName = serviceCategories.find(
@@ -120,7 +136,6 @@ function ProviderSearch() {
       pageTitle = `${selectedCategoryName} Providers`;
     }
   }
-  // --- END CHANGE ---
 
   return (
     <div className="flex-1 space-y-4 pt-6">
@@ -131,7 +146,6 @@ function ProviderSearch() {
         </Link>
       </Button>
 
-      {/* --- CHANGE: Dynamic title and "View All" link --- */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <h2 className="text-3xl font-bold tracking-tight">{pageTitle}</h2>
         {serviceCategory && !loading && (
@@ -144,10 +158,7 @@ function ProviderSearch() {
           </Button>
         )}
       </div>
-      {/* --- END CHANGE --- */}
 
-      {/* NEW: Dynamic Service Category Selector */}
-      {/* --- FIX: Only show category picker if NOT loading and no category is selected --- */}
       {!serviceCategory && !loading && (
         <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-white">
           <CardHeader>
@@ -262,7 +273,6 @@ function ProviderSearch() {
         </Card>
       )}
 
-      {/* Loading State */}
       {loading && (
         <div className="flex h-64 w-full flex-col items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
@@ -270,7 +280,6 @@ function ProviderSearch() {
         </div>
       )}
 
-      {/* Error State */}
       {!loading && error && (
         <div className="flex h-64 w-full flex-col items-center justify-center rounded-lg border-2 border-red-200 bg-red-50 p-8 text-center">
           <AlertCircle className="h-8 w-8 text-red-600" />
@@ -281,8 +290,6 @@ function ProviderSearch() {
         </div>
       )}
 
-      {/* Empty State */}
-      {/* --- FIX: Updated empty state logic --- */}
       {!loading && !error && providers.length === 0 && (
         <div className="flex h-64 w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center">
           <Search className="h-8 w-8 text-gray-400" />
@@ -302,14 +309,9 @@ function ProviderSearch() {
           </Button>
         </div>
       )}
-      {/* --- END FIX --- */}
 
-
-      {/* Results List */}
       {!loading && !error && providers.length > 0 && (
-        // --- START: MODIFIED GRID LAYOUT ---
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {/* --- END: MODIFIED GRID LAYOUT --- */}
           {providers.map((provider) => (
             <ProviderCard
               key={provider.id}
@@ -323,7 +325,7 @@ function ProviderSearch() {
   );
 }
 
-// --- START: MODIFIED ProviderCard Component ---
+// --- ProviderCard Component ---
 function ProviderCard({
   provider,
   serviceCategory,
@@ -339,10 +341,13 @@ function ProviderCard({
     ? parseFloat(previewService.basePrice)
     : null;
 
+  // --- FIX: Get the first service category to display ---
+  const firstCategory = provider.serviceCategories?.[0];
+  // --- END FIX ---
+
   return (
     <Card className="flex flex-col justify-between transition-all hover:shadow-lg">
       <CardHeader className="pb-4">
-        {/* Title font size changed from text-lg to text-base */}
         <CardTitle className="text-base truncate">
           {provider.businessName}
         </CardTitle>
@@ -355,11 +360,20 @@ function ProviderCard({
             ({provider.totalReviews} reviews)
           </span>
         </div>
+        {/* --- FIX: Add the category badge --- */}
+        {firstCategory && (
+          <Badge
+            variant="outline"
+            className="mt-2 text-xs w-fit font-normal"
+          >
+            {formatServiceCategory(firstCategory)}
+          </Badge>
+        )}
+        {/* --- END FIX --- */}
       </CardHeader>
 
       {/* CardContent has been removed */}
 
-      {/* CardFooter is now the primary info/action area */}
       <CardFooter className="flex justify-between items-center bg-gray-50/50 p-4">
         <div>
           {previewService && basePriceValue !== null && !isNaN(basePriceValue) ? (
@@ -367,7 +381,6 @@ function ProviderCard({
               <p className="text-xs text-muted-foreground">
                 Services starting at
               </p>
-              {/* Price font size changed from text-base to text-sm */}
               <p className="text-sm font-semibold">
                 ${basePriceValue.toFixed(2)}
                 <span className="text-xs font-normal text-muted-foreground">
@@ -387,7 +400,6 @@ function ProviderCard({
               serviceCategory ? `?service=${serviceCategory}` : ''
             }`}
           >
-            {/* Button text changed from "View Profile" to "View" */}
             View
           </Link>
         </Button>
