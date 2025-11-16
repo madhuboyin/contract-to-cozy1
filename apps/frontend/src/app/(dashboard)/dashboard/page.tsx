@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import Link from 'next/link';
-import { api } from '@/lib/api/client'; 
+import { api } from '@/lib/api/client';
 import {
   Card,
   CardContent,
@@ -22,18 +22,24 @@ import {
   Home,
   ListChecks,
   Loader2,
+  CalendarCheck, // <-- 1. ADDED
+  Check, // <-- 2. ADDED
+  Search, // <-- 3. ADDED
 } from 'lucide-react';
 import { ServiceCategoryIcon } from '@/components/ServiceCategoryIcon';
+import { cn } from '@/lib/utils'; // <-- 4. ADDED for cn utility
 
 // --- Types ---
-type ChecklistItemStatus = 'PENDING' | 'COMPLETED' | 'NOT_NEEDED';
-interface ChecklistItemType {
+type ChecklistItemStatus = 'PENDING' | 'COMPLETED' | 'NOT_NEEDED'; // <-- 5. MOVED TO TOP
+
+// Types for HomeBuyerWelcome component
+interface HBChecklistItemType {
   id: string;
   status: ChecklistItemStatus;
 }
-interface ChecklistType {
+interface HBChecklistType {
   id: string;
-  items: ChecklistItemType[];
+  items: HBChecklistItemType[];
 }
 // Define type for service categories (mirroring API response)
 interface ServiceCategoryConfig {
@@ -43,45 +49,62 @@ interface ServiceCategoryConfig {
   icon: string;
 }
 
+// --- 6. ADDED: NEW TYPES FOR EXISTING_OWNER ---
+interface MaintenanceTaskItem {
+  id: string;
+  title: string;
+  status: ChecklistItemStatus; // Uses the top-level enum
+  serviceCategory: string | null;
+  isRecurring: boolean;
+  nextDueDate: string | null;
+}
+
+interface FullChecklist {
+  id: string;
+  items: MaintenanceTaskItem[];
+}
+// --- END NEW TYPES ---
+
 // --- HELPER FUNCTIONS (Moved to top for use in all components) ---
 
 const getStatusBadge = (status: string) => {
-    const statusClass = 'inline-block h-2 w-2 rounded-full mr-2 flex-shrink-0';
-    switch (status.toUpperCase()) {
-        case 'PENDING':
-        case 'IN_PROGRESS':
-            return <span className={`${statusClass} bg-yellow-500`} title="Pending/In Progress" />;
-        case 'CONFIRMED':
-            return <span className={`${statusClass} bg-blue-500`} title="Confirmed" />;
-        case 'COMPLETED':
-            return <span className={`${statusClass} bg-green-500`} title="Completed" />;
-        case 'CANCELLED':
-            return <span className={`${statusClass} bg-red-500`} title="Cancelled" />;
-        default:
-            return <span className={`${statusClass} bg-gray-500`} title={status} />;
-    }
+  // ... (existing function, no changes)
+  const statusClass = 'inline-block h-2 w-2 rounded-full mr-2 flex-shrink-0';
+  switch (status.toUpperCase()) {
+    case 'PENDING':
+    case 'IN_PROGRESS':
+      return <span className={`${statusClass} bg-yellow-500`} title="Pending/In Progress" />;
+    case 'CONFIRMED':
+      return <span className={`${statusClass} bg-blue-500`} title="Confirmed" />;
+    case 'COMPLETED':
+      return <span className={`${statusClass} bg-green-500`} title="Completed" />;
+    case 'CANCELLED':
+      return <span className={`${statusClass} bg-red-500`} title="Cancelled" />;
+    default:
+      return <span className={`${statusClass} bg-gray-500`} title={status} />;
+  }
 };
 
 const formatActivityTime = (dateString: string) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  // ... (existing function, no changes)
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffTime = Math.abs(now.getTime() - date.getTime());
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-    if (diffDays === 0) return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays === 0) return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
 
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
-
 
 // ----------------------------------------
 // --- Home Buyer Welcome Component ---
 // ----------------------------------------
 const HomeBuyerWelcome = ({ user }: { user: any }) => {
-  const [checklist, setChecklist] = useState<ChecklistType | null>(null);
+  const [checklist, setChecklist] = useState<HBChecklistType | null>(null); // <-- 7. Renamed type
   const [loadingChecklist, setLoadingChecklist] = useState(true);
 
   // --- START: Added state for dynamic cards ---
@@ -93,6 +116,7 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
 
   // --- START: Added data fetching functions ---
   const fetchChecklist = async () => {
+    // ... (existing function, no changes)
     try {
       setLoadingChecklist(true);
       const token = localStorage.getItem('accessToken'); // Note: api client handles this, but this is legacy fetch
@@ -118,6 +142,7 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
 
   // Fetch bookings for "Recent Activity"
   const fetchHomeBuyerBookings = async () => {
+    // ... (existing function, no changes)
     try {
       setDataLoading(true);
       
@@ -164,6 +189,7 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
 
   // Fetch service categories
   const fetchServiceCategories = async () => {
+    // ... (existing function, no changes)
     try {
       setCategoriesLoading(true);
       // The API will correctly return *only* HOME_BUYER categories
@@ -180,8 +206,8 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
   };
   // --- END: Added data fetching functions ---
 
-
   useEffect(() => {
+    // ... (existing effect, no changes)
     // Fetch all data on load
     fetchChecklist();
     fetchHomeBuyerBookings();
@@ -203,6 +229,7 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
 
   const completedItems =
     checklist?.items.filter((item) => item.status === 'COMPLETED').length || 0;
+  // ... (rest of HomeBuyerWelcome component is unchanged) ...
   const totalItems = checklist?.items.length || 8; // Default to 8
   const progressPercent = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
   
@@ -384,6 +411,109 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
   );
 };
 
+// --- 8. ADDED: NEW HELPER FUNCTIONS/COMPONENTS ---
+
+/**
+ * Formats a due date string into a user-friendly relative time.
+ */
+const formatDueDate = (dateString: string | null) => {
+  if (!dateString) return 'Upcoming';
+  const date = new Date(dateString);
+  const now = new Date();
+  
+  // Reset time part of 'now' to compare dates only
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  const diffTime = date.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays <= 0) return 'Due today';
+  if (diffDays === 1) return 'Due tomorrow';
+  if (diffDays <= 7) return `Due in ${diffDays} days`;
+  return `Due on ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+};
+
+/**
+ * Renders the list of upcoming maintenance tasks.
+ */
+interface UpcomingMaintenanceListProps {
+  items: MaintenanceTaskItem[];
+  onComplete: (itemId: string) => void;
+  updatingItems: Record<string, boolean>;
+}
+
+const UpcomingMaintenanceList = ({ items, onComplete, updatingItems }: UpcomingMaintenanceListProps) => {
+  // Filter for recurring, pending tasks and sort by due date (already done by backend)
+  const upcomingTasks = items
+    .filter(item => item.isRecurring && item.status === 'PENDING')
+    .slice(0, 4); // Show top 4
+
+  if (upcomingTasks.length === 0) {
+    return (
+      <div className="text-center text-gray-500 py-4">
+        <CheckCircle className="mx-auto h-8 w-8 text-green-500" />
+        <p className="mt-2 font-medium">All caught up!</p>
+        <p className="text-sm">You have no upcoming maintenance tasks scheduled.</p>
+      </div>
+    );
+  }
+
+  return (
+    <ul className="divide-y divide-gray-100">
+      {upcomingTasks.map(item => {
+        const isUpdating = updatingItems[item.id] || false;
+        return (
+          <li
+            key={item.id}
+            className={cn(
+              "flex items-center justify-between py-3",
+              isUpdating && "opacity-50"
+            )}
+          >
+            <div className="flex-1 min-w-0">
+              <p className="font-medium truncate">{item.title}</p>
+              <p className="text-sm text-blue-600 font-medium">
+                {formatDueDate(item.nextDueDate)}
+              </p>
+            </div>
+            
+            <div className="ml-4 flex-shrink-0 flex items-center space-x-2">
+              {item.serviceCategory && (
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  disabled={isUpdating}
+                  className="hidden sm:flex" // Hide on mobile
+                >
+                  <Link href={`/dashboard/providers?service=${item.serviceCategory}`}>
+                    <Search className="mr-2 h-4 w-4" />
+                    Find Provider
+                  </Link>
+                </Button>
+              )}
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => onComplete(item.id)}
+                disabled={isUpdating}
+              >
+                {isUpdating ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="mr-2 h-4 w-4" />
+                )}
+                Complete
+              </Button>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+};
+// --- END NEW HELPER COMPONENTS ---
+
 
 // ----------------------------------------
 // --- MAIN COMPONENT (Existing Owner) ---
@@ -403,20 +533,37 @@ export default function DashboardPage() {
   const [serviceCategories, setServiceCategories] = useState<ServiceCategoryConfig[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
 
+  // --- 9. ADDED: New state for checklist ---
+  const [checklist, setChecklist] = useState<FullChecklist | null>(null);
+  const [checklistLoading, setChecklistLoading] = useState(true);
+  const [updatingItems, setUpdatingItems] = useState<Record<string, boolean>>({});
+  // --- END New state ---
+
+
   // Fetch data for Existing Owner Dashboard
   const fetchDashboardData = async () => {
     // This check ENSURES this code only runs for EXISTING OWNERS
     if (user && user.segment !== 'HOME_BUYER') {
       try {
         setDataLoading(true);
+        setChecklistLoading(true); // <-- 10. ADDED
+
+        const token = localStorage.getItem('accessToken'); // <-- 11. ADDED
         
-        const [bookingsRes, propertiesRes] = await Promise.all([
+        const [bookingsRes, propertiesRes, checklistRes] = await Promise.all([ // <-- 12. MODIFIED
           api.listBookings({ limit: 50 }), 
           api.getProperties(),
+          // --- 13. ADDED: New fetch call for checklist ---
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/checklist`, {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: 'no-store',
+          }),
+          // --- END New fetch call ---
         ]);
         
         let upcoming = 0;
         let completed = 0;
+        // ... (rest of existing logic) ...
         let totalSpending = 0;
         let totalProperties = 0;
         let bookingsList: any[] = [];
@@ -475,16 +622,28 @@ export default function DashboardPage() {
           totalProperties: totalProperties,
         });
 
+        // --- 14. ADDED: New logic to set checklist state ---
+        if (checklistRes.ok) {
+          const checklistData = await checklistRes.json();
+          setChecklist(checklistData);
+        } else {
+          console.error('Failed to fetch checklist');
+          setChecklist(null);
+        }
+        // --- END New logic ---
+
       } catch (error) {
         console.error('Failed to fetch existing owner dashboard data:', error);
       } finally {
         setDataLoading(false);
+        setChecklistLoading(false); // <-- 15. ADDED
       }
     }
   };
 
   // Fetch service categories
   const fetchServiceCategories = async () => {
+    // ... (existing function, no changes)
     // This check ENSURES this code only runs for EXISTING OWNERS
     if (user && user.segment !== 'HOME_BUYER') {
       try {
@@ -500,6 +659,68 @@ export default function DashboardPage() {
       }
     }
   };
+
+  // --- 16. ADDED: New handler for completing tasks ---
+  const handleCompleteTask = async (itemId: string) => {
+    if (!checklist) return;
+
+    // Find the original item for rollback
+    const originalItem = checklist.items.find((item) => item.id === itemId);
+    if (!originalItem) return;
+
+    setUpdatingItems(prev => ({ ...prev, [itemId]: true }));
+    
+    // Optimistic update: Filter the item from the list
+    setChecklist(prev => ({
+      ...prev!,
+      items: prev!.items.filter(i => i.id !== itemId),
+    }));
+
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/checklist/items/${itemId}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status: 'COMPLETED' }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to update item.');
+      }
+
+      const updatedItem = await response.json();
+
+      // Final update from server:
+      // If the item is recurring, it will be returned with status PENDING
+      // and a new nextDueDate. We must add it back to the list.
+      if (updatedItem.isRecurring && updatedItem.status === 'PENDING') {
+          setChecklist(prev => ({
+            ...prev!,
+            items: [...prev!.items, updatedItem],
+          }));
+      }
+      // If it's not recurring, it's now 'COMPLETED' and our optimistic
+      // update (removing it) is correct, so we do nothing.
+
+    } catch (err: any) {
+      console.error('Failed to update task', err);
+      // Rollback on error: Add the original item back
+      setChecklist(prev => ({
+        ...prev!,
+        items: [...prev!.items, originalItem],
+      }));
+    } finally {
+      setUpdatingItems(prev => ({ ...prev, [itemId]: false }));
+    }
+  };
+  // --- END New handler ---
+
 
   useEffect(() => {
     // This logic correctly ensures it only runs for non-home-buyers
@@ -521,6 +742,7 @@ export default function DashboardPage() {
 
 
   if (loading) {
+    // ... (existing loading state, no changes)
     return (
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <h2 className="text-3xl font-bold tracking-tight">
@@ -542,6 +764,36 @@ export default function DashboardPage() {
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
       
+      {/* --- 17. ADDED: NEW UPCOMING MAINTENANCE CARD --- */}
+      <Card className="shadow-lg">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <div className="space-y-1.5">
+            <CardTitle className="text-2xl font-bold">
+              Upcoming Maintenance
+            </CardTitle>
+            <CardDescription>
+              Your home's schedule of upcoming tasks.
+            </CardDescription>
+          </div>
+          <CalendarCheck className="h-8 w-8 text-blue-500" />
+        </CardHeader>
+        <CardContent>
+          {checklistLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+            </div>
+          ) : (
+            <UpcomingMaintenanceList
+              items={checklist?.items || []}
+              onComplete={handleCompleteTask}
+              updatingItems={updatingItems}
+            />
+          )}
+        </CardContent>
+      </Card>
+      {/* --- END: NEW UPCOMING MAINTENANCE CARD --- */}
+
+
       {dataLoading && (
         <div className="flex items-center justify-center py-4">
             <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
@@ -550,6 +802,7 @@ export default function DashboardPage() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {/* ... (Existing metric cards: Upcoming, Spending, Properties, Completed) ... */}
         {/* Upcoming Bookings Card */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -646,6 +899,7 @@ export default function DashboardPage() {
       {/* Recent Activity Card - ENHANCED */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4">
+          {/* ... (existing Recent Activity card, no changes) ... */}
           <CardHeader>
             <CardTitle>Recent Activity</CardTitle>
             <CardDescription>
@@ -707,6 +961,7 @@ export default function DashboardPage() {
 
         {/* Dynamic Service Category Quick Actions */}
         <Card className="col-span-3">
+          {/* ... (existing Book Services card, no changes) ... */}
           <CardHeader>
             <CardTitle>Book Services</CardTitle>
             <CardDescription>

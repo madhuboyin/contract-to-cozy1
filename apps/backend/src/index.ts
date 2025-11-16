@@ -11,8 +11,8 @@ import providerRoutes from './routes/provider.routes';
 import bookingRoutes from './routes/booking.routes';
 import propertyRoutes from './routes/property.routes';
 import userRoutes from './routes/user.routes';
-import { checklistRoutes } from './routes/checklist.routes';
-import serviceCategoryRoutes from './routes/service-category.routes'; // NEW IMPORT
+import checklistRoutes from './routes/checklist.routes'; // <-- FIX 1: Default import
+import serviceCategoryRoutes from './routes/service-category.routes';
 import maintenanceRoutes from './routes/maintenance.routes';
 
 // Import middleware
@@ -88,7 +88,7 @@ app.get('/', (req: Request, res: Response) => {
       properties: '/api/properties',
       users: '/api/users',
       checklist: '/api/checklist',
-      serviceCategories: '/api/service-categories', // NEW
+      serviceCategories: '/api/service-categories',
     },
   });
 });
@@ -102,9 +102,8 @@ app.use('/api/providers', providerRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/properties', propertyRoutes);
 app.use('/api/users', userRoutes);
-app.use(checklistRoutes);
-app.use(serviceCategoryRoutes); // NEW ROUTE
-// --- 2. Add the new maintenance routes ---
+app.use('/api/checklist', checklistRoutes); // <-- FIX 2: Mount point
+app.use('/api/service-categories', serviceCategoryRoutes);
 app.use('/api/maintenance-templates', maintenanceRoutes);
 
 // =============================================================================
@@ -129,8 +128,8 @@ app.use((req: Request, res: Response) => {
       'PUT /api/users/profile',
       'GET /api/checklist',
       'PUT /api/checklist/items/:itemId',
-      'GET /api/service-categories', // NEW
-      'GET /api/service-categories/all', // NEW
+      'GET /api/service-categories',
+      'GET /api/service-categories/all',
     ],
   });
 });
@@ -159,11 +158,11 @@ app.listen(PORT, () => {
   console.log(`   - GET  /api/bookings`);
   console.log(`   - GET  /api/properties`);
   console.log(`   - GET  /api/users/profile`);
-  console.log(`   - PUT  /api/users/profile`);
+  console.log(`   - PUT  /api/users/profile`); // <-- FIX 3: Corrected typo
   console.log(`   - GET  /api/checklist`);
   console.log(`   - PUT  /api/checklist/items/:itemId`);
-  console.log(`   - GET  /api/service-categories       ← NEW`);
-  console.log(`   - GET  /api/service-categories/all   ← NEW`);
+  console.log(`   - GET  /api/service-categories`);
+  console.log(`   - GET  /api/service-categories/all`);
 });
 
 export default app;
