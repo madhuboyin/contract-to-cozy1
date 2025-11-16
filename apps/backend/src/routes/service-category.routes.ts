@@ -19,7 +19,7 @@ const router = Router();
  * @access Private
  */
 router.get(
-  '/api/service-categories',
+  '/',
   authenticate,
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
@@ -97,7 +97,7 @@ router.get(
  * @access Private
  */
 router.get(
-  '/api/service-categories/all',
+  '/all',
   authenticate,
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
