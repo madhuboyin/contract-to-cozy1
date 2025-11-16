@@ -81,7 +81,7 @@ export class ProviderService {
       },
       select: { category: true },
     });
-    const allowedCategoryNames = allowedCategories.map((c) => c.category as ServiceCategory);
+    const allowedCategoryNames = allowedCategories.map((c) => c.category);
 
     // 3. Permission Check:
     // If a specific category is requested, check if it's in the allowed list.
@@ -598,9 +598,7 @@ export class ProviderService {
       case 'rating':
         return { averageRating: sortOrder as 'asc' | 'desc' };
       case 'reviews':
-        // --- FIX: Corrected 'act' to 'asc' ---
         return { totalReviews: sortOrder as 'asc' | 'desc' };
-        // --- END FIX ---
       case 'price':
         // For price, we'll sort by the minimum base price of services
         return { services: { _count: sortOrder as 'asc' | 'desc' } };
