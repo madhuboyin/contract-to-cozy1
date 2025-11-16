@@ -65,11 +65,10 @@ export class ChecklistService {
       },
       include: {
         items: {
-          orderBy: {
-            // Order by due date for recurring, and sortOrder for one-time
-            nextDueDate: 'asc',
-            sortOrder: 'asc',
-          },
+          orderBy: [
+            { nextDueDate: "asc" },
+            { sortOrder: "asc" }
+          ]
         },
       },
     });
