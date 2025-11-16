@@ -288,6 +288,8 @@ model Checklist {
   @@map("checklists")
 }
 
+
+// Update ChecklistItem model - add these fields:
 model ChecklistItem {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
@@ -297,12 +299,17 @@ model ChecklistItem {
   description String?
   status      ChecklistItemStatus @default(PENDING)
   
-  // Links to service category
-  serviceCategory String? 
+  serviceCategory String?
+  
+  // NEW: Recurring task fields
+  isRecurring        Boolean   @default(false)
+  frequency          RecurrenceFrequency?
+  nextDueDate        DateTime?
+  lastCompletedDate  DateTime?
 
   checklistId String
   checklist   Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
-  sortOrder   Int @default(0) // <-- ADD THIS LINE
+  sortOrder   Int @default(0)
 
   @@index([checklistId])
   @@map("checklist_items")
@@ -684,31 +691,6 @@ enum RecurrenceFrequency {
   ANNUALLY
 }
 
-// Update ChecklistItem model - add these fields:
-model ChecklistItem {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  title       String
-  description String?
-  status      ChecklistItemStatus @default(PENDING)
-  
-  serviceCategory String?
-  
-  // NEW: Recurring task fields
-  isRecurring        Boolean   @default(false)
-  frequency          RecurrenceFrequency?
-  nextDueDate        DateTime?
-  lastCompletedDate  DateTime?
-
-  checklistId String
-  checklist   Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
-  sortOrder   Int @default(0)
-
-  @@index([checklistId])
-  @@map("checklist_items")
-}
 
 // NEW: Master task template
 model MaintenanceTaskTemplate {
