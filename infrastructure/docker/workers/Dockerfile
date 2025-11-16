@@ -55,6 +55,10 @@ RUN addgroup --system --gid 1001 nodejs && \
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 
+# Copy generated Prisma client from builder
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package*.json ./
@@ -64,10 +68,8 @@ RUN chown -R nodejs:nodejs /app
 
 USER nodejs
 
-# Workers don't expose ports but we can add a health endpoint
 EXPOSE 9090
 
-# Health check for worker process
 HEALTHCHECK --interval=60s --timeout=3s --start-period=60s --retries=3 \
   CMD pgrep -f "node dist/worker.js" || exit 1
 
