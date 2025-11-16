@@ -148,7 +148,7 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
               }
   
               const dateA = new Date(a.cancelledAt || a.completedAt || a.updatedAt || a.createdAt).getTime();
-              const dateB = new Date(b.cancelledAt || b.completedAt || b.updatedAt || b.createdAt).getTime();
+              const dateB = new Date(b.cancelledAt || a.completedAt || b.updatedAt || b.createdAt).getTime();
               
               return dateB - dateA;
           });
@@ -456,7 +456,7 @@ export default function DashboardPage() {
                 }
     
                 const dateA = new Date(a.cancelledAt || a.completedAt || a.updatedAt || a.createdAt).getTime();
-                const dateB = new Date(b.cancelledAt || b.completedAt || b.updatedAt || b.createdAt).getTime();
+                const dateB = new Date(b.cancelledAt || a.completedAt || b.updatedAt || b.createdAt).getTime();
                 
                 return dateB - dateA;
             });
