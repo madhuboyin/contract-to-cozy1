@@ -301,6 +301,7 @@ model ChecklistItem {
 
   checklistId String
   checklist   Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  sortOrder   Int @default(0) // <-- ADD THIS LINE
 
   @@index([checklistId])
   @@map("checklist_items")
