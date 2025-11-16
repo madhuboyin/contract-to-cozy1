@@ -692,13 +692,16 @@ enum RecurrenceFrequency {
 }
 
 
-// NEW: Master task template
 model MaintenanceTaskTemplate {
   id               String               @id @default(uuid())
   title            String
   description      String?
   defaultFrequency RecurrenceFrequency
   serviceCategory  ServiceCategory?
+  
+  // NEW fields
+  isActive         Boolean @default(true)
+  sortOrder        Int     @default(0)
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
