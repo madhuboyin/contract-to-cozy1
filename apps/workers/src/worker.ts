@@ -1,5 +1,5 @@
 // apps/workers/src/worker.ts
-import { PrismaClient, ChecklistItemStatus } from '../../backend/node_modules/@prisma/client';
+import { PrismaClient, ChecklistItemStatus } from '@prisma/client';
 import cron from 'node-cron';
 
 const prisma = new PrismaClient();
