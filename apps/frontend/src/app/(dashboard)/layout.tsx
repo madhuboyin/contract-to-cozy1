@@ -26,7 +26,7 @@ import {
   LogOut,
   PanelLeft,
   Settings,
-} from 'lucide-react'; // <-- Wrench icon import removed
+} from 'lucide-react'; // <-- Reverted: No Wrench icon
 
 interface NavLink {
   name: string;

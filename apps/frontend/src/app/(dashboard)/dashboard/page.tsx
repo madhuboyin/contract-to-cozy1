@@ -26,16 +26,14 @@ import {
   Check,
   Search,
   PlusCircle,
-  Settings,
+  Settings, // <-- Import Settings icon
 } from 'lucide-react';
 import { ServiceCategoryIcon } from '@/components/ServiceCategoryIcon';
 import { cn } from '@/lib/utils';
-import { ServiceCategoryConfig } from '@/types'; // <-- 1. IMPORTED FROM GLOBAL TYPES
+import { ServiceCategoryConfig } from '@/types'; // <-- Import global type
 
 // --- Types ---
 type ChecklistItemStatus = 'PENDING' | 'COMPLETED' | 'NOT_NEEDED';
-
-// --- 2. REMOVED HBChecklistType and ServiceCategoryConfig from here ---
 
 // --- NEW TYPES FOR EXISTING_OWNER ---
 interface MaintenanceTaskItem {
@@ -56,7 +54,6 @@ interface FullChecklist {
 // --- HELPER FUNCTIONS ---
 
 const getStatusBadge = (status: string) => {
-  // ... (this function is unchanged)
   const statusClass = 'inline-block h-2 w-2 rounded-full mr-2 flex-shrink-0';
   switch (status.toUpperCase()) {
     case 'PENDING':
@@ -74,7 +71,6 @@ const getStatusBadge = (status: string) => {
 };
 
 const formatActivityTime = (dateString: string) => {
-  // ... (this function is unchanged)
   if (!dateString) return '';
   const date = new Date(dateString);
   const now = new Date();
@@ -90,7 +86,7 @@ const formatActivityTime = (dateString: string) => {
 // --- Home Buyer Welcome Component ---
 // ----------------------------------------
 const HomeBuyerWelcome = ({ user }: { user: any }) => {
-  // --- 3. MOVED TYPES INSIDE THE COMPONENT ---
+  // Types local to this component
   interface HBChecklistItemType {
     id: string;
     status: ChecklistItemStatus;
@@ -99,17 +95,14 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
     id: string;
     items: HBChecklistItemType[];
   }
-  // --- END OF MOVE ---
 
   const [checklist, setChecklist] = useState<HBChecklistType | null>(null);
   const [loadingChecklist, setLoadingChecklist] = useState(true);
-
   const [recentActivityList, setRecentActivityList] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [serviceCategories, setServiceCategories] = useState<ServiceCategoryConfig[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
 
-  // ... (rest of HomeBuyerWelcome component is unchanged) ...
   const fetchChecklist = async () => {
     try {
       setLoadingChecklist(true);
@@ -120,7 +113,7 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-          cache: 'no-store',
+          cache: 'no-store', 
         }
       );
       if (response.ok) {
@@ -133,6 +126,7 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
       setLoadingChecklist(false);
     }
   };
+
   const fetchHomeBuyerBookings = async () => {
     try {
       setDataLoading(true);
@@ -165,6 +159,7 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
       setDataLoading(false);
     }
   };
+
   const fetchServiceCategories = async () => {
     try {
       setCategoriesLoading(true);
@@ -178,6 +173,7 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
       setCategoriesLoading(false);
     }
   };
+
   useEffect(() => {
     fetchChecklist();
     fetchHomeBuyerBookings();
@@ -192,6 +188,7 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
       window.removeEventListener('focus', handleFocus);
     };
   }, []);
+
   const completedItems =
     checklist?.items.filter((item) => item.status === 'COMPLETED').length || 0;
   const totalItems = checklist?.items.length || 8;
@@ -374,7 +371,7 @@ const formatDueDate = (dateString: string | null) => {
   return `Due on ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
 };
 
-// ... (UpcomingMaintenanceList is unchanged) ...
+// ... (UpcomingMaintenanceList is unchanged, contains "empty state" button) ...
 interface UpcomingMaintenanceListProps {
   items: MaintenanceTaskItem[];
   onComplete: (itemId: string) => void;
@@ -469,17 +466,13 @@ export default function DashboardPage() {
   });
   const [dataLoading, setDataLoading] = useState(false);
   const [recentActivityList, setRecentActivityList] = useState<any[]>([]);
-
-  // Use the imported global type
   const [serviceCategories, setServiceCategories] = useState<ServiceCategoryConfig[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
-
-  // Use the local type
   const [checklist, setChecklist] = useState<FullChecklist | null>(null);
   const [checklistLoading, setChecklistLoading] = useState(true);
   const [updatingItems, setUpdatingItems] = useState<Record<string, boolean>>({});
 
-  // ... (All functions: fetchDashboardData, fetchServiceCategories, handleCompleteTask, useEffect... are unchanged) ...
+  // ... (fetchDashboardData, fetchServiceCategories, handleCompleteTask, useEffect... are unchanged) ...
   const fetchDashboardData = async () => {
     if (user && user.segment !== 'HOME_BUYER') {
       try {
@@ -625,6 +618,7 @@ export default function DashboardPage() {
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, [user]);
+
   if (loading) {
     return (
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -643,6 +637,7 @@ export default function DashboardPage() {
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
 
+      {/* --- THIS IS THE MODIFIED CARD HEADER --- */}
       <Card className="shadow-lg">
         <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
           <div className="space-y-1.5">
@@ -653,6 +648,7 @@ export default function DashboardPage() {
               Your home's schedule of upcoming tasks.
             </CardDescription>
           </div>
+          {/* This is the permanent link to the setup page */}
           <Button asChild variant="outline" size="sm">
             <Link href="/dashboard/maintenance-setup">
               <Settings className="mr-2 h-4 w-4" />
@@ -660,6 +656,7 @@ export default function DashboardPage() {
             </Link>
           </Button>
         </CardHeader>
+        {/* --- END OF MODIFICATION --- */}
         <CardContent>
           {checklistLoading ? (
             <div className="flex items-center justify-center py-4">
