@@ -3,7 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import Image from 'next/image'; // <-- 1. Import next/image
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/utils';
@@ -28,7 +28,7 @@ import {
   PanelLeft,
   Settings,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge'; // <-- 2. Import Badge component
+import { Badge } from '@/components/ui/badge';
 
 interface NavLink {
   name: string;
@@ -63,7 +63,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen w-full flex-col">
       {/* --- Header (Contains all nav) --- */}
       <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-white px-4 sm:px-6">
-        {/* --- 3. UPDATED LOGO --- */}
+        {/* --- 1. UPDATED LOGO TEXT --- */}
         <Link
           href="/dashboard"
           className="flex items-center gap-2 font-semibold"
@@ -75,7 +75,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
             height={24}
             className="h-6 w-6"
           />
-          <span className="text-xl font-bold text-blue-600">Cozy</span>
+          <span className="text-xl font-bold text-blue-600">Contract to Cozy</span>
         </Link>
         {/* --- END LOGO FIX --- */}
 
@@ -101,6 +101,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-[280px] p-0">
+            {/* --- 1. UPDATED LOGO TEXT (MOBILE) --- */}
             <div className="flex h-[60px] items-center border-b px-6">
               <Link
                 href="/dashboard"
@@ -113,9 +114,10 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
                   height={24}
                   className="h-6 w-6"
                 />
-                <span className="text-xl font-bold text-blue-600">Cozy</span>
+                <span className="text-xl font-bold text-blue-600">Contract to Cozy</span>
               </Link>
             </div>
+            {/* --- END LOGO FIX (MOBILE) --- */}
             <div className="py-2">
               <SidebarNav />
             </div>
@@ -123,9 +125,10 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
         </Sheet>
       </header>
 
-      {/* --- 4. CENTERED PAGE CONTENT --- */}
+      {/* --- 2. CENTERED PAGE CONTENT --- */}
+      {/* This main element provides the background color and padding */}
       <main className="flex-1 bg-gray-50 p-4 md:p-8">
-        {/* This div centers your content */}
+        {/* This div centers your content and sets its max width */}
         <div className="mx-auto w-full max-w-7xl">
           {children}
         </div>
@@ -229,7 +232,6 @@ function UserMenu() {
     }
   };
 
-  // --- 5. HELPER TO FORMAT USER TYPE ---
   const getUserTypeLabel = () => {
     if (!user) return '';
     if (user.role === 'PROVIDER') return 'Provider';
@@ -259,13 +261,11 @@ function UserMenu() {
             <span className="text-xs font-normal text-gray-500">
               {user?.email}
             </span>
-            {/* --- 6. ADDED USER TYPE BADGE --- */}
             <Badge variant="outline" className="w-fit mt-1">
               {getUserTypeLabel()}
             </Badge>
           </div>
         </DropdownMenuLabel>
-        {/* --- END OF USER TYPE FIX --- */}
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link href="/dashboard/profile">
