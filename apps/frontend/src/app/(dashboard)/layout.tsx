@@ -246,7 +246,7 @@ function DesktopUserNav() {
   return (
     <div className="hidden items-center gap-4 lg:flex shrink-0">
       <div className="flex flex-col items-end space-y-1">
-        <span className="font-heading font-medium text-sm leading-tight">
+      <span className="font-heading font-medium text-sm leading-tight">
           {user?.firstName} {user?.lastName}
         </span>
         <Badge 
