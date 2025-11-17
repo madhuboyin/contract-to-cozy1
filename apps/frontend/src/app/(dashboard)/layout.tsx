@@ -244,30 +244,32 @@ function DesktopUserNav() {
   };
 
   return (
-    // --- FIX: "SHRUNK" NAV/OVERLAP (Part 3) ---
-    // Added `shrink-0` to prevent this component from shrinking
     <div className="hidden items-center gap-4 lg:flex shrink-0">
-      
-      {/* --- THIS IS THE TEXT OVERLAP FIX (Already present in your file) --- */}
-      {/* This div stacks the name and badge vertically */}
-      <div className="flex flex-col items-end space-y-1"> {/* Added space-y-1 */}
-        <span className="font-medium text-sm leading-tight"> {/* Use leading-tight */}
+      <div className="flex flex-col items-end space-y-1">
+        <span className="font-heading font-medium text-sm leading-tight">
           {user?.firstName} {user?.lastName}
         </span>
-        <Badge variant="outline" className="h-auto text-xs px-1.5 py-0">
+        <Badge 
+          variant="outline" 
+          className="h-auto text-xs px-1.5 py-0 border-[hsl(var(--color-primary))] text-[hsl(var(--color-primary))]"
+        >
           {getUserTypeLabel(user)}
         </Badge>
       </div>
-      {/* --- END OF OVERLAP FIX --- */}
 
-      <Button asChild variant="ghost" size="sm" className="text-gray-600 hover:text-blue-600">
+      <Button 
+        asChild 
+        variant="ghost" 
+        size="sm" 
+        className="font-body text-gray-600 hover:text-[hsl(var(--color-primary))]"
+      >
         <Link href="/dashboard/profile">Profile</Link>
       </Button>
       <Button 
         onClick={handleLogout} 
         variant="ghost" 
         size="sm" 
-        className="text-red-600 hover:bg-red-50 hover:text-red-700"
+        className="font-body text-red-600 hover:bg-red-50 hover:text-red-700"
       >
         Logout
       </Button>
@@ -275,7 +277,6 @@ function DesktopUserNav() {
   );
 }
 
-// New component for MOBILE user info
 function MobileUserNav() {
   const { user, logout } = useAuth();
 
@@ -289,9 +290,12 @@ function MobileUserNav() {
   return (
     <div className="border-t p-4">
       <div className="mb-2">
-        <div className="font-medium">{user?.firstName} {user?.lastName}</div>
-        <div className="text-xs text-gray-500">{user?.email}</div>
-        <Badge variant="outline" className="w-fit mt-1">
+        <div className="font-heading font-medium">{user?.firstName} {user?.lastName}</div>
+        <div className="font-body text-xs text-gray-500">{user?.email}</div>
+        <Badge 
+          variant="outline" 
+          className="w-fit mt-1 border-[hsl(var(--color-primary))] text-[hsl(var(--color-primary))]"
+        >
           {getUserTypeLabel(user)}
         </Badge>
       </div>
@@ -299,7 +303,7 @@ function MobileUserNav() {
         <SheetClose asChild>
           <Link 
             href="/dashboard/profile"
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-gray-700 transition-all hover:text-blue-600 hover:bg-gray-100 -mx-3"
+            className="font-body flex items-center gap-3 rounded-lg px-3 py-2 text-gray-700 transition-all hover:text-[hsl(var(--color-primary))] hover:bg-gray-100 -mx-3"
           >
             <Settings className="h-4 w-4" />
             Profile
@@ -308,7 +312,7 @@ function MobileUserNav() {
         <Button 
           onClick={handleLogout} 
           variant="ghost" 
-          className="text-red-600 justify-start -mx-3"
+          className="font-body text-red-600 justify-start -mx-3"
         >
           <LogOut className="mr-3 h-4 w-4" />
           Logout
