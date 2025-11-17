@@ -1,5 +1,5 @@
 // apps/frontend/src/app/(dashboard)/dashboard/maintenance-setup/MaintenanceConfigModal.tsx
-// --- CORRECTED FILE ---
+// --- FIXED FILE ---
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -36,7 +36,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-//import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface Props {
@@ -63,12 +63,12 @@ const categoryOptions: ServiceCategory[] = [
   'PLUMBING',
   'ELECTRICAL',
   'HVAC',
-  'CARPENTRY',   // <-- Corrected
-  'PAINTING',    // <-- Corrected
-  'ROOFING',     // <-- Corrected
+  'CARPENTRY', // <-- Corrected
+  'PAINTING', // <-- Corrected
+  'ROOFING', // <-- Corrected
   'LANDSCAPING',
   'CLEANING',
-  'OTHER',       // <-- Corrected
+  'OTHER', // <-- Corrected
 ];
 
 // Helper to format the enum strings for display (e.g., "SEMI_ANNUALLY" -> "Semi_annually")
@@ -146,52 +146,45 @@ export function MaintenanceConfigModal({
           <DialogTitle>
             {isNew ? 'Add Task' : 'Edit Task'}: {template?.title}
           </DialogTitle>
-          {/* --- FIX was here --- */}
           <DialogDescription>
             Customize the details for this maintenance task.
           </DialogDescription>
-          {/* --- End Fix --- */}
         </DialogHeader>
         <div className="grid gap-6 py-4">
+          {/* --- FIX: Changed to 1-column grid --- */}
           {/* Title */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="title" className="text-right">
-              Task Name
-            </Label>
+          <div className="grid gap-2">
+            <Label htmlFor="title">Task Name</Label>
             <Input
               id="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="col-span-3"
             />
           </div>
 
+          {/* --- FIX: Changed to 1-column grid --- */}
           {/* Description */}
-          <div className="grid grid-cols-4 items-start gap-4">
-            <Label htmlFor="description" className="text-right pt-2">
-              Notes
-            </Label>
+          <div className="grid gap-2">
+            <Label htmlFor="description">Notes</Label>
             <Textarea
               id="description"
               value={description || ''}
               onChange={(e) => setDescription(e.target.value || null)}
-              className="col-span-3"
               placeholder="e.g., Filter size is 20x20x1"
             />
           </div>
 
+          {/* --- FIX: Changed to 1-column grid --- */}
           {/* Service Category */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="category" className="text-right">
-              Category
-            </Label>
+          <div className="grid gap-2">
+            <Label htmlFor="category">Category</Label>
             <Select
               value={category || 'NONE'}
               onValueChange={(val) =>
                 setCategory(val === 'NONE' ? null : (val as ServiceCategory))
               }
             >
-              <SelectTrigger className="col-span-3">
+              <SelectTrigger>
                 <SelectValue placeholder="Select a category" />
               </SelectTrigger>
               <SelectContent>
@@ -205,8 +198,9 @@ export function MaintenanceConfigModal({
             </Select>
           </div>
 
+          {/* --- FIX: Removed col-start-2 and col-span-3 --- */}
           {/* Is Recurring */}
-          <div className="flex items-center space-x-2 col-start-2 col-span-3">
+          <div className="flex items-center space-x-2">
             <Checkbox
               id="isRecurring"
               checked={isRecurring}
@@ -218,18 +212,17 @@ export function MaintenanceConfigModal({
           {/* Frequency & Due Date (Conditional) */}
           {isRecurring && (
             <>
+              {/* --- FIX: Changed to 1-column grid --- */}
               {/* Frequency */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="frequency" className="text-right">
-                  Frequency
-                </Label>
+              <div className="grid gap-2">
+                <Label htmlFor="frequency">Frequency</Label>
                 <Select
                   value={frequency || ''}
                   onValueChange={(val) =>
                     setFrequency(val as RecurrenceFrequency)
                   }
                 >
-                  <SelectTrigger className="col-span-3">
+                  <SelectTrigger>
                     <SelectValue placeholder="Select a frequency" />
                   </SelectTrigger>
                   <SelectContent>
@@ -242,21 +235,21 @@ export function MaintenanceConfigModal({
                 </Select>
               </div>
 
+              {/* --- FIX: Changed to 1-column grid --- */}
               {/* Next Due Date */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="nextDueDate" className="text-right">
-                  Next Due Date
-                </Label>
+              <div className="grid gap-2">
+                <Label htmlFor="nextDueDate">Next Due Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
                       variant={'outline'}
                       className={cn(
-                        'col-span-3 justify-start text-left font-normal',
+                        // --- FIX: Removed col-span-3, added w-full ---
+                        'w-full justify-start text-left font-normal',
                         !nextDueDate && 'text-muted-foreground'
                       )}
                     >
-                      {/* <CalendarIcon className="mr-2 h-4 w-4" /> */}
+                      <CalendarIcon className="mr-2 h-4 w-4" />
                       {nextDueDate ? (
                         format(nextDueDate, 'PPP')
                       ) : (
