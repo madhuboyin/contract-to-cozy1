@@ -245,31 +245,35 @@ function DesktopUserNav() {
 
   return (
     <div className="hidden items-center gap-4 lg:flex shrink-0">
-      <div className="flex flex-col items-end space-y-1">
-      <span className="font-heading font-medium text-sm leading-tight">
+      {/* User name and badge - HORIZONTAL layout */}
+      <div className="flex items-center gap-2">
+        <span className="font-body font-medium text-sm text-gray-900">
           {user?.firstName} {user?.lastName}
         </span>
         <Badge 
           variant="outline" 
-          className="h-auto text-xs px-1.5 py-0 border-[hsl(var(--color-primary))] text-[hsl(var(--color-primary))]"
+          className="h-auto text-xs px-2 py-0.5 border-brand-primary text-brand-primary font-body"
         >
           {getUserTypeLabel(user)}
         </Badge>
       </div>
 
+      {/* Profile button - Phase 2 compliant */}
       <Button 
         asChild 
         variant="ghost" 
         size="sm" 
-        className="font-body text-gray-600 hover:text-[hsl(var(--color-primary))]"
+        className="font-body font-semibold text-gray-600 hover:text-brand-primary hover:bg-teal-50 tracking-wide transition-colors duration-200"
       >
         <Link href="/dashboard/profile">Profile</Link>
       </Button>
+
+      {/* Logout button - Phase 2 compliant */}
       <Button 
         onClick={handleLogout} 
         variant="ghost" 
         size="sm" 
-        className="font-body text-red-600 hover:bg-red-50 hover:text-red-700"
+        className="font-body font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 tracking-wide transition-colors duration-200"
       >
         Logout
       </Button>
@@ -290,11 +294,11 @@ function MobileUserNav() {
   return (
     <div className="border-t p-4">
       <div className="mb-2">
-        <div className="font-heading font-medium">{user?.firstName} {user?.lastName}</div>
+        <div className="font-body font-medium">{user?.firstName} {user?.lastName}</div>
         <div className="font-body text-xs text-gray-500">{user?.email}</div>
         <Badge 
           variant="outline" 
-          className="w-fit mt-1 border-[hsl(var(--color-primary))] text-[hsl(var(--color-primary))]"
+          className="w-fit mt-1 border-brand-primary text-brand-primary font-body"
         >
           {getUserTypeLabel(user)}
         </Badge>
@@ -303,7 +307,7 @@ function MobileUserNav() {
         <SheetClose asChild>
           <Link 
             href="/dashboard/profile"
-            className="font-body flex items-center gap-3 rounded-lg px-3 py-2 text-gray-700 transition-all hover:text-[hsl(var(--color-primary))] hover:bg-gray-100 -mx-3"
+            className="font-body font-medium flex items-center gap-3 rounded-lg px-3 py-2 text-gray-700 transition-colors duration-200 hover:text-brand-primary hover:bg-teal-50 -mx-3"
           >
             <Settings className="h-4 w-4" />
             Profile
@@ -312,7 +316,7 @@ function MobileUserNav() {
         <Button 
           onClick={handleLogout} 
           variant="ghost" 
-          className="font-body text-red-600 justify-start -mx-3"
+          className="font-body font-semibold text-red-600 justify-start hover:bg-red-50 hover:text-red-700 tracking-wide transition-colors duration-200 -mx-3"
         >
           <LogOut className="mr-3 h-4 w-4" />
           Logout
