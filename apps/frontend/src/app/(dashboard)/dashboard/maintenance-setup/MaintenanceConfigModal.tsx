@@ -36,7 +36,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { CalendarIcon } from 'lucide-react';
+//import { CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface Props {
@@ -256,7 +256,7 @@ export function MaintenanceConfigModal({
                         !nextDueDate && 'text-muted-foreground'
                       )}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {/* <CalendarIcon className="mr-2 h-4 w-4" /> */}
                       {nextDueDate ? (
                         format(nextDueDate, 'PPP')
                       ) : (
