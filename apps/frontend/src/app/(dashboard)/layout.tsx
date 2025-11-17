@@ -9,21 +9,17 @@ import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+  Sheet,
+  SheetClose, // <-- 1. Import SheetClose
+  SheetContent,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 import {
   Home,
   Calendar,
   Building,
   Search,
   ListChecks,
-  UserCircle,
   LogOut,
   PanelLeft,
   Settings,
@@ -38,7 +34,7 @@ interface NavLink {
 
 /**
  * Main layout for the authenticated dashboard.
- * Top-bar navigation with centered content.
+ * Top-bar navigation with centered content and inlined user menu.
  */
 function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -63,7 +59,6 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen w-full flex-col">
       {/* --- Header (Contains all nav) --- */}
       <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-white px-4 sm:px-6">
-        {/* --- 1. UPDATED LOGO TEXT --- */}
         <Link
           href="/dashboard"
           className="flex items-center gap-2 font-semibold"
@@ -77,7 +72,6 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
           />
           <span className="text-xl font-bold text-blue-600">Contract to Cozy</span>
         </Link>
-        {/* --- END LOGO FIX --- */}
 
         {/* Desktop-only horizontal nav */}
         <DesktopNav />
@@ -85,8 +79,8 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* User Menu */}
-        <UserMenu />
+        {/* --- 2. Replaced Dropdown with new DesktopUserNav --- */}
+        <DesktopUserNav />
 
         {/* Mobile-only hamburger menu */}
         <Sheet>
@@ -100,8 +94,8 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
               <span className="sr-only">Toggle navigation menu</span>
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-[280px] p-0">
-            {/* --- 1. UPDATED LOGO TEXT (MOBILE) --- */}
+          {/* --- 3. Modified SheetContent structure --- */}
+          <SheetContent side="left" className="w-[280px] p-0 flex flex-col">
             <div className="flex h-[60px] items-center border-b px-6">
               <Link
                 href="/dashboard"
@@ -117,29 +111,31 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <span className="text-xl font-bold text-blue-600">Contract to Cozy</span>
               </Link>
             </div>
-            {/* --- END LOGO FIX (MOBILE) --- */}
-            <div className="py-2">
+            
+            {/* Main nav links */}
+            <div className="py-2 flex-1 overflow-auto">
               <SidebarNav />
             </div>
+
+            {/* User links at bottom of mobile menu */}
+            <MobileUserNav />
           </SheetContent>
+          {/* --- End of SheetContent modification --- */}
         </Sheet>
       </header>
 
-      {/* --- 2. CENTERED PAGE CONTENT --- */}
-      {/* This main element provides the background color and padding */}
+      {/* --- Centered Page Content --- */}
       <main className="flex-1 bg-gray-50 p-4 md:p-8">
-        {/* This div centers your content and sets its max width */}
         <div className="mx-auto w-full max-w-7xl">
           {children}
         </div>
       </main>
-      {/* --- END CENTERED LAYOUT FIX --- */}
     </div>
   );
 }
 
 /**
- * Renders the new horizontal navigation for desktop.
+ * Renders the horizontal navigation for desktop.
  */
 function DesktopNav() {
   const pathname = usePathname();
@@ -179,7 +175,7 @@ function DesktopNav() {
 }
 
 /**
- * Renders the original vertical navigation, now *only* for the mobile sheet.
+ * Renders the vertical navigation for the mobile sheet.
  */
 function SidebarNav() {
   const pathname = usePathname();
@@ -200,29 +196,38 @@ function SidebarNav() {
     });
   }
 
+  // Use SheetClose to make links close the menu on navigation
   return (
     <nav className="grid items-start px-4 text-sm font-medium">
       {navLinks.map((link) => (
-        <Link
-          key={link.name}
-          href={link.href}
-          className={cn(
-            'flex items-center gap-3 rounded-lg px-3 py-2 text-gray-700 transition-all hover:text-blue-600 hover:bg-gray-100',
-            pathname === link.href && 'bg-blue-100 text-blue-700 hover:text-blue-700'
-          )}
-        >
-          <link.icon className="h-4 w-4" />
-          {link.name}
-        </Link>
+        <SheetClose asChild key={link.name}>
+          <Link
+            href={link.href}
+            className={cn(
+              'flex items-center gap-3 rounded-lg px-3 py-2 text-gray-700 transition-all hover:text-blue-600 hover:bg-gray-100',
+              pathname === link.href && 'bg-blue-100 text-blue-700 hover:text-blue-700'
+            )}
+          >
+            <link.icon className="h-4 w-4" />
+            {link.name}
+          </Link>
+        </SheetClose>
       ))}
     </nav>
   );
 }
 
-/**
- * Renders the user dropdown menu in the header.
- */
-function UserMenu() {
+// --- 4. Helper function to format user type ---
+const getUserTypeLabel = (user: any) => {
+  if (!user) return '';
+  if (user.role === 'PROVIDER') return 'Provider';
+  if (user.segment === 'HOME_BUYER') return 'Home Buyer';
+  if (user.segment === 'EXISTING_OWNER') return 'Homeowner';
+  return 'Homeowner'; // Default
+};
+
+// --- 5. New component for DESKTOP user info ---
+function DesktopUserNav() {
   const { user, logout } = useAuth();
 
   const handleLogout = () => {
@@ -232,54 +237,71 @@ function UserMenu() {
     }
   };
 
-  const getUserTypeLabel = () => {
-    if (!user) return '';
-    if (user.role === 'PROVIDER') return 'Provider';
-    if (user.segment === 'HOME_BUYER') return 'Home Buyer';
-    if (user.segment === 'EXISTING_OWNER') return 'Homeowner';
-    return 'Homeowner'; // Default
+  return (
+    <div className="hidden items-center gap-4 lg:flex">
+      <div className="flex flex-col items-end">
+        <span className="font-medium text-sm">
+          {user?.firstName} {user?.lastName}
+        </span>
+        <Badge variant="outline" className="h-5 text-xs px-1.5 py-0">
+          {getUserTypeLabel(user)}
+        </Badge>
+      </div>
+      <Button asChild variant="ghost" size="sm" className="text-gray-600 hover:text-blue-600">
+        <Link href="/dashboard/profile">Profile</Link>
+      </Button>
+      <Button 
+        onClick={handleLogout} 
+        variant="ghost" 
+        size="sm" 
+        className="text-red-600 hover:bg-red-50 hover:text-red-700"
+      >
+        Logout
+      </Button>
+    </div>
+  );
+}
+
+// --- 6. New component for MOBILE user info ---
+function MobileUserNav() {
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="rounded-full border w-8 h-8"
-        >
-          <UserCircle className="h-5 w-5" />
-          <span className="sr-only">Toggle user menu</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuLabel>
-          <div className="flex flex-col space-y-1">
-            <span className="font-medium">
-              {user?.firstName} {user?.lastName}
-            </span>
-            <span className="text-xs font-normal text-gray-500">
-              {user?.email}
-            </span>
-            <Badge variant="outline" className="w-fit mt-1">
-              {getUserTypeLabel()}
-            </Badge>
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/dashboard/profile">
-            <Settings className="mr-2 h-4 w-4" />
+    <div className="border-t p-4">
+      <div className="mb-2">
+        <div className="font-medium">{user?.firstName} {user?.lastName}</div>
+        <div className="text-xs text-gray-500">{user?.email}</div>
+        <Badge variant="outline" className="w-fit mt-1">
+          {getUserTypeLabel(user)}
+        </Badge>
+      </div>
+      <nav className="flex flex-col gap-1">
+        <SheetClose asChild>
+          <Link 
+            href="/dashboard/profile"
+            className="flex items-center gap-3 rounded-lg px-3 py-2 text-gray-700 transition-all hover:text-blue-600 hover:bg-gray-100 -mx-3"
+          >
+            <Settings className="h-4 w-4" />
             Profile
           </Link>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleLogout} className="text-red-600">
-          <LogOut className="mr-2 h-4 w-4" />
-          Log out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </SheetClose>
+        <Button 
+          onClick={handleLogout} 
+          variant="ghost" 
+          className="text-red-600 justify-start -mx-3"
+        >
+          <LogOut className="mr-3 h-4 w-4" />
+          Logout
+        </Button>
+      </nav>
+    </div>
   );
 }
 
