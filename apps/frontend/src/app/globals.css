@@ -437,10 +437,19 @@ a.bg-blue-700 svg {
   fill: currentColor;
 }
 
+/* --- FIX WAS HERE --- */
+/* The following two lines were removed as they were too broad and
+  incorrectly targeted the calendar date buttons, making them invisible.
+  The button.tsx component already handles this styling correctly.
+*/
+/*
 button[data-variant="default"],
 button[data-variant="primary"] {
   color: white !important;
 }
+*/
+/* --- END FIX --- */
+
 
 /* ========================================
    PHASE 2: MOBILE TYPOGRAPHY ADJUSTMENTS
