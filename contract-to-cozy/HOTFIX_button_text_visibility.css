@@ -1,0 +1,57 @@
+/* =========================================================================
+   HOTFIX: Button Text Visibility Issue
+   Problem: Text on teal buttons is teal (invisible)
+   Solution: Force white text on primary buttons
+   ========================================================================= */
+
+/* Add this to the END of your globals.css file */
+
+/* Force white text on primary colored buttons */
+button[class*="bg-blue"],
+button[class*="bg-brand-primary"],
+button[class*="bg-primary"],
+a[class*="bg-blue"],
+a[class*="bg-brand-primary"],
+a[class*="bg-primary"],
+.btn-primary {
+  color: white !important;
+}
+
+/* Ensure button text is visible on teal backgrounds */
+.bg-blue-50 *,
+.bg-blue-100 *,
+.bg-blue-200 * {
+  /* Light teal backgrounds - dark text is fine */
+}
+
+.bg-blue-400 *,
+.bg-blue-500 *,
+.bg-blue-600 *,
+.bg-blue-700 *,
+.bg-blue-800 *,
+.bg-blue-900 * {
+  /* Dark teal backgrounds - force white text */
+  color: white !important;
+}
+
+/* Override any text-blue classes on buttons with dark backgrounds */
+button.bg-blue-600.text-blue-600,
+button.bg-blue-700.text-blue-700,
+a.bg-blue-600.text-blue-600,
+a.bg-blue-700.text-blue-700 {
+  color: white !important;
+}
+
+/* Specific fix for common button patterns */
+.bg-blue-600:not(input):not(textarea):not(select),
+.bg-blue-700:not(input):not(textarea):not(select),
+.bg-primary:not(input):not(textarea):not(select) {
+  color: white !important;
+}
+
+/* Also fix hover states */
+.bg-blue-600:hover:not(input):not(textarea):not(select),
+.bg-blue-700:hover:not(input):not(textarea):not(select),
+.hover\:bg-blue-700:hover:not(input):not(textarea):not(select) {
+  color: white !important;
+}

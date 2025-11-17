@@ -5,7 +5,6 @@
 /* ========================================
    CONTRACT TO COZY - PHASE 1 COLOR SCHEME
    Moderate Teal + Warm Neutral Palette
-   FIXED: Button text visibility
    ======================================== */
 
 @layer base {
@@ -114,7 +113,7 @@ html {
   /* Primary Teal Button Styles */
   .btn-primary {
     background-color: hsl(var(--color-primary));
-    color: white;
+    color: hsl(var(--color-white));
     padding: 0.75rem 1.5rem;
     border-radius: 0.375rem;
     border: none;
@@ -125,7 +124,6 @@ html {
   
   .btn-primary:hover {
     background-color: hsl(var(--color-primary-light));
-    color: white;
   }
   
   .btn-primary:disabled {
@@ -133,7 +131,7 @@ html {
     cursor: not-allowed;
   }
 
-  /* Teal text colors - for links and non-button text */
+  /* Teal text colors */
   .text-brand-primary {
     color: hsl(var(--color-primary));
   }
@@ -174,13 +172,13 @@ html {
    ======================================== */
 
 @layer components {
-  /* Link styles with teal - NOT for buttons */
-  a:not(.no-brand-style):not([class*="bg-"]) {
+  /* Link styles with teal */
+  a:not(.no-brand-style) {
     color: hsl(var(--color-primary));
     transition: color 0.2s ease;
   }
   
-  a:not(.no-brand-style):not([class*="bg-"]):hover {
+  a:not(.no-brand-style):hover {
     color: hsl(var(--color-primary-light));
   }
   
@@ -212,76 +210,4 @@ html {
     background-color: hsl(var(--color-background-dark));
     color: hsl(var(--color-white));
   }
-}
-
-/* ========================================
-   BUTTON TEXT VISIBILITY FIX
-   Critical: Ensures white text on teal buttons
-   ======================================== */
-
-/* Force white text on all teal background buttons and links */
-button[class*="bg-blue-"],
-button[class*="bg-brand-primary"],
-button[class*="bg-primary"],
-button.bg-blue-600,
-button.bg-blue-700,
-a[class*="bg-blue-"],
-a[class*="bg-brand-primary"],
-a[class*="bg-primary"],
-a.bg-blue-600,
-a.bg-blue-700,
-.bg-blue-600:not(input):not(textarea):not(select):not(div):not(section),
-.bg-blue-700:not(input):not(textarea):not(select):not(div):not(section),
-.bg-primary:not(input):not(textarea):not(select):not(div):not(section) {
-  color: white !important;
-}
-
-/* Specifically target buttons with both background and text color classes */
-button.bg-blue-600.text-blue-600,
-button.bg-blue-700.text-blue-700,
-button.bg-blue-600.text-white,
-button.bg-blue-700.text-white,
-a.bg-blue-600.text-blue-600,
-a.bg-blue-700.text-blue-700 {
-  color: white !important;
-}
-
-/* Ensure hover states maintain white text */
-button[class*="bg-blue-"]:hover,
-button[class*="bg-brand-primary"]:hover,
-button.bg-blue-600:hover,
-button.bg-blue-700:hover,
-button.hover\:bg-blue-700:hover,
-a[class*="bg-blue-"]:hover,
-a.bg-blue-600:hover,
-a.bg-blue-700:hover {
-  color: white !important;
-}
-
-/* Additional specificity for nested elements in buttons */
-button[class*="bg-blue-"] *,
-button.bg-blue-600 *,
-button.bg-blue-700 *,
-button[class*="bg-primary"] *,
-a[class*="bg-blue-"] *,
-a.bg-blue-600 *,
-a.bg-blue-700 * {
-  color: inherit;
-}
-
-/* Ensure SVG icons in buttons inherit the white color */
-button[class*="bg-blue-"] svg,
-button.bg-blue-600 svg,
-button.bg-blue-700 svg,
-a[class*="bg-blue-"] svg,
-a.bg-blue-600 svg,
-a.bg-blue-700 svg {
-  color: white;
-  fill: currentColor;
-}
-
-/* Fix for shadcn/ui Button component with primary variant */
-button[data-variant="default"],
-button[data-variant="primary"] {
-  color: white !important;
 }
