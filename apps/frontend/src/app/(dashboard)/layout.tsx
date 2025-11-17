@@ -242,11 +242,11 @@ function DesktopUserNav() {
     // --- THIS IS THE TEXT OVERLAP FIX ---
     <div className="hidden items-center gap-4 lg:flex">
       {/* This div stacks the name and badge */}
-      <div className="flex flex-col items-end">
-        <span className="font-medium text-sm leading-tight"> {/* Added leading-tight */}
+      <div className="flex flex-col items-end space-y-0.5">
+        <span className="font-medium text-sm leading-none"> {/* Use leading-none */}
           {user?.firstName} {user?.lastName}
         </span>
-        <Badge variant="outline" className="h-auto text-xs px-1.5 py-0 mt-1"> {/* Added mt-1 */}
+        <Badge variant="outline" className="h-auto text-xs px-1.5 py-0">
           {getUserTypeLabel(user)}
         </Badge>
       </div>
