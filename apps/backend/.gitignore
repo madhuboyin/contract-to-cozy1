@@ -13,3 +13,9 @@
 
 # misc
 .DS_Store
+
+# Local Development Environment
+.env.local
+.env.development
+.env.*.local
+init-local-db.sh
