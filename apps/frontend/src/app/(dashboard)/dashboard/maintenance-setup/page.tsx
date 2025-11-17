@@ -1,4 +1,5 @@
 // apps/frontend/src/app/(dashboard)/dashboard/maintenance-setup/page.tsx
+// --- FINAL VERSION ---
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -17,14 +18,14 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+// --- DELETED ---: No longer need Checkbox
 import { ServiceCategoryIcon } from '@/components/ServiceCategoryIcon';
-import { Loader2, AlertCircle, Sparkles , Pencil} from 'lucide-react';
+import { Loader2, AlertCircle, Sparkles, Pencil } from 'lucide-react'; // --- ADDED Pencil ---
 import { cn } from '@/lib/utils';
 // --- ADDED ---
-import { MaintenanceConfigModal } from './MaintenanceConfigModal';
+import { MaintenanceConfigModal } from './MaintenanceConfigModal'; 
 
-// Helper function
+// Helper function (no change)
 function formatFrequency(frequency: string | null): string {
   if (!frequency) return 'One-time';
   return frequency
@@ -36,16 +37,23 @@ function formatFrequency(frequency: string | null): string {
 export default function MaintenanceSetupPage() {
   const router = useRouter();
   const [templates, setTemplates] = useState<MaintenanceTaskTemplate[]>([]);
-  const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
-  const [selectedTasks, setSelectedTasks] = useState<Record<string, MaintenanceTaskConfig>>({});
+
+  // --- DELETED ---: Old state is no longer needed
+  // const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
+
+  // --- NEW STATE ---
+  const [selectedTasks, setSelectedTasks] = useState<
+    Record<string, MaintenanceTaskConfig>
+  >({});
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<MaintenanceTaskTemplate | null>(null);
-  
+  const [editingTemplate, setEditingTemplate] =
+    useState<MaintenanceTaskTemplate | null>(null);
+
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] =  useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 1. Fetch all available maintenance templates on load
+  // Fetch templates (no change)
   useEffect(() => {
     const fetchTemplates = async () => {
       try {
@@ -67,15 +75,10 @@ export default function MaintenanceSetupPage() {
     fetchTemplates();
   }, []);
 
-  // 2. Handler to toggle a checkbox
-  const handleToggle = (templateId: string) => {
-    setSelectedIds((prev) => ({
-      ...prev,
-      [templateId]: !prev[templateId],
-    }));
-  };
+  // --- DELETED ---: Old handler is no longer needed
+  // const handleToggle = (templateId: string) => { ... };
 
-  // --- NEW HANDLERS (FOR PHASE 2) ---
+  // --- NEW HANDLERS ---
   const handleOpenModal = (template: MaintenanceTaskTemplate) => {
     setEditingTemplate(template);
     setIsModalOpen(true);
@@ -87,7 +90,7 @@ export default function MaintenanceSetupPage() {
   };
 
   const handleSaveTaskConfig = (config: MaintenanceTaskConfig) => {
-    setSelectedTasks(prev => ({
+    setSelectedTasks((prev) => ({
       ...prev,
       [config.templateId]: config,
     }));
@@ -95,7 +98,7 @@ export default function MaintenanceSetupPage() {
   };
 
   const handleRemoveTask = (templateId: string) => {
-    setSelectedTasks(prev => {
+    setSelectedTasks((prev) => {
       const newState = { ...prev };
       delete newState[templateId];
       return newState;
@@ -104,16 +107,21 @@ export default function MaintenanceSetupPage() {
   };
   // --- END NEW HANDLERS ---
 
-  // 3. Handler to save selections and redirect
+  // --- MODIFIED: handleSave ---
   const handleSave = async () => {
     setSaving(true);
-    const idsToSave = Object.keys(selectedIds).filter((id) => selectedIds[id]);
+    
+    // --- SWITCH ---
+    // Use the new 'selectedTasks' state instead of 'selectedIds'
+    const tasksToSave = Object.values(selectedTasks);
 
     // If user selected anything, save it.
-    if (idsToSave.length > 0) {
+    if (tasksToSave.length > 0) {
       try {
-        const response = await api.createMaintenanceItems({
-          templateIds: idsToSave,
+        // --- SWITCH ---
+        // Call the new 'createCustomMaintenanceItems' endpoint
+        const response = await api.createCustomMaintenanceItems({
+          tasks: tasksToSave,
         });
         if (!response.success) {
           throw new Error(
@@ -129,13 +137,14 @@ export default function MaintenanceSetupPage() {
     // Redirect to dashboard on success or if nothing was selected
     router.push('/dashboard');
   };
+  // --- END MODIFICATION ---
 
-  // 4. Handler to skip and redirect
+  // handleSkip (no change)
   const handleSkip = () => {
     router.push('/dashboard');
   };
 
-  // 5. Render Loading State
+  // Loading state (no change)
   if (loading) {
     return (
       <div className="flex h-[80vh] w-full items-center justify-center p-8">
@@ -144,7 +153,7 @@ export default function MaintenanceSetupPage() {
     );
   }
 
-  // 6. Render Error State
+  // Error state (no change)
   if (error) {
     return (
       <div className="container mx-auto max-w-3xl py-12">
@@ -184,21 +193,19 @@ export default function MaintenanceSetupPage() {
               <li
                 key={template.id}
                 className={cn(
-                  'flex items-start space-x-4 p-5 cursor-pointer rounded-lg hover:bg-gray-50',
-                  selectedIds[template.id] && 'bg-blue-50'
+                  'flex items-start space-x-4 p-5 rounded-lg',
+                  // --- SWITCH ---
+                  // Highlight only based on new 'selectedTasks' state
+                  selectedTasks[template.id] && 'bg-blue-50'
                 )}
-                onClick={() => handleToggle(template.id)}
+                // --- DELETED ---: onClick and cursor-pointer removed from li
               >
-                <Checkbox
-                  id={template.id}
-                  checked={selectedIds[template.id] || false}
-                  onCheckedChange={() => handleToggle(template.id)}
-                  className="mt-1"
-                />
+                {/* --- DELETED ---: Checkbox component removed */}
+
                 <div className="grid gap-0.5 flex-1 min-w-0">
                   <label
-                    htmlFor={template.id}
-                    className="font-medium cursor-pointer flex items-center"
+                    // --- DELETED ---: htmlFor and cursor-pointer removed
+                    className="font-medium flex items-center"
                   >
                     {template.serviceCategory && (
                       <ServiceCategoryIcon
@@ -218,7 +225,7 @@ export default function MaintenanceSetupPage() {
                   </p>
                 </div>
 
-                {/* --- NEW BUTTONS (FOR PHASE 2) --- */}
+                {/* --- NEW BUTTONS (from Phase 2) --- */}
                 <div className="ml-auto flex-shrink-0">
                   {selectedTasks[template.id] ? (
                     <Button
@@ -239,7 +246,6 @@ export default function MaintenanceSetupPage() {
                     </Button>
                   )}
                 </div>
-
               </li>
             ))}
           </ul>
@@ -258,6 +264,18 @@ export default function MaintenanceSetupPage() {
           </Button>
         </CardFooter>
       </Card>
+
+      {/* --- MODAL (from Phase 2) --- */}
+      <MaintenanceConfigModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        template={editingTemplate}
+        existingConfig={
+          editingTemplate ? selectedTasks[editingTemplate.id] : null
+        }
+        onSave={handleSaveTaskConfig}
+        onRemove={handleRemoveTask}
+      />
     </div>
   );
 }

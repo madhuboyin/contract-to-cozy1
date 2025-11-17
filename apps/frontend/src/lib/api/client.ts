@@ -13,7 +13,8 @@ import {
   CreateBookingInput,
   PaginationParams,
   Property,
-  MaintenanceTaskTemplate, // <-- 1. ADDED THIS IMPORT
+  MaintenanceTaskTemplate,
+  MaintenanceTaskConfig, // <-- ADDED THIS IMPORT
 } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
@@ -528,6 +529,21 @@ class APIClient {
       body: JSON.stringify(data),
     });
   }
+
+  // --- NEW FUNCTION FOR PHASE 3 ---
+  /**
+   * Creates new custom maintenance items from a user-defined config.
+   * @param data An object containing an array of task config objects.
+   */
+  async createCustomMaintenanceItems(data: {
+    tasks: MaintenanceTaskConfig[];
+  }): Promise<APIResponse<{ count: number }>> {
+    return this.request('/api/maintenance-templates/custom-items', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+  // --- END NEW FUNCTION ---
 
   // ==========================================================================
   // PROVIDER SERVICE ENDPOINTS (for provider portal)
