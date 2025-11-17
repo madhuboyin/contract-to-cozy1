@@ -10,7 +10,8 @@ import { useAuth } from '@/lib/auth/AuthContext';
 
 export default function SignupPage() {
   const router = useRouter();
-  const { register } = useAuth();
+  // --- FIX: Import `login` from useAuth ---
+  const { register, login } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -61,8 +62,23 @@ export default function SignupPage() {
       });
 
       if (result.success) {
-        // Redirect will be handled after successful registration
-        router.push('/dashboard');
+        // --- FIX: LOGIN AFTER REGISTER ---
+        // After account is created, log the user in to create a session
+        const loginResult = await login({
+          email: formData.email,
+          password: formData.password,
+        });
+
+        if (loginResult.success) {
+          // Now that they are logged in (and have a token), redirect.
+          router.push('/dashboard');
+        } else {
+          // This shouldn't happen, but just in case
+          setError(
+            'Account created, but login failed. Please go to the login page.'
+          );
+        }
+        // --- END OF FIX ---
       } else {
         setError(result.error || 'Failed to create account');
       }
@@ -364,7 +380,7 @@ export default function SignupPage() {
                       value="EXISTING_OWNER"
                       checked={formData.segment === 'EXISTING_OWNER'}
                       onChange={handleChange}
-                      className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                      className="h-4 w-4 text-blue-600 border-gray-30f0 focus:ring-blue-500"
                     />
                     <span className="ml-3 text-sm font-medium text-gray-800">
                       I'm an existing homeowner
