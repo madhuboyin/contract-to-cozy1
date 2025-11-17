@@ -60,9 +60,11 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
       {/* --- Header (Contains all nav) --- */}
       {/* 1. Increased header height to h-16 (4rem) to give content room */}
       <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-white px-4 sm:px-6">
+        {/* --- FIX: "SHRUNK" NAV/OVERLAP (Part 1) --- */}
+        {/* Added `shrink-0` to the logo link to prevent it from compressing */}
         <Link
           href="/dashboard"
-          className="flex items-center gap-2 font-semibold"
+          className="flex items-center gap-2 font-semibold shrink-0"
         >
           <Image
             src="/favicon.svg"
@@ -159,7 +161,7 @@ function DesktopNav() {
   }
 
   return (
-    // --- FIX: "SHRUNK" NAV ---
+    // --- FIX: "SHRUNK" NAV/OVERLAP (Part 2) ---
     // Added `shrink-0` to prevent this nav from shrinking
     <nav className="hidden items-center gap-4 lg:flex lg:gap-6 ml-6 shrink-0">
       {navLinks.map((link) => (
@@ -242,11 +244,11 @@ function DesktopUserNav() {
   };
 
   return (
-    // --- FIX: "SHRUNK" USER NAV ---
+    // --- FIX: "SHRUNK" NAV/OVERLAP (Part 3) ---
     // Added `shrink-0` to prevent this component from shrinking
     <div className="hidden items-center gap-4 lg:flex shrink-0">
       
-      {/* --- 3. THIS IS THE TEXT OVERLAP FIX (Already present) --- */}
+      {/* --- THIS IS THE TEXT OVERLAP FIX (Already present in your file) --- */}
       {/* This div stacks the name and badge vertically */}
       <div className="flex flex-col items-end space-y-1"> {/* Added space-y-1 */}
         <span className="font-medium text-sm leading-tight"> {/* Use leading-tight */}
