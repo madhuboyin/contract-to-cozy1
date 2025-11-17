@@ -6,8 +6,10 @@ import {
   Checklist,
   ChecklistItemStatus, // --- FIX: Import the enum ---
   ServiceCategory,
+  Prisma,
 } from '@prisma/client';
 import { ChecklistItem } from '@prisma/client';
+import { MaintenanceTaskConfig } from '../types/maintenance.types';
 
 const prisma = new PrismaClient();
 
@@ -233,6 +235,48 @@ export class ChecklistService {
     const result = await prisma.checklistItem.createMany({
       data: newItemsData,
       skipDuplicates: true, // Prevents errors if user adds the same item twice
+    });
+
+    return { count: result.count };
+  }
+  // --- END NEW FUNCTION ---
+
+  // --- NEW FUNCTION FOR PHASE 1 ---
+  /**
+   * Creates multiple custom maintenance items from a user-defined config.
+   * @param userId The ID of the user.
+   * @param tasks An array of MaintenanceTaskConfig objects.
+   */
+  static async createCustomMaintenanceItems(
+    userId: string,
+    tasks: MaintenanceTaskConfig[]
+  ): Promise<{ count: number }> {
+    // 1. Get the user's checklist (or create one)
+    const checklist = await this.getOrCreateChecklist(userId);
+    if (!checklist) {
+      throw new Error('Could not find or create a checklist for the user.');
+    }
+
+    // 2. Transform the user's config into new checklist items
+    const newItemsData: Prisma.ChecklistItemCreateManyInput[] = tasks.map((task, index) => ({
+      checklistId: checklist.id,
+      title: task.title,
+      description: task.description,
+      serviceCategory: task.serviceCategory,
+      status: ChecklistItemStatus.PENDING,
+      
+      // Use the custom values from the user
+      isRecurring: task.isRecurring,
+      frequency: task.isRecurring ? task.frequency : null,
+      nextDueDate: task.isRecurring ? task.nextDueDate : null,
+      
+      // Set sort order based on the array order
+      sortOrder: index, 
+    }));
+
+    // 3. Create all new items in the database
+    const result = await prisma.checklistItem.createMany({
+      data: newItemsData,
     });
 
     return { count: result.count };
