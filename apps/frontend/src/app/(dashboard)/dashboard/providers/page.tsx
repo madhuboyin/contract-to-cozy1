@@ -195,11 +195,11 @@ function ProviderSearch() {
                           />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-base text-gray-900">
+                          <div className="font-semibold text-base text-gray-900 !text-gray-900">
                             {category.displayName}
                           </div>
                           {category.description && (
-                            <div className="text-xs text-gray-500 mt-1 line-clamp-2">
+                            <div className="text-xs text-gray-500 mt-1 line-clamp-2 !text-gray-500">
                               {category.description}
                             </div>
                           )}
