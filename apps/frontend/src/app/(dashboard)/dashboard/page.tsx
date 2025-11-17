@@ -299,11 +299,17 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
                   })}
                 </ul>
               )}
-              <Button asChild variant="ghost" className="w-full text-blue-600 justify-end mt-2">
-                <Link href="/dashboard/bookings">
-                  View All Bookings <ArrowRight className="ml-1 h-4 w-4" />
-                </Link>
-              </Button>
+              
+              {/* --- FIX: Only show 'View All' if there is activity --- */}
+              {!dataLoading && recentActivityList.length > 0 && (
+                <Button asChild variant="ghost" className="w-full text-blue-600 justify-end mt-2">
+                  <Link href="/dashboard/bookings">
+                    View All Bookings <ArrowRight className="ml-1 h-4 w-4" />
+                  </Link>
+                </Button>
+              )}
+              {/* --- END FIX --- */}
+              
             </CardContent>
           </Card>
           <Card className="col-span-3">
@@ -818,11 +824,17 @@ export default function DashboardPage() {
                 })}
               </ul>
             )}
-            <Button asChild variant="ghost" className="w-full text-blue-600 justify-end mt-2">
-              <Link href="/dashboard/bookings">
-                View All Bookings <ArrowRight className="ml-1 h-4 w-4" />
-              </Link>
-            </Button>
+            
+            {/* --- FIX: Only show 'View All' if there is activity --- */}
+            {!dataLoading && recentActivityList.length > 0 && (
+              <Button asChild variant="ghost" className="w-full text-blue-600 justify-end mt-2">
+                <Link href="/dashboard/bookings">
+                  View All Bookings <ArrowRight className="ml-1 h-4 w-4" />
+                </Link>
+              </Button>
+            )}
+            {/* --- END FIX --- */}
+            
           </CardContent>
         </Card>
         <Card className="col-span-3">
