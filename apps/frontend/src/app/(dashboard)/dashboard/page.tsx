@@ -26,11 +26,11 @@ import {
   Check,
   Search,
   PlusCircle,
-  Settings, // <-- Import Settings icon
+  Settings,
 } from 'lucide-react';
 import { ServiceCategoryIcon } from '@/components/ServiceCategoryIcon';
 import { cn } from '@/lib/utils';
-import { ServiceCategoryConfig } from '@/types'; // <-- Import global type
+import { ServiceCategoryConfig } from '@/types'; // Import global type
 
 // --- Types ---
 type ChecklistItemStatus = 'PENDING' | 'COMPLETED' | 'NOT_NEEDED';
@@ -205,6 +205,7 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
     : 'Start Your Checklist';
 
   return (
+    // --- 1. PADDING REMOVED ---
     <div className="space-y-4">
       <h2 className="text-3xl font-bold tracking-tight">
         Welcome, {user.firstName}!
@@ -371,7 +372,7 @@ const formatDueDate = (dateString: string | null) => {
   return `Due on ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
 };
 
-// ... (UpcomingMaintenanceList is unchanged, contains "empty state" button) ...
+// ... (UpcomingMaintenanceList is unchanged) ...
 interface UpcomingMaintenanceListProps {
   items: MaintenanceTaskItem[];
   onComplete: (itemId: string) => void;
@@ -472,7 +473,6 @@ export default function DashboardPage() {
   const [checklistLoading, setChecklistLoading] = useState(true);
   const [updatingItems, setUpdatingItems] = useState<Record<string, boolean>>({});
 
-  // ... (fetchDashboardData, fetchServiceCategories, handleCompleteTask, useEffect... are unchanged) ...
   const fetchDashboardData = async () => {
     if (user && user.segment !== 'HOME_BUYER') {
       try {
@@ -605,6 +605,7 @@ export default function DashboardPage() {
       setUpdatingItems(prev => ({ ...prev, [itemId]: false }));
     }
   };
+
   useEffect(() => {
     if (user && user.segment !== 'HOME_BUYER') {
       fetchDashboardData();
@@ -621,6 +622,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
+      // --- 2. PADDING REMOVED ---
       <div className="space-y-4">
         <h2 className="text-3xl font-bold tracking-tight">
           Loading Dashboard...
@@ -634,10 +636,10 @@ export default function DashboardPage() {
 
   // --- EXISTING OWNER RENDER ---
   return (
+    // --- 3. PADDING REMOVED ---
     <div className="space-y-4">
       <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
 
-      {/* --- THIS IS THE MODIFIED CARD HEADER --- */}
       <Card className="shadow-lg">
         <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
           <div className="space-y-1.5">
@@ -648,7 +650,6 @@ export default function DashboardPage() {
               Your home's schedule of upcoming tasks.
             </CardDescription>
           </div>
-          {/* This is the permanent link to the setup page */}
           <Button asChild variant="outline" size="sm">
             <Link href="/dashboard/maintenance-setup">
               <Settings className="mr-2 h-4 w-4" />
@@ -656,7 +657,6 @@ export default function DashboardPage() {
             </Link>
           </Button>
         </CardHeader>
-        {/* --- END OF MODIFICATION --- */}
         <CardContent>
           {checklistLoading ? (
             <div className="flex items-center justify-center py-4">
