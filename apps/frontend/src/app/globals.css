@@ -381,75 +381,15 @@ html {
    PHASE 1: BUTTON TEXT VISIBILITY FIX
    ======================================== */
 
-button[class*="bg-blue-"],
-button[class*="bg-brand-primary"],
-button[class*="bg-primary"],
-button.bg-blue-600,
-button.bg-blue-700,
-a[class*="bg-blue-"],
-a[class*="bg-brand-primary"],
-a[class*="bg-primary"],
-a.bg-blue-600,
-a.bg-blue-700,
-.bg-blue-600:not(input):not(textarea):not(select):not(div):not(section),
-.bg-blue-700:not(input):not(textarea):not(select):not(div):not(section),
-.bg-primary:not(input):not(textarea):not(select):not(div):not(section) {
-  color: white !important;
-}
-
-button.bg-blue-600.text-blue-600,
-button.bg-blue-700.text-blue-700,
-button.bg-blue-600.text-white,
-button.bg-blue-700.text-white,
-a.bg-blue-600.text-blue-600,
-a.bg-blue-700.text-blue-700 {
-  color: white !important;
-}
-
-button[class*="bg-blue-"]:hover,
-button[class*="bg-brand-primary"]:hover,
-button.bg-blue-600:hover,
-button.bg-blue-700:hover,
-button.hover\:bg-blue-700:hover,
-a[class*="bg-blue-"]:hover,
-a.bg-blue-600:hover,
-a.bg-blue-700:hover {
-  color: white !important;
-}
-
-button[class*="bg-blue-"] *,
-button.bg-blue-600 *,
-button.bg-blue-700 *,
-button[class*="bg-primary"] *,
-a[class*="bg-blue-"] *,
-a.bg-blue-600 *,
-a.bg-blue-700 * {
-  color: inherit;
-}
-
-button[class*="bg-blue-"] svg,
-button.bg-blue-600 svg,
-button.bg-blue-700 svg,
-a[class*="bg-blue-"] svg,
-a.bg-blue-600 svg,
-a.bg-blue-700 svg {
-  color: white;
-  fill: currentColor;
-}
-
-/* --- FIX WAS HERE --- */
-/* The following two lines were removed as they were too broad and
-  incorrectly targeted the calendar date buttons, making them invisible.
-  The button.tsx component already handles this styling correctly.
+/* --- FIX ---
+  The entire "PHASE 1: BUTTON TEXT VISIBILITY FIX" block has been removed.
+  It contained overly broad CSS rules with "!important" that were
+  breaking the calendar component's styling.
+  
+  The `button.tsx` component already correctly handles text color 
+  (e.g., `text-primary-foreground`) for its variants, making this
+  hotfix block unnecessary and harmful.
 */
-/*
-button[data-variant="default"],
-button[data-variant="primary"] {
-  color: white !important;
-}
-*/
-/* --- END FIX --- */
-
 
 /* ========================================
    PHASE 2: MOBILE TYPOGRAPHY ADJUSTMENTS
