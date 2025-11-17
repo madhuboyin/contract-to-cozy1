@@ -42,7 +42,7 @@ export default function MaintenanceSetupPage() {
   const [editingTemplate, setEditingTemplate] = useState<MaintenanceTaskTemplate | null>(null);
   
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = = useState(false);
+  const [saving, setSaving] =  useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // 1. Fetch all available maintenance templates on load
