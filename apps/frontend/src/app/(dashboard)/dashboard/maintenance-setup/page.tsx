@@ -4,7 +4,10 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
-import { MaintenanceTaskTemplate } from '@/types';
+import {
+  MaintenanceTaskTemplate,
+  MaintenanceTaskConfig, // --- ADDED ---
+} from '@/types';
 import {
   Card,
   CardContent,
@@ -16,8 +19,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ServiceCategoryIcon } from '@/components/ServiceCategoryIcon';
-import { Loader2, AlertCircle, Sparkles } from 'lucide-react';
+import { Loader2, AlertCircle, Sparkles , Pencil} from 'lucide-react';
 import { cn } from '@/lib/utils';
+// --- ADDED ---
+import { MaintenanceConfigModal } from './MaintenanceConfigModal';
 
 // Helper function
 function formatFrequency(frequency: string | null): string {
@@ -32,8 +37,12 @@ export default function MaintenanceSetupPage() {
   const router = useRouter();
   const [templates, setTemplates] = useState<MaintenanceTaskTemplate[]>([]);
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
+  const [selectedTasks, setSelectedTasks] = useState<Record<string, MaintenanceTaskConfig>>({});
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<MaintenanceTaskTemplate | null>(null);
+  
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // 1. Fetch all available maintenance templates on load
@@ -65,6 +74,35 @@ export default function MaintenanceSetupPage() {
       [templateId]: !prev[templateId],
     }));
   };
+
+  // --- NEW HANDLERS (FOR PHASE 2) ---
+  const handleOpenModal = (template: MaintenanceTaskTemplate) => {
+    setEditingTemplate(template);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingTemplate(null);
+  };
+
+  const handleSaveTaskConfig = (config: MaintenanceTaskConfig) => {
+    setSelectedTasks(prev => ({
+      ...prev,
+      [config.templateId]: config,
+    }));
+    handleCloseModal();
+  };
+
+  const handleRemoveTask = (templateId: string) => {
+    setSelectedTasks(prev => {
+      const newState = { ...prev };
+      delete newState[templateId];
+      return newState;
+    });
+    handleCloseModal();
+  };
+  // --- END NEW HANDLERS ---
 
   // 3. Handler to save selections and redirect
   const handleSave = async () => {
@@ -179,6 +217,29 @@ export default function MaintenanceSetupPage() {
                     Recommended: {formatFrequency(template.defaultFrequency)}
                   </p>
                 </div>
+
+                {/* --- NEW BUTTONS (FOR PHASE 2) --- */}
+                <div className="ml-auto flex-shrink-0">
+                  {selectedTasks[template.id] ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleOpenModal(template)}
+                    >
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Edit
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleOpenModal(template)}
+                    >
+                      Select
+                    </Button>
+                  )}
+                </div>
+
               </li>
             ))}
           </ul>

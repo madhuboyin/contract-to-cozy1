@@ -279,3 +279,22 @@ export interface ServiceCategoryConfig {
   description: string;
   icon: string;
 }
+
+// --- ADD THE ENUMS (from schema.prisma) ---
+export enum RecurrenceFrequency {
+  MONTHLY = 'MONTHLY',
+  QUARTERLY = 'QUARTERLY',
+  SEMI_ANNUALLY = 'SEMI_ANNUALLY',
+  ANNUALLY = 'ANNUALLY',
+}
+
+// --- END ENUMS ---
+export interface MaintenanceTaskConfig {
+  templateId: string; // The original template this was based on
+  title: string;
+  description: string | null;
+  isRecurring: boolean;
+  frequency: RecurrenceFrequency | null;
+  nextDueDate: Date | null;
+  serviceCategory: ServiceCategory | null;
+}
