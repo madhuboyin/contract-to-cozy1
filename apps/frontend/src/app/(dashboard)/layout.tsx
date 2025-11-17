@@ -57,7 +57,8 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen w-full flex-col">
-      {/* --- 1. HEADER HEIGHT INCREASED --- */}
+      {/* --- Header (Contains all nav) --- */}
+      {/* 1. Increased header height to h-16 (4rem) to give content room */}
       <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-white px-4 sm:px-6">
         <Link
           href="/dashboard"
@@ -123,8 +124,9 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* --- 2. THIS IS THE CENTERING FIX --- */}
+      {/* This main element provides the background color */}
       <main className="flex-1 bg-gray-50">
-        {/* This div centers content and adds padding */}
+        {/* This div centers your content, sets its max width, and adds the padding */}
         <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
           {children}
         </div>
@@ -241,11 +243,11 @@ function DesktopUserNav() {
     // --- 3. THIS IS THE TEXT OVERLAP FIX ---
     <div className="hidden items-center gap-4 lg:flex">
       {/* This div stacks the name and badge */}
-      <div className="flex flex-col items-end">
-        <span className="font-medium text-sm leading-snug"> {/* Switched to leading-snug */}
+      <div className="flex flex-col items-end space-y-1"> {/* Added space-y-1 */}
+        <span className="font-medium text-sm leading-tight"> {/* Use leading-tight */}
           {user?.firstName} {user?.lastName}
         </span>
-        <Badge variant="outline" className="h-auto text-xs px-1.5 py-0 mt-0.5"> {/* Added mt-0.5 */}
+        <Badge variant="outline" className="h-auto text-xs px-1.5 py-0">
           {getUserTypeLabel(user)}
         </Badge>
       </div>
