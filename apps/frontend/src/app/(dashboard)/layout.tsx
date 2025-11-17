@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
-  SheetClose, // <-- 1. Import SheetClose
+  SheetClose,
   SheetContent,
   SheetTrigger,
 } from '@/components/ui/sheet';
@@ -79,7 +79,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* --- 2. Replaced Dropdown with new DesktopUserNav --- */}
+        {/* Replaced Dropdown with new DesktopUserNav */}
         <DesktopUserNav />
 
         {/* Mobile-only hamburger menu */}
@@ -94,7 +94,6 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
               <span className="sr-only">Toggle navigation menu</span>
             </Button>
           </SheetTrigger>
-          {/* --- 3. Modified SheetContent structure --- */}
           <SheetContent side="left" className="w-[280px] p-0 flex flex-col">
             <div className="flex h-[60px] items-center border-b px-6">
               <Link
@@ -120,16 +119,18 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
             {/* User links at bottom of mobile menu */}
             <MobileUserNav />
           </SheetContent>
-          {/* --- End of SheetContent modification --- */}
         </Sheet>
       </header>
 
-      {/* --- Centered Page Content --- */}
-      <main className="flex-1 bg-gray-50 p-4 md:p-8">
-        <div className="mx-auto w-full max-w-7xl">
+      {/* --- THIS IS THE CENTERING FIX --- */}
+      {/* This main element provides the background color */}
+      <main className="flex-1 bg-gray-50">
+        {/* This div centers your content, sets its max width, and adds the padding */}
+        <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
           {children}
         </div>
       </main>
+      {/* --- END CENTERING FIX --- */}
     </div>
   );
 }
@@ -217,7 +218,7 @@ function SidebarNav() {
   );
 }
 
-// --- 4. Helper function to format user type ---
+// Helper function to format user type
 const getUserTypeLabel = (user: any) => {
   if (!user) return '';
   if (user.role === 'PROVIDER') return 'Provider';
@@ -226,7 +227,7 @@ const getUserTypeLabel = (user: any) => {
   return 'Homeowner'; // Default
 };
 
-// --- 5. New component for DESKTOP user info ---
+// New component for DESKTOP user info
 function DesktopUserNav() {
   const { user, logout } = useAuth();
 
@@ -238,15 +239,19 @@ function DesktopUserNav() {
   };
 
   return (
+    // --- THIS IS THE TEXT OVERLAP FIX ---
     <div className="hidden items-center gap-4 lg:flex">
+      {/* This div stacks the name and badge */}
       <div className="flex flex-col items-end">
-        <span className="font-medium text-sm">
+        <span className="font-medium text-sm leading-tight"> {/* Added leading-tight */}
           {user?.firstName} {user?.lastName}
         </span>
-        <Badge variant="outline" className="h-5 text-xs px-1.5 py-0">
+        <Badge variant="outline" className="h-auto text-xs px-1.5 py-0 mt-1"> {/* Added mt-1 */}
           {getUserTypeLabel(user)}
         </Badge>
       </div>
+      {/* --- END OF OVERLAP FIX --- */}
+
       <Button asChild variant="ghost" size="sm" className="text-gray-600 hover:text-blue-600">
         <Link href="/dashboard/profile">Profile</Link>
       </Button>
@@ -262,7 +267,7 @@ function DesktopUserNav() {
   );
 }
 
-// --- 6. New component for MOBILE user info ---
+// New component for MOBILE user info
 function MobileUserNav() {
   const { user, logout } = useAuth();
 

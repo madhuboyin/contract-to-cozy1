@@ -205,7 +205,7 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
     : 'Start Your Checklist';
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+    <div className="space-y-4">
       <h2 className="text-3xl font-bold tracking-tight">
         Welcome, {user.firstName}!
       </h2>
@@ -621,7 +621,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+      <div className="space-y-4">
         <h2 className="text-3xl font-bold tracking-tight">
           Loading Dashboard...
         </h2>
@@ -634,7 +634,7 @@ export default function DashboardPage() {
 
   // --- EXISTING OWNER RENDER ---
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+    <div className="space-y-4">
       <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
 
       {/* --- THIS IS THE MODIFIED CARD HEADER --- */}
