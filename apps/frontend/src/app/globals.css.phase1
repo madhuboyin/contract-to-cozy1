@@ -3,14 +3,13 @@
 @tailwind utilities;
 
 /* ========================================
-   CONTRACT TO COZY - PHASE 2 TYPOGRAPHY
-   Building on Phase 1 Color Scheme
-   Modern, Readable Typography System
+   CONTRACT TO COZY - PHASE 1 COLOR SCHEME
+   Moderate Teal + Warm Neutral Palette
+   FIXED: Button text visibility
    ======================================== */
 
 @layer base {
   :root {
-    /* === PHASE 1: COLOR VARIABLES === */
     /* Base Background Colors */
     --background: 0 0% 98%;              /* #FAFAFA - Light Background */
     --foreground: 0 0% 13%;              /* #212121 - Primary Text */
@@ -64,10 +63,6 @@
     --color-text-primary: 0 0% 13%;      /* #212121 */
     --color-text-secondary: 0 0% 38%;    /* #616161 */
     --color-white: 0 0% 100%;            /* #FFFFFF */
-    
-    /* === PHASE 2: TYPOGRAPHY VARIABLES === */
-    --font-heading: var(--font-poppins), 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    --font-body: var(--font-inter), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
   
   .dark {
@@ -98,120 +93,12 @@
   }
 }
 
-/* ========================================
-   PHASE 2: BASE TYPOGRAPHY
-   ======================================== */
-
 @layer base {
   * {
     @apply border-[hsl(var(--border))];
   }
-  
   body {
     @apply bg-[hsl(var(--background))] text-[hsl(var(--foreground))];
-    font-family: var(--font-body);
-    font-size: 16px;
-    line-height: 1.6;
-    color: hsl(var(--color-text-primary));
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-  
-  /* Heading Hierarchy */
-  h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-heading);
-    color: hsl(var(--color-text-primary));
-    font-weight: 600;
-    line-height: 1.2;
-    margin-bottom: 0.75rem;
-  }
-  
-  h1 {
-    font-size: 2.25rem;   /* 36px */
-    font-weight: 700;
-    line-height: 1.1;
-  }
-  
-  h2 {
-    font-size: 1.75rem;   /* 28px */
-    font-weight: 600;
-  }
-  
-  h3 {
-    font-size: 1.5rem;    /* 24px */
-    font-weight: 600;
-  }
-  
-  h4 {
-    font-size: 1.25rem;   /* 20px */
-    font-weight: 500;
-  }
-  
-  h5 {
-    font-size: 1.125rem;  /* 18px */
-    font-weight: 500;
-  }
-  
-  h6 {
-    font-size: 1rem;      /* 16px */
-    font-weight: 500;
-  }
-  
-  /* Body Text */
-  p {
-    font-family: var(--font-body);
-    font-size: 1rem;
-    line-height: 1.6;
-    color: hsl(var(--color-text-primary));
-    margin-bottom: 1rem;
-  }
-  
-  /* Lists */
-  ul, ol {
-    font-family: var(--font-body);
-    font-size: 1rem;
-    line-height: 1.6;
-    color: hsl(var(--color-text-primary));
-  }
-  
-  li {
-    margin-bottom: 0.5rem;
-  }
-  
-  /* Small Text & Captions */
-  small, .small-text, .caption {
-    font-family: var(--font-body);
-    font-size: 0.875rem;  /* 14px */
-    color: hsl(var(--color-text-secondary));
-    line-height: 1.5;
-  }
-  
-  /* Links */
-  a {
-    font-family: var(--font-body);
-    font-weight: 500;
-    transition: color 0.2s ease;
-  }
-  
-  /* Form Elements */
-  label {
-    font-family: var(--font-body);
-    font-size: 0.9375rem; /* 15px */
-    font-weight: 500;
-    color: hsl(var(--color-text-primary));
-  }
-  
-  input, textarea, select {
-    font-family: var(--font-body);
-    font-size: 1rem;
-    line-height: 1.5;
-  }
-  
-  /* Buttons */
-  button {
-    font-family: var(--font-body);
-    font-weight: 600;
-    letter-spacing: 0.3px;
   }
 }
 
@@ -220,61 +107,11 @@ html {
 }
 
 /* ========================================
-   PHASE 2: TYPOGRAPHY UTILITIES
+   PHASE 1 - BRAND COLOR UTILITIES
    ======================================== */
 
 @layer utilities {
-  /* Font Family Utilities */
-  .font-heading {
-    font-family: var(--font-heading);
-  }
-  
-  .font-body {
-    font-family: var(--font-body);
-  }
-  
-  /* Reading-Optimized Text */
-  .text-readable {
-    font-size: 1.0625rem;  /* 17px - optimal for reading */
-    line-height: 1.7;
-    max-width: 65ch;       /* optimal line length */
-  }
-  
-  /* Text Weights */
-  .text-light {
-    font-weight: 300;
-  }
-  
-  .text-normal {
-    font-weight: 400;
-  }
-  
-  .text-medium {
-    font-weight: 500;
-  }
-  
-  .text-semibold {
-    font-weight: 600;
-  }
-  
-  .text-bold {
-    font-weight: 700;
-  }
-  
-  /* Letter Spacing */
-  .tracking-tight {
-    letter-spacing: -0.025em;
-  }
-  
-  .tracking-normal {
-    letter-spacing: 0;
-  }
-  
-  .tracking-wide {
-    letter-spacing: 0.025em;
-  }
-  
-  /* === PHASE 1: BRAND COLOR UTILITIES === */
+  /* Primary Teal Button Styles */
   .btn-primary {
     background-color: hsl(var(--color-primary));
     color: white;
@@ -284,7 +121,6 @@ html {
     font-weight: 600;
     cursor: pointer;
     transition: background-color 0.2s ease;
-    letter-spacing: 0.3px;
   }
   
   .btn-primary:hover {
@@ -297,6 +133,7 @@ html {
     cursor: not-allowed;
   }
 
+  /* Teal text colors - for links and non-button text */
   .text-brand-primary {
     color: hsl(var(--color-primary));
   }
@@ -305,6 +142,7 @@ html {
     color: hsl(var(--color-primary-light));
   }
   
+  /* Teal backgrounds */
   .bg-brand-primary {
     background-color: hsl(var(--color-primary));
   }
@@ -321,6 +159,7 @@ html {
     background-color: hsl(var(--color-background-dark));
   }
   
+  /* Border colors */
   .border-brand-primary {
     border-color: hsl(var(--color-primary));
   }
@@ -331,7 +170,7 @@ html {
 }
 
 /* ========================================
-   PHASE 2: COMPONENT TYPOGRAPHY STYLES
+   COMPONENT OVERRIDES
    ======================================== */
 
 @layer components {
@@ -339,12 +178,10 @@ html {
   a:not(.no-brand-style):not([class*="bg-"]) {
     color: hsl(var(--color-primary));
     transition: color 0.2s ease;
-    text-decoration: none;
   }
   
   a:not(.no-brand-style):not([class*="bg-"]):hover {
     color: hsl(var(--color-primary-light));
-    text-decoration: underline;
   }
   
   /* Footer styles */
@@ -378,9 +215,11 @@ html {
 }
 
 /* ========================================
-   PHASE 1: BUTTON TEXT VISIBILITY FIX
+   BUTTON TEXT VISIBILITY FIX
+   Critical: Ensures white text on teal buttons
    ======================================== */
 
+/* Force white text on all teal background buttons and links */
 button[class*="bg-blue-"],
 button[class*="bg-brand-primary"],
 button[class*="bg-primary"],
@@ -397,6 +236,7 @@ a.bg-blue-700,
   color: white !important;
 }
 
+/* Specifically target buttons with both background and text color classes */
 button.bg-blue-600.text-blue-600,
 button.bg-blue-700.text-blue-700,
 button.bg-blue-600.text-white,
@@ -406,6 +246,7 @@ a.bg-blue-700.text-blue-700 {
   color: white !important;
 }
 
+/* Ensure hover states maintain white text */
 button[class*="bg-blue-"]:hover,
 button[class*="bg-brand-primary"]:hover,
 button.bg-blue-600:hover,
@@ -417,6 +258,7 @@ a.bg-blue-700:hover {
   color: white !important;
 }
 
+/* Additional specificity for nested elements in buttons */
 button[class*="bg-blue-"] *,
 button.bg-blue-600 *,
 button.bg-blue-700 *,
@@ -427,6 +269,7 @@ a.bg-blue-700 * {
   color: inherit;
 }
 
+/* Ensure SVG icons in buttons inherit the white color */
 button[class*="bg-blue-"] svg,
 button.bg-blue-600 svg,
 button.bg-blue-700 svg,
@@ -437,53 +280,8 @@ a.bg-blue-700 svg {
   fill: currentColor;
 }
 
+/* Fix for shadcn/ui Button component with primary variant */
 button[data-variant="default"],
 button[data-variant="primary"] {
   color: white !important;
-}
-
-/* ========================================
-   PHASE 2: MOBILE TYPOGRAPHY ADJUSTMENTS
-   ======================================== */
-
-@media (max-width: 640px) {
-  html {
-    font-size: 15px;  /* Slightly smaller base on mobile */
-  }
-  
-  h1 {
-    font-size: 1.875rem;  /* 30px on mobile */
-  }
-  
-  h2 {
-    font-size: 1.5rem;    /* 24px on mobile */
-  }
-  
-  h3 {
-    font-size: 1.25rem;   /* 20px on mobile */
-  }
-  
-  h4 {
-    font-size: 1.125rem;  /* 18px on mobile */
-  }
-  
-  body {
-    line-height: 1.65;    /* Slightly more line height on mobile */
-  }
-  
-  p {
-    font-size: 1rem;
-    line-height: 1.65;
-  }
-}
-
-/* Extra small devices */
-@media (max-width: 480px) {
-  h1 {
-    font-size: 1.75rem;   /* 28px on very small screens */
-  }
-  
-  h2 {
-    font-size: 1.375rem;  /* 22px */
-  }
 }

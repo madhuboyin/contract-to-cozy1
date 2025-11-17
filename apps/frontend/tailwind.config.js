@@ -6,6 +6,42 @@ module.exports = {
   ],
   theme: {
     extend: {
+      /* ===== PHASE 2: TYPOGRAPHY ===== */
+      fontFamily: {
+        heading: ['var(--font-poppins)', 'Poppins', 'sans-serif'],
+        body: ['var(--font-inter)', 'Inter', 'sans-serif'],
+        sans: ['var(--font-inter)', 'Inter', 'sans-serif'],
+      },
+      fontSize: {
+        // Precise control over font sizes
+        'xs': ['0.75rem', { lineHeight: '1.5' }],      // 12px
+        'sm': ['0.875rem', { lineHeight: '1.5' }],     // 14px
+        'base': ['1rem', { lineHeight: '1.6' }],       // 16px
+        'lg': ['1.125rem', { lineHeight: '1.6' }],     // 18px
+        'xl': ['1.25rem', { lineHeight: '1.5' }],      // 20px
+        '2xl': ['1.5rem', { lineHeight: '1.4' }],      // 24px
+        '3xl': ['1.75rem', { lineHeight: '1.3' }],     // 28px
+        '4xl': ['2.25rem', { lineHeight: '1.2' }],     // 36px
+        '5xl': ['3rem', { lineHeight: '1.1' }],        // 48px
+      },
+      lineHeight: {
+        'tight': '1.2',
+        'snug': '1.4',
+        'normal': '1.6',
+        'relaxed': '1.7',
+        'loose': '1.8',
+      },
+      letterSpacing: {
+        'tighter': '-0.05em',
+        'tight': '-0.025em',
+        'normal': '0',
+        'wide': '0.025em',
+        'wider': '0.05em',
+        'widest': '0.1em',
+        'button': '0.3px',
+      },
+      
+      /* ===== PHASE 1: COLORS ===== */
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
@@ -47,38 +83,36 @@ module.exports = {
           '4': 'hsl(var(--chart-4))',
           '5': 'hsl(var(--chart-5))'
         },
-        // Brand color extensions - map blue classes to teal
+        // Brand color extensions - teal palette
         blue: {
-          50: 'hsl(173 44% 95%)',    // Very light teal
-          100: 'hsl(173 44% 88%)',   // Light teal
-          200: 'hsl(173 44% 76%)',   // Lighter teal
-          300: 'hsl(173 44% 64%)',   // Light-medium teal
-          400: 'hsl(173 44% 51%)',   // Medium teal (#4DB6AC - our light primary)
-          500: 'hsl(174 60% 40%)',   // Medium-dark teal
-          600: 'hsl(174 100% 29%)',  // Teal primary (#009688)
-          700: 'hsl(174 100% 24%)',  // Dark teal
-          800: 'hsl(174 100% 19%)',  // Darker teal
-          900: 'hsl(174 100% 14%)',  // Very dark teal
+          50: 'hsl(173 44% 95%)',
+          100: 'hsl(173 44% 88%)',
+          200: 'hsl(173 44% 76%)',
+          300: 'hsl(173 44% 64%)',
+          400: 'hsl(173 44% 51%)',   // #4DB6AC
+          500: 'hsl(174 60% 40%)',
+          600: 'hsl(174 100% 29%)',  // #009688
+          700: 'hsl(174 100% 24%)',
+          800: 'hsl(174 100% 19%)',
+          900: 'hsl(174 100% 14%)',
         },
-        // Keep gray scale for text and backgrounds
         gray: {
-          50: 'hsl(0 0% 98%)',      // #FAFAFA - our light background
+          50: 'hsl(0 0% 98%)',
           100: 'hsl(0 0% 96%)',
           200: 'hsl(0 0% 90%)',
           300: 'hsl(0 0% 83%)',
           400: 'hsl(0 0% 63%)',
           500: 'hsl(0 0% 45%)',
-          600: 'hsl(0 0% 38%)',     // #616161 - our secondary text
+          600: 'hsl(0 0% 38%)',
           700: 'hsl(0 0% 26%)',
           800: 'hsl(0 0% 18%)',
-          900: 'hsl(0 0% 13%)',     // #212121 - our primary text
+          900: 'hsl(0 0% 13%)',
         },
-        // Brand-specific utilities
         brand: {
-          primary: 'hsl(var(--color-primary))',           // #009688
-          'primary-light': 'hsl(var(--color-primary-light))', // #4DB6AC
-          background: 'hsl(var(--color-background))',     // #FAFAFA
-          'background-dark': 'hsl(var(--color-background-dark))', // #263238
+          primary: 'hsl(var(--color-primary))',
+          'primary-light': 'hsl(var(--color-primary-light))',
+          background: 'hsl(var(--color-background))',
+          'background-dark': 'hsl(var(--color-background-dark))',
         }
       },
       borderRadius: {
