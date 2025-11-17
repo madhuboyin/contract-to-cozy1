@@ -159,7 +159,9 @@ function DesktopNav() {
   }
 
   return (
-    <nav className="hidden items-center gap-4 lg:flex lg:gap-6 ml-6">
+    // --- FIX: "SHRUNK" NAV ---
+    // Added `shrink-0` to prevent this nav from shrinking
+    <nav className="hidden items-center gap-4 lg:flex lg:gap-6 ml-6 shrink-0">
       {navLinks.map((link) => (
         <Link
           key={link.name}
@@ -240,9 +242,12 @@ function DesktopUserNav() {
   };
 
   return (
-    // --- 3. THIS IS THE TEXT OVERLAP FIX ---
-    <div className="hidden items-center gap-4 lg:flex">
-      {/* This div stacks the name and badge */}
+    // --- FIX: "SHRUNK" USER NAV ---
+    // Added `shrink-0` to prevent this component from shrinking
+    <div className="hidden items-center gap-4 lg:flex shrink-0">
+      
+      {/* --- 3. THIS IS THE TEXT OVERLAP FIX (Already present) --- */}
+      {/* This div stacks the name and badge vertically */}
       <div className="flex flex-col items-end space-y-1"> {/* Added space-y-1 */}
         <span className="font-medium text-sm leading-tight"> {/* Use leading-tight */}
           {user?.firstName} {user?.lastName}
