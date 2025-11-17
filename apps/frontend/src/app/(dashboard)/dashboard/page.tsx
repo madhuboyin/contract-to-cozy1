@@ -300,7 +300,6 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
                 </ul>
               )}
               
-              {/* --- FIX: Only show 'View All' if there is activity --- */}
               {!dataLoading && recentActivityList.length > 0 && (
                 <Button asChild variant="ghost" className="w-full text-blue-600 justify-end mt-2">
                   <Link href="/dashboard/bookings">
@@ -308,7 +307,6 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
                   </Link>
                 </Button>
               )}
-              {/* --- END FIX --- */}
               
             </CardContent>
           </Card>
@@ -626,6 +624,11 @@ export default function DashboardPage() {
     return () => window.removeEventListener('focus', handleFocus);
   }, [user]);
 
+  // --- FIX: Calculate upcoming tasks to conditionally show "Manage Plan" button ---
+  const upcomingTasks = (checklist?.items || [])
+    .filter(item => item.isRecurring && item.status === 'PENDING');
+  // --- END FIX ---
+
   if (loading) {
     return (
       // --- 2. PADDING REMOVED ---
@@ -656,12 +659,18 @@ export default function DashboardPage() {
               Your home's schedule of upcoming tasks.
             </CardDescription>
           </div>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/dashboard/maintenance-setup">
-              <Settings className="mr-2 h-4 w-4" />
-              Manage Plan
-            </Link>
-          </Button>
+
+          {/* --- FIX: Only show "Manage Plan" if not loading AND tasks exist --- */}
+          {!checklistLoading && upcomingTasks.length > 0 && (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/dashboard/maintenance-setup">
+                <Settings className="mr-2 h-4 w-4" />
+                Manage Plan
+              </Link>
+            </Button>
+          )}
+          {/* --- END FIX --- */}
+          
         </CardHeader>
         <CardContent>
           {checklistLoading ? (
@@ -825,7 +834,6 @@ export default function DashboardPage() {
               </ul>
             )}
             
-            {/* --- FIX: Only show 'View All' if there is activity --- */}
             {!dataLoading && recentActivityList.length > 0 && (
               <Button asChild variant="ghost" className="w-full text-blue-600 justify-end mt-2">
                 <Link href="/dashboard/bookings">
@@ -833,7 +841,6 @@ export default function DashboardPage() {
                 </Link>
               </Button>
             )}
-            {/* --- END FIX --- */}
             
           </CardContent>
         </Card>
