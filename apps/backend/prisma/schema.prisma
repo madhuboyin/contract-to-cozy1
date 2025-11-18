@@ -68,7 +68,6 @@ model ServiceCategoryConfig {
   @@map("service_category_config")
 }
 
-// Expand ServiceCategory enum with new categories
 enum ServiceCategory {
   INSPECTION          // HOME_BUYER primary
   HANDYMAN           // Both segments
@@ -81,7 +80,10 @@ enum ServiceCategory {
   PEST_CONTROL       // Both segments
   LOCKSMITH          // Both segments
   INSURANCE
-  ATTORNEY 
+  ATTORNEY
+  FINANCE            // EXISTING_OWNER - Property tax renewals
+  WARRANTY           // EXISTING_OWNER - Warranty renewals
+  ADMIN              // EXISTING_OWNER - Administrative reminders
 }
 
 enum InspectionType {

@@ -99,7 +99,35 @@ const SERVICE_CATEGORY_CONFIGS = [
     icon: 'leaf',
     sortOrder: 10,
   },
+  {
+    category: ServiceCategory.FINANCE,
+    availableForHomeBuyer: false,
+    availableForExistingOwner: true,
+    displayName: 'Property Tax Services',
+    description: 'Property tax reminders, consultations, and renewal tracking',
+    icon: 'calculator',
+    sortOrder: 11,
+  },
+  {
+    category: ServiceCategory.WARRANTY,
+    availableForHomeBuyer: false,
+    availableForExistingOwner: true,
+    displayName: 'Warranty Management',
+    description: 'Home warranty renewals, claims assistance, and coverage tracking',
+    icon: 'shield-check',
+    sortOrder: 12,
+  },
+  {
+    category: ServiceCategory.ADMIN,
+    availableForHomeBuyer: false,
+    availableForExistingOwner: true,
+    displayName: 'Administrative Services',
+    description: 'General home admin tasks, reminders, and documentation',
+    icon: 'clipboard-list',
+    sortOrder: 13,
+  },
 ];
+
 
 async function seedServiceCategories() {
   try {
@@ -127,7 +155,7 @@ async function seedServiceCategories() {
     console.log('');
     console.log('Summary:');
     console.log(`  - HOME_BUYER only: INSPECTION, MOVING`);
-    console.log(`  - EXISTING_OWNER only: HANDYMAN, PLUMBING, ELECTRICAL, LANDSCAPING`);
+    console.log(`  - EXISTING_OWNER only: HANDYMAN, PLUMBING, ELECTRICAL, LANDSCAPING, FINANCE, WARRANTY, ADMIN`);
     console.log(`  - Both segments: CLEANING, LOCKSMITH, PEST_CONTROL, HVAC`);
     
     // Verify data was inserted
