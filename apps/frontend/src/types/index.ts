@@ -1,4 +1,5 @@
 // apps/frontend/src/types/index.ts
+
 /**
  * User Roles
  */
@@ -22,7 +23,7 @@ export type BookingStatus =
   | 'DISPUTED';
 
 /**
- * Service Category - EXPANDED
+ * Service Category - Synced with Backend Enum
  */
 export type ServiceCategory = 
   | 'INSPECTION'
@@ -30,12 +31,31 @@ export type ServiceCategory =
   | 'PLUMBING'
   | 'ELECTRICAL'
   | 'HVAC'
-  | 'CARPENTRY'
-  | 'PAINTING'
-  | 'ROOFING'
   | 'LANDSCAPING'
   | 'CLEANING'
-  | 'OTHER';
+  | 'MOVING'
+  | 'PEST_CONTROL'
+  | 'LOCKSMITH'
+  | 'INSURANCE'
+  | 'ATTORNEY'
+  | 'FINANCE'
+  | 'WARRANTY'
+  | 'ADMIN';
+
+/**
+ * Recurrence Frequency Enum
+ */
+export enum RecurrenceFrequency {
+  MONTHLY = 'MONTHLY',
+  QUARTERLY = 'QUARTERLY',
+  SEMI_ANNUALLY = 'SEMI_ANNUALLY',
+  ANNUALLY = 'ANNUALLY',
+}
+
+/**
+ * Homeowner Segment
+ */
+export type HomeownerSegment = 'HOME_BUYER' | 'EXISTING_OWNER';
 
 /**
  * User
@@ -48,6 +68,11 @@ export interface User {
   role: UserRole;
   emailVerified: boolean;
   status: UserStatus;
+  homeownerProfile?: {
+    id: string;
+    segment: HomeownerSegment;
+    // Add other profile fields if needed for frontend logic
+  };
 }
 
 /**
@@ -94,16 +119,16 @@ export interface Service {
   id: string;
   name: string;
   category: ServiceCategory;
-  inspectionType?: string | null;  // ADDED
-  handymanType?: string | null;    // ADDED
+  inspectionType?: string | null;
+  handymanType?: string | null;
   basePrice: string;
   priceUnit: string;
   description: string;
-  minimumCharge?: string | null;   // ADDED
+  minimumCharge?: string | null;
   estimatedDuration: number | null;
-  isActive: boolean;               // ADDED - This fixes your error!
-  createdAt?: string;              // ADDED
-  updatedAt?: string;              // ADDED
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 /**
@@ -117,6 +142,17 @@ export interface Property {
   state: string;
   zipCode: string;
   isPrimary: boolean;
+}
+
+/**
+ * Booking Timeline Entry
+ */
+export interface BookingTimelineEntry {
+  id: string;
+  status: BookingStatus;
+  note: string | null;
+  createdBy: string | null;
+  createdAt: string;
 }
 
 /**
@@ -175,14 +211,6 @@ export interface Booking {
   timeline: BookingTimelineEntry[];
   createdAt: string;
   updatedAt: string;
-}
-
-export interface BookingTimelineEntry {
-  id: string;
-  status: BookingStatus;
-  note: string | null;
-  createdBy: string | null;
-  createdAt: string;
 }
 
 /**
@@ -251,46 +279,33 @@ export interface CreateBookingInput {
   depositAmount?: number;
 }
 
-// --- NEW TYPE FOR PHASE 3 ---
+/**
+ * Maintenance Task Template
+ */
 export interface MaintenanceTaskTemplate {
   id: string;
   title: string;
   description: string | null;
-  serviceCategory: string | null;
-  defaultFrequency: string; // e.g., "annually"
+  serviceCategory: ServiceCategory | null;
+  defaultFrequency: RecurrenceFrequency; // Updated to use enum
   sortOrder: number;
 }
 
-// --- ADD THESE NEW EXPORTS ---
-
 /**
- * Defines the user's current goal (e.g., buying or managing).
- * This MUST match the enum in the Prisma schema.
- */
-export type HomeownerSegment = 'HOME_BUYER' | 'EXISTING_OWNER';
-
-/**
- * Defines the shape of a service category object
- * returned by the /api/service-categories endpoint.
+ * Service Category Config (for UI display)
  */
 export interface ServiceCategoryConfig {
-  category: string;
+  category: ServiceCategory;
   displayName: string;
   description: string;
   icon: string;
 }
 
-// --- ADD THE ENUMS (from schema.prisma) ---
-export enum RecurrenceFrequency {
-  MONTHLY = 'MONTHLY',
-  QUARTERLY = 'QUARTERLY',
-  SEMI_ANNUALLY = 'SEMI_ANNUALLY',
-  ANNUALLY = 'ANNUALLY',
-}
-
-// --- END ENUMS ---
+/**
+ * Maintenance Task Configuration
+ */
 export interface MaintenanceTaskConfig {
-  templateId: string; // The original template this was based on
+  templateId: string;
   title: string;
   description: string | null;
   isRecurring: boolean;
