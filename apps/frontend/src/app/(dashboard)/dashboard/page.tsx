@@ -165,7 +165,7 @@ const HomeBuyerWelcome = ({ user }: { user: any }) => {
       setCategoriesLoading(true);
       const response = await api.getServiceCategories();
       if (response.success) {
-        setServiceCategories(response.data.categories);
+        setServiceCategories(response.data.categories as ServiceCategoryConfig[]);
       }
     } catch (error) {
       console.error('Failed to fetch service categories:', error);
@@ -558,7 +558,7 @@ export default function DashboardPage() {
         setCategoriesLoading(true);
         const response = await api.getServiceCategories();
         if (response.success) {
-          setServiceCategories(response.data.categories);
+          setServiceCategories(response.data.categories as ServiceCategoryConfig[]);
         }
       } catch (error) {
         console.error('Failed to fetch service categories:', error);
