@@ -63,12 +63,8 @@ const categoryOptions: ServiceCategory[] = [
   'PLUMBING',
   'ELECTRICAL',
   'HVAC',
-  'CARPENTRY', // <-- Corrected
-  'PAINTING', // <-- Corrected
-  'ROOFING', // <-- Corrected
   'LANDSCAPING',
   'CLEANING',
-  'OTHER', // <-- Corrected
 ];
 
 // Helper to format the enum strings for display (e.g., "SEMI_ANNUALLY" -> "Semi_annually")
