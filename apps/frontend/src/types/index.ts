@@ -68,11 +68,13 @@ export interface User {
   role: UserRole;
   emailVerified: boolean;
   status: UserStatus;
-  homeownerProfile?: {
+  // FIX 1: Add the flattened segment field (sent by backend login/me responses)
+  segment?: HomeownerSegment; 
+  // FIX 2: Keep the nested profile structure for comprehensive user data
+  homeownerProfile?: { 
     id: string;
     segment: HomeownerSegment;
-    // Add other profile fields if needed for frontend logic
-  };
+  } | null;
 }
 
 /**
@@ -287,7 +289,7 @@ export interface MaintenanceTaskTemplate {
   title: string;
   description: string | null;
   serviceCategory: ServiceCategory | null;
-  defaultFrequency: RecurrenceFrequency; // Updated to use enum
+  defaultFrequency: RecurrenceFrequency;
   sortOrder: number;
 }
 

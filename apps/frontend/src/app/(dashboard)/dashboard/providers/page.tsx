@@ -1,427 +1,318 @@
 // apps/frontend/src/app/(dashboard)/dashboard/providers/page.tsx
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-// --- FIX: Import Badge ---
-import { Badge } from '@/components/ui/badge';
-// --- END FIX ---
-import { ArrowLeft, Loader2, AlertCircle, Search, Star } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge'; 
+import { MapPin, Search, Star, Loader2, ListChecks } from 'lucide-react';
+import { Provider, ServiceCategory } from '@/types';
+import Link from 'next/link';
+import { cn } from '@/lib/utils';
 import { ServiceCategoryIcon } from '@/components/ServiceCategoryIcon';
 
-// --- Define the Provider type ---
-interface Provider {
-  id: string;
-  businessName: string;
-  averageRating: number;
-  totalReviews: number;
-  services: {
-    id: string;
-    name: string;
-    basePrice: string;
-    priceUnit: string;
-  }[];
-  // --- FIX: Add missing field that the API is sending ---
-  serviceCategories: string[];
-  // --- END FIX ---
+// --- Constants ---
+const DEFAULT_RADIUS = 25;
+const CATEGORIES: { value: ServiceCategory; label: string; icon?: string }[] = [
+  { value: 'INSPECTION', label: 'Home Inspection', icon: 'INSPECTION' },
+  { value: 'HANDYMAN', label: 'Handyman Services', icon: 'HANDYMAN' },
+  { value: 'PLUMBING', label: 'Plumbing', icon: 'PLUMBING' },
+  { value: 'ELECTRICAL', label: 'Electrical', icon: 'ELECTRICAL' },
+  { value: 'HVAC', label: 'HVAC', icon: 'HVAC' },
+  { value: 'CLEANING', label: 'Cleaning', icon: 'CLEANING' },
+  { value: 'LANDSCAPING', label: 'Landscaping', icon: 'LANDSCAPING' },
+];
+
+// --- Components ---
+
+interface ServiceFilterProps {
+  onFilterChange: (filters: { zipCode: string; category: string | undefined }) => void;
+  defaultCategory?: string;
+  isHomeBuyer: boolean;
 }
 
-interface ServiceCategoryConfig {
-  category: string;
-  displayName: string;
-  description: string;
-  icon: string;
-}
+const ServiceFilter = React.memo(({ onFilterChange, defaultCategory, isHomeBuyer }: ServiceFilterProps) => {
+  const [zipCode, setZipCode] = useState('');
+  // FIX 1: Use 'ALL' as the placeholder value instead of ''.
+  const [selectedCategory, setSelectedCategory] = useState<string>(defaultCategory || 'ALL');
 
-// --- FIX: Add helper function from checklist page ---
-/**
- * Formats a service category string (e.g., "LANDSCAPING")
- * into a user-friendly title (e.g., "Landscaping").
- */
-function formatServiceCategory(category: string | null): string {
-  if (!category) return '';
-  return category
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
-}
-// --- END FIX ---
-
-// --- Main Search Component ---
-function ProviderSearch() {
-  const searchParams = useSearchParams();
-  const serviceCategory = searchParams.get('service');
-  const { user } = useAuth();
-
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const [loading, setLoading] = useState(true); // Default to true for initial load
-  const [error, setError] = useState<string | null>(null);
-
-  const [serviceCategories, setServiceCategories] = useState<
-    ServiceCategoryConfig[]
-  >([]);
-  const [categoriesLoading, setCategoriesLoading] = useState(false);
-
-  // Fetch service categories
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        setCategoriesLoading(true);
-        const response = await api.getServiceCategories();
-        if (response.success) {
-          setServiceCategories(response.data.categories);
-        }
-      } catch (error) {
-        console.error('Failed to fetch service categories:', error);
-      } finally {
-        setCategoriesLoading(false);
-      }
-    };
-
-    fetchCategories();
-  }, []);
-
-  // Fetch providers based on selected category (or all if none selected)
-  useEffect(() => {
-    const fetchProviders = async () => {
-      try {
-        setLoading(true);
-        setError(null); // Clear previous errors
-
-        // Always fetch. Pass 'category: undefined' if serviceCategory is null.
-        const response = await api.searchProviders({
-          category: serviceCategory || undefined,
-        });
-
-        if (response.success) {
-          // Use double assertion 'as unknown as Provider[]'
-          setProviders((response.data.providers as unknown as Provider[]) || []);
-        } else {
-          throw new Error(response.message || 'Failed to fetch providers.');
-        }
-      } catch (err: any) {
-        console.error('Failed to fetch providers:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProviders();
-  }, [serviceCategory]); // This effect re-runs when serviceCategory changes
-
-  const isHomeBuyer = user?.segment === 'HOME_BUYER';
-  const backLink = isHomeBuyer ? '/dashboard/checklist' : '/dashboard';
-  const backLinkText = isHomeBuyer ? 'Back to Checklist' : 'Back to Dashboard';
-
-  let pageTitle = 'Find Providers';
-  if (serviceCategory && !categoriesLoading) {
-    const selectedCategoryName = serviceCategories.find(
-      (c) => c.category === serviceCategory
-    )?.displayName;
-
-    if (selectedCategoryName) {
-      pageTitle = `${selectedCategoryName} Providers`;
+  const displayCategories = useMemo(() => {
+    if (isHomeBuyer) {
+      return CATEGORIES.filter(c => ['INSPECTION', 'HANDYMAN', 'CLEANING'].includes(c.value));
     }
-  }
+    return CATEGORIES;
+  }, [isHomeBuyer]);
+
+  const handleSearch = useCallback((e?: React.FormEvent) => {
+    e?.preventDefault();
+    
+    // FIX 2: Convert 'ALL' back to 'undefined' when passing to the API
+    const categoryValue = selectedCategory === 'ALL' ? undefined : selectedCategory;
+    
+    onFilterChange({
+      zipCode: zipCode.trim(),
+      category: categoryValue,
+    });
+  }, [zipCode, selectedCategory, onFilterChange]);
+
+  // Set default category on mount
+  useEffect(() => {
+    if (defaultCategory && defaultCategory !== selectedCategory) {
+      setSelectedCategory(defaultCategory);
+      handleSearch();
+    }
+  }, [defaultCategory, handleSearch, selectedCategory]);
 
   return (
-    <div className="flex-1 space-y-4 pt-6">
-      <Button asChild variant="link" className="pl-0 text-blue-600">
-        <Link href={backLink}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          {backLinkText}
-        </Link>
-      </Button>
-
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <h2 className="text-3xl font-bold tracking-tight">{pageTitle}</h2>
-        {serviceCategory && !loading && (
-          <Button
-            asChild
-            variant="link"
-            className="p-0 h-auto text-blue-600 self-start sm:self-center"
-          >
-            <Link href="/dashboard/providers">View All Categories</Link>
-          </Button>
-        )}
-      </div>
-
-      {!serviceCategory && !loading && (
-        <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-white">
-          <CardHeader>
-            <CardTitle className="text-xl">Select a Service Category</CardTitle>
-            <CardDescription>
-              Choose the type of service you need to see available providers or
-              browse all providers below.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {categoriesLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-                <p className="ml-3 text-gray-600">Loading categories...</p>
-              </div>
-            ) : serviceCategories.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {serviceCategories.map((category) => (
-                  <Button
-                    key={category.category}
-                    asChild
-                    size="lg"
-                    variant="outline"
-                    className="h-auto py-6 flex flex-col items-start justify-start space-y-2 text-left hover:bg-blue-50 hover:border-blue-300 transition-all"
-                  >
-                    <Link
-                      href={`/dashboard/providers?service=${category.category}`}
-                    >
-                      <div className="flex items-center space-x-3 w-full">
-                        <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                          <ServiceCategoryIcon
-                            icon={category.icon}
-                            className="h-5 w-5 text-blue-600"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-base text-gray-900 !text-gray-900">
-                            {category.displayName}
-                          </div>
-                          {category.description && (
-                            <div className="text-xs text-gray-500 mt-1 line-clamp-2 !text-gray-500">
-                              {category.description}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </Link>
-                  </Button>
-                ))}
-              </div>
-            ) : (
-              // Fallback: Static categories if API fails
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Button
-                  asChild
-                  size="lg"
-                  variant="default"
-                  className="h-24 flex flex-col items-center justify-center space-y-2"
-                >
-                  <Link href="/dashboard/providers?service=INSPECTION">
-                    <svg
-                      className="h-8 w-8"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                      />
-                    </svg>
-                    <span className="text-lg font-semibold">
-                      Home Inspection
-                    </span>
-                  </Link>
-                </Button>
-
-                <Button
-                  asChild
-                  size="lg"
-                  variant="outline"
-                  className="h-24 flex flex-col items-center justify-center space-y-2"
-                >
-                  <Link href="/dashboard/providers?service=HANDYMAN">
-                    <svg
-                      className="h-8 w-8"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0 3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826 3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                    </svg>
-                    <span className="text-lg font-semibold">Handyman</span>
-                  </Link>
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {loading && (
-        <div className="flex h-64 w-full flex-col items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <p className="mt-4 text-muted-foreground">Finding providers...</p>
-        </div>
-      )}
-
-      {!loading && error && (
-        <div className="flex h-64 w-full flex-col items-center justify-center rounded-lg border-2 border-red-200 bg-red-50 p-8 text-center">
-          <AlertCircle className="h-8 w-8 text-red-600" />
-          <h2 className="mt-4 text-xl font-semibold text-red-900">
-            Error Loading Providers
-          </h2>
-          <p className="mt-2 text-muted-foreground">{error}</p>
-        </div>
-      )}
-
-      {!loading && !error && providers.length === 0 && (
-        <div className="flex h-64 w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center">
-          <Search className="h-8 w-8 text-gray-400" />
-          <h2 className="mt-4 text-xl font-semibold">No Providers Found</h2>
-          {serviceCategory ? (
-            <p className="mt-2 text-muted-foreground">
-              We couldn't find any providers for this category. Try a different
-              service.
-            </p>
-          ) : (
-            <p className="mt-2 text-muted-foreground">
-              We couldn't find any providers for your segment at this time.
-            </p>
-          )}
-          <Button asChild variant="outline" className="mt-4">
-            <Link href="/dashboard/providers">View All Categories</Link>
-          </Button>
-        </div>
-      )}
-
-      {!loading && !error && providers.length > 0 && (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {providers.map((provider) => (
-            <ProviderCard
-              key={provider.id}
-              provider={provider}
-              serviceCategory={serviceCategory}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// --- ProviderCard Component ---
-function ProviderCard({
-  provider,
-  serviceCategory,
-}: {
-  provider: Provider;
-  serviceCategory: string | null;
-}) {
-  const previewService = provider.services?.sort(
-    (a, b) => parseFloat(a.basePrice) - parseFloat(b.basePrice)
-  )[0];
-
-  const basePriceValue = previewService?.basePrice
-    ? parseFloat(previewService.basePrice)
-    : null;
-
-  // --- FIX: Get the first service category to display ---
-  const firstCategory = provider.serviceCategories?.[0];
-  // --- END FIX ---
-
-  return (
-    <Card className="flex flex-col justify-between transition-all hover:shadow-lg">
-      <CardHeader className="pb-4">
-        <CardTitle className="text-base truncate">
-          {provider.businessName}
+    <Card className="shadow-lg">
+      <CardHeader>
+        <CardTitle className="text-xl flex items-center gap-2">
+          <Search className="h-5 w-5 text-blue-600" />
+          Find Local Providers
         </CardTitle>
-        <div className="flex items-center gap-1 pt-1">
-          <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-          <span className="font-medium">
-            {provider.averageRating.toFixed(1)}
-          </span>
-          <span className="text-sm text-muted-foreground">
-            ({provider.totalReviews} reviews)
-          </span>
-        </div>
-        {/* --- FIX: Add the category badge --- */}
-        {firstCategory && (
-          <Badge
-            variant="outline"
-            className="mt-2 text-xs w-fit font-normal"
-          >
-            {formatServiceCategory(firstCategory)}
-          </Badge>
-        )}
-        {/* --- END FIX --- */}
+        <CardDescription>
+          Search for trusted professionals based on service and location.
+        </CardDescription>
       </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="md:col-span-2">
+            <label className="text-sm font-medium mb-1 block">Service Category</label>
+            <Select 
+              value={selectedCategory} 
+              onValueChange={setSelectedCategory}
+            >
+              <SelectTrigger className="w-full">
+                {/* When selectedCategory is 'ALL', the value of the corresponding SelectItem ("All Categories") will be shown */}
+                <SelectValue placeholder={isHomeBuyer ? "Inspection (Required)" : "Select a Category"} />
+              </SelectTrigger>
+              <SelectContent>
+                {/* FIX 3: Change value="" to value="ALL" */}
+                <SelectItem value="ALL" className="text-gray-500">All Categories</SelectItem>
+                {displayCategories.map((cat) => (
+                  <SelectItem key={cat.value} value={cat.value}>
+                    <div className="flex items-center">
+                      <ServiceCategoryIcon icon={cat.value} className="h-4 w-4 mr-2" />
+                      {cat.label}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-      {/* CardContent has been removed */}
+          <div>
+            <label className="text-sm font-medium mb-1 block">Zip Code</label>
+            <Input
+              type="text"
+              placeholder="e.g., 78701"
+              value={zipCode}
+              onChange={(e) => setZipCode(e.target.value)}
+              className="w-full"
+            />
+          </div>
+          
+          <div className="flex items-end">
+            <Button type="submit" className="w-full">
+              <Search className="h-4 w-4 mr-2" />
+              Search
+            </Button>
+          </div>
+        </form>
 
-      <CardFooter className="flex justify-between items-center bg-gray-50/50 p-4">
-        <div>
-          {previewService && basePriceValue !== null && !isNaN(basePriceValue) ? (
-            <>
-              <p className="text-xs text-muted-foreground">
-                Services starting at
-              </p>
-              <p className="text-sm font-semibold">
-                ${basePriceValue.toFixed(2)}
-                <span className="text-xs font-normal text-muted-foreground">
-                  /{previewService.priceUnit}
-                </span>
-              </p>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No pricing available.
-            </p>
-          )}
-        </div>
-        <Button asChild size="sm">
-          <Link
-            href={`/dashboard/providers/${provider.id}${
-              serviceCategory ? `?service=${serviceCategory}` : ''
-            }`}
-          >
-            View
-          </Link>
-        </Button>
-      </CardFooter>
+        {isHomeBuyer && (
+          <div className="mt-4 p-3 border-l-4 border-blue-500 bg-blue-50 text-sm text-blue-700">
+            <ListChecks className="inline h-4 w-4 mr-1" /> 
+            We recommend starting with a **Home Inspection**.
+          </div>
+        )}
+      </CardContent>
     </Card>
   );
-}
-// --- END: MODIFIED ProviderCard Component ---
+});
+ServiceFilter.displayName = 'ServiceFilter';
 
-// --- Page Wrapper ---
-export default function ProvidersPage() {
+
+const ProviderList = ({ providers }: { providers: Provider[] }) => {
   return (
-    <Suspense fallback={<PageLoader />}>
-      <ProviderSearch />
-    </Suspense>
+    <div className="grid gap-6 md:grid-cols-2">
+      {providers.map((provider) => (
+        <Card 
+          key={provider.id} 
+          className="group relative hover:shadow-xl transition-shadow duration-300"
+        >
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xl font-bold truncate">
+              {provider.businessName}
+            </CardTitle>
+            <div className="flex items-center text-yellow-500 text-sm">
+              <Star className="h-4 w-4 fill-yellow-500 mr-1" />
+              {provider.averageRating.toFixed(1)}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-3">
+              {provider.totalReviews} reviews • {provider.totalCompletedJobs} jobs completed
+            </p>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {provider.serviceCategories.slice(0, 3).map(category => (
+                <Badge key={category} variant="secondary" className="text-xs">
+                  <ServiceCategoryIcon icon={category} className="h-3 w-3 mr-1" />
+                  {category}
+                </Badge>
+              ))}
+            </div>
+
+            <div className="flex items-center text-sm text-gray-600">
+              <MapPin className="h-4 w-4 mr-2 text-red-500" />
+              Serves up to {provider.serviceRadius} miles
+            </div>
+
+            <Link href={`/dashboard/providers/${provider.id}`} className="absolute inset-0">
+              <span className="sr-only">View Provider Profile: {provider.businessName}</span>
+            </Link>
+            
+          </CardContent>
+          <div className="absolute bottom-4 right-4">
+              <Button 
+                asChild
+                variant="default" 
+                size="sm" 
+                className="group-hover:translate-x-0 translate-x-2 transition-transform duration-300"
+              >
+                <Link href={`/dashboard/providers/${provider.id}`}>View Profile</Link>
+              </Button>
+            </div>
+        </Card>
+      ))}
+    </div>
   );
-}
+};
 
-function PageLoader() {
+
+// --- Main Page Component ---
+export default function ProvidersPage({ searchParams }: { searchParams: { service?: string } }) {
+  const { user, loading } = useAuth();
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [dataLoading, setDataLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  const defaultCategory = searchParams.service;
+
+  const isHomeBuyer = user?.segment === 'HOME_BUYER';
+  const initialZipCode = ''; 
+  const initialCategory = defaultCategory || '';
+
+  const [filters, setFilters] = useState({
+    zipCode: initialZipCode,
+    category: initialCategory,
+  });
+
+  const fetchProviders = useCallback(async (currentFilters: typeof filters) => {
+    if (dataLoading) return;
+
+    if (!currentFilters.zipCode && !currentFilters.category) {
+      if (!isHomeBuyer) return; 
+    }
+
+    setDataLoading(true);
+    setError(null);
+    try {
+      const params: any = {
+        // Ensure category is undefined if it's 'ALL' or empty
+        category: (currentFilters.category === 'ALL' || !currentFilters.category) ? undefined : currentFilters.category,
+        radius: DEFAULT_RADIUS,
+      };
+
+      if (currentFilters.zipCode) {
+        params.zipCode = currentFilters.zipCode;
+      }
+      
+      const response = await api.searchProviders(params);
+
+      if (response.success) {
+        setProviders(response.data.providers);
+      } else {
+        setError(response.message || 'Failed to search providers.');
+        setProviders([]);
+      }
+    } catch (err) {
+      console.error(err);
+      setError('An unexpected error occurred during search.');
+      setProviders([]);
+    } finally {
+      setDataLoading(false);
+    }
+  }, [dataLoading, isHomeBuyer]);
+
+  const handleFilterChange = useCallback((newFilters: { zipCode: string; category: string | undefined }) => {
+    const updatedFilters = {
+      zipCode: newFilters.zipCode,
+      category: newFilters.category || 'ALL', // Ensure state is set to 'ALL' if category is undefined
+    };
+    setFilters(updatedFilters);
+    fetchProviders(updatedFilters);
+  }, [fetchProviders]);
+
+  // Fetch providers on initial load or filter change
+  useEffect(() => {
+    if (initialCategory) {
+      fetchProviders(filters);
+    }
+  }, [fetchProviders, initialCategory]);
+
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-48">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
+  // --- Render ---
   return (
-    <div className="flex h-full w-full items-center justify-center p-8">
-      <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+    <div className="space-y-8">
+      <h1 className="text-3xl font-bold tracking-tight">Provider Search</h1>
+
+      <ServiceFilter 
+        onFilterChange={handleFilterChange} 
+        defaultCategory={defaultCategory}
+        isHomeBuyer={isHomeBuyer}
+      />
+
+      <h2 className="text-2xl font-bold tracking-tight border-b pb-2">
+        {dataLoading 
+          ? 'Searching...' 
+          : providers.length > 0
+            ? `${providers.length} Providers Found`
+            : error 
+              ? 'Search Results'
+              : 'Start Your Search'
+        }
+      </h2>
+
+      {dataLoading ? (
+        <div className="flex justify-center items-center h-48">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        </div>
+      ) : error ? (
+        <div className="text-center p-8 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-600 font-medium">Error: {error}</p>
+          <p className="text-sm text-red-500 mt-1">Please refine your search criteria.</p>
+        </div>
+      ) : providers.length > 0 ? (
+        <ProviderList providers={providers} />
+      ) : (
+        <div className="text-center p-8 bg-gray-50 border rounded-lg">
+          <p className="text-lg font-medium text-gray-700">No providers found matching your criteria.</p>
+          <p className="text-sm text-gray-500 mt-2">Try widening the service category or removing the zip code.</p>
+        </div>
+      )}
     </div>
   );
 }

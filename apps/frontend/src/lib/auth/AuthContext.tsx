@@ -1,148 +1,111 @@
 // apps/frontend/src/lib/auth/AuthContext.tsx
-// FIXED: Proper 401 error handling
-
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { api } from '@/lib/api/client'; // --- NEW: Import the smart API client ---
-
-interface User {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  phone?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  zipCode?: string;
-  role: string;
-  createdAt?: string;
-  updatedAt?: string;
-  segment?: string; // <-- ADD THIS LINE
-}
+import { api } from '@/lib/api/client';
+import { 
+  User, 
+  LoginInput, 
+  RegisterInput, 
+  LoginResponse,
+  APIResponse,
+} from '@/types'; 
 
 interface AuthContextType {
-  user: User | null;
+  user: User | null; 
   loading: boolean;
-  login: (credentials: { email: string; password: string }) => Promise<any>;
-  register: (data: any) => Promise<any>;
-  logout: () => Promise<void>;
-  refreshUser: () => Promise<void>;
+  login: (input: LoginInput) => Promise<APIResponse<LoginResponse>>;
+  register: (input: RegisterInput) => Promise<APIResponse<any>>;
+  logout: () => void;
+  fetchCurrentUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const [user, setUser] = useState<User | null>(null); 
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
 
-  const fetchUser = async () => {
-    // --- USE API CLIENT ---
-    // This will now auto-refresh if the token is expired
-    const response = await api.getCurrentUser();
-
-    if (response.success) {
-      setUser(response.data);
-    } else {
-      // Don't remove token here, api.request will handle it if refresh fails
-      setUser(null);
+  const setAuthData = (data: LoginResponse) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('accessToken', data.accessToken);
+      localStorage.setItem('refreshToken', data.refreshToken);
     }
-    setLoading(false);
-    // --- END MODIFICATION ---
   };
 
-  const refreshUser = async () => {
-    await fetchUser();
+  const clearAuthData = () => {
+    setUser(null);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+    }
+  };
+
+  const fetchCurrentUser = async () => {
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      clearAuthData();
+      setLoading(false);
+      return;
+    }
+
+    const response = await api.getCurrentUser();
+    if (response.success) {
+      setUser(response.data);
+      // DEBUG 1: Log the segment after successful fetch
+      console.log('DEBUG 1: AuthContext: fetched user segment:', response.data.homeownerProfile?.segment);
+    } else {
+      clearAuthData();
+      console.log('DEBUG 1: AuthContext: fetchCurrentUser failed.');
+    }
+    setLoading(false);
+  };
+
+  const login = async (input: LoginInput) => {
+    setLoading(true);
+    const response = await api.login(input);
+    if (response.success) {
+      setAuthData(response.data);
+      // DEBUG 2: Log initial user data returned by /api/auth/login
+      console.log('DEBUG 2: AuthContext: Login success (initial user data segment):', response.data.user.homeownerProfile?.segment);
+      await fetchCurrentUser(); 
+      console.log('DEBUG 2: AuthContext: Completed fetchCurrentUser after login. State should be updated.');
+    } else {
+      setLoading(false);
+      console.log('DEBUG 2: AuthContext: Login failed.');
+    }
+    return response;
+  };
+
+  const register = async (input: RegisterInput) => {
+    return api.register(input);
+  };
+
+  const logout = () => {
+    api.logout(); 
+    clearAuthData();
   };
 
   useEffect(() => {
-    // Only fetch user if we don't have one and there's a token
-    // This prevents re-fetching if user is already set by login/register
-    if (!user && localStorage.getItem('accessToken')) {
-      fetchUser();
-    } else {
-      setLoading(false);
-    }
+    fetchCurrentUser();
   }, []);
 
-  const login = async (credentials: { email: string; password: string }) => {
-    try {
-      // --- USE API CLIENT ---
-      const response = await api.login(credentials);
-
-      if (response.success) {
-        setUser(response.data.user);
-        return { success: true, data: response.data };
-      }
-
-      return { 
-        success: false, 
-        error: response.message || 'Invalid email or password' 
-      };
-      // --- END MODIFICATION ---
-
-    } catch (error) {
-      console.error('Login network error:', error);
-      return { 
-        success: false, 
-        error: 'Network error. Please check your connection.' 
-      };
-    }
+  const value = {
+    user,
+    loading,
+    login,
+    register,
+    logout,
+    fetchCurrentUser,
   };
 
-  const register = async (data: any) => {
-    try {
-      // --- USE API CLIENT ---
-      const response = await api.register(data);
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};
 
-      if (response.success) {
-        setUser(response.data.user);
-        return { success: true, data: response.data };
-      }
-      
-      return { 
-        success: false, 
-        error: response.message || 'Registration failed' 
-      };
-      // --- END MODIFICATION ---
-
-    } catch (error) {
-      console.error('Registration network error:', error);
-      return { 
-        success: false, 
-        error: 'Network error. Please check your connection.' 
-      };
-    }
-  };
-
-  const logout = async () => {
-    try {
-      // --- USE API CLIENT ---
-      // api.logout() already calls removeToken() internally
-      await api.logout();
-      // --- END MODIFICATION ---
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      setUser(null);
-      router.push('/login');
-    }
-  };
-
-  return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-}
+};
