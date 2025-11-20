@@ -1,105 +1,82 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* ========================================
-   CONTRACT TO COZY - PHASE 2 TYPOGRAPHY
-   Building on Phase 1 Color Scheme
-   Modern, Readable Typography System
+   PHASE 3: STONE/AMBER DESIGN SYSTEM
    ======================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@400;600;700&display=swap');
+
 
 @layer base {
   :root {
-    /* === PHASE 1: COLOR VARIABLES === */
-    /* Base Background Colors */
-    --background: 0 0% 98%;              /* #FAFAFA - Light Background */
-    --foreground: 0 0% 13%;              /* #212121 - Primary Text */
+    /* === SHADNCN COLOR VARIABLES (Updated to Stone/Amber) === */
+    --background: 30 18% 98%;              /* stone-50 */
+    --foreground: 30 3% 11%;               /* stone-900 */
     
-    /* Card & Popover */
-    --card: 0 0% 100%;                   /* White cards */
-    --card-foreground: 0 0% 13%;         /* #212121 - Card text */
-    --popover: 0 0% 100%;                /* White popover */
-    --popover-foreground: 0 0% 13%;      /* #212121 - Popover text */
+    --card: 0 0% 100%;                     /* White */
+    --card-foreground: 30 3% 11%;          /* stone-900 */
+    --popover: 0 0% 100%;
+    --popover-foreground: 30 3% 11%;
     
-    /* Primary Accent - Teal */
-    --primary: 174 100% 29%;             /* #009688 - Teal Primary */
-    --primary-foreground: 0 0% 100%;     /* White on teal */
+    /* Primary (Used for Buyer Accent/Dark Mode) */
+    --primary: 30 3% 11%;                  /* stone-900 */
+    --primary-foreground: 0 0% 100%;       /* White */
     
-    /* Secondary Colors */
-    --secondary: 0 0% 96%;               /* Light gray secondary */
-    --secondary-foreground: 0 0% 13%;    /* #212121 - Secondary text */
+    /* Secondary (Used for Owner Accent/General Accent) */
+    --secondary: 29 76% 24%;               /* amber-700 */
+    --secondary-foreground: 0 0% 100%;
     
-    /* Muted Colors */
-    --muted: 0 0% 96%;                   /* Muted background */
-    --muted-foreground: 0 0% 38%;        /* #616161 - Secondary text */
+    /* Muted */
+    --muted: 30 15% 96%;                   /* stone-100 */
+    --muted-foreground: 30 5% 50%;         /* stone-500 */
     
-    /* Accent Colors - Teal Light */
-    --accent: 173 44% 51%;               /* #4DB6AC - Teal Light */
-    --accent-foreground: 0 0% 100%;      /* White on accent */
+    /* Accent (Hover/Interactive) */
+    --accent: 40 100% 90%;                 /* amber-100 */
+    --accent-foreground: 30 3% 11%;        /* stone-900 */
     
-    /* Destructive (kept from original) */
+    /* Destructive (Keeping standard Red) */
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
     
     /* Border & Input */
-    --border: 0 0% 89.8%;                /* Light gray borders */
-    --input: 0 0% 89.8%;                 /* Input borders */
-    --ring: 174 100% 29%;                /* #009688 - Focus ring (teal) */
+    --border: 30 12% 90%;                  /* stone-200 */
+    --input: 30 12% 90%;                   /* stone-200 */
+    --ring: 29 76% 24%;                    /* amber-700 (Focus ring) */
     
     /* Border Radius */
-    --radius: 0.5rem;
+    --radius: 0.75rem; /* Slightly larger radius */
     
-    /* Chart Colors - Updated with teal theme */
-    --chart-1: 174 100% 29%;             /* Teal primary */
-    --chart-2: 173 44% 51%;              /* Teal light */
-    --chart-3: 200 18% 18%;              /* Dark gray */
-    --chart-4: 0 0% 38%;                 /* Medium gray */
-    --chart-5: 0 0% 13%;                 /* Dark text */
-    
-    /* Custom Brand Colors */
-    --color-primary: 174 100% 29%;       /* #009688 */
-    --color-primary-light: 173 44% 51%;  /* #4DB6AC */
-    --color-background: 0 0% 98%;        /* #FAFAFA */
-    --color-background-dark: 200 18% 18%; /* #263238 */
-    --color-text-primary: 0 0% 13%;      /* #212121 */
-    --color-text-secondary: 0 0% 38%;    /* #616161 */
-    --color-white: 0 0% 100%;            /* #FFFFFF */
-    
-    /* === PHASE 2: TYPOGRAPHY VARIABLES === */
-    --font-heading: var(--font-poppins), 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    --font-body: var(--font-inter), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    /* === NEW TYPOGRAPHY VARIABLES === */
+    --font-outfit: 'Outfit';
+    --font-playfair-display: 'Playfair Display';
   }
   
   .dark {
-    --background: 200 18% 18%;           /* #263238 - Dark Background */
-    --foreground: 0 0% 98%;              /* Light text on dark */
-    --card: 200 18% 18%;
-    --card-foreground: 0 0% 98%;
-    --popover: 200 18% 18%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 173 44% 51%;              /* Lighter teal for dark mode */
-    --primary-foreground: 0 0% 13%;
-    --secondary: 0 0% 20%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 20%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 174 100% 29%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 25%;
-    --input: 0 0% 25%;
-    --ring: 173 44% 51%;
-    --chart-1: 173 44% 51%;
-    --chart-2: 174 100% 29%;
-    --chart-3: 0 0% 70%;
-    --chart-4: 0 0% 50%;
-    --chart-5: 0 0% 30%;
+    --background: 30 3% 11%;           /* stone-900 */
+    --foreground: 30 18% 98%;          /* stone-50 */
+    --card: 30 3% 16%;                 /* stone-800 */
+    --card-foreground: 30 18% 98%;
+    --popover: 30 3% 16%;
+    --popover-foreground: 30 18% 98%;
+    --primary: 29 76% 24%;             /* amber-700 (Primary in dark mode) */
+    --primary-foreground: 30 3% 11%;
+    --secondary: 30 3% 16%;
+    --secondary-foreground: 30 18% 98%;
+    --muted: 30 3% 16%;
+    --muted-foreground: 30 5% 50%;
+    --accent: 30 3% 16%;
+    --accent-foreground: 30 18% 98%;
+    --border: 30 3% 28%;
+    --input: 30 3% 28%;
+    --ring: 40 100% 90%;
   }
 }
 
 /* ========================================
-   PHASE 2: BASE TYPOGRAPHY
+   BASE STYLES (Update fonts)
    ======================================== */
 
 @layer base {
@@ -108,331 +85,50 @@
   }
   
   body {
-    @apply bg-[hsl(var(--background))] text-[hsl(var(--foreground))];
-    font-family: var(--font-body);
+    /* Apply new default fonts and colors */
+    @apply bg-stone-50 text-stone-900 font-body;
+    font-family: var(--font-outfit), sans-serif;
     font-size: 16px;
     line-height: 1.6;
-    color: hsl(var(--color-text-primary));
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
   
-  /* Heading Hierarchy */
   h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-heading);
-    color: hsl(var(--color-text-primary));
-    font-weight: 600;
+    /* Apply new heading font */
+    font-family: var(--font-playfair-display), serif;
+    @apply text-stone-900 font-bold;
     line-height: 1.2;
     margin-bottom: 0.75rem;
   }
   
-  h1 {
-    font-size: 2.25rem;   /* 36px */
-    font-weight: 700;
-    line-height: 1.1;
-  }
-  
-  h2 {
-    font-size: 1.75rem;   /* 28px */
-    font-weight: 600;
-  }
-  
-  h3 {
-    font-size: 1.5rem;    /* 24px */
-    font-weight: 600;
-  }
-  
-  h4 {
-    font-size: 1.25rem;   /* 20px */
-    font-weight: 500;
-  }
-  
-  h5 {
-    font-size: 1.125rem;  /* 18px */
-    font-weight: 500;
-  }
-  
-  h6 {
-    font-size: 1rem;      /* 16px */
-    font-weight: 500;
-  }
-  
-  /* Body Text */
-  p {
-    font-family: var(--font-body);
-    font-size: 1rem;
-    line-height: 1.6;
-    color: hsl(var(--color-text-primary));
-    margin-bottom: 1rem;
-  }
-  
-  /* Lists */
-  ul, ol {
-    font-family: var(--font-body);
-    font-size: 1rem;
-    line-height: 1.6;
-    color: hsl(var(--color-text-primary));
-  }
-  
-  li {
-    margin-bottom: 0.5rem;
-  }
-  
-  /* Small Text & Captions */
-  small, .small-text, .caption {
-    font-family: var(--font-body);
-    font-size: 0.875rem;  /* 14px */
-    color: hsl(var(--color-text-secondary));
-    line-height: 1.5;
-  }
-  
-  /* Links */
+  /* Update link styles for the new design (less aggressive hover) */
   a {
-    font-family: var(--font-body);
+    font-family: var(--font-outfit), sans-serif;
     font-weight: 500;
     transition: color 0.2s ease;
+    @apply text-stone-700 hover:text-amber-700;
   }
   
-  /* Form Elements */
-  label {
-    font-family: var(--font-body);
-    font-size: 0.9375rem; /* 15px */
-    font-weight: 500;
-    color: hsl(var(--color-text-primary));
-  }
-  
-  input, textarea, select {
-    font-family: var(--font-body);
-    font-size: 1rem;
-    line-height: 1.5;
-  }
-  
-  /* Buttons */
-  button {
-    font-family: var(--font-body);
-    font-weight: 600;
-    letter-spacing: 0.3px;
-  }
+  /* Remove old component styles (Footer, Link overides, etc. will be handled in new components) */
 }
 
-html {
-  scroll-behavior: smooth;
-}
-
-/* ========================================
-   PHASE 2: TYPOGRAPHY UTILITIES
-   ======================================== */
-
+/* Cleanup old utilities that are now obsolete or replaced */
 @layer utilities {
-  /* Font Family Utilities */
+  /* Removing old custom brand utilities (btn-primary, text-brand-primary, etc.) */
+  /* The new components use direct Tailwind classes (bg-stone-900, text-amber-600) */
+  /* Keep only the necessary font utilities */
   .font-heading {
-    font-family: var(--font-heading);
+    font-family: var(--font-playfair-display);
   }
   
   .font-body {
-    font-family: var(--font-body);
-  }
-  
-  /* Reading-Optimized Text */
-  .text-readable {
-    font-size: 1.0625rem;  /* 17px - optimal for reading */
-    line-height: 1.7;
-    max-width: 65ch;       /* optimal line length */
-  }
-  
-  /* Text Weights */
-  .text-light {
-    font-weight: 300;
-  }
-  
-  .text-normal {
-    font-weight: 400;
-  }
-  
-  .text-medium {
-    font-weight: 500;
-  }
-  
-  .text-semibold {
-    font-weight: 600;
-  }
-  
-  .text-bold {
-    font-weight: 700;
-  }
-  
-  /* Letter Spacing */
-  .tracking-tight {
-    letter-spacing: -0.025em;
-  }
-  
-  .tracking-normal {
-    letter-spacing: 0;
-  }
-  
-  .tracking-wide {
-    letter-spacing: 0.025em;
-  }
-  
-  /* === PHASE 1: BRAND COLOR UTILITIES === */
-  .btn-primary {
-    background-color: hsl(var(--color-primary));
-    color: white;
-    padding: 0.75rem 1.5rem;
-    border-radius: 0.375rem;
-    border: none;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-    letter-spacing: 0.3px;
-  }
-  
-  .btn-primary:hover {
-    background-color: hsl(var(--color-primary-light));
-    color: white;
-  }
-  
-  .btn-primary:disabled {
-    background-color: hsl(0 0% 60%);
-    cursor: not-allowed;
-  }
-
-  .text-brand-primary {
-    color: hsl(var(--color-primary));
-  }
-  
-  .text-brand-primary-light {
-    color: hsl(var(--color-primary-light));
-  }
-  
-  .bg-brand-primary {
-    background-color: hsl(var(--color-primary));
-  }
-  
-  .bg-brand-primary-light {
-    background-color: hsl(var(--color-primary-light));
-  }
-  
-  .bg-brand-background {
-    background-color: hsl(var(--color-background));
-  }
-  
-  .bg-brand-dark {
-    background-color: hsl(var(--color-background-dark));
-  }
-  
-  .border-brand-primary {
-    border-color: hsl(var(--color-primary));
-  }
-  
-  .border-brand-primary-light {
-    border-color: hsl(var(--color-primary-light));
+    font-family: var(--font-outfit);
   }
 }
-
-/* ========================================
-   PHASE 2: COMPONENT TYPOGRAPHY STYLES
-   ======================================== */
-
-@layer components {
-  /* Link styles with teal - NOT for buttons */
-  a:not(.no-brand-style):not([class*="bg-"]) {
-    color: hsl(var(--color-primary));
-    transition: color 0.2s ease;
-    text-decoration: none;
-  }
-  
-  a:not(.no-brand-style):not([class*="bg-"]):hover {
-    color: hsl(var(--color-primary-light));
-    text-decoration: underline;
-  }
-  
-  /* Footer styles */
-  .footer {
-    background-color: hsl(var(--color-background-dark));
-    color: hsl(var(--color-white));
-  }
-  
-  /* Icon fills */
-  .icon-brand-primary {
-    fill: hsl(var(--color-primary));
-  }
-  
-  .icon-brand-primary:hover {
-    fill: hsl(var(--color-primary-light));
-  }
-  
-  /* Section backgrounds */
-  .section-light {
-    background-color: hsl(var(--color-background));
-  }
-  
-  .section-white {
-    background-color: hsl(var(--color-white));
-  }
-  
-  .section-dark {
-    background-color: hsl(var(--color-background-dark));
-    color: hsl(var(--color-white));
-  }
-}
-
-/* ========================================
-   PHASE 1: BUTTON TEXT VISIBILITY FIX
-   ======================================== */
-
-/* --- FIX ---
-  The entire "PHASE 1: BUTTON TEXT VISIBILITY FIX" block has been removed.
-  It contained overly broad CSS rules with "!important" that were
-  breaking the calendar component's styling.
-  
-  The `button.tsx` component already correctly handles text color 
-  (e.g., `text-primary-foreground`) for its variants, making this
-  hotfix block unnecessary and harmful.
-*/
-
-/* ========================================
-   PHASE 2: MOBILE TYPOGRAPHY ADJUSTMENTS
-   ======================================== */
 
 @media (max-width: 640px) {
   html {
-    font-size: 15px;  /* Slightly smaller base on mobile */
-  }
-  
-  h1 {
-    font-size: 1.875rem;  /* 30px on mobile */
-  }
-  
-  h2 {
-    font-size: 1.5rem;    /* 24px on mobile */
-  }
-  
-  h3 {
-    font-size: 1.25rem;   /* 20px on mobile */
-  }
-  
-  h4 {
-    font-size: 1.125rem;  /* 18px on mobile */
-  }
-  
-  body {
-    line-height: 1.65;    /* Slightly more line height on mobile */
-  }
-  
-  p {
-    font-size: 1rem;
-    line-height: 1.65;
-  }
-}
-
-/* Extra small devices */
-@media (max-width: 480px) {
-  h1 {
-    font-size: 1.75rem;   /* 28px on very small screens */
-  }
-  
-  h2 {
-    font-size: 1.375rem;  /* 22px */
+    font-size: 15px;
   }
 }

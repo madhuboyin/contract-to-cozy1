@@ -1,19 +1,25 @@
+// apps/frontend/tailwind.config.js
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  // Use the same darkMode setting
   darkMode: ['class'],
   content: [
     './src/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
     extend: {
-      /* ===== PHASE 2: TYPOGRAPHY ===== */
+      /* ===== PHASE 3: STONE/AMBER TYPOGRAPHY (NEW) ===== */
       fontFamily: {
-        heading: ['var(--font-poppins)', 'Poppins', 'sans-serif'],
-        body: ['var(--font-inter)', 'Inter', 'sans-serif'],
-        sans: ['var(--font-inter)', 'Inter', 'sans-serif'],
+        // Outfit for body and sans
+        sans: ['var(--font-outfit)', 'Outfit', 'sans-serif'],
+        body: ['var(--font-outfit)', 'Outfit', 'sans-serif'],
+        // Playfair Display for headings and serif
+        serif: ['var(--font-playfair-display)', 'Playfair Display', 'serif'],
+        heading: ['var(--font-playfair-display)', 'Playfair Display', 'serif'],
       },
       fontSize: {
-        // Precise control over font sizes
+        // Keeping existing size definitions but applying new font variables
         'xs': ['0.75rem', { lineHeight: '1.5' }],      // 12px
         'sm': ['0.875rem', { lineHeight: '1.5' }],     // 14px
         'base': ['1rem', { lineHeight: '1.6' }],       // 16px
@@ -23,6 +29,7 @@ module.exports = {
         '3xl': ['1.75rem', { lineHeight: '1.3' }],     // 28px
         '4xl': ['2.25rem', { lineHeight: '1.2' }],     // 36px
         '5xl': ['3rem', { lineHeight: '1.1' }],        // 48px
+        '6xl': ['3.75rem', { lineHeight: '1.1' }],     // New large size
       },
       lineHeight: {
         'tight': '1.2',
@@ -41,8 +48,10 @@ module.exports = {
         'button': '0.3px',
       },
       
-      /* ===== PHASE 1: COLORS ===== */
+      /* ===== PHASE 3: STONE/AMBER COLORS (NEW) ===== */
       colors: {
+        // REMOVING ALL PREVIOUS TAILWIND COLORS (Teal/Blue/Gray extensions)
+        // Only keeping hsl(var(--...)) definitions for shadcn-ui components
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
@@ -76,49 +85,35 @@ module.exports = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))'
         },
-        chart: {
-          '1': 'hsl(var(--chart-1))',
-          '2': 'hsl(var(--chart-2))',
-          '3': 'hsl(var(--chart-3))',
-          '4': 'hsl(var(--chart-4))',
-          '5': 'hsl(var(--chart-5))'
+        // New Custom Color Palette
+        stone: {
+          50: 'hsl(30 18% 98%)',   // #fafaf9
+          100: 'hsl(30 15% 96%)',  // #f5f5f4
+          200: 'hsl(30 12% 90%)',  // New Light Neutral
+          300: 'hsl(30 8% 80%)',   // New Medium Neutral
+          500: 'hsl(30 5% 50%)',   // New Default Neutral
+          600: 'hsl(30 4% 38%)',   // Text Secondary
+          700: 'hsl(30 3% 28%)',   // Text Primary
+          800: 'hsl(30 3% 16%)',   // #292524
+          900: 'hsl(30 3% 11%)',   // #1c1917 (Primary Dark)
         },
-        // Brand color extensions - teal palette
-        blue: {
-          50: 'hsl(173 44% 95%)',
-          100: 'hsl(173 44% 88%)',
-          200: 'hsl(173 44% 76%)',
-          300: 'hsl(173 44% 64%)',
-          400: 'hsl(173 44% 51%)',   // #4DB6AC
-          500: 'hsl(174 60% 40%)',
-          600: 'hsl(174 100% 29%)',  // #009688
-          700: 'hsl(174 100% 24%)',
-          800: 'hsl(174 100% 19%)',
-          900: 'hsl(174 100% 14%)',
+        amber: {
+          50: 'hsl(40 100% 97%)',  // #fffbeb
+          100: 'hsl(40 100% 90%)', // #fef3c7
+          200: 'hsl(40 90% 80%)',
+          300: 'hsl(40 80% 60%)',
+          500: 'hsl(35 90% 45%)', // Accent Default
+          600: 'hsl(30 80% 35%)',
+          700: 'hsl(29 76% 24%)', // Primary Accent (Owner)
+          800: 'hsl(26 75% 18%)',
+          900: 'hsl(25 75% 14%)', // #78350f (Accent Dark)
         },
-        gray: {
-          50: 'hsl(0 0% 98%)',
-          100: 'hsl(0 0% 96%)',
-          200: 'hsl(0 0% 90%)',
-          300: 'hsl(0 0% 83%)',
-          400: 'hsl(0 0% 63%)',
-          500: 'hsl(0 0% 45%)',
-          600: 'hsl(0 0% 38%)',
-          700: 'hsl(0 0% 26%)',
-          800: 'hsl(0 0% 18%)',
-          900: 'hsl(0 0% 13%)',
-        },
-        brand: {
-          primary: 'hsl(var(--color-primary))',
-          'primary-light': 'hsl(var(--color-primary-light))',
-          background: 'hsl(var(--color-background))',
-          'background-dark': 'hsl(var(--color-background-dark))',
-        }
       },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)'
+        sm: 'calc(var(--radius) - 4px)',
+        '3xl': '1.5rem', // Added for new design
       }
     }
   },

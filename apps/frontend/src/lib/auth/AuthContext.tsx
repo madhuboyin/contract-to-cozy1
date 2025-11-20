@@ -14,6 +14,7 @@ import {
 interface AuthContextType {
   user: User | null; 
   loading: boolean;
+  isAuthenticated: boolean;
   login: (input: LoginInput) => Promise<APIResponse<LoginResponse>>;
   register: (input: RegisterInput) => Promise<APIResponse<any>>;
   logout: () => void;
@@ -93,6 +94,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const value = {
     user,
     loading,
+    isAuthenticated: !!user,
     login,
     register,
     logout,

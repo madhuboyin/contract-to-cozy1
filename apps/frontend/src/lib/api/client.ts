@@ -165,6 +165,14 @@ class APIClient {
         };
       }
 
+      // Normalize response: if backend returns data directly (without success wrapper), wrap it
+      if (data.success === undefined) {
+        return {
+          success: true,
+          data: data,
+        };
+      }
+
       return data; // This is the APIResponse, which should have { success: true, ... }
       
       // --- END: MODIFIED LOGIC ---
@@ -507,6 +515,43 @@ class APIClient {
   // ==========================================================================
   // CHECKLIST & MAINTENANCE ENDPOINTS (PHASE 3)
   // ==========================================================================
+
+  /**
+   * Get the user's checklist
+   */
+  async getChecklist(): Promise<APIResponse<{
+    id: string;
+    items: Array<{
+      id: string;
+      title: string;
+      description: string | null;
+      status: 'PENDING' | 'COMPLETED' | 'NOT_NEEDED';
+      serviceCategory: string | null;
+      createdAt: string;
+    }>;
+  }>> {
+    return this.request('/api/checklist');
+  }
+
+  /**
+   * Update a checklist item's status
+   */
+  async updateChecklistItem(
+    itemId: string,
+    status: 'PENDING' | 'COMPLETED' | 'NOT_NEEDED'
+  ): Promise<APIResponse<{
+    id: string;
+    title: string;
+    description: string | null;
+    status: 'PENDING' | 'COMPLETED' | 'NOT_NEEDED';
+    serviceCategory: string | null;
+    createdAt: string;
+  }>> {
+    return this.request(`/api/checklist/items/${itemId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    });
+  }
 
   /**
    * Fetches the list of available maintenance task templates.

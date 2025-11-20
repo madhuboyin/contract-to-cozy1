@@ -1,65 +1,58 @@
 // apps/frontend/src/types/index.ts
 
-/**
- * User Roles
- */
+import React from 'react';
+
+// === NEW DYNAMIC TYPES ===
+export enum UserType {
+  BUYER = 'BUYER',
+  OWNER = 'OWNER',
+  GUEST = 'GUEST'
+}
+
+export interface ServiceCard {
+  id: string;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  imageUrl: string;
+}
+
+export interface MaintenanceTask {
+  id: string;
+  title: string;
+  dueDate: string;
+  status: 'pending' | 'completed' | 'overdue';
+  priority: 'low' | 'medium' | 'high';
+}
+
+export interface ChatMessage {
+  role: 'user' | 'model';
+  text: string;
+}
+
+export interface ClosingMilestone {
+  id: number;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+}
+
+
+// === EXISTING BACKEND TYPES (Partial list from backup) ===
+// Note: If this file contains more existing types, you must ensure they are preserved.
 export type UserRole = 'HOMEOWNER' | 'PROVIDER' | 'ADMIN';
-
-/**
- * User Status
- */
 export type UserStatus = 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING_VERIFICATION';
-
-/**
- * Booking Status
- */
-export type BookingStatus =
+export type BookingStatus = 
   | 'DRAFT'
-  | 'PENDING'
+  | 'PENDING' 
   | 'CONFIRMED'
   | 'IN_PROGRESS'
   | 'COMPLETED'
   | 'CANCELLED'
   | 'DISPUTED';
+export type ServiceCategory = 'INSPECTION' | 'HANDYMAN';
 
-/**
- * Service Category - Synced with Backend Enum
- */
-export type ServiceCategory = 
-  | 'INSPECTION'
-  | 'HANDYMAN'
-  | 'PLUMBING'
-  | 'ELECTRICAL'
-  | 'HVAC'
-  | 'LANDSCAPING'
-  | 'CLEANING'
-  | 'MOVING'
-  | 'PEST_CONTROL'
-  | 'LOCKSMITH'
-  | 'INSURANCE'
-  | 'ATTORNEY'
-  | 'FINANCE'
-  | 'WARRANTY'
-  | 'ADMIN';
-
-/**
- * Recurrence Frequency Enum
- */
-export enum RecurrenceFrequency {
-  MONTHLY = 'MONTHLY',
-  QUARTERLY = 'QUARTERLY',
-  SEMI_ANNUALLY = 'SEMI_ANNUALLY',
-  ANNUALLY = 'ANNUALLY',
-}
-
-/**
- * Homeowner Segment
- */
-export type HomeownerSegment = 'HOME_BUYER' | 'EXISTING_OWNER';
-
-/**
- * User
- */
+// === AUTH TYPES ===
 export interface User {
   id: string;
   email: string;
@@ -68,156 +61,32 @@ export interface User {
   role: UserRole;
   emailVerified: boolean;
   status: UserStatus;
-  // FIX 1: Add the flattened segment field (sent by backend login/me responses)
-  segment?: HomeownerSegment; 
-  // FIX 2: Keep the nested profile structure for comprehensive user data
-  homeownerProfile?: { 
-    id: string;
-    segment: HomeownerSegment;
-  } | null;
+  homeownerProfile?: {
+    segment?: string;
+    [key: string]: any;
+  };
 }
 
-/**
- * Auth Response
- */
+export interface LoginInput {
+  email: string;
+  password: string;
+}
+
+export interface RegisterInput {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  role: UserRole;
+}
+
 export interface LoginResponse {
   accessToken: string;
   refreshToken: string;
   user: User;
 }
 
-export interface RegisterResponse {
-  message: string;
-  user: User;
-  emailVerificationToken?: string;
-}
-
-/**
- * Provider - UPDATED to match backend response
- */
-export interface Provider {
-  id: string;
-  user: {
-    id: string;
-    firstName: string;
-    lastName: string;
-  };
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string | null;
-  businessName: string;
-  averageRating: number;
-  totalReviews: number;
-  totalCompletedJobs: number;
-  serviceRadius: number;
-  serviceCategories: ServiceCategory[];
-}
-
-/**
- * Service - Updated to match database schema
- */
-export interface Service {
-  id: string;
-  name: string;
-  category: ServiceCategory;
-  inspectionType?: string | null;
-  handymanType?: string | null;
-  basePrice: string;
-  priceUnit: string;
-  description: string;
-  minimumCharge?: string | null;
-  estimatedDuration: number | null;
-  isActive: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-/**
- * Property
- */
-export interface Property {
-  id: string;
-  name: string | null;
-  address: string;
-  city: string;
-  state: string;
-  zipCode: string;
-  isPrimary: boolean;
-}
-
-/**
- * Booking Timeline Entry
- */
-export interface BookingTimelineEntry {
-  id: string;
-  status: BookingStatus;
-  note: string | null;
-  createdBy: string | null;
-  createdAt: string;
-}
-
-/**
- * Booking
- */
-export interface Booking {
-  id: string;
-  bookingNumber: string;
-  status: BookingStatus;
-  category: ServiceCategory;
-  homeowner: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    phone: string | null;
-  };
-  provider: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    phone: string | null;
-    businessName: string;
-  };
-  service: {
-    id: string;
-    name: string;
-    category: ServiceCategory;
-    basePrice: string;
-    priceUnit: string;
-  };
-  property: {
-    id: string;
-    name: string | null;
-    address: string;
-    city: string;
-    state: string;
-    zipCode: string;
-  };
-  scheduledDate: string | null;
-  startTime: string | null;
-  endTime: string | null;
-  actualStartTime: string | null;
-  actualEndTime: string | null;
-  estimatedPrice: string;
-  finalPrice: string | null;
-  depositAmount: string | null;
-  description: string;
-  specialRequests: string | null;
-  internalNotes: string | null;
-  cancelledAt: string | null;
-  cancelledBy: string | null;
-  cancellationReason: string | null;
-  completedAt: string | null;
-  timeline: BookingTimelineEntry[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
- * API Response Types
- */
+// === API RESPONSE TYPES ===
 export interface APIError {
   success: false;
   message: string;
@@ -236,82 +105,3 @@ export interface APISuccess<T = any> {
 }
 
 export type APIResponse<T = any> = APISuccess<T> | APIError;
-
-/**
- * Pagination
- */
-export interface PaginationParams {
-  page?: number;
-  limit?: number;
-}
-
-export interface PaginationMeta {
-  page: number;
-  limit: number;
-  total: number;
-  totalPages: number;
-}
-
-/**
- * Form Inputs
- */
-export interface LoginInput {
-  email: string;
-  password: string;
-}
-
-export interface RegisterInput {
-  email: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-  role: UserRole;
-}
-
-export interface CreateBookingInput {
-  providerId: string;
-  serviceId: string;
-  propertyId: string;
-  scheduledDate?: string;
-  startTime?: string;
-  endTime?: string;
-  description: string;
-  specialRequests?: string;
-  estimatedPrice: number;
-  depositAmount?: number;
-}
-
-/**
- * Maintenance Task Template
- */
-export interface MaintenanceTaskTemplate {
-  id: string;
-  title: string;
-  description: string | null;
-  serviceCategory: ServiceCategory | null;
-  defaultFrequency: RecurrenceFrequency;
-  sortOrder: number;
-}
-
-/**
- * Service Category Config (for UI display)
- */
-export interface ServiceCategoryConfig {
-  category: ServiceCategory;
-  displayName: string;
-  description: string;
-  icon: string;
-}
-
-/**
- * Maintenance Task Configuration
- */
-export interface MaintenanceTaskConfig {
-  templateId: string;
-  title: string;
-  description: string | null;
-  isRecurring: boolean;
-  frequency: RecurrenceFrequency | null;
-  nextDueDate: Date | null;
-  serviceCategory: ServiceCategory | null;
-}

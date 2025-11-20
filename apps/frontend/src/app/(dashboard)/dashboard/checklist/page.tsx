@@ -33,6 +33,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'; // <-- This will now be found
 import { CheckedState } from '@radix-ui/react-checkbox'; // <-- NEW: Import type for 'checked'
+import { api } from '@/lib/api/client'; // <-- Use API client instead of direct fetch
 
 // --- Types ---
 // These types should match your Prisma schema
@@ -75,23 +76,14 @@ export default function ChecklistPage() {
     const fetchChecklist = async () => {
       try {
         setLoading(true);
-        const token = localStorage.getItem('accessToken');
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/checklist`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        const response = await api.getChecklist();
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch your checklist.');
+        if (!response.success) {
+          throw new Error(response.message || 'Failed to fetch your checklist.');
         }
-        const data = await response.json();
-        setChecklist(data);
+        setChecklist(response.data);
       } catch (err: any) {
-        setError(err.message);
+        setError(err.message || 'Failed to fetch your checklist.');
       } finally {
         setLoading(false);
       }
@@ -118,34 +110,21 @@ export default function ChecklistPage() {
     setChecklist({ ...checklist, items: optimisticItems as any });
 
     try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/checklist/items/${itemId}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ status }),
-        }
-      );
+      const response = await api.updateChecklistItem(itemId, status);
 
-      if (!response.ok) {
-        throw new Error('Failed to update item.');
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to update item.');
       }
-
-      const updatedItem = await response.json();
 
       // Final update: Replace the item with the confirmed one from the server
       setChecklist((prev) => ({
         ...prev!,
         items: prev!.items.map((item) =>
-          item.id === itemId ? updatedItem : item
+          item.id === itemId ? response.data : item
         ),
       }));
     } catch (err: any) {
-      setError('Failed to update. Please try again.');
+      setError(err.message || 'Failed to update. Please try again.');
       // Rollback on error
       setChecklist((prev) => ({
         ...prev!,

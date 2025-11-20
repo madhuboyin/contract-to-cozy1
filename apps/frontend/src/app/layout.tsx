@@ -1,44 +1,30 @@
 // apps/frontend/src/app/layout.tsx
 
 import type { Metadata } from 'next';
-import { Inter, Poppins } from 'next/font/google';
-import { AuthProvider } from '@/lib/auth/AuthContext';
 import './globals.css';
+import { UserContextProvider } from '@/context/UserContext'; // Import new context
+import { AuthProvider } from '@/lib/auth/AuthContext'; // Import AuthProvider
 
-// Inter for body text
-const inter = Inter({ 
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600'],
-  variable: '--font-inter',
-  display: 'swap',
-});
-
-// Poppins for headings
-const poppins = Poppins({ 
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-poppins',
-  display: 'swap',
-});
+// We rely on the global CSS import for Google Fonts
 
 export const metadata: Metadata = {
-  title: 'Contract to Cozy - Home Service Marketplace',
-  description: 'Connect with trusted service providers for your home',
-  icons: {
-    icon: '/favicon.svg',
-  },
+  title: 'Contract to Cozy | Signature to Sanctuary',
+  description: 'Your complete companion for the home journey—simplifying the chaos of closing and mastering the art of maintenance.',
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
-    <html lang="en">
-      <body className={`${inter.variable} ${poppins.variable} ${inter.className}`}>
+    <html lang="en" suppressHydrationWarning>
+      <body>
+        {/* Wrap content with AuthProvider and UserContextProvider */}
         <AuthProvider>
-          {children}
+          <UserContextProvider>
+            {children}
+          </UserContextProvider>
         </AuthProvider>
       </body>
     </html>

@@ -1,101 +1,83 @@
-// apps/frontend/src/components/landing/Testimonials.tsx
-// Compact version with reduced height
+// src/components/landing/Testimonials.tsx (Prop-based final version)
 
-export default function Testimonials() {
-  const testimonials = [
+import React from 'react';
+import { Quote, Star } from 'lucide-react';
+import { UserType } from '@/types';
+
+interface TestimonialsProps {
+  userType: UserType;
+}
+
+export const Testimonials: React.FC<TestimonialsProps> = ({ userType }) => {
+  const bgClass = userType === UserType.BUYER ? "bg-stone-900" : "bg-amber-50";
+  const textClass = userType === UserType.BUYER ? "text-white" : "text-stone-900";
+  const subTextClass = userType === UserType.BUYER ? "text-stone-400" : "text-stone-500";
+  const cardBg = userType === UserType.BUYER ? "bg-stone-800" : "bg-white";
+  
+  const reviews = userType === UserType.BUYER ? [
     {
-      name: 'Sarah B.',
-      location: 'Brooklyn, NY',
-      initials: 'SB',
-      rating: 5,
-      text: 'Saved me $850 and countless headaches! Found my home inspector, locksmith, and cleaning service all in one place.',
+      text: "Contract to Cozy found a clause in the inspection report I completely missed. Saved us $3,000 on HVAC repairs before we even signed.",
+      author: "Sarah J.",
+      role: "First-time Buyer",
+      image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=1887&auto=format&fit=crop"
     },
     {
-      name: 'Michael R.',
-      location: 'Park Slope, NY',
-      initials: 'MR',
-      rating: 5,
-      text: 'First-time buyer here. Contract to Cozy made everything so simple. Booked all my services in 20 minutes.',
+      text: "The moving checklist was a lifesaver. I usually forget utility transfers, but Cozy handled it all. Walked into a warm house with WiFi!",
+      author: "Michael T.",
+      role: "Relocation Buyer",
+      image: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=1887&auto=format&fit=crop" 
+    },
+  ] : [
+    {
+      text: "The maintenance reminders are a game-changer. I finally feel proactive about my home instead of constantly putting out fires.",
+      author: "David M.",
+      role: "Long-term Homeowner",
+      image: "https://images.unsplash.com/photo-1507003211169-0a812d80f828?q=80&w=1887&auto=format&fit=crop" 
     },
     {
-      name: 'Jessica C.',
-      location: 'Williamsburg, NY',
-      initials: 'JC',
-      rating: 5,
-      text: 'The neighborhood verification is genius! I saw the inspector had done 12 homes on my block. Felt way more confident.',
+      text: "Found a five-star plumber instantly using their vetted directory. The transparency in pricing was a huge relief.",
+      author: "Jessica L.",
+      role: "Property Manager",
+      image: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=1884&auto=format&fit=crop" 
     },
   ];
 
+  if (userType === UserType.GUEST) return null;
+
   return (
-    <section className="py-12 md:py-16 px-4 sm:px-6 lg:px-8 bg-gray-50">
-      <div className="max-w-7xl mx-auto">
-        {/* Section Header - Compact */}
-        <div className="text-center mb-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
-            Loved by Homebuyers
-          </h2>
-          <p className="text-base text-gray-600">
-            Join thousands of happy homeowners
-          </p>
+    <section className={`py-20 md:py-32 ${bgClass}`}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mb-12 flex flex-col md:flex-row justify-between items-start md:items-center">
+          <div>
+            <span className={`font-bold tracking-widest uppercase text-sm ${userType === UserType.BUYER ? 'text-amber-500' : 'text-stone-700'}`}>TESTIMONIALS</span>
+            <h2 className={`text-4xl md:text-5xl font-serif font-bold mt-3 ${textClass}`}>
+              Living the Cozy Life.
+            </h2>
+          </div>
+          <div className="flex text-amber-500 space-x-1 mt-4 md:mt-0">
+             {[...Array(5)].map((_, i) => <Star key={i} className="w-5 h-5 fill-current" />)}
+             <span className={`ml-2 text-sm font-medium ${subTextClass}`}>4.9/5 from 2,000+ users</span>
+          </div>
         </div>
 
-        {/* Testimonials Grid - Compact */}
-        <div className="grid md:grid-cols-3 gap-6">
-          {testimonials.map((testimonial, index) => (
-            <div
-              key={index}
-              className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-all duration-300"
-            >
-              {/* Stars - Smaller */}
-              <div className="flex text-yellow-400 text-lg mb-3">
-                {Array.from({ length: testimonial.rating }).map((_, i) => (
-                  <span key={i}>★</span>
-                ))}
-              </div>
-
-              {/* Testimonial Text - Compact */}
-              <p className="text-sm text-gray-700 leading-relaxed mb-4">
-                "{testimonial.text}"
+        <div className="grid md:grid-cols-2 gap-8">
+          {reviews.map((review, idx) => (
+            <div key={idx} className={`${cardBg} p-8 rounded-3xl relative group hover:-translate-y-1 transition-transform duration-300`}>
+              <Quote className={`w-10 h-10 ${userType === UserType.BUYER ? 'text-stone-700' : 'text-amber-100'} absolute top-8 right-8`} />
+              <p className={`text-lg leading-relaxed mb-8 relative z-10 ${userType === UserType.BUYER ? 'text-stone-200' : 'text-stone-600'}`}>
+                "{review.text}"
               </p>
-
-              {/* Author - Compact */}
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-full flex items-center justify-center text-white text-sm font-semibold">
-                  {testimonial.initials}
-                </div>
+              <div className="flex items-center">
+                <img src={review.image} alt={review.author} className="w-12 h-12 rounded-full object-cover mr-4 ring-2 ring-amber-500/50" />
                 <div>
-                  <div className="text-sm font-semibold text-gray-900">
-                    {testimonial.name}
-                  </div>
-                  <div className="text-xs text-gray-600">
-                    {testimonial.location}
-                  </div>
+                  <div className={`font-semibold text-lg ${userType === UserType.BUYER ? 'text-white' : 'text-stone-900'}`}>{review.author}</div>
+                  <div className={`text-sm ${userType === UserType.BUYER ? 'text-stone-400' : 'text-stone-600'}`}>{review.role}</div>
                 </div>
               </div>
             </div>
           ))}
         </div>
-
-        {/* Trust Badges - Compact */}
-        <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-          <div>
-            <div className="text-2xl font-bold text-blue-600 mb-1">10,000+</div>
-            <div className="text-xs text-gray-600">Happy Homeowners</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-blue-600 mb-1">500+</div>
-            <div className="text-xs text-gray-600">Verified Providers</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-blue-600 mb-1">4.9/5</div>
-            <div className="text-xs text-gray-600">Average Rating</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-blue-600 mb-1">$850+</div>
-            <div className="text-xs text-gray-600">Average Savings</div>
-          </div>
-        </div>
       </div>
     </section>
   );
-}
+};
