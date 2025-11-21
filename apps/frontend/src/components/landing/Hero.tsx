@@ -4,8 +4,8 @@ import React from 'react';
 import Image from 'next/image';
 import { ArrowRight, Key, ShieldCheck } from 'lucide-react';
 import { UserType } from '@/types'; 
-// NOTE: Assuming useAuth is correctly imported from your AuthContext file.
-import { useAuth } from '@/lib/auth/AuthContext'; 
+import { useRouter } from 'next/navigation'; // Already imported
+import { useAuth } from '@/lib/auth/AuthContext'; // Already imported
 
 interface HeroProps {
   userType: UserType;
@@ -25,7 +25,8 @@ type ContentMap = {
 }
 
 export const Hero: React.FC<HeroProps> = ({ userType, setUserType }) => {
-  const { isAuthenticated } = useAuth(); // Get authentication state
+  const { isAuthenticated } = useAuth();
+  const router = useRouter(); // Use the router instance
 
   // Define the target paths for redirection
   const BUYER_DESTINATION = '/dashboard/checklist';
@@ -40,7 +41,7 @@ export const Hero: React.FC<HeroProps> = ({ userType, setUserType }) => {
 
   const content: ContentMap = { 
     [UserType.GUEST]: {
-      image: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?q=80&w=2053&auto=format&fit=crop", 
+      image: "https://images.unsplash.com/photo-1600607687939-ce8a0c25118c?q=80&w=2053&auto=format&fit=crop", 
       title: "From Contract to Cozy",
       subtitle: "Your complete companion for the home journey—simplifying the chaos of closing and mastering the art of maintenance.",
       buttonText: null,
@@ -52,16 +53,16 @@ export const Hero: React.FC<HeroProps> = ({ userType, setUserType }) => {
       title: "Close with Confidence",
       subtitle: "Navigate inspections, insurance, and the final move without the stress. We guide you from signed offer to front door keys.",
       buttonText: "Start Your Closing Checklist",
-      accent: "bg-stone-900 hover:bg-stone-800",
       link: getCtaLink(BUYER_DESTINATION), // Conditional Link Applied
+      accent: "bg-stone-900 hover:bg-stone-800",
     },
     [UserType.OWNER]: {
       image: "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?q=80&w=2000&auto=format&fit=crop", 
       title: "Master Your Home Maintenance",
       subtitle: "Stop guessing about repairs. We provide personalized reminders, vetted local pros, and budget tracking for every major system in your home.",
       buttonText: "Set Up My Maintenance Plan",
-      accent: "bg-amber-700 hover:bg-amber-600",
       link: getCtaLink(OWNER_DESTINATION), // Conditional Link Applied
+      accent: "bg-amber-700 hover:bg-amber-600",
     },
   };
 
@@ -135,13 +136,14 @@ export const Hero: React.FC<HeroProps> = ({ userType, setUserType }) => {
           ) : (
             /* Buyer/Owner State: Show the primary CTA */
             current.link && ( 
-              <a
-                href={current.link} 
+              // FIX: Use an explicit button with router.push()
+              <button
+                onClick={() => router.push(current.link!)} // Use non-null assertion as link is truthy
                 className={`px-8 py-4 rounded-full text-white font-medium tracking-wide shadow-lg hover:shadow-xl transition-all duration-300 flex items-center ${current.accent || 'bg-stone-900'}`}
               >
                 {current.buttonText}
                 <ArrowRight className="w-5 h-5 ml-3" />
-              </a>
+              </button>
             )
           )}
         </div>

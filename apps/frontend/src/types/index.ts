@@ -86,6 +86,12 @@ export interface LoginResponse {
   user: User;
 }
 
+export interface RegisterResponse {
+  message: string;
+  user: User;
+  emailVerificationToken?: string;
+}
+
 // === API RESPONSE TYPES ===
 export interface APIError {
   success: false;
