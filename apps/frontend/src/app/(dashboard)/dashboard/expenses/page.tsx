@@ -1,17 +1,16 @@
 // apps/frontend/src/app/(dashboard)/dashboard/expenses/page.tsx
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { DollarSign, Plus, Loader2, Trash2, Edit, X, Save, Filter } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { api } from '@/lib/api/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTrigger, DialogFooter, DialogHeader } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-// FIX: Add APIError to the imports
 import { Expense, CreateExpenseInput, UpdateExpenseInput, Property, ExpenseCategory, APIError, APIResponse } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
@@ -32,7 +31,7 @@ const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
 const SELECT_NONE_VALUE = '__NONE__';
 const SELECT_ALL_VALUE = '__ALL__';
 
-// --- Expense Form Component ---
+// --- Expense Form Component (Simplified for brevity, assuming no changes needed here) ---
 interface ExpenseFormProps {
   initialData?: Expense;
   properties: Property[];
@@ -78,7 +77,9 @@ const ExpenseForm = ({ initialData, properties, onSave, onClose, isSubmitting }:
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <h2 className="text-xl font-semibold mb-4">{title}</h2>
+      <DialogHeader>
+        <h2 className="text-xl font-semibold">{title}</h2>
+      </DialogHeader>
       
       <div className="grid gap-2">
         <Label htmlFor="description">Description *</Label>
@@ -165,12 +166,12 @@ export default function ExpensesPage() {
   const [editingExpense, setEditingExpense] = useState<Expense | undefined>(undefined);
   const { toast } = useToast();
 
-  const fetchDependencies = async () => {
-    // FIX: Map the placeholder value back to undefined/null for the API call
+  // CRITICAL FIX: Wrap in useCallback and ensure it handles the full fetch cycle
+  const fetchDependencies = useCallback(async () => {
+    setIsLoading(true); // Always set loading true before fetching
     const apiPropertyId = filterPropertyId === SELECT_ALL_VALUE ? undefined : filterPropertyId;
     
     const [expensesRes, propertiesRes] = await Promise.all([
-      // Pass undefined for propertyId if filtering "All Expenses"
       api.listExpenses(apiPropertyId), 
       api.getProperties(),
     ]);
@@ -183,16 +184,19 @@ export default function ExpensesPage() {
         description: expensesRes.message,
         variant: "destructive",
       });
+      setExpenses([]); // Ensure state is cleared on API failure
     }
 
     if (propertiesRes.success) {
       setProperties(propertiesRes.data.properties);
     }
-  };
+    
+    setIsLoading(false); // Set loading false only after processing all results
+  }, [filterPropertyId]); // Depend on filterPropertyId
 
   useEffect(() => {
-    fetchDependencies().finally(() => setIsLoading(false));
-  }, [filterPropertyId]); // Refetch when filter changes
+    fetchDependencies();
+  }, [fetchDependencies]); // Depend on memoized fetch function
 
   const handleSave = async (data: CreateExpenseInput | UpdateExpenseInput) => {
     setIsSubmitting(true);
@@ -209,14 +213,15 @@ export default function ExpensesPage() {
         title: editingExpense ? 'Expense Updated' : 'Expense Recorded',
         description: `Expense for $${res.data.amount.toFixed(2)} was saved successfully.`,
       });
-      await fetchDependencies(); // Refresh list
+      // FIX: Ensure the list refresh is triggered right after a successful save.
+      await fetchDependencies(); 
       setIsModalOpen(false);
       setEditingExpense(undefined);
     } else {
-      // FIX: Cast the response to APIError before accessing message
+      // FIX: Remove unnecessary cast to APIError
       toast({
         title: 'Operation Failed',
-        description: (res as APIError).message,
+        description: res.message,
         variant: 'destructive',
       });
     }
@@ -233,15 +238,16 @@ export default function ExpensesPage() {
 
     if (res.success) {
       toast({ title: 'Expense Deleted', description: 'The expense record was removed.' });
+      // FIX: Ensure the list refresh is triggered right after a successful delete.
       await fetchDependencies();
     } else {
-      // FIX: Cast the response to APIError before accessing message
-      toast({ title: 'Deletion Failed', description: (res as APIError).message, variant: 'destructive' });
+      // FIX: Remove unnecessary cast to APIError
+      toast({ title: 'Deletion Failed', description: res.message, variant: 'destructive' });
     }
-    setIsLoading(false);
+    // Note: setIsLoading(false) is handled inside fetchDependencies now
   };
   
-  // FIX: Update signature to accept Expense | undefined
+  // Update signature to accept Expense | undefined
   const openEditModal = (expense?: Expense) => {
     setEditingExpense(expense);
     setIsModalOpen(true);
@@ -253,6 +259,7 @@ export default function ExpensesPage() {
   };
 
   const sortedExpenses = useMemo(() => {
+    // Rely on expenses state being correctly updated by fetchDependencies
     return [...expenses].sort((a, b) => {
         const dateA = parseISO(a.transactionDate).getTime();
         const dateB = parseISO(b.transactionDate).getTime();
@@ -278,12 +285,10 @@ export default function ExpensesPage() {
         </h2>
         <div className="flex items-center gap-4">
           <Dialog open={isModalOpen} onOpenChange={closeModal}>
-            <DialogTrigger asChild>
-              {/* FIX: The onClick passes undefined, which is now accepted */}
-              <Button onClick={() => openEditModal(undefined)}>
-                <Plus className="w-4 h-4 mr-2" /> Add Expense
-              </Button>
-            </DialogTrigger>
+            {/* FIX: Button directly opens the controlled dialog */}
+            <Button onClick={() => openEditModal(undefined)}>
+              <Plus className="w-4 h-4 mr-2" /> Add Expense
+            </Button>
             <DialogContent className="sm:max-w-[500px]">
               <ExpenseForm 
                 initialData={editingExpense}
@@ -343,6 +348,7 @@ export default function ExpensesPage() {
       </div>
 
 
+      {/* FIX: Display No Data/Loading only after checking isLoading */}
       {isLoading && (
         <div className="text-center py-10">
           <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto" />
@@ -350,11 +356,12 @@ export default function ExpensesPage() {
         </div>
       )}
 
+      {/* FIX: Check if NOT loading AND length is 0 */}
       {!isLoading && sortedExpenses.length === 0 && (
         <Card className="text-center py-10">
           <DollarSign className="w-10 h-10 text-gray-400 mx-auto mb-3" />
           <CardTitle>No Expenses Found</CardTitle>
-          <CardDescription>Click "Add Expense" to start tracking costs.</CardDescription>
+          <CardDescription>Click "Add Expense" to create your first record.</CardDescription>
         </Card>
       )}
 
@@ -405,7 +412,7 @@ export default function ExpensesPage() {
       )}
       <Dialog open={editingExpense !== undefined && isModalOpen} onOpenChange={closeModal}>
         <DialogContent className="sm:max-w-[500px]">
-          {editingExpense && (
+          {(editingExpense !== undefined || !editingExpense) && (
             <ExpenseForm 
                 initialData={editingExpense}
                 properties={properties}

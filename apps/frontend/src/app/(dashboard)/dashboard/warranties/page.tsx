@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/warranties/page.tsx
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { FileText, Plus, Loader2, Wrench, Trash2, Edit, X, Save, Upload, ExternalLink } from 'lucide-react';
 import { format, parseISO, isPast } from 'date-fns';
 import { api } from '@/lib/api/client';
@@ -11,10 +11,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Warranty, CreateWarrantyInput, UpdateWarrantyInput, Property, APIResponse } from '@/types';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Warranty, CreateWarrantyInput, UpdateWarrantyInput, Property, APIResponse, APIError } from '@/types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue }
+ from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
+
+// Placeholder for "None" option, necessary to avoid Radix UI error on value=""
+const SELECT_NONE_VALUE = '__NONE__';
 
 // --- Warranty Form Component ---
 interface WarrantyFormProps {
@@ -43,9 +47,9 @@ const WarrantyForm = ({ initialData, properties, onSave, onClose, isSubmitting }
       [id]: id === 'cost' ? (value ? parseFloat(value) : undefined) : value,
     }));
   };
-
+  
   const handleSelectChange = (value: string) => {
-    setFormData(prev => ({ ...prev, propertyId: value }));
+    setFormData(prev => ({ ...prev, propertyId: value === SELECT_NONE_VALUE ? undefined : value }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -54,10 +58,14 @@ const WarrantyForm = ({ initialData, properties, onSave, onClose, isSubmitting }
   };
 
   const title = initialData ? `Edit Warranty: ${initialData.providerName}` : 'Add New Warranty';
+  const selectedPropertyId = formData.propertyId || SELECT_NONE_VALUE;
+
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <h2 className="text-xl font-semibold mb-4">{title}</h2>
+      <DialogHeader>
+        <DialogTitle>{title}</DialogTitle>
+      </DialogHeader>
       
       <div className="grid gap-2">
         <Label htmlFor="providerName">Provider Name *</Label>
@@ -89,13 +97,16 @@ const WarrantyForm = ({ initialData, properties, onSave, onClose, isSubmitting }
       <div className="grid gap-2">
         <Label htmlFor="propertyId">Associated Property</Label>
         <Select 
-          value={formData.propertyId || ''} 
+          value={selectedPropertyId} 
           onValueChange={handleSelectChange}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select a property (Optional)" />
           </SelectTrigger>
           <SelectContent>
+             <SelectItem value={SELECT_NONE_VALUE}>
+                None (General Warranty)
+              </SelectItem> 
             {properties.map(p => (
               <SelectItem key={p.id} value={p.id}>
                 {p.name} ({p.zipCode})
@@ -156,11 +167,14 @@ export default function WarrantiesPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // FIX: Separate dialog state for Add/Edit
+  const [isAddEditModalOpen, setIsAddEditModalOpen] = useState(false); 
   const [editingWarranty, setEditingWarranty] = useState<Warranty | undefined>(undefined);
   const { toast } = useToast();
 
-  const fetchDependencies = async () => {
+  // FIX: Wrap fetchDependencies in useCallback and ensure proper loading state management
+  const fetchDependencies = useCallback(async () => {
+    setIsLoading(true);
     const [warrantiesRes, propertiesRes] = await Promise.all([
       api.listWarranties(),
       api.getProperties(),
@@ -174,16 +188,19 @@ export default function WarrantiesPage() {
         description: warrantiesRes.message,
         variant: "destructive",
       });
+      setWarranties([]);
     }
 
     if (propertiesRes.success) {
       setProperties(propertiesRes.data.properties);
     }
-  };
+    setIsLoading(false);
+  }, [toast]); // Dependency on toast is included as good practice
 
+  // Initial Data Fetch
   useEffect(() => {
-    fetchDependencies().finally(() => setIsLoading(false));
-  }, []);
+    fetchDependencies();
+  }, [fetchDependencies]);
 
   const handleSave = async (data: CreateWarrantyInput | UpdateWarrantyInput) => {
     setIsSubmitting(true);
@@ -200,8 +217,8 @@ export default function WarrantiesPage() {
         title: editingWarranty ? 'Warranty Updated' : 'Warranty Created',
         description: `${res.data.providerName}'s policy was saved successfully.`,
       });
-      await fetchDependencies(); // Refresh list
-      setIsModalOpen(false);
+      await fetchDependencies(); // Refresh list to show new/updated item
+      setIsAddEditModalOpen(false);
       setEditingWarranty(undefined);
     } else {
       toast({
@@ -223,24 +240,26 @@ export default function WarrantiesPage() {
 
     if (res.success) {
       toast({ title: 'Warranty Deleted', description: 'The warranty record was removed.' });
-      await fetchDependencies();
+      await fetchDependencies(); // Refresh list to remove deleted item
     } else {
       toast({ title: 'Deletion Failed', description: res.message, variant: 'destructive' });
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
   
-  const openEditModal = (warranty: Warranty) => {
+  // Update signature to accept Warranty | undefined
+  const openAddEditModal = (warranty?: Warranty) => {
     setEditingWarranty(warranty);
-    setIsModalOpen(true);
+    setIsAddEditModalOpen(true);
   };
   
-  const closeModal = () => {
-    setIsModalOpen(false);
+  const closeAddEditModal = () => {
+    setIsAddEditModalOpen(false);
     setEditingWarranty(undefined);
   };
 
   const sortedWarranties = useMemo(() => {
+    // Sort logic remains the same
     return [...warranties].sort((a, b) => {
         const dateA = parseISO(a.expiryDate).getTime();
         const dateB = parseISO(b.expiryDate).getTime();
@@ -254,18 +273,19 @@ export default function WarrantiesPage() {
         <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
           <Wrench className="w-7 h-7 text-blue-600" /> My Home Warranties
         </h2>
-        <Dialog open={isModalOpen} onOpenChange={closeModal}>
-          <DialogTrigger asChild>
-            <Button onClick={() => { setEditingWarranty(undefined); setIsModalOpen(true); }}>
-              <Plus className="w-4 h-4 mr-2" /> Add Warranty
-            </Button>
-          </DialogTrigger>
+        {/* FIX: Use only one controlled Dialog for Add/Edit */}
+        <Dialog open={isAddEditModalOpen} onOpenChange={closeAddEditModal}>
+          {/* FIX: Removed DialogTrigger, Button directly opens the controlled dialog */}
+          <Button onClick={() => openAddEditModal(undefined)}>
+            <Plus className="w-4 h-4 mr-2" /> Add Warranty
+          </Button>
           <DialogContent className="sm:max-w-[500px]">
+             {/* Render the form only when needed (initialData set for edit, or undefined for add) */}
             <WarrantyForm 
               initialData={editingWarranty}
               properties={properties}
               onSave={handleSave}
-              onClose={closeModal}
+              onClose={closeAddEditModal}
               isSubmitting={isSubmitting}
             />
           </DialogContent>
@@ -273,6 +293,7 @@ export default function WarrantiesPage() {
       </div>
       <p className="text-muted-foreground">Track all service, appliance, and home warranties in one place. Never miss an expiration date.</p>
 
+      {/* FIX: Corrected Loading and Empty State rendering logic */}
       {isLoading && (
         <div className="text-center py-10">
           <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto" />
@@ -333,34 +354,21 @@ export default function WarrantiesPage() {
                         <DocumentsView documents={warranty.documents} />
                     </div>
                 </CardContent>
-                <Dialog open={editingWarranty?.id === warranty.id && isModalOpen} onOpenChange={closeModal}>
-                  <DialogTrigger asChild>
-                    <div className="flex border-t">
-                      <Button variant="ghost" className="w-1/2 rounded-none rounded-bl-lg text-blue-600" onClick={() => openEditModal(warranty)}>
-                        <Edit className="w-4 h-4 mr-2" /> Edit
-                      </Button>
-                      <Button variant="ghost" className="w-1/2 rounded-none rounded-br-lg text-red-600 hover:bg-red-50" onClick={() => handleDelete(warranty.id)}>
-                        <Trash2 className="w-4 h-4 mr-2" /> Delete
-                      </Button>
-                    </div>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[500px]">
-                    {editingWarranty?.id === warranty.id && (
-                       <WarrantyForm 
-                          initialData={editingWarranty}
-                          properties={properties}
-                          onSave={handleSave}
-                          onClose={closeModal}
-                          isSubmitting={isSubmitting}
-                        />
-                    )}
-                  </DialogContent>
-                </Dialog>
+                <div className="flex border-t">
+                  {/* FIX: Button directly calls the state function for Edit */}
+                  <Button variant="ghost" className="w-1/2 rounded-none rounded-bl-lg text-blue-600" onClick={() => openAddEditModal(warranty)}>
+                    <Edit className="w-4 h-4 mr-2" /> Edit
+                  </Button>
+                  <Button variant="ghost" className="w-1/2 rounded-none rounded-br-lg text-red-600 hover:bg-red-50" onClick={() => handleDelete(warranty.id)}>
+                    <Trash2 className="w-4 h-4 mr-2" /> Delete
+                  </Button>
+                </div>
               </Card>
             );
           })}
         </div>
       )}
+      {/* Remove second dialog instance, use the main one controlled by isAddEditModalOpen */}
     </div>
   );
 }
