@@ -57,6 +57,91 @@ export enum RecurrenceFrequency {
  */
 export type HomeownerSegment = 'HOME_BUYER' | 'EXISTING_OWNER';
 
+// ============================================================================
+// NEW HOMEOWNER MANAGEMENT TYPES
+// ============================================================================
+
+/**
+ * Expense Category Enum
+ */
+export type ExpenseCategory = 
+  | 'REPAIR_SERVICE'
+  | 'PROPERTY_TAX'
+  | 'HOA_FEE'
+  | 'UTILITY'
+  | 'APPLIANCE'
+  | 'MATERIALS'
+  | 'OTHER';
+
+/**
+ * Core Document Type (Extended to include new relations)
+ * NOTE: This is a simplified frontend type; backend includes more fields.
+ */
+export interface Document {
+  id: string;
+  name: string;
+  fileUrl: string;
+  type: string;
+  description: string | null;
+  createdAt: string;
+}
+
+/**
+ * Expense Interface
+ */
+export interface Expense {
+  id: string;
+  homeownerProfileId: string;
+  propertyId: string | null;
+  bookingId: string | null;
+  description: string;
+  category: ExpenseCategory;
+  amount: number;
+  transactionDate: string; // ISO Date string
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Warranty Interface
+ */
+export interface Warranty {
+  id: string;
+  homeownerProfileId: string;
+  propertyId: string | null;
+  providerName: string;
+  policyNumber: string | null;
+  coverageDetails: string | null;
+  cost: number | null;
+  startDate: string; // ISO Date string
+  expiryDate: string; // ISO Date string
+  documents: Document[]; // Array of associated documents
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Insurance Policy Interface
+ */
+export interface InsurancePolicy {
+  id: string;
+  homeownerProfileId: string;
+  propertyId: string | null;
+  carrierName: string;
+  policyNumber: string;
+  coverageType: string | null;
+  premiumAmount: number;
+  startDate: string; // ISO Date string
+  expiryDate: string; // ISO Date string
+  documents: Document[]; // Array of associated documents
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================================================
+// CORE APPLICATION TYPES (Existing)
+// ============================================================================
+
 /**
  * User
  */
@@ -252,9 +337,10 @@ export interface PaginationMeta {
   totalPages: number;
 }
 
-/**
- * Form Inputs
- */
+// ============================================================================
+// FORM INPUTS (DTOs for Frontend)
+// ============================================================================
+
 export interface LoginInput {
   email: string;
   password: string;
@@ -315,3 +401,39 @@ export interface MaintenanceTaskConfig {
   nextDueDate: Date | null;
   serviceCategory: ServiceCategory | null;
 }
+
+// NEW DTOs for Home Management
+
+export interface CreateExpenseInput {
+  propertyId?: string;
+  bookingId?: string;
+  description: string;
+  category: ExpenseCategory;
+  amount: number;
+  transactionDate: string; // ISO date string
+}
+export interface UpdateExpenseInput extends Partial<CreateExpenseInput> {}
+
+
+export interface CreateWarrantyInput {
+  propertyId?: string;
+  providerName: string;
+  policyNumber?: string;
+  coverageDetails?: string;
+  cost?: number;
+  startDate: string; // ISO date string
+  expiryDate: string; // ISO date string
+}
+export interface UpdateWarrantyInput extends Partial<CreateWarrantyInput> {}
+
+
+export interface CreateInsurancePolicyInput {
+  propertyId?: string;
+  carrierName: string;
+  policyNumber: string;
+  coverageType?: string;
+  premiumAmount: number;
+  startDate: string; // ISO date string
+  expiryDate: string; // ISO date string
+}
+export interface UpdateInsurancePolicyInput extends Partial<CreateInsurancePolicyInput> {}

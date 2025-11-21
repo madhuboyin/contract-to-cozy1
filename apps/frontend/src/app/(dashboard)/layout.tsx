@@ -23,6 +23,10 @@ import {
   LogOut,
   PanelLeft,
   Settings,
+  Shield, // NEW: Insurance
+  Wrench, // NEW: Warranties
+  DollarSign, // NEW: Expenses
+  FileText, // NEW: Documents
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { User } from '@/types'; 
@@ -135,13 +139,22 @@ function DesktopNav({ user }: { user: User | null }) {
     { name: 'Find Providers', href: '/dashboard/providers', icon: Search },
   ];
 
-  // FIX: Check the top-level 'user.segment' property
-  if (user && user.segment === 'HOME_BUYER') {
+  // Conditional Navigation based on Segment
+  if (user?.segment === 'HOME_BUYER') {
     navLinks.push({
       name: 'Checklist',
       href: '/dashboard/checklist',
       icon: ListChecks,
     });
+  } else if (user?.segment === 'EXISTING_OWNER') {
+    // NEW LINKS for Existing Owners
+    navLinks.push(
+      { name: 'Insurance', href: '/dashboard/insurance', icon: Shield },
+      { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench },
+      { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign },
+      // The documents feature will likely be integrated into properties/warranties/insurance screens
+      // { name: 'Documents', href: '/dashboard/documents', icon: FileText }, 
+    );
   }
 
   return (
@@ -152,7 +165,7 @@ function DesktopNav({ user }: { user: User | null }) {
           href={link.href}
           className={cn(
             'text-sm font-medium text-gray-600 transition-all hover:text-blue-600',
-            pathname === link.href && 'text-blue-600 font-semibold'
+            pathname.startsWith(link.href) && 'text-blue-600 font-semibold'
           )}
         >
           {link.name}
@@ -175,13 +188,20 @@ function SidebarNav({ user }: { user: User | null }) {
     { name: 'Find Providers', href: '/dashboard/providers', icon: Search },
   ];
 
-  // FIX: Check the top-level 'user.segment' property
-  if (user && user.segment === 'HOME_BUYER') {
+  // Conditional Navigation based on Segment
+  if (user?.segment === 'HOME_BUYER') {
     navLinks.push({
       name: 'Checklist',
       href: '/dashboard/checklist',
       icon: ListChecks,
     });
+  } else if (user?.segment === 'EXISTING_OWNER') {
+    // NEW LINKS for Existing Owners
+    navLinks.push(
+      { name: 'Insurance', href: '/dashboard/insurance', icon: Shield },
+      { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench },
+      { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign },
+    );
   }
 
   // Use SheetClose to make links close the menu on navigation
@@ -193,7 +213,7 @@ function SidebarNav({ user }: { user: User | null }) {
             href={link.href}
             className={cn(
               'flex items-center gap-3 rounded-lg px-3 py-2 text-gray-700 transition-all hover:text-blue-600 hover:bg-gray-100',
-              pathname === link.href && 'bg-blue-100 text-blue-700 hover:text-blue-700'
+              pathname.startsWith(link.href) && 'bg-blue-100 text-blue-700 hover:text-blue-700'
             )}
           >
             <link.icon className="h-4 w-4" />

@@ -3,6 +3,7 @@
 import type { Metadata } from 'next';
 import { Inter, Poppins } from 'next/font/google';
 import { AuthProvider } from '@/lib/auth/AuthContext';
+import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
 
 // Inter for body text
@@ -39,6 +40,7 @@ export default function RootLayout({
       <body className={`${inter.variable} ${poppins.variable} ${inter.className}`}>
         <AuthProvider>
           {children}
+          <Toaster />
         </AuthProvider>
       </body>
     </html>

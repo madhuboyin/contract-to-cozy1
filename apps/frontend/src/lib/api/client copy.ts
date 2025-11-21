@@ -14,30 +14,18 @@ import {
   PaginationParams,
   Property,
   MaintenanceTaskTemplate,
-  MaintenanceTaskConfig,
-  // NEW HOME MANAGEMENT IMPORTS
-  CreateExpenseInput,
-  UpdateExpenseInput,
-  Expense,
-  CreateWarrantyInput,
-  UpdateWarrantyInput,
-  Warranty,
-  CreateInsurancePolicyInput,
-  UpdateInsurancePolicyInput,
-  InsurancePolicy,
-  APISuccess, // Assuming APISuccess is needed for list calls
+  MaintenanceTaskConfig, // <-- ADDED THIS IMPORT
 } from '@/types';
 
-// NOTE: Changed to API_BASE_URL to match common convention, but using the provided API_URL environment variable check
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 /**
  * API Client for Contract to Cozy Backend
- * Uses a class structure for token refresh logic and state management.
  */
 class APIClient {
   private baseURL: string;
 
+  // --- NEW ---
   // Add state to prevent multiple refresh attempts at the same time
   private isRefreshing = false;
   private failedQueue: {
@@ -106,33 +94,22 @@ class APIClient {
   ): Promise<APIResponse<T>> {
     const token = this.getToken();
     
-    // Ensure body is handled as JSON string if present
-    let body = options.body;
-    if (options.body && typeof options.body !== 'string') {
-        body = JSON.stringify(options.body);
-    }
-    
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(options.headers as Record<string, string>),
     };
     
-    // The Authorization header is ONLY set if a token is found in localStorage
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    
-    // If the caller passed an Authorization header directly in options (e.g., in getCurrentUser), 
-    // it will overwrite the localStorage token if needed. This relies on the spread operator above.
 
     try {
       let response = await fetch(`${this.baseURL}${endpoint}`, {
         ...options,
-        body, // Use the prepared JSON body
         headers,
       });
 
-      // --- START: MODIFIED LOGIC (Token Refresh and Response Handling) ---
+      // --- START: MODIFIED LOGIC ---
 
       if (response.status === 401 && !endpoint.startsWith('/api/auth/')) {
         // Token expired or invalid, and it's not an auth endpoint
@@ -140,10 +117,7 @@ class APIClient {
         if (this.isRefreshing) {
           // A refresh is already in progress. Add this request to the queue.
           return new Promise((resolve, reject) => {
-            // NOTE: Store the options without the potentially expired token header
-            const cleanHeaders = { ...headers };
-            delete cleanHeaders['Authorization']; 
-            this.failedQueue.push({ resolve, reject, endpoint, options, headers: cleanHeaders });
+            this.failedQueue.push({ resolve, reject, endpoint, options, headers });
           });
         }
 
@@ -162,7 +136,6 @@ class APIClient {
           const newHeaders = { ...headers, 'Authorization': `Bearer ${newToken}` };
           response = await fetch(`${this.baseURL}${endpoint}`, {
             ...options,
-            body,
             headers: newHeaders,
           });
 
@@ -170,6 +143,7 @@ class APIClient {
           // Refresh failed. Log user out.
           this.isRefreshing = false;
           const error = new Error('Session expired. Please log in again.');
+          // Reject all waiting requests
           this.processFailedQueue(error, null);
           
           this.removeToken();
@@ -190,18 +164,7 @@ class APIClient {
           error: data.error,
         };
       }
-      
-      // CRITICAL FIX: Ensure if the body explicitly contains { success: false }, we treat it as failure, 
-      // even if the HTTP status was 200 OK (common in login responses)
-      if (data && data.success === false) {
-          return {
-              success: false,
-              message: data.message || 'Request failed due to business logic error.',
-              error: data.error,
-          } as APIResponse<T>;
-      }
 
-      // If HTTP 2xx and no explicit { success: false } in body
       return data; // This is the APIResponse, which should have { success: true, ... }
       
       // --- END: MODIFIED LOGIC ---
@@ -216,7 +179,7 @@ class APIClient {
   }
 
   // ==========================================================================
-  // AUTH ENDPOINTS (Restored original names/logic)
+  // AUTH ENDPOINTS
   // ==========================================================================
 
   /**
@@ -238,7 +201,7 @@ class APIClient {
       body: JSON.stringify(input),
     });
 
-    // Save tokens on successful login, relying on response.success check in request()
+    // Save tokens on successful login
     if (response.success) {
       this.setToken(response.data.accessToken);
       if (typeof window !== 'undefined') {
@@ -260,19 +223,10 @@ class APIClient {
   }
 
   /**
-   * Get current user (Restored name: getCurrentUser)
-   * This corresponds to the /api/auth/me endpoint.
-   * FIX: Now accepts an optional token to support authentication initialization flow.
+   * Get current user
    */
-  async getCurrentUser(tokenOverride?: string): Promise<APIResponse<User>> {
-    const options: RequestInit = {};
-    
-    // If a token is provided in the call, inject it directly into the headers
-    if (tokenOverride) {
-      options.headers = { 'Authorization': `Bearer ${tokenOverride}` };
-    }
-    
-    return this.request<User>('/api/auth/me', options);
+  async getCurrentUser(): Promise<APIResponse<User>> {
+    return this.request<User>('/api/auth/me');
   }
 
   /**
@@ -290,6 +244,8 @@ class APIClient {
       };
     }
 
+    // Use fetch directly here to avoid circular dependency in request()
+    // and to ensure we don't try to refresh a failed refresh token
     const response = await fetch(`${this.baseURL}/api/auth/refresh`, {
         method: 'POST',
         headers: {
@@ -307,7 +263,6 @@ class APIClient {
         };
     }
 
-    // Rely on backend sending { success: true/false, data: { ... } }
     if (data.success) {
       this.setToken(data.data.accessToken);
       if (typeof window !== 'undefined') {
@@ -319,7 +274,7 @@ class APIClient {
   }
 
   // ==========================================================================
-  // PROVIDER ENDPOINTS (Restored)
+  // PROVIDER ENDPOINTS
   // ==========================================================================
 
   /**
@@ -377,7 +332,7 @@ class APIClient {
   }
 
   // ==========================================================================
-  // BOOKING ENDPOINTS (Restored)
+  // BOOKING ENDPOINTS
   // ==========================================================================
 
   /**
@@ -486,7 +441,7 @@ class APIClient {
   }
 
   // ==========================================================================
-  // PROPERTY ENDPOINTS (Restored)
+  // PROPERTY ENDPOINTS
   // ==========================================================================
 
   /**
@@ -548,9 +503,9 @@ class APIClient {
       method: 'DELETE',
     });
   }
-    
+  
   // ==========================================================================
-  // CHECKLIST & MAINTENANCE ENDPOINTS (PHASE 3) (Restored)
+  // CHECKLIST & MAINTENANCE ENDPOINTS (PHASE 3)
   // ==========================================================================
 
   /**
@@ -575,6 +530,7 @@ class APIClient {
     });
   }
 
+  // --- NEW FUNCTION FOR PHASE 3 ---
   /**
    * Creates new custom maintenance items from a user-defined config.
    * @param data An object containing an array of task config objects.
@@ -587,9 +543,10 @@ class APIClient {
       body: JSON.stringify(data),
     });
   }
+  // --- END NEW FUNCTION ---
 
   // ==========================================================================
-  // PROVIDER SERVICE ENDPOINTS (for provider portal) (Restored)
+  // PROVIDER SERVICE ENDPOINTS (for provider portal)
   // ==========================================================================
 
   /**
@@ -653,9 +610,7 @@ class APIClient {
     });
   }  
 
-  /**
-   * Get list of service categories
-   */
+  // Add this method to your api client
   async getServiceCategories() {
     return this.request<{
       segment: string;
@@ -668,68 +623,7 @@ class APIClient {
     }>('/api/service-categories');
   }
 
-  // ==========================================================================
-  // NEW HOME MANAGEMENT ENDPOINTS (Warranties, Insurance, Expenses)
-  // ==========================================================================
-
-  // --- EXPENSES ---
-  async createExpense(data: CreateExpenseInput): Promise<APIResponse<Expense>> {
-    return this.request<Expense>('/api/home-management/expenses', { method: 'POST', body: JSON.stringify(data) });
-  }
-  
-  // FIX: Changed return type to APIResponse to allow for failure handling
-  async listExpenses(propertyId?: string): Promise<APIResponse<{ expenses: Expense[] }>> {
-      const query = propertyId ? `?propertyId=${propertyId}` : '';
-      return this.request<{ expenses: Expense[] }>(`/api/home-management/expenses${query}`);
-  }
-
-  async updateExpense(expenseId: string, data: UpdateExpenseInput): Promise<APIResponse<Expense>> {
-    return this.request<Expense>(`/api/home-management/expenses/${expenseId}`, { method: 'PATCH', body: JSON.stringify(data) });
-  }
-
-  async deleteExpense(expenseId: string): Promise<APIResponse<void>> {
-    return this.request<void>(`/api/home-management/expenses/${expenseId}`, { method: 'DELETE' });
-  }
-
-
-  // --- WARRANTIES ---
-  async createWarranty(data: CreateWarrantyInput): Promise<APIResponse<Warranty>> {
-    return this.request<Warranty>('/api/home-management/warranties', { method: 'POST', body: JSON.stringify(data) });
-  }
-
-  // FIX: Changed return type to APIResponse to allow for failure handling
-  async listWarranties(): Promise<APIResponse<{ warranties: Warranty[] }>> {
-    return this.request<{ warranties: Warranty[] }>('/api/home-management/warranties');
-  }
-
-  async updateWarranty(warrantyId: string, data: UpdateWarrantyInput): Promise<APIResponse<Warranty>> {
-    return this.request<Warranty>(`/api/home-management/warranties/${warrantyId}`, { method: 'PATCH', body: JSON.stringify(data) });
-  }
-
-  async deleteWarranty(warrantyId: string): Promise<APIResponse<void>> {
-    return this.request<void>(`/api/home-management/warranties/${warrantyId}`, { method: 'DELETE' });
-  }
-
-
-  // --- INSURANCE POLICIES ---
-  async createInsurancePolicy(data: CreateInsurancePolicyInput): Promise<APIResponse<InsurancePolicy>> {
-    return this.request<InsurancePolicy>('/api/home-management/insurance-policies', { method: 'POST', body: JSON.stringify(data) });
-  }
-
-  // FIX: Changed return type to APIResponse to allow for failure handling
-  async listInsurancePolicies(): Promise<APIResponse<{ policies: InsurancePolicy[] }>> {
-    return this.request<{ policies: InsurancePolicy[] }>('/api/home-management/insurance-policies');
-  }
-
-  async updateInsurancePolicy(policyId: string, data: UpdateInsurancePolicyInput): Promise<APIResponse<InsurancePolicy>> {
-    return this.request<InsurancePolicy>(`/api/home-management/insurance-policies/${policyId}`, { method: 'PATCH', body: JSON.stringify(data) });
-  }
-
-  async deleteInsurancePolicy(policyId: string): Promise<APIResponse<void>> {
-    return this.request<void>(`/api/home-management/insurance-policies/${policyId}`, { method: 'DELETE' });
-  }
-
 }
 
 // Export singleton instance
-export const api = new APIClient(API_BASE_URL);
+export const api = new APIClient(API_URL);

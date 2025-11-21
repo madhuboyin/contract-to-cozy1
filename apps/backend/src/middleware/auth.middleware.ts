@@ -1,9 +1,14 @@
+// apps/backend/src/middleware/auth.middleware.ts
+
 import { Response, NextFunction } from 'express';
 import { AuthRequest, UserRole } from '../types/auth.types';
 import { verifyAccessToken } from '../utils/jwt.util';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
+
+// NOTE: AuthRequest type is defined in '../types/auth.types' and is assumed
+// to have been updated to include homeownerProfile and providerProfile on req.user.
 
 /**
  * Middleware to authenticate requests using JWT
@@ -15,7 +20,6 @@ export const authenticate = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    // Get token from Authorization header
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -34,7 +38,7 @@ export const authenticate = async (
     // Verify token
     const decoded = verifyAccessToken(token);
 
-    // Fetch user from database to ensure they still exist and are active
+    // Fetch user and include profile IDs (CRITICAL CHANGE)
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
       select: {
@@ -45,6 +49,8 @@ export const authenticate = async (
         role: true,
         status: true,
         emailVerified: true,
+        homeownerProfile: { select: { id: true } }, // NEW: Fetch Profile IDs
+        providerProfile: { select: { id: true } },  // NEW: Fetch Profile IDs
       },
     });
 
@@ -82,7 +88,7 @@ export const authenticate = async (
       return;
     }
 
-    // Attach user to request
+    // Attach user to request, including the new profile IDs
     req.user = {
       userId: user.id,
       email: user.email,
@@ -91,6 +97,8 @@ export const authenticate = async (
       lastName: user.lastName,
       emailVerified: user.emailVerified,
       status: user.status as any,
+      homeownerProfile: user.homeownerProfile, // ATTACHED
+      providerProfile: user.providerProfile,   // ATTACHED
     };
 
     next();
@@ -104,6 +112,35 @@ export const authenticate = async (
     });
   }
 };
+
+
+/**
+ * Middleware to restrict access only to users with the HOMEOWNER role 
+ * and an existing homeowner profile ID (required for home management data).
+ */
+export const restrictToHomeowner = ( // <--- MUST have 'export' here
+  req: AuthRequest, 
+  res: Response, 
+  next: NextFunction
+): void => {
+  if (
+    !req.user || 
+    req.user.role !== 'HOMEOWNER' || 
+    !req.user.homeownerProfile?.id // Checks if the profile ID is present
+  ) {
+    res.status(403).json({ 
+      success: false, 
+      error: {
+        message: 'Access denied. Must be an authenticated homeowner with a profile.',
+        code: 'HOMEOWNER_PROFILE_REQUIRED',
+      }
+    });
+    return;
+  }
+  // If check passes, continue
+  next();
+};
+
 
 /**
  * Middleware to require specific roles
@@ -200,6 +237,8 @@ export const optionalAuth = async (
         role: true,
         status: true,
         emailVerified: true,
+        homeownerProfile: { select: { id: true } },
+        providerProfile: { select: { id: true } },
       },
     });
 
@@ -212,6 +251,8 @@ export const optionalAuth = async (
         lastName: user.lastName,
         emailVerified: user.emailVerified,
         status: user.status as any,
+        homeownerProfile: user.homeownerProfile,
+        providerProfile: user.providerProfile,
       };
     }
 

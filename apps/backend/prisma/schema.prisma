@@ -163,6 +163,17 @@ enum ProviderStatus {
   SUSPENDED
 }
 
+// NEW ENUM for tracking different types of homeowner expenses
+enum ExpenseCategory {
+  REPAIR_SERVICE
+  PROPERTY_TAX
+  HOA_FEE
+  UTILITY
+  APPLIANCE
+  MATERIALS
+  OTHER
+}
+
 // ============================================================================
 // USER MANAGEMENT
 // ============================================================================
@@ -267,6 +278,11 @@ model HomeownerProfile {
   properties  Property[]
   checklist   Checklist?
   
+  // NEW RELATIONS
+  warranties  Warranty[]
+  insurancePolicies InsurancePolicy[]
+  expenses    Expense[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
@@ -333,6 +349,12 @@ model Property {
   // Relations
   homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
   bookings         Booking[]
+
+  // NEW RELATIONS
+  warranties       Warranty[]
+  insurancePolicies InsurancePolicy[]
+  expenses         Expense[]
+  documents        Document[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -554,6 +576,7 @@ model Booking {
   messages          Message[]
   review            Review?
   timeline          BookingTimeline[]
+  expenses          Expense[] // NEW: Expense link
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -629,6 +652,10 @@ model Payment {
 model Document {
   id          String       @id @default(uuid())
   bookingId   String?
+  propertyId  String?      // NEW: Link to general home documents
+  warrantyId  String?      // NEW: Link to a Warranty record
+  policyId    String?      // NEW: Link to an InsurancePolicy record
+
   uploadedBy  String       // userId
   
   // Document Details
@@ -640,16 +667,22 @@ model Document {
   mimeType    String
   
   // Metadata
-  metadata    Json? // Flexible storage for document-specific data
+  metadata    Json?        // Flexible storage for document-specific data
   
   // Relations
-  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  booking          Booking?         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  property         Property?        @relation(fields: [propertyId], references: [id])
+  warranty         Warranty?        @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
+  insurancePolicy  InsurancePolicy? @relation(fields: [policyId], references: [id], onDelete: Cascade)
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
   @@index([bookingId])
   @@index([type])
+  @@index([propertyId]) // NEW INDEX
+  @@index([warrantyId]) // NEW INDEX
+  @@index([policyId])   // NEW INDEX
   @@map("documents")
 }
 
@@ -709,6 +742,100 @@ model MaintenanceTaskTemplate {
   updatedAt DateTime @updatedAt
   
   @@map("maintenance_task_templates")
+}
+
+// ============================================================================
+// WARRANTY MANAGEMENT
+// ============================================================================
+
+model Warranty {
+  id                 String    @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String?   // Link to a specific property (e.g., HVAC unit warranty is for the main home)
+  
+  // Policy Details
+  providerName       String
+  policyNumber       String?
+  coverageDetails    String?
+  cost               Decimal?  @db.Decimal(12, 2)
+  
+  // Dates
+  startDate          DateTime
+  expiryDate         DateTime
+  
+  // Relations
+  homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property           Property?        @relation(fields: [propertyId], references: [id])
+  documents          Document[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([homeownerProfileId])
+  @@index([expiryDate])
+  @@map("warranties")
+}
+
+// ============================================================================
+// INSURANCE MANAGEMENT
+// ============================================================================
+
+model InsurancePolicy {
+  id                 String    @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String?   // Link to the insured property
+  
+  // Policy Details
+  carrierName        String
+  policyNumber       String
+  coverageType       String?   // e.g., "Homeowner", "Landlord", "Flood"
+  premiumAmount      Decimal   @db.Decimal(12, 2)
+  
+  // Dates
+  startDate          DateTime
+  expiryDate         DateTime
+  
+  // Relations
+  homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property           Property?        @relation(fields: [propertyId], references: [id])
+  documents          Document[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([homeownerProfileId])
+  @@index([expiryDate])
+  @@map("insurance_policies")
+}
+
+// ============================================================================
+// EXPENSE MANAGEMENT
+// ============================================================================
+
+model Expense {
+  id                 String          @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String?   // Link to a specific property
+  bookingId          String?   // Optional link to a platform booking (e.g., a top-up payment)
+  
+  // Expense Details
+  description        String
+  category           ExpenseCategory
+  amount             Decimal         @db.Decimal(12, 2)
+  transactionDate    DateTime
+  
+  // Relations
+  homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property           Property?        @relation(fields: [propertyId], references: [id])
+  booking            Booking?         @relation(fields: [bookingId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([homeownerProfileId])
+  @@index([category])
+  @@index([transactionDate])
+  @@map("expenses")
 }
 
 // ============================================================================

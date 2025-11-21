@@ -24,6 +24,8 @@ export interface AuthUser {
   lastName: string;
   emailVerified: boolean;
   status: UserStatus;
+  homeownerProfile?: { id: string } | null;
+  providerProfile?: { id: string } | null;
 }
 
 // Extended Express Request with user

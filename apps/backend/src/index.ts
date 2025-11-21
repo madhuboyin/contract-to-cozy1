@@ -14,6 +14,7 @@ import userRoutes from './routes/user.routes';
 import checklistRoutes from './routes/checklist.routes'; // <-- FIX 1: Default import
 import serviceCategoryRoutes from './routes/service-category.routes';
 import maintenanceRoutes from './routes/maintenance.routes';
+import homeownerManagementRoutes from './routes/home-management.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
@@ -105,6 +106,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/checklist', checklistRoutes); // <-- FIX 2: Mount point
 app.use('/api/service-categories', serviceCategoryRoutes);
 app.use('/api/maintenance-templates', maintenanceRoutes);
+app.use('/api/home-management', homeownerManagementRoutes); // NEW LINE
 
 // =============================================================================
 // 404 HANDLER

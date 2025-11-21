@@ -1,6 +1,6 @@
+// apps/frontend/src/app/(auth)/login/page.tsx
 'use client';
 
-// apps/frontend/src/app/(auth)/login/page.tsx
 // Updated with password visibility toggle
 
 import { useState } from 'react';
@@ -10,15 +10,32 @@ import { useAuth } from '@/lib/auth/AuthContext';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, user } = useAuth();
+  // IMPORTANT: We use the 'user' from useAuth as the source of truth after login() succeeds
+  const { login, user } = useAuth(); 
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  // Changed error state to hold null or a message string
+  const [error, setError] = useState<string | null>(null); 
   const [showPassword, setShowPassword] = useState(false);
 
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
+
+  // Redirect instantly if already authenticated
+  // NOTE: This check should handle the case where 'user' is populated on mount
+  if (user) {
+    // If user state is already available, redirect based on their role
+    if (user.role === 'PROVIDER') {
+      router.push('/providers/dashboard');
+    } else if (user.role === 'ADMIN') {
+      router.push('/admin/dashboard');
+    } else {
+      router.push('/dashboard');
+    }
+    return null; 
+  }
+
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -29,44 +46,41 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError(null); // Clear previous errors
 
     try {
       setLoading(true);
+      
+      // The login function returns LoginResponse (object) or null.
       const result = await login({ 
         email: formData.email, 
         password: formData.password 
       });
 
-      if (!result.success) {
-        setError(result.error || 'Invalid email or password');
-        return;
-      }
+      // FIX: Check if result is a truthy value (not null) for SUCCESS.
+      if (result) {
+        // SUCCESS: The AuthContext handled saving tokens and setting user state.
+        
+        // Use the returned user role for immediate redirection
+        const userRole = result.user.role; 
 
-      // Role-based redirect
-      await new Promise(resolve => setTimeout(resolve, 150));
-
-      const token = localStorage.getItem('accessToken');
-      let userRole = user?.role;
-
-      if (!userRole && token) {
-        try {
-          const decoded = JSON.parse(atob(token.split('.')[1]));
-          userRole = decoded.role;
-        } catch (error) {
-          console.error('Error decoding token:', error);
+        // Role-based redirect
+        if (userRole === 'PROVIDER') {
+          router.push('/providers/dashboard');
+        } else if (userRole === 'ADMIN') {
+          router.push('/admin/dashboard');
+        } else {
+          router.push('/dashboard');
         }
-      }
-
-      if (userRole === 'PROVIDER') {
-        router.push('/providers/dashboard');
-      } else if (userRole === 'ADMIN') {
-        router.push('/admin/dashboard');
+        
       } else {
-        router.push('/dashboard');
+        // FAILURE: login() returned null.
+        setError('Invalid email or password. Please try again.');
       }
     } catch (err: any) {
-      setError(err.message || 'Invalid email or password');
+      // Catch any unexpected network/API client errors
+      console.error('Login component caught network error:', err);
+      setError('A network or server error occurred during sign in.');
     } finally {
       setLoading(false);
     }
@@ -119,7 +133,10 @@ export default function LoginPage() {
             {/* Error Message */}
             {error && (
               <div className="mb-6 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
-                {error}
+                <div className="flex items-center space-x-2">
+                    <svg className="w-5 h-5 flex-shrink-0 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" d="M9.401 3.003c1.155-1.121 3.2-1.121 4.356 0l4.46 4.321c1.155 1.121 1.155 3.2 0 4.356l-6.666 6.467a3.076 3.076 0 01-4.356 0l-6.666-6.467c-1.155-1.155-1.155-3.2 0-4.356l4.46-4.321zM12 9a.75.75 0 00-.75.75v3.75c0 .414.336.75.75.75s.75-.336.75-.75V9.75A.75.75 0 0012 9zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" /></svg>
+                    <span>{error}</span>
+                </div>
               </div>
             )}
 
