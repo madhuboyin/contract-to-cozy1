@@ -33,17 +33,16 @@ const safeToNumber = (value: DecimalLike | null | undefined): number | null => {
 };
 
 
-// --- MAPPING HELPERS (CRITICAL FIX) ---
+// --- MAPPING HELPERS (CRITICAL FIX: AVOIDS SPREAD) ---
 
 /**
  * Helper function to map raw expense to expected Expense interface (explicitly)
- * AVOIDS SPREAD OPERATOR to prevent leaking unconverted Decimal properties.
  */
 const mapRawExpenseToExpense = (rawExpense: any): Expense => {
     const expenseWithNumber = rawExpense as PrismaOutputWithDecimals<typeof rawExpense>;
-    // Amount is required/non-nullable, default to 0 if conversion fails
     const amount = safeToNumber(expenseWithNumber.amount) ?? 0;
     
+    // Explicitly list ALL fields
     return {
         id: rawExpense.id,
         homeownerProfileId: rawExpense.homeownerProfileId,
@@ -65,6 +64,7 @@ const mapRawWarrantyToWarranty = (rawWarranty: any): Warranty => {
     const warrantyWithNumber = rawWarranty as PrismaOutputWithDecimals<typeof rawWarranty>;
     const cost = safeToNumber(warrantyWithNumber.cost);
 
+    // Explicitly list ALL fields
     return {
         id: rawWarranty.id,
         homeownerProfileId: rawWarranty.homeownerProfileId,
@@ -77,7 +77,7 @@ const mapRawWarrantyToWarranty = (rawWarranty: any): Warranty => {
         expiryDate: rawWarranty.expiryDate,
         createdAt: rawWarranty.createdAt,
         updatedAt: rawWarranty.updatedAt,
-        documents: rawWarranty.documents || [], // included via 'include: true' in list/update
+        documents: rawWarranty.documents || [],
     } as Warranty;
 };
 
@@ -86,9 +86,9 @@ const mapRawWarrantyToWarranty = (rawWarranty: any): Warranty => {
  */
 const mapRawPolicyToInsurancePolicy = (rawPolicy: any): InsurancePolicy => {
     const policyWithNumber = rawPolicy as PrismaOutputWithDecimals<typeof rawPolicy>;
-    // premiumAmount is required/non-nullable, default to 0 if conversion fails
     const premiumAmount = safeToNumber(policyWithNumber.premiumAmount) ?? 0;
 
+    // Explicitly list ALL fields
     return {
         id: rawPolicy.id,
         homeownerProfileId: rawPolicy.homeownerProfileId,
@@ -101,7 +101,7 @@ const mapRawPolicyToInsurancePolicy = (rawPolicy: any): InsurancePolicy => {
         expiryDate: rawPolicy.expiryDate,
         createdAt: rawPolicy.createdAt,
         updatedAt: rawPolicy.updatedAt,
-        documents: rawPolicy.documents || [], // included via 'include: true' in list/update
+        documents: rawPolicy.documents || [],
     } as InsurancePolicy;
 };
 
@@ -111,14 +111,13 @@ export async function createExpense(
   homeownerProfileId: string, 
   data: CreateExpenseDTO
 ): Promise<Expense> {
-  // CRITICAL DEBUG: Log input data before database operation
   console.log('DEBUG (POST /expenses): Input Data Received:', data);
 
   try {
     const rawExpense = await prisma.expense.create({
       data: {
         homeownerProfile: { connect: { id: homeownerProfileId } },
-        // Check for empty string IDs and convert them to undefined/null for Prisma
+        // FIX: Handle empty strings in optional relation IDs
         property: data.propertyId && data.propertyId !== "" ? { connect: { id: data.propertyId } } : undefined,
         booking: data.bookingId && data.bookingId !== "" ? { connect: { id: data.bookingId } } : undefined,
         
@@ -129,12 +128,10 @@ export async function createExpense(
       } as Prisma.ExpenseCreateInput,
     });
     
-    // CRITICAL DEBUG: Log successful raw Prisma output
     console.log('DEBUG (POST /expenses): Raw Prisma Output (Success):', rawExpense);
 
     return mapRawExpenseToExpense(rawExpense);
   } catch (error) {
-    // CRITICAL DEBUG: Log the exact error object from Prisma
     console.error('FATAL ERROR (POST /expenses): Prisma operation failed.', error); 
     throw error;
   }
@@ -190,21 +187,26 @@ export async function createWarranty(
   homeownerProfileId: string, 
   data: CreateWarrantyDTO
 ): Promise<Warranty> {
-  const rawWarranty = await prisma.warranty.create({
-    data: {
-      homeownerProfile: { connect: { id: homeownerProfileId } },
-      property: data.propertyId && data.propertyId !== "" ? { connect: { id: data.propertyId } } : undefined,
-      
-      providerName: data.providerName,
-      policyNumber: data.policyNumber,
-      coverageDetails: data.coverageDetails,
-      cost: data.cost,
-      startDate: new Date(data.startDate),
-      expiryDate: new Date(data.expiryDate),
-    } as Prisma.WarrantyCreateInput,
-  });
+  try {
+    const rawWarranty = await prisma.warranty.create({
+      data: {
+        homeownerProfile: { connect: { id: homeownerProfileId } },
+        property: data.propertyId && data.propertyId !== "" ? { connect: { id: data.propertyId } } : undefined,
+        
+        providerName: data.providerName,
+        policyNumber: data.policyNumber,
+        coverageDetails: data.coverageDetails,
+        cost: data.cost,
+        startDate: new Date(data.startDate),
+        expiryDate: new Date(data.expiryDate),
+      } as Prisma.WarrantyCreateInput,
+    });
 
-  return mapRawWarrantyToWarranty(rawWarranty);
+    return mapRawWarrantyToWarranty(rawWarranty);
+  } catch (error) {
+    console.error('FATAL ERROR (POST /warranties): Prisma operation failed.', error); 
+    throw error;
+  }
 }
 
 export async function listWarranties(homeownerProfileId: string): Promise<Warranty[]> {
@@ -254,21 +256,26 @@ export async function createInsurancePolicy(
   homeownerProfileId: string, 
   data: CreateInsurancePolicyDTO
 ): Promise<InsurancePolicy> {
-  const rawPolicy = await prisma.insurancePolicy.create({
-    data: {
-      homeownerProfile: { connect: { id: homeownerProfileId } },
-      property: data.propertyId && data.propertyId !== "" ? { connect: { id: data.propertyId } } : undefined,
-      
-      carrierName: data.carrierName,
-      policyNumber: data.policyNumber,
-      coverageType: data.coverageType,
-      premiumAmount: data.premiumAmount,
-      startDate: new Date(data.startDate),
-      expiryDate: new Date(data.expiryDate),
-    } as Prisma.InsurancePolicyCreateInput,
-  });
-  
-  return mapRawPolicyToInsurancePolicy(rawPolicy);
+  try {
+    const rawPolicy = await prisma.insurancePolicy.create({
+      data: {
+        homeownerProfile: { connect: { id: homeownerProfileId } },
+        property: data.propertyId && data.propertyId !== "" ? { connect: { id: data.propertyId } } : undefined,
+        
+        carrierName: data.carrierName,
+        policyNumber: data.policyNumber,
+        coverageType: data.coverageType,
+        premiumAmount: data.premiumAmount,
+        startDate: new Date(data.startDate),
+        expiryDate: new Date(data.expiryDate),
+      } as Prisma.InsurancePolicyCreateInput,
+    });
+    
+    return mapRawPolicyToInsurancePolicy(rawPolicy);
+  } catch (error) {
+    console.error('FATAL ERROR (POST /insurance-policies): Prisma operation failed.', error); 
+    throw error;
+  }
 }
 
 export async function listInsurancePolicies(homeownerProfileId: string): Promise<InsurancePolicy[]> {
