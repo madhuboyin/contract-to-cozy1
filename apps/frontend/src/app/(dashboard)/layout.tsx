@@ -147,13 +147,12 @@ function DesktopNav({ user }: { user: User | null }) {
       icon: ListChecks,
     });
   } else if (user?.segment === 'EXISTING_OWNER') {
-    // NEW LINKS for Existing Owners
+    // NEW LINKS for Existing Owners (ADDED Document link)
     navLinks.push(
+      { name: 'Documents', href: '/dashboard/documents', icon: FileText }, // ADDED
       { name: 'Insurance', href: '/dashboard/insurance', icon: Shield },
       { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench },
       { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign },
-      // The documents feature will likely be integrated into properties/warranties/insurance screens
-      // { name: 'Documents', href: '/dashboard/documents', icon: FileText }, 
     );
   }
 
@@ -196,8 +195,9 @@ function SidebarNav({ user }: { user: User | null }) {
       icon: ListChecks,
     });
   } else if (user?.segment === 'EXISTING_OWNER') {
-    // NEW LINKS for Existing Owners
+    // NEW LINKS for Existing Owners (ADDED Document link)
     navLinks.push(
+      { name: 'Documents', href: '/dashboard/documents', icon: FileText }, // ADDED
       { name: 'Insurance', href: '/dashboard/insurance', icon: Shield },
       { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench },
       { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign },

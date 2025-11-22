@@ -25,7 +25,10 @@ import {
   CreateInsurancePolicyInput,
   UpdateInsurancePolicyInput,
   InsurancePolicy,
-  APISuccess, // Assuming APISuccess is needed for list calls
+  APISuccess, 
+  // NEW DOCUMENT IMPORTS
+  Document,
+  DocumentUploadInput,
 } from '@/types';
 
 // NOTE: Changed to API_BASE_URL to match common convention, but using the provided API_URL environment variable check
@@ -215,8 +218,53 @@ class APIClient {
     }
   }
 
+  /**
+   * Make HTTP request specifically for multipart/form-data (NEW HELPER)
+   */
+  private async formDataRequest<T>(
+    endpoint: string,
+    formData: FormData
+  ): Promise<APIResponse<T>> {
+    const token = this.getToken();
+    
+    const headers: Record<string, string> = {};
+    
+    // Authorization header is required
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    try {
+        const response = await fetch(`${this.baseURL}${endpoint}`, {
+            method: 'POST', // File uploads are typically POST
+            // Do NOT set Content-Type header; let the browser set it for FormData
+            headers,
+            body: formData,
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || data.success === false) {
+            return {
+                success: false,
+                message: data.message || 'An error occurred during file upload.',
+                error: data.error,
+            } as APIResponse<T>;
+        }
+
+        return data; // This is the APIResponse
+        
+    } catch (error) {
+        console.error('API Form Data Request Error:', error);
+        return {
+            success: false,
+            message: 'Network error or session issue during file upload.',
+        };
+    }
+  }
+
   // ==========================================================================
-  // AUTH ENDPOINTS (Restored original names/logic)
+  // AUTH ENDPOINTS 
   // ==========================================================================
 
   /**
@@ -319,7 +367,7 @@ class APIClient {
   }
 
   // ==========================================================================
-  // PROVIDER ENDPOINTS (Restored)
+  // PROVIDER ENDPOINTS 
   // ==========================================================================
 
   /**
@@ -377,7 +425,7 @@ class APIClient {
   }
 
   // ==========================================================================
-  // BOOKING ENDPOINTS (Restored)
+  // BOOKING ENDPOINTS 
   // ==========================================================================
 
   /**
@@ -486,7 +534,7 @@ class APIClient {
   }
 
   // ==========================================================================
-  // PROPERTY ENDPOINTS (Restored)
+  // PROPERTY ENDPOINTS 
   // ==========================================================================
 
   /**
@@ -550,7 +598,7 @@ class APIClient {
   }
     
   // ==========================================================================
-  // CHECKLIST & MAINTENANCE ENDPOINTS (PHASE 3) (Restored)
+  // CHECKLIST & MAINTENANCE ENDPOINTS (PHASE 3) 
   // ==========================================================================
 
   /**
@@ -589,7 +637,7 @@ class APIClient {
   }
 
   // ==========================================================================
-  // PROVIDER SERVICE ENDPOINTS (for provider portal) (Restored)
+  // PROVIDER SERVICE ENDPOINTS (for provider portal) 
   // ==========================================================================
 
   /**
@@ -727,6 +775,39 @@ class APIClient {
 
   async deleteInsurancePolicy(policyId: string): Promise<APIResponse<void>> {
     return this.request<void>(`/api/home-management/insurance-policies/${policyId}`, { method: 'DELETE' });
+  }
+
+  // ==========================================================================
+  // NEW DOCUMENT ENDPOINT (ADDED)
+  // ==========================================================================
+
+  /**
+   * Uploads a document and associates it with a parent entity.
+   * @param file The file object (from a FileList).
+   * @param data Metadata including the associated ID (propertyId, warrantyId, or policyId).
+   */
+  async uploadDocument(file: File, data: DocumentUploadInput): Promise<APIResponse<Document>> {
+      const formData = new FormData();
+      
+      // Append file as 'file' - MUST match the backend multer field name
+      formData.append('file', file);
+
+      // Append metadata fields
+      formData.append('type', data.type);
+      formData.append('name', data.name);
+      if (data.description) formData.append('description', data.description);
+      if (data.propertyId) formData.append('propertyId', data.propertyId);
+      if (data.warrantyId) formData.append('warrantyId', data.warrantyId);
+      if (data.policyId) formData.append('policyId', data.policyId);
+
+      return this.formDataRequest<Document>('/api/home-management/documents/upload', formData);
+  }
+
+    /**
+     * Lists all documents uploaded by the homeowner. (NEW)
+     */
+    async listDocuments(): Promise<APIResponse<{ documents: Document[] }>> {
+      return this.request<{ documents: Document[] }>('/api/home-management/documents');
   }
 
 }

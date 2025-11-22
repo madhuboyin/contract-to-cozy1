@@ -103,5 +103,31 @@ export interface CreateInsurancePolicyDTO {
 
 export interface UpdateInsurancePolicyDTO extends Partial<CreateInsurancePolicyDTO> {}
 
-// You may also need to update DTOs in other files (like document.types.ts) 
-// to handle the new document relations, but these are the core new DTOs.
+// --- DTOs and Types for Document Management (FIXED: Added DocumentType) ---
+
+/**
+ * Document Type Enum (Synced with schema.prisma)
+ */
+export type DocumentType = 
+  | 'INSPECTION_REPORT'
+  | 'ESTIMATE'
+  | 'INVOICE'
+  | 'CONTRACT'
+  | 'PERMIT'
+  | 'PHOTO'
+  | 'VIDEO'
+  | 'INSURANCE_CERTIFICATE'
+  | 'LICENSE'
+  | 'OTHER';
+  
+/**
+ * DTO for creating a document via the upload endpoint.
+ */
+export interface CreateDocumentDTO {
+  type: DocumentType;
+  name: string;
+  description?: string;
+  propertyId?: string;
+  warrantyId?: string;
+  policyId?: string;
+}

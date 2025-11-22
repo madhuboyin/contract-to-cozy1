@@ -44,11 +44,18 @@ export default function DashboardPage() {
         }).then(res => res.json()),
       ]);
 
+      // *** DEBUG LOG (NEW) ***
+      console.log('DEBUG 5: Raw Checklist API Response:', checklistRes);
+
       setData(prev => ({
         ...prev,
         bookings: bookingsRes.success ? bookingsRes.data.bookings : [],
         properties: propertiesRes.success ? propertiesRes.data.properties : [],
-        checklist: checklistRes.id ? (checklistRes as ChecklistData) : null,
+        // FIXED: Check for a non-null/non-error object structure. 
+        // This is a more robust check than relying solely on '.id'.
+        checklist: checklistRes && typeof checklistRes === 'object' && !('error' in checklistRes) 
+          ? (checklistRes as ChecklistData) 
+          : null,
         isLoading: false,
       }));
 
@@ -101,13 +108,13 @@ export default function DashboardPage() {
   const userSegment = user.segment;
   
   // DEBUG 4: Log segment in the router just before routing decision
-  console.log('DEBUG 4: Dashboard Router: Segment read is:', userSegment);
+  // console.log('DEBUG 4: Dashboard Router: Segment read is:', userSegment);
 
   const checklistItems = (data.checklist?.items || []) as DashboardChecklistItem[];
   
   // CRITICAL: The segment check must match the fixed property in types/index.ts
   if (userSegment === 'HOME_BUYER') {
-    console.log('DEBUG 4: Dashboard Router: Rendering HOME_BUYER Dashboard.');
+    // console.log('DEBUG 4: Dashboard Router: Rendering HOME_BUYER Dashboard.');
     return (
       <HomeBuyerDashboard 
         userFirstName={user.firstName}
@@ -119,7 +126,7 @@ export default function DashboardPage() {
   }
 
   // Default to Existing Owner for 'EXISTING_OWNER' or if segment is missing/undefined
-  console.log('DEBUG 4: Dashboard Router: Rendering EXISTING_OWNER Dashboard.');
+  // console.log('DEBUG 4: Dashboard Router: Rendering EXISTING_OWNER Dashboard.');
   return (
     <ExistingOwnerDashboard 
       userFirstName={user.firstName}

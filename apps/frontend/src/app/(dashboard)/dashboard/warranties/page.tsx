@@ -11,14 +11,149 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Warranty, CreateWarrantyInput, UpdateWarrantyInput, Property, APIResponse, APIError } from '@/types';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue }
- from '@/components/ui/select';
+import { Warranty, CreateWarrantyInput, UpdateWarrantyInput, Property, APIResponse, APIError, Document, DocumentUploadInput, DocumentType } from '@/types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 
 // Placeholder for "None" option, necessary to avoid Radix UI error on value=""
 const SELECT_NONE_VALUE = '__NONE__';
+
+// --- Document Type Constants for UI (NEW) ---
+const DOCUMENT_TYPES: DocumentType[] = [
+    'INSPECTION_REPORT',
+    'ESTIMATE',
+    'INVOICE',
+    'CONTRACT',
+    'PERMIT',
+    'PHOTO',
+    'VIDEO',
+    'INSURANCE_CERTIFICATE',
+    'LICENSE',
+    'OTHER',
+];
+
+// --- Document Upload Modal Component (NEW) ---
+interface DocumentUploadModalProps {
+  parentEntityId: string; 
+  parentEntityType: 'property' | 'warranty' | 'policy';
+  onUploadSuccess: () => void;
+  onClose: () => void;
+}
+
+const DocumentUploadModal = ({ parentEntityId, parentEntityType, onUploadSuccess, onClose }: DocumentUploadModalProps) => {
+  const [file, setFile] = useState<File | null>(null);
+  const [name, setName] = useState('');
+  const [type, setType] = useState<DocumentType>('OTHER');
+  const [description, setDescription] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const { toast } = useToast();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!file || !name) {
+      toast({ title: "Error", description: "Please select a file and provide a name.", variant: "destructive" });
+      return;
+    }
+    
+    setIsUploading(true);
+    
+    const inputData: DocumentUploadInput = {
+        name,
+        type,
+        description: description || undefined,
+    };
+    
+    // Dynamically assign the correct parent ID
+    if (parentEntityType === 'warranty') {
+        inputData.warrantyId = parentEntityId;
+    } else if (parentEntityType === 'policy') {
+        inputData.policyId = parentEntityId;
+    } else if (parentEntityType === 'property') {
+        inputData.propertyId = parentEntityId;
+    }
+    
+    const res = await api.uploadDocument(file, inputData);
+
+    if (res.success) {
+      toast({ title: 'Document Uploaded', description: `"${res.data.name}" linked successfully.` });
+      onUploadSuccess();
+    } else {
+      toast({ 
+        title: 'Upload Failed', 
+        description: res.message, 
+        variant: 'destructive' 
+      });
+    }
+    setIsUploading(false);
+  };
+  
+  const title = `Upload Document for ${parentEntityType.charAt(0).toUpperCase() + parentEntityType.slice(1)}`;
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <DialogHeader>
+        <DialogTitle>{title}</DialogTitle>
+      </DialogHeader>
+      
+      <div className="grid gap-2">
+        <Label htmlFor="file">File to Upload *</Label>
+        <Input 
+          id="file" 
+          type="file" 
+          onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)} 
+          required 
+          disabled={isUploading}
+        />
+        {file && <p className="text-xs text-muted-foreground">Selected: {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)</p>}
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="grid gap-2">
+          <Label htmlFor="name">Document Name *</Label>
+          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required disabled={isUploading} />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="type">Document Type</Label>
+           <Select 
+            value={type} 
+            onValueChange={(v) => setType(v as DocumentType)}
+            disabled={isUploading}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select type" />
+            </SelectTrigger>
+            <SelectContent>
+              {DOCUMENT_TYPES.map(dt => (
+                <SelectItem key={dt} value={dt}>
+                  {/* Convert DOCUMENT_TYPE_ENUM_NAME to "Document Type Enum Name" for display */}
+                  {dt.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor="description">Description (Optional)</Label>
+        <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} disabled={isUploading} />
+      </div>
+
+      <DialogFooter className="mt-6">
+        <Button type="button" variant="outline" onClick={onClose} disabled={isUploading}>
+          <X className="w-4 h-4 mr-2" /> Cancel
+        </Button>
+        <Button type="submit" disabled={isUploading || !file || !name}>
+          {isUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />} 
+          Upload & Save
+        </Button>
+      </DialogFooter>
+    </form>
+  );
+};
+// --- End Document Upload Modal Component ---
+
 
 // --- Warranty Form Component ---
 interface WarrantyFormProps {
@@ -167,12 +302,16 @@ export default function WarrantiesPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // FIX: Separate dialog state for Add/Edit
+  
   const [isAddEditModalOpen, setIsAddEditModalOpen] = useState(false); 
   const [editingWarranty, setEditingWarranty] = useState<Warranty | undefined>(undefined);
+  
+  // NEW STATE for Document Upload Modal
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [uploadingToWarrantyId, setUploadingToWarrantyId] = useState<string | null>(null);
+
   const { toast } = useToast();
 
-  // FIX: Wrap fetchDependencies in useCallback and ensure proper loading state management
   const fetchDependencies = useCallback(async () => {
     setIsLoading(true);
     const [warrantiesRes, propertiesRes] = await Promise.all([
@@ -195,7 +334,7 @@ export default function WarrantiesPage() {
       setProperties(propertiesRes.data.properties);
     }
     setIsLoading(false);
-  }, [toast]); // Dependency on toast is included as good practice
+  }, [toast]); 
 
   // Initial Data Fetch
   useEffect(() => {
@@ -217,7 +356,7 @@ export default function WarrantiesPage() {
         title: editingWarranty ? 'Warranty Updated' : 'Warranty Created',
         description: `${res.data.providerName}'s policy was saved successfully.`,
       });
-      await fetchDependencies(); // Refresh list to show new/updated item
+      await fetchDependencies(); 
       setIsAddEditModalOpen(false);
       setEditingWarranty(undefined);
     } else {
@@ -240,14 +379,14 @@ export default function WarrantiesPage() {
 
     if (res.success) {
       toast({ title: 'Warranty Deleted', description: 'The warranty record was removed.' });
-      await fetchDependencies(); // Refresh list to remove deleted item
+      await fetchDependencies(); 
     } else {
       toast({ title: 'Deletion Failed', description: res.message, variant: 'destructive' });
       setIsLoading(false);
     }
   };
   
-  // Update signature to accept Warranty | undefined
+  // Handlers for Add/Edit Modal
   const openAddEditModal = (warranty?: Warranty) => {
     setEditingWarranty(warranty);
     setIsAddEditModalOpen(true);
@@ -258,8 +397,19 @@ export default function WarrantiesPage() {
     setEditingWarranty(undefined);
   };
 
+  // NEW Handlers for Document Upload Modal
+  const openUploadModal = (warrantyId: string) => {
+    setUploadingToWarrantyId(warrantyId);
+    setIsUploadModalOpen(true);
+  };
+  
+  const closeUploadModal = () => {
+    setIsUploadModalOpen(false);
+    setUploadingToWarrantyId(null);
+  };
+
+
   const sortedWarranties = useMemo(() => {
-    // Sort logic remains the same
     return [...warranties].sort((a, b) => {
         const dateA = parseISO(a.expiryDate).getTime();
         const dateB = parseISO(b.expiryDate).getTime();
@@ -273,14 +423,12 @@ export default function WarrantiesPage() {
         <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
           <Wrench className="w-7 h-7 text-blue-600" /> My Home Warranties
         </h2>
-        {/* FIX: Use only one controlled Dialog for Add/Edit */}
+        
         <Dialog open={isAddEditModalOpen} onOpenChange={closeAddEditModal}>
-          {/* FIX: Removed DialogTrigger, Button directly opens the controlled dialog */}
           <Button onClick={() => openAddEditModal(undefined)}>
             <Plus className="w-4 h-4 mr-2" /> Add Warranty
           </Button>
           <DialogContent className="sm:max-w-[500px]">
-             {/* Render the form only when needed (initialData set for edit, or undefined for add) */}
             <WarrantyForm 
               initialData={editingWarranty}
               properties={properties}
@@ -293,7 +441,6 @@ export default function WarrantiesPage() {
       </div>
       <p className="text-muted-foreground">Track all service, appliance, and home warranties in one place. Never miss an expiration date.</p>
 
-      {/* FIX: Corrected Loading and Empty State rendering logic */}
       {isLoading && (
         <div className="text-center py-10">
           <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto" />
@@ -349,17 +496,20 @@ export default function WarrantiesPage() {
                     <p className="font-medium text-gray-700">Cost: {warranty.cost ? `$${warranty.cost.toFixed(2)}` : 'N/A'}</p>
                     <div className="border-t pt-3">
                         <h4 className="font-semibold text-xs mb-2 flex items-center gap-1 text-gray-600">
-                            <Upload className="w-3 h-3" /> Documents ({warranty.documents.length})
+                            <FileText className="w-3 h-3" /> Documents ({warranty.documents.length})
                         </h4>
                         <DocumentsView documents={warranty.documents} />
                     </div>
                 </CardContent>
                 <div className="flex border-t">
-                  {/* FIX: Button directly calls the state function for Edit */}
-                  <Button variant="ghost" className="w-1/2 rounded-none rounded-bl-lg text-blue-600" onClick={() => openAddEditModal(warranty)}>
+                  {/* NEW: Upload Button - calls the new openUploadModal handler */}
+                  <Button variant="ghost" className="w-1/3 rounded-none text-green-600" onClick={() => openUploadModal(warranty.id)}>
+                    <Upload className="w-4 h-4 mr-1" /> Upload
+                  </Button>
+                  <Button variant="ghost" className="w-1/3 rounded-none text-blue-600" onClick={() => openAddEditModal(warranty)}>
                     <Edit className="w-4 h-4 mr-2" /> Edit
                   </Button>
-                  <Button variant="ghost" className="w-1/2 rounded-none rounded-br-lg text-red-600 hover:bg-red-50" onClick={() => handleDelete(warranty.id)}>
+                  <Button variant="ghost" className="w-1/3 rounded-none rounded-br-lg text-red-600 hover:bg-red-50" onClick={() => handleDelete(warranty.id)}>
                     <Trash2 className="w-4 h-4 mr-2" /> Delete
                   </Button>
                 </div>
@@ -368,7 +518,24 @@ export default function WarrantiesPage() {
           })}
         </div>
       )}
-      {/* Remove second dialog instance, use the main one controlled by isAddEditModalOpen */}
+      
+      {/* NEW: Document Upload Dialog (for Warranties) */}
+      <Dialog open={isUploadModalOpen} onOpenChange={closeUploadModal}>
+        <DialogContent className="sm:max-w-[500px]">
+          {uploadingToWarrantyId && (
+            <DocumentUploadModal 
+              parentEntityId={uploadingToWarrantyId}
+              parentEntityType="warranty"
+              onUploadSuccess={() => {
+                  // After successful upload, refresh the list and close the modal
+                  fetchDependencies(); 
+                  closeUploadModal();
+              }}
+              onClose={closeUploadModal}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

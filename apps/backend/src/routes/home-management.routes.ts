@@ -2,16 +2,22 @@
 
 import { Router } from 'express';
 import * as HomeManagementController from '../controllers/home-management.controller';
-// FIX 1: Changed 'authenticateToken' to 'authenticate'
-// FIX 2: Added 'restrictToHomeowner'
 import { authenticate, restrictToHomeowner } from '../middleware/auth.middleware'; 
-// NOTE: Validation middleware is omitted here but required for production code 
+import { upload } from '../controllers/home-management.controller'; 
 
 const router = Router();
 
 // Apply authentication and the new role restriction middleware to all routes in this router.
 // This ensures only authenticated HOMEOWNERs with a profile can access these endpoints.
 router.use(authenticate, restrictToHomeowner);
+
+// --- DOCUMENT ROUTES (FIXED) ---
+router.route('/documents')
+    .get(HomeManagementController.getDocuments); // ADDED: Registers the GET route
+    
+router.route('/documents/upload')
+    .post(upload.single('file'), HomeManagementController.postDocumentUpload); 
+
 
 // --- EXPENSES ROUTES ---
 router.route('/expenses')

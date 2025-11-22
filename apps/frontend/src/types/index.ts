@@ -58,6 +58,39 @@ export enum RecurrenceFrequency {
 export type HomeownerSegment = 'HOME_BUYER' | 'EXISTING_OWNER';
 
 // ============================================================================
+// NEW DOCUMENT UPLOAD TYPES (ADDED)
+// ============================================================================
+
+/**
+ * Document Type Enum (Synced with Backend Enum)
+ */
+export type DocumentType = 
+  | 'INSPECTION_REPORT'
+  | 'ESTIMATE'
+  | 'INVOICE'
+  | 'CONTRACT'
+  | 'PERMIT'
+  | 'PHOTO'
+  | 'VIDEO'
+  | 'INSURANCE_CERTIFICATE'
+  | 'LICENSE'
+  | 'OTHER';
+
+/**
+ * Document Upload Request DTO
+ * Note: The file itself is sent as 'file' in a separate multipart/form-data field.
+ */
+export interface DocumentUploadInput {
+  type: DocumentType;
+  name: string;
+  description?: string;
+  // Exactly one of the following is typically required
+  propertyId?: string;
+  warrantyId?: string;
+  policyId?: string;
+}
+
+// ============================================================================
 // NEW HOMEOWNER MANAGEMENT TYPES
 // ============================================================================
 
@@ -75,14 +108,18 @@ export type ExpenseCategory =
 
 /**
  * Core Document Type (Extended to include new relations)
- * NOTE: This is a simplified frontend type; backend includes more fields.
  */
 export interface Document {
   id: string;
   name: string;
   fileUrl: string;
-  type: string;
+  type: DocumentType; // Updated type to use the new DocumentType enum
   description: string | null;
+  fileSize: number;
+  mimeType: string;
+  propertyId: string | null;
+  warrantyId: string | null;
+  policyId: string | null;
   createdAt: string;
 }
 

@@ -4,19 +4,20 @@
 import {
   PrismaClient,
   Checklist,
-  ChecklistItemStatus, // --- FIX: Import the enum ---
+  ChecklistItemStatus, 
   ServiceCategory,
   Prisma,
+  ChecklistItem,
 } from '@prisma/client';
-import { ChecklistItem } from '@prisma/client';
 import { MaintenanceTaskConfig } from '../types/maintenance.types';
 
 const prisma = new PrismaClient();
 
-// --- NEW HELPER FUNCTION ---
+// --- START HELPER FUNCTIONS ---
+
 /**
  * Calculates the next due date based on a frequency string.
- * @param frequency - e.g., "annually", "semi-annually", "monthly"
+ * @param frequency - e.g., "ANNUALLY", "SEMI_ANNUALLY", "MONTHLY"
  * @returns A Date object for the next due date.
  */
 const calculateNextDueDate = (
@@ -25,16 +26,16 @@ const calculateNextDueDate = (
 ): Date => {
   const nextDate = new Date(startDate);
   switch (frequency) {
-    case 'annually':
+    case 'ANNUALLY':
       nextDate.setFullYear(nextDate.getFullYear() + 1);
       break;
-    case 'semi-annually':
+    case 'SEMI_ANNUALLY':
       nextDate.setMonth(nextDate.getMonth() + 6);
       break;
-    case 'quarterly':
+    case 'QUARTERLY':
       nextDate.setMonth(nextDate.getMonth() + 3);
       break;
-    case 'monthly':
+    case 'MONTHLY':
       nextDate.setMonth(nextDate.getMonth() + 1);
       break;
     default:
@@ -43,7 +44,107 @@ const calculateNextDueDate = (
   }
   return nextDate;
 };
-// --- END HELPER FUNCTION ---
+
+
+/**
+ * Synchronizes renewal tasks (Warranties, Insurance Policies) with the user's checklist.
+ * Ensures an active, pending checklist item exists for every unexpired renewal.
+ * @param userId The ID of the user.
+ * @param checklistId The ID of the user's checklist.
+ */
+const syncRenewalTasks = async (userId: string, checklistId: string): Promise<void> => {
+    const renewalItemsToCreate: Prisma.ChecklistItemCreateManyInput[] = [];
+    const now = new Date();
+
+    // 1. Fetch all active renewals and existing renewal tasks concurrently.
+    const [warranties, policies, existingRenewalItems] = await Promise.all([
+        prisma.warranty.findMany({
+            where: { homeownerProfile: { userId } },
+            select: { id: true, providerName: true, policyNumber: true, expiryDate: true },
+        }),
+        prisma.insurancePolicy.findMany({
+            where: { homeownerProfile: { userId } },
+            select: { id: true, carrierName: true, policyNumber: true, expiryDate: true },
+        }),
+        prisma.checklistItem.findMany({
+            where: {
+                checklistId,
+                serviceCategory: { in: [ServiceCategory.WARRANTY, ServiceCategory.INSURANCE] },
+                status: ChecklistItemStatus.PENDING,
+            }
+        })
+    ]);
+
+    // 2. Process Warranties
+    warranties.forEach(w => {
+        // Only generate tasks for items not yet expired
+        if (w.expiryDate > now) {
+            const title = `Renew Warranty: ${w.providerName}`;
+            // Use policyNumber for a unique description/identifier
+            const description = `Policy ${w.policyNumber} expires on ${w.expiryDate.toISOString().split('T')[0]}.`;
+            
+            // Avoid creating a duplicate pending task (check against existing items)
+            const isDuplicate = existingRenewalItems.some(item => 
+                item.serviceCategory === ServiceCategory.WARRANTY && 
+                item.title === title &&
+                // Compare dates by timestamp to avoid object reference issues
+                item.nextDueDate?.getTime() === w.expiryDate.getTime()
+            );
+
+            if (!isDuplicate) {
+                renewalItemsToCreate.push({
+                    checklistId,
+                    title,
+                    description,
+                    serviceCategory: ServiceCategory.WARRANTY,
+                    status: ChecklistItemStatus.PENDING,
+                    nextDueDate: w.expiryDate,
+                    isRecurring: true, 
+                    frequency: 'ANNUALLY', // Default frequency for renewals
+                    sortOrder: 100,
+                });
+            }
+        }
+    });
+
+    // 3. Process Insurance Policies
+    policies.forEach(p => {
+        if (p.expiryDate > now) {
+            const title = `Renew Insurance: ${p.carrierName}`;
+            const description = `Policy ${p.policyNumber} expires on ${p.expiryDate.toISOString().split('T')[0]}.`;
+
+            const isDuplicate = existingRenewalItems.some(item => 
+                item.serviceCategory === ServiceCategory.INSURANCE && 
+                item.title === title &&
+                item.nextDueDate?.getTime() === p.expiryDate.getTime()
+            );
+
+            if (!isDuplicate) {
+                renewalItemsToCreate.push({
+                    checklistId,
+                    title,
+                    description,
+                    serviceCategory: ServiceCategory.INSURANCE,
+                    status: ChecklistItemStatus.PENDING,
+                    nextDueDate: p.expiryDate,
+                    isRecurring: true,
+                    frequency: 'ANNUALLY', // Default frequency for renewals
+                    sortOrder: 110,
+                });
+            }
+        }
+    });
+
+    // 4. Create new items
+    if (renewalItemsToCreate.length > 0) {
+        await prisma.checklistItem.createMany({
+            data: renewalItemsToCreate,
+            skipDuplicates: true,
+        });
+    }
+};
+// --- END HELPER FUNCTIONS ---
+
 
 // Define type for the itemsToCreate array
 interface ChecklistItemTemplate {
@@ -55,11 +156,12 @@ interface ChecklistItemTemplate {
 
 export class ChecklistService {
   /**
-   * Get or create a checklist for a user.
+   * Get or create a checklist for a user. (MODIFIED)
    * If a checklist doesn't exist, one is created based on the user's segment.
+   * Also performs a sync to ensure all active renewal tasks are present.
    */
-  static async getOrCreateChecklist(userId: string): Promise<Checklist | null> {
-    const existingChecklist = await prisma.checklist.findFirst({
+  static async getOrCreateChecklist(userId: string): Promise<Checklist & { items: ChecklistItem[] } | null> {
+    let checklist = await prisma.checklist.findFirst({
       where: {
         homeownerProfile: {
           userId: userId,
@@ -75,18 +177,39 @@ export class ChecklistService {
       },
     });
 
-    if (existingChecklist) {
-      return existingChecklist;
+    if (!checklist) {
+      // No checklist found, create one
+      checklist = await this.createChecklist(userId);
+    }
+    
+    if (checklist) {
+        // 1. Synchronize renewal tasks after fetching or creating
+        await syncRenewalTasks(userId, checklist.id);
+
+        // 2. Refetch the checklist WITH the items include clause (FIXED TYPE ERROR)
+        const finalChecklist = await prisma.checklist.findFirst({
+             where: { id: checklist.id },
+             include: {
+                items: {
+                  orderBy: [
+                    { nextDueDate: "asc" },
+                    { sortOrder: "asc" }
+                  ]
+                },
+             }
+        });
+        
+        // This finalChecklist will now satisfy the return type
+        return finalChecklist as (Checklist & { items: ChecklistItem[] }) | null;
     }
 
-    // No checklist found, create one
-    return this.createChecklist(userId);
+    return null;
   }
 
   /**
    * Create a new checklist for a user based on their segment.
    */
-  static async createChecklist(userId: string): Promise<Checklist | null> {
+  static async createChecklist(userId: string): Promise<Checklist & { items: ChecklistItem[] } | null> {
     // Get user's segment
     const homeownerProfile = await prisma.homeownerProfile.findUnique({
       where: { userId },
@@ -155,7 +278,6 @@ export class ChecklistService {
       ];
     } else {
       // EXISTING_OWNERs now get an EMPTY checklist by default.
-      // Items will be added by the new maintenance setup flow.
       itemsToCreate = [];
     }
 
@@ -168,9 +290,7 @@ export class ChecklistService {
             title: item.title,
             description: item.description,
             serviceCategory: item.serviceCategory,
-            // --- FIX: Use the enum ---
             status: ChecklistItemStatus.PENDING,
-            // --- END FIX ---
             sortOrder: item.sortOrder,
             isRecurring: false, // Default one-time items
           })),
@@ -185,7 +305,7 @@ export class ChecklistService {
       },
     });
 
-    return newChecklist;
+    return newChecklist as (Checklist & { items: ChecklistItem[] }) | null;
   }
 
   // --- NEW FUNCTION for Phase 3 ---
@@ -222,9 +342,7 @@ export class ChecklistService {
       title: template.title,
       description: template.description,
       serviceCategory: template.serviceCategory,
-      // --- FIX: Use the enum ---
       status: ChecklistItemStatus.PENDING,
-      // --- END FIX ---
       isRecurring: true,
       frequency: template.defaultFrequency,
       nextDueDate: calculateNextDueDate(template.defaultFrequency),
@@ -312,9 +430,7 @@ export class ChecklistService {
     if (item.isRecurring && status === 'COMPLETED') {
       // If a recurring item is "completed", reset its due date for the next cycle
       dataToUpdate = {
-        // --- FIX: Use the enum ---
         status: ChecklistItemStatus.PENDING,
-        // --- END FIX ---
         lastCompletedDate: new Date(),
         nextDueDate: calculateNextDueDate(item.frequency),
       };
