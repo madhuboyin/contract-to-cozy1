@@ -27,6 +27,10 @@ export const errorHandler = (
   res: Response,
   next: NextFunction
 ): void => {
+  let statusCode = (error as APIError).statusCode || res.statusCode !== 200 ? res.statusCode : 500;
+  let message = error.message;
+  let errorCode = (error as APIError).code || 'INTERNAL_ERROR';
+
   // Log error for debugging
   console.error('Error:', {
     name: error.name,
@@ -35,6 +39,19 @@ export const errorHandler = (
     path: req.path,
     method: req.method,
   });
+
+  // --- START: CRITICAL ADDITION FOR SERIALIZATION/PRISMA CRASH ---
+  // Handle Serialization Crash (The most likely cause of generic 500s on Home Management)
+  if (
+    error instanceof TypeError && 
+    (error.message.includes('BigInt') || error.message.includes('Decimal'))
+  ) {
+    statusCode = 500;
+    message = 'Data serialization failed. Unconverted Decimal/BigInt type detected.';
+    errorCode = 'JSON_SERIALIZATION_CRASH';
+    console.error('FATAL JSON SERIALIZATION CRASH: Error in home-management due to unconverted Decimal/BigInt type.', error);
+  }
+  // --- END: CRITICAL ADDITION FOR SERIALIZATION/PRISMA CRASH ---
 
   // Handle custom API errors
   if (error instanceof APIError) {
@@ -56,21 +73,8 @@ export const errorHandler = (
       res.status(409).json({
         success: false,
         error: {
-          message: 'A record with this value already exists',
+          message: `Duplicate entry for field: ${(error.meta?.target as string[])?.join(', ')}`,
           code: 'DUPLICATE_ENTRY',
-          details: error.meta,
-        },
-      });
-      return;
-    }
-
-    // Record not found
-    if (error.code === 'P2025') {
-      res.status(404).json({
-        success: false,
-        error: {
-          message: 'Record not found',
-          code: 'NOT_FOUND',
         },
       });
       return;
@@ -86,6 +90,18 @@ export const errorHandler = (
         },
       });
       return;
+    }
+    
+    // Other known Prisma errors (e.g., P2025 - not found)
+    if (error.code === 'P2025') {
+        res.status(404).json({
+          success: false,
+          error: {
+            message: 'Record not found.',
+            code: 'NOT_FOUND',
+          },
+        });
+        return;
     }
   }
 
@@ -125,28 +141,22 @@ export const errorHandler = (
   }
 
   // Default error response
-  const statusCode = res.statusCode !== 200 ? res.statusCode : 500;
   res.status(statusCode).json({
     success: false,
     error: {
       message: process.env.NODE_ENV === 'production' 
         ? 'An unexpected error occurred' 
-        : error.message,
-      code: 'INTERNAL_ERROR',
+        : message, // Use the extracted/default message
+      code: errorCode,
       ...(process.env.NODE_ENV === 'development' && { stack: error.stack }),
     },
   });
 };
 
 /**
- * 404 handler for undefined routes
+ * 404 handler for unknown routes
  */
-export const notFoundHandler = (req: Request, res: Response): void => {
-  res.status(404).json({
-    success: false,
-    error: {
-      message: `Route ${req.method} ${req.path} not found`,
-      code: 'NOT_FOUND',
-    },
-  });
+export const notFoundHandler = (req: Request, res: Response, next: NextFunction) => {
+  res.status(404);
+  next(new APIError(`Not Found - ${req.originalUrl}`, 404, 'NOT_FOUND_ROUTE'));
 };
