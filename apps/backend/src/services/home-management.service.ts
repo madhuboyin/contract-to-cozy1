@@ -67,7 +67,7 @@ export async function listExpenses(
   // FIX: Convert Decimal to number for all listed expenses
   return rawExpenses.map(rawExpense => ({
     ...rawExpense,
-    amount: (rawExpense as PrismaOutputWithDecimals<typeof rawExpense>).amount!.toNumber(),
+    amount: (rawExpense as PrismaOutputWithDecimals<typeof rawExpenses[0]>).amount!.toNumber(),
   })) as Expense[];
 }
 
@@ -152,14 +152,15 @@ export async function listWarranties(homeownerProfileId: string): Promise<Warran
     where: { homeownerProfileId },
     orderBy: { expiryDate: 'asc' },
     include: {
-      documents: { select: { id: true, name: true, fileUrl: true } }
+      // FIX 3: Change documents selection to fetch the full object to match local interface
+      documents: true
     }
   });
 
   // FIX: Convert Decimal to number for all listed warranties
   return rawWarranties.map(rawWarranty => ({
     ...rawWarranty,
-    cost: rawWarranty.cost ? (rawWarranty as PrismaOutputWithDecimals<typeof rawWarranty>).cost!.toNumber() : null,
+    cost: rawWarranty.cost ? (rawWarranty as PrismaOutputWithDecimals<typeof rawWarranties[0]>).cost!.toNumber() : null,
   })) as Warranty[];
 }
 
@@ -178,7 +179,8 @@ export async function updateWarranty(
       ...(data.startDate && { startDate: new Date(data.startDate) }),
       ...(data.expiryDate && { expiryDate: new Date(data.expiryDate) }),
     } as Prisma.WarrantyUpdateInput,
-    include: { documents: { select: { id: true, name: true, fileUrl: true } } }
+    // FIX 4: Fetch full document object
+    include: { documents: true }
   });
 
   // FIX: Convert Decimal to number before casting
@@ -246,14 +248,15 @@ export async function listInsurancePolicies(homeownerProfileId: string): Promise
     where: { homeownerProfileId },
     orderBy: { expiryDate: 'asc' },
     include: {
-      documents: { select: { id: true, name: true, fileUrl: true } }
+      // FIX 5: Change documents selection to fetch the full object to match local interface
+      documents: true
     }
   });
 
   // FIX: Convert Decimal to number for all listed policies
   return rawPolicies.map(rawPolicy => ({
     ...rawPolicy,
-    premiumAmount: (rawPolicy as PrismaOutputWithDecimals<typeof rawPolicy>).premiumAmount!.toNumber(),
+    premiumAmount: (rawPolicy as PrismaOutputWithDecimals<typeof rawPolicies[0]>).premiumAmount!.toNumber(),
   })) as InsurancePolicy[];
 }
 
@@ -272,7 +275,8 @@ export async function updateInsurancePolicy(
       ...(data.startDate && { startDate: new Date(data.startDate) }),
       ...(data.expiryDate && { expiryDate: new Date(data.expiryDate) }),
     } as Prisma.InsurancePolicyUpdateInput,
-    include: { documents: { select: { id: true, name: true, fileUrl: true } } }
+    // FIX 6: Fetch full document object
+    include: { documents: true }
   });
 
   // FIX: Convert Decimal to number before casting
