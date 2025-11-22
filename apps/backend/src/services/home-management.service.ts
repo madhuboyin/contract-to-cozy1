@@ -26,7 +26,6 @@ type PrismaOutputWithDecimals<T> = T & {
  * Returns null if the value is null/undefined or if conversion method is missing.
  */
 const safeToNumber = (value: DecimalLike | null | undefined): number | null => {
-    // This explicit check prevents the runtime crash when the object is not a valid Decimal instance
     if (value && typeof value.toNumber === 'function') {
         return value.toNumber();
     }
@@ -119,8 +118,10 @@ export async function createExpense(
     const rawExpense = await prisma.expense.create({
       data: {
         homeownerProfile: { connect: { id: homeownerProfileId } },
-        property: data.propertyId ? { connect: { id: data.propertyId } } : undefined,
-        booking: data.bookingId ? { connect: { id: data.bookingId } } : undefined,
+        // Check for empty string IDs and convert them to undefined/null for Prisma
+        property: data.propertyId && data.propertyId !== "" ? { connect: { id: data.propertyId } } : undefined,
+        booking: data.bookingId && data.bookingId !== "" ? { connect: { id: data.bookingId } } : undefined,
+        
         description: data.description,
         category: data.category,
         amount: data.amount,
@@ -192,7 +193,7 @@ export async function createWarranty(
   const rawWarranty = await prisma.warranty.create({
     data: {
       homeownerProfile: { connect: { id: homeownerProfileId } },
-      property: data.propertyId ? { connect: { id: data.propertyId } } : undefined,
+      property: data.propertyId && data.propertyId !== "" ? { connect: { id: data.propertyId } } : undefined,
       
       providerName: data.providerName,
       policyNumber: data.policyNumber,
@@ -256,7 +257,7 @@ export async function createInsurancePolicy(
   const rawPolicy = await prisma.insurancePolicy.create({
     data: {
       homeownerProfile: { connect: { id: homeownerProfileId } },
-      property: data.propertyId ? { connect: { id: data.propertyId } } : undefined,
+      property: data.propertyId && data.propertyId !== "" ? { connect: { id: data.propertyId } } : undefined,
       
       carrierName: data.carrierName,
       policyNumber: data.policyNumber,
