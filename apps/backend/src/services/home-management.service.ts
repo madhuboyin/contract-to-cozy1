@@ -9,11 +9,16 @@ import {
 
 const prisma = new PrismaClient();
 
-// Helper type to access Decimal fields for conversion without deep Prisma client types
+// Helper interface for safe Decimal conversion (the object must have a toNumber method)
+interface DecimalLike {
+  toNumber: () => number;
+}
+
+// Helper type to check for Decimal fields which need conversion
 type PrismaOutputWithDecimals<T> = T & { 
-  amount?: { toNumber: () => number };
-  cost?: { toNumber: () => number | null };
-  premiumAmount?: { toNumber: () => number };
+  amount?: DecimalLike;
+  cost?: DecimalLike | null;
+  premiumAmount?: DecimalLike;
 };
 
 // --- EXPENSE SERVICE LOGIC ---
@@ -25,8 +30,6 @@ export async function createExpense(
   homeownerProfileId: string, 
   data: CreateExpenseDTO
 ): Promise<Expense> {
-  // DEBUG 1: Log expense data before Prisma call
-  console.log('DEBUG: createExpense - Input Data:', data);
   try {
     const rawExpense = await prisma.expense.create({
       data: {
@@ -43,14 +46,14 @@ export async function createExpense(
       } as Prisma.ExpenseCreateInput,
     });
     
-    // DEBUG 2: Log raw expense data from Prisma
-    console.log('DEBUG: createExpense - Raw Output:', rawExpense);
+    // FIX: Safely convert Decimal to number before casting.
+    const expenseWithNumber = rawExpense as PrismaOutputWithDecimals<typeof rawExpense>;
 
-    // FIX: Convert Decimal to number before casting
     return {
       ...rawExpense,
-      amount: (rawExpense as PrismaOutputWithDecimals<typeof rawExpense>).amount!.toNumber(),
+      amount: expenseWithNumber.amount!.toNumber(),
     } as Expense;
+
   } catch (error) {
     console.error('ERROR: createExpense failed', error);
     throw error;
@@ -74,21 +77,19 @@ export async function listExpenses(
     orderBy: { transactionDate: 'desc' },
   });
 
-  console.log('DEBUG: listExpenses - Raw Data Length:', rawExpenses.length); // DEBUG 3
-
-  // FIX: Convert Decimal to number for all listed expenses
+  // FIX: Safely convert Decimal to number for all listed expenses
   return rawExpenses.map(rawExpense => {
-    // DEBUG 4: Check raw amount value
-    console.log('DEBUG: listExpenses - Expense ID:', rawExpense.id, 'Raw Amount:', (rawExpense as any).amount); 
+    const expenseWithNumber = rawExpense as PrismaOutputWithDecimals<typeof rawExpenses[0]>;
 
-    // Safety check for amount property before calling toNumber()
-    if (!(rawExpense as any).amount) {
-      console.error('ERROR: listExpenses - Missing amount on expense:', rawExpense.id);
+    // We rely on the raw object having the Decimal instance with .toNumber()
+    if (!expenseWithNumber.amount || typeof expenseWithNumber.amount.toNumber !== 'function') {
+        // If the database has corrupted data or the mapping failed, throw a clear error
+        throw new Error(`Expense ID ${rawExpense.id} is missing a valid 'amount' field for conversion.`);
     }
-    
+
     return {
       ...rawExpense,
-      amount: (rawExpense as PrismaOutputWithDecimals<typeof rawExpenses[0]>).amount!.toNumber(),
+      amount: expenseWithNumber.amount.toNumber(),
     } as Expense;
   }) as Expense[];
 }
@@ -109,10 +110,12 @@ export async function updateExpense(
     } as Prisma.ExpenseUpdateInput,
   });
   
-  // FIX: Convert Decimal to number before casting
+  const expenseWithNumber = rawUpdatedExpense as PrismaOutputWithDecimals<typeof rawUpdatedExpense>;
+  
+  // FIX: Safely convert Decimal to number before casting
   return {
     ...rawUpdatedExpense,
-    amount: (rawUpdatedExpense as PrismaOutputWithDecimals<typeof rawUpdatedExpense>).amount!.toNumber(),
+    amount: expenseWithNumber.amount!.toNumber(),
   } as Expense;
 }
 
@@ -127,10 +130,12 @@ export async function deleteExpense(
     where: { id: expenseId, homeownerProfileId },
   });
   
-  // FIX: Convert Decimal to number before casting
+  const expenseWithNumber = rawDeletedExpense as PrismaOutputWithDecimals<typeof rawDeletedExpense>;
+
+  // FIX: Safely convert Decimal to number before casting
   return {
     ...rawDeletedExpense,
-    amount: (rawDeletedExpense as PrismaOutputWithDecimals<typeof rawDeletedExpense>).amount!.toNumber(),
+    amount: expenseWithNumber.amount!.toNumber(),
   } as Expense;
 }
 
@@ -158,11 +163,13 @@ export async function createWarranty(
       expiryDate: new Date(data.expiryDate),
     } as Prisma.WarrantyCreateInput,
   });
+  
+  const warrantyWithNumber = rawWarranty as PrismaOutputWithDecimals<typeof rawWarranty>;
 
   // FIX: Convert Decimal to number before casting (cost is optional)
   return {
     ...rawWarranty,
-    cost: rawWarranty.cost ? (rawWarranty as PrismaOutputWithDecimals<typeof rawWarranty>).cost!.toNumber() : null,
+    cost: rawWarranty.cost ? warrantyWithNumber.cost!.toNumber() : null,
   } as Warranty;
 }
 
@@ -178,16 +185,17 @@ export async function listWarranties(homeownerProfileId: string): Promise<Warran
     }
   });
 
-  console.log('DEBUG: listWarranties - Raw Data Length:', rawWarranties.length); // DEBUG 5
-
   // FIX: Convert Decimal to number for all listed warranties
   return rawWarranties.map(rawWarranty => {
-    // DEBUG 6: Check raw cost value
-    console.log('DEBUG: listWarranties - Warranty ID:', rawWarranty.id, 'Raw Cost:', (rawWarranty as any).cost);
+    const warrantyWithNumber = rawWarranty as PrismaOutputWithDecimals<typeof rawWarranties[0]>;
+
+    const convertedCost = rawWarranty.cost
+        ? warrantyWithNumber.cost!.toNumber() // Use non-null assertion since rawWarranty.cost is checked
+        : null;
 
     return {
       ...rawWarranty,
-      cost: rawWarranty.cost ? (rawWarranty as PrismaOutputWithDecimals<typeof rawWarranties[0]>).cost!.toNumber() : null,
+      cost: convertedCost,
     } as Warranty;
   }) as Warranty[];
 }
@@ -209,11 +217,13 @@ export async function updateWarranty(
     } as Prisma.WarrantyUpdateInput,
     include: { documents: true }
   });
+  
+  const warrantyWithNumber = rawUpdatedWarranty as PrismaOutputWithDecimals<typeof rawUpdatedWarranty>;
 
   // FIX: Convert Decimal to number before casting
   return {
     ...rawUpdatedWarranty,
-    cost: rawUpdatedWarranty.cost ? (rawUpdatedWarranty as PrismaOutputWithDecimals<typeof rawUpdatedWarranty>).cost!.toNumber() : null,
+    cost: rawUpdatedWarranty.cost ? warrantyWithNumber.cost!.toNumber() : null,
   } as Warranty;
 }
 
@@ -227,11 +237,13 @@ export async function deleteWarranty(
   const rawDeletedWarranty = await prisma.warranty.delete({
     where: { id: warrantyId, homeownerProfileId },
   });
+  
+  const warrantyWithNumber = rawDeletedWarranty as PrismaOutputWithDecimals<typeof rawDeletedWarranty>;
 
   // FIX: Convert Decimal to number before casting
   return {
     ...rawDeletedWarranty,
-    cost: rawDeletedWarranty.cost ? (rawDeletedWarranty as PrismaOutputWithDecimals<typeof rawDeletedWarranty>).cost!.toNumber() : null,
+    cost: rawDeletedWarranty.cost ? warrantyWithNumber.cost!.toNumber() : null,
   } as Warranty;
 }
 
@@ -259,11 +271,13 @@ export async function createInsurancePolicy(
       expiryDate: new Date(data.expiryDate),
     } as Prisma.InsurancePolicyCreateInput,
   });
+  
+  const policyWithNumber = rawPolicy as PrismaOutputWithDecimals<typeof rawPolicy>;
 
   // FIX: Convert Decimal to number before casting
   return {
     ...rawPolicy,
-    premiumAmount: (rawPolicy as PrismaOutputWithDecimals<typeof rawPolicy>).premiumAmount!.toNumber(),
+    premiumAmount: policyWithNumber.premiumAmount!.toNumber(),
   } as InsurancePolicy;
 }
 
@@ -279,21 +293,18 @@ export async function listInsurancePolicies(homeownerProfileId: string): Promise
     }
   });
 
-  console.log('DEBUG: listInsurancePolicies - Raw Data Length:', rawPolicies.length); // DEBUG 7
-
   // FIX: Convert Decimal to number for all listed policies
   return rawPolicies.map(rawPolicy => {
-    // DEBUG 8: Check raw premiumAmount value
-    console.log('DEBUG: listInsurancePolicies - Policy ID:', rawPolicy.id, 'Raw Premium Amount:', (rawPolicy as any).premiumAmount);
+    const policyWithNumber = rawPolicy as PrismaOutputWithDecimals<typeof rawPolicies[0]>;
 
-    // Safety check for premiumAmount property before calling toNumber()
-    if (!(rawPolicy as any).premiumAmount) {
-        console.error('ERROR: listInsurancePolicies - Missing premiumAmount on policy:', rawPolicy.id);
+    // We rely on the raw object having the Decimal instance with .toNumber()
+    if (!policyWithNumber.premiumAmount || typeof policyWithNumber.premiumAmount.toNumber !== 'function') {
+        throw new Error(`Policy ID ${rawPolicy.id} is missing a valid 'premiumAmount' field for conversion.`);
     }
-    
+
     return {
       ...rawPolicy,
-      premiumAmount: (rawPolicy as PrismaOutputWithDecimals<typeof rawPolicies[0]>).premiumAmount!.toNumber(),
+      premiumAmount: policyWithNumber.premiumAmount.toNumber(),
     } as InsurancePolicy;
   }) as InsurancePolicy[];
 }
@@ -315,11 +326,13 @@ export async function updateInsurancePolicy(
     } as Prisma.InsurancePolicyUpdateInput,
     include: { documents: true }
   });
+  
+  const policyWithNumber = rawUpdatedPolicy as PrismaOutputWithDecimals<typeof rawUpdatedPolicy>;
 
   // FIX: Convert Decimal to number before casting
   return {
     ...rawUpdatedPolicy,
-    premiumAmount: (rawUpdatedPolicy as PrismaOutputWithDecimals<typeof rawUpdatedPolicy>).premiumAmount!.toNumber(),
+    premiumAmount: policyWithNumber.premiumAmount!.toNumber(),
   } as InsurancePolicy;
 }
 
@@ -333,11 +346,13 @@ export async function deleteInsurancePolicy(
   const rawDeletedPolicy = await prisma.insurancePolicy.delete({
     where: { id: policyId, homeownerProfileId },
   });
+  
+  const policyWithNumber = rawDeletedPolicy as PrismaOutputWithDecimals<typeof rawDeletedPolicy>;
 
   // FIX: Convert Decimal to number before casting
   return {
     ...rawDeletedPolicy,
-    premiumAmount: (rawDeletedPolicy as PrismaOutputWithDecimals<typeof rawDeletedPolicy>).premiumAmount!.toNumber(),
+    premiumAmount: policyWithNumber.premiumAmount!.toNumber(),
   } as InsurancePolicy;
 }
 
@@ -414,11 +429,5 @@ export async function listDocuments(homeownerProfileId: string): Promise<Documen
         orderBy: { createdAt: 'desc' },
     });
     
-    console.log('DEBUG: listDocuments - Raw Data Length:', documents.length); // DEBUG 9
-    // DEBUG 10: Log the first document's raw data to inspect its structure
-    if (documents.length > 0) {
-        console.log('DEBUG: listDocuments - First Document Raw:', documents[0]); 
-    }
-
     return documents as Document[];
 }
