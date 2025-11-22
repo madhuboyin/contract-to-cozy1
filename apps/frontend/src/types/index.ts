@@ -57,6 +57,128 @@ export enum RecurrenceFrequency {
  */
 export type HomeownerSegment = 'HOME_BUYER' | 'EXISTING_OWNER';
 
+// ============================================================================
+// NEW DOCUMENT UPLOAD TYPES (ADDED)
+// ============================================================================
+
+/**
+ * Document Type Enum (Synced with Backend Enum)
+ */
+export type DocumentType = 
+  | 'INSPECTION_REPORT'
+  | 'ESTIMATE'
+  | 'INVOICE'
+  | 'CONTRACT'
+  | 'PERMIT'
+  | 'PHOTO'
+  | 'VIDEO'
+  | 'INSURANCE_CERTIFICATE'
+  | 'LICENSE'
+  | 'OTHER';
+
+/**
+ * Document Upload Request DTO
+ * Note: The file itself is sent as 'file' in a separate multipart/form-data field.
+ */
+export interface DocumentUploadInput {
+  type: DocumentType;
+  name: string;
+  description?: string;
+  // Exactly one of the following is typically required
+  propertyId?: string;
+  warrantyId?: string;
+  policyId?: string;
+}
+
+// ============================================================================
+// NEW HOMEOWNER MANAGEMENT TYPES
+// ============================================================================
+
+/**
+ * Expense Category Enum
+ */
+export type ExpenseCategory = 
+  | 'REPAIR_SERVICE'
+  | 'PROPERTY_TAX'
+  | 'HOA_FEE'
+  | 'UTILITY'
+  | 'APPLIANCE'
+  | 'MATERIALS'
+  | 'OTHER';
+
+/**
+ * Core Document Type (Extended to include new relations)
+ */
+export interface Document {
+  id: string;
+  name: string;
+  fileUrl: string;
+  type: DocumentType; // Updated type to use the new DocumentType enum
+  description: string | null;
+  fileSize: number;
+  mimeType: string;
+  propertyId: string | null;
+  warrantyId: string | null;
+  policyId: string | null;
+  createdAt: string;
+}
+
+/**
+ * Expense Interface
+ */
+export interface Expense {
+  id: string;
+  homeownerProfileId: string;
+  propertyId: string | null;
+  bookingId: string | null;
+  description: string;
+  category: ExpenseCategory;
+  amount: number;
+  transactionDate: string; // ISO Date string
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Warranty Interface
+ */
+export interface Warranty {
+  id: string;
+  homeownerProfileId: string;
+  propertyId: string | null;
+  providerName: string;
+  policyNumber: string | null;
+  coverageDetails: string | null;
+  cost: number | null;
+  startDate: string; // ISO Date string
+  expiryDate: string; // ISO Date string
+  documents: Document[]; // Array of associated documents
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Insurance Policy Interface
+ */
+export interface InsurancePolicy {
+  id: string;
+  homeownerProfileId: string;
+  propertyId: string | null;
+  carrierName: string;
+  policyNumber: string;
+  coverageType: string | null;
+  premiumAmount: number;
+  startDate: string; // ISO Date string
+  expiryDate: string; // ISO Date string
+  documents: Document[]; // Array of associated documents
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================================================
+// CORE APPLICATION TYPES (Existing)
+// ============================================================================
+
 /**
  * User
  */
@@ -68,11 +190,13 @@ export interface User {
   role: UserRole;
   emailVerified: boolean;
   status: UserStatus;
-  homeownerProfile?: {
+  // FIX 1: Add the flattened segment field (sent by backend login/me responses)
+  segment?: HomeownerSegment; 
+  // FIX 2: Keep the nested profile structure for comprehensive user data
+  homeownerProfile?: { 
     id: string;
     segment: HomeownerSegment;
-    // Add other profile fields if needed for frontend logic
-  };
+  } | null;
 }
 
 /**
@@ -250,9 +374,10 @@ export interface PaginationMeta {
   totalPages: number;
 }
 
-/**
- * Form Inputs
- */
+// ============================================================================
+// FORM INPUTS (DTOs for Frontend)
+// ============================================================================
+
 export interface LoginInput {
   email: string;
   password: string;
@@ -287,7 +412,7 @@ export interface MaintenanceTaskTemplate {
   title: string;
   description: string | null;
   serviceCategory: ServiceCategory | null;
-  defaultFrequency: RecurrenceFrequency; // Updated to use enum
+  defaultFrequency: RecurrenceFrequency;
   sortOrder: number;
 }
 
@@ -313,3 +438,39 @@ export interface MaintenanceTaskConfig {
   nextDueDate: Date | null;
   serviceCategory: ServiceCategory | null;
 }
+
+// NEW DTOs for Home Management
+
+export interface CreateExpenseInput {
+  propertyId?: string;
+  bookingId?: string;
+  description: string;
+  category: ExpenseCategory;
+  amount: number;
+  transactionDate: string; // ISO date string
+}
+export interface UpdateExpenseInput extends Partial<CreateExpenseInput> {}
+
+
+export interface CreateWarrantyInput {
+  propertyId?: string;
+  providerName: string;
+  policyNumber?: string;
+  coverageDetails?: string;
+  cost?: number;
+  startDate: string; // ISO date string
+  expiryDate: string; // ISO date string
+}
+export interface UpdateWarrantyInput extends Partial<CreateWarrantyInput> {}
+
+
+export interface CreateInsurancePolicyInput {
+  propertyId?: string;
+  carrierName: string;
+  policyNumber: string;
+  coverageType?: string;
+  premiumAmount: number;
+  startDate: string; // ISO date string
+  expiryDate: string; // ISO date string
+}
+export interface UpdateInsurancePolicyInput extends Partial<CreateInsurancePolicyInput> {}

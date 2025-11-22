@@ -23,8 +23,13 @@ import {
   LogOut,
   PanelLeft,
   Settings,
+  Shield, // NEW: Insurance
+  Wrench, // NEW: Warranties
+  DollarSign, // NEW: Expenses
+  FileText, // NEW: Documents
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { User } from '@/types'; 
 
 interface NavLink {
   name: string;
@@ -34,10 +39,9 @@ interface NavLink {
 
 /**
  * Main layout for the authenticated dashboard.
- * Top-bar navigation with centered content and inlined user menu.
  */
 function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading } = useAuth() as { user: User | null, loading: boolean };
 
   if (loading) {
     return (
@@ -57,11 +61,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen w-full flex-col">
-      {/* --- Header (Contains all nav) --- */}
-      {/* 1. Increased header height to h-16 (4rem) to give content room */}
       <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-white px-4 sm:px-6">
-        {/* --- FIX: "SHRUNK" NAV/OVERLAP (Part 1) --- */}
-        {/* Added `shrink-0` to the logo link to prevent it from compressing */}
         <Link
           href="/dashboard"
           className="flex items-center gap-2 font-semibold shrink-0"
@@ -76,22 +76,16 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
           <span className="text-xl font-bold text-blue-600">Contract to Cozy</span>
         </Link>
 
-        {/* Desktop-only horizontal nav */}
-        <DesktopNav />
-
-        {/* Spacer */}
+        <DesktopNav user={user} />
         <div className="flex-1" />
+        <DesktopUserNav user={user} />
 
-        {/* Replaced Dropdown with new DesktopUserNav */}
-        <DesktopUserNav />
-
-        {/* Mobile-only hamburger menu */}
         <Sheet>
           <SheetTrigger asChild>
             <Button
               variant="outline"
               size="icon"
-              className="shrink-0 lg:hidden" // Hidden on desktop
+              className="shrink-0 lg:hidden" 
             >
               <PanelLeft className="h-5 w-5" />
               <span className="sr-only">Toggle navigation menu</span>
@@ -114,26 +108,20 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
               </Link>
             </div>
             
-            {/* Main nav links */}
             <div className="py-2 flex-1 overflow-auto">
-              <SidebarNav />
+              <SidebarNav user={user} />
             </div>
 
-            {/* User links at bottom of mobile menu */}
-            <MobileUserNav />
+            <MobileUserNav user={user} />
           </SheetContent>
         </Sheet>
       </header>
 
-      {/* --- 2. THIS IS THE CENTERING FIX --- */}
-      {/* This main element provides the background color */}
       <main className="flex-1 bg-gray-50">
-        {/* This div centers your content, sets its max width, and adds the padding */}
         <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
           {children}
         </div>
       </main>
-      {/* --- END CENTERING FIX --- */}
     </div>
   );
 }
@@ -141,9 +129,8 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 /**
  * Renders the horizontal navigation for desktop.
  */
-function DesktopNav() {
+function DesktopNav({ user }: { user: User | null }) {
   const pathname = usePathname();
-  const { user } = useAuth();
 
   const navLinks: NavLink[] = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
@@ -152,17 +139,24 @@ function DesktopNav() {
     { name: 'Find Providers', href: '/dashboard/providers', icon: Search },
   ];
 
-  if (user && user.segment === 'HOME_BUYER') {
+  // Conditional Navigation based on Segment
+  if (user?.segment === 'HOME_BUYER') {
     navLinks.push({
       name: 'Checklist',
       href: '/dashboard/checklist',
       icon: ListChecks,
     });
+  } else if (user?.segment === 'EXISTING_OWNER') {
+    // NEW LINKS for Existing Owners (ADDED Document link)
+    navLinks.push(
+      { name: 'Documents', href: '/dashboard/documents', icon: FileText }, // ADDED
+      { name: 'Insurance', href: '/dashboard/insurance', icon: Shield },
+      { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench },
+      { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign },
+    );
   }
 
   return (
-    // --- FIX: "SHRUNK" NAV/OVERLAP (Part 2) ---
-    // Added `shrink-0` to prevent this nav from shrinking
     <nav className="hidden items-center gap-4 lg:flex lg:gap-6 ml-6 shrink-0">
       {navLinks.map((link) => (
         <Link
@@ -170,7 +164,7 @@ function DesktopNav() {
           href={link.href}
           className={cn(
             'text-sm font-medium text-gray-600 transition-all hover:text-blue-600',
-            pathname === link.href && 'text-blue-600 font-semibold'
+            pathname.startsWith(link.href) && 'text-blue-600 font-semibold'
           )}
         >
           {link.name}
@@ -183,9 +177,8 @@ function DesktopNav() {
 /**
  * Renders the vertical navigation for the mobile sheet.
  */
-function SidebarNav() {
+function SidebarNav({ user }: { user: User | null }) {
   const pathname = usePathname();
-  const { user } = useAuth();
 
   const navLinks: NavLink[] = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
@@ -194,12 +187,21 @@ function SidebarNav() {
     { name: 'Find Providers', href: '/dashboard/providers', icon: Search },
   ];
 
-  if (user && user.segment === 'HOME_BUYER') {
+  // Conditional Navigation based on Segment
+  if (user?.segment === 'HOME_BUYER') {
     navLinks.push({
       name: 'Checklist',
       href: '/dashboard/checklist',
       icon: ListChecks,
     });
+  } else if (user?.segment === 'EXISTING_OWNER') {
+    // NEW LINKS for Existing Owners (ADDED Document link)
+    navLinks.push(
+      { name: 'Documents', href: '/dashboard/documents', icon: FileText }, // ADDED
+      { name: 'Insurance', href: '/dashboard/insurance', icon: Shield },
+      { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench },
+      { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign },
+    );
   }
 
   // Use SheetClose to make links close the menu on navigation
@@ -211,7 +213,7 @@ function SidebarNav() {
             href={link.href}
             className={cn(
               'flex items-center gap-3 rounded-lg px-3 py-2 text-gray-700 transition-all hover:text-blue-600 hover:bg-gray-100',
-              pathname === link.href && 'bg-blue-100 text-blue-700 hover:text-blue-700'
+              pathname.startsWith(link.href) && 'bg-blue-100 text-blue-700 hover:text-blue-700'
             )}
           >
             <link.icon className="h-4 w-4" />
@@ -224,17 +226,22 @@ function SidebarNav() {
 }
 
 // Helper function to format user type
-const getUserTypeLabel = (user: any) => {
+const getUserTypeLabel = (user: User | null) => {
   if (!user) return '';
   if (user.role === 'PROVIDER') return 'Provider';
-  if (user.segment === 'HOME_BUYER') return 'Home Buyer';
-  if (user.segment === 'EXISTING_OWNER') return 'Homeowner';
+  
+  // FIX: Check the top-level 'user.segment' property
+  const segment = user.segment;
+  
+  if (segment === 'HOME_BUYER') return 'Home Buyer';
+  if (segment === 'EXISTING_OWNER') return 'Homeowner';
+  
   return 'Homeowner'; // Default
 };
 
 // New component for DESKTOP user info
-function DesktopUserNav() {
-  const { user, logout } = useAuth();
+function DesktopUserNav({ user }: { user: User | null }) {
+  const { logout } = useAuth(); 
 
   const handleLogout = () => {
     logout();
@@ -245,7 +252,6 @@ function DesktopUserNav() {
 
   return (
     <div className="hidden items-center gap-4 lg:flex shrink-0">
-      {/* User name and badge - HORIZONTAL layout */}
       <div className="flex items-center gap-2">
         <span className="font-body font-medium text-sm text-gray-900">
           {user?.firstName} {user?.lastName}
@@ -258,7 +264,6 @@ function DesktopUserNav() {
         </Badge>
       </div>
 
-      {/* Profile button - Phase 2 compliant */}
       <Button 
         asChild 
         variant="ghost" 
@@ -268,7 +273,6 @@ function DesktopUserNav() {
         <Link href="/dashboard/profile">Profile</Link>
       </Button>
 
-      {/* Logout button - Phase 2 compliant */}
       <Button 
         onClick={handleLogout} 
         variant="ghost" 
@@ -281,8 +285,8 @@ function DesktopUserNav() {
   );
 }
 
-function MobileUserNav() {
-  const { user, logout } = useAuth();
+function MobileUserNav({ user }: { user: User | null }) {
+  const { logout } = useAuth();
 
   const handleLogout = () => {
     logout();
