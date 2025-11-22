@@ -24,11 +24,13 @@ type PrismaOutputWithDecimals<T> = T & {
 /**
  * Safely converts a Decimal-like object to a number.
  * Returns null if the value is null/undefined or if conversion method is missing.
+ * This is the final and most robust solution for Decimal conversion issues.
  */
 const safeToNumber = (value: DecimalLike | null | undefined): number | null => {
     if (value && typeof value.toNumber === 'function') {
         return value.toNumber();
     }
+    // Return null if the value is null, undefined, or doesn't have the conversion method
     return null;
 };
 
@@ -55,12 +57,14 @@ export async function createExpense(
       } as Prisma.ExpenseCreateInput,
     });
     
-    // FIX: Use safeToNumber for robustness
     const expenseWithNumber = rawExpense as PrismaOutputWithDecimals<typeof rawExpense>;
+    
+    // FIX 1: Use safeToNumber, default to 0 (non-nullable column)
+    const amount = safeToNumber(expenseWithNumber.amount) ?? 0;
 
     return {
       ...rawExpense,
-      amount: expenseWithNumber.amount ? expenseWithNumber.amount.toNumber() : 0, // Assume required field is always present
+      amount: amount,
     } as Expense;
 
   } catch (error) {
@@ -83,17 +87,11 @@ export async function listExpenses(
     orderBy: { transactionDate: 'desc' },
   });
 
-  // FIX: Use safeToNumber for all listed expenses
+  // FIX 2: Use safeToNumber for all listed expenses
   return rawExpenses.map(rawExpense => {
     const expenseWithNumber = rawExpense as PrismaOutputWithDecimals<typeof rawExpenses[0]>;
     
-    // Amount is a required field (not null)
     const amount = safeToNumber(expenseWithNumber.amount) ?? 0;
-    
-    // If the data is critically corrupt (amount is null in a non-null column)
-    if (amount === null) {
-        throw new Error(`Critical data error: Expense ID ${rawExpense.id} has invalid 'amount'.`);
-    }
     
     return {
       ...rawExpense,
@@ -117,10 +115,12 @@ export async function updateExpense(
   
   const expenseWithNumber = rawUpdatedExpense as PrismaOutputWithDecimals<typeof rawUpdatedExpense>;
   
-  // FIX: Safely convert Decimal to number before casting
+  // FIX 3: Safely convert Decimal to number before casting
+  const amount = safeToNumber(expenseWithNumber.amount) ?? 0;
+
   return {
     ...rawUpdatedExpense,
-    amount: expenseWithNumber.amount ? expenseWithNumber.amount.toNumber() : 0,
+    amount: amount,
   } as Expense;
 }
 
@@ -134,10 +134,12 @@ export async function deleteExpense(
   
   const expenseWithNumber = rawDeletedExpense as PrismaOutputWithDecimals<typeof rawDeletedExpense>;
 
-  // FIX: Safely convert Decimal to number before casting
+  // FIX 4: Safely convert Decimal to number before casting
+  const amount = safeToNumber(expenseWithNumber.amount) ?? 0;
+  
   return {
     ...rawDeletedExpense,
-    amount: expenseWithNumber.amount ? expenseWithNumber.amount.toNumber() : 0,
+    amount: amount,
   } as Expense;
 }
 
@@ -165,7 +167,7 @@ export async function createWarranty(
   
   const warrantyWithNumber = rawWarranty as PrismaOutputWithDecimals<typeof rawWarranty>;
 
-  // FIX: Convert Decimal to number before casting (cost is optional)
+  // FIX 5: Use safeToNumber for optional field.
   return {
     ...rawWarranty,
     cost: safeToNumber(warrantyWithNumber.cost),
@@ -181,7 +183,7 @@ export async function listWarranties(homeownerProfileId: string): Promise<Warran
     }
   });
 
-  // FIX: Use safeToNumber for all listed warranties
+  // FIX 6: Use safeToNumber for all listed warranties
   return rawWarranties.map(rawWarranty => {
     const warrantyWithNumber = rawWarranty as PrismaOutputWithDecimals<typeof rawWarranties[0]>;
 
@@ -209,7 +211,7 @@ export async function updateWarranty(
   
   const warrantyWithNumber = rawUpdatedWarranty as PrismaOutputWithDecimals<typeof rawUpdatedWarranty>;
 
-  // FIX: Safely convert Decimal to number before casting
+  // FIX 7: Safely convert Decimal to number before casting
   return {
     ...rawUpdatedWarranty,
     cost: safeToNumber(warrantyWithNumber.cost),
@@ -226,7 +228,7 @@ export async function deleteWarranty(
   
   const warrantyWithNumber = rawDeletedWarranty as PrismaOutputWithDecimals<typeof rawDeletedWarranty>;
 
-  // FIX: Safely convert Decimal to number before casting
+  // FIX 8: Safely convert Decimal to number before casting
   return {
     ...rawDeletedWarranty,
     cost: safeToNumber(warrantyWithNumber.cost),
@@ -257,10 +259,12 @@ export async function createInsurancePolicy(
   
   const policyWithNumber = rawPolicy as PrismaOutputWithDecimals<typeof rawPolicy>;
 
-  // FIX: Convert Decimal to number before casting
+  // FIX 9: Convert Decimal to number before casting (non-nullable)
+  const premiumAmount = safeToNumber(policyWithNumber.premiumAmount) ?? 0;
+
   return {
     ...rawPolicy,
-    premiumAmount: policyWithNumber.premiumAmount ? policyWithNumber.premiumAmount.toNumber() : 0,
+    premiumAmount: premiumAmount,
   } as InsurancePolicy;
 }
 
@@ -273,11 +277,10 @@ export async function listInsurancePolicies(homeownerProfileId: string): Promise
     }
   });
 
-  // FIX: Use safeToNumber for all listed policies
+  // FIX 10: Use safeToNumber for all listed policies
   return rawPolicies.map(rawPolicy => {
     const policyWithNumber = rawPolicy as PrismaOutputWithDecimals<typeof rawPolicies[0]>;
 
-    // premiumAmount is a required field (not null)
     const premiumAmount = safeToNumber(policyWithNumber.premiumAmount) ?? 0;
 
     return {
@@ -304,10 +307,12 @@ export async function updateInsurancePolicy(
   
   const policyWithNumber = rawUpdatedPolicy as PrismaOutputWithDecimals<typeof rawUpdatedPolicy>;
 
-  // FIX: Convert Decimal to number before casting
+  // FIX 11: Convert Decimal to number before casting
+  const premiumAmount = safeToNumber(policyWithNumber.premiumAmount) ?? 0;
+
   return {
     ...rawUpdatedPolicy,
-    premiumAmount: policyWithNumber.premiumAmount ? policyWithNumber.premiumAmount.toNumber() : 0,
+    premiumAmount: premiumAmount,
   } as InsurancePolicy;
 }
 
@@ -321,10 +326,12 @@ export async function deleteInsurancePolicy(
   
   const policyWithNumber = rawDeletedPolicy as PrismaOutputWithDecimals<typeof rawDeletedPolicy>;
 
-  // FIX: Convert Decimal to number before casting
+  // FIX 12: Convert Decimal to number before casting
+  const premiumAmount = safeToNumber(policyWithNumber.premiumAmount) ?? 0;
+
   return {
     ...rawDeletedPolicy,
-    premiumAmount: policyWithNumber.premiumAmount ? policyWithNumber.premiumAmount.toNumber() : 0,
+    premiumAmount: premiumAmount,
   } as InsurancePolicy;
 }
 

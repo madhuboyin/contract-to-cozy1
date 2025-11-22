@@ -21,7 +21,22 @@ export const upload = multer({ storage: multer.memoryStorage() });
 // ============================================================================
 
 // Utility function to get homeownerProfileId from the request (assuming Auth is implemented)
-const getHomeownerId = (req: AuthRequest) => (req.user as any)?.homeownerProfile?.id as string;
+//const getHomeownerId = (req: AuthRequest) => (req.user as any)?.homeownerProfile?.id as string;
+
+const getHomeownerId = (req: AuthRequest): string => {
+  const profileId = req.user?.homeownerProfile?.id;
+  
+  if (!profileId) {
+    console.error('getHomeownerId: Profile ID not found', {
+      userId: req.user?.userId,
+      role: req.user?.role,
+      hasProfile: !!req.user?.homeownerProfile
+    });
+    throw new Error('Homeowner profile not found. User may not have completed onboarding.');
+  }
+  
+  return profileId;
+};
 
 // Temporary type augmentation for Multer to recognize req.file and req.body as multipart
 interface UploadAuthRequest extends Request {
@@ -50,6 +65,7 @@ export const postExpense = async (req: AuthRequest, res: Response, next: NextFun
     const expense = await HomeManagementService.createExpense(homeownerProfileId, expenseData);
     res.status(201).json({ success: true, data: expense });
   } catch (error) {
+    //console.error('Error in postExpense:', error.message, error.stack);
     next(error);
   }
 };
