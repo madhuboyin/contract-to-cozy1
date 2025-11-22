@@ -17,6 +17,8 @@ interface AuthContextType {
   isProvider: boolean;
   isAdmin: boolean;
   userSegment: HomeownerSegment | undefined;
+  // FIX 1: Add refreshUser to the context type
+  refreshUser: () => Promise<void>; 
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -73,6 +75,36 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const userSegment = user?.segment;
 
   // --- Authentication Handlers ---
+  
+  // FIX 2: Define logout first to be used in refreshUser
+  const logout = useCallback(() => {
+    if (isBrowser) {
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+      localStorage.removeItem(USER_STORAGE_KEY);
+    }
+    setUser(null);
+    router.push('/login');
+  }, [router]);
+
+  // FIX 3: Define refreshUser using the common fetchCurrentUser logic
+  const refreshUser = useCallback(async () => {
+    if (!isBrowser) return;
+
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token) {
+        return; 
+    }
+    
+    const freshUser = await fetchCurrentUser(token);
+    if (freshUser) {
+      setUser(freshUser);
+    } else {
+      // Token failed validation, log out to clear bad token/user data
+      logout(); 
+    }
+  }, [logout]);
+
 
   const login = useCallback(async (data: LoginInput): Promise<LoginResponse | null> => {
     try {
@@ -108,7 +140,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(user);
         
         // Return the full object structure expected by LoginResponse
-        return { accessToken, refreshToken, user }; 
+        return { success: true, accessToken, refreshToken, user }; // Ensuring success is returned
       }
       // If response.success is false, we return null (triggers 'Invalid email' message)
       console.warn('DEBUG: Login failed due to API response body (success: false).'); // DEBUG 4
@@ -137,16 +169,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [login]);
 
-
-  const logout = useCallback(() => {
-    if (isBrowser) {
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
-      localStorage.removeItem(REFRESH_TOKEN_KEY);
-      localStorage.removeItem(USER_STORAGE_KEY);
-    }
-    setUser(null);
-    router.push('/login');
-  }, [router]);
 
   // --- Initialization Effect ---
   useEffect(() => {
@@ -195,6 +217,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     isProvider,
     isAdmin,
     userSegment,
+    // FIX 4: Add refreshUser to the context value
+    refreshUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
