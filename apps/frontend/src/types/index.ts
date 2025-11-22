@@ -190,7 +190,6 @@ export interface User {
   role: UserRole;
   emailVerified: boolean;
   status: UserStatus;
-  // FIX: Add missing creation date property to resolve the build error
   createdAt: string; 
   // FIX 1: Add the flattened segment field (sent by backend login/me responses)
   segment?: HomeownerSegment; 
@@ -205,7 +204,7 @@ export interface User {
  * Auth Response
  */
 export interface LoginResponse {
-  // FIX: Add success property to satisfy the check in page.tsx (if login is successful)
+  // FIX: Added success property
   success: true; 
   accessToken: string;
   refreshToken: string;
@@ -213,7 +212,7 @@ export interface LoginResponse {
 }
 
 export interface RegisterResponse {
-  // FIX: Add success property to satisfy the check in page.tsx (if registration is successful)
+  // FIX: Added success property
   success: true; 
   message: string;
   user: User;
@@ -395,7 +394,8 @@ export interface RegisterInput {
   firstName: string;
   lastName: string;
   role: UserRole;
-  segment: HomeownerSegment; 
+  // FIX APPLIED: Make segment optional so 'PROVIDER' registration passes validation
+  segment?: HomeownerSegment; 
 }
 
 export interface CreateBookingInput {
