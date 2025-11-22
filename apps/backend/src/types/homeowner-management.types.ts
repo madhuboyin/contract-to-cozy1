@@ -1,17 +1,40 @@
 // apps/backend/src/types/homeowner-management.types.ts
 
 // Assuming @prisma/client is available in the backend environment.
-import { ExpenseCategory as ExpenseCategoryPrisma } from '@prisma/client';
+// FIX 1: Import all relevant enums/types from @prisma/client to resolve potential import resolution issues.
+import * as PrismaEnums from '@prisma/client'; 
 
 /**
  * Expense Category Enum (Synced with Prisma)
  */
-export const ExpenseCategory = ExpenseCategoryPrisma;
-export type ExpenseCategory = ExpenseCategoryPrisma;
+// FIX 2: Export the value object and type explicitly from the imported module.
+export const ExpenseCategory = PrismaEnums.ExpenseCategory;
+export type ExpenseCategory = PrismaEnums.ExpenseCategory;
 
 // ============================================================================
 // CORE ENTITY INTERFACES
 // ============================================================================
+
+/**
+ * Document Interface (Minimal structure reflecting entity relations)
+ * NOTE: This is manually synced with the full Document model fields required for display/relations.
+ */
+export interface Document {
+  id: string;
+  name: string;
+  fileUrl: string;
+  // Added other fields from the Prisma schema for completeness, though list services only select a subset.
+  type: DocumentType; 
+  description: string | null;
+  fileSize: number;
+  mimeType: string;
+  propertyId: string | null;
+  warrantyId: string | null;
+  policyId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 
 /**
  * Expense Interface
@@ -44,6 +67,7 @@ export interface Warranty {
   expiryDate: Date;
   createdAt: Date;
   updatedAt: Date;
+  documents: Document[]; 
 }
 
 /**
@@ -61,6 +85,7 @@ export interface InsurancePolicy {
   expiryDate: Date;
   createdAt: Date;
   updatedAt: Date;
+  documents: Document[];
 }
 
 // ============================================================================
@@ -103,7 +128,7 @@ export interface CreateInsurancePolicyDTO {
 
 export interface UpdateInsurancePolicyDTO extends Partial<CreateInsurancePolicyDTO> {}
 
-// --- DTOs and Types for Document Management (FIXED: Added DocumentType) ---
+// --- DTOs and Types for Document Management ---
 
 /**
  * Document Type Enum (Synced with schema.prisma)
