@@ -65,7 +65,7 @@ export const postExpense = async (req: AuthRequest, res: Response, next: NextFun
     const expense = await HomeManagementService.createExpense(homeownerProfileId, expenseData);
     res.status(201).json({ success: true, data: expense });
   } catch (error) {
-    //console.error('Error in postExpense:', error.message, error.stack);
+    console.error('Error in postExpense:', error);
     next(error);
   }
 };
@@ -81,6 +81,7 @@ export const getExpenses = async (req: AuthRequest, res: Response, next: NextFun
     );
     res.status(200).json({ success: true, data: { expenses } });
   } catch (error) {
+    console.error('Error in getExpenses:', error);
     next(error);
   }
 };
@@ -98,6 +99,7 @@ export const patchExpense = async (req: AuthRequest, res: Response, next: NextFu
     );
     res.status(200).json({ success: true, data: expense });
   } catch (error) {
+    console.error('Error in patchExpense:', error);
     next(error);
   }
 };
@@ -110,6 +112,7 @@ export const deleteExpense = async (req: AuthRequest, res: Response, next: NextF
     await HomeManagementService.deleteExpense(expenseId, homeownerProfileId);
     res.status(200).json({ success: true, message: 'Expense deleted successfully.' });
   } catch (error) {
+    console.error('Error in deleteExpense:', error);
     next(error);
   }
 };
@@ -124,6 +127,7 @@ export const postWarranty = async (req: AuthRequest, res: Response, next: NextFu
     const warranty = await HomeManagementService.createWarranty(homeownerProfileId, warrantyData);
     res.status(201).json({ success: true, data: warranty });
   } catch (error) {
+    console.error('Error in postWarranties:', error);
     next(error);
   }
 };
@@ -134,6 +138,7 @@ export const getWarranties = async (req: AuthRequest, res: Response, next: NextF
     const warranties = await HomeManagementService.listWarranties(homeownerProfileId);
     res.status(200).json({ success: true, data: { warranties } });
   } catch (error) {
+    console.error('Error in getWarranty:', error);
     next(error);
   }
 };
@@ -151,6 +156,7 @@ export const patchWarranty = async (req: AuthRequest, res: Response, next: NextF
     );
     res.status(200).json({ success: true, data: warranty });
   } catch (error) {
+    console.error('Error in patchWarranty:', error);
     next(error);
   }
 };
@@ -163,6 +169,7 @@ export const deleteWarranty = async (req: AuthRequest, res: Response, next: Next
     await HomeManagementService.deleteWarranty(warrantyId, homeownerProfileId);
     res.status(200).json({ success: true, message: 'Warranty deleted successfully.' });
   } catch (error) {
+    console.error('Error in deleteWarranty:', error);
     next(error);
   }
 };
