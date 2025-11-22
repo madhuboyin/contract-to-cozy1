@@ -8,6 +8,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { isValidEmail } from '@/lib/utils';
+// FIX 1: Import APIError for robust error handling
+import { APIError } from '@/types/index'; 
 
 export default function ProviderLoginPage() {
   const router = useRouter();
@@ -47,7 +49,8 @@ export default function ProviderLoginPage() {
 
     const result = await login(formData);
 
-    if (result.success) {
+    // FIX 2: Check for null AND result.success to proceed safely
+    if (result && result.success) {
       // Wait for user state to update
       await new Promise(resolve => setTimeout(resolve, 150));
       
@@ -82,7 +85,13 @@ export default function ProviderLoginPage() {
         router.push('/dashboard');
       }
     } else {
-      setApiError(result.error || 'Login failed');
+      // FIX 3: Safely handle error or null result
+      const errorResponse = result as (APIError | null);
+      const errorMessage = errorResponse?.error?.message || 
+                           errorResponse?.message || 
+                           'Login failed. Please check your credentials.';
+
+      setApiError(errorMessage);
       setIsLoading(false);
     }
   };
