@@ -22,6 +22,10 @@ type ToasterToast = ToastProps & {
   title?: React.ReactNode
   description?: React.ReactNode
   action?: ToastActionElement
+  // FIX 1: Add missing 'open' property for Radix state management
+  open: boolean
+  // FIX 2: Add missing 'onOpenChange' property
+  onOpenChange: (open: boolean) => void
 }
 
 const actionTypes = {
@@ -144,7 +148,7 @@ function dispatch(action: Action) {
   })
 }
 
-type Toast = Omit<ToasterToast, "id">
+type Toast = Omit<ToasterToast, "id" | "open" | "onOpenChange"> // Update Omit to exclude new required fields
 
 function toast({ ...props }: Toast) {
   const id = genId()
@@ -196,4 +200,3 @@ function useToast() {
 }
 
 export { useToast, toast }
-
