@@ -25,26 +25,36 @@ export async function createExpense(
   homeownerProfileId: string, 
   data: CreateExpenseDTO
 ): Promise<Expense> {
-  const rawExpense = await prisma.expense.create({
-    data: {
-      homeownerProfile: {
-        connect: { id: homeownerProfileId },
-      },
-      property: data.propertyId ? { connect: { id: data.propertyId } } : undefined,
-      booking: data.bookingId ? { connect: { id: data.bookingId } } : undefined,
-      
-      description: data.description,
-      category: data.category,
-      amount: data.amount,
-      transactionDate: new Date(data.transactionDate),
-    } as Prisma.ExpenseCreateInput,
-  });
-  
-  // FIX: Convert Decimal to number before casting
-  return {
-    ...rawExpense,
-    amount: (rawExpense as PrismaOutputWithDecimals<typeof rawExpense>).amount!.toNumber(),
-  } as Expense;
+  // DEBUG 1: Log expense data before Prisma call
+  console.log('DEBUG: createExpense - Input Data:', data);
+  try {
+    const rawExpense = await prisma.expense.create({
+      data: {
+        homeownerProfile: {
+          connect: { id: homeownerProfileId },
+        },
+        property: data.propertyId ? { connect: { id: data.propertyId } } : undefined,
+        booking: data.bookingId ? { connect: { id: data.bookingId } } : undefined,
+        
+        description: data.description,
+        category: data.category,
+        amount: data.amount,
+        transactionDate: new Date(data.transactionDate),
+      } as Prisma.ExpenseCreateInput,
+    });
+    
+    // DEBUG 2: Log raw expense data from Prisma
+    console.log('DEBUG: createExpense - Raw Output:', rawExpense);
+
+    // FIX: Convert Decimal to number before casting
+    return {
+      ...rawExpense,
+      amount: (rawExpense as PrismaOutputWithDecimals<typeof rawExpense>).amount!.toNumber(),
+    } as Expense;
+  } catch (error) {
+    console.error('ERROR: createExpense failed', error);
+    throw error;
+  }
 }
 
 /**
@@ -64,11 +74,23 @@ export async function listExpenses(
     orderBy: { transactionDate: 'desc' },
   });
 
+  console.log('DEBUG: listExpenses - Raw Data Length:', rawExpenses.length); // DEBUG 3
+
   // FIX: Convert Decimal to number for all listed expenses
-  return rawExpenses.map(rawExpense => ({
-    ...rawExpense,
-    amount: (rawExpense as PrismaOutputWithDecimals<typeof rawExpenses[0]>).amount!.toNumber(),
-  })) as Expense[];
+  return rawExpenses.map(rawExpense => {
+    // DEBUG 4: Check raw amount value
+    console.log('DEBUG: listExpenses - Expense ID:', rawExpense.id, 'Raw Amount:', (rawExpense as any).amount); 
+
+    // Safety check for amount property before calling toNumber()
+    if (!(rawExpense as any).amount) {
+      console.error('ERROR: listExpenses - Missing amount on expense:', rawExpense.id);
+    }
+    
+    return {
+      ...rawExpense,
+      amount: (rawExpense as PrismaOutputWithDecimals<typeof rawExpenses[0]>).amount!.toNumber(),
+    } as Expense;
+  }) as Expense[];
 }
 
 /**
@@ -152,16 +174,22 @@ export async function listWarranties(homeownerProfileId: string): Promise<Warran
     where: { homeownerProfileId },
     orderBy: { expiryDate: 'asc' },
     include: {
-      // FIX 3: Change documents selection to fetch the full object to match local interface
       documents: true
     }
   });
 
+  console.log('DEBUG: listWarranties - Raw Data Length:', rawWarranties.length); // DEBUG 5
+
   // FIX: Convert Decimal to number for all listed warranties
-  return rawWarranties.map(rawWarranty => ({
-    ...rawWarranty,
-    cost: rawWarranty.cost ? (rawWarranty as PrismaOutputWithDecimals<typeof rawWarranties[0]>).cost!.toNumber() : null,
-  })) as Warranty[];
+  return rawWarranties.map(rawWarranty => {
+    // DEBUG 6: Check raw cost value
+    console.log('DEBUG: listWarranties - Warranty ID:', rawWarranty.id, 'Raw Cost:', (rawWarranty as any).cost);
+
+    return {
+      ...rawWarranty,
+      cost: rawWarranty.cost ? (rawWarranty as PrismaOutputWithDecimals<typeof rawWarranties[0]>).cost!.toNumber() : null,
+    } as Warranty;
+  }) as Warranty[];
 }
 
 /**
@@ -179,7 +207,6 @@ export async function updateWarranty(
       ...(data.startDate && { startDate: new Date(data.startDate) }),
       ...(data.expiryDate && { expiryDate: new Date(data.expiryDate) }),
     } as Prisma.WarrantyUpdateInput,
-    // FIX 4: Fetch full document object
     include: { documents: true }
   });
 
@@ -248,16 +275,27 @@ export async function listInsurancePolicies(homeownerProfileId: string): Promise
     where: { homeownerProfileId },
     orderBy: { expiryDate: 'asc' },
     include: {
-      // FIX 5: Change documents selection to fetch the full object to match local interface
       documents: true
     }
   });
 
+  console.log('DEBUG: listInsurancePolicies - Raw Data Length:', rawPolicies.length); // DEBUG 7
+
   // FIX: Convert Decimal to number for all listed policies
-  return rawPolicies.map(rawPolicy => ({
-    ...rawPolicy,
-    premiumAmount: (rawPolicy as PrismaOutputWithDecimals<typeof rawPolicies[0]>).premiumAmount!.toNumber(),
-  })) as InsurancePolicy[];
+  return rawPolicies.map(rawPolicy => {
+    // DEBUG 8: Check raw premiumAmount value
+    console.log('DEBUG: listInsurancePolicies - Policy ID:', rawPolicy.id, 'Raw Premium Amount:', (rawPolicy as any).premiumAmount);
+
+    // Safety check for premiumAmount property before calling toNumber()
+    if (!(rawPolicy as any).premiumAmount) {
+        console.error('ERROR: listInsurancePolicies - Missing premiumAmount on policy:', rawPolicy.id);
+    }
+    
+    return {
+      ...rawPolicy,
+      premiumAmount: (rawPolicy as PrismaOutputWithDecimals<typeof rawPolicies[0]>).premiumAmount!.toNumber(),
+    } as InsurancePolicy;
+  }) as InsurancePolicy[];
 }
 
 /**
@@ -275,7 +313,6 @@ export async function updateInsurancePolicy(
       ...(data.startDate && { startDate: new Date(data.startDate) }),
       ...(data.expiryDate && { expiryDate: new Date(data.expiryDate) }),
     } as Prisma.InsurancePolicyUpdateInput,
-    // FIX 6: Fetch full document object
     include: { documents: true }
   });
 
@@ -377,5 +414,11 @@ export async function listDocuments(homeownerProfileId: string): Promise<Documen
         orderBy: { createdAt: 'desc' },
     });
     
+    console.log('DEBUG: listDocuments - Raw Data Length:', documents.length); // DEBUG 9
+    // DEBUG 10: Log the first document's raw data to inspect its structure
+    if (documents.length > 0) {
+        console.log('DEBUG: listDocuments - First Document Raw:', documents[0]); 
+    }
+
     return documents as Document[];
 }
