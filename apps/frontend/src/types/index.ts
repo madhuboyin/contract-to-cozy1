@@ -190,6 +190,8 @@ export interface User {
   role: UserRole;
   emailVerified: boolean;
   status: UserStatus;
+  // FIX: Add missing creation date property to resolve the build error
+  createdAt: string; 
   // FIX 1: Add the flattened segment field (sent by backend login/me responses)
   segment?: HomeownerSegment; 
   // FIX 2: Keep the nested profile structure for comprehensive user data
@@ -393,7 +395,6 @@ export interface RegisterInput {
   firstName: string;
   lastName: string;
   role: UserRole;
-  // This was the fix from a previous step
   segment: HomeownerSegment; 
 }
 
