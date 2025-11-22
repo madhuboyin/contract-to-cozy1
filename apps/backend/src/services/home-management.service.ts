@@ -26,6 +26,7 @@ type PrismaOutputWithDecimals<T> = T & {
  * Returns null if the value is null/undefined or if conversion method is missing.
  */
 const safeToNumber = (value: DecimalLike | null | undefined): number | null => {
+    // This explicit check prevents the runtime crash when the object is not a valid Decimal instance
     if (value && typeof value.toNumber === 'function') {
         return value.toNumber();
     }
@@ -33,15 +34,24 @@ const safeToNumber = (value: DecimalLike | null | undefined): number | null => {
 };
 
 
-// --- MAPPING HELPERS (CRITICAL FIX: AVOIDS SPREAD) ---
+// --- MAPPING HELPERS (CRITICAL DEBUG AND FIX) ---
 
 /**
  * Helper function to map raw expense to expected Expense interface (explicitly)
  */
 const mapRawExpenseToExpense = (rawExpense: any): Expense => {
     const expenseWithNumber = rawExpense as PrismaOutputWithDecimals<typeof rawExpense>;
-    const amount = safeToNumber(expenseWithNumber.amount) ?? 0;
+    let amount = 0;
     
+    try {
+        // High-granularity check for 'amount'
+        amount = safeToNumber(expenseWithNumber.amount) ?? 0;
+        if (amount === null) throw new Error("Conversion resulted in null.");
+    } catch (e) {
+        console.error(`FATAL MAPPING ERROR (Expense ID ${rawExpense.id}): Failed to convert 'amount'. Raw value was:`, expenseWithNumber.amount);
+        throw new Error(`Expense conversion failed for ID ${rawExpense.id} on 'amount' field.`);
+    }
+
     // Explicitly list ALL fields
     return {
         id: rawExpense.id,
@@ -62,7 +72,15 @@ const mapRawExpenseToExpense = (rawExpense: any): Expense => {
  */
 const mapRawWarrantyToWarranty = (rawWarranty: any): Warranty => {
     const warrantyWithNumber = rawWarranty as PrismaOutputWithDecimals<typeof rawWarranty>;
-    const cost = safeToNumber(warrantyWithNumber.cost);
+    let cost: number | null = null;
+
+    try {
+        // High-granularity check for 'cost'
+        cost = safeToNumber(warrantyWithNumber.cost);
+    } catch (e) {
+        console.error(`FATAL MAPPING ERROR (Warranty ID ${rawWarranty.id}): Failed to convert 'cost'. Raw value was:`, warrantyWithNumber.cost);
+        throw new Error(`Warranty conversion failed for ID ${rawWarranty.id} on 'cost' field.`);
+    }
 
     // Explicitly list ALL fields
     return {
@@ -86,7 +104,17 @@ const mapRawWarrantyToWarranty = (rawWarranty: any): Warranty => {
  */
 const mapRawPolicyToInsurancePolicy = (rawPolicy: any): InsurancePolicy => {
     const policyWithNumber = rawPolicy as PrismaOutputWithDecimals<typeof rawPolicy>;
-    const premiumAmount = safeToNumber(policyWithNumber.premiumAmount) ?? 0;
+    let premiumAmount = 0;
+
+    try {
+        // High-granularity check for 'premiumAmount'
+        premiumAmount = safeToNumber(policyWithNumber.premiumAmount) ?? 0;
+        if (premiumAmount === null) throw new Error("Conversion resulted in null.");
+    } catch (e) {
+        console.error(`FATAL MAPPING ERROR (Policy ID ${rawPolicy.id}): Failed to convert 'premiumAmount'. Raw value was:`, policyWithNumber.premiumAmount);
+        throw new Error(`Policy conversion failed for ID ${rawPolicy.id} on 'premiumAmount' field.`);
+    }
+
 
     // Explicitly list ALL fields
     return {
@@ -117,10 +145,8 @@ export async function createExpense(
     const rawExpense = await prisma.expense.create({
       data: {
         homeownerProfile: { connect: { id: homeownerProfileId } },
-        // FIX: Handle empty strings in optional relation IDs
         property: data.propertyId && data.propertyId !== "" ? { connect: { id: data.propertyId } } : undefined,
         booking: data.bookingId && data.bookingId !== "" ? { connect: { id: data.bookingId } } : undefined,
-        
         description: data.description,
         category: data.category,
         amount: data.amount,
@@ -128,8 +154,6 @@ export async function createExpense(
       } as Prisma.ExpenseCreateInput,
     });
     
-    console.log('DEBUG (POST /expenses): Raw Prisma Output (Success):', rawExpense);
-
     return mapRawExpenseToExpense(rawExpense);
   } catch (error) {
     console.error('FATAL ERROR (POST /expenses): Prisma operation failed.', error); 

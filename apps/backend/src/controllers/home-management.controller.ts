@@ -21,22 +21,7 @@ export const upload = multer({ storage: multer.memoryStorage() });
 // ============================================================================
 
 // Utility function to get homeownerProfileId from the request (assuming Auth is implemented)
-//const getHomeownerId = (req: AuthRequest) => (req.user as any)?.homeownerProfile?.id as string;
-
-const getHomeownerId = (req: AuthRequest): string => {
-  const profileId = req.user?.homeownerProfile?.id;
-  
-  if (!profileId) {
-    console.error('getHomeownerId: Profile ID not found', {
-      userId: req.user?.userId,
-      role: req.user?.role,
-      hasProfile: !!req.user?.homeownerProfile
-    });
-    throw new Error('Homeowner profile not found. User may not have completed onboarding.');
-  }
-  
-  return profileId;
-};
+const getHomeownerId = (req: AuthRequest) => (req.user as any)?.homeownerProfile?.id as string;
 
 // Temporary type augmentation for Multer to recognize req.file and req.body as multipart
 interface UploadAuthRequest extends Request {
@@ -60,12 +45,14 @@ export const postExpense = async (req: AuthRequest, res: Response, next: NextFun
     const homeownerProfileId = getHomeownerId(req);
     const expenseData: CreateExpenseDTO = req.body;
     
-    // NOTE: Validation middleware should ensure expenseData integrity
+    // DEBUG 1: Log incoming request data
+    console.log('DEBUG (Controller): POST /expenses received data:', expenseData);
 
     const expense = await HomeManagementService.createExpense(homeownerProfileId, expenseData);
     res.status(201).json({ success: true, data: expense });
   } catch (error) {
-    console.error('Error in postExpense:', error);
+    // DEBUG 2: Log the error being passed to Express's error handler
+    console.error('DEBUG (Controller): Error caught in postExpense:', error);
     next(error);
   }
 };
@@ -75,13 +62,17 @@ export const getExpenses = async (req: AuthRequest, res: Response, next: NextFun
     const homeownerProfileId = getHomeownerId(req);
     const { propertyId } = req.query; // Optional filter
 
+    // DEBUG 3: Log API call initiation
+    console.log(`DEBUG (Controller): GET /expenses for user ${homeownerProfileId}`);
+
     const expenses = await HomeManagementService.listExpenses(
       homeownerProfileId, 
       propertyId as string
     );
     res.status(200).json({ success: true, data: { expenses } });
   } catch (error) {
-    console.error('Error in getExpenses:', error);
+    // DEBUG 4: Log the error being passed to Express's error handler
+    console.error('DEBUG (Controller): Error caught in getExpenses:', error);
     next(error);
   }
 };
@@ -99,7 +90,6 @@ export const patchExpense = async (req: AuthRequest, res: Response, next: NextFu
     );
     res.status(200).json({ success: true, data: expense });
   } catch (error) {
-    console.error('Error in patchExpense:', error);
     next(error);
   }
 };
@@ -112,7 +102,6 @@ export const deleteExpense = async (req: AuthRequest, res: Response, next: NextF
     await HomeManagementService.deleteExpense(expenseId, homeownerProfileId);
     res.status(200).json({ success: true, message: 'Expense deleted successfully.' });
   } catch (error) {
-    console.error('Error in deleteExpense:', error);
     next(error);
   }
 };
@@ -124,10 +113,15 @@ export const postWarranty = async (req: AuthRequest, res: Response, next: NextFu
   try {
     const homeownerProfileId = getHomeownerId(req);
     const warrantyData: CreateWarrantyDTO = req.body;
+    
+    // DEBUG 5: Log incoming request data
+    console.log('DEBUG (Controller): POST /warranties received data:', warrantyData);
+
     const warranty = await HomeManagementService.createWarranty(homeownerProfileId, warrantyData);
     res.status(201).json({ success: true, data: warranty });
   } catch (error) {
-    console.error('Error in postWarranties:', error);
+    // DEBUG 6: Log the error being passed to Express's error handler
+    console.error('DEBUG (Controller): Error caught in postWarranty:', error);
     next(error);
   }
 };
@@ -135,10 +129,15 @@ export const postWarranty = async (req: AuthRequest, res: Response, next: NextFu
 export const getWarranties = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const homeownerProfileId = getHomeownerId(req);
+    
+    // DEBUG 7: Log API call initiation
+    console.log(`DEBUG (Controller): GET /warranties for user ${homeownerProfileId}`);
+
     const warranties = await HomeManagementService.listWarranties(homeownerProfileId);
     res.status(200).json({ success: true, data: { warranties } });
   } catch (error) {
-    console.error('Error in getWarranty:', error);
+    // DEBUG 8: Log the error being passed to Express's error handler
+    console.error('DEBUG (Controller): Error caught in getWarranties:', error);
     next(error);
   }
 };
@@ -156,7 +155,6 @@ export const patchWarranty = async (req: AuthRequest, res: Response, next: NextF
     );
     res.status(200).json({ success: true, data: warranty });
   } catch (error) {
-    console.error('Error in patchWarranty:', error);
     next(error);
   }
 };
@@ -169,7 +167,6 @@ export const deleteWarranty = async (req: AuthRequest, res: Response, next: Next
     await HomeManagementService.deleteWarranty(warrantyId, homeownerProfileId);
     res.status(200).json({ success: true, message: 'Warranty deleted successfully.' });
   } catch (error) {
-    console.error('Error in deleteWarranty:', error);
     next(error);
   }
 };
@@ -181,9 +178,15 @@ export const postInsurancePolicy = async (req: AuthRequest, res: Response, next:
   try {
     const homeownerProfileId = getHomeownerId(req);
     const policyData: CreateInsurancePolicyDTO = req.body;
+    
+    // DEBUG 9: Log incoming request data
+    console.log('DEBUG (Controller): POST /insurance-policies received data:', policyData);
+
     const policy = await HomeManagementService.createInsurancePolicy(homeownerProfileId, policyData);
     res.status(201).json({ success: true, data: policy });
   } catch (error) {
+    // DEBUG 10: Log the error being passed to Express's error handler
+    console.error('DEBUG (Controller): Error caught in postInsurancePolicy:', error);
     next(error);
   }
 };
@@ -191,9 +194,15 @@ export const postInsurancePolicy = async (req: AuthRequest, res: Response, next:
 export const getInsurancePolicies = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const homeownerProfileId = getHomeownerId(req);
+    
+    // DEBUG 11: Log API call initiation
+    console.log(`DEBUG (Controller): GET /insurance-policies for user ${homeownerProfileId}`);
+
     const policies = await HomeManagementService.listInsurancePolicies(homeownerProfileId);
     res.status(200).json({ success: true, data: { policies } });
   } catch (error) {
+    // DEBUG 12: Log the error being passed to Express's error handler
+    console.error('DEBUG (Controller): Error caught in getInsurancePolicies:', error);
     next(error);
   }
 };
