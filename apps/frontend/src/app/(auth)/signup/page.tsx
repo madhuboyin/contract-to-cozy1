@@ -7,6 +7,18 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthContext';
+// FIX 1: Import the necessary types for state and error handling
+import { HomeownerSegment, APIError } from '@/types/index'; 
+
+// FIX 2: Define the explicit type for the form data
+interface SignupFormData {
+  email: string;
+  password: string;
+  confirmPassword: string;
+  firstName: string;
+  lastName: string;
+  segment: HomeownerSegment; 
+}
 
 export default function SignupPage() {
   const router = useRouter();
@@ -17,7 +29,8 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const [formData, setFormData] = useState({
+  // FIX 3: Apply the explicit type to useState
+  const [formData, setFormData] = useState<SignupFormData>({
     email: '',
     password: '',
     confirmPassword: '',
@@ -61,7 +74,10 @@ export default function SignupPage() {
         segment: formData.segment, // <-- 2. PASS SEGMENT TO API
       });
 
-      if (result.success) {
+      // FIX 4: Implement robust null/error type checks
+      // 4a. Check for null AND success. If true, TS knows 'result' is the RegisterResponse.
+      if (result && result.success) {
+        
         // --- FIX: LOGIN AFTER REGISTER ---
         // After account is created, log the user in to create a session
         const loginResult = await login({
@@ -69,18 +85,30 @@ export default function SignupPage() {
           password: formData.password,
         });
 
-        if (loginResult.success) {
+        // 4b. Check for null AND success. If true, TS knows 'loginResult' is the LoginResponse.
+        if (loginResult && loginResult.success) {
           // Now that they are logged in (and have a token), redirect.
           router.push('/dashboard');
         } else {
-          // This shouldn't happen, but just in case
-          setError(
-            'Account created, but login failed. Please go to the login page.'
-          );
+          // Failure case: loginResult is APIError | null. Use type assertion to safely access error properties.
+          const errorResponse = loginResult as (APIError | null);
+          const errorMessage = errorResponse?.error?.message || 
+                               errorResponse?.message ||
+                               'Account created, but login failed. Please go to the login page.';
+          
+          setError(errorMessage);
         }
         // --- END OF FIX ---
       } else {
-        setError(result.error || 'Failed to create account');
+        // Failure case: result is APIError | null. Use type assertion to safely access error properties.
+        const errorResponse = result as (APIError | null);
+
+        // Access nested message or top-level message
+        const errorMessage = errorResponse?.error?.message || 
+                             errorResponse?.message || 
+                             'Failed to create account';
+        
+        setError(errorMessage);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to create account');

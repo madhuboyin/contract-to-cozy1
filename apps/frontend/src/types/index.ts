@@ -203,12 +203,16 @@ export interface User {
  * Auth Response
  */
 export interface LoginResponse {
+  // FIX: Add success property to satisfy the check in page.tsx (if login is successful)
+  success: true; 
   accessToken: string;
   refreshToken: string;
   user: User;
 }
 
 export interface RegisterResponse {
+  // FIX: Add success property to satisfy the check in page.tsx (if registration is successful)
+  success: true; 
   message: string;
   user: User;
   emailVerificationToken?: string;
@@ -389,7 +393,8 @@ export interface RegisterInput {
   firstName: string;
   lastName: string;
   role: UserRole;
-  segment: HomeownerSegment;
+  // This was the fix from a previous step
+  segment: HomeownerSegment; 
 }
 
 export interface CreateBookingInput {
