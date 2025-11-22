@@ -1,5 +1,4 @@
 // apps/backend/src/services/checklist.service.ts
-// Complete working version - copy this entire file
 
 import {
   PrismaClient,
@@ -56,10 +55,7 @@ const syncRenewalTasks = async (userId: string, checklistId: string): Promise<vo
     const renewalItemsToCreate: Prisma.ChecklistItemCreateManyInput[] = [];
     const now = new Date();
 
-    console.log(`DEBUG: syncRenewalTasks running for checklist ID: ${checklistId}`); // DEBUG A
-
     // 1. Fetch all active renewals and existing renewal tasks concurrently.
-    // NOTE: These queries are minimalist and should not trigger Decimal conversion errors.
     const [warranties, policies, existingRenewalItems] = await Promise.all([
         prisma.warranty.findMany({
             where: { homeownerProfile: { userId } },
@@ -78,26 +74,21 @@ const syncRenewalTasks = async (userId: string, checklistId: string): Promise<vo
         })
     ]);
 
-    console.log(`DEBUG: Renewals fetched. Warranties: ${warranties.length}, Policies: ${policies.length}, Existing Items: ${existingRenewalItems.length}`); // DEBUG B
-
     // 2. Process Warranties
     warranties.forEach(w => {
-        // FIX: Ensure expiryDate is a valid Date object before comparison
-        if (w.expiryDate && w.expiryDate instanceof Date && w.expiryDate > now) {
+        // Only generate tasks for items not yet expired
+        if (w.expiryDate > now) {
             const title = `Renew Warranty: ${w.providerName}`;
             // Use policyNumber for a unique description/identifier
             const description = `Policy ${w.policyNumber} expires on ${w.expiryDate.toISOString().split('T')[0]}.`;
             
-            // Check for duplicate pending task
-            const isDuplicate = existingRenewalItems.some(item => {
-                // Defensive check against null nextDueDate
-                const existingDueDateMs = item.nextDueDate?.getTime();
-                const renewalDueDateMs = w.expiryDate.getTime();
-                
-                return item.serviceCategory === ServiceCategory.WARRANTY && 
-                       item.title === title &&
-                       existingDueDateMs === renewalDueDateMs;
-            });
+            // Avoid creating a duplicate pending task (check against existing items)
+            const isDuplicate = existingRenewalItems.some(item => 
+                item.serviceCategory === ServiceCategory.WARRANTY && 
+                item.title === title &&
+                // Compare dates by timestamp to avoid object reference issues
+                item.nextDueDate?.getTime() === w.expiryDate.getTime()
+            );
 
             if (!isDuplicate) {
                 renewalItemsToCreate.push({
@@ -117,20 +108,15 @@ const syncRenewalTasks = async (userId: string, checklistId: string): Promise<vo
 
     // 3. Process Insurance Policies
     policies.forEach(p => {
-        // FIX: Ensure expiryDate is a valid Date object before comparison
-        if (p.expiryDate && p.expiryDate instanceof Date && p.expiryDate > now) {
+        if (p.expiryDate > now) {
             const title = `Renew Insurance: ${p.carrierName}`;
             const description = `Policy ${p.policyNumber} expires on ${p.expiryDate.toISOString().split('T')[0]}.`;
 
-            const isDuplicate = existingRenewalItems.some(item => {
-                // Defensive check against null nextDueDate
-                const existingDueDateMs = item.nextDueDate?.getTime();
-                const renewalDueDateMs = p.expiryDate.getTime();
-
-                return item.serviceCategory === ServiceCategory.INSURANCE && 
-                       item.title === title &&
-                       existingDueDateMs === renewalDueDateMs;
-            });
+            const isDuplicate = existingRenewalItems.some(item => 
+                item.serviceCategory === ServiceCategory.INSURANCE && 
+                item.title === title &&
+                item.nextDueDate?.getTime() === p.expiryDate.getTime()
+            );
 
             if (!isDuplicate) {
                 renewalItemsToCreate.push({
@@ -148,15 +134,12 @@ const syncRenewalTasks = async (userId: string, checklistId: string): Promise<vo
         }
     });
 
-    console.log(`DEBUG: Renewal items ready to create: ${renewalItemsToCreate.length}`); // DEBUG C
-
     // 4. Create new items
     if (renewalItemsToCreate.length > 0) {
         await prisma.checklistItem.createMany({
             data: renewalItemsToCreate,
             skipDuplicates: true,
         });
-        console.log(`DEBUG: Created ${renewalItemsToCreate.length} new renewal tasks.`); // DEBUG D
     }
 };
 // --- END HELPER FUNCTIONS ---
@@ -177,55 +160,55 @@ export class ChecklistService {
    * Also performs a sync to ensure all active renewal tasks are present.
    */
   static async getOrCreateChecklist(userId: string): Promise<Checklist & { items: ChecklistItem[] } | null> {
-    try {
-        let checklist = await prisma.checklist.findFirst({
-        where: {
-            homeownerProfile: {
-            userId: userId,
-            },
+    let checklist = await prisma.checklist.findFirst({
+      where: {
+        homeownerProfile: {
+          userId: userId,
         },
-        include: {
-            items: {
-            orderBy: [
-                { nextDueDate: "asc" },
-                { sortOrder: "asc" }
-            ]
-            },
+      },
+      include: {
+        items: {
+          orderBy: [
+            { nextDueDate: "asc" },
+            { sortOrder: "asc" }
+          ]
         },
-        });
+      },
+    });
 
-        if (!checklist) {
-        // No checklist found, create one
-        console.log(`DEBUG: Checklist not found for user ${userId}. Creating new one.`); // DEBUG E
-        checklist = await this.createChecklist(userId);
-        }
-        
-        if (checklist) {
-            // 1. Synchronize renewal tasks after fetching or creating
-            await syncRenewalTasks(userId, checklist.id);
-
-            // 2. Refetch the checklist WITH the items include clause (FIXED TYPE ERROR)
-            const finalChecklist = await prisma.checklist.findFirst({
-                where: { id: checklist.id },
-                include: {
-                    items: {
-                    orderBy: [
-                        { nextDueDate: "asc" },
-                        { sortOrder: "asc" }
-                    ]
-                    },
-                }
-            });
-            
-            // This finalChecklist will now satisfy the return type
-            return finalChecklist as (Checklist & { items: ChecklistItem[] }) | null;
-        }
-
-        return null;
-    } catch (error) {
-        console.error('CRITICAL ERROR in getOrCreateChecklist (Checklist API):', error); // DEBUG F
-        throw error;
+    if (!checklist) {
+      // No checklist found, create one
+      checklist = await this.createChecklist(userId);
     }
+    
+    if (checklist) {
+        // FIX: Wrap the sync call in a try-catch block to prevent a database/serialization error 
+        // from crashing the entire checklist retrieval.
+        try {
+            await syncRenewalTasks(userId, checklist.id);
+        } catch (syncError) {
+            console.error('WARNING: Failed to synchronize renewal tasks. Checklist data may be incomplete.', syncError);
+            // Allow the process to continue by ignoring the non-critical sync error
+        }
+
+        // 2. Refetch the checklist WITH the items include clause
+        const finalChecklist = await prisma.checklist.findFirst({
+             where: { id: checklist.id },
+             include: {
+                items: {
+                  orderBy: [
+                    { nextDueDate: "asc" },
+                    { sortOrder: "asc" }
+                  ]
+                },
+             }
+        });
+        
+        // This finalChecklist will now satisfy the return type
+        return finalChecklist as (Checklist & { items: ChecklistItem[] }) | null;
+    }
+
+    return null;
   }
 
   /**
@@ -365,13 +348,9 @@ export class ChecklistService {
       description: template.description,
       serviceCategory: template.serviceCategory,
       status: ChecklistItemStatus.PENDING,
-      
-      // Use the custom values from the user
       isRecurring: true,
       frequency: template.defaultFrequency,
       nextDueDate: calculateNextDueDate(template.defaultFrequency),
-      
-      // Set sort order based on the array order
       sortOrder: template.sortOrder || 0,
     }));
 
