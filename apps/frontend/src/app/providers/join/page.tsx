@@ -7,6 +7,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthContext';
+// FIX 1: Import APIError for robust error handling
+import { APIError } from '@/types/index'; 
 
 const serviceOptions = [
   { value: 'HOME_INSPECTION', label: 'Home Inspection' },
@@ -114,12 +116,21 @@ export default function ProviderJoinPage() {
         firstName: formData.firstName,
         lastName: formData.lastName,
         role: 'PROVIDER',
+        // Note: 'segment' is made optional in RegisterInput via a previous fix,
+        // so it is correctly omitted here for 'PROVIDER' registration.
       });
 
-      if (result.success) {
+      // FIX 2a: Add null check to result before accessing properties
+      if (result && result.success) {
         router.push('/providers/dashboard');
       } else {
-        setError(result.error || 'Failed to create provider account');
+        // FIX 2b: Handle null case and safely access error message
+        const errorResponse = result as (APIError | null);
+        const errorMessage = errorResponse?.error?.message || 
+                             errorResponse?.message || 
+                             'Failed to create provider account';
+
+        setError(errorMessage);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to create provider account');
