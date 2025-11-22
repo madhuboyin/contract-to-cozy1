@@ -24,18 +24,89 @@ type PrismaOutputWithDecimals<T> = T & {
 /**
  * Safely converts a Decimal-like object to a number.
  * Returns null if the value is null/undefined or if conversion method is missing.
- * This is the final and most robust solution for Decimal conversion issues.
  */
 const safeToNumber = (value: DecimalLike | null | undefined): number | null => {
+    // This explicit check prevents the runtime crash when the object is not a valid Decimal instance
     if (value && typeof value.toNumber === 'function') {
         return value.toNumber();
     }
-    // Return null if the value is null, undefined, or doesn't have the conversion method
     return null;
 };
 
 
-// --- EXPENSE SERVICE LOGIC ---
+// --- MAPPING HELPERS (CRITICAL FIX) ---
+
+/**
+ * Helper function to map raw expense to expected Expense interface (explicitly)
+ * AVOIDS SPREAD OPERATOR to prevent leaking unconverted Decimal properties.
+ */
+const mapRawExpenseToExpense = (rawExpense: any): Expense => {
+    const expenseWithNumber = rawExpense as PrismaOutputWithDecimals<typeof rawExpense>;
+    // Amount is required/non-nullable, default to 0 if conversion fails
+    const amount = safeToNumber(expenseWithNumber.amount) ?? 0;
+    
+    return {
+        id: rawExpense.id,
+        homeownerProfileId: rawExpense.homeownerProfileId,
+        propertyId: rawExpense.propertyId,
+        bookingId: rawExpense.bookingId,
+        description: rawExpense.description,
+        category: rawExpense.category,
+        amount: amount, // CONVERTED
+        transactionDate: rawExpense.transactionDate,
+        createdAt: rawExpense.createdAt,
+        updatedAt: rawExpense.updatedAt,
+    } as Expense;
+};
+
+/**
+ * Helper function to map raw warranty to expected Warranty interface (explicitly)
+ */
+const mapRawWarrantyToWarranty = (rawWarranty: any): Warranty => {
+    const warrantyWithNumber = rawWarranty as PrismaOutputWithDecimals<typeof rawWarranty>;
+    const cost = safeToNumber(warrantyWithNumber.cost);
+
+    return {
+        id: rawWarranty.id,
+        homeownerProfileId: rawWarranty.homeownerProfileId,
+        propertyId: rawWarranty.propertyId,
+        providerName: rawWarranty.providerName,
+        policyNumber: rawWarranty.policyNumber,
+        coverageDetails: rawWarranty.coverageDetails,
+        cost: cost, // CONVERTED (nullable)
+        startDate: rawWarranty.startDate,
+        expiryDate: rawWarranty.expiryDate,
+        createdAt: rawWarranty.createdAt,
+        updatedAt: rawWarranty.updatedAt,
+        documents: rawWarranty.documents || [], // included via 'include: true' in list/update
+    } as Warranty;
+};
+
+/**
+ * Helper function to map raw policy to expected InsurancePolicy interface (explicitly)
+ */
+const mapRawPolicyToInsurancePolicy = (rawPolicy: any): InsurancePolicy => {
+    const policyWithNumber = rawPolicy as PrismaOutputWithDecimals<typeof rawPolicy>;
+    // premiumAmount is required/non-nullable, default to 0 if conversion fails
+    const premiumAmount = safeToNumber(policyWithNumber.premiumAmount) ?? 0;
+
+    return {
+        id: rawPolicy.id,
+        homeownerProfileId: rawPolicy.homeownerProfileId,
+        propertyId: rawPolicy.propertyId,
+        carrierName: rawPolicy.carrierName,
+        policyNumber: rawPolicy.policyNumber,
+        coverageType: rawPolicy.coverageType,
+        premiumAmount: premiumAmount, // CONVERTED
+        startDate: rawPolicy.startDate,
+        expiryDate: rawPolicy.expiryDate,
+        createdAt: rawPolicy.createdAt,
+        updatedAt: rawPolicy.updatedAt,
+        documents: rawPolicy.documents || [], // included via 'include: true' in list/update
+    } as InsurancePolicy;
+};
+
+// --- EXPENSE SERVICE LOGIC (USING MAPPED HELPERS) ---
 
 export async function createExpense(
   homeownerProfileId: string, 
@@ -44,12 +115,9 @@ export async function createExpense(
   try {
     const rawExpense = await prisma.expense.create({
       data: {
-        homeownerProfile: {
-          connect: { id: homeownerProfileId },
-        },
+        homeownerProfile: { connect: { id: homeownerProfileId } },
         property: data.propertyId ? { connect: { id: data.propertyId } } : undefined,
         booking: data.bookingId ? { connect: { id: data.bookingId } } : undefined,
-        
         description: data.description,
         category: data.category,
         amount: data.amount,
@@ -57,16 +125,7 @@ export async function createExpense(
       } as Prisma.ExpenseCreateInput,
     });
     
-    const expenseWithNumber = rawExpense as PrismaOutputWithDecimals<typeof rawExpense>;
-    
-    // FIX 1: Use safeToNumber, default to 0 (non-nullable column)
-    const amount = safeToNumber(expenseWithNumber.amount) ?? 0;
-
-    return {
-      ...rawExpense,
-      amount: amount,
-    } as Expense;
-
+    return mapRawExpenseToExpense(rawExpense);
   } catch (error) {
     console.error('ERROR: createExpense failed', error);
     throw error;
@@ -87,17 +146,7 @@ export async function listExpenses(
     orderBy: { transactionDate: 'desc' },
   });
 
-  // FIX 2: Use safeToNumber for all listed expenses
-  return rawExpenses.map(rawExpense => {
-    const expenseWithNumber = rawExpense as PrismaOutputWithDecimals<typeof rawExpenses[0]>;
-    
-    const amount = safeToNumber(expenseWithNumber.amount) ?? 0;
-    
-    return {
-      ...rawExpense,
-      amount: amount,
-    } as Expense;
-  }) as Expense[];
+  return rawExpenses.map(mapRawExpenseToExpense);
 }
 
 export async function updateExpense(
@@ -113,15 +162,7 @@ export async function updateExpense(
     } as Prisma.ExpenseUpdateInput,
   });
   
-  const expenseWithNumber = rawUpdatedExpense as PrismaOutputWithDecimals<typeof rawUpdatedExpense>;
-  
-  // FIX 3: Safely convert Decimal to number before casting
-  const amount = safeToNumber(expenseWithNumber.amount) ?? 0;
-
-  return {
-    ...rawUpdatedExpense,
-    amount: amount,
-  } as Expense;
+  return mapRawExpenseToExpense(rawUpdatedExpense);
 }
 
 export async function deleteExpense(
@@ -132,18 +173,10 @@ export async function deleteExpense(
     where: { id: expenseId, homeownerProfileId },
   });
   
-  const expenseWithNumber = rawDeletedExpense as PrismaOutputWithDecimals<typeof rawDeletedExpense>;
-
-  // FIX 4: Safely convert Decimal to number before casting
-  const amount = safeToNumber(expenseWithNumber.amount) ?? 0;
-  
-  return {
-    ...rawDeletedExpense,
-    amount: amount,
-  } as Expense;
+  return mapRawExpenseToExpense(rawDeletedExpense);
 }
 
-// --- WARRANTY SERVICE LOGIC ---
+// --- WARRANTY SERVICE LOGIC (USING MAPPED HELPERS) ---
 
 export async function createWarranty(
   homeownerProfileId: string, 
@@ -151,9 +184,7 @@ export async function createWarranty(
 ): Promise<Warranty> {
   const rawWarranty = await prisma.warranty.create({
     data: {
-      homeownerProfile: {
-        connect: { id: homeownerProfileId },
-      },
+      homeownerProfile: { connect: { id: homeownerProfileId } },
       property: data.propertyId ? { connect: { id: data.propertyId } } : undefined,
       
       providerName: data.providerName,
@@ -164,14 +195,8 @@ export async function createWarranty(
       expiryDate: new Date(data.expiryDate),
     } as Prisma.WarrantyCreateInput,
   });
-  
-  const warrantyWithNumber = rawWarranty as PrismaOutputWithDecimals<typeof rawWarranty>;
 
-  // FIX 5: Use safeToNumber for optional field.
-  return {
-    ...rawWarranty,
-    cost: safeToNumber(warrantyWithNumber.cost),
-  } as Warranty;
+  return mapRawWarrantyToWarranty(rawWarranty);
 }
 
 export async function listWarranties(homeownerProfileId: string): Promise<Warranty[]> {
@@ -183,15 +208,7 @@ export async function listWarranties(homeownerProfileId: string): Promise<Warran
     }
   });
 
-  // FIX 6: Use safeToNumber for all listed warranties
-  return rawWarranties.map(rawWarranty => {
-    const warrantyWithNumber = rawWarranty as PrismaOutputWithDecimals<typeof rawWarranties[0]>;
-
-    return {
-      ...rawWarranty,
-      cost: safeToNumber(warrantyWithNumber.cost),
-    } as Warranty;
-  }) as Warranty[];
+  return rawWarranties.map(mapRawWarrantyToWarranty);
 }
 
 export async function updateWarranty(
@@ -208,14 +225,8 @@ export async function updateWarranty(
     } as Prisma.WarrantyUpdateInput,
     include: { documents: true }
   });
-  
-  const warrantyWithNumber = rawUpdatedWarranty as PrismaOutputWithDecimals<typeof rawUpdatedWarranty>;
 
-  // FIX 7: Safely convert Decimal to number before casting
-  return {
-    ...rawUpdatedWarranty,
-    cost: safeToNumber(warrantyWithNumber.cost),
-  } as Warranty;
+  return mapRawWarrantyToWarranty(rawUpdatedWarranty);
 }
 
 export async function deleteWarranty(
@@ -225,17 +236,11 @@ export async function deleteWarranty(
   const rawDeletedWarranty = await prisma.warranty.delete({
     where: { id: warrantyId, homeownerProfileId },
   });
-  
-  const warrantyWithNumber = rawDeletedWarranty as PrismaOutputWithDecimals<typeof rawDeletedWarranty>;
 
-  // FIX 8: Safely convert Decimal to number before casting
-  return {
-    ...rawDeletedWarranty,
-    cost: safeToNumber(warrantyWithNumber.cost),
-  } as Warranty;
+  return mapRawWarrantyToWarranty(rawDeletedWarranty);
 }
 
-// --- INSURANCE POLICY SERVICE LOGIC ---
+// --- INSURANCE POLICY SERVICE LOGIC (USING MAPPED HELPERS) ---
 
 export async function createInsurancePolicy(
   homeownerProfileId: string, 
@@ -243,9 +248,7 @@ export async function createInsurancePolicy(
 ): Promise<InsurancePolicy> {
   const rawPolicy = await prisma.insurancePolicy.create({
     data: {
-      homeownerProfile: {
-        connect: { id: homeownerProfileId },
-      },
+      homeownerProfile: { connect: { id: homeownerProfileId } },
       property: data.propertyId ? { connect: { id: data.propertyId } } : undefined,
       
       carrierName: data.carrierName,
@@ -257,15 +260,7 @@ export async function createInsurancePolicy(
     } as Prisma.InsurancePolicyCreateInput,
   });
   
-  const policyWithNumber = rawPolicy as PrismaOutputWithDecimals<typeof rawPolicy>;
-
-  // FIX 9: Convert Decimal to number before casting (non-nullable)
-  const premiumAmount = safeToNumber(policyWithNumber.premiumAmount) ?? 0;
-
-  return {
-    ...rawPolicy,
-    premiumAmount: premiumAmount,
-  } as InsurancePolicy;
+  return mapRawPolicyToInsurancePolicy(rawPolicy);
 }
 
 export async function listInsurancePolicies(homeownerProfileId: string): Promise<InsurancePolicy[]> {
@@ -277,17 +272,7 @@ export async function listInsurancePolicies(homeownerProfileId: string): Promise
     }
   });
 
-  // FIX 10: Use safeToNumber for all listed policies
-  return rawPolicies.map(rawPolicy => {
-    const policyWithNumber = rawPolicy as PrismaOutputWithDecimals<typeof rawPolicies[0]>;
-
-    const premiumAmount = safeToNumber(policyWithNumber.premiumAmount) ?? 0;
-
-    return {
-      ...rawPolicy,
-      premiumAmount: premiumAmount,
-    } as InsurancePolicy;
-  }) as InsurancePolicy[];
+  return rawPolicies.map(mapRawPolicyToInsurancePolicy);
 }
 
 export async function updateInsurancePolicy(
@@ -305,15 +290,7 @@ export async function updateInsurancePolicy(
     include: { documents: true }
   });
   
-  const policyWithNumber = rawUpdatedPolicy as PrismaOutputWithDecimals<typeof rawUpdatedPolicy>;
-
-  // FIX 11: Convert Decimal to number before casting
-  const premiumAmount = safeToNumber(policyWithNumber.premiumAmount) ?? 0;
-
-  return {
-    ...rawUpdatedPolicy,
-    premiumAmount: premiumAmount,
-  } as InsurancePolicy;
+  return mapRawPolicyToInsurancePolicy(rawUpdatedPolicy);
 }
 
 export async function deleteInsurancePolicy(
@@ -324,15 +301,7 @@ export async function deleteInsurancePolicy(
     where: { id: policyId, homeownerProfileId },
   });
   
-  const policyWithNumber = rawDeletedPolicy as PrismaOutputWithDecimals<typeof rawDeletedPolicy>;
-
-  // FIX 12: Convert Decimal to number before casting
-  const premiumAmount = safeToNumber(policyWithNumber.premiumAmount) ?? 0;
-
-  return {
-    ...rawDeletedPolicy,
-    premiumAmount: premiumAmount,
-  } as InsurancePolicy;
+  return mapRawPolicyToInsurancePolicy(rawDeletedPolicy);
 }
 
 
@@ -362,12 +331,10 @@ export async function createDocument(
 ): Promise<Document> {
   
   // 1. MOCK FILE UPLOAD
-  // Generate a mock unique URL and size based on the uploaded file info
   const fileExtension = file.originalname.split('.').pop();
   const fileUrl = MOCK_STORAGE_URL + `${Date.now()}-${file.fieldname}.${fileExtension}`;
   
   // 2. INPUT VALIDATION (Simplified check)
-  // Ensure the homeowner owns the property if a propertyId is provided
   if (data.propertyId) {
     const property = await prisma.property.findFirst({
       where: { id: data.propertyId, homeownerProfileId },
@@ -402,7 +369,6 @@ export async function createDocument(
  * Lists all documents uploaded by the homeowner.
  */
 export async function listDocuments(homeownerProfileId: string): Promise<Document[]> {
-    // Strategy: Fetch all Documents where the uploadedBy ID matches the homeowner's ID.
     const documents = await prisma.document.findMany({
         where: { uploadedBy: homeownerProfileId },
         orderBy: { createdAt: 'desc' },
