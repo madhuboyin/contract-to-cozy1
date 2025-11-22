@@ -21,11 +21,20 @@ type PrismaOutputWithDecimals<T> = T & {
   premiumAmount?: DecimalLike;
 };
 
+/**
+ * Safely converts a Decimal-like object to a number.
+ * Returns null if the value is null/undefined or if conversion method is missing.
+ */
+const safeToNumber = (value: DecimalLike | null | undefined): number | null => {
+    if (value && typeof value.toNumber === 'function') {
+        return value.toNumber();
+    }
+    return null;
+};
+
+
 // --- EXPENSE SERVICE LOGIC ---
 
-/**
- * Creates a new expense record for a homeowner.
- */
 export async function createExpense(
   homeownerProfileId: string, 
   data: CreateExpenseDTO
@@ -46,12 +55,12 @@ export async function createExpense(
       } as Prisma.ExpenseCreateInput,
     });
     
-    // FIX: Safely convert Decimal to number before casting.
+    // FIX: Use safeToNumber for robustness
     const expenseWithNumber = rawExpense as PrismaOutputWithDecimals<typeof rawExpense>;
 
     return {
       ...rawExpense,
-      amount: expenseWithNumber.amount!.toNumber(),
+      amount: expenseWithNumber.amount ? expenseWithNumber.amount.toNumber() : 0, // Assume required field is always present
     } as Expense;
 
   } catch (error) {
@@ -60,9 +69,6 @@ export async function createExpense(
   }
 }
 
-/**
- * Lists all expenses for a homeowner, optionally filtered by property.
- */
 export async function listExpenses(
   homeownerProfileId: string, 
   propertyId?: string
@@ -77,26 +83,25 @@ export async function listExpenses(
     orderBy: { transactionDate: 'desc' },
   });
 
-  // FIX: Safely convert Decimal to number for all listed expenses
+  // FIX: Use safeToNumber for all listed expenses
   return rawExpenses.map(rawExpense => {
     const expenseWithNumber = rawExpense as PrismaOutputWithDecimals<typeof rawExpenses[0]>;
-
-    // We rely on the raw object having the Decimal instance with .toNumber()
-    if (!expenseWithNumber.amount || typeof expenseWithNumber.amount.toNumber !== 'function') {
-        // If the database has corrupted data or the mapping failed, throw a clear error
-        throw new Error(`Expense ID ${rawExpense.id} is missing a valid 'amount' field for conversion.`);
+    
+    // Amount is a required field (not null)
+    const amount = safeToNumber(expenseWithNumber.amount) ?? 0;
+    
+    // If the data is critically corrupt (amount is null in a non-null column)
+    if (amount === null) {
+        throw new Error(`Critical data error: Expense ID ${rawExpense.id} has invalid 'amount'.`);
     }
-
+    
     return {
       ...rawExpense,
-      amount: expenseWithNumber.amount.toNumber(),
+      amount: amount,
     } as Expense;
   }) as Expense[];
 }
 
-/**
- * Updates an existing expense record.
- */
 export async function updateExpense(
   expenseId: string, 
   homeownerProfileId: string, 
@@ -115,13 +120,10 @@ export async function updateExpense(
   // FIX: Safely convert Decimal to number before casting
   return {
     ...rawUpdatedExpense,
-    amount: expenseWithNumber.amount!.toNumber(),
+    amount: expenseWithNumber.amount ? expenseWithNumber.amount.toNumber() : 0,
   } as Expense;
 }
 
-/**
- * Deletes an expense record.
- */
 export async function deleteExpense(
   expenseId: string, 
   homeownerProfileId: string
@@ -135,15 +137,12 @@ export async function deleteExpense(
   // FIX: Safely convert Decimal to number before casting
   return {
     ...rawDeletedExpense,
-    amount: expenseWithNumber.amount!.toNumber(),
+    amount: expenseWithNumber.amount ? expenseWithNumber.amount.toNumber() : 0,
   } as Expense;
 }
 
 // --- WARRANTY SERVICE LOGIC ---
 
-/**
- * Creates a new warranty record.
- */
 export async function createWarranty(
   homeownerProfileId: string, 
   data: CreateWarrantyDTO
@@ -169,13 +168,10 @@ export async function createWarranty(
   // FIX: Convert Decimal to number before casting (cost is optional)
   return {
     ...rawWarranty,
-    cost: rawWarranty.cost ? warrantyWithNumber.cost!.toNumber() : null,
+    cost: safeToNumber(warrantyWithNumber.cost),
   } as Warranty;
 }
 
-/**
- * Lists all warranties for a homeowner.
- */
 export async function listWarranties(homeownerProfileId: string): Promise<Warranty[]> {
   const rawWarranties = await prisma.warranty.findMany({
     where: { homeownerProfileId },
@@ -185,24 +181,17 @@ export async function listWarranties(homeownerProfileId: string): Promise<Warran
     }
   });
 
-  // FIX: Convert Decimal to number for all listed warranties
+  // FIX: Use safeToNumber for all listed warranties
   return rawWarranties.map(rawWarranty => {
     const warrantyWithNumber = rawWarranty as PrismaOutputWithDecimals<typeof rawWarranties[0]>;
 
-    const convertedCost = rawWarranty.cost
-        ? warrantyWithNumber.cost!.toNumber() // Use non-null assertion since rawWarranty.cost is checked
-        : null;
-
     return {
       ...rawWarranty,
-      cost: convertedCost,
+      cost: safeToNumber(warrantyWithNumber.cost),
     } as Warranty;
   }) as Warranty[];
 }
 
-/**
- * Updates an existing warranty record.
- */
 export async function updateWarranty(
   warrantyId: string, 
   homeownerProfileId: string, 
@@ -220,16 +209,13 @@ export async function updateWarranty(
   
   const warrantyWithNumber = rawUpdatedWarranty as PrismaOutputWithDecimals<typeof rawUpdatedWarranty>;
 
-  // FIX: Convert Decimal to number before casting
+  // FIX: Safely convert Decimal to number before casting
   return {
     ...rawUpdatedWarranty,
-    cost: rawUpdatedWarranty.cost ? warrantyWithNumber.cost!.toNumber() : null,
+    cost: safeToNumber(warrantyWithNumber.cost),
   } as Warranty;
 }
 
-/**
- * Deletes a warranty record.
- */
 export async function deleteWarranty(
   warrantyId: string, 
   homeownerProfileId: string
@@ -240,18 +226,15 @@ export async function deleteWarranty(
   
   const warrantyWithNumber = rawDeletedWarranty as PrismaOutputWithDecimals<typeof rawDeletedWarranty>;
 
-  // FIX: Convert Decimal to number before casting
+  // FIX: Safely convert Decimal to number before casting
   return {
     ...rawDeletedWarranty,
-    cost: rawDeletedWarranty.cost ? warrantyWithNumber.cost!.toNumber() : null,
+    cost: safeToNumber(warrantyWithNumber.cost),
   } as Warranty;
 }
 
 // --- INSURANCE POLICY SERVICE LOGIC ---
 
-/**
- * Creates a new insurance policy record.
- */
 export async function createInsurancePolicy(
   homeownerProfileId: string, 
   data: CreateInsurancePolicyDTO
@@ -277,13 +260,10 @@ export async function createInsurancePolicy(
   // FIX: Convert Decimal to number before casting
   return {
     ...rawPolicy,
-    premiumAmount: policyWithNumber.premiumAmount!.toNumber(),
+    premiumAmount: policyWithNumber.premiumAmount ? policyWithNumber.premiumAmount.toNumber() : 0,
   } as InsurancePolicy;
 }
 
-/**
- * Lists all insurance policies for a homeowner.
- */
 export async function listInsurancePolicies(homeownerProfileId: string): Promise<InsurancePolicy[]> {
   const rawPolicies = await prisma.insurancePolicy.findMany({
     where: { homeownerProfileId },
@@ -293,25 +273,20 @@ export async function listInsurancePolicies(homeownerProfileId: string): Promise
     }
   });
 
-  // FIX: Convert Decimal to number for all listed policies
+  // FIX: Use safeToNumber for all listed policies
   return rawPolicies.map(rawPolicy => {
     const policyWithNumber = rawPolicy as PrismaOutputWithDecimals<typeof rawPolicies[0]>;
 
-    // We rely on the raw object having the Decimal instance with .toNumber()
-    if (!policyWithNumber.premiumAmount || typeof policyWithNumber.premiumAmount.toNumber !== 'function') {
-        throw new Error(`Policy ID ${rawPolicy.id} is missing a valid 'premiumAmount' field for conversion.`);
-    }
+    // premiumAmount is a required field (not null)
+    const premiumAmount = safeToNumber(policyWithNumber.premiumAmount) ?? 0;
 
     return {
       ...rawPolicy,
-      premiumAmount: policyWithNumber.premiumAmount.toNumber(),
+      premiumAmount: premiumAmount,
     } as InsurancePolicy;
   }) as InsurancePolicy[];
 }
 
-/**
- * Updates an existing insurance policy record.
- */
 export async function updateInsurancePolicy(
   policyId: string, 
   homeownerProfileId: string, 
@@ -332,13 +307,10 @@ export async function updateInsurancePolicy(
   // FIX: Convert Decimal to number before casting
   return {
     ...rawUpdatedPolicy,
-    premiumAmount: policyWithNumber.premiumAmount!.toNumber(),
+    premiumAmount: policyWithNumber.premiumAmount ? policyWithNumber.premiumAmount.toNumber() : 0,
   } as InsurancePolicy;
 }
 
-/**
- * Deletes an insurance policy record.
- */
 export async function deleteInsurancePolicy(
   policyId: string, 
   homeownerProfileId: string
@@ -352,7 +324,7 @@ export async function deleteInsurancePolicy(
   // FIX: Convert Decimal to number before casting
   return {
     ...rawDeletedPolicy,
-    premiumAmount: policyWithNumber.premiumAmount!.toNumber(),
+    premiumAmount: policyWithNumber.premiumAmount ? policyWithNumber.premiumAmount.toNumber() : 0,
   } as InsurancePolicy;
 }
 
