@@ -112,6 +112,7 @@ class APIClient {
     // Ensure body is handled as JSON string if present
     let body = options.body;
     if (options.body && typeof options.body !== 'string') {
+        // Here, options.body is the plain JS object, so we stringify it.
         body = JSON.stringify(options.body);
     }
     
@@ -128,12 +129,26 @@ class APIClient {
     // If the caller passed an Authorization header directly in options (e.g., in getCurrentUser), 
     // it will overwrite the localStorage token if needed. This relies on the spread operator above.
 
+    // --- DEBUG LOG 1: Log Request Details ---
+    const bodyPreview = typeof body === 'string' ? body.substring(0, 200) : null;
+    console.log('API DEBUG: Sending Request:', {
+        endpoint: `${this.baseURL}${endpoint}`,
+        method: options.method || 'GET',
+        headers: headers,
+        bodyPreview: bodyPreview, 
+    });
+    // ----------------------------------------
+
     try {
       let response = await fetch(`${this.baseURL}${endpoint}`, {
         ...options,
         body, // Use the prepared JSON body
         headers,
       });
+
+      // --- DEBUG LOG 2: Log Raw Response Status ---
+      console.log('API DEBUG: Received Response Status:', response.status, 'for endpoint:', endpoint);
+      // --------------------------------------------
 
       // --- START: MODIFIED LOGIC (Token Refresh and Response Handling) ---
 
@@ -184,7 +199,28 @@ class APIClient {
       }
 
       // Process the final response (original, retry, or non-401 error)
-      const data = await response.json();
+      const text = await response.text();
+      let data;
+      try {
+          data = JSON.parse(text);
+      } catch (e) {
+          // If response body is not valid JSON (e.g., 500 HTML/text response)
+          // Return a structured APIError for the 500 status
+          const errorMessage = `Server returned status ${response.status}. Body was not JSON.`;
+          // Safely check for substring existence on text
+          const textPreview = text ? text.substring(0, 200) : 'Empty body';
+          console.error('API DEBUG: Failed to parse JSON response. Raw body:', textPreview);
+          return {
+              success: false,
+              message: errorMessage,
+              error: { message: text.substring(0, 100), code: `HTTP_${response.status}` },
+          } as APIResponse<T>;
+      }
+
+
+      // --- DEBUG LOG 3: Log Final Data ---
+      console.log('API DEBUG: Final Response Data:', data);
+      // -----------------------------------
 
       if (!response.ok) {
         return {
@@ -210,7 +246,7 @@ class APIClient {
       // --- END: MODIFIED LOGIC ---
 
     } catch (error) {
-      console.error('API Request Error:', error);
+      console.error('API Request Error (Catch Block):', error);
       return {
         success: false,
         message: 'Network error. Please check your connection.',
@@ -233,6 +269,15 @@ class APIClient {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
+
+    // --- DEBUG LOG 4: Log Form Data Request Details ---
+    console.log('API DEBUG: Sending FormData Request:', {
+        endpoint: `${this.baseURL}${endpoint}`,
+        method: 'POST',
+        headers: headers,
+        bodyType: 'FormData',
+    });
+    // ----------------------------------------------------
     
     try {
         const response = await fetch(`${this.baseURL}${endpoint}`, {
@@ -242,7 +287,15 @@ class APIClient {
             body: formData,
         });
 
+        // --- DEBUG LOG 5: Log Raw Form Data Response Status ---
+        console.log('API DEBUG: Received Form Data Response Status:', response.status, 'for endpoint:', endpoint);
+        // --------------------------------------------------------
+
         const data = await response.json();
+
+        // --- DEBUG LOG 6: Log Final Form Data ---
+        console.log('API DEBUG: Final Form Data Response Data:', data);
+        // ------------------------------------------
 
         if (!response.ok || data.success === false) {
             return {
@@ -273,7 +326,8 @@ class APIClient {
   async register(input: RegisterInput): Promise<APIResponse<RegisterResponse>> {
     return this.request<RegisterResponse>('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify(input),
+      // FIX: Cast object to BodyInit to satisfy RequestInit.body type
+      body: input as unknown as BodyInit,
     });
   }
 
@@ -283,7 +337,8 @@ class APIClient {
   async login(input: LoginInput): Promise<APIResponse<LoginResponse>> {
     const response = await this.request<LoginResponse>('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify(input),
+      // FIX: Cast object to BodyInit to satisfy RequestInit.body type
+      body: input as unknown as BodyInit,
     });
 
     // Save tokens on successful login, relying on response.success check in request()
@@ -309,8 +364,6 @@ class APIClient {
 
   /**
    * Get current user (Restored name: getCurrentUser)
-   * This corresponds to the /api/auth/me endpoint.
-   * FIX: Now accepts an optional token to support authentication initialization flow.
    */
   async getCurrentUser(tokenOverride?: string): Promise<APIResponse<User>> {
     const options: RequestInit = {};
@@ -434,7 +487,8 @@ class APIClient {
   async createBooking(input: CreateBookingInput): Promise<APIResponse<Booking>> {
     return this.request<Booking>('/api/bookings', {
       method: 'POST',
-      body: JSON.stringify(input),
+      // FIX: Cast object to BodyInit
+      body: input as unknown as BodyInit,
     });
   }
 
@@ -483,7 +537,8 @@ class APIClient {
   ): Promise<APIResponse<Booking>> {
     return this.request<Booking>(`/api/bookings/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(updates),
+      // FIX: Cast object to BodyInit
+      body: updates as unknown as BodyInit,
     });
   }
 
@@ -519,7 +574,8 @@ class APIClient {
   ): Promise<APIResponse<Booking>> {
     return this.request<Booking>(`/api/bookings/${id}/complete`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      // FIX: Cast object to BodyInit
+      body: data as unknown as BodyInit,
     });
   }
 
@@ -529,7 +585,8 @@ class APIClient {
   async cancelBooking(id: string, reason: string): Promise<APIResponse<Booking>> {
     return this.request<Booking>(`/api/bookings/${id}/cancel`, {
       method: 'POST',
-      body: JSON.stringify({ reason }),
+      // FIX: Cast object to BodyInit
+      body: { reason } as unknown as BodyInit,
     });
   }
 
@@ -564,7 +621,8 @@ class APIClient {
   }): Promise<APIResponse<Property>> {
     return this.request('/api/properties', {
       method: 'POST',
-      body: JSON.stringify(data),
+      // FIX: Cast object to BodyInit
+      body: data as unknown as BodyInit,
     });
   }
 
@@ -584,7 +642,8 @@ class APIClient {
   ): Promise<APIResponse<Property>> {
     return this.request(`/api/properties/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      // FIX: Cast object to BodyInit
+      body: data as unknown as BodyInit,
     });
   }
 
@@ -619,7 +678,8 @@ class APIClient {
   }): Promise<APIResponse<{ count: number }>> {
     return this.request('/api/checklist/maintenance-items', {
       method: 'POST',
-      body: JSON.stringify(data),
+      // FIX: Cast object to BodyInit
+      body: data as unknown as BodyInit,
     });
   }
 
@@ -632,7 +692,8 @@ class APIClient {
   }): Promise<APIResponse<{ count: number }>> {
     return this.request('/api/maintenance-templates/custom-items', {
       method: 'POST',
-      body: JSON.stringify(data),
+      // FIX: Cast object to BodyInit
+      body: data as unknown as BodyInit,
     });
   }
 
@@ -664,7 +725,8 @@ class APIClient {
   }): Promise<APIResponse<Service>> {
     return this.request<Service>('/api/providers/services', {
       method: 'POST',
-      body: JSON.stringify(data),
+      // FIX: Cast object to BodyInit
+      body: data as unknown as BodyInit,
     });
   }
 
@@ -688,7 +750,8 @@ class APIClient {
   ): Promise<APIResponse<Service>> {
     return this.request<Service>(`/api/providers/services/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify(data),
+      // FIX: Cast object to BodyInit
+      body: data as unknown as BodyInit,
     });
   }
 
@@ -722,7 +785,7 @@ class APIClient {
 
   // --- EXPENSES ---
   async createExpense(data: CreateExpenseInput): Promise<APIResponse<Expense>> {
-    return this.request<Expense>('/api/home-management/expenses', { method: 'POST', body: JSON.stringify(data) });
+    return this.request<Expense>('/api/home-management/expenses', { method: 'POST', body: data as unknown as BodyInit });
   }
   
   // FIX: Changed return type to APIResponse to allow for failure handling
@@ -732,7 +795,7 @@ class APIClient {
   }
 
   async updateExpense(expenseId: string, data: UpdateExpenseInput): Promise<APIResponse<Expense>> {
-    return this.request<Expense>(`/api/home-management/expenses/${expenseId}`, { method: 'PATCH', body: JSON.stringify(data) });
+    return this.request<Expense>(`/api/home-management/expenses/${expenseId}`, { method: 'PATCH', body: data as unknown as BodyInit });
   }
 
   async deleteExpense(expenseId: string): Promise<APIResponse<void>> {
@@ -742,7 +805,7 @@ class APIClient {
 
   // --- WARRANTIES ---
   async createWarranty(data: CreateWarrantyInput): Promise<APIResponse<Warranty>> {
-    return this.request<Warranty>('/api/home-management/warranties', { method: 'POST', body: JSON.stringify(data) });
+    return this.request<Warranty>('/api/home-management/warranties', { method: 'POST', body: data as unknown as BodyInit });
   }
 
   // FIX: Changed return type to APIResponse to allow for failure handling
@@ -751,7 +814,7 @@ class APIClient {
   }
 
   async updateWarranty(warrantyId: string, data: UpdateWarrantyInput): Promise<APIResponse<Warranty>> {
-    return this.request<Warranty>(`/api/home-management/warranties/${warrantyId}`, { method: 'PATCH', body: JSON.stringify(data) });
+    return this.request<Warranty>(`/api/home-management/warranties/${warrantyId}`, { method: 'PATCH', body: data as unknown as BodyInit });
   }
 
   async deleteWarranty(warrantyId: string): Promise<APIResponse<void>> {
@@ -761,7 +824,7 @@ class APIClient {
 
   // --- INSURANCE POLICIES ---
   async createInsurancePolicy(data: CreateInsurancePolicyInput): Promise<APIResponse<InsurancePolicy>> {
-    return this.request<InsurancePolicy>('/api/home-management/insurance-policies', { method: 'POST', body: JSON.stringify(data) });
+    return this.request<InsurancePolicy>('/api/home-management/insurance-policies', { method: 'POST', body: data as unknown as BodyInit });
   }
 
   // FIX: Changed return type to APIResponse to allow for failure handling
@@ -770,7 +833,7 @@ class APIClient {
   }
 
   async updateInsurancePolicy(policyId: string, data: UpdateInsurancePolicyInput): Promise<APIResponse<InsurancePolicy>> {
-    return this.request<InsurancePolicy>(`/api/home-management/insurance-policies/${policyId}`, { method: 'PATCH', body: JSON.stringify(data) });
+    return this.request<InsurancePolicy>(`/api/home-management/insurance-policies/${policyId}`, { method: 'PATCH', body: data as unknown as BodyInit });
   }
 
   async deleteInsurancePolicy(policyId: string): Promise<APIResponse<void>> {
