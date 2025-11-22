@@ -389,6 +389,7 @@ export interface RegisterInput {
   firstName: string;
   lastName: string;
   role: UserRole;
+  segment: HomeownerSegment;
 }
 
 export interface CreateBookingInput {
