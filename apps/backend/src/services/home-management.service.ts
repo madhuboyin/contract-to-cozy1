@@ -112,6 +112,9 @@ export async function createExpense(
   homeownerProfileId: string, 
   data: CreateExpenseDTO
 ): Promise<Expense> {
+  // CRITICAL DEBUG: Log input data before database operation
+  console.log('DEBUG (POST /expenses): Input Data Received:', data);
+
   try {
     const rawExpense = await prisma.expense.create({
       data: {
@@ -125,9 +128,13 @@ export async function createExpense(
       } as Prisma.ExpenseCreateInput,
     });
     
+    // CRITICAL DEBUG: Log successful raw Prisma output
+    console.log('DEBUG (POST /expenses): Raw Prisma Output (Success):', rawExpense);
+
     return mapRawExpenseToExpense(rawExpense);
   } catch (error) {
-    console.error('ERROR: createExpense failed', error);
+    // CRITICAL DEBUG: Log the exact error object from Prisma
+    console.error('FATAL ERROR (POST /expenses): Prisma operation failed.', error); 
     throw error;
   }
 }
@@ -322,7 +329,6 @@ interface CreateDocumentDTO {
 
 /**
  * Handles the upload and database record creation for a new document.
- * It mocks the file storage interaction and saves the record to the DB.
  */
 export async function createDocument(
   homeownerProfileId: string, 
