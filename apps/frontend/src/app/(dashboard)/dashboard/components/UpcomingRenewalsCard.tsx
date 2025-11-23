@@ -79,7 +79,7 @@ export const UpcomingRenewalsCard = () => {
             return {
                 ...item,
                 daysUntilExpiry: days,
-                // Highlight red if days > 0 and <= 30, or if days <= 0 (expired)
+                // isExpiringSoon is true if days is 30 or less (including negative/expired)
                 isExpiringSoon: days <= 30, 
             };
         })
@@ -102,7 +102,7 @@ export const UpcomingRenewalsCard = () => {
   
   return (
     <Card className={`h-full`}>
-      {/* FIX 1: Ensure header uses standard padding to align */}
+      {/* FIX 1: Use standard padding for alignment */}
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">
           Upcoming Renewals
@@ -124,28 +124,32 @@ export const UpcomingRenewalsCard = () => {
           <div className="space-y-3">
             {upcomingItems.map((item, index) => {
               // Determine styling classes for this specific item
-              const isExpiringSoonAlert = item.isExpiringSoon; 
+              const isAlertItem = item.isExpiringSoon; 
               const isExpired = item.daysUntilExpiry < 0;
 
-              // Link Text: Red only if EXPIRED, otherwise neutral black/gray-900
+              // Link Text Color: Red only if EXPIRED, otherwise neutral black/gray-900 (prevents unwanted green)
               const linkTextColorClass = isExpired ? 'text-red-600' : 'text-gray-900';
               
-              // Date/Day Count Text: Red if EXPIRING SOON OR EXPIRED
-              const dateTextColorClass = isExpiringSoonAlert ? 'text-red-600' : 'text-gray-700';
-              const daysTextColorClass = isExpiringSoonAlert ? 'text-red-500' : 'text-gray-500';
-              
+              // Icon Color: Red if Alert, otherwise type-specific color
+              const itemIconColor = isAlertItem ? 'text-red-500' : (item.type === 'Warranty' ? 'text-blue-500' : 'text-purple-500');
+
+              // Date/Days Text Color: Red if Alert, otherwise neutral gray/black
+              // FIX 2: Ensures date text is red if expiring soon
+              const dateTextColor = isAlertItem ? 'text-red-600' : 'text-gray-700'; 
+              const daysTextColor = isAlertItem ? 'text-red-500' : 'text-gray-500';
+
               return (
                 <React.Fragment key={item.id}> 
                   <div className="flex justify-between items-center text-sm">
                     <div className="flex items-center space-x-2">
-                      {/* Icon styling uses dateTextColorClass */}
+                      {/* Icon */}
                       {item.type === 'Warranty' ? (
-                        <Shield className={`h-4 w-4 flex-shrink-0 ${dateTextColorClass}`} />
+                        <Shield className={`h-4 w-4 flex-shrink-0 ${itemIconColor}`} />
                       ) : (
-                        <Home className={`h-4 w-4 flex-shrink-0 ${dateTextColorClass}`} />
+                        <Home className={`h-4 w-4 flex-shrink-0 ${itemIconColor}`} />
                       )}
                       
-                      {/* FIX 2: Apply color class to link text. Hover remains blue/red. */}
+                      {/* Link Text (Name) */}
                       <Link
                         href={`/dashboard/${item.type === 'Warranty' ? 'warranties' : 'insurance'}`}
                         className={`font-medium ${linkTextColorClass} hover:text-blue-600`} 
@@ -155,13 +159,13 @@ export const UpcomingRenewalsCard = () => {
                     </div>
                     <div className="flex-shrink-0 text-right">
                       
-                      {/* DATE TEXT FIX: Apply red color if expiring soon/expired */}
-                      <p className={`font-semibold ${dateTextColorClass}`}>
+                      {/* DATE TEXT (Expiring Soon/Expired = RED) */}
+                      <p className={`font-semibold ${dateTextColor}`}>
                         {format(new Date(item.expiryDate), 'MMM dd, yyyy')}
                       </p>
                       
-                      {/* DAY COUNT TEXT FIX: Apply red color if expiring soon/expired */}
-                      <p className={`text-xs ${daysTextColorClass}`}>
+                      {/* DAY COUNT TEXT (Expiring Soon/Expired = RED) */}
+                      <p className={`text-xs ${daysTextColor}`}>
                         {item.daysUntilExpiry <= 0
                           ? `Expired ${Math.abs(item.daysUntilExpiry)} days ago`
                           : item.daysUntilExpiry <= 30
