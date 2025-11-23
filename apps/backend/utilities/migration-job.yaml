@@ -1,0 +1,62 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: prisma-migrate-homeowner-tables
+  namespace: production
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: migrate
+        image: ghcr.io/madhuboyin/contract-to-cozy/backend:latest
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          cd /app/apps/backend
+          
+          echo "Current directory: $(pwd)"
+          echo "Checking schema file..."
+          ls -la prisma/schema.prisma
+          
+          echo ""
+          echo "Running Prisma migration..."
+          npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss
+          
+          EXIT_CODE=$?
+          
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo ""
+            echo "✅ Migration successful!"
+            echo ""
+            echo "Verifying new tables exist..."
+            npx prisma db execute --stdin <<'EOF'
+SELECT table_name FROM information_schema.tables 
+WHERE table_schema = 'public' 
+  AND table_name IN ('warranties', 'insurance_policies', 'expenses', 'documents')
+ORDER BY table_name;
+EOF
+          else
+            echo ""
+            echo "❌ Migration failed with code: $EXIT_CODE"
+            exit $EXIT_CODE
+          fi
+        
+        env:
+        - name: DATABASE_URL
+          value: "postgresql://postgres:$(POSTGRES_PASSWORD)@postgres:5432/contracttocozy?schema=public"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: POSTGRES_PASSWORD
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
