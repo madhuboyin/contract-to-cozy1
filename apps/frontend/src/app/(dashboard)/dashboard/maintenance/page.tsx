@@ -74,12 +74,19 @@ export default function MaintenancePage() {
     queryFn: () => api.getChecklist(),
   });
 
+  // FIX: Access 'items' directly from the checklistRes object, 
+  // casting to 'any' to bypass the TypeScript error (TS2352) caused by the API client's mixed return type.
   const allChecklistItems = useMemo(() => {
-    if (!checklistRes?.success || !checklistRes.data.items) {
-      console.error("Error fetching checklist data:", checklistRes?.message);
+    const rawData = checklistRes as any;
+
+    // Check if the successful response (raw data) contains the items array
+    if (!rawData || !Array.isArray(rawData.items)) {
+      console.error("Error fetching checklist data: Items array missing or invalid response structure.", rawData?.message || rawData);
       return [];
     }
-    return checklistRes.data.items as DashboardChecklistItem[];
+    
+    // Return the items array
+    return rawData.items as DashboardChecklistItem[];
   }, [checklistRes]);
 
 
@@ -88,7 +95,7 @@ export default function MaintenancePage() {
     return allChecklistItems
       .filter(item => item.isRecurring)
       .filter(item => 
-        // FIX: Relaxed status filter to show all active tasks.
+        // Filter: Show all active tasks (i.e., not completed or dismissed)
         item.status !== 'COMPLETED' && item.status !== 'NOT_NEEDED'
       ) 
       .filter(item => 
@@ -103,7 +110,7 @@ export default function MaintenancePage() {
       });
   }, [allChecklistItems]);
 
-  // --- Modal Handlers ---
+  // --- Modal Handlers & Mutations ---
   const handleOpenModal = (task: DashboardChecklistItem) => {
     setEditingTask(task);
     setIsModalOpen(true);
@@ -114,12 +121,8 @@ export default function MaintenancePage() {
     setEditingTask(null);
   };
   
-  // NOTE: This uses useMutation for optimism, but relies on a hypothetical 
-  // API function that must be implemented in the client API wrapper.
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string, data: Partial<DashboardChecklistItem> }) => {
-      // Placeholder API call (assume api.updateChecklistItem exists/will be implemented)
-      // The implemented API client now supports updateChecklistItem!
       const updateData = {
           title: data.title,
           description: data.description,
@@ -148,11 +151,8 @@ export default function MaintenancePage() {
     },
   });
 
-  // NOTE: This uses useMutation for optimism, but relies on a hypothetical 
-  // API function that must be implemented in the client API wrapper.
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      // The implemented API client now supports deleteChecklistItem!
       const response = await api.deleteChecklistItem(id);
       if (!response.success) {
           throw new Error(response.error?.message || 'Failed to delete item.');
@@ -182,26 +182,21 @@ export default function MaintenancePage() {
       description: config.description,
       isRecurring: config.isRecurring,
       frequency: config.isRecurring ? config.frequency : null,
-      // Note: nextDueDate needs to be converted to ISO string from Date
       nextDueDate: config.isRecurring && config.nextDueDate 
         ? format(config.nextDueDate, 'yyyy-MM-dd') 
         : null,
       serviceCategory: config.serviceCategory,
     };
 
-    // The mutation uses the item's ID for the update API call
     updateMutation.mutate({ id: editingTask.id, data: updateData });
   };
   
-  // The onRemove handler from the modal
   const handleRemoveTask = (taskId: string) => {
     deleteMutation.mutate(taskId);
   };
-
-  // --- End Modal Handlers ---
+  // --- End Modal Handlers & Mutations ---
   
 
-  // FIX: Changed .isLoading to .isPending for mutations to fix TypeScript error
   if (isLoading || updateMutation.isPending || deleteMutation.isPending) { 
     return (
       <div className="space-y-6 pb-8">
@@ -313,18 +308,16 @@ export default function MaintenancePage() {
         onClose={handleCloseModal}
         template={null} 
         existingConfig={editingTask ? {
-            templateId: editingTask.id, // Use the item's ID as the identifier
+            templateId: editingTask.id, 
             title: editingTask.title,
             description: editingTask.description,
             isRecurring: editingTask.isRecurring,
             frequency: editingTask.frequency as RecurrenceFrequency,
-            // Convert ISO string back to Date object for the modal's internal state
             nextDueDate: editingTask.nextDueDate ? parseISO(editingTask.nextDueDate) : null,
             serviceCategory: editingTask.serviceCategory as ServiceCategory,
         } : null}
         onSave={handleSaveTaskUpdate} 
-        // Pass the item's ID for the modal's onRemove handler
-        onRemove={() => deleteMutation.mutate(editingTask?.id || '')} 
+        onRemove={() => handleRemoveTask(editingTask?.id || '')} 
       />
     </div>
   );
