@@ -164,6 +164,8 @@ export async function updateProperty(
   userId: string,
   data: UpdatePropertyData
 ) {
+  // DEBUG LOG 2: Log data received by the service layer
+  console.log(`[DEBUG - Service] Data received for update: ${propertyId}`, data);
   const homeownerProfileId = await getHomeownerProfileId(userId);
 
   // Verify ownership
@@ -236,11 +238,16 @@ export async function updateProperty(
   if (data.applianceAges !== undefined) updatePayload.applianceAges = data.applianceAges;
   // END PHASE 2 ADDITIONS
 
+  // DEBUG LOG 3: Log the payload just before the Prisma update operation
+  console.log('[DEBUG - Service] Final Prisma Update Payload:', updatePayload); 
+
   const property = await prisma.property.update({
     where: { id: propertyId },
     data: updatePayload,
   });
-
+  
+  // DEBUG LOG 4: Log the successful result returned by Prisma
+  console.log('[DEBUG - Service] Prisma Update Successful. Result ID:', property.id);
   return property;
 }
 

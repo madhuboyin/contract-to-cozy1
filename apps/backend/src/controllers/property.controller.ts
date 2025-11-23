@@ -90,6 +90,8 @@ export const updateProperty = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     // CRITICAL FIX: Explicitly cast req.body to the complete UpdatePropertyInput type
     const updateData = req.body as UpdatePropertyInput; 
+    // DEBUG LOG 1: Log incoming payload from frontend
+    console.log(`[DEBUG - Controller] Received Update Payload for Property ${id}:`, updateData);
 
     // Pass the comprehensive payload, allowing the service to save all fields
     const property = await propertyService.updateProperty(id, userId, updateData);
