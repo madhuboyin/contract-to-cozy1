@@ -1,6 +1,8 @@
-//apps/backend/src/services/property.service.ts
+// apps/backend/src/services/property.service.ts
 
-import { PrismaClient, PropertyType, OwnershipType, HeatingType, CoolingType, WaterHeaterType, RoofType } from '@prisma/client';
+import { PrismaClient, Property, PropertyType, OwnershipType, HeatingType, CoolingType, WaterHeaterType, RoofType } from '@prisma/client';
+// IMPORT REQUIRED: Import the utility and interface
+import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.util'; 
 
 const prisma = new PrismaClient();
 
@@ -47,6 +49,24 @@ interface UpdatePropertyData extends Partial<CreatePropertyData> {
   // All fields are optional for update
 }
 
+// NEW INTERFACE for API response
+export interface ScoredProperty extends Property {
+    healthScore: HealthScoreResult;
+}
+
+/**
+ * Helper function to calculate and attach the score to a property object.
+ */
+async function attachHealthScore(property: Property): Promise<ScoredProperty> {
+    const documentCount = await prisma.document.count({
+        where: { propertyId: property.id }
+    });
+    const healthScore = calculateHealthScore(property, documentCount);
+    return {
+        ...property,
+        healthScore,
+    } as ScoredProperty;
+}
 
 /**
  * Get homeowner profile ID for a user
@@ -66,7 +86,7 @@ async function getHomeownerProfileId(userId: string): Promise<string> {
 /**
  * Get all properties for a user
  */
-export async function getUserProperties(userId: string) {
+export async function getUserProperties(userId: string): Promise<ScoredProperty[]> {
   const homeownerProfileId = await getHomeownerProfileId(userId);
 
   const properties = await prisma.property.findMany({
@@ -76,14 +96,19 @@ export async function getUserProperties(userId: string) {
       { createdAt: 'desc' },
     ],
   });
+  
+  // MAP REQUIRED: Calculate and attach score for all properties
+  const scoredProperties = await Promise.all(
+      properties.map(attachHealthScore)
+  );
 
-  return properties;
+  return scoredProperties;
 }
 
 /**
  * Create a new property
  */
-export async function createProperty(userId: string, data: CreatePropertyData) {
+export async function createProperty(userId: string, data: CreatePropertyData): Promise<ScoredProperty> {
   const homeownerProfileId = await getHomeownerProfileId(userId);
 
   // If this is set as primary, unset other primary properties
@@ -137,13 +162,14 @@ export async function createProperty(userId: string, data: CreatePropertyData) {
     },
   });
 
-  return property;
+  // ATTACH SCORE: Calculate and attach score before returning
+  return attachHealthScore(property);
 }
 
 /**
  * Get a property by ID (verify ownership)
  */
-export async function getPropertyById(propertyId: string, userId: string) {
+export async function getPropertyById(propertyId: string, userId: string): Promise<ScoredProperty | null> {
   const homeownerProfileId = await getHomeownerProfileId(userId);
 
   const property = await prisma.property.findFirst({
@@ -153,7 +179,10 @@ export async function getPropertyById(propertyId: string, userId: string) {
     },
   });
 
-  return property;
+  if (!property) return null;
+
+  // ATTACH SCORE: Calculate and attach score before returning
+  return attachHealthScore(property);
 }
 
 /**
@@ -163,9 +192,7 @@ export async function updateProperty(
   propertyId: string,
   userId: string,
   data: UpdatePropertyData
-) {
-  // DEBUG LOG 2: Log data received by the service layer
-  console.log(`[DEBUG - Service] Data received for update: ${propertyId}`, data);
+): Promise<ScoredProperty> {
   const homeownerProfileId = await getHomeownerProfileId(userId);
 
   // Verify ownership
@@ -238,17 +265,13 @@ export async function updateProperty(
   if (data.applianceAges !== undefined) updatePayload.applianceAges = data.applianceAges;
   // END PHASE 2 ADDITIONS
 
-  // DEBUG LOG 3: Log the payload just before the Prisma update operation
-  console.log('[DEBUG - Service] Final Prisma Update Payload:', updatePayload); 
-
   const property = await prisma.property.update({
     where: { id: propertyId },
     data: updatePayload,
   });
-  
-  // DEBUG LOG 4: Log the successful result returned by Prisma
-  console.log('[DEBUG - Service] Prisma Update Successful. Result ID:', property.id);
-  return property;
+
+  // ATTACH SCORE: Calculate and attach score before returning
+  return attachHealthScore(property);
 }
 
 /**
