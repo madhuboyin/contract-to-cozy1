@@ -1,4 +1,5 @@
-//apps/frontend/src/app/(dashboard)/dashboard/components/RecurringMaintenanceCard.tsx
+// apps/frontend/src/app/(dashboard)/dashboard/components/RecurringMaintenanceCard.tsx
+'use client';
 
 import React from 'react';
 import Link from 'next/link';
@@ -9,7 +10,6 @@ import { cn } from '@/lib/utils';
 import { DashboardChecklistItem } from '../types'; 
 
 interface RecurringMaintenanceCardProps {
-  // FIX: Use the unified type
   maintenance: DashboardChecklistItem[];
   className?: string;
 }
@@ -17,14 +17,18 @@ interface RecurringMaintenanceCardProps {
 export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMaintenanceCardProps) => {
   
   // Filter for pending, recurring tasks and sort them by due date
-  const pendingTasks = maintenance
+  const allPendingTasks = maintenance
     .filter(t => t.status === 'PENDING' && t.isRecurring)
     .sort((a, b) => {
         const dateA = a.nextDueDate ? new Date(a.nextDueDate).getTime() : Infinity;
         const dateB = b.nextDueDate ? new Date(b.nextDueDate).getTime() : Infinity;
         return dateA - dateB;
-    })
-    .slice(0, 4);
+    });
+
+  // FIX 1: Limit display items to 3
+  const displayTasks = allPendingTasks.slice(0, 3);
+  const totalItems = allPendingTasks.length;
+  const overflowCount = totalItems - displayTasks.length;
 
   const formatDue = (dateStr: string | null) => {
     if (!dateStr) return 'No date';
@@ -43,6 +47,15 @@ export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMa
     return <span className="text-gray-500">{date.toLocaleDateString()}</span>;
   };
 
+  // FIX 2: Dynamic Footer Logic
+  const footerLink = overflowCount > 0 
+    ? "/dashboard/maintenance" // Link to the list page if overflow exists
+    : "/dashboard/maintenance-setup"; // Link to setup page otherwise
+
+  const footerText = overflowCount > 0 
+    ? `View ${overflowCount} More Task${overflowCount > 1 ? 's' : ''} →`
+    : "Manage Maintenance Plan";
+    
   return (
     <Card className={cn("h-full flex flex-col", className)}>
       <CardHeader>
@@ -53,15 +66,14 @@ export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMa
         <CardDescription>Routine tasks to keep home value</CardDescription>
       </CardHeader>
       <CardContent className="flex-1 space-y-4">
-        {pendingTasks.length === 0 ? (
+        {displayTasks.length === 0 ? ( // FIX 3: Use displayTasks for empty check
           <div className="text-center py-8 text-gray-500">
              <Check className="mx-auto h-8 w-8 text-green-500 mb-2" />
              <p>All caught up!</p>
           </div>
         ) : (
           <ul className="space-y-1">
-            {pendingTasks.map(task => (
-              // FIX: Wrap the list item content in a Link to make it clickable
+            {displayTasks.map(task => ( 
               <Link 
                 key={task.id} 
                 href="/dashboard/maintenance" 
@@ -78,10 +90,10 @@ export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMa
           </ul>
         )}
       </CardContent>
+      {/* FIX 4: Implement Dynamic CardFooter */}
       <CardFooter className="border-t pt-4">
-        <Button variant="ghost" className="w-full h-8 text-xs" asChild>
-          {/* FIX: Link to the maintenance setup page instead of the general checklist */}
-          <Link href="/dashboard/maintenance-setup">Manage Maintenance Plan</Link>
+        <Button variant="ghost" className="w-full h-8 text-xs font-semibold text-blue-600 hover:text-blue-700" asChild>
+          <Link href={footerLink}>{footerText}</Link>
         </Button>
       </CardFooter>
     </Card>
