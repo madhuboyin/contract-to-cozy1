@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { format, differenceInDays } from 'date-fns'; 
 import Link from 'next/link';
 import { Home, Shield, AlertTriangle } from 'lucide-react';
-import { Button } from '@/components/ui/button'; // Import Button
+import { Button } from '@/components/ui/button'; 
 
 // 1. Define the combined Renewal Item Type
 interface RenewalItem {
@@ -93,7 +93,6 @@ export const UpcomingRenewalsCard = () => {
       console.error("Error fetching renewals data:", errorW || errorI);
   }
 
-  // FIX 1: Limit display items to 3
   const displayItems = renewalItems.slice(0, 3); 
   const overflowCount = renewalItems.length - displayItems.length;
   const showMore = overflowCount > 0;
@@ -106,13 +105,17 @@ export const UpcomingRenewalsCard = () => {
   return (
     <Card className={`h-full flex flex-col`}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">
+        {/* FIX 1: Remove font size classes and add flex/gap */}
+        <CardTitle className="flex items-center gap-2"> 
+          {/* FIX 2: Add the primary icon inside the CardTitle */}
+          <Shield className="h-5 w-5 text-green-600" />
           Upcoming Renewals
         </CardTitle>
+        {/* This icon remains as the conditional status indicator on the far right */}
         {isAlert ? (
           <AlertTriangle className="h-4 w-4 text-red-500" />
         ) : (
-          <Shield className="h-4 w-4 text-green-500" />
+          <Shield className="h-4 w-4 text-green-500" /> 
         )}
       </CardHeader>
       <CardContent className="flex-1">
@@ -122,7 +125,7 @@ export const UpcomingRenewalsCard = () => {
             <div className="h-4 w-2/3 rounded bg-gray-200 animate-pulse" />
             <div className="h-4 w-1/3 rounded bg-gray-200 animate-pulse" />
           </div>
-        ) : displayItems.length > 0 ? ( // FIX 2: Use displayItems
+        ) : displayItems.length > 0 ? (
           <div className="space-y-3">
             {displayItems.map((item, index) => {
               const isAlertItem = item.isExpiringSoon; 
@@ -139,12 +142,14 @@ export const UpcomingRenewalsCard = () => {
                 <React.Fragment key={item.id}> 
                   <div className="flex justify-between items-center text-sm">
                     <div className="flex items-center space-x-2">
+                      {/* Icon */}
                       {item.type === 'Warranty' ? (
                         <Shield className={`h-4 w-4 flex-shrink-0 ${itemIconColor}`} />
                       ) : (
                         <Home className={`h-4 w-4 flex-shrink-0 ${itemIconColor}`} />
                       )}
                       
+                      {/* Link Text (Name) */}
                       <Link
                         href={`/dashboard/${item.type === 'Warranty' ? 'warranties' : 'insurance'}`}
                         className={`font-medium ${linkTextColorClass} hover:opacity-80`} 
@@ -154,10 +159,12 @@ export const UpcomingRenewalsCard = () => {
                     </div>
                     <div className="flex-shrink-0 text-right">
                       
+                      {/* DATE TEXT (Expiring Soon/Expired = RED) */}
                       <p className={`font-semibold ${dateTextColor}`}>
                         {format(new Date(item.expiryDate), 'MMM dd, yyyy')}
                       </p>
                       
+                      {/* DAY COUNT TEXT (Expiring Soon/Expired = RED) */}
                       <p className={`text-xs ${daysTextColor}`}>
                         {item.daysUntilExpiry <= 0
                           ? `Expired ${Math.abs(item.daysUntilExpiry)} days ago`
@@ -178,11 +185,11 @@ export const UpcomingRenewalsCard = () => {
         )}
       </CardContent>
       
-      {/* FIX 3: Add CardFooter for the "More" link */}
+      {/* Footer link logic */}
       {showMore && (
         <CardFooter className="border-t pt-4 -mt-2">
             <Link
-                href="/dashboard/warranties" // Link to the primary renewal page
+                href="/dashboard/warranties" 
                 className="text-sm font-semibold text-blue-600 hover:text-blue-700"
             >
                 View {overflowCount} More Renewal{overflowCount > 1 ? 's' : ''} &rarr;
