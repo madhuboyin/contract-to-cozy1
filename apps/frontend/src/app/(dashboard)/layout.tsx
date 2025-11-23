@@ -151,6 +151,7 @@ function DesktopNav({ user }: { user: User | null }) {
     navLinks.push(
       { name: 'Documents', href: '/dashboard/documents', icon: FileText }, // ADDED
       { name: 'Insurance', href: '/dashboard/insurance', icon: Shield },
+      { name: 'Maintenance', href: '/dashboard/maintenance', icon: ListChecks },
       { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench },
       { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign },
     );
@@ -199,6 +200,7 @@ function SidebarNav({ user }: { user: User | null }) {
     navLinks.push(
       { name: 'Documents', href: '/dashboard/documents', icon: FileText }, // ADDED
       { name: 'Insurance', href: '/dashboard/insurance', icon: Shield },
+      { name: 'Maintenance', href: '/dashboard/maintenance', icon: ListChecks },
       { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench },
       { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign },
     );
