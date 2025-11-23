@@ -32,7 +32,7 @@ import {
   // FIX 1: Add Checklist and ChecklistItem types (assuming they exist in @/types)
   Checklist, 
   ChecklistItem,
-  UpdateChecklistItemInput,
+  UpdateChecklistItemInput, // Added to fix previous issues
 } from '@/types';
 
 // NOTE: Changed to API_BASE_URL to match common convention, but using the provided API_URL environment variable check
@@ -129,9 +129,6 @@ class APIClient {
       headers['Authorization'] = `Bearer ${token}`;
     }
     
-    // If the caller passed an Authorization header directly in options (e.g., in getCurrentUser), 
-    // it will overwrite the localStorage token if needed. This relies on the spread operator above.
-
     // --- DEBUG LOG 1: Log Request Details ---
     const bodyPreview = typeof body === 'string' ? body.substring(0, 200) : null;
     console.log('API DEBUG: Sending Request:', {
@@ -153,7 +150,7 @@ class APIClient {
       console.log('API DEBUG: Received Response Status:', response.status, 'for endpoint:', endpoint);
       // --------------------------------------------
 
-      // --- START: MODIFIED LOGIC (Token Refresh and Response Handling) ---
+      // --- START: MODIFIED LOGIC (Token Refresh) ---
 
       if (response.status === 401 && !endpoint.startsWith('/api/auth/')) {
         // Token expired or invalid, and it's not an auth endpoint
@@ -161,7 +158,6 @@ class APIClient {
         if (this.isRefreshing) {
           // A refresh is already in progress. Add this request to the queue.
           return new Promise((resolve, reject) => {
-            // NOTE: Store the options without the potentially expired token header
             const cleanHeaders = { ...headers };
             delete cleanHeaders['Authorization']; 
             this.failedQueue.push({ resolve, reject, endpoint, options, headers: cleanHeaders });
@@ -176,7 +172,6 @@ class APIClient {
           // Refresh was successful. 
           const newToken = refreshResponse.data.accessToken;
           this.isRefreshing = false;
-          // Process all waiting requests
           this.processFailedQueue(null, newToken);
 
           // Retry the original request with the new token
@@ -201,33 +196,23 @@ class APIClient {
         }
       }
 
-      // Process the final response (original, retry, or non-401 error)
-      const text = await response.text();
+      // --- END: MODIFIED LOGIC (Token Refresh) ---
+
+
+      // --- START: FIX FOR 204 AND BODY STREAM READ ERROR ---
       let data;
-      try {
-          data = JSON.parse(text);
-      } catch (e) {
-          // If response body is not valid JSON (e.g., 500 HTML/text response)
-          // Return a structured APIError for the 500 status
-          const errorMessage = `Server returned status ${response.status}. Body was not JSON.`;
-          // Safely check for substring existence on text
-          const textPreview = text ? text.substring(0, 200) : 'Empty body';
-          console.error('API DEBUG: Failed to parse JSON response. Raw body:', textPreview);
-          return {
-              success: false,
-              message: errorMessage,
-              error: { message: text.substring(0, 100), code: `HTTP_${response.status}` },
-          } as APIResponse<T>;
+      let text = ''; 
+      
+      // FIX: Read the body once only if content is expected. This prevents the 'body stream already read' error.
+      if (response.status !== 204 && response.status !== 205 && response.status !== 304) {
+          text = await response.text();
       }
 
-
-      // FIX: Skip parsing JSON if the response indicates no content (e.g., 204 No Content)
-      if (response.status !== 204 && response.status !== 205) {
-        const text = await response.text();
+      if (text) {
         try {
             data = JSON.parse(text);
         } catch (e) {
-            // If response body is not valid JSON (e.g., 500 HTML/text response)
+            // If response body is not valid JSON
             const errorMessage = `Server returned status ${response.status}. Body was not JSON.`;
             const textPreview = text ? text.substring(0, 200) : 'Empty body';
             console.error('API DEBUG: Failed to parse JSON response. Raw body:', textPreview);
@@ -238,7 +223,8 @@ class APIClient {
             } as APIResponse<T>;
         }
       }
-      // If status is 204, 'data' will remain undefined/null, which is interpreted below.
+      // --- END: FIX FOR 204 AND BODY STREAM READ ERROR ---
+
 
       // --- DEBUG LOG 3: Log Final Data ---
       console.log('API DEBUG: Final Response Data:', data);
@@ -247,13 +233,17 @@ class APIClient {
       if (!response.ok) {
         return {
           success: false,
-          message: data.message || 'An error occurred',
-          error: data.error,
+          message: (data && data.message) || 'An error occurred',
+          error: data && data.error,
         };
       }
       
-      // CRITICAL FIX: Ensure if the body explicitly contains { success: false }, we treat it as failure, 
-      // even if the HTTP status was 200 OK (common in login responses)
+      // If status was 204/205 (No Content), return explicit success with empty data
+      if (response.status === 204 || response.status === 205) {
+          return { success: true, data: {} as T, message: "No Content" } as APIResponse<T>;
+      }
+      
+      // CRITICAL FIX: Ensure if the body explicitly contains { success: false }, we treat it as failure
       if (data && data.success === false) {
           return {
               success: false,
@@ -262,10 +252,8 @@ class APIClient {
           } as APIResponse<T>;
       }
 
-      // If HTTP 2xx and no explicit { success: false } in body
-      return data; // This is the APIResponse, which should have { success: true, ... }
-      
-      // --- END: MODIFIED LOGIC ---
+      // If HTTP 2xx and explicit { success: true } or no success field
+      return data; 
 
     } catch (error) {
       console.error('API Request Error (Catch Block):', error);
@@ -442,15 +430,36 @@ class APIClient {
   }
 
   // ==========================================================================
-  // CHECKLIST ENDPOINTS (FIX 2: ADDED)
+  // CHECKLIST ENDPOINTS 
   // ==========================================================================
   
   /**
    * Fetches the user's full checklist and items.
    */
-  // FIX 3: Added the missing getChecklist method
   async getChecklist(): Promise<APIResponse<Checklist & { items: ChecklistItem[] }>> {
     return this.request<Checklist & { items: ChecklistItem[] }>('/api/checklist');
+  }
+
+  /**
+   * Updates an existing checklist item.
+   */
+  async updateChecklistItem(
+    id: string,
+    data: UpdateChecklistItemInput
+  ): Promise<APIResponse<ChecklistItem>> {
+    return this.request<ChecklistItem>(`/api/checklist/items/${id}`, {
+      method: 'PATCH', // Use PATCH for partial updates
+      body: data as unknown as BodyInit,
+    });
+  }
+
+  /**
+   * Deletes a checklist item.
+   */
+  async deleteChecklistItem(id: string): Promise<APIResponse<void>> {
+    return this.request<void>(`/api/checklist/items/${id}`, {
+      method: 'DELETE',
+    });
   }
 
 
@@ -906,29 +915,6 @@ class APIClient {
      */
     async listDocuments(): Promise<APIResponse<{ documents: Document[] }>> {
       return this.request<{ documents: Document[] }>('/api/home-management/documents');
-  }
-
-  /**
-     * Updates an existing checklist item. (NEW)
-     */
-  async updateChecklistItem(
-    id: string,
-    data: UpdateChecklistItemInput
-  ): Promise<APIResponse<ChecklistItem>> {
-    return this.request<ChecklistItem>(`/api/checklist/items/${id}`, {
-      method: 'PATCH', // Use PATCH for partial updates
-      // FIX: Cast object to BodyInit
-      body: data as unknown as BodyInit,
-    });
-  }
-
-  /**
-   * Deletes a checklist item. (NEW)
-   */
-  async deleteChecklistItem(id: string): Promise<APIResponse<void>> {
-    return this.request<void>(`/api/checklist/items/${id}`, {
-      method: 'DELETE',
-    });
   }
 
 }
