@@ -87,7 +87,6 @@ enum RoofType {
 
 // NEW: Service category configuration for segment targeting
 model ServiceCategoryConfig {
-// ... existing fields (lines 53-69) ...
   id            String          @id @default(uuid())
   category      ServiceCategory @unique
   
@@ -98,8 +97,7 @@ model ServiceCategoryConfig {
   // Display properties
   displayName   String
   description   String?
-  icon          String?
-// Icon identifier for frontend
+  icon          String?     // Icon identifier for frontend
   sortOrder     Int    @default(0)
   
   // Status
@@ -113,7 +111,6 @@ model ServiceCategoryConfig {
 }
 
 enum ServiceCategory {
-// ... existing fields (lines 75-89) ...
   INSPECTION          // HOME_BUYER primary
   HANDYMAN           // Both segments
   PLUMBING           // EXISTING_OWNER primary
@@ -134,7 +131,6 @@ enum ServiceCategory {
 }
 
 enum InspectionType {
-// ... existing fields (lines 98-107) ...
   HOME_INSPECTION
   PEST_INSPECTION
   RADON_TESTING
@@ -147,7 +143,6 @@ enum InspectionType {
 }
 
 enum HandymanType {
-// ... existing fields (lines 110-118) ...
   MINOR_REPAIRS
   FIXTURE_INSTALLATION
   FURNITURE_ASSEMBLY
@@ -161,7 +156,6 @@ enum HandymanType {
 
 enum BookingStatus 
 {
-// ... existing fields (lines 121-127) ...
   DRAFT
   PENDING
   CONFIRMED
@@ -172,7 +166,6 @@ enum BookingStatus
 }
 
 enum PaymentStatus {
-// ... existing fields (lines 130-134) ...
   PENDING
   AUTHORIZED
   CAPTURED
@@ -182,7 +175,6 @@ enum PaymentStatus {
 }
 
 enum DocumentType {
-// ... existing fields (lines 137-147) ...
   INSPECTION_REPORT
   ESTIMATE
   INVOICE
@@ -196,7 +188,6 @@ enum DocumentType {
 }
 
 enum MessageType {
-// ... existing fields (lines 150-153) ...
   TEXT
   SYSTEM
   BOOKING_UPDATE
@@ -204,7 +195,6 @@ enum MessageType {
 }
 
 enum ReviewStatus {
-// ... existing fields (lines 156-159) ...
   PENDING
   APPROVED
   REJECTED
@@ -212,7 +202,6 @@ enum ReviewStatus {
 }
 
 enum ProviderStatus {
-// ... existing fields (lines 162-165) ...
   PENDING_APPROVAL
   ACTIVE
   INACTIVE
@@ -221,7 +210,6 @@ enum ProviderStatus {
 
 // NEW ENUM for tracking different types of homeowner expenses
 enum ExpenseCategory {
-// ... existing fields (lines 169-175) ...
   REPAIR_SERVICE
   PROPERTY_TAX
   HOA_FEE
@@ -237,7 +225,6 @@ enum ExpenseCategory {
 // ============================================================================
 
 model User {
-// ... existing fields (lines 182-205) ...
   id        String     @id @default(uuid())
   email     String     @unique
   phone     String?
@@ -273,13 +260,11 @@ model User {
   
   @@index([email])
   @@index([role])
-  
   @@index([status])
   @@map("users")
 }
 
 model Address {
-// ... existing fields (lines 209-228) ...
   id      String  @id @default(uuid())
   userId  String  @unique
   
@@ -355,7 +340,6 @@ model HomeownerProfile {
 // ============================================================================
 
 model Checklist {
-// ... existing fields (lines 268-280) ...
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -371,7 +355,6 @@ model Checklist {
 
 // Update ChecklistItem model - add these fields:
 model ChecklistItem {
-// ... existing fields (lines 283-301) ...
   id            String   @id @default(cuid())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -398,7 +381,6 @@ model Property {
   id                 String   @id @default(uuid())
   homeownerProfileId String
   
-  // Address Details (Existing Fields)
   name         String? // e.g., "Main Home", "Investment Property"
   address     String
   city        String
@@ -481,7 +463,6 @@ model Property {
 // ... (Model ProviderProfile and all subsequent models remain unchanged for Phase 1)
 // ============================================================================
 model ProviderProfile {
-// ... existing fields (lines 332-378) ...
   id     String @id @default(uuid())
   userId String @unique
   
@@ -532,7 +513,6 @@ model ProviderProfile {
 }
 
 model Certification {
-// ... existing fields (lines 381-396) ...
   id                String   @id @default(uuid())
   providerProfileId String
   
@@ -555,7 +535,6 @@ model Certification {
 }
 
 model ProviderPortfolio {
-// ... existing fields (lines 399-411) ...
   id                String  @id @default(uuid())
   providerProfileId String
   
@@ -574,7 +553,6 @@ model ProviderPortfolio {
 }
 
 model ProviderAvailability {
-// ... existing fields (lines 414-429) ...
   id                String   @id @default(uuid())
   providerProfileId String
   
@@ -600,7 +578,6 @@ model ProviderAvailability {
 // ============================================================================
 
 model Service {
-// ... existing fields (lines 435-459) ...
   id                String          @id @default(uuid())
   providerProfileId String
   
@@ -639,7 +616,6 @@ model Service {
 // ============================================================================
 
 model Booking {
-// ... existing fields (lines 465-502) ...
   id                String        @id @default(uuid())
   bookingNumber     String        @unique // B-2025-001234
  
@@ -704,7 +680,6 @@ model Booking {
 }
 
 model BookingTimeline {
-// ... existing fields (lines 505-518) ...
   id        String   @id @default(uuid())
   bookingId String
   
@@ -726,7 +701,6 @@ model BookingTimeline {
 // ============================================================================
 
 model Payment {
-// ... existing fields (lines 524-547) ...
   id          String        @id @default(uuid())
   bookingId   String
   
@@ -765,7 +739,6 @@ model Payment {
 // ============================================================================
 
 model Document {
-// ... existing fields (lines 553-587) ...
   id          String       @id @default(uuid())
   bookingId   String?
   propertyId  String?      // NEW: Link to general home documents
@@ -807,7 +780,6 @@ model Document {
 // ============================================================================
 
 model Message {
-// ... existing fields (lines 593-614) ...
   id          String      @id @default(uuid())
   bookingId   String?
   senderId    String
@@ -836,7 +808,6 @@ model Message {
 
 // Add new enum for frequency
 enum RecurrenceFrequency {
-// ... existing fields (lines 617-621) ...
   MONTHLY
   QUARTERLY
   SEMI_ANNUALLY
@@ -845,7 +816,6 @@ enum RecurrenceFrequency {
 
 
 model MaintenanceTaskTemplate {
-// ... existing fields (lines 624-635) ...
   id               String               @id @default(uuid())
   title            String
   description      String?
@@ -867,7 +837,6 @@ model MaintenanceTaskTemplate {
 // ============================================================================
 
 model Warranty {
-// ... existing fields (lines 641-665) ...
   id                 String    @id @default(uuid())
   homeownerProfileId String
   propertyId         String? // Link to a specific property (e.g., HVAC unit warranty is for the main home)
@@ -900,7 +869,6 @@ model Warranty {
 // ============================================================================
 
 model InsurancePolicy {
-// ... existing fields (lines 671-695) ...
   id                 String    @id @default(uuid())
   homeownerProfileId String
   propertyId         String? // Link to the insured property
@@ -933,7 +901,6 @@ model InsurancePolicy {
 // ============================================================================
 
 model Expense {
-// ... existing fields (lines 701-725) ...
   id                 String          @id @default(uuid())
   homeownerProfileId String
   propertyId         String? // Link to a specific property
@@ -964,7 +931,6 @@ model Expense {
 // ============================================================================
 
 model Review {
-// ... existing fields (lines 731-760) ...
   id          String       @id @default(uuid())
   bookingId   String       @unique
   authorId    String
@@ -1009,7 +975,6 @@ model Review {
 // ============================================================================
 
 model Notification {
-// ... existing fields (lines 766-787) ...
   id       String  @id @default(uuid())
   userId   String
   
@@ -1042,7 +1007,6 @@ model Notification {
 // ============================================================================
 
 model Favorite {
-// ... existing fields (lines 793-806) ...
   id                String   @id @default(uuid())
   userId            String
   providerProfileId String
@@ -1063,7 +1027,6 @@ model Favorite {
 // ============================================================================
 
 model AuditLog {
-// ... existing fields (lines 812-828) ...
   id         String   @id @default(uuid())
   
   // Who & What
@@ -1088,7 +1051,6 @@ model AuditLog {
 }
 
 model SystemSetting {
-// ... existing fields (lines 831-837) ...
   id    String @id @default(uuid())
   key   String @unique
   value Json
