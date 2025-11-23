@@ -3,16 +3,10 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { FileText, Loader2, Wrench, Calendar, Settings, Plus, Edit, Trash2 } from 'lucide-react';
+import { FileText, Loader2, Wrench, Calendar, Settings, Plus, Edit, Trash2, CheckCircle } from 'lucide-react';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import { api } from '@/lib/api/client';
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardHeader, 
-  CardTitle 
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
@@ -24,6 +18,14 @@ import {
   ServiceCategory,
   ChecklistItem, 
 } from '@/types';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 
 // Define the type for items fetched from the checklist endpoint
@@ -41,23 +43,38 @@ const RENEWAL_CATEGORIES: ServiceCategory[] = [
 
 // Helper to format days until due
 const formatDueDate = (dueDateString: string | null) => {
-    if (!dueDateString) return { text: 'N/A', color: 'text-gray-500' }; 
+    if (!dueDateString) return { text: 'N/A', color: 'text-gray-500', isAlert: false }; 
 
-    // Parse the date using UTC to avoid timezone issues with `new Date()`
     const dueDate = parseISO(dueDateString);
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Normalize today to midnight for consistent comparison
+    today.setHours(0, 0, 0, 0); 
 
     const days = differenceInDays(dueDate, today);
     
     if (days < 0) {
-        return { text: `Overdue by ${Math.abs(days)} days`, color: 'text-red-600' };
+        return { text: `Overdue by ${Math.abs(days)} days`, color: 'text-red-600', isAlert: true };
+    }
+    if (days === 0) {
+        return { text: `Due Today`, color: 'text-red-600', isAlert: true };
     }
     if (days <= 30) {
-        return { text: `Due in ${days} days`, color: 'text-orange-500' };
+        return { text: `Due in ${days} days`, color: 'text-orange-600', isAlert: true };
     }
-    return { text: `Due ${format(dueDate, 'MMM dd, yyyy')}`, color: 'text-gray-700' };
+    return { text: `${format(dueDate, 'MMM dd, yyyy')}`, color: 'text-gray-700', isAlert: false };
 };
+
+// FIX: Renamed and modified helper to accept string | null, resolving the type error.
+function formatEnumString(val: string | null | undefined): string {
+    if (!val) return 'N/A';
+    // Use replace to convert underscores and then capitalize
+    return val.toString().replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+// Helper to format category for display (now just calls the generic formatter)
+function formatCategory(category: ServiceCategory | null) {
+    if (!category) return 'General';
+    return formatEnumString(category);
+}
 
 
 // --- Main Page Component ---
@@ -74,18 +91,14 @@ export default function MaintenancePage() {
     queryFn: () => api.getChecklist(),
   });
 
-  // FIX: Access 'items' directly from the checklistRes object, 
-  // casting to 'any' to bypass the TypeScript error (TS2352) caused by the API client's mixed return type.
   const allChecklistItems = useMemo(() => {
     const rawData = checklistRes as any;
 
-    // Check if the successful response (raw data) contains the items array
     if (!rawData || !Array.isArray(rawData.items)) {
       console.error("Error fetching checklist data: Items array missing or invalid response structure.", rawData?.message || rawData);
       return [];
     }
     
-    // Return the items array
     return rawData.items as DashboardChecklistItem[];
   }, [checklistRes]);
 
@@ -95,22 +108,19 @@ export default function MaintenancePage() {
     return allChecklistItems
       .filter(item => item.isRecurring)
       .filter(item => 
-        // Filter: Show all active tasks (i.e., not completed or dismissed)
         item.status !== 'COMPLETED' && item.status !== 'NOT_NEEDED'
       ) 
       .filter(item => 
-        // Exclude renewal categories
         !item.serviceCategory || !RENEWAL_CATEGORIES.includes(item.serviceCategory)
       )
       .sort((a, b) => { 
-        // Sort by soonest Next Due Date
         const dateA = a.nextDueDate ? parseISO(a.nextDueDate).getTime() : Infinity;
         const dateB = b.nextDueDate ? parseISO(b.nextDueDate).getTime() : Infinity;
         return dateA - dateB;
       });
   }, [allChecklistItems]);
 
-  // --- Modal Handlers & Mutations ---
+  // --- Modal Handlers & Mutations (Omitted for brevity) ---
   const handleOpenModal = (task: DashboardChecklistItem) => {
     setEditingTask(task);
     setIsModalOpen(true);
@@ -173,10 +183,35 @@ export default function MaintenancePage() {
     },
   });
 
+  const handleMarkComplete = useMutation({
+    mutationFn: async (item: DashboardChecklistItem) => {
+        const response = await api.updateChecklistItem(item.id, { status: 'COMPLETED' });
+        if (!response.success) {
+            throw new Error(response.error?.message || 'Failed to mark as complete.');
+        }
+        return response.data;
+    },
+    onSuccess: (data) => {
+        queryClient.invalidateQueries({ queryKey: ['full-home-checklist'] });
+        toast({ 
+            title: "Task Completed", 
+            description: `"${data.title}" reset for its next cycle.`, 
+            variant: 'default'
+        });
+    },
+    onError: (error) => {
+        toast({
+            title: "Completion Failed",
+            description: error.message || "Could not mark task as complete.",
+            variant: "destructive",
+        });
+    }
+  });
+
+
   const handleSaveTaskUpdate = (config: MaintenanceTaskConfig) => {
     if (!editingTask) return;
 
-    // Map the MaintenanceConfigModal output to the ChecklistItem update DTO
     const updateData: Partial<DashboardChecklistItem> = {
       title: config.title,
       description: config.description,
@@ -197,7 +232,7 @@ export default function MaintenancePage() {
   // --- End Modal Handlers & Mutations ---
   
 
-  if (isLoading || updateMutation.isPending || deleteMutation.isPending) { 
+  if (isLoading || updateMutation.isPending || deleteMutation.isPending || handleMarkComplete.isPending) { 
     return (
       <div className="space-y-6 pb-8">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mt-10" />
@@ -233,72 +268,78 @@ export default function MaintenancePage() {
         </Card>
       )}
 
-      {maintenanceItems.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {maintenanceItems.map(item => {
-            const dueDateInfo = formatDueDate(item.nextDueDate);
-            const isAlert = dueDateInfo.color !== 'text-gray-700';
-
-            return (
-              <Card 
-                key={item.id} 
-                className={cn(
-                  "flex flex-col",
-                  isAlert ? "border-orange-400 bg-orange-50/50" : "border-gray-200"
-                )}
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-lg">
+      {!isLoading && maintenanceItems.length > 0 && (
+        <div className="rounded-md border bg-white">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[200px]">Task</TableHead>
+                <TableHead className="w-[120px]">Category</TableHead>
+                <TableHead className="w-[120px] hidden sm:table-cell">Frequency</TableHead>
+                <TableHead className="w-[150px]">Last Done</TableHead>
+                <TableHead className="w-[150px] text-center">Next Due</TableHead>
+                <TableHead className="w-[150px] text-center">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {maintenanceItems.map(item => {
+                const dueDateInfo = formatDueDate(item.nextDueDate);
+                
+                return (
+                  <TableRow 
+                    key={item.id} 
+                    className={cn(dueDateInfo.isAlert ? 'bg-orange-50/50 hover:bg-orange-50' : 'hover:bg-gray-50')}
+                  >
+                    <TableCell className="font-medium text-gray-900">
                       {item.title}
-                    </CardTitle>
-                    <div className={cn(
-                      "text-xs font-semibold px-2 py-1 rounded-full",
-                      isAlert ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'
-                    )}>
-                      {item.frequency || 'N/A'}
-                    </div>
-                  </div>
-                  <CardDescription>
-                    Category: {item.serviceCategory || 'General'}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex-1 space-y-3 pt-3 text-sm">
-                    <p className="text-gray-600 line-clamp-2">{item.description || 'No detailed description provided.'}</p>
-                    
-                    <div className="flex items-center gap-2 border-t pt-3">
-                        <Calendar className="w-4 h-4 text-muted-foreground" />
-                        <span className={cn('font-medium', dueDateInfo.color)}>
-                            {dueDateInfo.text}
-                        </span>
-                    </div>
-                    {item.lastCompletedDate && (
-                        <div className="text-xs text-muted-foreground">
-                            Last done: {format(parseISO(item.lastCompletedDate), 'MMM dd, yyyy')}
-                        </div>
-                    )}
-                </CardContent>
-                <div className="flex border-t">
-                  <Button 
-                    variant="ghost" 
-                    className="w-1/2 rounded-none text-blue-600"
-                    onClick={() => handleOpenModal(item)} // Open modal on click
-                    disabled={updateMutation.isPending || deleteMutation.isPending}
-                  >
-                    <Settings className="w-4 h-4 mr-2" /> View/Edit
-                  </Button>
-                  {/* Action button would trigger the mark-complete API call */}
-                  <Button 
-                    variant="ghost" 
-                    className="w-1/2 rounded-none rounded-br-lg text-green-600 hover:bg-green-50"
-                    onClick={() => toast({ title: "Mark Complete", description: "Functionality to be implemented." })}
-                  >
-                    <Edit className="w-4 h-4 mr-2" /> Mark Complete
-                  </Button>
-                </div>
-              </Card>
-            );
-          })}
+                      <div className="text-xs text-muted-foreground mt-0.5 max-w-xs truncate">
+                        {item.description || 'No description.'}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {formatCategory(item.serviceCategory)}
+                    </TableCell>
+                    <TableCell className="text-sm hidden sm:table-cell">
+                      {/* FIX: Use the generic formatter on the frequency string */}
+                      {formatEnumString(item.frequency)}
+                    </TableCell>
+                    <TableCell className="text-sm text-gray-500">
+                        {item.lastCompletedDate ? format(parseISO(item.lastCompletedDate), 'MMM dd, yyyy') : 'Never'}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span className={cn('font-medium text-sm', dueDateInfo.color)}>
+                          {dueDateInfo.text}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex justify-center space-x-1">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-gray-500 hover:text-green-600"
+                            onClick={() => handleMarkComplete.mutate(item)}
+                            title="Mark Complete"
+                            disabled={handleMarkComplete.isPending}
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-gray-500 hover:text-blue-600"
+                            onClick={() => handleOpenModal(item)}
+                            title="Edit Task"
+                            disabled={updateMutation.isPending || deleteMutation.isPending}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </div>
       )}
 
