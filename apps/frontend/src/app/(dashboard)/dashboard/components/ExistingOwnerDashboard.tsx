@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/ExistingOwnerDashboard.tsx
 
 import React from 'react';
-import Link from 'next/link'; // FIX 1: Import Link component
+import Link from 'next/link'; 
 import { Booking, Property } from '@/types';
 import { UpcomingBookingsCard } from './UpcomingBookingsCard';
 import { RecurringMaintenanceCard } from './RecurringMaintenanceCard';
@@ -19,7 +19,8 @@ interface ExistingOwnerDashboardProps {
 }
 
 export const ExistingOwnerDashboard = ({ 
-  bookings, 
+  // Keep the props here, but only use the ones that are still needed for logic
+  bookings, // Still available in props, but not passed to UpcomingBookingsCard
   properties, 
   checklistItems,
   userFirstName
@@ -36,7 +37,7 @@ export const ExistingOwnerDashboard = ({
     item.status === 'PENDING' 
   );
   
-  // 2. Identify all active Renewal Category items
+  // 2. Identify all active Renewal Category items (omitted full logic for brevity)
   const activeRenewalItems = activeChecklistItems.filter(item => 
     item.serviceCategory && RENEWAL_CATEGORIES.includes(item.serviceCategory as string)
   );
@@ -93,9 +94,9 @@ export const ExistingOwnerDashboard = ({
 
       <div className="grid grid-cols-1 md::grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Row 1 */}
-        <UpcomingBookingsCard bookings={bookings} />
+        {/* FIX 1: Remove 'bookings' prop to resolve the compile error */}
+        <UpcomingBookingsCard /> 
         <RecurringMaintenanceCard maintenance={upcomingMaintenance} />
-        {/* FIX 2: Remove the renewals prop because UpcomingRenewalsCard is now self-fetching */}
         <UpcomingRenewalsCard /> 
         {/* Row 2 */}
         <MyPropertiesCard properties={properties} />
@@ -104,7 +105,11 @@ export const ExistingOwnerDashboard = ({
       
       {/* Expanded View of the full Home Management Checklist */}
       <div className="pt-4">
-        <Link href="/dashboard/maintenance" className="text-lg font-semibold text-blue-600 hover:text-blue-700 transition-colors flex items-center">
+        {/* FIX 2: Change link destination from /dashboard/checklist to /dashboard/maintenance */}
+        <Link 
+          href="/dashboard/maintenance" 
+          className="text-lg font-semibold text-blue-600 hover:text-blue-700 transition-colors flex items-center"
+        >
           View Full Home Management Checklist &rarr;
         </Link>
       </div>
