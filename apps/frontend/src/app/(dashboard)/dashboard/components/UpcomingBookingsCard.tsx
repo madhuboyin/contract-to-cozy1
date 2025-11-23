@@ -78,9 +78,12 @@ export const UpcomingBookingsCard = () => {
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle> 
+        {/* FIX: Added the primary icon inside the CardTitle */}
+        <CardTitle className="flex items-center gap-2"> 
+          <Calendar className="h-5 w-5 text-blue-600" /> 
           Upcoming Bookings
         </CardTitle>
+        {/* This icon remains as the conditional status indicator on the far right */}
         {isAlert ? (
           <AlertTriangle className="h-4 w-4 text-orange-500" />
         ) : (
