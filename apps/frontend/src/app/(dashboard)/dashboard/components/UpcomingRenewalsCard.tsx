@@ -33,7 +33,7 @@ const getDaysUntilExpiry = (expiryDateString: string): number => {
 };
 
 
-// FIX: Exported as a named constant to satisfy the import in ExistingOwnerDashboard.tsx
+// FIX: Exported as a named constant 
 export const UpcomingRenewalsCard = () => {
   // Fetch Warranties
   const { data: warrantyData, isLoading: isLoadingWarranties, error: errorW } = useQuery({
@@ -92,24 +92,23 @@ export const UpcomingRenewalsCard = () => {
   
   if (errorW || errorI) {
       console.error("Error fetching renewals data:", errorW || errorI);
-      // Fall through to display generic error or empty state
   }
 
   const upcomingItems = renewalItems.slice(0, 5); // Show top 5 expiring/upcoming items
 
-  // Determine card style based on alert items
+  // Determine alert status for the HEADER ICON ONLY
   const expiringCount = renewalItems.filter(item => item.isExpiringSoon && item.daysUntilExpiry >= 0).length;
   const expiredCount = renewalItems.filter(item => item.daysUntilExpiry < 0).length;
   const isAlert = expiringCount > 0 || expiredCount > 0;
-  const alertClass = isAlert ? 'bg-red-50 border-red-200 text-red-800' : 'bg-background';
-
+  
   return (
-    <Card className={`h-full ${alertClass}`}>
+    <Card className={`h-full`}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">
           Upcoming Renewals
         </CardTitle>
         {isAlert ? (
+          // Header icon shows alert status
           <AlertTriangle className="h-4 w-4 text-red-500" />
         ) : (
           <Shield className="h-4 w-4 text-green-500" />
@@ -124,38 +123,45 @@ export const UpcomingRenewalsCard = () => {
           </div>
         ) : upcomingItems.length > 0 ? (
           <div className="space-y-3">
-            {upcomingItems.map((item, index) => (
-              <React.Fragment key={item.id}>
-                <div className="flex justify-between items-center text-sm">
-                  <div className="flex items-center space-x-2">
-                    {item.type === 'Warranty' ? (
-                      <Shield className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                    ) : (
-                      <Home className="h-4 w-4 text-purple-500 flex-shrink-0" />
-                    )}
-                    <Link
-                      href={`/dashboard/${item.type === 'Warranty' ? 'warranties' : 'insurance'}`}
-                      className={`font-medium ${item.isExpiringSoon && item.daysUntilExpiry >= 0 ? 'text-red-600 hover:text-red-700' : item.daysUntilExpiry < 0 ? 'text-red-500' : 'text-gray-900 hover:text-blue-600'}`}
-                    >
-                      {item.name}
-                    </Link>
+            {upcomingItems.map((item, index) => {
+              // Determine if this specific item should be red
+              const isRedAlert = item.isExpiringSoon; 
+              const textColorClass = isRedAlert ? 'text-red-600' : 'text-gray-900';
+              
+              return (
+                // FIX: Use shorthand Fragment <></> to wrap siblings inside map
+                <React.Fragment key={item.id}> 
+                  <div className="flex justify-between items-center text-sm">
+                    <div className="flex items-center space-x-2">
+                      {item.type === 'Warranty' ? (
+                        <Shield className={`h-4 w-4 flex-shrink-0 ${isRedAlert ? 'text-red-500' : 'text-blue-500'}`} />
+                      ) : (
+                        <Home className={`h-4 w-4 flex-shrink-0 ${isRedAlert ? 'text-red-500' : 'text-purple-500'}`} />
+                      )}
+                      <Link
+                        href={`/dashboard/${item.type === 'Warranty' ? 'warranties' : 'insurance'}`}
+                        className={`font-medium ${textColorClass} hover:text-red-700 hover:text-blue-600`} 
+                      >
+                        {item.name}
+                      </Link>
+                    </div>
+                    <div className="flex-shrink-0 text-right">
+                      <p className={`font-semibold ${isRedAlert ? 'text-red-600' : 'text-gray-700'}`}>
+                        {format(new Date(item.expiryDate), 'MMM dd, yyyy')}
+                      </p>
+                      <p className={`text-xs ${isRedAlert ? 'text-red-500' : 'text-gray-500'}`}>
+                        {item.daysUntilExpiry <= 0
+                          ? `Expired ${Math.abs(item.daysUntilExpiry)} days ago`
+                          : item.daysUntilExpiry <= 30
+                            ? `${item.daysUntilExpiry} days left`
+                            : ''}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-shrink-0 text-right">
-                    <p className={`font-semibold ${item.isExpiringSoon && item.daysUntilExpiry >= 0 ? 'text-red-600' : item.daysUntilExpiry < 0 ? 'text-red-500' : 'text-gray-700'}`}>
-                      {format(new Date(item.expiryDate), 'MMM dd, yyyy')}
-                    </p>
-                    <p className={`text-xs ${item.daysUntilExpiry <= 0 ? 'text-red-500' : 'text-gray-500'}`}>
-                      {item.daysUntilExpiry <= 0
-                        ? `Expired ${Math.abs(item.daysUntilExpiry)} days ago`
-                        : item.daysUntilExpiry <= 30
-                          ? `${item.daysUntilExpiry} days left`
-                          : ''}
-                    </p>
-                  </div>
-                </div>
-                {index < upcomingItems.length - 1 && <Separator />}
-              </React.Fragment>
-            ))}
+                  {index < upcomingItems.length - 1 && <Separator />}
+                </React.Fragment>
+              );
+            })}
           </div>
         ) : (
           <p className="text-sm text-gray-500 pt-2">No upcoming renewals found.</p>
