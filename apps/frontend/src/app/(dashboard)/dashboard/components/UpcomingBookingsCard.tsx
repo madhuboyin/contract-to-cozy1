@@ -1,80 +1,147 @@
-//apps/frontend/src/app/(dashboard)/dashboard/components/UpcomingBookingsCard.tsx
+// apps/frontend/src/app/(dashboard)/dashboard/components/UpcomingBookingsCard.tsx
+'use client';
 
-import React from 'react';
-import Link from 'next/link';
-import { Calendar, Clock, ArrowRight, AlertCircle } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import * as React from 'react';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api/client';
 import { Booking } from '@/types';
-import { cn } from '@/lib/utils';
+import { Separator } from '@/components/ui/separator';
+import { format, isPast } from 'date-fns';
+import Link from 'next/link';
+import { Calendar, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
-interface UpcomingBookingsCardProps {
-  bookings: Booking[];
-  className?: string;
+/**
+ * Helper to format time for display (e.g., 9:00 AM)
+ */
+const formatTime = (time: string | null) => {
+    if (!time) return 'TBD';
+    try {
+        // Assume time is in HH:mm:ss format
+        const [hours, minutes] = time.split(':');
+        const date = new Date();
+        date.setHours(parseInt(hours, 10), parseInt(minutes, 10));
+        return format(date, 'h:mm a');
+    } catch {
+        return 'TBD';
+    }
 }
 
-export const UpcomingBookingsCard = ({ bookings, className }: UpcomingBookingsCardProps) => {
-  // Filter for upcoming only (PENDING, CONFIRMED, IN_PROGRESS)
-  const upcomingBookings = bookings
-    .filter(b => ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(b.status))
-    .sort((a, b) => new Date(a.scheduledDate || '').getTime() - new Date(b.scheduledDate || '').getTime())
-    .slice(0, 3);
+/**
+ * Helper to get the correct icon color based on booking status
+ */
+const getStatusColor = (status: Booking['status']): string => {
+    switch (status) {
+        case 'PENDING':
+            return 'text-yellow-500';
+        case 'CONFIRMED':
+            return 'text-blue-500';
+        case 'IN_PROGRESS':
+            return 'text-green-500';
+        default:
+            return 'text-gray-500';
+    }
+}
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return 'TBD';
-    return new Date(dateStr).toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit'
-    });
-  };
+export const UpcomingBookingsCard = () => {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['upcoming-bookings'],
+    queryFn: () => api.listBookings({
+        status: 'PENDING,CONFIRMED', 
+        sortBy: 'scheduledDate',
+        sortOrder: 'asc',
+    }),
+  });
+
+  const rawBookings = data?.success ? data.data.bookings : [];
+
+  // Filter out past bookings and sort by scheduled date
+  const upcomingBookings = React.useMemo(() => {
+    if (isLoading || !rawBookings) return [];
+    
+    return rawBookings
+      .filter(b => b.scheduledDate && !isPast(new Date(b.scheduledDate)))
+      .sort((a, b) => new Date(a.scheduledDate || 0).getTime() - new Date(b.scheduledDate || 0).getTime());
+  }, [rawBookings, isLoading]);
+
+  // FIX 1: Limit display items to 3
+  const displayBookings = upcomingBookings.slice(0, 3);
+  const overflowCount = upcomingBookings.length - displayBookings.length;
+  const showMore = overflowCount > 0;
+  
+  // Determine if any booking is confirmed/pending/about to start (Alert Triangle)
+  const isAlert = upcomingBookings.some(b => b.status === 'CONFIRMED' || b.status === 'IN_PROGRESS');
 
   return (
-    <Card className={cn("h-full flex flex-col", className)}>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Calendar className="h-5 w-5 text-blue-600" />
+    <Card className="h-full flex flex-col">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">
           Upcoming Bookings
         </CardTitle>
-        <CardDescription>Scheduled services for your home</CardDescription>
+        {isAlert ? (
+          <AlertTriangle className="h-4 w-4 text-orange-500" />
+        ) : (
+          <Calendar className="h-4 w-4 text-blue-500" />
+        )}
       </CardHeader>
       <CardContent className="flex-1">
-        {upcomingBookings.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 text-center text-muted-foreground">
-            <Clock className="h-8 w-8 mb-2 opacity-20" />
-            <p className="text-sm">No upcoming bookings</p>
-            <Button variant="link" asChild className="mt-2">
-              <Link href="/dashboard/providers">Find a Pro</Link>
-            </Button>
+        {isLoading ? (
+          <div className="space-y-3 pt-2">
+            <div className="h-4 w-1/2 rounded bg-gray-200 animate-pulse" />
+            <div className="h-4 w-2/3 rounded bg-gray-200 animate-pulse" />
+            <div className="h-4 w-1/3 rounded bg-gray-200 animate-pulse" />
           </div>
-        ) : (
-          <div className="space-y-4">
-            {upcomingBookings.map((booking) => (
-              <div key={booking.id} className="flex items-start justify-between border-b pb-3 last:border-0 last:pb-0">
-                <div className="space-y-1">
-                  <p className="font-medium text-sm">{booking.service.name}</p>
-                  <div className="flex items-center text-xs text-muted-foreground">
-                    <span className={cn(
-                      "inline-block w-2 h-2 rounded-full mr-2",
-                      booking.status === 'CONFIRMED' ? "bg-green-500" : "bg-yellow-500"
-                    )} />
-                    {formatDate(booking.scheduledDate)}
+        ) : displayBookings.length > 0 ? ( // FIX 2: Use displayBookings for rendering check
+          <div className="space-y-3">
+            {displayBookings.map((booking, index) => ( // FIX 3: Iterate over displayBookings
+              <React.Fragment key={booking.id}>
+                <div className="flex justify-between items-center text-sm">
+                  <div className="flex items-center space-x-2">
+                    <Calendar className={`h-4 w-4 flex-shrink-0 ${getStatusColor(booking.status)}`} />
+                    <Link
+                      href={`/dashboard/bookings/${booking.id}`}
+                      className="font-medium text-foreground hover:opacity-80 truncate"
+                    >
+                      {booking.service.name}
+                    </Link>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {booking.provider.businessName || `${booking.provider.firstName} ${booking.provider.lastName}`}
-                  </p>
+                  <div className="flex-shrink-0 text-right">
+                    <p className="font-semibold text-gray-700">
+                      {booking.scheduledDate ? format(new Date(booking.scheduledDate), 'MMM dd') : 'TBD'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {formatTime(booking.startTime)}
+                    </p>
+                  </div>
                 </div>
-                <Button variant="ghost" size="icon" asChild className="-mt-1">
-                  <Link href={`/dashboard/bookings/${booking.id}`}>
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              </div>
+                {index < displayBookings.length - 1 && <Separator />}
+              </React.Fragment>
             ))}
           </div>
+        ) : (
+          <p className="text-sm text-gray-500 pt-2">No upcoming services scheduled.</p>
+        )}
+        {(error) && (
+          <p className="text-sm text-red-500 pt-2">Error loading bookings.</p>
         )}
       </CardContent>
+      
+      {/* FIX 4: Add Dynamic CardFooter */}
+      <CardFooter className="border-t pt-4">
+        {displayBookings.length > 0 && showMore ? (
+            <Link
+                href="/dashboard/bookings" 
+                className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+            >
+                View {overflowCount} More Booking{overflowCount > 1 ? 's' : ''} &rarr;
+            </Link>
+        ) : (
+             <Button variant="ghost" className="w-full h-8 text-xs font-semibold text-blue-600 hover:text-blue-700" asChild>
+                <Link href="/dashboard/bookings">View All Bookings →</Link>
+            </Button>
+        )}
+      </CardFooter>
     </Card>
   );
-};
+}
