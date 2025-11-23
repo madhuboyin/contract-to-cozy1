@@ -29,18 +29,13 @@ spec:
           
           if [ $EXIT_CODE -eq 0 ]; then
             echo ""
-            echo "✅ Migration successful!"
+            echo "Migration successful!"
             echo ""
-            echo "Verifying new tables exist..."
-            npx prisma db execute --stdin <<'EOF'
-SELECT table_name FROM information_schema.tables 
-WHERE table_schema = 'public' 
-  AND table_name IN ('warranties', 'insurance_policies', 'expenses', 'documents')
-ORDER BY table_name;
-EOF
+            echo "Generating Prisma Client..."
+            npx prisma generate --schema=./prisma/schema.prisma
           else
             echo ""
-            echo "❌ Migration failed with code: $EXIT_CODE"
+            echo "Migration failed with code: $EXIT_CODE"
             exit $EXIT_CODE
           fi
         
