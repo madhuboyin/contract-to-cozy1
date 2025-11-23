@@ -23,7 +23,19 @@ router.put(
   checklistController.handleUpdateChecklistItem
 );
 
-// --- NEW ROUTE for Phase 3 ---
+// --- NEW ROUTE: DELETE Checklist Item ---
+/**
+ * @route   DELETE /api/checklist/items/:itemId
+ * @desc    Delete a checklist item (used for recurring maintenance tasks)
+ * @access  Private
+ */
+router.delete(
+  '/items/:itemId', // <--- ADDED DELETE ROUTE
+  authenticate,
+  checklistController.handleDeleteChecklistItem
+);
+// ----------------------------------------
+
 /**
  * @route   POST /api/checklist/maintenance-items
  * @desc    Add new recurring maintenance items to user's checklist

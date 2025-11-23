@@ -451,4 +451,41 @@ export class ChecklistService {
 
     return updatedItem;
   }
+  
+  // --- FIX: ADDED MISSING deleteChecklistItem METHOD ---
+  /**
+   * Deletes a specific checklist item.
+   * @param userId The ID of the user.
+   * @param itemId The ID of the checklist item to delete.
+   */
+  static async deleteChecklistItem(
+    userId: string,
+    itemId: string
+  ): Promise<void> {
+    // 1. Verify the checklist item belongs to the user for security
+    const item = await prisma.checklistItem.findFirst({
+      where: {
+        id: itemId,
+        checklist: {
+          homeownerProfile: {
+            userId: userId,
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!item) {
+      // This will throw a 404 in the controller, as designed
+      throw new Error('Checklist item not found or user does not have access.');
+    }
+
+    // 2. Delete the item
+    await prisma.checklistItem.delete({
+      where: {
+        id: itemId,
+      },
+    });
+  }
+  // --- END FIX ---
 }

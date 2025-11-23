@@ -67,6 +67,40 @@ const handleUpdateChecklistItem = async (
   }
 };
 
+// --- NEW FUNCTION for DELETE (ADDED) ---
+/**
+ * Deletes a single checklist item.
+ */
+const handleDeleteChecklistItem = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required.' });
+    }
+    const userId = req.user.userId;
+
+    const { itemId } = req.params;
+
+    await ChecklistService.deleteChecklistItem(userId, itemId);
+
+    // Send a 204 No Content response for successful deletion
+    res.status(204).send();
+  } catch (error) {
+    // Handle specific error from the service (e.g., item not found or unauthorized access)
+    if (
+      error instanceof Error &&
+      (error.message.includes('access') || error.message.includes('not found'))
+    ) {
+      return res.status(404).json({ message: error.message });
+    }
+    next(error);
+  }
+};
+// --- END NEW FUNCTION ---
+
 // --- NEW FUNCTION for Phase 3 ---
 /**
  * Creates new maintenance checklist items from a list of template IDs.
@@ -106,6 +140,7 @@ const handleCreateMaintenanceItems = async (
 export const checklistController = {
   handleGetChecklist,
   handleUpdateChecklistItem,
-  // --- Add new handler ---
   handleCreateMaintenanceItems,
+  // FIX: Add the new handler to the exported object
+  handleDeleteChecklistItem,
 };
