@@ -141,7 +141,7 @@ export default function MaintenanceSetupPage() {
         return;
       }
     }
-    router.push('/dashboard/checklist'); // Redirect to checklist to see new items
+    router.push('/dashboard/maintenance');// Redirect to checklist to see new items
   };
   // --- END MODIFICATION ---
 
