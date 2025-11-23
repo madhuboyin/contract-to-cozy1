@@ -131,10 +131,17 @@ export function MaintenanceConfigModal({
     });
   };
 
+  // FIX: Updated logic to use the task ID from either existingConfig or template
   const handleRemove = () => {
-    if (!template) return;
-    onRemove(template.id);
+    // Get the ID from the existing task config if present, otherwise from the template
+    const idToRemove = existingConfig?.templateId || template?.id;
+
+    if (!idToRemove) return;
+    
+    // Call the parent's onRemove handler with the correct ID
+    onRemove(idToRemove);
   };
+  // --- END FIX ---
 
   const isNew = !existingConfig;
 
