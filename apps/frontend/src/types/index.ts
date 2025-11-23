@@ -302,6 +302,21 @@ export interface Service {
 }
 
 /**
+ * Interface representing the detailed breakdown of the Property Health Score,
+ * matching the object returned by the calculateHealthScore utility on the backend.
+ */
+export interface HealthScoreResult {
+  totalScore: number;
+  baseScore: number;
+  unlockedScore: number;
+  maxPotentialScore: number;
+  maxBaseScore: number;
+  maxExtraScore: number;
+  insights: { factor: string; status: string; score: number }[];
+  ctaNeeded: boolean;
+}
+
+/**
  * Property
  */
 
@@ -340,7 +355,20 @@ export interface Property {
   hasFireExtinguisher?: boolean | null;
   hasIrrigation?: boolean | null;
   hasDrainageIssues?: boolean | null;
+
+  applianceAges: any;
   
+  createdAt: string;
+  updatedAt: string;
+  
+}
+
+/**
+ * The final type returned by the API for property fetches/updates,
+ * which includes the calculated health score.
+ */
+export interface ScoredProperty extends Property {
+  healthScore: HealthScoreResult;
 }
 
 /**
