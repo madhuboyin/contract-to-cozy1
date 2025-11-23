@@ -102,7 +102,7 @@ export const UpcomingRenewalsCard = () => {
   
   return (
     <Card className={`h-full`}>
-      {/* FIX 1: Use standard padding for alignment */}
+      {/* FIX 1: Use standard CardHeader classes for alignment consistency */}
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">
           Upcoming Renewals
@@ -127,14 +127,13 @@ export const UpcomingRenewalsCard = () => {
               const isAlertItem = item.isExpiringSoon; 
               const isExpired = item.daysUntilExpiry < 0;
 
-              // Link Text Color: Red only if EXPIRED, otherwise neutral black/gray-900 (prevents unwanted green)
-              const linkTextColorClass = isExpired ? 'text-red-600' : 'text-gray-900';
+              // Link Text Color: Red only if EXPIRED, otherwise use a dark neutral color
+              const linkTextColorClass = isExpired ? 'text-red-600' : 'text-gray-800';
               
               // Icon Color: Red if Alert, otherwise type-specific color
               const itemIconColor = isAlertItem ? 'text-red-500' : (item.type === 'Warranty' ? 'text-blue-500' : 'text-purple-500');
 
               // Date/Days Text Color: Red if Alert, otherwise neutral gray/black
-              // FIX 2: Ensures date text is red if expiring soon
               const dateTextColor = isAlertItem ? 'text-red-600' : 'text-gray-700'; 
               const daysTextColor = isAlertItem ? 'text-red-500' : 'text-gray-500';
 
@@ -152,7 +151,8 @@ export const UpcomingRenewalsCard = () => {
                       {/* Link Text (Name) */}
                       <Link
                         href={`/dashboard/${item.type === 'Warranty' ? 'warranties' : 'insurance'}`}
-                        className={`font-medium ${linkTextColorClass} hover:text-blue-600`} 
+                        // FIX 2: Use stronger neutral link color by default, ensuring hover is only blue when not an alert
+                        className={`font-medium ${linkTextColorClass} ${isAlertItem ? 'hover:text-red-700' : 'hover:text-blue-600'}`} 
                       >
                         {item.name}
                       </Link>
