@@ -218,6 +218,8 @@ export interface User {
   role: UserRole;
   emailVerified: boolean;
   status: UserStatus;
+  // FIX: Add missing creation date property to resolve the build error in profile/page.tsx
+  createdAt: string; 
   segment?: HomeownerSegment; 
   homeownerProfile?: { 
     id: string;
@@ -228,7 +230,7 @@ export interface User {
 /**
  * Auth Response
  */
-// FIX 3: Add success property to LoginResponse
+// FIX: Add success property to LoginResponse
 export interface LoginResponse {
   success: true; 
   accessToken: string;
@@ -236,7 +238,7 @@ export interface LoginResponse {
   user: User;
 }
 
-// FIX 3: Add success property to RegisterResponse
+// FIX: Add success property to RegisterResponse
 export interface RegisterResponse {
   success: true;
   message: string;
@@ -413,7 +415,7 @@ export interface LoginInput {
   password: string;
 }
 
-// FIX 4: Update RegisterInput to include the optional segment property
+// FIX: Update RegisterInput to include the optional segment property
 export interface RegisterInput {
   email: string;
   password: string;
