@@ -1,19 +1,17 @@
 import { Router } from 'express';
-// DELETE: Remove the local 'z' import as it's no longer used for local schema definitions
-// import { z } from 'zod'; 
+// DELETE: Removed unnecessary local z import
 import { authenticate } from '../middleware/auth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import * as propertyController from '../controllers/property.controller';
-// CRITICAL FIX: Import the comprehensive schemas from validators.ts (which includes all new fields)
+// CRITICAL FIX: Import the comprehensive schemas (with all new fields) from validators.ts
 import { createPropertySchema, updatePropertySchema } from '../utils/validators'; 
 
 const router = Router();
 
-// DELETED: Local Validation schemas were removed from this file.
+// Validation schemas were deleted from this file, relying entirely on the imports above.
 
 // Routes - all require authentication
-// The validateBody middleware now uses the imported, comprehensive Zod schemas,
-// which include all Basic and Advanced property fields.
+// CRITICAL FIX: The validateBody middleware now uses the imported, comprehensive Zod schemas.
 router.get('/', authenticate, propertyController.listProperties);
 router.post('/', authenticate, validateBody(createPropertySchema), propertyController.createProperty);
 router.get('/:id', authenticate, propertyController.getProperty);

@@ -41,19 +41,26 @@ export const HomeBuyerDashboard = ({
         <p className="text-muted-foreground">Stay on track with your home buying checklist.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Row 1 */}
+      {/* START LAYOUT FIX: Use a 2-column grid for flexibility */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
+        {/* ROW 1: Checklist Card (Spans two columns for prominence) */}
+        <div className="lg:col-span-2">
+            <HomeBuyerChecklistCard items={homeBuyerItems} />
+        </div>
+
+        {/* ROW 2, Slot 1: My Properties Card */}
+        <MyPropertiesCard properties={properties} />
+        
+        {/* ROW 2, Slot 2: Upcoming Bookings Card */}
         <UpcomingBookingsCard /> 
         
-        {/* Passing the filtered items to the checklist card */}
-        <HomeBuyerChecklistCard items={homeBuyerItems} />
-        
-        <MyPropertiesCard properties={properties} />
-
-        {/* Row 2 */}
-        <FavoriteProvidersCard />
+        {/* ROW 3: Favorite Providers Card (Spans two columns) */}
+        <div className="lg:col-span-2">
+            <FavoriteProvidersCard />
+        </div>
       </div>
+      {/* END LAYOUT FIX */}
     </div>
   );
 };
