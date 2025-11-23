@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import * as propertyService from '../services/property.service';
 import { AuthRequest } from '../types';
+// IMPORT REQUIRED: Assuming you have defined these in your validators.ts file (Phase 2)
+import { CreatePropertyInput, UpdatePropertyInput } from '../utils/validators'; 
 
 /**
  * List all properties for the authenticated user
@@ -29,7 +31,8 @@ export const listProperties = async (req: AuthRequest, res: Response) => {
 export const createProperty = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
-    const propertyData = req.body;
+    // CRITICAL FIX: Explicitly cast req.body to the complete CreatePropertyInput type
+    const propertyData = req.body as CreatePropertyInput; 
 
     const property = await propertyService.createProperty(userId, propertyData);
 
@@ -64,6 +67,7 @@ export const getProperty = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    // NOTE: The property service returns the full Property object, ensuring new fields are included here.
     res.json({
       success: true,
       data: property,
@@ -84,8 +88,10 @@ export const updateProperty = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
     const { id } = req.params;
-    const updateData = req.body;
+    // CRITICAL FIX: Explicitly cast req.body to the complete UpdatePropertyInput type
+    const updateData = req.body as UpdatePropertyInput; 
 
+    // Pass the comprehensive payload, allowing the service to save all fields
     const property = await propertyService.updateProperty(id, userId, updateData);
 
     res.json({
