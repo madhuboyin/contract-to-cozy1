@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { FileText, Plus, Loader2, Shield, Trash2, Edit, X, Save, ExternalLink, Upload } from 'lucide-react';
+import { FileText, Plus, Loader2, Shield, Trash2, Edit, X, Save, ExternalLink, Upload, AlertCircle } from 'lucide-react';
 import { format, parseISO, isPast } from 'date-fns';
 import { api } from '@/lib/api/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +15,15 @@ import { InsurancePolicy, CreateInsurancePolicyInput, UpdateInsurancePolicyInput
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
+// NEW IMPORTS for Table structure
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 // Placeholder for "None" option, necessary to avoid Radix UI error on value=""
 const SELECT_NONE_VALUE = '__NONE__';
@@ -33,7 +42,7 @@ const DOCUMENT_TYPES: DocumentType[] = [
     'OTHER',
 ];
 
-// --- Document Upload Modal Component (Integrated) ---
+// --- Document Upload Modal Component ---
 interface DocumentUploadModalProps {
   parentEntityId: string; 
   parentEntityType: 'property' | 'warranty' | 'policy';
@@ -81,7 +90,7 @@ const DocumentUploadModal = ({ parentEntityId, parentEntityType, onUploadSuccess
     } else {
       toast({ 
         title: 'Upload Failed', 
-        description: res.message, 
+        description: (res as APIError).message, 
         variant: 'destructive' 
       });
     }
@@ -154,7 +163,7 @@ const DocumentUploadModal = ({ parentEntityId, parentEntityType, onUploadSuccess
 };
 
 
-// --- Insurance Policy Form Component (PolicyForm remains the same) ---
+// --- Insurance Policy Form Component ---
 interface PolicyFormProps {
   initialData?: InsurancePolicy;
   properties: Property[];
@@ -284,32 +293,6 @@ const PolicyForm = ({ initialData, properties, onSave, onClose, isSubmitting }: 
   );
 };
 
-// --- Documents View Component (Reused from Warranties) ---
-const DocumentsView = ({ documents }: { documents: InsurancePolicy['documents'] }) => {
-  if (!documents || documents.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground text-center py-4">No documents associated with this policy.</p>
-    );
-  }
-  return (
-    <ul className="space-y-2">
-      {documents.map(doc => (
-        <li key={doc.id} className="flex items-center justify-between p-2 border rounded-md">
-          <div className="flex items-center">
-            <FileText className="w-4 h-4 mr-2 text-blue-500" />
-            <span className="text-sm font-medium truncate">{doc.name}</span>
-          </div>
-          <Button variant="ghost" size="sm" asChild>
-            <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs">
-              View <ExternalLink className="w-3 h-3 ml-1" />
-            </a>
-          </Button>
-        </li>
-      ))}
-    </ul>
-  );
-};
-
 
 // --- Main Page Component ---
 export default function InsurancePage() {
@@ -327,7 +310,6 @@ export default function InsurancePage() {
 
   const { toast } = useToast();
   
-  // FIX: Wrap fetchDependencies in useCallback and ensure proper loading state management
   const fetchDependencies = useCallback(async () => {
     setIsLoading(true);
     const [policiesRes, propertiesRes] = await Promise.all([
@@ -340,7 +322,7 @@ export default function InsurancePage() {
     } else {
       toast({
         title: "Error fetching policies",
-        description: policiesRes.message,
+        description: (policiesRes as APIError).message,
         variant: "destructive",
       });
       setPolicies([]);
@@ -350,7 +332,7 @@ export default function InsurancePage() {
       setProperties(propertiesRes.data.properties);
     }
     setIsLoading(false);
-  }, [toast]); // Dependency on toast is included as good practice
+  }, [toast]); 
 
   useEffect(() => {
     fetchDependencies();
@@ -401,7 +383,7 @@ export default function InsurancePage() {
     }
   };
   
-  // Update signature to accept InsurancePolicy | undefined
+  // Handlers for Add/Edit Modal
   const openAddEditModal = (policy?: InsurancePolicy) => {
     setEditingPolicy(policy);
     setIsAddEditModalOpen(true);
@@ -412,7 +394,7 @@ export default function InsurancePage() {
     setEditingPolicy(undefined);
   };
   
-  // NEW Upload Handlers
+  // Handlers for Document Upload Modal
   const openUploadModal = (policyId: string) => {
     setUploadingToPolicyId(policyId);
     setIsUploadModalOpen(true);
@@ -431,6 +413,12 @@ export default function InsurancePage() {
         return dateA - dateB;
     });
   }, [policies]);
+  
+  const getPropertyInfo = useCallback((propertyId: string | null) => {
+      if (!propertyId) return 'General';
+      const property = properties.find(p => p.id === propertyId);
+      return property ? property.name || property.address : 'N/A';
+  }, [properties]);
 
 
   return (
@@ -439,9 +427,8 @@ export default function InsurancePage() {
         <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
           <Shield className="w-7 h-7 text-green-600" /> My Insurance Policies
         </h2>
-        {/* FIX 1: Use only one controlled Dialog for Add/Edit */}
+        
         <Dialog open={isAddEditModalOpen} onOpenChange={closeAddEditModal}>
-          {/* FIX 2: Button directly calls the modal setup function (Removed DialogTrigger) */}
           <Button onClick={() => openAddEditModal(undefined)}>
             <Plus className="w-4 h-4 mr-2" /> Add Policy
           </Button>
@@ -458,7 +445,6 @@ export default function InsurancePage() {
       </div>
       <p className="text-muted-foreground">Track policy details and renewal dates for all your properties.</p>
       
-      {/* FIX: Corrected Loading and Empty State rendering logic */}
       {isLoading && (
         <div className="text-center py-10">
           <Loader2 className="w-8 h-8 animate-spin text-green-600 mx-auto" />
@@ -475,69 +461,98 @@ export default function InsurancePage() {
       )}
 
       {!isLoading && sortedPolicies.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {sortedPolicies.map(policy => {
-            const isExpired = isPast(parseISO(policy.expiryDate));
-            const property = properties.find(p => p.id === policy.propertyId);
-            
-            return (
-              <Card 
-                key={policy.id} 
-                className={cn(
-                  "flex flex-col",
-                  isExpired ? "border-red-400 bg-red-50/50" : "border-gray-200"
-                )}
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex justify-between items-start">
-                    <CardTitle 
-                      className={cn(
-                        "text-lg",
-                        isExpired && "text-red-700"
-                      )}
-                    >
+        <div className="rounded-md border bg-white">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[150px]">Carrier</TableHead>
+                <TableHead className="w-[120px]">Policy #</TableHead>
+                <TableHead className="hidden lg:table-cell w-[120px]">Coverage Type</TableHead>
+                <TableHead className="w-[100px]">Property</TableHead>
+                <TableHead className="w-[120px] text-right">Premium</TableHead>
+                <TableHead className="w-[120px] text-center">Expires</TableHead>
+                <TableHead className="w-[100px] text-center">Status</TableHead>
+                <TableHead className="w-[120px] text-center">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sortedPolicies.map(policy => {
+                const expired = isPast(parseISO(policy.expiryDate));
+                const statusClass = expired ? 'text-red-600' : 'text-green-600';
+                
+                return (
+                  <TableRow key={policy.id} className={expired ? 'bg-red-50/50 hover:bg-red-50' : ''}>
+                    <TableCell className="font-medium">
                       {policy.carrierName}
-                    </CardTitle>
-                    <div className="text-xs font-semibold px-2 py-1 rounded-full text-white"
-                      style={{ backgroundColor: isExpired ? 'rgb(220 38 38)' : 'rgb(22 163 74)' }}
-                    >
-                      {isExpired ? 'EXPIRED' : format(parseISO(policy.expiryDate), 'MMM dd, yyyy')}
-                    </div>
-                  </div>
-                  <CardDescription>
-                    Policy: {policy.policyNumber || 'N/A'} 
-                    {property && ` | Property: ${property.name || property.address}`}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex-1 space-y-3 pt-3 text-sm">
-                    <p className="text-gray-600">Coverage: {policy.coverageType || 'N/A'}</p>
-                    <p className="font-medium text-gray-700">Premium: ${policy.premiumAmount.toFixed(2)} / yr</p>
-                    <div className="border-t pt-3">
-                        <h4 className="font-semibold text-xs mb-2 flex items-center gap-1 text-gray-600">
-                            <FileText className="w-3 h-3" /> Documents ({policy.documents.length})
-                        </h4>
-                        <DocumentsView documents={policy.documents} />
-                    </div>
-                </CardContent>
-                <div className="flex border-t">
-                  {/* NEW: Upload Button - calls the new openUploadModal handler */}
-                  <Button variant="ghost" className="w-1/3 rounded-none text-green-600" onClick={() => openUploadModal(policy.id)}>
-                    <Upload className="w-4 h-4 mr-1" /> Upload
-                  </Button>
-                  <Button variant="ghost" className="w-1/3 rounded-none text-blue-600" onClick={() => openAddEditModal(policy)}>
-                    <Edit className="w-4 h-4 mr-2" /> Edit
-                  </Button>
-                  <Button variant="ghost" className="w-1/3 rounded-none rounded-br-lg text-red-600 hover:bg-red-50" onClick={() => handleDelete(policy.id)}>
-                    <Trash2 className="w-4 h-4 mr-2" /> Delete
-                  </Button>
-                </div>
-              </Card>
-            );
-          })}
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {format(parseISO(policy.startDate), 'MMM dd, yyyy')}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                        {policy.policyNumber || 'N/A'}
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell text-sm text-gray-600">
+                      {policy.coverageType || 'N/A'}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                        {getPropertyInfo(policy.propertyId)}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                        ${policy.premiumAmount.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className={statusClass}>
+                          {format(parseISO(policy.expiryDate), 'MMM dd, yyyy')}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span className={cn(
+                        "text-xs font-semibold px-2 py-0.5 rounded-full",
+                        expired ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                      )}>
+                        {expired ? 'EXPIRED' : 'ACTIVE'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex justify-center space-x-1">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-gray-500 hover:text-green-600"
+                            onClick={() => openUploadModal(policy.id)}
+                            title="Upload Document"
+                          >
+                            <Upload className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-gray-500 hover:text-blue-600"
+                            onClick={() => openAddEditModal(policy)}
+                            title="Edit Policy"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-gray-500 hover:text-red-600"
+                            onClick={() => handleDelete(policy.id)}
+                            title="Delete Policy"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </div>
       )}
       
-      {/* NEW: Document Upload Dialog (for Insurance Policies) */}
+      {/* Document Upload Dialog (for Insurance Policies) */}
       <Dialog open={isUploadModalOpen} onOpenChange={closeUploadModal}>
         <DialogContent className="sm:max-w-[500px]">
           {uploadingToPolicyId && (
@@ -545,7 +560,6 @@ export default function InsurancePage() {
               parentEntityId={uploadingToPolicyId}
               parentEntityType="policy"
               onUploadSuccess={() => {
-                  // After successful upload, refresh the list and close the modal
                   fetchDependencies(); 
                   closeUploadModal();
               }}
