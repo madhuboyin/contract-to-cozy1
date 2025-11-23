@@ -190,6 +190,8 @@ export interface ChecklistItem {
   nextDueDate: string | null;
   lastCompletedDate: string | null;
   checklistId: string;
+  createdAt: string; 
+  updatedAt: string;
 }
 
 /**

@@ -1,14 +1,18 @@
+// apps/frontend/src/app/(dashboard)/dashboard/components/HomeBuyerDashboard.tsx
+
 import React from 'react';
 import { Booking, Property } from '@/types';
-import { HomeBuyerChecklistCard } from './HomeBuyerChecklistCard';
 import { UpcomingBookingsCard } from './UpcomingBookingsCard';
+import { HomeBuyerChecklistCard } from './HomeBuyerChecklistCard';
 import { MyPropertiesCard } from './MyPropertiesCard';
-import { DashboardChecklistItem } from '../types'; // Import the unified type
+import { FavoriteProvidersCard } from './FavoriteProvidersCard';
+import { DashboardChecklistItem } from '../types';
 
+// FIX: Define the missing interface here
 interface HomeBuyerDashboardProps {
-  bookings: Booking[];
+  bookings: Booking[]; 
   properties: Property[];
-  checklistItems: DashboardChecklistItem[]; 
+  checklistItems: DashboardChecklistItem[];
   userFirstName: string;
 }
 
@@ -16,32 +20,39 @@ export const HomeBuyerDashboard = ({
   bookings, 
   properties, 
   checklistItems,
-  userFirstName 
+  userFirstName
 }: HomeBuyerDashboardProps) => {
+
+  // 1. Filter the raw checklistItems down to the set intended for the Home Buyer Card
+  // Assuming the Home Buyer card displays all checklist items (since they are non-recurring/initial)
+  const homeBuyerItems = checklistItems.filter(item => 
+    !item.isRecurring // Filter out any recurring items that may have been created
+  ).sort((a, b) => {
+    // Basic sort to keep presentation consistent (e.g., by sort order or creation date)
+    const dateA = new Date(a.createdAt).getTime();
+    const dateB = new Date(b.createdAt).getTime();
+    return dateA - dateB;
+  });
+  
   return (
-    <div className="space-y-8 pb-8"> 
+    <div className="space-y-6 pb-8">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Welcome, {userFirstName}!</h2>
-        <p className="text-muted-foreground">Let's get you cozy in your new home.</p>
+        <h2 className="text-3xl font-bold tracking-tight">Welcome to your new home journey, {userFirstName}</h2>
+        <p className="text-muted-foreground">Stay on track with your home buying checklist.</p>
       </div>
 
-      {/* --- ROW 1: HOME BUYING CHECKLIST (FULL WIDTH) ---
-        This card now occupies its own row, spanning 100% of the available width. 
-      */}
-      <div>
-        <HomeBuyerChecklistCard items={checklistItems} className="min-h-[400px]" />
-      </div>
-      
-      {/* --- ROW 2: BOOKINGS & PROPERTY (SPLIT 2-COLUMN GRID) ---
-        This section uses a standard 2-column grid to put the smaller cards side-by-side.
-      */}
-      <h3 className="text-2xl font-bold tracking-tight pt-4">Your Home Transition Details</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6"> 
-        {/* Upcoming Bookings Card (1/2 width) */}
-        <UpcomingBookingsCard bookings={bookings} />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Row 1 */}
         
-        {/* My Property Card (1/2 width) */}
+        <UpcomingBookingsCard /> 
+        
+        {/* Passing the filtered items to the checklist card */}
+        <HomeBuyerChecklistCard items={homeBuyerItems} />
+        
         <MyPropertiesCard properties={properties} />
+
+        {/* Row 2 */}
+        <FavoriteProvidersCard />
       </div>
     </div>
   );

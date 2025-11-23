@@ -1,3 +1,4 @@
+// apps/frontend/src/app/(dashboard)/dashboard/types.ts
 import { Booking, Property } from '@/types';
 
 // --- TYPES (Centralized and Unified) ---
@@ -16,6 +17,9 @@ export interface DashboardChecklistItem {
   serviceCategory: string | null;
   isRecurring: boolean;
   nextDueDate: string | null;
+  // FIX: Added missing properties for sorting and completeness
+  createdAt: string; 
+  updatedAt: string;
 }
 
 // Local type for API response (matches DashboardChecklistItem structurally)
