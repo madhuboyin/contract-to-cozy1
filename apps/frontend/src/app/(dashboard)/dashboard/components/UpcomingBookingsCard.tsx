@@ -48,8 +48,7 @@ export const UpcomingBookingsCard = () => {
   const { data, isLoading, error } = useQuery({
     queryKey: ['upcoming-bookings'],
     queryFn: () => api.listBookings({
-        // FIX 1: Removed restrictive 'status' filter from API call 
-        // to ensure backend returns results.
+        // Filter is removed to ensure all bookings are returned and filtered client-side
         sortBy: 'scheduledDate',
         sortOrder: 'asc',
     }),
@@ -57,17 +56,16 @@ export const UpcomingBookingsCard = () => {
 
   const rawBookings = data?.success ? data.data.bookings : [];
 
-  // Filter out past bookings and sort by scheduled date
+  // FIX: This definition must precede all usage of 'upcomingBookings'
   const upcomingBookings = React.useMemo(() => {
     if (isLoading || !rawBookings) return [];
     
-    // Define statuses that should NOT be considered upcoming
     const nonUpcomingStatuses = ['COMPLETED', 'CANCELLED', 'DRAFT'];
 
     return rawBookings
-      .filter(b => b.scheduledDate) // Must have a date
-      .filter(b => !isPast(new Date(b.scheduledDate!))) // Must be in the future (or today)
-      .filter(b => !nonUpcomingStatuses.includes(b.status)) // Must have an active status
+      .filter(b => b.scheduledDate) 
+      .filter(b => !isPast(new Date(b.scheduledDate!))) 
+      .filter(b => !nonUpcomingStatuses.includes(b.status)) 
       .sort((a, b) => new Date(a.scheduledDate || 0).getTime() - new Date(b.scheduledDate || 0).getTime());
   }, [rawBookings, isLoading]);
 
@@ -75,13 +73,12 @@ export const UpcomingBookingsCard = () => {
   const overflowCount = upcomingBookings.length - displayBookings.length;
   const showMore = overflowCount > 0;
   
-  // Determine if any booking is confirmed/pending/about to start (Alert Triangle)
   const isAlert = upcomingBookings.some(b => b.status === 'CONFIRMED' || b.status === 'IN_PROGRESS' || b.status === 'PENDING');
 
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">
+        <CardTitle> 
           Upcoming Bookings
         </CardTitle>
         {isAlert ? (
