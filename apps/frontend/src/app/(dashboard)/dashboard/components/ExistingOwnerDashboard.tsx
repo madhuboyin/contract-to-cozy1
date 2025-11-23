@@ -5,7 +5,6 @@ import Link from 'next/link'; // FIX 1: Import Link component
 import { Booking, Property } from '@/types';
 import { UpcomingBookingsCard } from './UpcomingBookingsCard';
 import { RecurringMaintenanceCard } from './RecurringMaintenanceCard';
-// FIX 2: Change to named import (assuming UpcomingRenewalsCard.tsx is fixed)
 import { UpcomingRenewalsCard } from './UpcomingRenewalsCard'; 
 import { MyPropertiesCard } from './MyPropertiesCard';
 import { FavoriteProvidersCard } from './FavoriteProvidersCard';
@@ -92,11 +91,11 @@ export const ExistingOwnerDashboard = ({
         <p className="text-muted-foreground">Here is what's happening with your properties today.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md::grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Row 1 */}
         <UpcomingBookingsCard bookings={bookings} />
         <RecurringMaintenanceCard maintenance={upcomingMaintenance} />
-        {/* FIX: Remove the 'renewals' prop */}
+        {/* FIX 2: Remove the renewals prop because UpcomingRenewalsCard is now self-fetching */}
         <UpcomingRenewalsCard /> 
         {/* Row 2 */}
         <MyPropertiesCard properties={properties} />
