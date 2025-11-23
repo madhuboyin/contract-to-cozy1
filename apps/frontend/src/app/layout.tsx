@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { Inter, Poppins } from 'next/font/google';
 import { AuthProvider } from '@/lib/auth/AuthContext';
 import { Toaster } from '@/components/ui/toaster';
+import { QueryProvider } from '@/lib/providers/QueryProvider'; // FIX 1: Import the Query Provider
 import './globals.css';
 
 // Inter for body text
@@ -38,10 +39,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${poppins.variable} ${inter.className}`}>
-        <AuthProvider>
-          {children}
-          <Toaster />
-        </AuthProvider>
+        {/* FIX 2: Wrap the entire application with QueryProvider */}
+        <QueryProvider>
+          <AuthProvider>
+            {children}
+            <Toaster />
+          </AuthProvider>
+        </QueryProvider>
       </body>
     </html>
   );
