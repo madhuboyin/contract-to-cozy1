@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query'; 
 import { api } from '@/lib/api/client';
 import { Warranty, InsurancePolicy } from '@/types'; 
-// FIX: This line now resolves because separator.tsx is provided
 import { Separator } from '@/components/ui/separator'; 
 import { format, differenceInDays } from 'date-fns'; 
 import Link from 'next/link';
@@ -34,15 +33,16 @@ const getDaysUntilExpiry = (expiryDateString: string): number => {
 };
 
 
-export default function UpcomingRenewalsCard() {
+// FIX: Exported as a named constant to satisfy the import in ExistingOwnerDashboard.tsx
+export const UpcomingRenewalsCard = () => {
   // Fetch Warranties
-  const { data: warrantyData, isLoading: isLoadingWarranties } = useQuery({
+  const { data: warrantyData, isLoading: isLoadingWarranties, error: errorW } = useQuery({
     queryKey: ['warranties-renewals'],
     queryFn: () => api.listWarranties(),
   });
 
   // Fetch Insurance Policies
-  const { data: insuranceData, isLoading: isLoadingInsurance } = useQuery({
+  const { data: insuranceData, isLoading: isLoadingInsurance, error: errorI } = useQuery({
     queryKey: ['insurance-policies-renewals'],
     queryFn: () => api.listInsurancePolicies(),
   });
@@ -86,7 +86,13 @@ export default function UpcomingRenewalsCard() {
         })
         // Filter out items expired more than 30 days ago, or keep all future items
         .filter(item => item.daysUntilExpiry >= -30) 
-        .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime()); // Sort by expiryDate ascending
+        // Sort by expiryDate ascending (soonest first)
+        .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime()); 
+  }
+  
+  if (errorW || errorI) {
+      console.error("Error fetching renewals data:", errorW || errorI);
+      // Fall through to display generic error or empty state
   }
 
   const upcomingItems = renewalItems.slice(0, 5); // Show top 5 expiring/upcoming items
@@ -129,7 +135,7 @@ export default function UpcomingRenewalsCard() {
                     )}
                     <Link
                       href={`/dashboard/${item.type === 'Warranty' ? 'warranties' : 'insurance'}`}
-                      className={`font-medium ${item.isExpiringSoon || item.daysUntilExpiry <= 0 ? 'text-red-600 hover:text-red-700' : 'text-gray-900 hover:text-blue-600'}`}
+                      className={`font-medium ${item.isExpiringSoon && item.daysUntilExpiry >= 0 ? 'text-red-600 hover:text-red-700' : item.daysUntilExpiry < 0 ? 'text-red-500' : 'text-gray-900 hover:text-blue-600'}`}
                     >
                       {item.name}
                     </Link>

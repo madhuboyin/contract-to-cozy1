@@ -1,10 +1,12 @@
-//apps/frontend/src/app/(dashboard)/dashboard/components/ExistingOwnerDashboard.tsx
+// apps/frontend/src/app/(dashboard)/dashboard/components/ExistingOwnerDashboard.tsx
 
 import React from 'react';
+import Link from 'next/link'; // FIX 1: Import Link component
 import { Booking, Property } from '@/types';
 import { UpcomingBookingsCard } from './UpcomingBookingsCard';
 import { RecurringMaintenanceCard } from './RecurringMaintenanceCard';
-import { UpcomingRenewalsCard } from './UpcomingRenewalsCard';
+// FIX 2: Change to named import (assuming UpcomingRenewalsCard.tsx is fixed)
+import { UpcomingRenewalsCard } from './UpcomingRenewalsCard'; 
 import { MyPropertiesCard } from './MyPropertiesCard';
 import { FavoriteProvidersCard } from './FavoriteProvidersCard';
 import { DashboardChecklistItem } from '../types'; 
@@ -39,33 +41,28 @@ export const ExistingOwnerDashboard = ({
   const activeRenewalItems = activeChecklistItems.filter(item => 
     item.serviceCategory && RENEWAL_CATEGORIES.includes(item.serviceCategory as string)
   );
-  
-  // Calculate the cutoff date (7 days from now)
-  const today = new Date();
-  const oneWeekFromNow = addDays(today, 7);
 
-  // --- RENEWALS DEBUG LOGS ---
+  // --- START RENEWALS DEBUG LOGS ---
   console.log('--- RENEWALS DEBUG START ---');
-  console.log('Total Checklist Items Received:', checklistItems.length);
-  console.log('Total PENDING Checklist Items:', activeChecklistItems.length);
-  console.log('Total Active Renewal Items (by Category):', activeRenewalItems.length);
-  console.log('Current Date (Local Time):', today.toLocaleString());
-  console.log('Cutoff Date (Expiring/Expired by):', oneWeekFromNow.toLocaleString());
 
-  // 3. APPLY DATE LOGIC: Show items that are overdue OR expiring within 7 days.
+  const today = new Date();
+  const nextSevenDays = addDays(today, 7);
+
   const upcomingRenewals = activeRenewalItems.filter(item => {
-      if (!item.nextDueDate) {
-          // console.log(`[RENEWAL ITEM ${item.id}] Skipped: No nextDueDate`);
-          return false; // Skip items without a renewal date
+      let passesFilter = true;
+
+      // Ensure nextDueDate is valid before trying to parse
+      if (item.nextDueDate) {
+          const dueDate = parseISO(item.nextDueDate);
+          const isExpired = isBefore(dueDate, today);
+          const isUpcoming = isBefore(dueDate, nextSevenDays);
+          
+          // Show expired items OR items coming up in the next 7 days
+          passesFilter = isExpired || isUpcoming;
+      } else {
+          // If due date is null, typically filter it out unless business logic dictates otherwise
+          passesFilter = false; 
       }
-      
-      const dueDate = parseISO(item.nextDueDate);
-
-      // The condition: due date is currently or was in the past 
-      // OR the due date is before the cutoff date (one week from now).
-      const passesFilter = isBefore(dueDate, oneWeekFromNow);
-
-      console.log(`[RENEWAL ITEM ${item.id} - ${item.title}] Status: ${item.status}, Category: ${item.serviceCategory}, Due Date: ${item.nextDueDate}, Passes Date Filter? ${passesFilter}`);
       
       return passesFilter;
   }).sort((a, b) => {
@@ -99,11 +96,18 @@ export const ExistingOwnerDashboard = ({
         {/* Row 1 */}
         <UpcomingBookingsCard bookings={bookings} />
         <RecurringMaintenanceCard maintenance={upcomingMaintenance} />
-        <UpcomingRenewalsCard renewals={upcomingRenewals} />
-
+        {/* FIX: Remove the 'renewals' prop */}
+        <UpcomingRenewalsCard /> 
         {/* Row 2 */}
-        <MyPropertiesCard properties={properties} className="md:col-span-2" />
+        <MyPropertiesCard properties={properties} />
         <FavoriteProvidersCard />
+      </div>
+      
+      {/* Expanded View of the full Home Management Checklist */}
+      <div className="pt-4">
+        <Link href="/dashboard/checklist" className="text-lg font-semibold text-blue-600 hover:text-blue-700 transition-colors flex items-center">
+          View Full Home Management Checklist &rarr;
+        </Link>
       </div>
     </div>
   );
