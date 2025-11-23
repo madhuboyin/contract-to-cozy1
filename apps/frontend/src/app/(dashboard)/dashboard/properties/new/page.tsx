@@ -365,7 +365,7 @@ export default function NewPropertyPage() {
 
           {/* Section: General Details */}
           <div className="space-y-4">
-            <h3 className="text-md font-semibold text-blue-700">General Details</h3>
+            <h3 className="text-base font-semibold text-blue-700">General Details</h3>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               <div>
                 <label htmlFor="propertySize" className="block text-sm font-medium text-gray-700 mb-2">
@@ -408,7 +408,7 @@ export default function NewPropertyPage() {
           
           {/* Section: Systems Snapshot */}
           <div className="space-y-4">
-            <h3 className="text-md font-semibold text-blue-700">Systems & Age Snapshot</h3>
+            <h3 className="text-base font-semibold text-blue-700">Systems & Age Snapshot</h3>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
               <SelectInput label="Heating Type" name="heatingType" value={formData.heatingType} options={HEATING_OPTIONS} />
               <SelectInput label="Cooling Type" name="coolingType" value={formData.coolingType} options={COOLING_OPTIONS} />
@@ -449,7 +449,7 @@ export default function NewPropertyPage() {
           
           {/* Section: Structure */}
           <div className="space-y-4">
-            <h3 className="text-md font-semibold text-blue-700">Structure</h3>
+            <h3 className="text-base font-semibold text-blue-700">Structure</h3>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               <SelectInput label="Roof Type" name="roofType" value={formData.roofType} options={ROOF_OPTIONS} />
               <div>
@@ -471,7 +471,7 @@ export default function NewPropertyPage() {
 
           {/* Section: Safety */}
           <div className="space-y-4">
-            <h3 className="text-md font-semibold text-blue-700">Safety Checks</h3>
+            <h3 className="text-base font-semibold text-blue-700">Safety Checks</h3>
             <div className="grid grid-cols-2 gap-4">
               <BooleanInput label="Smoke Detectors available" name="hasSmokeDetectors" checked={formData.hasSmokeDetectors} />
               <BooleanInput label="CO Detectors available" name="hasCoDetectors" checked={formData.hasCoDetectors} />
@@ -482,7 +482,7 @@ export default function NewPropertyPage() {
           
           {/* Section: Exterior */}
           <div className="space-y-4">
-            <h3 className="text-md font-semibold text-blue-700">Exterior & Utilities</h3>
+            <h3 className="text-base font-semibold text-blue-700">Exterior & Utilities</h3>
             <div className="grid grid-cols-2 gap-4">
               <BooleanInput label="Lawn / Irrigation System present" name="hasIrrigation" checked={formData.hasIrrigation} />
               <BooleanInput label="Known Drainage Issues" name="hasDrainageIssues" checked={formData.hasDrainageIssues} />

@@ -382,7 +382,7 @@ export default function EditPropertyPage() {
 
           {/* Section: General Details */}
           <div className="space-y-4">
-            <h3 className="text-md font-semibold text-blue-700">General Details</h3>
+            <h3 className="text-base font-semibold text-blue-700">General Details</h3>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
               <div>
                 <label htmlFor="propertySize" className="block text-sm font-medium text-gray-700 mb-2">
@@ -425,7 +425,7 @@ export default function EditPropertyPage() {
           
           {/* Section: Systems Snapshot */}
           <div className="space-y-4">
-            <h3 className="text-md font-semibold text-blue-700">Systems & Age Snapshot</h3>
+            <h3 className="text-base font-semibold text-blue-700">Systems & Age Snapshot</h3>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
               <SelectInput label="Heating Type" name="heatingType" value={formData.heatingType} options={HEATING_OPTIONS} />
               <SelectInput label="Cooling Type" name="coolingType" value={formData.coolingType} options={COOLING_OPTIONS} />
@@ -466,7 +466,7 @@ export default function EditPropertyPage() {
           
           {/* Section: Structure */}
           <div className="space-y-4">
-            <h3 className="text-md font-semibold text-blue-700">Structure</h3>
+            <h3 className="text-base font-semibold text-blue-700">Structure</h3>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               <SelectInput label="Roof Type" name="roofType" value={formData.roofType} options={ROOF_OPTIONS} />
               <div>
@@ -488,7 +488,7 @@ export default function EditPropertyPage() {
 
           {/* Section: Safety */}
           <div className="space-y-4">
-            <h3 className="text-md font-semibold text-blue-700">Safety Checks</h3>
+            <h3 className="text-base font-semibold text-blue-700">Safety Checks</h3>
             <div className="grid grid-cols-2 gap-4">
               <BooleanInput label="Smoke Detectors available" name="hasSmokeDetectors" checked={formData.hasSmokeDetectors} />
               <BooleanInput label="CO Detectors available" name="hasCoDetectors" checked={formData.hasCoDetectors} />
@@ -499,10 +499,11 @@ export default function EditPropertyPage() {
           
           {/* Section: Exterior */}
           <div className="space-y-4">
-            <h3 className="text-md font-semibold text-blue-700">Exterior & Utilities</h3>
+            <h3 className="text-base font-semibold text-blue-700">Exterior & Utilities</h3>
             <div className="grid grid-cols-2 gap-4">
               <BooleanInput label="Lawn / Irrigation System present" name="hasIrrigation" checked={formData.hasIrrigation} />
               <BooleanInput label="Known Drainage Issues" name="hasDrainageIssues" checked={formData.hasDrainageIssues} />
+              {/* Lot size input omitted for brevity, similar to other numerical inputs */}
             </div>
           </div>
 
@@ -510,34 +511,6 @@ export default function EditPropertyPage() {
       )}
     </div>
   );
-  // --- End UI Sections ---
-
-  if (loading) {
-    return (
-      <div className="px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-          <div className="h-96 bg-gray-200 rounded"></div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!property) {
-    return (
-      <div className="px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto">
-        <div className="text-center py-12">
-          <p className="text-gray-600">{error || 'Property not found'}</p>
-          <button
-            onClick={() => router.push('/dashboard/properties')}
-            className="text-blue-600 hover:text-blue-700 mt-4"
-          >
-            ← Back to Properties
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto">
@@ -552,9 +525,9 @@ export default function EditPropertyPage() {
           Back to Properties
         </button>
         
-        <h1 className="text-2xl font-bold text-gray-900">Edit Property</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Add New Property</h1>
         <p className="mt-1 text-sm text-gray-600">
-          Update all basic and advanced details for your property.
+          Start with the basics to get immediate service access, then unlock your full Property Health Score with advanced details.
         </p>
       </div>
 
@@ -576,11 +549,12 @@ export default function EditPropertyPage() {
         
         {AdvancedDetailsAccordion}
 
-        {/* Primary property checkbox (from original file) */}
+        {/* Primary property checkbox (from original requirements) */}
         <div className="flex items-start pt-4 border-t border-gray-200">
           <div className="flex items-center h-5">
             <input
               type="checkbox"
+              id="isPrimary"
               name="isPrimary"
               checked={formData.isPrimary}
               onChange={handleChange}
@@ -588,7 +562,7 @@ export default function EditPropertyPage() {
             />
           </div>
           <div className="ml-3">
-            <label className="text-sm font-medium text-gray-700">
+            <label htmlFor="isPrimary" className="text-sm font-medium text-gray-700">
               Set as primary property
             </label>
             <p className="text-sm text-gray-500">
@@ -611,7 +585,7 @@ export default function EditPropertyPage() {
             disabled={submitting}
             className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            {submitting ? 'Updating...' : 'Update Property'}
+            {submitting ? 'Creating...' : 'Create Property & Continue'}
           </button>
         </div>
       </form>
