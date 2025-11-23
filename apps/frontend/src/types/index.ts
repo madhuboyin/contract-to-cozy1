@@ -175,10 +175,6 @@ export interface InsurancePolicy {
   updatedAt: string;
 }
 
-// ============================================================================
-// CORE APPLICATION TYPES (Existing)
-// ============================================================================
-
 // --- CHECKLIST TYPES (FIX: ADDED MISSING TYPES) ---
 /**
  * Checklist Item Interface
@@ -207,6 +203,9 @@ export interface Checklist {
 }
 // --- END CHECKLIST TYPES ---
 
+// ============================================================================
+// CORE APPLICATION TYPES (Existing)
+// ============================================================================
 
 /**
  * User
@@ -219,9 +218,7 @@ export interface User {
   role: UserRole;
   emailVerified: boolean;
   status: UserStatus;
-  // FIX 1: Add the flattened segment field (sent by backend login/me responses)
   segment?: HomeownerSegment; 
-  // FIX 2: Keep the nested profile structure for comprehensive user data
   homeownerProfile?: { 
     id: string;
     segment: HomeownerSegment;
@@ -231,13 +228,17 @@ export interface User {
 /**
  * Auth Response
  */
+// FIX 3: Add success property to LoginResponse
 export interface LoginResponse {
+  success: true; 
   accessToken: string;
   refreshToken: string;
   user: User;
 }
 
+// FIX 3: Add success property to RegisterResponse
 export interface RegisterResponse {
+  success: true;
   message: string;
   user: User;
   emailVerificationToken?: string;
@@ -412,12 +413,14 @@ export interface LoginInput {
   password: string;
 }
 
+// FIX 4: Update RegisterInput to include the optional segment property
 export interface RegisterInput {
   email: string;
   password: string;
   firstName: string;
   lastName: string;
   role: UserRole;
+  segment?: HomeownerSegment;
 }
 
 export interface CreateBookingInput {
