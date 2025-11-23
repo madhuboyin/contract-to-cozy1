@@ -25,7 +25,7 @@ export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMa
         return dateA - dateB;
     });
 
-  // FIX 1: Limit display items to 3
+  // Limit display items to 3
   const displayTasks = allPendingTasks.slice(0, 3);
   const totalItems = allPendingTasks.length;
   const overflowCount = totalItems - displayTasks.length;
@@ -47,14 +47,13 @@ export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMa
     return <span className="text-gray-500">{date.toLocaleDateString()}</span>;
   };
 
-  // FIX 2: Dynamic Footer Logic
-  const footerLink = overflowCount > 0 
-    ? "/dashboard/maintenance" // Link to the list page if overflow exists
-    : "/dashboard/maintenance-setup"; // Link to setup page otherwise
-
-  const footerText = overflowCount > 0 
+  // Define primary and setup links
+  const primaryLink = "/dashboard/maintenance";
+  const primaryText = overflowCount > 0 
     ? `View ${overflowCount} More Task${overflowCount > 1 ? 's' : ''} →`
-    : "Manage Maintenance Plan";
+    : "View Full List →";
+    
+  const setupLink = "/dashboard/maintenance-setup";
     
   return (
     <Card className={cn("h-full flex flex-col", className)}>
@@ -66,7 +65,7 @@ export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMa
         <CardDescription>Routine tasks to keep home value</CardDescription>
       </CardHeader>
       <CardContent className="flex-1 space-y-4">
-        {displayTasks.length === 0 ? ( // FIX 3: Use displayTasks for empty check
+        {displayTasks.length === 0 ? ( 
           <div className="text-center py-8 text-gray-500">
              <Check className="mx-auto h-8 w-8 text-green-500 mb-2" />
              <p>All caught up!</p>
@@ -90,11 +89,27 @@ export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMa
           </ul>
         )}
       </CardContent>
-      {/* FIX 4: Implement Dynamic CardFooter */}
+      {/* FIX: Implement dual links in CardFooter when tasks exist */}
       <CardFooter className="border-t pt-4">
-        <Button variant="ghost" className="w-full h-8 text-xs font-semibold text-blue-600 hover:text-blue-700" asChild>
-          <Link href={footerLink}>{footerText}</Link>
-        </Button>
+        {displayTasks.length === 0 ? (
+            // Case 1: List is Empty -> Full-width link to Setup
+             <Button variant="ghost" className="w-full h-8 text-xs font-semibold text-blue-600 hover:text-blue-700" asChild>
+                <Link href={setupLink}>Set Up Maintenance Plan →</Link>
+            </Button>
+        ) : (
+             // Case 2: List has items -> Two links: Setup on left, List/More on right
+            <div className="flex justify-between w-full items-center">
+                <Link 
+                    href={setupLink} 
+                    className="text-xs font-semibold text-gray-600 hover:text-blue-700 underline"
+                >
+                    Maintenance Setup
+                </Link>
+                <Button variant="ghost" className="h-8 text-xs font-semibold text-blue-600 hover:text-blue-700" asChild>
+                    <Link href={primaryLink}>{primaryText}</Link>
+                </Button>
+            </div>
+        )}
       </CardFooter>
     </Card>
   );
