@@ -1,8 +1,10 @@
+//apps/backend/src/services/property.service.ts
+
 import { PrismaClient, PropertyType, OwnershipType, HeatingType, CoolingType, WaterHeaterType, RoofType } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// REPLACED INTERFACES with complete definitions matching the extended Prisma Property model (Phase 2)
+// REPLACED INTERFACES with complete definitions matching the extended Prisma Property model
 interface CreatePropertyData {
   name?: string;
   address: string;
