@@ -1,5 +1,4 @@
 // apps/frontend/src/app/(dashboard)/dashboard/maintenance-setup/page.tsx
-// --- FINAL VERSION ---
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -7,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import {
   MaintenanceTaskTemplate,
-  MaintenanceTaskConfig, // --- ADDED ---
+  MaintenanceTaskConfig,
+  ServiceCategory, // Import ServiceCategory for type-checking the filter
 } from '@/types';
 import {
   Card,
@@ -18,12 +18,20 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-// --- DELETED ---: No longer need Checkbox
 import { ServiceCategoryIcon } from '@/components/ServiceCategoryIcon';
-import { Loader2, AlertCircle, Sparkles, Pencil } from 'lucide-react'; // --- ADDED Pencil ---
+import { Loader2, AlertCircle, Sparkles, Pencil, Wrench } from 'lucide-react'; // Added Wrench icon for consistency
 import { cn } from '@/lib/utils';
-// --- ADDED ---
 import { MaintenanceConfigModal } from './MaintenanceConfigModal'; 
+
+// FIX 1: Define excluded renewal/financial categories
+const RENEWAL_CATEGORIES: ServiceCategory[] = [
+  'INSURANCE',
+  'WARRANTY',
+  'FINANCE',
+  'ADMIN',
+  'ATTORNEY',
+];
+
 
 // Helper function (no change)
 function formatFrequency(frequency: string | null): string {
@@ -38,10 +46,6 @@ export default function MaintenanceSetupPage() {
   const router = useRouter();
   const [templates, setTemplates] = useState<MaintenanceTaskTemplate[]>([]);
 
-  // --- DELETED ---: Old state is no longer needed
-  // const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
-
-  // --- NEW STATE ---
   const [selectedTasks, setSelectedTasks] = useState<
     Record<string, MaintenanceTaskConfig>
   >({});
@@ -53,14 +57,24 @@ export default function MaintenanceSetupPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch templates (no change)
+  // FIX 2: Modified fetchTemplates to filter results
   useEffect(() => {
     const fetchTemplates = async () => {
       try {
         setLoading(true);
         const response = await api.getMaintenanceTemplates();
         if (response.success) {
-          setTemplates(response.data.templates);
+          
+          // Apply the filter to remove renewal/financial templates
+          const filteredTemplates = response.data.templates.filter(
+            (t) => 
+                // Keep templates with no service category (e.g., general admin tasks)
+                t.serviceCategory === null || 
+                // Exclude any known renewal/financial categories
+                !RENEWAL_CATEGORIES.includes(t.serviceCategory)
+          );
+          
+          setTemplates(filteredTemplates);
         } else {
           throw new Error(
             response.error?.message || 'Failed to load maintenance tasks.'
@@ -75,10 +89,8 @@ export default function MaintenanceSetupPage() {
     fetchTemplates();
   }, []);
 
-  // --- DELETED ---: Old handler is no longer needed
-  // const handleToggle = (templateId: string) => { ... };
 
-  // --- NEW HANDLERS ---
+  // --- NEW HANDLERS (No Change) ---
   const handleOpenModal = (template: MaintenanceTaskTemplate) => {
     setEditingTemplate(template);
     setIsModalOpen(true);
@@ -107,19 +119,14 @@ export default function MaintenanceSetupPage() {
   };
   // --- END NEW HANDLERS ---
 
-  // --- MODIFIED: handleSave ---
+  // --- MODIFIED: handleSave (No Change) ---
   const handleSave = async () => {
     setSaving(true);
     
-    // --- SWITCH ---
-    // Use the new 'selectedTasks' state instead of 'selectedIds'
     const tasksToSave = Object.values(selectedTasks);
 
-    // If user selected anything, save it.
     if (tasksToSave.length > 0) {
       try {
-        // --- SWITCH ---
-        // Call the new 'createCustomMaintenanceItems' endpoint
         const response = await api.createCustomMaintenanceItems({
           tasks: tasksToSave,
         });
@@ -134,8 +141,7 @@ export default function MaintenanceSetupPage() {
         return;
       }
     }
-    // Redirect to dashboard on success or if nothing was selected
-    router.push('/dashboard');
+    router.push('/dashboard/checklist'); // Redirect to checklist to see new items
   };
   // --- END MODIFICATION ---
 
@@ -173,7 +179,8 @@ export default function MaintenanceSetupPage() {
 
   // 7. Render Main Content
   return (
-    <div className="container mx-auto max-w-3xl py-12">
+    // FIX 3: Updated container classes for dashboard page consistency
+    <div className="space-y-6 pb-8 max-w-4xl mx-auto py-12">
       <Card>
         <CardHeader>
           <div className="w-14 h-14 rounded-lg bg-blue-100 flex items-center justify-center mb-4">
@@ -194,19 +201,11 @@ export default function MaintenanceSetupPage() {
                 key={template.id}
                 className={cn(
                   'flex items-start space-x-4 p-5 rounded-lg',
-                  // --- SWITCH ---
-                  // Highlight only based on new 'selectedTasks' state
                   selectedTasks[template.id] && 'bg-blue-50'
                 )}
-                // --- DELETED ---: onClick and cursor-pointer removed from li
               >
-                {/* --- DELETED ---: Checkbox component removed */}
-
                 <div className="grid gap-0.5 flex-1 min-w-0">
-                  <label
-                    // --- DELETED ---: htmlFor and cursor-pointer removed
-                    className="font-medium flex items-center"
-                  >
+                  <label className="font-medium flex items-center">
                     {template.serviceCategory && (
                       <ServiceCategoryIcon
                         icon={template.serviceCategory}
@@ -225,7 +224,6 @@ export default function MaintenanceSetupPage() {
                   </p>
                 </div>
 
-                {/* --- NEW BUTTONS (from Phase 2) --- */}
                 <div className="ml-auto flex-shrink-0">
                   {selectedTasks[template.id] ? (
                     <Button
@@ -265,7 +263,7 @@ export default function MaintenanceSetupPage() {
         </CardFooter>
       </Card>
 
-      {/* --- MODAL (from Phase 2) --- */}
+      {/* --- MODAL (No Change) --- */}
       <MaintenanceConfigModal
         isOpen={isModalOpen}
         onClose={handleCloseModal}

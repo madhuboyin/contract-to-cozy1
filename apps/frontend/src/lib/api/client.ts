@@ -29,6 +29,9 @@ import {
   // NEW DOCUMENT IMPORTS
   Document,
   DocumentUploadInput,
+  // FIX 1: Add Checklist and ChecklistItem types (assuming they exist in @/types)
+  Checklist, 
+  ChecklistItem,
 } from '@/types';
 
 // NOTE: Changed to API_BASE_URL to match common convention, but using the provided API_URL environment variable check
@@ -112,7 +115,6 @@ class APIClient {
     // Ensure body is handled as JSON string if present
     let body = options.body;
     if (options.body && typeof options.body !== 'string') {
-        // Here, options.body is the plain JS object, so we stringify it.
         body = JSON.stringify(options.body);
     }
     
@@ -326,7 +328,7 @@ class APIClient {
   async register(input: RegisterInput): Promise<APIResponse<RegisterResponse>> {
     return this.request<RegisterResponse>('/api/auth/register', {
       method: 'POST',
-      // FIX: Cast object to BodyInit to satisfy RequestInit.body type
+      // FIX: Cast object to BodyInit
       body: input as unknown as BodyInit,
     });
   }
@@ -337,7 +339,7 @@ class APIClient {
   async login(input: LoginInput): Promise<APIResponse<LoginResponse>> {
     const response = await this.request<LoginResponse>('/api/auth/login', {
       method: 'POST',
-      // FIX: Cast object to BodyInit to satisfy RequestInit.body type
+      // FIX: Cast object to BodyInit
       body: input as unknown as BodyInit,
     });
 
@@ -418,6 +420,19 @@ class APIClient {
 
     return data;
   }
+
+  // ==========================================================================
+  // CHECKLIST ENDPOINTS (FIX 2: ADDED)
+  // ==========================================================================
+  
+  /**
+   * Fetches the user's full checklist and items.
+   */
+  // FIX 3: Added the missing getChecklist method
+  async getChecklist(): Promise<APIResponse<Checklist & { items: ChecklistItem[] }>> {
+    return this.request<Checklist & { items: ChecklistItem[] }>('/api/checklist');
+  }
+
 
   // ==========================================================================
   // PROVIDER ENDPOINTS 

@@ -179,6 +179,35 @@ export interface InsurancePolicy {
 // CORE APPLICATION TYPES (Existing)
 // ============================================================================
 
+// --- CHECKLIST TYPES (FIX: ADDED MISSING TYPES) ---
+/**
+ * Checklist Item Interface
+ */
+export interface ChecklistItem {
+  id: string;
+  title: string;
+  description: string | null;
+  status: 'PENDING' | 'COMPLETED' | 'NOT_NEEDED'; // Assuming enum values
+  serviceCategory: ServiceCategory | null;
+  isRecurring: boolean;
+  frequency: RecurrenceFrequency | null;
+  nextDueDate: string | null;
+  lastCompletedDate: string | null;
+  checklistId: string;
+}
+
+/**
+ * Checklist Interface
+ */
+export interface Checklist {
+  id: string;
+  homeownerProfileId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+// --- END CHECKLIST TYPES ---
+
+
 /**
  * User
  */
@@ -190,7 +219,6 @@ export interface User {
   role: UserRole;
   emailVerified: boolean;
   status: UserStatus;
-  createdAt: string; 
   // FIX 1: Add the flattened segment field (sent by backend login/me responses)
   segment?: HomeownerSegment; 
   // FIX 2: Keep the nested profile structure for comprehensive user data
@@ -204,16 +232,12 @@ export interface User {
  * Auth Response
  */
 export interface LoginResponse {
-  // FIX: Added success property
-  success: true; 
   accessToken: string;
   refreshToken: string;
   user: User;
 }
 
 export interface RegisterResponse {
-  // FIX: Added success property
-  success: true; 
   message: string;
   user: User;
   emailVerificationToken?: string;
@@ -394,8 +418,6 @@ export interface RegisterInput {
   firstName: string;
   lastName: string;
   role: UserRole;
-  // FIX APPLIED: Make segment optional so 'PROVIDER' registration passes validation
-  segment?: HomeownerSegment; 
 }
 
 export interface CreateBookingInput {
