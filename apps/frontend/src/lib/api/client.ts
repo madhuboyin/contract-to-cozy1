@@ -221,6 +221,25 @@ class APIClient {
       }
 
 
+      // FIX: Skip parsing JSON if the response indicates no content (e.g., 204 No Content)
+      if (response.status !== 204 && response.status !== 205) {
+        const text = await response.text();
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            // If response body is not valid JSON (e.g., 500 HTML/text response)
+            const errorMessage = `Server returned status ${response.status}. Body was not JSON.`;
+            const textPreview = text ? text.substring(0, 200) : 'Empty body';
+            console.error('API DEBUG: Failed to parse JSON response. Raw body:', textPreview);
+            return {
+                success: false,
+                message: errorMessage,
+                error: { message: text.substring(0, 100), code: `HTTP_${response.status}` },
+            } as APIResponse<T>;
+        }
+      }
+      // If status is 204, 'data' will remain undefined/null, which is interpreted below.
+
       // --- DEBUG LOG 3: Log Final Data ---
       console.log('API DEBUG: Final Response Data:', data);
       // -----------------------------------
