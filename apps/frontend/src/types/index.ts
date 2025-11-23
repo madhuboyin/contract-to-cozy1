@@ -201,6 +201,18 @@ export interface Checklist {
   createdAt: string;
   updatedAt: string;
 }
+
+// NEW DTO for updating a ChecklistItem
+export interface UpdateChecklistItemInput {
+  title?: string;
+  description?: string | null;
+  status?: 'PENDING' | 'COMPLETED' | 'NOT_NEEDED';
+  serviceCategory?: ServiceCategory | null;
+  isRecurring?: boolean;
+  frequency?: RecurrenceFrequency | null;
+  nextDueDate?: string | null; // ISO Date string
+  lastCompletedDate?: string | null; // ISO Date string
+}
 // --- END CHECKLIST TYPES ---
 
 // ============================================================================

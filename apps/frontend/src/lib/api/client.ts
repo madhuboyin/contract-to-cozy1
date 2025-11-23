@@ -32,6 +32,7 @@ import {
   // FIX 1: Add Checklist and ChecklistItem types (assuming they exist in @/types)
   Checklist, 
   ChecklistItem,
+  UpdateChecklistItemInput,
 } from '@/types';
 
 // NOTE: Changed to API_BASE_URL to match common convention, but using the provided API_URL environment variable check
@@ -886,6 +887,29 @@ class APIClient {
      */
     async listDocuments(): Promise<APIResponse<{ documents: Document[] }>> {
       return this.request<{ documents: Document[] }>('/api/home-management/documents');
+  }
+
+  /**
+     * Updates an existing checklist item. (NEW)
+     */
+  async updateChecklistItem(
+    id: string,
+    data: UpdateChecklistItemInput
+  ): Promise<APIResponse<ChecklistItem>> {
+    return this.request<ChecklistItem>(`/api/checklist/items/${id}`, {
+      method: 'PATCH', // Use PATCH for partial updates
+      // FIX: Cast object to BodyInit
+      body: data as unknown as BodyInit,
+    });
+  }
+
+  /**
+   * Deletes a checklist item. (NEW)
+   */
+  async deleteChecklistItem(id: string): Promise<APIResponse<void>> {
+    return this.request<void>(`/api/checklist/items/${id}`, {
+      method: 'DELETE',
+    });
   }
 
 }

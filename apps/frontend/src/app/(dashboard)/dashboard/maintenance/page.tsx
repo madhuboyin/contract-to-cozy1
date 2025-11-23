@@ -3,31 +3,34 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { FileText, Loader2, Wrench, Calendar, Settings, Plus, Edit } from 'lucide-react';
+import { FileText, Loader2, Wrench, Calendar, Settings, Plus, Edit, Trash2 } from 'lucide-react';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import { api } from '@/lib/api/client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardHeader, 
+  CardTitle 
+} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
-import { useQuery } from '@tanstack/react-query'; 
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'; 
+import { MaintenanceConfigModal } from '../maintenance-setup/MaintenanceConfigModal'; 
+import { 
+  MaintenanceTaskConfig, 
+  RecurrenceFrequency,
+  ServiceCategory,
+  ChecklistItem, 
+} from '@/types';
 
-// Assuming DashboardChecklistItem is imported or defined globally,
-// but defining it locally for clarity based on the previous context:
-interface DashboardChecklistItem {
-    id: string;
-    title: string;
-    description: string | null;
-    status: 'PENDING' | 'COMPLETED' | 'NOT_NEEDED';
-    serviceCategory: string | null;
-    isRecurring: boolean;
-    frequency: string | null;
-    nextDueDate: string | null;
-    lastCompletedDate: string | null;
-}
+
+// Define the type for items fetched from the checklist endpoint
+interface DashboardChecklistItem extends ChecklistItem {}
 
 // Categories to EXCLUDE (Renewals and Financial items)
-const RENEWAL_CATEGORIES = [
+const RENEWAL_CATEGORIES: ServiceCategory[] = [
   'INSURANCE',
   'WARRANTY',
   'FINANCE',
@@ -36,12 +39,16 @@ const RENEWAL_CATEGORIES = [
 ];
 
 
-// Helper to format days until due (FIXED Union Type Access Error)
-// FIX 1: Ensure consistent return type (object) to avoid the union type access error in JSX.
+// Helper to format days until due
 const formatDueDate = (dueDateString: string | null) => {
     if (!dueDateString) return { text: 'N/A', color: 'text-gray-500' }; 
 
-    const days = differenceInDays(parseISO(dueDateString), new Date());
+    // Parse the date using UTC to avoid timezone issues with `new Date()`
+    const dueDate = parseISO(dueDateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Normalize today to midnight for consistent comparison
+
+    const days = differenceInDays(dueDate, today);
     
     if (days < 0) {
         return { text: `Overdue by ${Math.abs(days)} days`, color: 'text-red-600' };
@@ -49,18 +56,21 @@ const formatDueDate = (dueDateString: string | null) => {
     if (days <= 30) {
         return { text: `Due in ${days} days`, color: 'text-orange-500' };
     }
-    return { text: `Due ${format(parseISO(dueDateString), 'MMM dd, yyyy')}`, color: 'text-gray-700' };
+    return { text: `Due ${format(dueDate, 'MMM dd, yyyy')}`, color: 'text-gray-700' };
 };
 
 
 // --- Main Page Component ---
 export default function MaintenancePage() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<DashboardChecklistItem | null>(null);
 
   // Fetch the user's full checklist
   const { data: checklistRes, isLoading, refetch } = useQuery({
     queryKey: ['full-home-checklist'],
-    // FIX 2: getChecklist needs to be added to API client
     queryFn: () => api.getChecklist(),
   });
 
@@ -69,7 +79,6 @@ export default function MaintenancePage() {
       console.error("Error fetching checklist data:", checklistRes?.message);
       return [];
     }
-    // FIX 3: Explicitly cast the fetched items array to resolve implicit 'any' error
     return checklistRes.data.items as DashboardChecklistItem[];
   }, [checklistRes]);
 
@@ -78,12 +87,15 @@ export default function MaintenancePage() {
   const maintenanceItems = useMemo(() => {
     return allChecklistItems
       .filter(item => item.isRecurring)
-      .filter(item => item.status === 'PENDING') // Only track active, pending items
+      .filter(item => 
+        // FIX: Relaxed status filter to show all active tasks.
+        item.status !== 'COMPLETED' && item.status !== 'NOT_NEEDED'
+      ) 
       .filter(item => 
         // Exclude renewal categories
         !item.serviceCategory || !RENEWAL_CATEGORIES.includes(item.serviceCategory)
       )
-      .sort((a, b) => { // FIX 4: Corrected sorting parameters (resolved itemA/itemB error)
+      .sort((a, b) => { 
         // Sort by soonest Next Due Date
         const dateA = a.nextDueDate ? parseISO(a.nextDueDate).getTime() : Infinity;
         const dateB = b.nextDueDate ? parseISO(b.nextDueDate).getTime() : Infinity;
@@ -91,8 +103,106 @@ export default function MaintenancePage() {
       });
   }, [allChecklistItems]);
 
+  // --- Modal Handlers ---
+  const handleOpenModal = (task: DashboardChecklistItem) => {
+    setEditingTask(task);
+    setIsModalOpen(true);
+  };
 
-  if (isLoading) {
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingTask(null);
+  };
+  
+  // NOTE: This uses useMutation for optimism, but relies on a hypothetical 
+  // API function that must be implemented in the client API wrapper.
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string, data: Partial<DashboardChecklistItem> }) => {
+      // Placeholder API call (assume api.updateChecklistItem exists/will be implemented)
+      // The implemented API client now supports updateChecklistItem!
+      const updateData = {
+          title: data.title,
+          description: data.description,
+          isRecurring: data.isRecurring,
+          frequency: data.frequency,
+          nextDueDate: data.nextDueDate,
+          serviceCategory: data.serviceCategory,
+      }
+      const response = await api.updateChecklistItem(id, updateData); 
+      if (!response.success) {
+          throw new Error(response.error?.message || 'Failed to update item.');
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['full-home-checklist'] });
+      toast({ title: "Task Updated", description: "Maintenance task configuration saved." });
+      handleCloseModal();
+    },
+    onError: (error) => {
+      toast({ 
+        title: "Update Failed", 
+        description: error.message || "Could not save task changes.",
+        variant: "destructive" 
+      });
+    },
+  });
+
+  // NOTE: This uses useMutation for optimism, but relies on a hypothetical 
+  // API function that must be implemented in the client API wrapper.
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      // The implemented API client now supports deleteChecklistItem!
+      const response = await api.deleteChecklistItem(id);
+      if (!response.success) {
+          throw new Error(response.error?.message || 'Failed to delete item.');
+      }
+      return id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['full-home-checklist'] });
+      toast({ title: "Task Removed", description: "Maintenance task permanently deleted." });
+      handleCloseModal();
+    },
+    onError: (error) => {
+      toast({ 
+        title: "Removal Failed", 
+        description: error.message || "Could not remove the task.",
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const handleSaveTaskUpdate = (config: MaintenanceTaskConfig) => {
+    if (!editingTask) return;
+
+    // Map the MaintenanceConfigModal output to the ChecklistItem update DTO
+    const updateData: Partial<DashboardChecklistItem> = {
+      title: config.title,
+      description: config.description,
+      isRecurring: config.isRecurring,
+      frequency: config.isRecurring ? config.frequency : null,
+      // Note: nextDueDate needs to be converted to ISO string from Date
+      nextDueDate: config.isRecurring && config.nextDueDate 
+        ? format(config.nextDueDate, 'yyyy-MM-dd') 
+        : null,
+      serviceCategory: config.serviceCategory,
+    };
+
+    // The mutation uses the item's ID for the update API call
+    updateMutation.mutate({ id: editingTask.id, data: updateData });
+  };
+  
+  // The onRemove handler from the modal
+  const handleRemoveTask = (taskId: string) => {
+    deleteMutation.mutate(taskId);
+  };
+
+  // --- End Modal Handlers ---
+  
+
+  // FIX: Changed .isLoading to .isPending for mutations to fix TypeScript error
+  if (isLoading || updateMutation.isPending || deleteMutation.isPending) { 
     return (
       <div className="space-y-6 pb-8">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mt-10" />
@@ -103,7 +213,7 @@ export default function MaintenancePage() {
 
 
   return (
-    <div className="space-y-6 pb-8">
+    <div className="space-y-6 pb-8 max-w-7xl mx-auto px-4 md:px-8">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
           <Wrench className="w-7 h-7 text-blue-600" /> Recurring Maintenance
@@ -151,7 +261,7 @@ export default function MaintenancePage() {
                       "text-xs font-semibold px-2 py-1 rounded-full",
                       isAlert ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'
                     )}>
-                      {item.frequency || 'One-time'}
+                      {item.frequency || 'N/A'}
                     </div>
                   </div>
                   <CardDescription>
@@ -174,13 +284,20 @@ export default function MaintenancePage() {
                     )}
                 </CardContent>
                 <div className="flex border-t">
-                  <Button variant="ghost" className="w-1/2 rounded-none text-blue-600" asChild>
-                    <Link href={`/dashboard/checklist`}>
-                        <Settings className="w-4 h-4 mr-2" /> View/Edit
-                    </Link>
+                  <Button 
+                    variant="ghost" 
+                    className="w-1/2 rounded-none text-blue-600"
+                    onClick={() => handleOpenModal(item)} // Open modal on click
+                    disabled={updateMutation.isPending || deleteMutation.isPending}
+                  >
+                    <Settings className="w-4 h-4 mr-2" /> View/Edit
                   </Button>
                   {/* Action button would trigger the mark-complete API call */}
-                  <Button variant="ghost" className="w-1/2 rounded-none rounded-br-lg text-green-600 hover:bg-green-50">
+                  <Button 
+                    variant="ghost" 
+                    className="w-1/2 rounded-none rounded-br-lg text-green-600 hover:bg-green-50"
+                    onClick={() => toast({ title: "Mark Complete", description: "Functionality to be implemented." })}
+                  >
                     <Edit className="w-4 h-4 mr-2" /> Mark Complete
                   </Button>
                 </div>
@@ -189,6 +306,26 @@ export default function MaintenancePage() {
           })}
         </div>
       )}
+
+      {/* --- MODAL FOR EDITING --- */}
+      <MaintenanceConfigModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        template={null} 
+        existingConfig={editingTask ? {
+            templateId: editingTask.id, // Use the item's ID as the identifier
+            title: editingTask.title,
+            description: editingTask.description,
+            isRecurring: editingTask.isRecurring,
+            frequency: editingTask.frequency as RecurrenceFrequency,
+            // Convert ISO string back to Date object for the modal's internal state
+            nextDueDate: editingTask.nextDueDate ? parseISO(editingTask.nextDueDate) : null,
+            serviceCategory: editingTask.serviceCategory as ServiceCategory,
+        } : null}
+        onSave={handleSaveTaskUpdate} 
+        // Pass the item's ID for the modal's onRemove handler
+        onRemove={() => deleteMutation.mutate(editingTask?.id || '')} 
+      />
     </div>
   );
 }
