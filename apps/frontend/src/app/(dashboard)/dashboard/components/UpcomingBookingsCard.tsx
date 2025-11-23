@@ -48,7 +48,8 @@ export const UpcomingBookingsCard = () => {
   const { data, isLoading, error } = useQuery({
     queryKey: ['upcoming-bookings'],
     queryFn: () => api.listBookings({
-        status: 'PENDING,CONFIRMED', 
+        // FIX 1: Removed restrictive 'status' filter from API call 
+        // to ensure backend returns results.
         sortBy: 'scheduledDate',
         sortOrder: 'asc',
     }),
@@ -60,18 +61,22 @@ export const UpcomingBookingsCard = () => {
   const upcomingBookings = React.useMemo(() => {
     if (isLoading || !rawBookings) return [];
     
+    // Define statuses that should NOT be considered upcoming
+    const nonUpcomingStatuses = ['COMPLETED', 'CANCELLED', 'DRAFT'];
+
     return rawBookings
-      .filter(b => b.scheduledDate && !isPast(new Date(b.scheduledDate)))
+      .filter(b => b.scheduledDate) // Must have a date
+      .filter(b => !isPast(new Date(b.scheduledDate!))) // Must be in the future (or today)
+      .filter(b => !nonUpcomingStatuses.includes(b.status)) // Must have an active status
       .sort((a, b) => new Date(a.scheduledDate || 0).getTime() - new Date(b.scheduledDate || 0).getTime());
   }, [rawBookings, isLoading]);
 
-  // FIX 1: Limit display items to 3
   const displayBookings = upcomingBookings.slice(0, 3);
   const overflowCount = upcomingBookings.length - displayBookings.length;
   const showMore = overflowCount > 0;
   
   // Determine if any booking is confirmed/pending/about to start (Alert Triangle)
-  const isAlert = upcomingBookings.some(b => b.status === 'CONFIRMED' || b.status === 'IN_PROGRESS');
+  const isAlert = upcomingBookings.some(b => b.status === 'CONFIRMED' || b.status === 'IN_PROGRESS' || b.status === 'PENDING');
 
   return (
     <Card className="h-full flex flex-col">
@@ -92,9 +97,9 @@ export const UpcomingBookingsCard = () => {
             <div className="h-4 w-2/3 rounded bg-gray-200 animate-pulse" />
             <div className="h-4 w-1/3 rounded bg-gray-200 animate-pulse" />
           </div>
-        ) : displayBookings.length > 0 ? ( // FIX 2: Use displayBookings for rendering check
+        ) : displayBookings.length > 0 ? (
           <div className="space-y-3">
-            {displayBookings.map((booking, index) => ( // FIX 3: Iterate over displayBookings
+            {displayBookings.map((booking, index) => (
               <React.Fragment key={booking.id}>
                 <div className="flex justify-between items-center text-sm">
                   <div className="flex items-center space-x-2">
@@ -127,7 +132,6 @@ export const UpcomingBookingsCard = () => {
         )}
       </CardContent>
       
-      {/* FIX 4: Add Dynamic CardFooter */}
       <CardFooter className="border-t pt-4">
         {displayBookings.length > 0 && showMore ? (
             <Link
