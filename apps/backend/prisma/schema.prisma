@@ -156,8 +156,7 @@ enum HandymanType {
   CAULKING_SEALING
 }
 
-enum BookingStatus 
-{
+enum BookingStatus {
   DRAFT
   PENDING
   CONFIRMED
