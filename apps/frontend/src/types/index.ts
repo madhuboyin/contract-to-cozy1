@@ -304,14 +304,43 @@ export interface Service {
 /**
  * Property
  */
+
 export interface Property {
   id: string;
+  homeownerProfileId: string;
   name: string | null;
   address: string;
   city: string;
   state: string;
   zipCode: string;
   isPrimary: boolean;
+  
+  // PHASE 4 ADDITIONS: Basic/Migrated Fields
+  propertyType: string | null; // Corresponds to the new Enum string
+  propertySize: number | null; // Square Footage
+  yearBuilt: number | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  
+  // PHASE 4 ADDITIONS: Advanced Fields
+  ownershipType?: string | null;
+  occupantsCount?: number | null;
+  heatingType?: string | null;
+  coolingType?: string | null;
+  waterHeaterType?: string | null;
+  roofType?: string | null;
+  hvacInstallYear?: number | null;
+  waterHeaterInstallYear?: number | null;
+  roofReplacementYear?: number | null;
+  
+  // Booleans
+  hasSmokeDetectors?: boolean | null;
+  hasCoDetectors?: boolean | null;
+  hasSecuritySystem?: boolean | null;
+  hasFireExtinguisher?: boolean | null;
+  hasIrrigation?: boolean | null;
+  hasDrainageIssues?: boolean | null;
+  
 }
 
 /**

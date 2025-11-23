@@ -670,8 +670,8 @@ class APIClient {
     });
   }
 
-  /**
-   * Update a property
+/**
+   * Update a property (Updated to support all detail fields)
    */
   async updateProperty(
     id: string,
@@ -682,6 +682,35 @@ class APIClient {
       state?: string;
       zipCode?: string;
       isPrimary?: boolean;
+      
+      // Layer 1 - Basic/Migrated Fields
+      propertyType?: string; // Expects enum string
+      propertySize?: number;
+      yearBuilt?: number;
+      
+      // Layer 2 - Advanced Fields (Migrated and New)
+      bedrooms?: number;
+      bathrooms?: number;
+      ownershipType?: string; // Expects enum string
+      occupantsCount?: number;
+      heatingType?: string;
+      coolingType?: string;
+      waterHeaterType?: string;
+      roofType?: string;
+      hvacInstallYear?: number;
+      waterHeaterInstallYear?: number;
+      roofReplacementYear?: number;
+      foundationType?: string;
+      sidingType?: string;
+      electricalPanelAge?: number;
+      lotSize?: number;
+      hasIrrigation?: boolean;
+      hasDrainageIssues?: boolean;
+      hasSmokeDetectors?: boolean;
+      hasCoDetectors?: boolean;
+      hasSecuritySystem?: boolean;
+      hasFireExtinguisher?: boolean;
+      applianceAges?: any;
     }
   ): Promise<APIResponse<Property>> {
     return this.request(`/api/properties/${id}`, {
