@@ -34,60 +34,17 @@ enum HomeownerSegment {
   EXISTING_OWNER   // Standard homeowner focused on maintenance
 }
 
+// ADD THIS NEW ENUM
 enum ChecklistItemStatus {
   PENDING
   COMPLETED
   NOT_NEEDED
 }
 
-// ADDED ENUMS FOR PROPERTY DETAILS (Phase 1)
-enum PropertyType {
-  SINGLE_FAMILY
-  TOWNHOME
-  CONDO
-  APARTMENT
-  MULTI_UNIT
-  INVESTMENT_PROPERTY
-}
-
-enum OwnershipType {
-  OWNER_OCCUPIED
-  RENTED_OUT
-}
-
-enum HeatingType {
-  HVAC
-  FURNACE
-  HEAT_PUMP
-  RADIATORS
-  UNKNOWN
-}
-
-enum CoolingType {
-  CENTRAL_AC
-  WINDOW_AC
-  UNKNOWN
-}
-
-enum WaterHeaterType {
-  TANK
-  TANKLESS
-  HEAT_PUMP
-  SOLAR
-  UNKNOWN
-}
-
-enum RoofType {
-  SHINGLE
-  TILE
-  FLAT
-  METAL
-  UNKNOWN
-}
+// Add after the ChecklistItemStatus enum (around line 50)
 
 // NEW: Service category configuration for segment targeting
 model ServiceCategoryConfig {
-// ... existing fields (lines 53-69) ...
   id            String          @id @default(uuid())
   category      ServiceCategory @unique
   
@@ -98,8 +55,7 @@ model ServiceCategoryConfig {
   // Display properties
   displayName   String
   description   String?
-  icon          String?
-// Icon identifier for frontend
+  icon          String?         // Icon identifier for frontend
   sortOrder     Int    @default(0)
   
   // Status
@@ -113,19 +69,16 @@ model ServiceCategoryConfig {
 }
 
 enum ServiceCategory {
-// ... existing fields (lines 75-89) ...
   INSPECTION          // HOME_BUYER primary
   HANDYMAN           // Both segments
   PLUMBING           // EXISTING_OWNER primary
-  ELECTRICAL       
-  // EXISTING_OWNER primary
+  ELECTRICAL         // EXISTING_OWNER primary
   HVAC               // Both segments
   LANDSCAPING        // EXISTING_OWNER primary
   CLEANING           // Both segments (move-in for buyers, maintenance for owners)
   MOVING             // HOME_BUYER primary
   PEST_CONTROL       // Both segments
   LOCKSMITH          // Both segments
-  
   INSURANCE
   ATTORNEY
   FINANCE            // EXISTING_OWNER - Property tax renewals
@@ -134,7 +87,6 @@ enum ServiceCategory {
 }
 
 enum InspectionType {
-// ... existing fields (lines 98-107) ...
   HOME_INSPECTION
   PEST_INSPECTION
   RADON_TESTING
@@ -147,7 +99,6 @@ enum InspectionType {
 }
 
 enum HandymanType {
-// ... existing fields (lines 110-118) ...
   MINOR_REPAIRS
   FIXTURE_INSTALLATION
   FURNITURE_ASSEMBLY
@@ -159,9 +110,7 @@ enum HandymanType {
   CAULKING_SEALING
 }
 
-enum BookingStatus 
-{
-// ... existing fields (lines 121-127) ...
+enum BookingStatus {
   DRAFT
   PENDING
   CONFIRMED
@@ -172,7 +121,6 @@ enum BookingStatus
 }
 
 enum PaymentStatus {
-// ... existing fields (lines 130-134) ...
   PENDING
   AUTHORIZED
   CAPTURED
@@ -182,7 +130,6 @@ enum PaymentStatus {
 }
 
 enum DocumentType {
-// ... existing fields (lines 137-147) ...
   INSPECTION_REPORT
   ESTIMATE
   INVOICE
@@ -196,7 +143,6 @@ enum DocumentType {
 }
 
 enum MessageType {
-// ... existing fields (lines 150-153) ...
   TEXT
   SYSTEM
   BOOKING_UPDATE
@@ -204,7 +150,6 @@ enum MessageType {
 }
 
 enum ReviewStatus {
-// ... existing fields (lines 156-159) ...
   PENDING
   APPROVED
   REJECTED
@@ -212,7 +157,6 @@ enum ReviewStatus {
 }
 
 enum ProviderStatus {
-// ... existing fields (lines 162-165) ...
   PENDING_APPROVAL
   ACTIVE
   INACTIVE
@@ -221,12 +165,10 @@ enum ProviderStatus {
 
 // NEW ENUM for tracking different types of homeowner expenses
 enum ExpenseCategory {
-// ... existing fields (lines 169-175) ...
   REPAIR_SERVICE
   PROPERTY_TAX
   HOA_FEE
   UTILITY
- 
   APPLIANCE
   MATERIALS
   OTHER
@@ -237,7 +179,6 @@ enum ExpenseCategory {
 // ============================================================================
 
 model User {
-// ... existing fields (lines 182-205) ...
   id        String     @id @default(uuid())
   email     String     @unique
   phone     String?
@@ -255,7 +196,7 @@ model User {
   avatar       String?
   bio          String?
   address      Address?
-// Timestamps
+  // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   lastLoginAt DateTime?
@@ -273,13 +214,11 @@ model User {
   
   @@index([email])
   @@index([role])
-  
   @@index([status])
   @@map("users")
 }
 
 model Address {
-// ... existing fields (lines 209-228) ...
   id      String  @id @default(uuid())
   userId  String  @unique
   
@@ -312,16 +251,15 @@ model HomeownerProfile {
   userId String @unique
   
   // NEW FIELD to identify the user's segment.
-// Defaults to EXISTING_OWNER for 100% backward compatibility.
+  // Defaults to EXISTING_OWNER for 100% backward compatibility.
   segment HomeownerSegment @default(EXISTING_OWNER)
   
-  // Property Information (THESE FIELDS WILL BE REMOVED IN PHASE 3 AFTER MIGRATION)
-  // For Phase 1: Keep them here to maintain backwards compatibility
-  propertyType        String? // Single Family, Condo, Townhouse, etc. (Existing)
-  propertySize        Int?    // Square footage (Existing)
-  yearBuilt           Int?    // (Existing)
-  bedrooms            Int?    // (Existing)
-  bathrooms           Float?  // (Existing)
+  // Property Information
+  propertyType        String? // Single Family, Condo, Townhouse, etc.
+  propertySize        Int?    // Square footage
+  yearBuilt           Int?
+  bedrooms            Int?
+  bathrooms           Float?
   
   // Purchase Information (for HOME_BUYER segment)
   closingDate         DateTime?
@@ -332,14 +270,15 @@ model HomeownerProfile {
   notificationPreferences Json?  // Flexible JSON for various notification settings
   
   // Budget tracking
-  totalBudget         Decimal?  @db.Decimal(12, 2)
+  totalBudget         Decimal? @db.Decimal(12, 2)
   spentAmount         Decimal   @default(0) @db.Decimal(12, 2)
   
   // Relations
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   properties  Property[]
   checklist   Checklist?
-// NEW RELATIONS
+  
+  // NEW RELATIONS
   warranties  Warranty[]
   insurancePolicies InsurancePolicy[]
   expenses    Expense[]
@@ -355,7 +294,6 @@ model HomeownerProfile {
 // ============================================================================
 
 model Checklist {
-// ... existing fields (lines 268-280) ...
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -371,8 +309,7 @@ model Checklist {
 
 // Update ChecklistItem model - add these fields:
 model ChecklistItem {
-// ... existing fields (lines 283-301) ...
-  id            String   @id @default(cuid())
+  id        String   @id @default(cuid())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -381,11 +318,13 @@ model ChecklistItem {
   status      ChecklistItemStatus @default(PENDING)
   
   serviceCategory String?
-// NEW: Recurring task fields
+  
+  // NEW: Recurring task fields
   isRecurring        Boolean   @default(false)
   frequency          RecurrenceFrequency?
   nextDueDate        DateTime?
   lastCompletedDate  DateTime?
+
   checklistId String
   checklist   Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
   sortOrder   Int @default(0)
@@ -398,8 +337,8 @@ model Property {
   id                 String   @id @default(uuid())
   homeownerProfileId String
   
-  // Address Details (Existing Fields)
-  name         String? // e.g., "Main Home", "Investment Property"
+  // Property details
+  name         String?  // e.g., "Main Home", "Investment Property"
   address     String
   city        String
   state       String
@@ -407,66 +346,14 @@ model Property {
   
   isPrimary   Boolean  @default(true)
   
-  // ============================================================================
-  // NEW PROPERTY DETAILS (FROM HOMEOWNERPROFILE & NEW REQUIREMENTS) - PHASE 1 ADDITIONS
-  // ============================================================================
-  
-  // Migrated from HomeownerProfile (Layer 1 - Basic)
-  propertyType        PropertyType? 
-  propertySize        Int?    // Square footage
-  yearBuilt           Int?
-  
-  // Migrated from HomeownerProfile (Layer 2 - Advanced)
-  bedrooms            Int?
-  bathrooms           Float?
-  
-  // New Basic/Advanced Fields
-  ownershipType       OwnershipType?
-  occupantsCount      Int?    // Number of Occupants (Layer 2 - Usage/Wear Factor)
-  
-  // New Systems Snapshot (Layer 2 - Systems Factor)
-  heatingType         HeatingType?
-  coolingType         CoolingType?
-  waterHeaterType     WaterHeaterType?
-  
-  // New Structure Snapshot (Layer 2 - Structure Factor)
-  roofType            RoofType?
-
-  // New Optional Fields (Layer 2 - Extra Score Details)
-  hvacInstallYear     Int?
-  waterHeaterInstallYear Int?
-  roofReplacementYear Int?
-  foundationType      String?
-  sidingType          String? // Added as per detailed requirements list
-  electricalPanelAge  Int?    // Added as per detailed requirements list
-  
-  // Exterior & Utilities
-  lotSize             Float?
-  hasIrrigation       Boolean?
-  hasDrainageIssues   Boolean?
-  
-  // Safety
-  hasSmokeDetectors   Boolean?
-  hasCoDetectors      Boolean?
-  hasSecuritySystem   Boolean?
-  hasFireExtinguisher Boolean? // Added as per detailed requirements list
-  
-  // Appliances
-  applianceAges       Json?  // Major appliance ages
-
-  // ============================================================================
-  // END NEW PROPERTY DETAILS
-  // ============================================================================
-  
   // Relations
   homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
   bookings         Booking[]
 
-  // NEW RELATIONS (Existing)
+  // NEW RELATIONS
   warranties       Warranty[]
   insurancePolicies InsurancePolicy[]
   expenses         Expense[]
- 
   documents        Document[]
   
   createdAt DateTime @default(now())
@@ -478,17 +365,18 @@ model Property {
 
 // ============================================================================
 // PROVIDER PROFILE
-// ... (Model ProviderProfile and all subsequent models remain unchanged for Phase 1)
 // ============================================================================
+
 model ProviderProfile {
-// ... existing fields (lines 332-378) ...
   id     String @id @default(uuid())
   userId String @unique
   
   // Business Information
   businessName        String
   businessType        String? // LLC, Sole Proprietor, Corporation
-  taxId               String? // Service Information
+  taxId               String?
+  
+  // Service Information
   serviceCategories   ServiceCategory[]
   serviceRadius       Int      @default(25)  // Miles
   
@@ -503,6 +391,7 @@ model ProviderProfile {
   teamSize            Int?
   description         String?
   website             String?
+  
   // Ratings
   averageRating       Float    @default(0) @db.Real
   totalReviews        Int      @default(0)
@@ -521,7 +410,7 @@ model ProviderProfile {
   certifications     Certification[]
   portfolioImages    ProviderPortfolio[]
   bookings           Booking[]
-  availability        ProviderAvailability[]
+  availability       ProviderAvailability[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -532,7 +421,6 @@ model ProviderProfile {
 }
 
 model Certification {
-// ... existing fields (lines 381-396) ...
   id                String   @id @default(uuid())
   providerProfileId String
   
@@ -555,7 +443,6 @@ model Certification {
 }
 
 model ProviderPortfolio {
-// ... existing fields (lines 399-411) ...
   id                String  @id @default(uuid())
   providerProfileId String
   
@@ -574,7 +461,6 @@ model ProviderPortfolio {
 }
 
 model ProviderAvailability {
-// ... existing fields (lines 414-429) ...
   id                String   @id @default(uuid())
   providerProfileId String
   
@@ -600,7 +486,6 @@ model ProviderAvailability {
 // ============================================================================
 
 model Service {
-// ... existing fields (lines 435-459) ...
   id                String          @id @default(uuid())
   providerProfileId String
   
@@ -615,7 +500,7 @@ model Service {
   // Pricing
   basePrice         Decimal         @db.Decimal(10, 2)
   priceUnit         String          // "per hour", "per sqft", "flat rate"
-  minimumCharge     Decimal?        @db.Decimal(10, 2)
+  minimumCharge     Decimal? @db.Decimal(10, 2)
   
   // Availability
   isActive          Boolean         @default(true)
@@ -639,7 +524,6 @@ model Service {
 // ============================================================================
 
 model Booking {
-// ... existing fields (lines 465-502) ...
   id                String        @id @default(uuid())
   bookingNumber     String        @unique // B-2025-001234
  
@@ -665,7 +549,7 @@ model Booking {
   
   // Pricing
   estimatedPrice    Decimal         @db.Decimal(10, 2)
-  finalPrice        Decimal?        @db.Decimal(10, 2)
+  finalPrice        Decimal? @db.Decimal(10, 2)
   depositAmount     Decimal?        @db.Decimal(10, 2)
   
   // Details
@@ -677,8 +561,10 @@ model Booking {
   cancelledAt       DateTime?
   cancelledBy       String?         // userId
   cancellationReason String?
+  
   // Completion
   completedAt       DateTime?
+  
   // Relations
   homeowner         User              @relation("BookingHomeowner", fields: [homeownerId], references: [id])
   provider          User              @relation("BookingProvider", fields: [providerId], references: [id])
@@ -704,7 +590,6 @@ model Booking {
 }
 
 model BookingTimeline {
-// ... existing fields (lines 505-518) ...
   id        String   @id @default(uuid())
   bookingId String
   
@@ -726,7 +611,6 @@ model BookingTimeline {
 // ============================================================================
 
 model Payment {
-// ... existing fields (lines 524-547) ...
   id          String        @id @default(uuid())
   bookingId   String
   
@@ -749,6 +633,7 @@ model Payment {
   // Refund
   refundedAmount Decimal? @db.Decimal(10, 2)
   refundedAt     DateTime?
+  
   // Relations
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   
@@ -765,12 +650,11 @@ model Payment {
 // ============================================================================
 
 model Document {
-// ... existing fields (lines 553-587) ...
   id          String       @id @default(uuid())
   bookingId   String?
   propertyId  String?      // NEW: Link to general home documents
-  warrantyId  String? // NEW: Link to a Warranty record
-  policyId    String? // NEW: Link to an InsurancePolicy record
+  warrantyId  String?      // NEW: Link to a Warranty record
+  policyId    String?      // NEW: Link to an InsurancePolicy record
 
   uploadedBy  String       // userId
   
@@ -783,12 +667,12 @@ model Document {
   mimeType    String
   
   // Metadata
-  metadata    Json? // Flexible storage for document-specific data
+  metadata    Json?        // Flexible storage for document-specific data
   
   // Relations
-  booking          Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  property         Property? @relation(fields: [propertyId], references: [id])
-  warranty         Warranty? @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
+  booking          Booking?         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  property         Property?        @relation(fields: [propertyId], references: [id])
+  warranty         Warranty?        @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
   insurancePolicy  InsurancePolicy? @relation(fields: [policyId], references: [id], onDelete: Cascade)
   
   createdAt DateTime @default(now())
@@ -807,7 +691,6 @@ model Document {
 // ============================================================================
 
 model Message {
-// ... existing fields (lines 593-614) ...
   id          String      @id @default(uuid())
   bookingId   String?
   senderId    String
@@ -821,6 +704,7 @@ model Message {
   // Status
   isRead      Boolean     @default(false)
   readAt      DateTime?
+  
   // Relations
   booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   sender    User     @relation(fields: [senderId], references: [id])
@@ -836,7 +720,6 @@ model Message {
 
 // Add new enum for frequency
 enum RecurrenceFrequency {
-// ... existing fields (lines 617-621) ...
   MONTHLY
   QUARTERLY
   SEMI_ANNUALLY
@@ -845,7 +728,6 @@ enum RecurrenceFrequency {
 
 
 model MaintenanceTaskTemplate {
-// ... existing fields (lines 624-635) ...
   id               String               @id @default(uuid())
   title            String
   description      String?
@@ -867,16 +749,15 @@ model MaintenanceTaskTemplate {
 // ============================================================================
 
 model Warranty {
-// ... existing fields (lines 641-665) ...
   id                 String    @id @default(uuid())
   homeownerProfileId String
-  propertyId         String? // Link to a specific property (e.g., HVAC unit warranty is for the main home)
+  propertyId         String?   // Link to a specific property (e.g., HVAC unit warranty is for the main home)
   
   // Policy Details
   providerName       String
   policyNumber       String?
   coverageDetails    String?
-  cost               Decimal? @db.Decimal(12, 2)
+  cost               Decimal?  @db.Decimal(12, 2)
   
   // Dates
   startDate          DateTime
@@ -884,7 +765,7 @@ model Warranty {
   
   // Relations
   homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
-  property           Property? @relation(fields: [propertyId], references: [id])
+  property           Property?        @relation(fields: [propertyId], references: [id])
   documents          Document[]
   
   createdAt DateTime @default(now())
@@ -900,15 +781,14 @@ model Warranty {
 // ============================================================================
 
 model InsurancePolicy {
-// ... existing fields (lines 671-695) ...
   id                 String    @id @default(uuid())
   homeownerProfileId String
-  propertyId         String? // Link to the insured property
+  propertyId         String?   // Link to the insured property
   
   // Policy Details
   carrierName        String
   policyNumber       String
-  coverageType       String? // e.g., "Homeowner", "Landlord", "Flood"
+  coverageType       String?   // e.g., "Homeowner", "Landlord", "Flood"
   premiumAmount      Decimal   @db.Decimal(12, 2)
   
   // Dates
@@ -917,7 +797,7 @@ model InsurancePolicy {
   
   // Relations
   homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
-  property           Property? @relation(fields: [propertyId], references: [id])
+  property           Property?        @relation(fields: [propertyId], references: [id])
   documents          Document[]
   
   createdAt DateTime @default(now())
@@ -933,11 +813,10 @@ model InsurancePolicy {
 // ============================================================================
 
 model Expense {
-// ... existing fields (lines 701-725) ...
   id                 String          @id @default(uuid())
   homeownerProfileId String
-  propertyId         String? // Link to a specific property
-  bookingId          String? // Optional link to a platform booking (e.g., a top-up payment)
+  propertyId         String?   // Link to a specific property
+  bookingId          String?   // Optional link to a platform booking (e.g., a top-up payment)
   
   // Expense Details
   description        String
@@ -947,8 +826,8 @@ model Expense {
   
   // Relations
   homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
-  property           Property? @relation(fields: [propertyId], references: [id])
-  booking            Booking? @relation(fields: [bookingId], references: [id])
+  property           Property?        @relation(fields: [propertyId], references: [id])
+  booking            Booking?         @relation(fields: [bookingId], references: [id])
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -964,7 +843,6 @@ model Expense {
 // ============================================================================
 
 model Review {
-// ... existing fields (lines 731-760) ...
   id          String       @id @default(uuid())
   bookingId   String       @unique
   authorId    String
@@ -982,6 +860,7 @@ model Review {
   communicationRating Int?
   valueRating        Int?
   professionalismRating Int?
+  
   // Moderation
   status      ReviewStatus @default(PENDING)
   moderatedAt DateTime?
@@ -990,6 +869,7 @@ model Review {
   // Provider Response
   response    String?
   respondedAt DateTime?
+  
   // Relations
   booking  Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   author   User    @relation("ReviewAuthor", fields: [authorId], references: [id])
@@ -1009,7 +889,6 @@ model Review {
 // ============================================================================
 
 model Notification {
-// ... existing fields (lines 766-787) ...
   id       String  @id @default(uuid())
   userId   String
   
@@ -1020,12 +899,14 @@ model Notification {
   
   // Action
   actionUrl String?
+  
   // Status
   isRead   Boolean @default(false)
   readAt   DateTime?
   
   // Metadata
   metadata Json?
+  
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   
@@ -1042,7 +923,6 @@ model Notification {
 // ============================================================================
 
 model Favorite {
-// ... existing fields (lines 793-806) ...
   id                String   @id @default(uuid())
   userId            String
   providerProfileId String
@@ -1057,13 +937,11 @@ model Favorite {
   @@map("favorites")
 }
 
-// 
 // ============================================================================
 // SYSTEM TABLES
 // ============================================================================
 
 model AuditLog {
-// ... existing fields (lines 812-828) ...
   id         String   @id @default(uuid())
   
   // Who & What
@@ -1079,6 +957,7 @@ model AuditLog {
   // Context
   ipAddress  String?
   userAgent  String?
+  
   createdAt DateTime @default(now())
   
   @@index([userId])
@@ -1088,7 +967,6 @@ model AuditLog {
 }
 
 model SystemSetting {
-// ... existing fields (lines 831-837) ...
   id    String @id @default(uuid())
   key   String @unique
   value Json
