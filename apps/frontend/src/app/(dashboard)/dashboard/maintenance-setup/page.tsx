@@ -22,6 +22,8 @@ import { ServiceCategoryIcon } from '@/components/ServiceCategoryIcon';
 import { Loader2, AlertCircle, Sparkles, Pencil, Wrench } from 'lucide-react'; // Added Wrench icon for consistency
 import { cn } from '@/lib/utils';
 import { MaintenanceConfigModal } from './MaintenanceConfigModal'; 
+// NEW IMPORT
+import { useQueryClient } from '@tanstack/react-query';
 
 // FIX 1: Define excluded renewal/financial categories
 const RENEWAL_CATEGORIES: ServiceCategory[] = [
@@ -44,6 +46,8 @@ function formatFrequency(frequency: string | null): string {
 
 export default function MaintenanceSetupPage() {
   const router = useRouter();
+  // FIX 2: Initialize the queryClient
+  const queryClient = useQueryClient();
   const [templates, setTemplates] = useState<MaintenanceTaskTemplate[]>([]);
 
   const [selectedTasks, setSelectedTasks] = useState<
@@ -119,31 +123,35 @@ export default function MaintenanceSetupPage() {
   };
   // --- END NEW HANDLERS ---
 
-  // --- MODIFIED: handleSave (No Change) ---
-  const handleSave = async () => {
-    setSaving(true);
-    
-    const tasksToSave = Object.values(selectedTasks);
+// --- MODIFIED: handleSave (Added Query Invalidation and Corrected Redirect) ---
+const handleSave = async () => {
+  setSaving(true);
+  
+  const tasksToSave = Object.values(selectedTasks);
 
-    if (tasksToSave.length > 0) {
-      try {
-        const response = await api.createCustomMaintenanceItems({
-          tasks: tasksToSave,
-        });
-        if (!response.success) {
-          throw new Error(
-            response.error?.message || 'Failed to save tasks.'
-          );
-        }
-      } catch (err: any) {
-        setError(err.message);
-        setSaving(false);
-        return;
+  if (tasksToSave.length > 0) {
+    try {
+      const response = await api.createCustomMaintenanceItems({
+        tasks: tasksToSave,
+      });
+      if (!response.success) {
+        throw new Error(
+          response.error?.message || 'Failed to save tasks.'
+        );
       }
+      
+      // FIX 1: Invalidate the maintenance list query cache to force a refresh on the next page
+      queryClient.invalidateQueries({ queryKey: ['full-home-checklist'] });
+
+    } catch (err: any) {
+      setError(err.message);
+      setSaving(false);
+      return;
     }
-    router.push('/dashboard/maintenance');// Redirect to checklist to see new items
-  };
-  // --- END MODIFICATION ---
+  }
+  // FIX 2: Redirect to the correct Maintenance List page for Existing Owners
+  router.push('/dashboard/maintenance'); 
+};
 
   // handleSkip (no change)
   const handleSkip = () => {
