@@ -59,14 +59,21 @@ export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMa
              <p>All caught up!</p>
           </div>
         ) : (
-          <ul className="space-y-3">
+          <ul className="space-y-1">
             {pendingTasks.map(task => (
-              <li key={task.id} className="flex items-center justify-between text-sm">
-                <span className="truncate pr-2 font-medium">{task.title}</span>
-                <span className="flex-shrink-0 text-xs whitespace-nowrap">
-                  {formatDue(task.nextDueDate)}
-                </span>
-              </li>
+              // FIX: Wrap the list item content in a Link to make it clickable
+              <Link 
+                key={task.id} 
+                href="/dashboard/maintenance" 
+                className="block p-2 rounded-lg hover:bg-gray-100 transition-colors duration-150"
+              >
+                <li className="flex items-center justify-between text-sm">
+                  <span className="truncate pr-2 font-medium">{task.title}</span>
+                  <span className="flex-shrink-0 text-xs whitespace-nowrap">
+                    {formatDue(task.nextDueDate)}
+                  </span>
+                </li>
+              </Link>
             ))}
           </ul>
         )}
