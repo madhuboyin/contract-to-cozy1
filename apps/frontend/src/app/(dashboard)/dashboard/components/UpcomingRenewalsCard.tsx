@@ -102,7 +102,7 @@ export const UpcomingRenewalsCard = () => {
   
   return (
     <Card className={`h-full`}>
-      {/* FIX 1: Use standard CardHeader classes for alignment consistency */}
+      {/* HEADER: Standard CardHeader class for alignment consistency */}
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">
           Upcoming Renewals
@@ -127,8 +127,8 @@ export const UpcomingRenewalsCard = () => {
               const isAlertItem = item.isExpiringSoon; 
               const isExpired = item.daysUntilExpiry < 0;
 
-              // Link Text Color: Default to strong neutral black. Red only if EXPIRED.
-              const linkTextColorClass = isExpired ? 'text-red-600' : 'text-gray-900';
+              // Link Text Color: Default to neutral foreground. Red only if EXPIRED.
+              const linkTextColorClass = isExpired ? 'text-red-600' : 'text-foreground';
               
               // Icon Color: Red if Alert, otherwise type-specific color
               const itemIconColor = isAlertItem ? 'text-red-500' : (item.type === 'Warranty' ? 'text-blue-500' : 'text-purple-500');
@@ -148,22 +148,23 @@ export const UpcomingRenewalsCard = () => {
                         <Home className={`h-4 w-4 flex-shrink-0 ${itemIconColor}`} />
                       )}
                       
-                      {/* FIX 2: Link Text (Name) - Ensure strong neutral color by default */}
+                      {/* Link Text (Name) */}
                       <Link
                         href={`/dashboard/${item.type === 'Warranty' ? 'warranties' : 'insurance'}`}
-                        className={`font-medium ${linkTextColorClass} hover:text-blue-600`} 
+                        // FIX 2: Set the neutral color to 'text-foreground' and ensure hover is subtle
+                        className={`font-medium ${linkTextColorClass} hover:opacity-80`} 
                       >
                         {item.name}
                       </Link>
                     </div>
                     <div className="flex-shrink-0 text-right">
                       
-                      {/* FIX 3: DATE TEXT (Expiring Soon/Expired = RED) */}
+                      {/* DATE TEXT (Expiring Soon/Expired = RED) */}
                       <p className={`font-semibold ${dateTextColor}`}>
                         {format(new Date(item.expiryDate), 'MMM dd, yyyy')}
                       </p>
                       
-                      {/* FIX 4: DAY COUNT TEXT (Expiring Soon/Expired = RED) */}
+                      {/* DAY COUNT TEXT (Expiring Soon/Expired = RED) */}
                       <p className={`text-xs ${daysTextColor}`}>
                         {item.daysUntilExpiry <= 0
                           ? `Expired ${Math.abs(item.daysUntilExpiry)} days ago`
