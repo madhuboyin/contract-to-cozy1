@@ -104,7 +104,7 @@ export const ExistingOwnerDashboard = ({
       
       {/* Expanded View of the full Home Management Checklist */}
       <div className="pt-4">
-        <Link href="/dashboard/checklist" className="text-lg font-semibold text-blue-600 hover:text-blue-700 transition-colors flex items-center">
+        <Link href="/dashboard/maintenance" className="text-lg font-semibold text-blue-600 hover:text-blue-700 transition-colors flex items-center">
           View Full Home Management Checklist &rarr;
         </Link>
       </div>
