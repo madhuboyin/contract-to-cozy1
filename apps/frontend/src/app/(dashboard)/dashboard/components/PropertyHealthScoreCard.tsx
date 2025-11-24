@@ -2,29 +2,8 @@ import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
 import { Zap, Shield, Home, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-
-// --- Type Definitions (Assumed to be exported from frontend's src/types/index.ts) ---
-
-// NOTE: These interfaces mirror the backend response structure (ScoredProperty)
-interface HealthScoreResult {
-  totalScore: number;
-  baseScore: number;
-  unlockedScore: number;
-  maxPotentialScore: number;
-  maxBaseScore: number;
-  maxExtraScore: number;
-  insights: { factor: string; status: string; score: number }[];
-  ctaNeeded: boolean;
-}
-
-interface ScoredProperty {
-    id: string;
-    name: string | null;
-    isPrimary: boolean;
-    // ... other standard Property fields
-    healthScore: HealthScoreResult;
-}
-// -----------------------------------------------------------------------------------
+// CRITICAL FIX: Import ScoredProperty and HealthScoreResult from the official types file
+import { ScoredProperty, HealthScoreResult } from '@/types'; 
 
 
 interface PropertyHealthScoreCardProps {

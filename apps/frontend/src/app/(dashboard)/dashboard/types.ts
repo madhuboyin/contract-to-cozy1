@@ -37,3 +37,25 @@ export interface DashboardData {
   isLoading: boolean;
   error: string | null;
 }
+
+/**
+ * Interface representing the detailed breakdown of the Property Health Score.
+ */
+export interface HealthScoreResult {
+  totalScore: number;
+  baseScore: number;
+  unlockedScore: number;
+  maxPotentialScore: number;
+  maxBaseScore: number;
+  maxExtraScore: number;
+  insights: { factor: string; status: string; score: number }[];
+  ctaNeeded: boolean;
+}
+
+/**
+ * The core Property type from the API, extended with the calculated score.
+ * It extends the base Property type imported via '@/types'
+ */
+export interface ScoredProperty extends Property { // Assumes Property is imported or available globally
+    healthScore: HealthScoreResult;
+}

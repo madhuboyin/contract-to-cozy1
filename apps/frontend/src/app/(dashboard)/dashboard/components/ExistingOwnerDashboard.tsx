@@ -6,14 +6,19 @@ import { Booking, Property } from '@/types';
 import { UpcomingBookingsCard } from './UpcomingBookingsCard';
 import { RecurringMaintenanceCard } from './RecurringMaintenanceCard';
 import { UpcomingRenewalsCard } from './UpcomingRenewalsCard'; 
-import { MyPropertiesCard } from './MyPropertiesCard';
 import { FavoriteProvidersCard } from './FavoriteProvidersCard';
-import { DashboardChecklistItem } from '../types'; 
+import { DashboardChecklistItem, ScoredProperty } from '../types'; // Import ScoredProperty from types
 import { parseISO, isBefore, addDays } from 'date-fns'; 
+import { PropertyHealthScoreCard } from './PropertyHealthScoreCard'; 
+
+
+// --- REMOVED TEMPORARY TYPE DEFINITIONS ---
+// The temporary interfaces for HealthScoreResult and ScoredProperty were removed here.
+// --------------------------------------------------------------------------
 
 interface ExistingOwnerDashboardProps {
   bookings: Booking[];
-  properties: Property[];
+  properties: ScoredProperty[]; // Use the imported ScoredProperty
   checklistItems: DashboardChecklistItem[];
   userFirstName: string;
 }
@@ -29,6 +34,9 @@ export const ExistingOwnerDashboard = ({
   // *** GUARANTEED LOG TO CONFIRM RENDERING ***
   console.log('*** DEBUG 0: ExistingOwnerDashboard component is rendering ***');
   
+  // Logic to determine the primary property for the Score Card
+  const primaryProperty = properties.find(p => p.isPrimary) || properties[0];
+
   // Filter Logic
   const RENEWAL_CATEGORIES = ['INSURANCE', 'WARRANTY', 'FINANCE', 'ADMIN', 'ATTORNEY'];
   
@@ -37,46 +45,7 @@ export const ExistingOwnerDashboard = ({
     item.status === 'PENDING' 
   );
   
-  // 2. Identify all active Renewal Category items (omitted full logic for brevity)
-  const activeRenewalItems = activeChecklistItems.filter(item => 
-    item.serviceCategory && RENEWAL_CATEGORIES.includes(item.serviceCategory as string)
-  );
-
-  // --- START RENEWALS DEBUG LOGS ---
-  console.log('--- RENEWALS DEBUG START ---');
-
-  const today = new Date();
-  const nextSevenDays = addDays(today, 7);
-
-  const upcomingRenewals = activeRenewalItems.filter(item => {
-      let passesFilter = true;
-
-      // Ensure nextDueDate is valid before trying to parse
-      if (item.nextDueDate) {
-          const dueDate = parseISO(item.nextDueDate);
-          const isExpired = isBefore(dueDate, today);
-          const isUpcoming = isBefore(dueDate, nextSevenDays);
-          
-          // Show expired items OR items coming up in the next 7 days
-          passesFilter = isExpired || isUpcoming;
-      } else {
-          // If due date is null, typically filter it out unless business logic dictates otherwise
-          passesFilter = false; 
-      }
-      
-      return passesFilter;
-  }).sort((a, b) => {
-      // Sort by soonest due date (past dates bubble up first)
-      const dateA = parseISO(a.nextDueDate || '2999-12-31').getTime();
-      const dateB = parseISO(b.nextDueDate || '2999-12-31').getTime();
-      return dateA - dateB;
-  });
-
-  console.log('Total Upcoming Renewals Displayed:', upcomingRenewals.length);
-  console.log('--- RENEWALS DEBUG END ---');
-  // --- END RENEWALS DEBUG LOGS ---
-
-
+  // 2. Separate Maintenance from Renewals
   const upcomingMaintenance = activeChecklistItems.filter(item => 
     // Exclude renewal items from the maintenance list for clarity
     !item.serviceCategory || !RENEWAL_CATEGORIES.includes(item.serviceCategory as string)
@@ -89,18 +58,30 @@ export const ExistingOwnerDashboard = ({
     <div className="space-y-6 pb-8">
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Welcome back, {userFirstName}</h2>
-        <p className="text-muted-foreground">Here is what's happening with your properties today.</p>
+        <p className="text-muted-foreground">Monitor your home's health and maintenance schedule.</p>
       </div>
 
-      <div className="grid grid-cols-1 md::grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Row 1 */}
-        {/* FIX 1: Remove 'bookings' prop to resolve the compile error */}
+      {/* NEW LAYOUT IMPLEMENTATION */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* ROW 1: Property Health Score (2/3 width) and Upcoming Bookings (1/3 width) */}
+        {primaryProperty && (
+            <div className="lg:col-span-2">
+                <PropertyHealthScoreCard property={primaryProperty} />
+            </div>
+        )}
         <UpcomingBookingsCard /> 
-        <RecurringMaintenanceCard maintenance={upcomingMaintenance} />
-        <UpcomingRenewalsCard /> 
-        {/* Row 2 */}
-        <MyPropertiesCard properties={properties} />
-        <FavoriteProvidersCard />
+
+        {/* ROW 2: Recurring Maintenance and Upcoming Renewals (Full width split) */}
+        <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <RecurringMaintenanceCard maintenance={upcomingMaintenance} />
+          <UpcomingRenewalsCard />
+        </div>
+        
+        {/* ROW 3: Favorite Providers Card (Spans full width) */}
+        <div className="lg:col-span-3"> 
+          <FavoriteProvidersCard />
+        </div>
       </div>
       
       {/* Expanded View of the full Home Management Checklist */}

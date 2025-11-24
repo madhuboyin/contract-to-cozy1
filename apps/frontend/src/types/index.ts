@@ -301,6 +301,8 @@ export interface Service {
   updatedAt?: string;
 }
 
+// Add these interfaces to your apps/frontend/src/types/index.ts (or the file aliased as "../types")
+
 /**
  * Interface representing the detailed breakdown of the Property Health Score,
  * matching the object returned by the calculateHealthScore utility on the backend.
@@ -317,9 +319,9 @@ export interface HealthScoreResult {
 }
 
 /**
- * Property
+ * The standard Property interface, updated to include all new optional fields 
+ * from the extended database schema (Phase 1).
  */
-
 export interface Property {
   id: string;
   homeownerProfileId: string;
@@ -330,37 +332,38 @@ export interface Property {
   zipCode: string;
   isPrimary: boolean;
   
-  // PHASE 4 ADDITIONS: Basic/Migrated Fields
-  propertyType: string | null; // Corresponds to the new Enum string
-  propertySize: number | null; // Square Footage
+  // New Basic/Migrated Fields
+  propertyType: string | null; // Enum string
+  propertySize: number | null;
   yearBuilt: number | null;
-  bedrooms?: number | null;
-  bathrooms?: number | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
   
-  // PHASE 4 ADDITIONS: Advanced Fields
-  ownershipType?: string | null;
-  occupantsCount?: number | null;
-  heatingType?: string | null;
-  coolingType?: string | null;
-  waterHeaterType?: string | null;
-  roofType?: string | null;
-  hvacInstallYear?: number | null;
-  waterHeaterInstallYear?: number | null;
-  roofReplacementYear?: number | null;
-  
-  // Booleans
-  hasSmokeDetectors?: boolean | null;
-  hasCoDetectors?: boolean | null;
-  hasSecuritySystem?: boolean | null;
-  hasFireExtinguisher?: boolean | null;
-  hasIrrigation?: boolean | null;
-  hasDrainageIssues?: boolean | null;
-
+  // New Advanced Fields
+  ownershipType: string | null;
+  occupantsCount: number | null;
+  heatingType: string | null;
+  coolingType: string | null;
+  waterHeaterType: string | null;
+  roofType: string | null;
+  hvacInstallYear: number | null;
+  waterHeaterInstallYear: number | null;
+  roofReplacementYear: number | null;
+  foundationType: string | null;
+  sidingType: string | null;
+  electricalPanelAge: number | null;
+  lotSize: number | null;
+  hasIrrigation: boolean | null;
+  hasDrainageIssues: boolean | null;
+  hasSmokeDetectors: boolean | null;
+  hasCoDetectors: boolean | null;
+  hasSecuritySystem: boolean | null;
+  hasFireExtinguisher: boolean | null;
   applianceAges: any;
   
   createdAt: string;
   updatedAt: string;
-  
+  // ... include any other existing fields ...
 }
 
 /**
@@ -368,7 +371,7 @@ export interface Property {
  * which includes the calculated health score.
  */
 export interface ScoredProperty extends Property {
-  healthScore: HealthScoreResult;
+    healthScore: HealthScoreResult;
 }
 
 /**
