@@ -34,18 +34,23 @@ export default function DashboardPage() {
 
   const fetchDashboardData = async () => {
     if (!user) {
+      console.log('DEBUG: User not logged in, halting fetch.');
       setData(prev => ({ ...prev, isLoading: false, error: 'User not logged in.' }));
       return;
     }
 
     try {
+      console.log('DEBUG: Starting fetchDashboardData...');
       setData(prev => ({ ...prev, isLoading: true, error: null }));
       
-      // Since the API client's getProperties is typed to return APIResponse<{properties: Property[]}>,
-      // we need to explicitly cast the data here to correctly handle the attached score.
+      const API_URL = process.env.NEXT_PUBLIC_API_URL;
+      const CHECKLIST_URL = `${API_URL}/api/checklist`;
       
-      // FIX 1: Restore absolute URL fetch and add robust HTTP status check
-      const checklistFetchPromise = fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/checklist`, {
+      // DEBUG: Log the API URL being used
+      console.log(`DEBUG: Checking NEXT_PUBLIC_API_URL: ${API_URL}`);
+      console.log(`DEBUG: Final Checklist URL: ${CHECKLIST_URL}`);
+      
+      const checklistFetchPromise = fetch(CHECKLIST_URL, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
           }
@@ -54,9 +59,10 @@ export default function DashboardPage() {
             if (!res.ok) {
                 // If it fails (e.g., 404, 500), throw an error to be caught below, preventing JSON parse errors.
                 const errorText = await res.text();
-                // Throw an error with the HTTP status and a snippet of the response text (if available)
-                throw new Error(`Checklist API returned status ${res.status}. Response start: ${errorText.substring(0, 100)}`);
+                console.error(`ERROR: Checklist fetch failed with status ${res.status}. Response start: ${errorText.substring(0, 100)}`);
+                throw new Error(`Checklist API returned status ${res.status}.`);
             }
+            console.log('DEBUG: Checklist fetch successful (res.ok is true). Attempting JSON parse.');
             return res.json();
         });
 
@@ -68,10 +74,16 @@ export default function DashboardPage() {
         checklistFetchPromise, // Use the new robust fetch logic
       ]);
 
+      console.log('DEBUG: Promise.all resolved.');
+      
       const newProperties: ScoredProperty[] = propertiesRes.success ? (propertiesRes.data.properties as ScoredProperty[]) : [];
 
       // FIX: Ensure checklist is set robustly.
       const isChecklistSuccess = typeof checklistRes === 'object' && checklistRes !== null && checklistRes.success;
+
+      // DEBUG: Log the checklist data status
+      console.log(`DEBUG: Checklist Success Status: ${isChecklistSuccess}`);
+      console.log(`DEBUG: Fetched Checklist Data (partial): ID=${isChecklistSuccess ? checklistRes.data.id : 'N/A'}, Items Count=${isChecklistSuccess ? checklistRes.data.items.length : 0}`);
 
       setData({
         bookings: bookingsRes.success ? bookingsRes.data.bookings : [],
@@ -82,7 +94,8 @@ export default function DashboardPage() {
       });
 
     } catch (error: any) {
-      console.error('Failed to fetch dashboard data:', error);
+      // CRITICAL DEBUG: Catch and log the entire error object
+      console.error('CRITICAL ERROR: Failed to fetch dashboard data:', error);
       setData(prev => ({ ...prev, isLoading: false, error: error.message || 'An unexpected error occurred.' }));
     }
   };
@@ -116,6 +129,9 @@ export default function DashboardPage() {
   const userSegment = user.segment;
   
   const checklistItems = (data.checklist?.items || []) as DashboardChecklistItem[];
+  
+  // CRITICAL DEBUG: Log the final number of checklist items being passed down
+  console.log(`DEBUG: Final Checklist Items to Dashboard: ${checklistItems.length}`);
   
   // CRITICAL: The segment check must match the fixed property in types/index.ts
   if (userSegment === 'HOME_BUYER') {
