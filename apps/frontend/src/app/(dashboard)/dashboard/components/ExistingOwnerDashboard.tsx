@@ -39,9 +39,11 @@ export const ExistingOwnerDashboard = ({
   
   // 2. Separate Maintenance from Renewals (FINAL FIX)
   const upcomingMaintenance = activeChecklistItems.filter(item => 
-    // Include the task ONLY if it is NOT a renewal category
-    !item.serviceCategory || !RENEWAL_CATEGORIES.includes(item.serviceCategory as string)
-  ); 
+    // CRITICAL FIX: Only include RECURRING tasks for the Recurring Maintenance Card
+    item.isRecurring && 
+    // AND the task must NOT be a renewal category
+    (!item.serviceCategory || !RENEWAL_CATEGORIES.includes(item.serviceCategory as string))
+  );
   // No secondary filter on item.isRecurring is applied here.
 
   return (
