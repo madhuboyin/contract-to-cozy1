@@ -46,7 +46,6 @@ export default function DashboardPage() {
       const API_URL = process.env.NEXT_PUBLIC_API_URL;
       const CHECKLIST_URL = `${API_URL}/api/checklist`;
       
-      // DEBUG: Log the API URL being used
       console.log(`DEBUG: Checking NEXT_PUBLIC_API_URL: ${API_URL}`);
       console.log(`DEBUG: Final Checklist URL: ${CHECKLIST_URL}`);
       
@@ -55,9 +54,8 @@ export default function DashboardPage() {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
           }
         }).then(async (res) => {
-            // CRITICAL FIX: Check for successful HTTP status (e.g., 200-299) before parsing.
+            // Check for successful HTTP status (e.g., 200-299) before parsing.
             if (!res.ok) {
-                // If it fails (e.g., 404, 500), throw an error to be caught below, preventing JSON parse errors.
                 const errorText = await res.text();
                 console.error(`ERROR: Checklist fetch failed with status ${res.status}. Response start: ${errorText.substring(0, 100)}`);
                 throw new Error(`Checklist API returned status ${res.status}.`);
@@ -78,17 +76,31 @@ export default function DashboardPage() {
       
       const newProperties: ScoredProperty[] = propertiesRes.success ? (propertiesRes.data.properties as ScoredProperty[]) : [];
 
-      // FIX: Ensure checklist is set robustly.
-      const isChecklistSuccess = typeof checklistRes === 'object' && checklistRes !== null && checklistRes.success;
+      // FIX: Robustly extract checklist data, accommodating for both wrapped and unwrapped successful payloads.
+      let fetchedChecklist = null;
+      let isChecklistSuccess = false;
 
+      if (typeof checklistRes === 'object' && checklistRes !== null) {
+          if (checklistRes.success && checklistRes.data) {
+              // Case A: Expected wrapped format { success: true, data: ChecklistData }
+              fetchedChecklist = checklistRes.data;
+              isChecklistSuccess = true;
+          } else if (Array.isArray(checklistRes.items)) {
+              // Case B: Unwrapped format ChecklistData { id: string, items: [] }. 
+              // We assume success if the expected checklist properties (like items array) are present.
+              fetchedChecklist = checklistRes;
+              isChecklistSuccess = true;
+          }
+      }
+      
       // DEBUG: Log the checklist data status
       console.log(`DEBUG: Checklist Success Status: ${isChecklistSuccess}`);
-      console.log(`DEBUG: Fetched Checklist Data (partial): ID=${isChecklistSuccess ? checklistRes.data.id : 'N/A'}, Items Count=${isChecklistSuccess ? checklistRes.data.items.length : 0}`);
+      console.log(`DEBUG: Fetched Checklist Data (partial): ID=${fetchedChecklist ? fetchedChecklist.id : 'N/A'}, Items Count=${fetchedChecklist ? fetchedChecklist.items.length : 0}`);
 
       setData({
         bookings: bookingsRes.success ? bookingsRes.data.bookings : [],
         properties: newProperties, // Now correctly typed and passed
-        checklist: isChecklistSuccess ? checklistRes.data : null, // Uses the robust check
+        checklist: fetchedChecklist, // Assign the correctly extracted data
         isLoading: false,
         error: null,
       });
