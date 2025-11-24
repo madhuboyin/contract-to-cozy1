@@ -12,8 +12,6 @@ import { parseISO, isBefore, addDays } from 'date-fns';
 import { PropertyHealthScoreCard } from './PropertyHealthScoreCard'; 
 
 // --- Temporary/Local Type Definitions (Mirrors backend ScoredProperty) ---
-// NOTE: These were kept locally for this file's context.
-
 interface ExistingOwnerDashboardProps {
   bookings: Booking[];
   properties: ScoredProperty[]; 
@@ -28,9 +26,6 @@ export const ExistingOwnerDashboard = ({
   userFirstName
 }: ExistingOwnerDashboardProps) => {
   
-  // *** GUARANTEED LOG TO CONFIRM RENDERING ***
-  console.log('*** DEBUG 0: ExistingOwnerDashboard component is rendering ***');
-  
   // Logic to determine the primary property for the Score Card
   const primaryProperty = properties.find(p => p.isPrimary) || properties[0];
 
@@ -42,12 +37,12 @@ export const ExistingOwnerDashboard = ({
     item.status === 'PENDING' 
   );
   
-  // 2. Separate Maintenance from Renewals (FIX APPLIED HERE)
+  // 2. Separate Maintenance from Renewals (FINAL FIX)
   const upcomingMaintenance = activeChecklistItems.filter(item => 
-    // Exclude renewal items from the maintenance list for clarity
+    // Include the task ONLY if it is NOT a renewal category
     !item.serviceCategory || !RENEWAL_CATEGORIES.includes(item.serviceCategory as string)
-    // PREVIOUSLY: There was a filter(item => item.isRecurring) here, which is now REMOVED
-  );
+  ); 
+  // No secondary filter on item.isRecurring is applied here.
 
   return (
     <div className="space-y-6 pb-8">
