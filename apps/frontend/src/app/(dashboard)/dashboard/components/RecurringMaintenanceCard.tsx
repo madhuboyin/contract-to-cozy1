@@ -16,9 +16,10 @@ interface RecurringMaintenanceCardProps {
 
 export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMaintenanceCardProps) => {
   
-  // Filter for pending, recurring tasks and sort them by due date
+  // CRITICAL FIX: Removed the restrictive filter: `&& t.isRecurring`
+  // We now display all maintenance tasks passed to the component, provided they are PENDING.
   const allPendingTasks = maintenance
-    .filter(t => t.status === 'PENDING' && t.isRecurring)
+    .filter(t => t.status === 'PENDING') 
     .sort((a, b) => {
         const dateA = a.nextDueDate ? new Date(a.nextDueDate).getTime() : Infinity;
         const dateB = b.nextDueDate ? new Date(b.nextDueDate).getTime() : Infinity;
@@ -34,51 +35,44 @@ export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMa
     if (!dateStr) return 'No date';
     const date = new Date(dateStr);
     const now = new Date();
-    // Reset time components for accurate day difference
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfTargetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     
-    const diffTime = startOfTargetDate.getTime() - startOfToday.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    // Check if task is overdue
+    if (date < now) {
+        return <span className="text-red-500 font-semibold">OVERDUE</span>;
+    }
     
-    if (diffDays < 0) return <span className="text-red-500 font-medium">Overdue</span>;
-    if (diffDays === 0) return <span className="text-orange-500 font-medium">Due Today</span>;
-    if (diffDays <= 7) return <span className="text-orange-500 font-medium">Due in {diffDays} days</span>;
-    return <span className="text-gray-500">{date.toLocaleDateString()}</span>;
+    // Simple formatting for display
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
-
-  // Define primary and setup links
-  const primaryLink = "/dashboard/maintenance";
-  const primaryText = overflowCount > 0 
-    ? `View ${overflowCount} More Task${overflowCount > 1 ? 's' : ''} →`
-    : "View Full List →";
-    
+  
   const setupLink = "/dashboard/maintenance-setup";
-    
+  const primaryLink = "/dashboard/maintenance";
+  const primaryText = totalItems > 3 ? `View All (${totalItems})` : "View Full List";
+
   return (
-    <Card className={cn("h-full flex flex-col", className)}>
+    <Card className={cn("flex flex-col", className)}>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Wrench className="h-5 w-5 text-orange-600" />
-          Maintenance
+        <CardTitle className="text-xl flex items-center space-x-2">
+            <Wrench className="w-5 h-5 text-gray-500" />
+            <span>Upcoming Maintenance</span>
         </CardTitle>
-        <CardDescription>Routine tasks to keep home value</CardDescription>
+        <CardDescription>
+            {totalItems} active tasks. Focus on high priority items for your primary residence.
+        </CardDescription>
       </CardHeader>
-      <CardContent className="flex-1 space-y-4">
-        {displayTasks.length === 0 ? ( 
-          <div className="text-center py-8 text-gray-500">
-             <Check className="mx-auto h-8 w-8 text-green-500 mb-2" />
-             <p>All caught up!</p>
+      
+      <CardContent className="flex-grow">
+        {displayTasks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full p-4 space-y-2">
+            <Check className="w-8 h-8 text-green-500" />
+            <p className="text-center text-lg font-medium text-gray-700">All caught up!</p>
+            <p className="text-center text-sm text-gray-500">No active maintenance tasks are currently due.</p>
           </div>
         ) : (
-          <ul className="space-y-1">
-            {displayTasks.map(task => ( 
-              <Link 
-                key={task.id} 
-                href="/dashboard/maintenance" 
-                className="block p-2 rounded-lg hover:bg-gray-100 transition-colors duration-150"
-              >
-                <li className="flex items-center justify-between text-sm">
+          <ul className="space-y-3">
+            {displayTasks.map((task) => (
+              <Link key={task.id} href={`/dashboard/maintenance?taskId=${task.id}`}>
+                <li className="flex items-center justify-between text-sm hover:bg-gray-50 p-2 -m-2 rounded transition-colors">
                   <span className="truncate pr-2 font-medium">{task.title}</span>
                   <span className="flex-shrink-0 text-xs whitespace-nowrap">
                     {formatDue(task.nextDueDate)}
@@ -86,6 +80,11 @@ export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMa
                 </li>
               </Link>
             ))}
+            {overflowCount > 0 && (
+                <li className="text-xs text-gray-500 pt-2">
+                    +{overflowCount} more items hidden.
+                </li>
+            )}
           </ul>
         )}
       </CardContent>
@@ -93,7 +92,7 @@ export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMa
       <CardFooter className="border-t pt-4">
         {displayTasks.length === 0 ? (
             // Case 1: List is Empty -> Full-width link to Setup
-             <Button variant="ghost" className="w-full h-8 text-xs font-semibold text-blue-600 hover:text-blue-700" asChild>
+             <Button variant="outline" className="w-full h-8 text-xs font-semibold text-blue-600 hover:text-blue-700" asChild>
                 <Link href={setupLink}>Set Up Maintenance Plan →</Link>
             </Button>
         ) : (
