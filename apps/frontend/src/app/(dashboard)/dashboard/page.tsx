@@ -57,10 +57,13 @@ export default function DashboardPage() {
 
       const newProperties: ScoredProperty[] = propertiesRes.success ? (propertiesRes.data.properties as ScoredProperty[]) : [];
 
+      // FIX: Ensure checklist is set robustly. If checklistRes is null/undefined/non-object, treat it as failure.
+      const isChecklistSuccess = typeof checklistRes === 'object' && checklistRes !== null && checklistRes.success;
+
       setData({
         bookings: bookingsRes.success ? bookingsRes.data.bookings : [],
         properties: newProperties, // Now correctly typed and passed
-        checklist: checklistRes.success ? checklistRes.data : null,
+        checklist: isChecklistSuccess ? checklistRes.data : null, // Uses the robust check
         isLoading: false,
         error: null,
       });
