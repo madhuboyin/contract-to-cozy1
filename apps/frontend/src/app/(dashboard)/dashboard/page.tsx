@@ -6,12 +6,21 @@ import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
 import { Loader2 } from 'lucide-react';
 import { Booking, Property, User } from '@/types';
+// CRITICAL FIX: Import ScoredProperty and HealthScoreResult from local types
+import { DashboardChecklistItem, ScoredProperty, HealthScoreResult } from './types'; 
 
 // Import the new segment-specific dashboard components
 import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
 import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
-import { DashboardData, DashboardChecklistItem, ChecklistData } from './types';
 
+// UPDATE INTERFACE: DashboardData must now store properties as ScoredProperty[]
+interface DashboardData {
+    bookings: Booking[];
+    properties: ScoredProperty[]; // Changed from Property[]
+    checklist: { id: string, items: DashboardChecklistItem[] } | null;
+    isLoading: boolean;
+    error: string | null;
+}
 
 export default function DashboardPage() {
   const { user, loading: userLoading } = useAuth();
@@ -32,65 +41,48 @@ export default function DashboardPage() {
     try {
       setData(prev => ({ ...prev, isLoading: true, error: null }));
       
-      const token = localStorage.getItem('accessToken');
+      // Since the API client's getProperties is typed to return APIResponse<{properties: Property[]}>,
+      // we need to explicitly cast the data here to correctly handle the attached score.
       
       const [bookingsRes, propertiesRes, checklistRes] = await Promise.all([
         // Fixed 400 error by using 'createdAt'
         api.listBookings({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' }),
         api.getProperties(),
         fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/checklist`, {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: 'no-store',
-        }).then(res => res.json()),
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          }
+        }).then(res => res.json()), // Manually fetching checklist to avoid circular typing issue
       ]);
 
-      // *** DEBUG LOG (NEW) ***
-      console.log('DEBUG 5: Raw Checklist API Response:', checklistRes);
+      const newProperties: ScoredProperty[] = propertiesRes.success ? (propertiesRes.data.properties as ScoredProperty[]) : [];
 
-      setData(prev => ({
-        ...prev,
+      setData({
         bookings: bookingsRes.success ? bookingsRes.data.bookings : [],
-        properties: propertiesRes.success ? propertiesRes.data.properties : [],
-        // FIXED: Check for a non-null/non-error object structure. 
-        // This is a more robust check than relying solely on '.id'.
-        checklist: checklistRes && typeof checklistRes === 'object' && !('error' in checklistRes) 
-          ? (checklistRes as ChecklistData) 
-          : null,
+        properties: newProperties, // Now correctly typed and passed
+        checklist: checklistRes.success ? checklistRes.data : null,
         isLoading: false,
-      }));
+        error: null,
+      });
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch dashboard data:', error);
-      setData(prev => ({ 
-        ...prev, 
-        isLoading: false, 
-        error: 'Failed to load dashboard data.' 
-      }));
+      setData(prev => ({ ...prev, isLoading: false, error: error.message || 'An unexpected error occurred.' }));
     }
   };
 
   useEffect(() => {
-    // Only fetch data once user object is available (not null)
     if (user && !userLoading) {
       fetchDashboardData();
     }
-
-    const handleFocus = () => {
-      if (user && !userLoading) {
-        fetchDashboardData();
-      }
-    };
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
   }, [user, userLoading]);
 
-  // --- RENDERING LOGIC (The Router) ---
-
+  // Handle Loading/Error States
   if (userLoading || data.isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4 p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        <p className="text-lg text-gray-600">Loading your personalized dashboard...</p>
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        <p className="ml-3 text-lg text-gray-600">Loading your personalized dashboard...</p>
       </div>
     );
   }
@@ -107,31 +99,26 @@ export default function DashboardPage() {
   // FIX: Access the top-level segment field, which is correctly available on the User type.
   const userSegment = user.segment;
   
-  // DEBUG 4: Log segment in the router just before routing decision
-  // console.log('DEBUG 4: Dashboard Router: Segment read is:', userSegment);
-
   const checklistItems = (data.checklist?.items || []) as DashboardChecklistItem[];
   
   // CRITICAL: The segment check must match the fixed property in types/index.ts
   if (userSegment === 'HOME_BUYER') {
-    // console.log('DEBUG 4: Dashboard Router: Rendering HOME_BUYER Dashboard.');
     return (
       <HomeBuyerDashboard 
         userFirstName={user.firstName}
         bookings={data.bookings}
-        properties={data.properties}
+        properties={data.properties} // Now ScoredProperty[]
         checklistItems={checklistItems}
       />
     );
   }
 
   // Default to Existing Owner for 'EXISTING_OWNER' or if segment is missing/undefined
-  // console.log('DEBUG 4: Dashboard Router: Rendering EXISTING_OWNER Dashboard.');
   return (
     <ExistingOwnerDashboard 
       userFirstName={user.firstName}
       bookings={data.bookings}
-      properties={data.properties}
+      properties={data.properties} // Now ScoredProperty[]
       checklistItems={checklistItems}
     />
   );

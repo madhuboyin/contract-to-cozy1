@@ -2,30 +2,26 @@
 
 import React from 'react';
 import Link from 'next/link'; 
-import { Booking, Property } from '@/types';
+import { Booking, Property } from '@/types'; 
 import { UpcomingBookingsCard } from './UpcomingBookingsCard';
 import { RecurringMaintenanceCard } from './RecurringMaintenanceCard';
 import { UpcomingRenewalsCard } from './UpcomingRenewalsCard'; 
 import { FavoriteProvidersCard } from './FavoriteProvidersCard';
-import { DashboardChecklistItem, ScoredProperty } from '../types'; // Import ScoredProperty from types
+// CRITICAL FIX: Import ScoredProperty and DashboardChecklistItem from '../types'
+import { DashboardChecklistItem, ScoredProperty } from '../types'; 
 import { parseISO, isBefore, addDays } from 'date-fns'; 
 import { PropertyHealthScoreCard } from './PropertyHealthScoreCard'; 
 
-
-// --- REMOVED TEMPORARY TYPE DEFINITIONS ---
-// The temporary interfaces for HealthScoreResult and ScoredProperty were removed here.
-// --------------------------------------------------------------------------
-
+// CRITICAL FIX: Update properties prop interface to expect ScoredProperty[]
 interface ExistingOwnerDashboardProps {
   bookings: Booking[];
-  properties: ScoredProperty[]; // Use the imported ScoredProperty
+  properties: ScoredProperty[]; 
   checklistItems: DashboardChecklistItem[];
   userFirstName: string;
 }
 
 export const ExistingOwnerDashboard = ({ 
-  // Keep the props here, but only use the ones that are still needed for logic
-  bookings, // Still available in props, but not passed to UpcomingBookingsCard
+  bookings, 
   properties, 
   checklistItems,
   userFirstName
