@@ -44,22 +44,33 @@ export default function DashboardPage() {
       // Since the API client's getProperties is typed to return APIResponse<{properties: Property[]}>,
       // we need to explicitly cast the data here to correctly handle the attached score.
       
+      // FIX 1: Restore absolute URL fetch and add robust HTTP status check
+      const checklistFetchPromise = fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/checklist`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          }
+        }).then(async (res) => {
+            // CRITICAL FIX: Check for successful HTTP status (e.g., 200-299) before parsing.
+            if (!res.ok) {
+                // If it fails (e.g., 404, 500), throw an error to be caught below, preventing JSON parse errors.
+                const errorText = await res.text();
+                // Throw an error with the HTTP status and a snippet of the response text (if available)
+                throw new Error(`Checklist API returned status ${res.status}. Response start: ${errorText.substring(0, 100)}`);
+            }
+            return res.json();
+        });
+
+
       const [bookingsRes, propertiesRes, checklistRes] = await Promise.all([
         // Fixed 400 error by using 'createdAt'
         api.listBookings({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' }),
         api.getProperties(),
-        // CRITICAL FIX: Use a relative path to ensure the request is sent, 
-        // relying on Next.js's internal proxying or client config to resolve the base URL.
-        fetch(`/api/checklist`, { 
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-          }
-        }).then(res => res.json()), // Manually fetching checklist to avoid circular typing issue
+        checklistFetchPromise, // Use the new robust fetch logic
       ]);
 
       const newProperties: ScoredProperty[] = propertiesRes.success ? (propertiesRes.data.properties as ScoredProperty[]) : [];
 
-      // FIX: Ensure checklist is set robustly. If checklistRes is null/undefined/non-object, treat it as failure.
+      // FIX: Ensure checklist is set robustly.
       const isChecklistSuccess = typeof checklistRes === 'object' && checklistRes !== null && checklistRes.success;
 
       setData({
