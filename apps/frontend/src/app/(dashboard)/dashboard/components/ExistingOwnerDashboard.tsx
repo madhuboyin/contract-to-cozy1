@@ -2,17 +2,18 @@
 
 import React from 'react';
 import Link from 'next/link'; 
-import { Booking, Property } from '@/types'; 
+import { Booking, Property } from '@/types';
 import { UpcomingBookingsCard } from './UpcomingBookingsCard';
 import { RecurringMaintenanceCard } from './RecurringMaintenanceCard';
 import { UpcomingRenewalsCard } from './UpcomingRenewalsCard'; 
 import { FavoriteProvidersCard } from './FavoriteProvidersCard';
-// CRITICAL FIX: Import ScoredProperty and DashboardChecklistItem from '../types'
 import { DashboardChecklistItem, ScoredProperty } from '../types'; 
 import { parseISO, isBefore, addDays } from 'date-fns'; 
 import { PropertyHealthScoreCard } from './PropertyHealthScoreCard'; 
 
-// CRITICAL FIX: Update properties prop interface to expect ScoredProperty[]
+// --- Temporary/Local Type Definitions (Mirrors backend ScoredProperty) ---
+// NOTE: These were kept locally for this file's context.
+
 interface ExistingOwnerDashboardProps {
   bookings: Booking[];
   properties: ScoredProperty[]; 
@@ -41,13 +42,11 @@ export const ExistingOwnerDashboard = ({
     item.status === 'PENDING' 
   );
   
-  // 2. Separate Maintenance from Renewals
+  // 2. Separate Maintenance from Renewals (FIX APPLIED HERE)
   const upcomingMaintenance = activeChecklistItems.filter(item => 
     // Exclude renewal items from the maintenance list for clarity
     !item.serviceCategory || !RENEWAL_CATEGORIES.includes(item.serviceCategory as string)
-  ).filter(item =>
-    // Then filter for recurring maintenance tasks
-    item.isRecurring
+    // PREVIOUSLY: There was a filter(item => item.isRecurring) here, which is now REMOVED
   );
 
   return (
