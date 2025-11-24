@@ -48,7 +48,9 @@ export default function DashboardPage() {
         // Fixed 400 error by using 'createdAt'
         api.listBookings({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' }),
         api.getProperties(),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/checklist`, {
+        // CRITICAL FIX: Use a relative path to ensure the request is sent, 
+        // relying on Next.js's internal proxying or client config to resolve the base URL.
+        fetch(`/api/checklist`, { 
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
           }
