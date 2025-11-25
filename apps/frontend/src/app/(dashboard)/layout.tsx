@@ -55,26 +55,69 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const fetchPropertyCount = async () => {
-      if (!user || user.segment !== 'EXISTING_OWNER') {
+      console.log('🎌 BANNER CHECK - Starting...');
+      console.log('👤 User:', user ? 'exists' : 'null');
+      console.log('👤 User segment:', user?.segment);
+      console.log('⏳ Loading:', loading);
+
+      if (!user) {
+        console.log('❌ No user, banner hidden');
         setShowBanner(false);
         return;
       }
 
+      if (user.segment !== 'EXISTING_OWNER') {
+        console.log('❌ Not EXISTING_OWNER, banner hidden');
+        setShowBanner(false);
+        return;
+      }
+
+      console.log('✅ User is EXISTING_OWNER, checking properties...');
+
       try {
         const response = await api.getProperties();
+        console.log('📦 Properties API response:', response);
+        
         if (response.success) {
           const count = response.data.properties.length;
           setPropertyCount(count);
+          console.log('🏠 Property count:', count);
           
           const hasSkipped = localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY) === 'true';
-          setShowBanner(count === 0 && hasSkipped);
+          console.log('📦 localStorage skip flag:', localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY));
+          console.log('✅ Has skipped?', hasSkipped);
+          
+          const shouldShowBanner = count === 0 && hasSkipped;
+          console.log('');
+          console.log('🎌 BANNER DECISION:');
+          console.log('   ├─ Property count === 0?', count === 0);
+          console.log('   ├─ Has skipped?', hasSkipped);
+          console.log('   └─ Show banner?', shouldShowBanner);
+          console.log('');
+          
+          setShowBanner(shouldShowBanner);
+          
+          if (shouldShowBanner) {
+            console.log('✅ BANNER WILL BE SHOWN');
+          } else {
+            console.log('❌ Banner will NOT be shown');
+            if (count > 0) {
+              console.log('   Reason: User has properties');
+            }
+            if (!hasSkipped) {
+              console.log('   Reason: User has not skipped');
+            }
+          }
+        } else {
+          console.error('❌ Properties API failed:', response);
         }
       } catch (error) {
-        console.error('Failed to fetch properties for banner:', error);
+        console.error('❌ Failed to fetch properties for banner:', error);
       }
     };
 
     if (!loading && user) {
+      console.log('🎌 User loaded, fetching property count for banner...');
       fetchPropertyCount();
     }
   }, [user, loading]);
@@ -93,6 +136,9 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
     }
     return null;
   }
+
+  console.log('🎨 RENDERING LAYOUT');
+  console.log('🎌 Banner showBanner state:', showBanner);
 
   return (
     <div className="flex min-h-screen w-full flex-col">
@@ -152,6 +198,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
         </Sheet>
       </header>
 
+      {/* Banner placed here - between header and main content */}
       <PropertySetupBanner show={showBanner} />
 
       <main className="flex-1 bg-gray-50">
@@ -166,9 +213,6 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 function DesktopNav({ user }: { user: User | null }) {
   const pathname = usePathname();
 
-  // Debug logging
-  console.log('DesktopNav - User segment:', user?.segment);
-
   const allLinks: NavLink[] = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Properties', href: '/dashboard/properties', icon: Building },
@@ -181,17 +225,13 @@ function DesktopNav({ user }: { user: User | null }) {
     { name: 'Documents', href: '/dashboard/documents', icon: FileText },
   ];
 
-  // Filter links based on segment
   const visibleLinks = allLinks.filter(link => {
-    // Checklist only for HOME_BUYER
     if (link.name === 'Checklist') {
       return user?.segment === 'HOME_BUYER';
     }
-    // Warranties, Insurance, Expenses, Documents only for EXISTING_OWNER
     if (['Warranties', 'Insurance', 'Expenses', 'Documents'].includes(link.name)) {
       return user?.segment === 'EXISTING_OWNER';
     }
-    // Everything else for everyone
     return true;
   });
 
@@ -236,7 +276,6 @@ function SidebarNav({ user }: { user: User | null }) {
     { name: 'Documents', href: '/dashboard/documents', icon: FileText },
   ];
 
-  // Filter links based on segment
   const visibleLinks = allLinks.filter(link => {
     if (link.name === 'Checklist') {
       return user?.segment === 'HOME_BUYER';

@@ -3,74 +3,87 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { X, Home } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Home, X } from 'lucide-react';
 
 const BANNER_DISMISSED_KEY = 'propertyBannerDismissed';
 
 interface PropertySetupBannerProps {
-  show: boolean; // Parent controls visibility based on property count
+  show: boolean;
 }
 
-export const PropertySetupBanner: React.FC<PropertySetupBannerProps> = ({ show }) => {
-  const [isDismissed, setIsDismissed] = useState(false);
+export function PropertySetupBanner({ show }: PropertySetupBannerProps) {
+  const [dismissed, setDismissed] = useState(false);
 
-  // Check localStorage on mount
   useEffect(() => {
-    const dismissed = localStorage.getItem(BANNER_DISMISSED_KEY);
-    if (dismissed === 'true') {
-      setIsDismissed(true);
+    console.log('🎌 BANNER COMPONENT - Mounted/Updated');
+    console.log('   ├─ show prop:', show);
+    
+    const wasDismissed = localStorage.getItem(BANNER_DISMISSED_KEY) === 'true';
+    console.log('   ├─ localStorage dismissed:', wasDismissed);
+    
+    setDismissed(wasDismissed);
+    
+    const shouldRender = show && !wasDismissed;
+    console.log('   └─ Will render?', shouldRender);
+    
+    if (shouldRender) {
+      console.log('✅ BANNER IS RENDERING');
+    } else {
+      console.log('❌ Banner NOT rendering');
+      if (!show) {
+        console.log('   Reason: show=false');
+      }
+      if (wasDismissed) {
+        console.log('   Reason: dismissed=true');
+      }
     }
-  }, []);
+  }, [show]);
 
   const handleDismiss = () => {
+    console.log('🎌 BANNER DISMISSED by user');
     localStorage.setItem(BANNER_DISMISSED_KEY, 'true');
-    setIsDismissed(true);
+    setDismissed(true);
   };
 
-  // Don't render if parent says don't show OR if user dismissed it
-  if (!show || isDismissed) {
+  // Don't render if show is false or if user dismissed it
+  if (!show || dismissed) {
     return null;
   }
 
+  console.log('🎨 BANNER RENDERING NOW');
+
   return (
-    <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-orange-400 shadow-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center flex-1">
-            <div className="flex-shrink-0">
-              <Home className="h-6 w-6 text-orange-600" />
-            </div>
-            <div className="ml-4 flex-1">
-              <h3 className="text-sm font-semibold text-gray-900">
-                Complete Your Property Profile
-              </h3>
-              <p className="mt-1 text-sm text-gray-700">
-                Add your property details to unlock personalized maintenance insights, property health scores, and tailored service recommendations.
-              </p>
-            </div>
+    <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-orange-400 px-6 py-4 shadow-sm">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 flex-1">
+          <Home className="h-5 w-5 text-orange-600 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-gray-900">
+              Complete Your Property Profile
+            </p>
+            <p className="text-xs text-gray-600">
+              Add your property details to unlock personalized maintenance insights and property health scores.
+            </p>
           </div>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard/properties/new"
+            className="px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors whitespace-nowrap"
+          >
+            Add Property Now
+          </Link>
           
-          <div className="flex items-center space-x-3 ml-4">
-            <Link href="/dashboard/properties/new">
-              <Button 
-                size="sm" 
-                className="bg-orange-600 hover:bg-orange-700 text-white font-medium"
-              >
-                Add Property Now
-              </Button>
-            </Link>
-            
-            <button
-              onClick={handleDismiss}
-              className="flex-shrink-0 p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-              aria-label="Dismiss banner"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
+          <button
+            onClick={handleDismiss}
+            className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+            aria-label="Dismiss banner"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </div>
   );
-};
+}
