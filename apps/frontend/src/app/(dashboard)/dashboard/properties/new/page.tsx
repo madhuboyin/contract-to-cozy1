@@ -162,9 +162,13 @@ export default function NewPropertyPage() {
   };
 
   // NEW: Handle skip action
-  const handleSkip = () => {
+  const handleSkip = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Skip button clicked');
     localStorage.setItem(PROPERTY_SETUP_SKIPPED_KEY, 'true');
-    router.push('/dashboard');
+    console.log('Navigating to dashboard...');
+    window.location.href = '/dashboard'; // Use direct navigation for reliability
   };
 
   const SelectInput = ({ label, name, value, options, required = false }: { 

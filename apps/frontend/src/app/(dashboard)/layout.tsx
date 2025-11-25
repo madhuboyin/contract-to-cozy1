@@ -170,16 +170,28 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 function DesktopNav({ user }: { user: User | null }) {
   const pathname = usePathname();
 
-  const homeownerLinks: NavLink[] = [
+  const baseLinks: NavLink[] = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Properties', href: '/dashboard/properties', icon: Building },
     { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
     { name: 'Find Services', href: '/dashboard/providers', icon: Search },
+  ];
+
+  const homeBuyerOnlyLinks: NavLink[] = [
     { name: 'Checklist', href: '/dashboard/checklist', icon: ListChecks },
+  ];
+
+  const existingOwnerLinks: NavLink[] = [
     { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench },
     { name: 'Insurance', href: '/dashboard/insurance', icon: Shield },
     { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign },
     { name: 'Documents', href: '/dashboard/documents', icon: FileText },
+  ];
+
+  // Build navigation based on user segment
+  const homeownerLinks = [
+    ...baseLinks,
+    ...(user?.segment === 'HOME_BUYER' ? homeBuyerOnlyLinks : existingOwnerLinks),
   ];
 
   return (
@@ -211,16 +223,28 @@ function DesktopNav({ user }: { user: User | null }) {
 function SidebarNav({ user }: { user: User | null }) {
   const pathname = usePathname();
 
-  const homeownerLinks: NavLink[] = [
+  const baseLinks: NavLink[] = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Properties', href: '/dashboard/properties', icon: Building },
     { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
     { name: 'Find Services', href: '/dashboard/providers', icon: Search },
+  ];
+
+  const homeBuyerOnlyLinks: NavLink[] = [
     { name: 'Checklist', href: '/dashboard/checklist', icon: ListChecks },
+  ];
+
+  const existingOwnerLinks: NavLink[] = [
     { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench },
     { name: 'Insurance', href: '/dashboard/insurance', icon: Shield },
     { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign },
     { name: 'Documents', href: '/dashboard/documents', icon: FileText },
+  ];
+
+  // Build navigation based on user segment
+  const homeownerLinks = [
+    ...baseLinks,
+    ...(user?.segment === 'HOME_BUYER' ? homeBuyerOnlyLinks : existingOwnerLinks),
   ];
 
   return (
