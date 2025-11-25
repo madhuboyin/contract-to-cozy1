@@ -9,9 +9,10 @@ import { Loader2 } from 'lucide-react';
 import { Booking, Property, User } from '@/types';
 import { DashboardChecklistItem, ScoredProperty, HealthScoreResult } from './types'; 
 
-// Import the segment-specific dashboard components
 import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
 import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
+
+const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
 
 interface DashboardData {
     bookings: Booking[];
@@ -46,9 +47,6 @@ export default function DashboardPage() {
       const API_URL = process.env.NEXT_PUBLIC_API_URL;
       const CHECKLIST_URL = `${API_URL}/api/checklist`;
       
-      console.log(`DEBUG: Checking NEXT_PUBLIC_API_URL: ${API_URL}`);
-      console.log(`DEBUG: Final Checklist URL: ${CHECKLIST_URL}`);
-      
       const checklistFetchPromise = fetch(CHECKLIST_URL, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
@@ -56,10 +54,9 @@ export default function DashboardPage() {
         }).then(async (res) => {
             if (!res.ok) {
                 const errorText = await res.text();
-                console.error(`ERROR: Checklist fetch failed with status ${res.status}. Response start: ${errorText.substring(0, 100)}`);
+                console.error(`ERROR: Checklist fetch failed with status ${res.status}`);
                 throw new Error(`Checklist API returned status ${res.status}.`);
             }
-            console.log('DEBUG: Checklist fetch successful (res.ok is true). Attempting JSON parse.');
             return res.json();
         });
 
@@ -73,7 +70,6 @@ export default function DashboardPage() {
       
       const newProperties: ScoredProperty[] = propertiesRes.success ? (propertiesRes.data.properties as ScoredProperty[]) : [];
 
-      // Extract checklist data
       let fetchedChecklist = null;
       let isChecklistSuccess = false;
 
@@ -87,8 +83,7 @@ export default function DashboardPage() {
           }
       }
       
-      console.log(`DEBUG: Checklist Success Status: ${isChecklistSuccess}`);
-      console.log(`DEBUG: Fetched Checklist Data (partial): ID=${fetchedChecklist ? fetchedChecklist.id : 'N/A'}, Items Count=${fetchedChecklist ? fetchedChecklist.items.length : 0}`);
+      console.log(`DEBUG: Properties count: ${newProperties.length}`);
 
       setData({
         bookings: bookingsRes.success ? bookingsRes.data.bookings : [],
@@ -110,20 +105,57 @@ export default function DashboardPage() {
     }
   }, [user, userLoading]);
 
-  // NEW: Redirect logic for EXISTING_OWNER with no properties
+  // Redirect check with EXTENSIVE logging
   useEffect(() => {
+    console.log('╔══════════════════════════════════════════════════════════╗');
+    console.log('║          DASHBOARD REDIRECT CHECK TRIGGERED              ║');
+    console.log('╚══════════════════════════════════════════════════════════╝');
+    console.log('⏰ Time:', new Date().toISOString());
+    console.log('👤 User loading:', userLoading);
+    console.log('📊 Data loading:', data.isLoading);
+    console.log('🧑 User exists:', !!user);
+    
+    if (user) {
+      console.log('👤 User segment:', user.segment);
+      console.log('🏠 Properties count:', data.properties.length);
+    }
+    
+    const hasSkipped = localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY);
+    console.log('📦 localStorage skip flag:', hasSkipped);
+    console.log('✅ Skip flag is true?', hasSkipped === 'true');
+    
     if (!userLoading && !data.isLoading && user) {
       const userSegment = user.segment;
+      const propertyCount = data.properties.length;
+      const skipFlagValue = hasSkipped === 'true';
       
-      // Check if user is EXISTING_OWNER AND has no properties
-      if (userSegment === 'EXISTING_OWNER' && data.properties.length === 0) {
-        console.log('DEBUG: New EXISTING_OWNER detected with no properties, redirecting to property setup...');
+      console.log('');
+      console.log('🔍 DECISION LOGIC:');
+      console.log('   ├─ Is EXISTING_OWNER?', userSegment === 'EXISTING_OWNER');
+      console.log('   ├─ Has 0 properties?', propertyCount === 0);
+      console.log('   └─ Has NOT skipped?', !skipFlagValue);
+      console.log('');
+      
+      if (userSegment === 'EXISTING_OWNER' && propertyCount === 0 && !skipFlagValue) {
+        console.log('🚀 REDIRECTING to /dashboard/properties/new');
+        console.log('   Reason: New EXISTING_OWNER with no properties who has not skipped');
         router.push('/dashboard/properties/new');
+      } else if (userSegment === 'EXISTING_OWNER' && propertyCount === 0 && skipFlagValue) {
+        console.log('✋ NOT REDIRECTING');
+        console.log('   Reason: User has skipped property setup');
+        console.log('   Banner should be visible on dashboard');
+      } else {
+        console.log('✋ NOT REDIRECTING');
+        console.log('   Reason: Not a new EXISTING_OWNER or already has properties');
       }
+    } else {
+      console.log('⏸️ SKIPPING REDIRECT CHECK - Still loading');
     }
+    
+    console.log('╚══════════════════════════════════════════════════════════╝');
+    console.log('');
   }, [user, userLoading, data.isLoading, data.properties, router]);
 
-  // Handle Loading/Error States
   if (userLoading || data.isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -145,8 +177,6 @@ export default function DashboardPage() {
   const userSegment = user.segment;
   const checklistItems = (data.checklist?.items || []) as DashboardChecklistItem[];
   
-  console.log(`DEBUG: Final Checklist Items to Dashboard: ${checklistItems.length}`);
-  
   if (userSegment === 'HOME_BUYER') {
     return (
       <HomeBuyerDashboard 
@@ -158,7 +188,6 @@ export default function DashboardPage() {
     );
   }
 
-  // Default to Existing Owner
   return (
     <ExistingOwnerDashboard 
       userFirstName={user.firstName}

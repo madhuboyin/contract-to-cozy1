@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/new/page.tsx
 'use client';
 
-import { useState, FormEvent, ChangeEvent, useEffect } from 'react';
+import { useState, FormEvent, ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -47,12 +47,6 @@ export default function NewPropertyPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
-
-  // Log on mount
-  useEffect(() => {
-    console.log('🏠 PROPERTY PAGE MOUNTED');
-    console.log('🏠 Current localStorage skip flag:', localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY));
-  }, []);
 
   const [formData, setFormData] = useState<PropertyFormData>({
     name: '',
@@ -152,7 +146,6 @@ export default function NewPropertyPage() {
       const response = await api.createProperty(payload);
 
       if (response.success) {
-        console.log('✅ PROPERTY CREATED: Removing skip flag');
         localStorage.removeItem(PROPERTY_SETUP_SKIPPED_KEY);
         alert('Property created successfully!');
         router.push('/dashboard/properties');
@@ -167,25 +160,12 @@ export default function NewPropertyPage() {
     }
   };
 
+  // NEW: Separate skip handler
   const handleSkipNow = () => {
-    console.log('╔════════════════════════════════════════════════════════════╗');
-    console.log('║                   SKIP BUTTON CLICKED!                     ║');
-    console.log('╚════════════════════════════════════════════════════════════╝');
-    console.log('⏰ Time:', new Date().toISOString());
-    console.log('🔑 Setting localStorage key:', PROPERTY_SETUP_SKIPPED_KEY);
-    
+    console.log('Skip button clicked - setting localStorage and navigating...');
     localStorage.setItem(PROPERTY_SETUP_SKIPPED_KEY, 'true');
-    
-    console.log('✅ localStorage SET!');
-    console.log('📦 Current value:', localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY));
-    console.log('🚀 Initiating navigation to /dashboard...');
-    console.log('╔════════════════════════════════════════════════════════════╗');
-    
-    // Use both methods to be absolutely sure
-    setTimeout(() => {
-      console.log('🔄 Navigating NOW with window.location.href');
-      window.location.href = '/dashboard';
-    }, 100);
+    console.log('localStorage set, navigating to dashboard...');
+    window.location.href = '/dashboard';
   };
 
   const SelectInput = ({ label, name, value, options, required = false }: { 
@@ -404,11 +384,130 @@ export default function NewPropertyPage() {
 
           {showAdvanced && (
             <div className="p-6 space-y-8 bg-white border-t border-gray-200">
-              {/* Advanced fields omitted for brevity - same as before */}
+              <div className="space-y-4">
+                <h3 className="text-base font-semibold text-blue-700">General Details</h3>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="propertySize" className="block text-sm font-medium text-gray-700 mb-2">
+                      Square Footage
+                    </label>
+                    <input
+                      type="number"
+                      id="propertySize"
+                      name="propertySize"
+                      value={formData.propertySize}
+                      onChange={handleChange}
+                      placeholder="e.g., 2500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    />
+                  </div>
+                  
+                  <SelectInput 
+                    label="Ownership Type" 
+                    name="ownershipType" 
+                    value={formData.ownershipType} 
+                    options={OWNERSHIP_OPTIONS}
+                  />
+                  
+                  <div>
+                    <label htmlFor="occupantsCount" className="block text-sm font-medium text-gray-700 mb-2">
+                      Number of Occupants
+                    </label>
+                    <input
+                      type="number"
+                      id="occupantsCount"
+                      name="occupantsCount"
+                      value={formData.occupantsCount}
+                      onChange={handleChange}
+                      placeholder="e.g., 4"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-base font-semibold text-blue-700">Systems</h3>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <SelectInput label="Heating Type" name="heatingType" value={formData.heatingType} options={HEATING_OPTIONS} />
+                  <SelectInput label="Cooling Type" name="coolingType" value={formData.coolingType} options={COOLING_OPTIONS} />
+                  <SelectInput label="Water Heater Type" name="waterHeaterType" value={formData.waterHeaterType} options={WATER_HEATER_OPTIONS} />
+                  <SelectInput label="Roof Type" name="roofType" value={formData.roofType} options={ROOF_OPTIONS} />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-base font-semibold text-blue-700">Installation Years</h3>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+                  <div>
+                    <label htmlFor="hvacInstallYear" className="block text-sm font-medium text-gray-700 mb-2">
+                      HVAC Install Year
+                    </label>
+                    <input
+                      type="number"
+                      id="hvacInstallYear"
+                      name="hvacInstallYear"
+                      value={formData.hvacInstallYear}
+                      onChange={handleChange}
+                      placeholder="2018"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="waterHeaterInstallYear" className="block text-sm font-medium text-gray-700 mb-2">
+                      Water Heater Install Year
+                    </label>
+                    <input
+                      type="number"
+                      id="waterHeaterInstallYear"
+                      name="waterHeaterInstallYear"
+                      value={formData.waterHeaterInstallYear}
+                      onChange={handleChange}
+                      placeholder="2019"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="roofReplacementYear" className="block text-sm font-medium text-gray-700 mb-2">
+                      Roof Replacement Year
+                    </label>
+                    <input
+                      type="number"
+                      id="roofReplacementYear"
+                      name="roofReplacementYear"
+                      value={formData.roofReplacementYear}
+                      onChange={handleChange}
+                      placeholder="2020"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-base font-semibold text-blue-700">Safety Features</h3>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <BooleanInput label="Has Smoke Detectors" name="hasSmokeDetectors" checked={formData.hasSmokeDetectors} />
+                  <BooleanInput label="Has CO Detectors" name="hasCoDetectors" checked={formData.hasCoDetectors} />
+                  <BooleanInput label="Has Security System" name="hasSecuritySystem" checked={formData.hasSecuritySystem} />
+                  <BooleanInput label="Has Fire Extinguisher" name="hasFireExtinguisher" checked={formData.hasFireExtinguisher} />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-base font-semibold text-blue-700">Exterior</h3>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <BooleanInput label="Has Irrigation System" name="hasIrrigation" checked={formData.hasIrrigation} />
+                  <BooleanInput label="Has Drainage Issues" name="hasDrainageIssues" checked={formData.hasDrainageIssues} />
+                </div>
+              </div>
             </div>
           )}
         </div>
 
+        {/* Action Buttons - Submit button inside form */}
         <div className="flex items-center justify-end bg-white rounded-lg shadow-md p-6">
           <button
             type="submit"
@@ -420,16 +519,14 @@ export default function NewPropertyPage() {
         </div>
       </form>
 
-      {/* Skip button OUTSIDE form with bold styling for visibility */}
-      <div className="mt-6 p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg text-center">
+      {/* Skip button OUTSIDE form - completely separate */}
+      <div className="mt-4 text-center">
         <button
-          type="button"
           onClick={handleSkipNow}
-          className="px-6 py-3 text-base font-bold text-gray-800 bg-yellow-200 hover:bg-yellow-300 rounded-lg transition-colors border-2 border-yellow-400"
+          className="text-sm font-medium text-gray-600 hover:text-gray-800 hover:underline transition-colors"
         >
-          ⏭️ Skip for Now (Click Me!)
+          Skip for Now
         </button>
-        <p className="mt-2 text-xs text-gray-600">Check browser console after clicking</p>
       </div>
     </div>
   );
