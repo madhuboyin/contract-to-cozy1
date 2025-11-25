@@ -53,7 +53,6 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [propertyCount, setPropertyCount] = useState<number | null>(null);
   const [showBanner, setShowBanner] = useState(false);
 
-  // Fetch property count for banner visibility
   useEffect(() => {
     const fetchPropertyCount = async () => {
       if (!user || user.segment !== 'EXISTING_OWNER') {
@@ -67,7 +66,6 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
           const count = response.data.properties.length;
           setPropertyCount(count);
           
-          // Show banner if: no properties AND user has skipped setup
           const hasSkipped = localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY) === 'true';
           setShowBanner(count === 0 && hasSkipped);
         }
@@ -89,7 +87,6 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // If user is a PROVIDER, redirect them
   if (user && user.role === 'PROVIDER') {
     if (typeof window !== 'undefined') {
       window.location.href = '/providers/dashboard';
@@ -155,7 +152,6 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
         </Sheet>
       </header>
 
-      {/* Property Setup Banner - shown conditionally */}
       <PropertySetupBanner show={showBanner} />
 
       <main className="flex-1 bg-gray-50">
@@ -170,33 +166,38 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 function DesktopNav({ user }: { user: User | null }) {
   const pathname = usePathname();
 
-  const baseLinks: NavLink[] = [
+  // Debug logging
+  console.log('DesktopNav - User segment:', user?.segment);
+
+  const allLinks: NavLink[] = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Properties', href: '/dashboard/properties', icon: Building },
     { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
     { name: 'Find Services', href: '/dashboard/providers', icon: Search },
-  ];
-
-  const homeBuyerOnlyLinks: NavLink[] = [
     { name: 'Checklist', href: '/dashboard/checklist', icon: ListChecks },
-  ];
-
-  const existingOwnerLinks: NavLink[] = [
     { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench },
     { name: 'Insurance', href: '/dashboard/insurance', icon: Shield },
     { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign },
     { name: 'Documents', href: '/dashboard/documents', icon: FileText },
   ];
 
-  // Build navigation based on user segment
-  const homeownerLinks = [
-    ...baseLinks,
-    ...(user?.segment === 'HOME_BUYER' ? homeBuyerOnlyLinks : existingOwnerLinks),
-  ];
+  // Filter links based on segment
+  const visibleLinks = allLinks.filter(link => {
+    // Checklist only for HOME_BUYER
+    if (link.name === 'Checklist') {
+      return user?.segment === 'HOME_BUYER';
+    }
+    // Warranties, Insurance, Expenses, Documents only for EXISTING_OWNER
+    if (['Warranties', 'Insurance', 'Expenses', 'Documents'].includes(link.name)) {
+      return user?.segment === 'EXISTING_OWNER';
+    }
+    // Everything else for everyone
+    return true;
+  });
 
   return (
     <nav className="hidden lg:flex gap-6 items-center">
-      {homeownerLinks.map((link) => {
+      {visibleLinks.map((link) => {
         const Icon = link.icon;
         const isActive = pathname === link.href;
         
@@ -223,33 +224,32 @@ function DesktopNav({ user }: { user: User | null }) {
 function SidebarNav({ user }: { user: User | null }) {
   const pathname = usePathname();
 
-  const baseLinks: NavLink[] = [
+  const allLinks: NavLink[] = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Properties', href: '/dashboard/properties', icon: Building },
     { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
     { name: 'Find Services', href: '/dashboard/providers', icon: Search },
-  ];
-
-  const homeBuyerOnlyLinks: NavLink[] = [
     { name: 'Checklist', href: '/dashboard/checklist', icon: ListChecks },
-  ];
-
-  const existingOwnerLinks: NavLink[] = [
     { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench },
     { name: 'Insurance', href: '/dashboard/insurance', icon: Shield },
     { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign },
     { name: 'Documents', href: '/dashboard/documents', icon: FileText },
   ];
 
-  // Build navigation based on user segment
-  const homeownerLinks = [
-    ...baseLinks,
-    ...(user?.segment === 'HOME_BUYER' ? homeBuyerOnlyLinks : existingOwnerLinks),
-  ];
+  // Filter links based on segment
+  const visibleLinks = allLinks.filter(link => {
+    if (link.name === 'Checklist') {
+      return user?.segment === 'HOME_BUYER';
+    }
+    if (['Warranties', 'Insurance', 'Expenses', 'Documents'].includes(link.name)) {
+      return user?.segment === 'EXISTING_OWNER';
+    }
+    return true;
+  });
 
   return (
     <nav className="grid gap-1 px-4 text-sm font-medium">
-      {homeownerLinks.map((link) => {
+      {visibleLinks.map((link) => {
         const Icon = link.icon;
         const isActive = pathname === link.href;
         

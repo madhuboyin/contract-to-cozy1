@@ -5,6 +5,7 @@ import { useState, FormEvent, ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import Link from 'next/link';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
 
@@ -146,9 +147,8 @@ export default function NewPropertyPage() {
       const response = await api.createProperty(payload);
 
       if (response.success) {
-        // Clear skip flag on successful property creation
         localStorage.removeItem(PROPERTY_SETUP_SKIPPED_KEY);
-        alert('Property created successfully! You can now complete the Advanced Profile for a full health score.');
+        alert('Property created successfully!');
         router.push('/dashboard/properties');
       } else {
         setError(response.message || 'Failed to create property');
@@ -159,16 +159,6 @@ export default function NewPropertyPage() {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  // NEW: Handle skip action
-  const handleSkip = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    console.log('Skip button clicked');
-    localStorage.setItem(PROPERTY_SETUP_SKIPPED_KEY, 'true');
-    console.log('Navigating to dashboard...');
-    window.location.href = '/dashboard'; // Use direct navigation for reliability
   };
 
   const SelectInput = ({ label, name, value, options, required = false }: { 
@@ -372,7 +362,6 @@ export default function NewPropertyPage() {
           {BasicAddressFields}
         </div>
 
-        {/* Advanced Section (collapsed by default) */}
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <button
             type="button"
@@ -381,7 +370,7 @@ export default function NewPropertyPage() {
           >
             <div className="flex items-center space-x-2">
               <span className="text-lg font-semibold text-gray-900">Advanced Property Details</span>
-              <span className="text-sm text-gray-500 font-normal">(Optional - for better health score)</span>
+              <span className="text-sm text-gray-500 font-normal">(Optional)</span>
             </div>
             {showAdvanced ? <ChevronUp className="w-5 h-5 text-gray-600" /> : <ChevronDown className="w-5 h-5 text-gray-600" />}
           </button>
@@ -511,15 +500,16 @@ export default function NewPropertyPage() {
           )}
         </div>
 
-        {/* Action Buttons */}
         <div className="flex items-center justify-between bg-white rounded-lg shadow-md p-6">
-          <button
-            type="button"
-            onClick={handleSkip}
-            className="px-6 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
+          <Link
+            href="/dashboard"
+            onClick={() => {
+              localStorage.setItem(PROPERTY_SETUP_SKIPPED_KEY, 'true');
+            }}
+            className="px-6 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:underline transition-colors"
           >
             Skip for Now
-          </button>
+          </Link>
           
           <button
             type="submit"
