@@ -25,6 +25,7 @@ interface DashboardData {
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: userLoading } = useAuth();
+  const [redirectChecked, setRedirectChecked] = useState(false);
   const [data, setData] = useState<DashboardData>({
     bookings: [],
     properties: [],
@@ -33,6 +34,73 @@ export default function DashboardPage() {
     error: null,
   });
 
+  // PRIORITY 1: Check redirect FIRST, before loading data
+  useEffect(() => {
+    const checkRedirect = async () => {
+      console.log('🔍 REDIRECT CHECK - Starting...');
+      
+      if (userLoading) {
+        console.log('⏸️ User still loading, waiting...');
+        return;
+      }
+
+      if (!user) {
+        console.log('❌ No user, skipping redirect check');
+        setRedirectChecked(true);
+        return;
+      }
+
+      if (redirectChecked) {
+        console.log('✅ Already checked redirect, skipping');
+        return;
+      }
+
+      console.log('👤 User segment:', user.segment);
+
+      // Only check for EXISTING_OWNER
+      if (user.segment !== 'EXISTING_OWNER') {
+        console.log('✋ Not EXISTING_OWNER, no redirect needed');
+        setRedirectChecked(true);
+        return;
+      }
+
+      // Check if user has skipped
+      const hasSkipped = localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY) === 'true';
+      console.log('📦 localStorage skip flag:', localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY));
+      console.log('✅ Has skipped?', hasSkipped);
+
+      if (hasSkipped) {
+        console.log('✋ User has skipped, no redirect needed');
+        setRedirectChecked(true);
+        return;
+      }
+
+      // Quick property count check
+      console.log('🔍 Checking property count...');
+      try {
+        const propertiesRes = await api.getProperties();
+        const propertyCount = propertiesRes.success ? propertiesRes.data.properties.length : 0;
+        console.log('🏠 Property count:', propertyCount);
+
+        if (propertyCount === 0) {
+          console.log('🚀 REDIRECTING: New EXISTING_OWNER with 0 properties and has not skipped');
+          console.log('   Navigating to /dashboard/properties/new');
+          router.push('/dashboard/properties/new');
+          // Don't set redirectChecked - let redirect happen
+        } else {
+          console.log('✋ User has properties, no redirect needed');
+          setRedirectChecked(true);
+        }
+      } catch (error) {
+        console.error('❌ Error checking properties:', error);
+        setRedirectChecked(true);
+      }
+    };
+
+    checkRedirect();
+  }, [user, userLoading, redirectChecked, router]);
+
+  // PRIORITY 2: Load dashboard data (only after redirect check)
   const fetchDashboardData = async () => {
     if (!user) {
       console.log('DEBUG: User not logged in, halting fetch.');
@@ -100,63 +168,13 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    if (user && !userLoading) {
+    if (user && !userLoading && redirectChecked) {
+      console.log('📊 Redirect checked, now fetching dashboard data...');
       fetchDashboardData();
     }
-  }, [user, userLoading]);
+  }, [user, userLoading, redirectChecked]);
 
-  // Redirect check with EXTENSIVE logging
-  useEffect(() => {
-    console.log('╔══════════════════════════════════════════════════════════╗');
-    console.log('║          DASHBOARD REDIRECT CHECK TRIGGERED              ║');
-    console.log('╚══════════════════════════════════════════════════════════╝');
-    console.log('⏰ Time:', new Date().toISOString());
-    console.log('👤 User loading:', userLoading);
-    console.log('📊 Data loading:', data.isLoading);
-    console.log('🧑 User exists:', !!user);
-    
-    if (user) {
-      console.log('👤 User segment:', user.segment);
-      console.log('🏠 Properties count:', data.properties.length);
-    }
-    
-    const hasSkipped = localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY);
-    console.log('📦 localStorage skip flag:', hasSkipped);
-    console.log('✅ Skip flag is true?', hasSkipped === 'true');
-    
-    if (!userLoading && !data.isLoading && user) {
-      const userSegment = user.segment;
-      const propertyCount = data.properties.length;
-      const skipFlagValue = hasSkipped === 'true';
-      
-      console.log('');
-      console.log('🔍 DECISION LOGIC:');
-      console.log('   ├─ Is EXISTING_OWNER?', userSegment === 'EXISTING_OWNER');
-      console.log('   ├─ Has 0 properties?', propertyCount === 0);
-      console.log('   └─ Has NOT skipped?', !skipFlagValue);
-      console.log('');
-      
-      if (userSegment === 'EXISTING_OWNER' && propertyCount === 0 && !skipFlagValue) {
-        console.log('🚀 REDIRECTING to /dashboard/properties/new');
-        console.log('   Reason: New EXISTING_OWNER with no properties who has not skipped');
-        router.push('/dashboard/properties/new');
-      } else if (userSegment === 'EXISTING_OWNER' && propertyCount === 0 && skipFlagValue) {
-        console.log('✋ NOT REDIRECTING');
-        console.log('   Reason: User has skipped property setup');
-        console.log('   Banner should be visible on dashboard');
-      } else {
-        console.log('✋ NOT REDIRECTING');
-        console.log('   Reason: Not a new EXISTING_OWNER or already has properties');
-      }
-    } else {
-      console.log('⏸️ SKIPPING REDIRECT CHECK - Still loading');
-    }
-    
-    console.log('╚══════════════════════════════════════════════════════════╝');
-    console.log('');
-  }, [user, userLoading, data.isLoading, data.properties, router]);
-
-  if (userLoading || data.isLoading) {
+  if (userLoading || data.isLoading || !redirectChecked) {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
