@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/layout.tsx
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -23,13 +23,15 @@ import {
   LogOut,
   PanelLeft,
   Settings,
-  Shield, // NEW: Insurance
-  Wrench, // NEW: Warranties
-  DollarSign, // NEW: Expenses
-  FileText, // NEW: Documents
+  Shield,
+  Wrench,
+  DollarSign,
+  FileText,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { User } from '@/types'; 
+import { User } from '@/types';
+import { PropertySetupBanner } from '@/components/PropertySetupBanner';
+import { api } from '@/lib/api/client';
 
 interface NavLink {
   name: string;
@@ -37,11 +39,47 @@ interface NavLink {
   icon: React.ElementType;
 }
 
-/**
- * Main layout for the authenticated dashboard.
- */
+const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
+
+function getUserTypeLabel(user: User | null): string {
+  if (!user) return 'Guest';
+  if (user.segment === 'HOME_BUYER') return 'Home Buyer';
+  if (user.segment === 'EXISTING_OWNER') return 'Homeowner';
+  return 'Homeowner';
+}
+
 function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth() as { user: User | null, loading: boolean };
+  const [propertyCount, setPropertyCount] = useState<number | null>(null);
+  const [showBanner, setShowBanner] = useState(false);
+
+  // Fetch property count for banner visibility
+  useEffect(() => {
+    const fetchPropertyCount = async () => {
+      if (!user || user.segment !== 'EXISTING_OWNER') {
+        setShowBanner(false);
+        return;
+      }
+
+      try {
+        const response = await api.getProperties();
+        if (response.success) {
+          const count = response.data.properties.length;
+          setPropertyCount(count);
+          
+          // Show banner if: no properties AND user has skipped setup
+          const hasSkipped = localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY) === 'true';
+          setShowBanner(count === 0 && hasSkipped);
+        }
+      } catch (error) {
+        console.error('Failed to fetch properties for banner:', error);
+      }
+    };
+
+    if (!loading && user) {
+      fetchPropertyCount();
+    }
+  }, [user, loading]);
 
   if (loading) {
     return (
@@ -117,6 +155,9 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
         </Sheet>
       </header>
 
+      {/* Property Setup Banner - shown conditionally */}
+      <PropertySetupBanner show={showBanner} />
+
       <main className="flex-1 bg-gray-50">
         <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
           {children}
@@ -126,124 +167,91 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
-/**
- * Renders the horizontal navigation for desktop.
- */
 function DesktopNav({ user }: { user: User | null }) {
   const pathname = usePathname();
 
-  const navLinks: NavLink[] = [
+  const homeownerLinks: NavLink[] = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
-    { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
     { name: 'Properties', href: '/dashboard/properties', icon: Building },
-    { name: 'Find Providers', href: '/dashboard/providers', icon: Search },
+    { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
+    { name: 'Find Services', href: '/dashboard/providers', icon: Search },
+    { name: 'Checklist', href: '/dashboard/checklist', icon: ListChecks },
+    { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench },
+    { name: 'Insurance', href: '/dashboard/insurance', icon: Shield },
+    { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign },
+    { name: 'Documents', href: '/dashboard/documents', icon: FileText },
   ];
 
-  // Conditional Navigation based on Segment
-  if (user?.segment === 'HOME_BUYER') {
-    navLinks.push({
-      name: 'Checklist',
-      href: '/dashboard/checklist',
-      icon: ListChecks,
-    });
-  } else if (user?.segment === 'EXISTING_OWNER') {
-    // NEW LINKS for Existing Owners (ADDED Document link)
-    navLinks.push(
-      { name: 'Documents', href: '/dashboard/documents', icon: FileText }, // ADDED
-      { name: 'Insurance', href: '/dashboard/insurance', icon: Shield },
-      { name: 'Maintenance', href: '/dashboard/maintenance', icon: ListChecks },
-      { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench },
-      { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign },
-    );
-  }
-
   return (
-    <nav className="hidden items-center gap-4 lg:flex lg:gap-6 ml-6 shrink-0">
-      {navLinks.map((link) => (
-        <Link
-          key={link.name}
-          href={link.href}
-          className={cn(
-            'text-sm font-medium text-gray-600 transition-all hover:text-blue-600',
-            pathname.startsWith(link.href) && 'text-blue-600 font-semibold'
-          )}
-        >
-          {link.name}
-        </Link>
-      ))}
+    <nav className="hidden lg:flex gap-6 items-center">
+      {homeownerLinks.map((link) => {
+        const Icon = link.icon;
+        const isActive = pathname === link.href;
+        
+        return (
+          <Link
+            key={link.href}
+            href={link.href}
+            className={cn(
+              'font-body font-medium text-sm flex items-center gap-2 transition-colors duration-200',
+              isActive 
+                ? 'text-brand-primary font-semibold' 
+                : 'text-gray-700 hover:text-brand-primary'
+            )}
+          >
+            <Icon className="h-4 w-4" />
+            {link.name}
+          </Link>
+        );
+      })}
     </nav>
   );
 }
 
-/**
- * Renders the vertical navigation for the mobile sheet.
- */
 function SidebarNav({ user }: { user: User | null }) {
   const pathname = usePathname();
 
-  const navLinks: NavLink[] = [
+  const homeownerLinks: NavLink[] = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
-    { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
     { name: 'Properties', href: '/dashboard/properties', icon: Building },
-    { name: 'Find Providers', href: '/dashboard/providers', icon: Search },
+    { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
+    { name: 'Find Services', href: '/dashboard/providers', icon: Search },
+    { name: 'Checklist', href: '/dashboard/checklist', icon: ListChecks },
+    { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench },
+    { name: 'Insurance', href: '/dashboard/insurance', icon: Shield },
+    { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign },
+    { name: 'Documents', href: '/dashboard/documents', icon: FileText },
   ];
 
-  // Conditional Navigation based on Segment
-  if (user?.segment === 'HOME_BUYER') {
-    navLinks.push({
-      name: 'Checklist',
-      href: '/dashboard/checklist',
-      icon: ListChecks,
-    });
-  } else if (user?.segment === 'EXISTING_OWNER') {
-    // NEW LINKS for Existing Owners (ADDED Document link)
-    navLinks.push(
-      { name: 'Documents', href: '/dashboard/documents', icon: FileText }, // ADDED
-      { name: 'Insurance', href: '/dashboard/insurance', icon: Shield },
-      { name: 'Maintenance', href: '/dashboard/maintenance', icon: ListChecks },
-      { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench },
-      { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign },
-    );
-  }
-
-  // Use SheetClose to make links close the menu on navigation
   return (
-    <nav className="grid items-start px-4 text-sm font-medium">
-      {navLinks.map((link) => (
-        <SheetClose asChild key={link.name}>
-          <Link
-            href={link.href}
-            className={cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-gray-700 transition-all hover:text-blue-600 hover:bg-gray-100',
-              pathname.startsWith(link.href) && 'bg-blue-100 text-blue-700 hover:text-blue-700'
-            )}
-          >
-            <link.icon className="h-4 w-4" />
-            {link.name}
-          </Link>
-        </SheetClose>
-      ))}
+    <nav className="grid gap-1 px-4 text-sm font-medium">
+      {homeownerLinks.map((link) => {
+        const Icon = link.icon;
+        const isActive = pathname === link.href;
+        
+        return (
+          <SheetClose key={link.href} asChild>
+            <Link
+              href={link.href}
+              className={cn(
+                'font-body font-medium flex items-center gap-3 rounded-lg px-3 py-2 transition-colors duration-200',
+                isActive
+                  ? 'bg-teal-50 text-brand-primary font-semibold'
+                  : 'text-gray-700 hover:text-brand-primary hover:bg-teal-50'
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {link.name}
+            </Link>
+          </SheetClose>
+        );
+      })}
     </nav>
   );
 }
 
-// Helper function to format user type
-const getUserTypeLabel = (user: User | null) => {
-  if (!user) return '';
-  if (user.role === 'PROVIDER') return 'Provider';
-  
-  // FIX: Check the top-level 'user.segment' property
-  const segment = user.segment;
-  
-  if (segment === 'HOME_BUYER') return 'Home Buyer';
-  if (segment === 'EXISTING_OWNER') return 'Homeowner';
-  
-  return 'Homeowner'; // Default
-};
-
-// New component for DESKTOP user info
 function DesktopUserNav({ user }: { user: User | null }) {
-  const { logout } = useAuth(); 
+  const { logout } = useAuth();
 
   const handleLogout = () => {
     logout();
@@ -253,32 +261,27 @@ function DesktopUserNav({ user }: { user: User | null }) {
   };
 
   return (
-    <div className="hidden items-center gap-4 lg:flex shrink-0">
-      <div className="flex items-center gap-2">
-        <span className="font-body font-medium text-sm text-gray-900">
-          {user?.firstName} {user?.lastName}
-        </span>
-        <Badge 
-          variant="outline" 
-          className="h-auto text-xs px-2 py-0.5 border-brand-primary text-brand-primary font-body"
-        >
-          {getUserTypeLabel(user)}
-        </Badge>
-      </div>
-
-      <Button 
-        asChild 
-        variant="ghost" 
-        size="sm" 
-        className="font-body font-semibold text-gray-600 hover:text-brand-primary hover:bg-teal-50 tracking-wide transition-colors duration-200"
+    <div className="hidden lg:flex items-center gap-4">
+      <Link 
+        href="/dashboard/profile"
+        className="font-body font-medium flex items-center gap-2 text-sm text-gray-700 hover:text-brand-primary transition-colors duration-200"
       >
-        <Link href="/dashboard/profile">Profile</Link>
-      </Button>
-
+        <Settings className="h-4 w-4" />
+        <div>
+          <div className="font-medium">{user?.firstName}</div>
+          <Badge 
+            variant="outline" 
+            className="font-body text-xs border-brand-primary text-brand-primary"
+          >
+            {getUserTypeLabel(user)}
+          </Badge>
+        </div>
+      </Link>
+      
       <Button 
         onClick={handleLogout} 
         variant="ghost" 
-        size="sm" 
+        size="sm"
         className="font-body font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 tracking-wide transition-colors duration-200"
       >
         Logout

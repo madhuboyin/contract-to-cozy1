@@ -2,27 +2,27 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
 import { Loader2 } from 'lucide-react';
 import { Booking, Property, User } from '@/types';
-// CRITICAL FIX: Import ScoredProperty and HealthScoreResult from local types
 import { DashboardChecklistItem, ScoredProperty, HealthScoreResult } from './types'; 
 
-// Import the new segment-specific dashboard components
+// Import the segment-specific dashboard components
 import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
 import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
 
-// UPDATE INTERFACE: DashboardData must now store properties as ScoredProperty[]
 interface DashboardData {
     bookings: Booking[];
-    properties: ScoredProperty[]; // Changed from Property[]
+    properties: ScoredProperty[];
     checklist: { id: string, items: DashboardChecklistItem[] } | null;
     isLoading: boolean;
     error: string | null;
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { user, loading: userLoading } = useAuth();
   const [data, setData] = useState<DashboardData>({
     bookings: [],
@@ -54,7 +54,6 @@ export default function DashboardPage() {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
           }
         }).then(async (res) => {
-            // Check for successful HTTP status (e.g., 200-299) before parsing.
             if (!res.ok) {
                 const errorText = await res.text();
                 console.error(`ERROR: Checklist fetch failed with status ${res.status}. Response start: ${errorText.substring(0, 100)}`);
@@ -64,49 +63,42 @@ export default function DashboardPage() {
             return res.json();
         });
 
-
       const [bookingsRes, propertiesRes, checklistRes] = await Promise.all([
-        // Fixed 400 error by using 'createdAt'
         api.listBookings({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' }),
         api.getProperties(),
-        checklistFetchPromise, // Use the new robust fetch logic
+        checklistFetchPromise,
       ]);
 
       console.log('DEBUG: Promise.all resolved.');
       
       const newProperties: ScoredProperty[] = propertiesRes.success ? (propertiesRes.data.properties as ScoredProperty[]) : [];
 
-      // FIX: Robustly extract checklist data, accommodating for both wrapped and unwrapped successful payloads.
+      // Extract checklist data
       let fetchedChecklist = null;
       let isChecklistSuccess = false;
 
       if (typeof checklistRes === 'object' && checklistRes !== null) {
           if (checklistRes.success && checklistRes.data) {
-              // Case A: Expected wrapped format { success: true, data: ChecklistData }
               fetchedChecklist = checklistRes.data;
               isChecklistSuccess = true;
           } else if (Array.isArray(checklistRes.items)) {
-              // Case B: Unwrapped format ChecklistData { id: string, items: [] }. 
-              // We assume success if the expected checklist properties (like items array) are present.
               fetchedChecklist = checklistRes;
               isChecklistSuccess = true;
           }
       }
       
-      // DEBUG: Log the checklist data status
       console.log(`DEBUG: Checklist Success Status: ${isChecklistSuccess}`);
       console.log(`DEBUG: Fetched Checklist Data (partial): ID=${fetchedChecklist ? fetchedChecklist.id : 'N/A'}, Items Count=${fetchedChecklist ? fetchedChecklist.items.length : 0}`);
 
       setData({
         bookings: bookingsRes.success ? bookingsRes.data.bookings : [],
-        properties: newProperties, // Now correctly typed and passed
-        checklist: fetchedChecklist, // Assign the correctly extracted data
+        properties: newProperties,
+        checklist: fetchedChecklist,
         isLoading: false,
         error: null,
       });
 
     } catch (error: any) {
-      // CRITICAL DEBUG: Catch and log the entire error object
       console.error('CRITICAL ERROR: Failed to fetch dashboard data:', error);
       setData(prev => ({ ...prev, isLoading: false, error: error.message || 'An unexpected error occurred.' }));
     }
@@ -117,6 +109,19 @@ export default function DashboardPage() {
       fetchDashboardData();
     }
   }, [user, userLoading]);
+
+  // NEW: Redirect logic for EXISTING_OWNER with no properties
+  useEffect(() => {
+    if (!userLoading && !data.isLoading && user) {
+      const userSegment = user.segment;
+      
+      // Check if user is EXISTING_OWNER AND has no properties
+      if (userSegment === 'EXISTING_OWNER' && data.properties.length === 0) {
+        console.log('DEBUG: New EXISTING_OWNER detected with no properties, redirecting to property setup...');
+        router.push('/dashboard/properties/new');
+      }
+    }
+  }, [user, userLoading, data.isLoading, data.properties, router]);
 
   // Handle Loading/Error States
   if (userLoading || data.isLoading) {
@@ -137,32 +142,28 @@ export default function DashboardPage() {
     );
   }
 
-  // FIX: Access the top-level segment field, which is correctly available on the User type.
   const userSegment = user.segment;
-  
   const checklistItems = (data.checklist?.items || []) as DashboardChecklistItem[];
   
-  // CRITICAL DEBUG: Log the final number of checklist items being passed down
   console.log(`DEBUG: Final Checklist Items to Dashboard: ${checklistItems.length}`);
   
-  // CRITICAL: The segment check must match the fixed property in types/index.ts
   if (userSegment === 'HOME_BUYER') {
     return (
       <HomeBuyerDashboard 
         userFirstName={user.firstName}
         bookings={data.bookings}
-        properties={data.properties} // Now ScoredProperty[]
+        properties={data.properties}
         checklistItems={checklistItems}
       />
     );
   }
 
-  // Default to Existing Owner for 'EXISTING_OWNER' or if segment is missing/undefined
+  // Default to Existing Owner
   return (
     <ExistingOwnerDashboard 
       userFirstName={user.firstName}
       bookings={data.bookings}
-      properties={data.properties} // Now ScoredProperty[]
+      properties={data.properties}
       checklistItems={checklistItems}
     />
   );
