@@ -5,7 +5,6 @@ import { useState, FormEvent, ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import Link from 'next/link';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
 
@@ -159,6 +158,14 @@ export default function NewPropertyPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // NEW: Separate skip handler
+  const handleSkipNow = () => {
+    console.log('Skip button clicked - setting localStorage and navigating...');
+    localStorage.setItem(PROPERTY_SETUP_SKIPPED_KEY, 'true');
+    console.log('localStorage set, navigating to dashboard...');
+    window.location.href = '/dashboard';
   };
 
   const SelectInput = ({ label, name, value, options, required = false }: { 
@@ -500,17 +507,8 @@ export default function NewPropertyPage() {
           )}
         </div>
 
-        <div className="flex items-center justify-between bg-white rounded-lg shadow-md p-6">
-          <Link
-            href="/dashboard"
-            onClick={() => {
-              localStorage.setItem(PROPERTY_SETUP_SKIPPED_KEY, 'true');
-            }}
-            className="px-6 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:underline transition-colors"
-          >
-            Skip for Now
-          </Link>
-          
+        {/* Action Buttons - Submit button inside form */}
+        <div className="flex items-center justify-end bg-white rounded-lg shadow-md p-6">
           <button
             type="submit"
             disabled={submitting}
@@ -520,6 +518,16 @@ export default function NewPropertyPage() {
           </button>
         </div>
       </form>
+
+      {/* Skip button OUTSIDE form - completely separate */}
+      <div className="mt-4 text-center">
+        <button
+          onClick={handleSkipNow}
+          className="text-sm font-medium text-gray-600 hover:text-gray-800 hover:underline transition-colors"
+        >
+          Skip for Now
+        </button>
+      </div>
     </div>
   );
 }
