@@ -47,8 +47,8 @@ export const HomeBuyerChecklistCard = ({ items, className }: HomeBuyerChecklistC
           </div>
           {totalCount > 0 && (
             <div className="text-right">
-              <span className="text-2xl font-bold text-blue-600">{Math.round(progress)}%</span>
-              <p className="text-xs text-muted-foreground">Complete</p>
+              <span className="font-heading text-2xl font-bold text-blue-600">{Math.round(progress)}%</span>
+              <p className="font-body text-xs text-muted-foreground">Complete</p>
             </div>
           )}
         </div>
@@ -73,13 +73,13 @@ export const HomeBuyerChecklistCard = ({ items, className }: HomeBuyerChecklistC
               </div>
               <div className="flex-1 min-w-0">
                 <p className={cn(
-                  "text-sm font-medium truncate",
+                  "font-body text-sm font-medium truncate",
                   item.status === 'COMPLETED' ? "text-gray-500 line-through" : "text-gray-900"
                 )}>
                   {item.title}
                 </p>
                 {item.description && (
-                  <p className="text-xs text-gray-500 truncate">{item.description}</p>
+                  <p className="font-body text-xs text-gray-500 truncate">{item.description}</p>
                 )}
               </div>
               {item.status !== 'COMPLETED' && (
@@ -91,7 +91,7 @@ export const HomeBuyerChecklistCard = ({ items, className }: HomeBuyerChecklistC
           ))}
           {buyerItems.length === 0 && (
             <div className="text-center py-6 text-muted-foreground">
-              <p>Your checklist is empty. Get started in the full checklist view!</p>
+              <p className="font-body text-sm">Your checklist is empty. Get started in the full checklist view!</p>
             </div>
           )}
         </div>

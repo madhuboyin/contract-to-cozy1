@@ -35,7 +35,7 @@ export const MyPropertiesCard = ({ properties, className }: MyPropertiesCardProp
       <CardContent>
         {properties.length === 0 ? (
           <div className="text-center py-6 text-muted-foreground">
-            <p>No properties added yet.</p>
+            <p className="font-body text-sm">No properties added yet.</p>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
@@ -50,14 +50,14 @@ export const MyPropertiesCard = ({ properties, className }: MyPropertiesCardProp
                   </span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-gray-900">
+                  <div className="font-body text-sm font-medium text-gray-900">
                     <Link href={`/dashboard/properties/${property.id}/edit`} className="focus:outline-none">
                       <span className="absolute inset-0" aria-hidden="true" />
                       {property.name || 'Unnamed Property'}
                     </Link>
                   </div>
-                  <p className="text-sm text-gray-500 truncate">{property.address}</p>
-                  <div className="flex items-center mt-1 text-xs text-gray-400">
+                  <p className="font-body text-sm text-gray-500 truncate">{property.address}</p>
+                  <div className="font-body flex items-center mt-1 text-xs text-gray-400">
                     <MapPin className="mr-1 h-3 w-3" />
                     {property.city}, {property.state}
                   </div>

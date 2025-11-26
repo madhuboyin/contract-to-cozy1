@@ -38,7 +38,7 @@ export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMa
     
     // Check if task is overdue
     if (date < now) {
-        return <span className="text-red-500 font-semibold">OVERDUE</span>;
+        return <span className="font-body text-red-500 font-semibold">OVERDUE</span>;
     }
     
     // Simple formatting for display
@@ -65,30 +65,29 @@ export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMa
         {displayTasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full p-4 space-y-2">
             <Check className="w-8 h-8 text-green-500" />
-            <p className="text-center text-lg font-medium text-gray-700">All caught up!</p>
-            <p className="text-center text-sm text-gray-500">No active maintenance tasks are currently due.</p>
+            <p className="font-heading text-center text-lg font-medium text-gray-700">All caught up!</p>
+            <p className="font-body text-center text-sm text-gray-500">No active maintenance tasks are currently due.</p>
           </div>
         ) : (
           <ul className="space-y-3">
             {displayTasks.map((task) => (
               <Link key={task.id} href={`/dashboard/maintenance?taskId=${task.id}`}>
-                <li className="flex items-center justify-between text-sm hover:bg-gray-50 p-2 -m-2 rounded transition-colors">
-                  <span className="truncate pr-2 font-medium">{task.title}</span>
-                  <span className="flex-shrink-0 text-xs whitespace-nowrap">
+                <li className="flex items-center justify-between hover:bg-gray-50 p-2 -m-2 rounded transition-colors">
+                  <span className="font-body text-sm truncate pr-2 font-medium">{task.title}</span>
+                  <span className="font-body flex-shrink-0 text-xs whitespace-nowrap">
                     {formatDue(task.nextDueDate)}
                   </span>
                 </li>
               </Link>
             ))}
             {overflowCount > 0 && (
-                <li className="text-xs text-gray-500 pt-2">
+                <li className="font-body text-xs text-gray-500 pt-2">
                     +{overflowCount} more items hidden.
                 </li>
             )}
           </ul>
         )}
       </CardContent>
-      {/* FIX: Implement dual links in CardFooter when tasks exist */}
       <CardFooter className="border-t pt-4">
         {displayTasks.length === 0 ? (
             // Case 1: List is Empty -> Full-width link to Setup
@@ -100,7 +99,7 @@ export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMa
             <div className="flex justify-between w-full items-center">
                 <Link 
                     href={setupLink} 
-                    className="text-xs font-semibold text-gray-600 hover:text-blue-700 underline"
+                    className="font-body text-xs font-semibold text-gray-600 hover:text-blue-700 underline"
                 >
                     Maintenance Setup
                 </Link>

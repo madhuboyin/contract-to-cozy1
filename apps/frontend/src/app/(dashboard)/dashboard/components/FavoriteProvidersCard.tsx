@@ -26,7 +26,7 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
       <CardContent className="flex-1">
         {favorites.length === 0 ? (
           <div className="text-center py-6 text-muted-foreground">
-            <p className="text-sm mb-3">Save providers you love here.</p>
+            <p className="font-body text-sm mb-3">Save providers you love here.</p>
             <Button variant="outline" size="sm" asChild>
               <Link href="/dashboard/providers">Find Providers</Link>
             </Button>

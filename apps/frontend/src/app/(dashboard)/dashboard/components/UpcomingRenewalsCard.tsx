@@ -142,7 +142,7 @@ export const UpcomingRenewalsCard = () => {
 
               return (
                 <React.Fragment key={item.id}> 
-                  <div className="flex justify-between items-center text-sm">
+                  <div className="flex justify-between items-center">
                     <div className="flex items-center space-x-2">
                       {/* Icon */}
                       {item.type === 'Warranty' ? (
@@ -154,7 +154,7 @@ export const UpcomingRenewalsCard = () => {
                       {/* Link Text (Name) */}
                       <Link
                         href={`/dashboard/${item.type === 'Warranty' ? 'warranties' : 'insurance'}`}
-                        className={`font-medium ${linkTextColorClass} hover:opacity-80`} 
+                        className={`font-body text-sm font-medium ${linkTextColorClass} hover:opacity-80`} 
                       >
                         {item.name}
                       </Link>
@@ -162,12 +162,12 @@ export const UpcomingRenewalsCard = () => {
                     <div className="flex-shrink-0 text-right">
                       
                       {/* DATE TEXT (Expiring Soon/Expired = RED) */}
-                      <p className={`font-semibold ${dateTextColor}`}>
+                      <p className={`font-body text-sm font-semibold ${dateTextColor}`}>
                         {format(new Date(item.expiryDate), 'MMM dd, yyyy')}
                       </p>
                       
                       {/* DAY COUNT TEXT (Expiring Soon/Expired = RED) */}
-                      <p className={`text-xs ${daysTextColor}`}>
+                      <p className={`font-body text-xs ${daysTextColor}`}>
                         {item.daysUntilExpiry <= 0
                           ? `Expired ${Math.abs(item.daysUntilExpiry)} days ago`
                           : item.daysUntilExpiry <= 30
@@ -183,7 +183,7 @@ export const UpcomingRenewalsCard = () => {
             })}
           </div>
         ) : (
-          <p className="text-sm text-gray-500 pt-2">No upcoming renewals found.</p>
+          <p className="font-body text-sm text-gray-500 pt-2">No upcoming renewals found.</p>
         )}
       </CardContent>
       
@@ -192,9 +192,9 @@ export const UpcomingRenewalsCard = () => {
         <CardFooter className="border-t pt-4 -mt-2">
             <Link
                 href="/dashboard/warranties" 
-                className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+                className="font-body text-sm font-semibold text-blue-600 hover:text-blue-700"
             >
-                View {overflowCount} More Renewal{overflowCount > 1 ? 's' : ''} &rarr;
+                View {overflowCount} More Renewal{overflowCount > 1 ? 's' : ''} →
             </Link>
         </CardFooter>
       )}

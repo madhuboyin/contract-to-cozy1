@@ -104,21 +104,21 @@ export const UpcomingBookingsCard = () => {
           <div className="space-y-3">
             {displayBookings.map((booking, index) => (
               <React.Fragment key={booking.id}>
-                <div className="flex justify-between items-center text-sm">
+                <div className="flex justify-between items-center">
                   <div className="flex items-center space-x-2">
                     <Calendar className={`h-4 w-4 flex-shrink-0 ${getStatusColor(booking.status)}`} />
                     <Link
                       href={`/dashboard/bookings/${booking.id}`}
-                      className="font-medium text-foreground hover:opacity-80 truncate"
+                      className="font-body text-sm font-medium text-foreground hover:opacity-80 truncate"
                     >
                       {booking.service.name}
                     </Link>
                   </div>
                   <div className="flex-shrink-0 text-right">
-                    <p className="font-semibold text-gray-700">
+                    <p className="font-body text-sm font-semibold text-gray-700">
                       {booking.scheduledDate ? format(new Date(booking.scheduledDate), 'MMM dd') : 'TBD'}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="font-body text-xs text-gray-500">
                       {formatTime(booking.startTime)}
                     </p>
                   </div>
@@ -128,10 +128,10 @@ export const UpcomingBookingsCard = () => {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-gray-500 pt-2">No upcoming services scheduled.</p>
+          <p className="font-body text-sm text-gray-500 pt-2">No upcoming services scheduled.</p>
         )}
         {(error) && (
-          <p className="text-sm text-red-500 pt-2">Error loading bookings.</p>
+          <p className="font-body text-sm text-red-500 pt-2">Error loading bookings.</p>
         )}
       </CardContent>
       
@@ -139,9 +139,9 @@ export const UpcomingBookingsCard = () => {
         {displayBookings.length > 0 && showMore ? (
             <Link
                 href="/dashboard/bookings" 
-                className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+                className="font-body text-sm font-semibold text-blue-600 hover:text-blue-700"
             >
-                View {overflowCount} More Booking{overflowCount > 1 ? 's' : ''} &rarr;
+                View {overflowCount} More Booking{overflowCount > 1 ? 's' : ''} →
             </Link>
         ) : (
              <Button variant="ghost" className="w-full h-8 text-xs font-semibold text-blue-600 hover:text-blue-700" asChild>

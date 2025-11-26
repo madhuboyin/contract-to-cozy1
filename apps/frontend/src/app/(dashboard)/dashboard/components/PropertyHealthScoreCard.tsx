@@ -58,8 +58,8 @@ export const PropertyHealthScoreCard: React.FC<PropertyHealthScoreCardProps> = (
         {/* Score Display */}
         <div className="flex items-baseline space-x-2">
           <p className="font-heading text-5xl font-extrabold text-gray-900">{healthScore.totalScore}</p>
-          <p className="text-xl font-semibold text-gray-500">/100</p>
-          <span className={`text-sm font-medium px-2 py-0.5 rounded-full ${rating.color}`}>
+          <p className="font-heading text-xl font-semibold text-gray-500">/100</p>
+          <span className={`font-body text-sm font-medium px-2 py-0.5 rounded-full ${rating.color}`}>
             {rating.text}
           </span>
         </div>
@@ -68,12 +68,12 @@ export const PropertyHealthScoreCard: React.FC<PropertyHealthScoreCardProps> = (
         <div className="relative pt-1">
           <div className="flex mb-2 items-center justify-between">
             <div>
-              <span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-blue-600 bg-blue-200">
+              <span className="font-body text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-blue-600 bg-blue-200">
                 Current Score
               </span>
             </div>
             <div className="text-right">
-              <span className="text-xs font-semibold inline-block text-blue-600">
+              <span className="font-body text-xs font-semibold inline-block text-blue-600">
                 {progressPercent.toFixed(0)}%
               </span>
             </div>
@@ -88,8 +88,8 @@ export const PropertyHealthScoreCard: React.FC<PropertyHealthScoreCardProps> = (
 
         {/* Key Insights (Base Score) */}
         <div className="pt-2 border-t border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-700 mb-2">Key Factors</h3>
-          <ul className="text-sm space-y-1 text-gray-600">
+          <h3 className="font-heading text-sm font-semibold text-gray-700 mb-2">Key Factors</h3>
+          <ul className="font-body text-sm space-y-1 text-gray-600">
             {healthScore.insights
               .filter(i => ['Age Factor', 'Structure Factor', 'Systems Factor'].includes(i.factor))
               .slice(0, 3) // Show top 3 factors
@@ -108,7 +108,7 @@ export const PropertyHealthScoreCard: React.FC<PropertyHealthScoreCardProps> = (
       {/* Footer CTA */}
       {healthScore.ctaNeeded && (
         <CardFooter className="bg-gray-50 border-t p-4 rounded-b-lg flex flex-col space-y-2">
-          <p className="text-sm font-semibold text-gray-800">
+          <p className="font-body text-sm font-semibold text-gray-800">
             Improve to {healthScore.maxPotentialScore}/100 — Complete Profile
           </p>
           <button 
