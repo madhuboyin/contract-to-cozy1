@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/client';
 import { Booking } from '@/types';
@@ -78,16 +78,19 @@ export const UpcomingBookingsCard = () => {
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        {/* FIX: Added the primary icon inside the CardTitle */}
-        <CardTitle className="flex items-center gap-2"> 
-          <Calendar className="h-5 w-5 text-blue-600" /> 
-          Upcoming Bookings
-        </CardTitle>
-        {/* This icon remains as the conditional status indicator on the far right */}
+        <div className="space-y-1">
+          <CardTitle className="font-heading text-xl flex items-center gap-2"> 
+            <Calendar className="h-5 w-5 text-blue-600" /> 
+            Upcoming Bookings
+          </CardTitle>
+          <CardDescription className="font-body text-sm">
+            Your scheduled services
+          </CardDescription>
+        </div>
         {isAlert ? (
           <AlertTriangle className="h-4 w-4 text-orange-500" />
         ) : (
-          <Calendar className="h-4 w-4 text-blue-500" />
+          <CheckCircle className="h-4 w-4 text-green-500" />
         )}
       </CardHeader>
       <CardContent className="flex-1">

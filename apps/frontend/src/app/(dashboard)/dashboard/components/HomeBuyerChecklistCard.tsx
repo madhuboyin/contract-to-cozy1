@@ -37,11 +37,13 @@ export const HomeBuyerChecklistCard = ({ items, className }: HomeBuyerChecklistC
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <div className="space-y-1">
-            <CardTitle className="text-xl flex items-center gap-2">
-              <ListChecks className="h-6 w-6 text-blue-600" />
+            <CardTitle className="font-heading text-xl flex items-center gap-2">
+              <ListChecks className="h-5 w-5 text-blue-600" />
               {cardTitle}
             </CardTitle>
-            <CardDescription>{cardDescription}</CardDescription>
+            <CardDescription className="font-body text-sm">
+              {cardDescription}
+            </CardDescription>
           </div>
           {totalCount > 0 && (
             <div className="text-right">

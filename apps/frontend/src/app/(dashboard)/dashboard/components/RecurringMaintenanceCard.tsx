@@ -52,11 +52,11 @@ export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMa
   return (
     <Card className={cn("flex flex-col", className)}>
       <CardHeader>
-        <CardTitle className="text-xl flex items-center space-x-2">
-            <Wrench className="w-5 h-5 text-gray-500" />
+        <CardTitle className="font-heading text-xl flex items-center gap-2">
+            <Wrench className="w-5 h-5 text-indigo-600" />
             <span>Upcoming Maintenance</span>
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="font-body text-sm">
             {totalItems} active tasks. Focus on high priority items for your primary residence.
         </CardDescription>
       </CardHeader>

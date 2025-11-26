@@ -18,11 +18,13 @@ export const MyPropertiesCard = ({ properties, className }: MyPropertiesCardProp
     <Card className={cn("h-full", className)}>
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="space-y-1">
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="font-heading text-xl flex items-center gap-2">
             <Home className="h-5 w-5 text-indigo-600" />
             My Properties
           </CardTitle>
-          <CardDescription>Manage your real estate assets</CardDescription>
+          <CardDescription className="font-body text-sm">
+            Manage your real estate assets
+          </CardDescription>
         </div>
         <Button variant="outline" size="sm" asChild>
           <Link href="/dashboard/properties/new">

@@ -15,11 +15,13 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
   return (
     <Card className={cn("h-full flex flex-col", className)}>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle className="font-heading text-xl flex items-center gap-2">
           <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
           My Pros
         </CardTitle>
-        <CardDescription>Quick access to trusted providers</CardDescription>
+        <CardDescription className="font-body text-sm">
+          Quick access to trusted providers
+        </CardDescription>
       </CardHeader>
       <CardContent className="flex-1">
         {favorites.length === 0 ? (

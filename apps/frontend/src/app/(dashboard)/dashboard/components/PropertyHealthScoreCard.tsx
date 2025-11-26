@@ -44,11 +44,11 @@ export const PropertyHealthScoreCard: React.FC<PropertyHealthScoreCardProps> = (
   return (
     <Card className="shadow-lg border border-gray-100 h-full flex flex-col">
       <CardHeader>
-        <CardTitle className="flex items-center space-x-2 text-xl">
+        <CardTitle className="font-heading text-xl flex items-center gap-2">
           <Zap className="w-5 h-5 text-blue-600" />
           <span>Property Health Score</span>
         </CardTitle>
-        <CardDescription className="text-gray-500">
+        <CardDescription className="font-body text-sm text-muted-foreground">
             {property.name || 'Primary Residence'}
         </CardDescription>
       </CardHeader>
@@ -57,7 +57,7 @@ export const PropertyHealthScoreCard: React.FC<PropertyHealthScoreCardProps> = (
         
         {/* Score Display */}
         <div className="flex items-baseline space-x-2">
-          <p className="text-5xl font-extrabold text-gray-900">{healthScore.totalScore}</p>
+          <p className="font-heading text-5xl font-extrabold text-gray-900">{healthScore.totalScore}</p>
           <p className="text-xl font-semibold text-gray-500">/100</p>
           <span className={`text-sm font-medium px-2 py-0.5 rounded-full ${rating.color}`}>
             {rating.text}

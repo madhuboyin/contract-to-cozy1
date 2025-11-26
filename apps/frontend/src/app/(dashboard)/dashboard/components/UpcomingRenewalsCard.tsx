@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query'; 
 import { api } from '@/lib/api/client';
 import { Warranty, InsurancePolicy } from '@/types'; 
@@ -105,13 +105,15 @@ export const UpcomingRenewalsCard = () => {
   return (
     <Card className={`h-full flex flex-col`}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        {/* FIX 1: Remove font size classes and add flex/gap */}
-        <CardTitle className="flex items-center gap-2"> 
-          {/* FIX 2: Add the primary icon inside the CardTitle */}
-          <Shield className="h-5 w-5 text-green-600" />
-          Upcoming Renewals
-        </CardTitle>
-        {/* This icon remains as the conditional status indicator on the far right */}
+        <div className="space-y-1">
+          <CardTitle className="font-heading text-xl flex items-center gap-2"> 
+            <Shield className="h-5 w-5 text-green-600" />
+            Upcoming Renewals
+          </CardTitle>
+          <CardDescription className="font-body text-sm">
+            Insurance and warranty expirations
+          </CardDescription>
+        </div>
         {isAlert ? (
           <AlertTriangle className="h-4 w-4 text-red-500" />
         ) : (
