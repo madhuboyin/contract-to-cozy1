@@ -345,8 +345,8 @@ function DesktopUserNav({ user }: { user: User | null }) {
         onClick={handleLogout} 
         variant="ghost" 
         size="sm"
-        className="font-body font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 tracking-wide transition-colors duration-200"
-      >
+        className="font-body font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive tracking-wide transition-colors duration-200"
+        >
         Logout
       </Button>
     </div>
@@ -388,8 +388,8 @@ function MobileUserNav({ user }: { user: User | null }) {
         <Button 
           onClick={handleLogout} 
           variant="ghost" 
-          className="font-body font-semibold text-red-600 justify-start hover:bg-red-50 hover:text-red-700 tracking-wide transition-colors duration-200 -mx-3"
-        >
+          className="font-body font-semibold text-destructive justify-start hover:bg-destructive/10 hover:text-destructive tracking-wide transition-colors duration-200 -mx-3"
+          >
           <LogOut className="mr-3 h-4 w-4" />
           Logout
         </Button>
