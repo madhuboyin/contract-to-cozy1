@@ -4,14 +4,17 @@ import { Request, Response, NextFunction } from 'express';
 import RiskAssessmentService from '../services/RiskAssessment.service';
 import { Property } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { AuthUser } from '../types/auth.types'; 
 
-// Define the structure of the user object that is ACTUALLY added by the middleware/token payload
-// This is done locally to fix the compilation error, overriding any global type conflicts.
-interface MinimalAuthUser {
-    id: string; // The User ID
-    homeownerProfileId?: string; // The flattened ID of the related homeowner profile (FIX)
-    // Add other necessary properties like role if needed for checks
-}
+// Define a type that ensures the Request object has the correct user structure 
+// after the auth middleware executes, resolving the compilation error.
+// FIX: Merges the original AuthUser structure with the flattened ID that the middleware returns.
+type RiskRequest = Request & {
+  user: AuthUser & {
+      // This is the flattened ID property that the compiler confirms exists
+      homeownerProfileId: string; 
+  }; 
+};
 
 
 class RiskAssessmentController {
@@ -19,15 +22,14 @@ class RiskAssessmentController {
   /**
    * GET /api/risk/property/:propertyId/report
    */
-  async getRiskReport(req: Request, res: Response, next: NextFunction) {
+  async getRiskReport(req: RiskRequest, res: Response, next: NextFunction) {
     try {
       const { propertyId } = req.params;
       
-      // FIX APPLIED: Cast req.user to the minimal structure
-      const user = req.user as MinimalAuthUser; 
-
-      // FIX APPLIED: Access homeownerProfileId directly
-      const homeownerProfileId = user.homeownerProfileId;
+      const user = req.user;
+      
+      // Access the required flattened ID
+      const homeownerProfileId = user.homeownerProfileId; 
       
       if (!homeownerProfileId) {
          return res.status(403).json({ message: 'Access denied. Homeowner profile required for property access.' });
@@ -53,14 +55,12 @@ class RiskAssessmentController {
   /**
    * POST /api/risk/calculate/:propertyId
    */
-  async triggerRecalculation(req: Request, res: Response, next: NextFunction) {
+  async triggerRecalculation(req: RiskRequest, res: Response, next: NextFunction) {
     try {
       const { propertyId } = req.params;
       
-      // FIX APPLIED: Cast req.user to the minimal structure
-      const user = req.user as MinimalAuthUser;
+      const user = req.user;
 
-      // FIX APPLIED: Access homeownerProfileId directly
       const homeownerProfileId = user.homeownerProfileId;
       
       if (!homeownerProfileId) {
