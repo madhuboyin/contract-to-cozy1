@@ -142,40 +142,39 @@ export const UpcomingRenewalsCard = () => {
 
               return (
                 <React.Fragment key={item.id}> 
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center space-x-2">
-                      {/* Icon */}
-                      {item.type === 'Warranty' ? (
-                        <Shield className={`h-4 w-4 flex-shrink-0 ${itemIconColor}`} />
-                      ) : (
-                        <Home className={`h-4 w-4 flex-shrink-0 ${itemIconColor}`} />
-                      )}
-                      
-                      {/* Link Text (Name) */}
-                      <Link
-                        href={`/dashboard/${item.type === 'Warranty' ? 'warranties' : 'insurance'}`}
-                        className={`font-body text-sm font-medium ${linkTextColorClass} hover:opacity-80`} 
-                      >
-                        {item.name}
-                      </Link>
+                  <Link href={`/dashboard/${item.type === 'Warranty' ? 'warranties' : 'insurance'}`} className="block">
+                    <div className="flex justify-between items-center p-2 -m-2 rounded hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center space-x-2">
+                        {/* Icon */}
+                        {item.type === 'Warranty' ? (
+                          <Shield className={`h-4 w-4 flex-shrink-0 ${itemIconColor}`} />
+                        ) : (
+                          <Home className={`h-4 w-4 flex-shrink-0 ${itemIconColor}`} />
+                        )}
+                        
+                        {/* Link Text (Name) */}
+                        <span className={`font-body text-sm font-medium ${linkTextColorClass}`}>
+                          {item.name}
+                        </span>
+                      </div>
+                      <div className="flex-shrink-0 text-right">
+                        
+                        {/* DATE TEXT (Expiring Soon/Expired = RED) */}
+                        <p className={`font-body text-sm font-semibold ${dateTextColor}`}>
+                          {format(new Date(item.expiryDate), 'MMM dd, yyyy')}
+                        </p>
+                        
+                        {/* DAY COUNT TEXT (Expiring Soon/Expired = RED) */}
+                        <p className={`font-body text-xs ${daysTextColor}`}>
+                          {item.daysUntilExpiry <= 0
+                            ? `Expired ${Math.abs(item.daysUntilExpiry)} days ago`
+                            : item.daysUntilExpiry <= 30
+                              ? `${item.daysUntilExpiry} days left`
+                              : ''}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex-shrink-0 text-right">
-                      
-                      {/* DATE TEXT (Expiring Soon/Expired = RED) */}
-                      <p className={`font-body text-sm font-semibold ${dateTextColor}`}>
-                        {format(new Date(item.expiryDate), 'MMM dd, yyyy')}
-                      </p>
-                      
-                      {/* DAY COUNT TEXT (Expiring Soon/Expired = RED) */}
-                      <p className={`font-body text-xs ${daysTextColor}`}>
-                        {item.daysUntilExpiry <= 0
-                          ? `Expired ${Math.abs(item.daysUntilExpiry)} days ago`
-                          : item.daysUntilExpiry <= 30
-                            ? `${item.daysUntilExpiry} days left`
-                            : ''}
-                      </p>
-                    </div>
-                  </div>
+                  </Link>
                   {/* Separator only needed between items */}
                   {index < displayItems.length - 1 && <Separator />}
                 </React.Fragment>
@@ -192,7 +191,7 @@ export const UpcomingRenewalsCard = () => {
         <CardFooter className="border-t pt-4 -mt-2">
             <Link
                 href="/dashboard/warranties" 
-                className="font-body text-sm font-semibold text-blue-600 hover:text-blue-700"
+                className="font-body text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
             >
                 View {overflowCount} More Renewal{overflowCount > 1 ? 's' : ''} →
             </Link>

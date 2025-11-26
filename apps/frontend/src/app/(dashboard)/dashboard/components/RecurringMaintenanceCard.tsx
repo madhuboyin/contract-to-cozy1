@@ -5,6 +5,7 @@ import React from 'react';
 import Link from 'next/link';
 import { Wrench, Check, Clock } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { DashboardChecklistItem } from '../types'; 
@@ -69,23 +70,26 @@ export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMa
             <p className="font-body text-center text-sm text-gray-500">No active maintenance tasks are currently due.</p>
           </div>
         ) : (
-          <ul className="space-y-3">
-            {displayTasks.map((task) => (
-              <Link key={task.id} href={`/dashboard/maintenance?taskId=${task.id}`}>
-                <li className="flex items-center justify-between hover:bg-gray-50 p-2 -m-2 rounded transition-colors">
-                  <span className="font-body text-sm truncate pr-2 font-medium">{task.title}</span>
-                  <span className="font-body flex-shrink-0 text-xs whitespace-nowrap">
-                    {formatDue(task.nextDueDate)}
-                  </span>
-                </li>
-              </Link>
+          <div className="space-y-3">
+            {displayTasks.map((task, index) => (
+              <React.Fragment key={task.id}>
+                <Link href={`/dashboard/maintenance?taskId=${task.id}`} className="block">
+                  <div className="flex items-center justify-between p-2 -m-2 rounded hover:bg-gray-50 transition-colors">
+                    <span className="font-body text-sm truncate pr-2 font-medium">{task.title}</span>
+                    <span className="font-body flex-shrink-0 text-xs whitespace-nowrap">
+                      {formatDue(task.nextDueDate)}
+                    </span>
+                  </div>
+                </Link>
+                {index < displayTasks.length - 1 && <Separator />}
+              </React.Fragment>
             ))}
             {overflowCount > 0 && (
-                <li className="font-body text-xs text-gray-500 pt-2">
-                    +{overflowCount} more items hidden.
-                </li>
+              <p className="font-body text-xs text-gray-500 pt-2">
+                +{overflowCount} more items hidden.
+              </p>
             )}
-          </ul>
+          </div>
         )}
       </CardContent>
       <CardFooter className="border-t pt-4">

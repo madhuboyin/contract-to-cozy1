@@ -104,25 +104,24 @@ export const UpcomingBookingsCard = () => {
           <div className="space-y-3">
             {displayBookings.map((booking, index) => (
               <React.Fragment key={booking.id}>
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center space-x-2">
-                    <Calendar className={`h-4 w-4 flex-shrink-0 ${getStatusColor(booking.status)}`} />
-                    <Link
-                      href={`/dashboard/bookings/${booking.id}`}
-                      className="font-body text-sm font-medium text-foreground hover:opacity-80 truncate"
-                    >
-                      {booking.service.name}
-                    </Link>
+                <Link href={`/dashboard/bookings/${booking.id}`} className="block">
+                  <div className="flex justify-between items-center p-2 -m-2 rounded hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center space-x-2">
+                      <Calendar className={`h-4 w-4 flex-shrink-0 ${getStatusColor(booking.status)}`} />
+                      <span className="font-body text-sm font-medium text-foreground truncate">
+                        {booking.service.name}
+                      </span>
+                    </div>
+                    <div className="flex-shrink-0 text-right">
+                      <p className="font-body text-sm font-semibold text-gray-700">
+                        {booking.scheduledDate ? format(new Date(booking.scheduledDate), 'MMM dd') : 'TBD'}
+                      </p>
+                      <p className="font-body text-xs text-gray-500">
+                        {formatTime(booking.startTime)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-shrink-0 text-right">
-                    <p className="font-body text-sm font-semibold text-gray-700">
-                      {booking.scheduledDate ? format(new Date(booking.scheduledDate), 'MMM dd') : 'TBD'}
-                    </p>
-                    <p className="font-body text-xs text-gray-500">
-                      {formatTime(booking.startTime)}
-                    </p>
-                  </div>
-                </div>
+                </Link>
                 {index < displayBookings.length - 1 && <Separator />}
               </React.Fragment>
             ))}
