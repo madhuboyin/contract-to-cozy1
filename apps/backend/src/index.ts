@@ -15,6 +15,7 @@ import checklistRoutes from './routes/checklist.routes'; // <-- FIX 1: Default i
 import serviceCategoryRoutes from './routes/service-category.routes';
 import maintenanceRoutes from './routes/maintenance.routes';
 import homeownerManagementRoutes from './routes/home-management.routes';
+import riskRoutes from './routes/risk.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
@@ -107,6 +108,7 @@ app.use('/api/checklist', checklistRoutes); // <-- FIX 2: Mount point
 app.use('/api/service-categories', serviceCategoryRoutes);
 app.use('/api/maintenance-templates', maintenanceRoutes);
 app.use('/api/home-management', homeownerManagementRoutes); // NEW LINE
+app.use('/api/risk', riskRoutes);
 
 // =============================================================================
 // 404 HANDLER
@@ -165,6 +167,8 @@ app.listen(PORT, () => {
   console.log(`   - PUT  /api/checklist/items/:itemId`);
   console.log(`   - GET  /api/service-categories`);
   console.log(`   - GET  /api/service-categories/all`);
+  console.log(`   - GET  /api/risk/property/:propertyId/report`);
+  console.log(`   - POST /api/risk/calculate/:propertyId`);
 });
 
 export default app;
