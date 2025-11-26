@@ -506,6 +506,9 @@ model Property {
   expenses         Expense[]
  
   documents        Document[]
+
+  // NEW RELATION FOR RISK ASSESSMENT (Phase 1): ADDED explicit name "PropertyRiskReport"
+  riskReport       RiskAssessmentReport? @relation(name: "PropertyRiskReport")
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
