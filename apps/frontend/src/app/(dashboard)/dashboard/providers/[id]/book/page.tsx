@@ -6,6 +6,8 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api/client';
 import { Provider, Service, Property, CreateBookingInput } from '@/types';
+// FIX: Import useQueryClient for cache invalidation
+import { useQueryClient } from '@tanstack/react-query'; 
 
 // --- Helper Function ---
 function formatServiceCategory(category: string | null): string {
@@ -20,7 +22,9 @@ function formatServiceCategory(category: string | null): string {
 export default function BookProviderPage() {
   const params = useParams();
   const router = useRouter();
-  // New: Get search params and the service category hint
+  // FIX: Initialize the query client
+  const queryClient = useQueryClient();
+  
   const searchParams = useSearchParams();
   const serviceCategory = searchParams.get('service');
   const providerId = params.id as string;
@@ -163,6 +167,10 @@ export default function BookProviderPage() {
       console.log('Booking response:', response);
       
       if (response.success) {
+        // FIX: Invalidate the cache for all booking-related queries
+        // This forces the "Upcoming Bookings" card on the Dashboard to re-fetch its data.
+        await queryClient.invalidateQueries({ queryKey: ['bookings'] });
+
         alert('Booking created successfully!');
         router.push('/dashboard/bookings');
       } else {
