@@ -102,7 +102,7 @@ export default function ProviderDetailPage() {
       // DEBUG: Log the data received on success
       console.log('DEBUG (Add Favorite Success): Data received from mutation:', mutationResponse.data);
 
-      // Rely on refetchQueries for data consistency.
+      // FIX: Rely entirely on refetchQueries for data consistency.
       queryClient.refetchQueries({ queryKey: ['provider', providerId] });
       queryClient.refetchQueries({ queryKey: FAVORITES_QUERY_KEY });
       
@@ -125,7 +125,7 @@ export default function ProviderDetailPage() {
   const removeFavoriteMutation = useMutation({
     mutationFn: (id: string) => api.removeFavorite(id),
     onSuccess: () => {
-      // Rely on refetchQueries for data consistency.
+      // FIX: Rely entirely on refetchQueries for data consistency.
       queryClient.refetchQueries({ queryKey: ['provider', providerId] });
       queryClient.refetchQueries({ queryKey: FAVORITES_QUERY_KEY });
       
