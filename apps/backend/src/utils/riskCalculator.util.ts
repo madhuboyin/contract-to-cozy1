@@ -1,0 +1,238 @@
+//apps/backend/src/utils/riskCalculator.util.ts
+
+import {
+    Property,
+    Warranty,
+    InsurancePolicy,
+    RiskAssessmentReport,
+    RiskCategory,
+    Prisma,
+  } from "@prisma/client";
+  import { RISK_ASSET_CONFIG, SystemRiskConfig } from "../config/risk-constants";
+  
+  // --- INTERFACES & TYPES (Mirroring Prisma Models for strict typing) ---
+  
+  // Extend Property type to include required relations for the calculation
+  interface PropertyWithDetails extends Property {
+    warranties: Warranty[];
+    insurancePolicies: InsurancePolicy[];
+  }
+  
+  // Result structure for a single asset calculation
+  export interface AssetRiskDetail {
+    assetName: string;
+    systemType: string;
+    category: RiskCategory;
+    age: number;
+    expectedLife: number;
+    replacementCost: number;
+    probability: number;       // P (0.0 to 1.0)
+    coverageFactor: number;    // C (0.0 to 1.0)
+    outOfPocketCost: number;   // Out-of-Pocket Cost = Impact Cost * (1 - C)
+    riskDollar: number;        // P * Out-of-Pocket Cost
+    riskLevel: 'LOW' | 'MODERATE' | 'ELEVATED' | 'HIGH';
+    actionCta?: string;
+  }
+  
+  // --- CORE HELPER FUNCTIONS ---
+  
+  const clamp = (num: number, min: number, max: number): number => {
+    return Math.max(min, Math.min(max, num));
+  };
+  
+  const getAgeInYears = (installYear: number | null, currentYear: number): number => {
+      if (!installYear) return 0; // Assume new or unknown
+      return clamp(currentYear - installYear, 0, 100);
+  };
+  
+  // --- STEP 2: PROBABILITY CALCULATION (P) ---
+  // Uses a non-linear (squared) relationship to penalize older assets more severely.
+  const calculateProbability = (age: number, expectedLife: number, warningBump: number = 0): number => {
+      if (age === 0) return 0.05; // Baseline low risk for new/unknown age
+      if (expectedLife <= 0) return 0.95; // Max risk if life is undefined
+  
+      const ageRatio = clamp(age / expectedLife, 0, 2); 
+      
+      // Non-linear P based on (Age Ratio)^2. P goes from 0 to 1.0 sharply near end of life.
+      // Base probability starts low (0.1) and scales exponentially
+      const P_base = 0.1 + 0.9 * Math.pow(ageRatio, 2);
+  
+      let P = clamp(P_base + warningBump, 0, 1);
+  
+      // If asset is significantly past its expected life, ensure high risk floor
+      if (ageRatio >= 1.2) {
+          P = Math.max(P, 0.85);
+      }
+      
+      return clamp(P, 0.05, 1.0);
+  };
+  
+  
+  // --- STEP 3: COVERAGE & OUT-OF-POCKET CALCULATION (C) ---
+  // The most crucial financial component. Determines how much the user would actually pay.
+  const calculateOutofPocket = (
+    replacementCost: number,
+    hasActiveWarranty: boolean,
+    hasDwellingInsurance: boolean,
+    probability: number
+  ): number => {
+    let uncoveredCost = replacementCost;
+    const standardDeductible = 1000; // Assume a typical deductible for insurance
+    const warrantyDeductible = 150; // Assume a typical service fee/deductible for home warranty
+  
+    // Logic: When P is high (old age), the risk is Wear-and-Tear (W&T), which Insurance often doesn't cover.
+    // When P is low, the risk is sudden accidental damage, which Insurance usually covers.
+  
+    // 1. Coverage for High Probability Failures (W&T, Age-related):
+    if (probability > 0.7) {
+      if (hasActiveWarranty) {
+        // Warranty covers W&T. Risk is reduced to the service fee.
+        uncoveredCost = warrantyDeductible;
+      } else {
+        // No warranty, and insurance won't cover W&T due to age. Full exposure.
+        uncoveredCost = replacementCost;
+      }
+    } 
+    // 2. Coverage for Low/Moderate Probability Failures (Accident/Sudden Loss):
+    else {
+      if (hasDwellingInsurance) {
+        // Insurance covers sudden loss. Risk is reduced to the deductible.
+        uncoveredCost = standardDeductible;
+      } else {
+        // No insurance/warranty for accidental damage. Full exposure.
+        uncoveredCost = replacementCost;
+      }
+    }
+  
+    return clamp(uncoveredCost, 0, replacementCost);
+  };
+  
+  // --- MAIN CALCULATION FUNCTIONS ---
+  
+  /**
+   * Calculates the Risk Dollar and all metrics for a single asset.
+   */
+  export const calculateAssetRisk = (
+    assetName: string,
+    assetConfig: SystemRiskConfig,
+    property: PropertyWithDetails,
+    currentYear: number,
+  ): AssetRiskDetail | null => {
+    
+    // 1. Identify Installation Year based on asset type (Simplified for Phase 1)
+    let installYear: number | null = null;
+    switch (assetConfig.systemType) {
+      case "HVAC_FURNACE":
+      case "HVAC_HEAT_PUMP":
+        installYear = property.hvacInstallYear;
+        break;
+      case "WATER_HEATER_TANK":
+      case "WATER_HEATER_TANKLESS":
+        installYear = property.waterHeaterInstallYear;
+        break;
+      case "ROOF_SHINGLE":
+      case "ROOF_TILE_METAL":
+        installYear = property.roofReplacementYear;
+        break;
+      // ... extend with more granular mapping later
+      default:
+          // For components like Detectors, assume age based on a fixed 10-year rule
+          if (assetConfig.category === RiskCategory.SAFETY) {
+              installYear = property.yearBuilt || 2020; // Best guess or recent reno
+          }
+          break;
+    }
+    
+    // If we can't determine the age, skip this asset for now
+    if (!installYear) return null;
+  
+    const age = getAgeInYears(installYear, currentYear);
+    const expectedLife = assetConfig.expectedLife;
+    const replacementCost = assetConfig.replacementCost;
+  
+    // 2. Apply Warning Flags (Simplified Phase 1 check on Property fields)
+    let warningBump = 0;
+    if (property.hasDrainageIssues && assetConfig.warningFlags?.hasDrainageIssues) {
+      warningBump += assetConfig.warningFlags.hasDrainageIssues;
+    }
+    
+    // 3. Calculate Probability (P)
+    const P = calculateProbability(age, expectedLife, warningBump);
+  
+    // 4. Calculate Coverage Status (C)
+    const hasActiveWarranty = property.warranties.some(w => new Date(w.expiryDate).getFullYear() >= currentYear);
+    const hasDwellingInsurance = property.insurancePolicies.length > 0; // Simplified check
+    
+    // 5. Calculate Out-of-Pocket Cost
+    const outOfPocketCost = calculateOutofPocket(replacementCost, hasActiveWarranty, hasDwellingInsurance, P);
+    
+    // 6. Calculate Risk Dollar
+    const riskDollar = P * outOfPocketCost;
+    
+    // 7. Determine Risk Level (Color Buckets)
+    const scoreRatio = riskDollar / (replacementCost * 0.5); // Arbitrary scoring metric for single asset
+    let riskLevel: AssetRiskDetail['riskLevel'];
+    if (scoreRatio < 0.1) riskLevel = 'LOW';
+    else if (scoreRatio < 0.3) riskLevel = 'MODERATE';
+    else if (scoreRatio < 0.6) riskLevel = 'ELEVATED';
+    else riskLevel = 'HIGH';
+  
+    // 8. Determine Action CTA (Phase 3 logic placeholder)
+    let actionCta = '';
+    if (riskLevel === 'HIGH' && !hasActiveWarranty) {
+        actionCta = 'Add Home Warranty';
+    } else if (age > expectedLife && outOfPocketCost > 0) {
+        actionCta = 'Schedule Inspection/Replacement';
+    }
+  
+    return {
+      assetName,
+      systemType: assetConfig.systemType,
+      category: assetConfig.category,
+      age,
+      expectedLife,
+      replacementCost,
+      probability: Math.round(P * 100) / 100,
+      coverageFactor: Math.round(1 - (outOfPocketCost / replacementCost) * 100) / 100, // C is derivative
+      outOfPocketCost: Math.round(outOfPocketCost),
+      riskDollar: Math.round(riskDollar),
+      riskLevel,
+      actionCta,
+    };
+  };
+  
+  /**
+   * Main function to aggregate risks and calculate the final normalized score.
+   * @returns RiskAssessmentReport structure data.
+   */
+  export const calculateTotalRiskScore = (
+    property: PropertyWithDetails,
+    assetRisks: AssetRiskDetail[],
+  ): Omit<RiskAssessmentReport, 'id' | 'propertyId' | 'property' | 'createdAt'> => {
+    
+    const totalRiskDollar = assetRisks.reduce((sum, risk) => sum + risk.riskDollar, 0);
+    
+    // --- STEP 5: NORMALIZE TO 0–100 SCORE ---
+    
+    // Dynamic MAX_RISK: Define max acceptable risk as 15% of the property's potential replacement cost.
+    // Using property size (sqft) * a fixed cost as a simplified proxy for total asset value/replacement cost.
+    const PROPERTY_VALUE_RATE = 25; // $25 per square foot of total internal assets
+    const maxPotentialExposure = property.propertySize ? property.propertySize * PROPERTY_VALUE_RATE : 50000;
+    
+    // Max tolerable risk is 20% of the max potential exposure (a tuning parameter)
+    const MAX_RISK_DOLLAR = maxPotentialExposure * 0.20; 
+  
+    // Non-Linear Mapping (Squared Inverse): Punishes high-risk exposure more severely.
+    const riskRatio = clamp(totalRiskDollar / MAX_RISK_DOLLAR, 0, 1);
+    const score = 100 * (1 - Math.pow(riskRatio, 2));
+  
+    // --- STEP 6: COLOR BUCKETS (Final Score Status) ---
+    const finalScore = Math.round(score);
+  
+    return {
+      riskScore: finalScore,
+      financialExposureTotal: new Prisma.Decimal(totalRiskDollar),
+      details: assetRisks as any, // Cast to any because Prisma's Json type is flexible
+      lastCalculatedAt: new Date(),
+    };
+  };
