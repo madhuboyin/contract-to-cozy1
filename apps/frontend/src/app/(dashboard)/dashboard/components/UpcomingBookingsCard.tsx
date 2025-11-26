@@ -139,14 +139,17 @@ export const UpcomingBookingsCard = () => {
         {displayBookings.length > 0 && showMore ? (
             <Link
                 href="/dashboard/bookings" 
-                className="font-body text-sm font-semibold text-blue-600 hover:text-blue-700"
+                className="font-body text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
             >
                 View {overflowCount} More Booking{overflowCount > 1 ? 's' : ''} →
             </Link>
         ) : (
-             <Button variant="ghost" className="w-full h-8 text-xs font-semibold text-blue-600 hover:text-blue-700" asChild>
-                <Link href="/dashboard/bookings">View All Bookings →</Link>
-            </Button>
+             <Link 
+                href="/dashboard/bookings"
+                className="font-body text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+             >
+                View All Bookings →
+             </Link>
         )}
       </CardFooter>
     </Card>

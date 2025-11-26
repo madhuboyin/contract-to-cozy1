@@ -90,22 +90,28 @@ export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMa
       </CardContent>
       <CardFooter className="border-t pt-4">
         {displayTasks.length === 0 ? (
-            // Case 1: List is Empty -> Full-width link to Setup
-             <Button variant="outline" className="w-full h-8 text-xs font-semibold text-blue-600 hover:text-blue-700" asChild>
-                <Link href={setupLink}>Set Up Maintenance Plan →</Link>
-            </Button>
+            // Case 1: List is Empty -> Primary CTA
+             <Link 
+                href={setupLink}
+                className="font-body text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+             >
+                Set Up Maintenance Plan →
+             </Link>
         ) : (
-             // Case 2: List has items -> Two links: Setup on left, List/More on right
+             // Case 2: List has items -> Secondary link on left, Primary CTA on right
             <div className="flex justify-between w-full items-center">
                 <Link 
                     href={setupLink} 
-                    className="font-body text-xs font-semibold text-gray-600 hover:text-blue-700 underline"
+                    className="font-body text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
                 >
                     Maintenance Setup
                 </Link>
-                <Button variant="ghost" className="h-8 text-xs font-semibold text-blue-600 hover:text-blue-700" asChild>
-                    <Link href={primaryLink}>{primaryText}</Link>
-                </Button>
+                <Link 
+                    href={primaryLink}
+                    className="font-body text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+                >
+                    {primaryText} →
+                </Link>
             </div>
         )}
       </CardFooter>
