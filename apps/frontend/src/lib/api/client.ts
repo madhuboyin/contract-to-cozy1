@@ -33,17 +33,23 @@ import {
   Checklist, 
   ChecklistItem,
   UpdateChecklistItemInput, // Added to fix previous issues
-  // Removed the problematic 'ProviderProfile' import
 } from '@/types';
 
-// FIX: Define a temporary structural type for ProviderProfile to resolve the 'Cannot find name' error.
+// FIX 1: Define a custom Error class to carry API error messages and status
+class APIError extends Error {
+  constructor(message: string, public status: number | string = 'API_ERROR') {
+    super(message);
+    this.name = 'APIError';
+  }
+}
+
+// FIX 2: Define a temporary structural type for ProviderProfile to resolve the 'Cannot find name' error.
 // This structure reflects the data returned by the backend listFavorites controller.
 type ProviderProfile = Provider & {
-  // FIX: Explicitly ensure the user object includes the phone field, as selected by the backend.
-  // This resolves the type incompatibility with FavoriteProviderData.
   user: User & { phone: string | null }; 
   services: Service[];
 };
+
 
 // NOTE: Changed to API_BASE_URL to match common convention, but using the provided API_URL environment variable check
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
@@ -202,7 +208,8 @@ class APIClient {
           if (typeof window !== 'undefined') {
             window.location.href = '/login';
           }
-          return { success: false, message: 'Session expired. Please log in again.' };
+          // FIX: Throw error on session expiry instead of returning an error object
+          throw new APIError('Session expired. Please log in again.', '401');
         }
       }
 
@@ -222,44 +229,37 @@ class APIClient {
         try {
             data = JSON.parse(text);
         } catch (e) {
-            // If response body is not valid JSON
-            const errorMessage = `Server returned status ${response.status}. Body was not JSON.`;
-            const textPreview = text ? text.substring(0, 200) : 'Empty body';
-            console.error('API DEBUG: Failed to parse JSON response. Raw body:', textPreview);
-            return {
-                success: false,
-                message: errorMessage,
-                error: { message: text.substring(0, 100), code: `HTTP_${response.status}` },
-            } as APIResponse<T>;
+            // FIX: Throw error for non-JSON body
+            throw new APIError(`Server returned status ${response.status}. Body was not JSON.`, response.status);
         }
       }
       // --- END: FIX FOR 204 AND BODY STREAM READ ERROR ---
+      
+      // FIX 3: Critical Error Handling Logic (Replaced previous logic)
+
+      // 3a. Check for generic non-OK response (e.g., 400, 404, 500)
+      if (!response.ok) {
+        const errorMessage = (data && data.error) || (data && data.message) || `HTTP Error: ${response.status}`;
+        // CRITICAL FIX: THROW an error instead of returning a success: false object
+        throw new APIError(errorMessage, response.status);
+      }
+
+      // 3b. Check for API logic failure (e.g., backend uses HTTP 200 but sends { success: false })
+      if (data && data.success === false) {
+          const errorMessage = data.message || (data.error && data.error.message) || 'Request failed due to business logic error.';
+          // CRITICAL FIX: THROW an error for business logic failure
+          throw new APIError(errorMessage, response.status); 
+      }
+      // --- END: FIX 3 ---
 
 
       // --- DEBUG LOG 3: Log Final Data ---
       console.log('API DEBUG: Final Response Data:', data);
       // -----------------------------------
 
-      if (!response.ok) {
-        return {
-          success: false,
-          message: (data && data.message) || 'An error occurred',
-          error: data && data.error,
-        };
-      }
-      
       // If status was 204/205 (No Content), return explicit success with empty data
       if (response.status === 204 || response.status === 205) {
           return { success: true, data: {} as T, message: "No Content" } as APIResponse<T>;
-      }
-      
-      // CRITICAL FIX: Ensure if the body explicitly contains { success: false }, we treat it as failure
-      if (data && data.success === false) {
-          return {
-              success: false,
-              message: data.message || 'Request failed due to business logic error.',
-              error: data.error,
-          } as APIResponse<T>;
       }
 
       // If HTTP 2xx and explicit { success: true } or no success field
@@ -267,10 +267,11 @@ class APIClient {
 
     } catch (error) {
       console.error('API Request Error (Catch Block):', error);
-      return {
-        success: false,
-        message: 'Network error. Please check your connection.',
-      };
+      // FIX 4: Re-throw custom errors, otherwise throw generic network error
+      if (error instanceof APIError) {
+          throw error;
+      }
+      throw new APIError('Network error. Please check your connection.', 'NETWORK');
     }
   }
 
@@ -318,21 +319,20 @@ class APIClient {
         // ------------------------------------------
 
         if (!response.ok || data.success === false) {
-            return {
-                success: false,
-                message: data.message || 'An error occurred during file upload.',
-                error: data.error,
-            } as APIResponse<T>;
+          const errorMessage = (data && data.error) || (data && data.message) || `HTTP Error: ${response.status}`;
+          // FIX: Throw error
+          throw new APIError(errorMessage, response.status);
         }
 
         return data; // This is the APIResponse
         
     } catch (error) {
         console.error('API Form Data Request Error:', error);
-        return {
-            success: false,
-            message: 'Network error or session issue during file upload.',
-        };
+        // FIX: Re-throw custom errors, otherwise throw generic network error
+        if (error instanceof APIError) {
+            throw error;
+        }
+        throw new APIError('Network error or session issue during file upload.', 'NETWORK');
     }
   }
 
@@ -344,11 +344,13 @@ class APIClient {
    * Register new user
    */
   async register(input: RegisterInput): Promise<APIResponse<RegisterResponse>> {
-    return this.request<RegisterResponse>('/api/auth/register', {
+    const response = await this.request<RegisterResponse>('/api/auth/register', {
       method: 'POST',
       // FIX: Cast object to BodyInit
       body: input as unknown as BodyInit,
     });
+    // FIX: Must return the APIResponse structure
+    return response;
   }
 
   /**
@@ -361,7 +363,7 @@ class APIClient {
       body: input as unknown as BodyInit,
     });
 
-    // Save tokens on successful login, relying on response.success check in request()
+    // FIX: Add check for response.success to satisfy TypeScript and access 'data' property.
     if (response.success) {
       this.setToken(response.data.accessToken);
       if (typeof window !== 'undefined') {
@@ -376,10 +378,15 @@ class APIClient {
    * Logout user
    */
   async logout(): Promise<void> {
-    await this.request('/api/auth/logout', {
-      method: 'POST',
-    });
-    this.removeToken();
+    try {
+      await this.request('/api/auth/logout', {
+        method: 'POST',
+      });
+    } catch (e) {
+      // Ignore errors on logout request, the tokens are being cleared anyway
+    } finally {
+      this.removeToken();
+    }
   }
 
   /**
@@ -405,6 +412,7 @@ class APIClient {
       : null;
 
     if (!refreshToken) {
+      // FIX: Return APIResponse object
       return {
         success: false,
         message: 'No refresh token available',
@@ -422,6 +430,7 @@ class APIClient {
     const data = await response.json();
 
     if (!response.ok) {
+      // FIX: Return APIResponse object
         return {
             success: false,
             message: data.message || 'Failed to refresh token',
@@ -435,7 +444,7 @@ class APIClient {
         localStorage.setItem('refreshToken', data.data.refreshToken);
       }
     }
-
+    // FIX: Return APIResponse object
     return data;
   }
 
@@ -972,19 +981,23 @@ class APIClient {
    * Adds a provider to the homeowner's favorites.
    */
   async addFavorite(providerProfileId: string): Promise<APIResponse<any>> {
-    return this.request('/api/users/favorites', {
+    // NOTE: This relies on the request method correctly throwing the APIError
+    const response = await this.request('/api/users/favorites', {
       method: 'POST',
       body: { providerProfileId } as unknown as BodyInit,
     });
+    return response;
   }
 
   /**
    * Removes a provider from the homeowner's favorites.
    */
   async removeFavorite(providerProfileId: string): Promise<APIResponse<void>> {
-    return this.request<void>(`/api/users/favorites/${providerProfileId}`, {
+    // NOTE: This relies on the request method correctly throwing the APIError
+    const response = await this.request<void>(`/api/users/favorites/${providerProfileId}`, {
       method: 'DELETE',
     });
+    return response;
   }
 
 }
