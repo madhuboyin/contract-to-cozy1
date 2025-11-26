@@ -3,8 +3,8 @@
 
 import React from 'react';
 import Link from 'next/link';
-// FIX: Added Loader2 for loading state
-import { Star, Phone, Loader2 } from 'lucide-react';
+// FIX: Added Calendar for Book button
+import { Star, Phone, Loader2, Calendar } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'; 
@@ -15,7 +15,6 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/client';
 
 // Define a structural type for the data returned by listFavorites API 
-// (based on the backend controller response structure)
 interface FavoriteProviderData {
   id: string; // ProviderProfile ID
   businessName: string;
@@ -25,10 +24,20 @@ interface FavoriteProviderData {
   user: {
     firstName: string;
     lastName: string;
+    phone: string | null; // Added phone based on expected use
   };
 }
 
 const FAVORITES_QUERY_KEY = ['favorites'];
+
+// Helper to create initials for the AvatarFallback
+const getInitials = (name: string) => {
+    const parts = name.split(' ');
+    if (parts.length > 1) {
+        return (parts[0][0] || '') + (parts[1][0] || '');
+    }
+    return name[0] || '?';
+};
 
 export const FavoriteProvidersCard = ({ className }: { className?: string }) => {
   
@@ -93,7 +102,8 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
           Quick access to trusted providers
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex-1">
+      {/* Added max-h-72 and overflow-y-auto to allow scrolling if many favorites exist */}
+      <CardContent className="flex-1 overflow-y-auto max-h-72">
         {favorites.length === 0 ? (
           <div className="text-center py-6 text-muted-foreground">
             <p className="font-body text-sm mb-3">Save providers you love here.</p>
@@ -102,11 +112,52 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
             </Button>
           </div>
         ) : (
-          <div className="space-y-3">
-             {/* List logic for displaying providers will go here in Phase 3 */}
-             <p className="text-muted-foreground text-sm text-center py-6">
-                Showing {favorites.length} providers. List display coming in Phase 3...
-            </p>
+          // PHASE 3 FIX: Render the list of favorite providers
+          <div className="space-y-4">
+             {favorites.map((provider) => (
+                <div 
+                    key={provider.id} 
+                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                    <div className="flex items-center space-x-3 min-w-0">
+                        <Avatar className="h-10 w-10 shrink-0">
+                            <AvatarFallback className="bg-teal-500 text-white text-base font-semibold">
+                                {getInitials(provider.businessName)}
+                            </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                            <Link 
+                                href={`/dashboard/providers/${provider.id}`} 
+                                className="font-medium text-gray-900 hover:text-brand-primary truncate block"
+                                title={provider.businessName}
+                            >
+                                {provider.businessName}
+                            </Link>
+                            <div className="flex items-center text-sm text-gray-500">
+                                <Star className="h-3 w-3 fill-yellow-500 text-yellow-500 mr-1" />
+                                <span>{provider.averageRating.toFixed(1)} ({provider.totalReviews})</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex space-x-2 shrink-0">
+                        {/* Action buttons */}
+                        {provider.user.phone && (
+                            <Button variant="ghost" size="icon" asChild>
+                                <a href={`tel:${provider.user.phone}`} title={`Call ${provider.businessName}`}>
+                                    <Phone className="h-4 w-4 text-gray-500 hover:text-brand-primary" />
+                                </a>
+                            </Button>
+                        )}
+                        <Button variant="outline" size="sm" asChild>
+                            <Link href={`/dashboard/providers/${provider.id}/book`}>
+                                <Calendar className="h-4 w-4 mr-1" />
+                                Book
+                            </Link>
+                        </Button>
+                    </div>
+                </div>
+            ))}
+            {/* REMOVED: <p className="text-muted-foreground text-sm text-center py-6">Showing {favorites.length} providers. List display coming in Phase 3...</p> */}
           </div>
         )}
       </CardContent>
