@@ -78,13 +78,16 @@ export default function ProviderDetailPage() {
       }
       // Log the error but don't crash the component
       console.error("Failed to fetch favorites status:", response.message);
-      return [];
+      throw new Error(response.message); // Throw to set isError=true
     },
     // Set a moderate staleTime
     staleTime: 5 * 60 * 1000, 
     // Ensure this runs only if we have a providerId to check against
     enabled: !!providerId, 
   });
+
+  // DEBUG LOG
+  console.log('DEBUG: Favorites Query Status:', favoritesQuery.status);
   
   const isFavorite = favoritesQuery.data?.includes(providerId) ?? false;
   
@@ -141,6 +144,45 @@ export default function ProviderDetailPage() {
   };
 
   const isToggling = addFavoriteMutation.isPending || removeFavoriteMutation.isPending;
+
+  // =========================================================================
+  // Button Rendering Logic Refactor for Robustness & Debugging
+  // =========================================================================
+  const renderFavoriteButton = () => {
+    if (favoritesQuery.isError) {
+        console.error("DEBUG: Favorites Query Error:", favoritesQuery.error);
+        // Render an error state in the button's place
+        return (
+            <div className="text-sm text-red-600 px-4 py-2 border border-red-300 bg-red-50 rounded-lg">
+                Error: Failed to load favorite status.
+            </div>
+        );
+    }
+    
+    // This is the combined loading state
+    const loadingState = favoritesQuery.isLoading || isToggling;
+
+    return (
+        <Button
+            onClick={handleFavoriteToggle}
+            variant={isFavorite ? "destructive" : "outline"}
+            size="lg"
+            disabled={loadingState}
+            className="flex items-center space-x-2"
+        >
+            {loadingState ? (
+                <Loader2 className="h-5 w-5 animate-spin mr-2" />
+            ) : (
+                <Heart 
+                    className={isFavorite ? "h-5 w-5 fill-white" : "h-5 w-5 text-gray-500"} 
+                />
+            )}
+            <span className="text-base font-semibold">
+                {loadingState ? 'Loading...' : isFavorite ? 'My Pro' : 'Add to My Pros'}
+            </span>
+        </Button>
+    );
+  };
 
   // =========================================================================
   // EXISTING DATA LOADING LOGIC
@@ -223,25 +265,8 @@ export default function ProviderDetailPage() {
           </div>
         </div>
 
-        {/* PHASE 3 FIX: Favorite Toggle Button */}
-        <Button
-            onClick={handleFavoriteToggle}
-            variant={isFavorite ? "destructive" : "outline"}
-            size="lg"
-            disabled={isToggling}
-            className="flex items-center space-x-2"
-        >
-            {isToggling ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-                <Heart 
-                    className={isFavorite ? "h-5 w-5 fill-white" : "h-5 w-5 text-gray-500"} 
-                />
-            )}
-            <span className="text-base font-semibold">
-                {isFavorite ? 'My Pro' : 'Add to My Pros'}
-            </span>
-        </Button>
+        {/* FIX: Use the robust rendering function */}
+        {renderFavoriteButton()}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
