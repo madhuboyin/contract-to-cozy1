@@ -97,23 +97,9 @@ export default function ProviderDetailPage() {
   // 2. Mutation for adding a favorite
   const addFavoriteMutation = useMutation({
     mutationFn: (id: string) => api.addFavorite(id),
-    // FIX: Use response to manually update the cache data immediately
-    onSuccess: (response: any) => {
-      // response.data contains the new ProviderProfile object
-      const newProvider = response.data;
-      
-      // Manually update the cache for the FAVORITES_QUERY_KEY
-      queryClient.setQueryData(FAVORITES_QUERY_KEY, (oldData: any[] | undefined) => {
-          const favorites = oldData || [];
-          
-          // Only add if it's not already present
-          if (!favorites.some(p => p.id === newProvider.id)) {
-              return [...favorites, newProvider];
-          }
-          return favorites;
-      });
-
-      // Refetch for a server-side check/cleanup in the background
+    onSuccess: () => {
+      // FIX: Removed manual cache update (setQueryData) to prevent stale/incorrect data insertion.
+      // Rely entirely on refetchQueries for data consistency.
       queryClient.refetchQueries({ queryKey: ['provider', providerId] });
       queryClient.refetchQueries({ queryKey: FAVORITES_QUERY_KEY });
       
@@ -136,13 +122,8 @@ export default function ProviderDetailPage() {
   const removeFavoriteMutation = useMutation({
     mutationFn: (id: string) => api.removeFavorite(id),
     onSuccess: () => {
-      // FIX: Manually update the cache after removal
-      queryClient.setQueryData(FAVORITES_QUERY_KEY, (oldData: any[] | undefined) => {
-          const favorites = oldData || [];
-          return favorites.filter(p => p.id !== providerId);
-      });
-
-      // Refetch for a server-side check/cleanup in the background
+      // FIX: Removed manual cache update (setQueryData) to prevent stale/incorrect data insertion.
+      // Rely entirely on refetchQueries for data consistency.
       queryClient.refetchQueries({ queryKey: ['provider', providerId] });
       queryClient.refetchQueries({ queryKey: FAVORITES_QUERY_KEY });
       
