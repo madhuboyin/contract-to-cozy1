@@ -33,12 +33,15 @@ import {
   Checklist, 
   ChecklistItem,
   UpdateChecklistItemInput, // Added to fix previous issues
+  // Removed the problematic 'ProviderProfile' import
 } from '@/types';
 
 // FIX: Define a temporary structural type for ProviderProfile to resolve the 'Cannot find name' error.
 // This structure reflects the data returned by the backend listFavorites controller.
 type ProviderProfile = Provider & {
-  user: User;
+  // FIX: Explicitly ensure the user object includes the phone field, as selected by the backend.
+  // This resolves the type incompatibility with FavoriteProviderData.
+  user: User & { phone: string | null }; 
   services: Service[];
 };
 
@@ -953,7 +956,7 @@ class APIClient {
       return this.request<{ documents: Document[] }>('/api/home-management/documents');
   }
 
-// ==========================================================================
+  // ==========================================================================
   // NEW FAVORITES ENDPOINTS (PHASE 1)
   // ==========================================================================
 

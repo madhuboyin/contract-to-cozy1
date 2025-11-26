@@ -1,5 +1,4 @@
 import { Response } from 'express';
-// FIX: Import Prisma and UserRole
 import { PrismaClient, UserRole, Prisma } from '@prisma/client'; 
 import { z } from 'zod';
 import { AuthRequest } from '../types/auth.types';
@@ -17,6 +16,7 @@ const updateProfileSchema = z.object({
 });
 
 export const getProfile = async (req: AuthRequest, res: Response) => {
+// ... (existing implementation)
   try {
     const userId = req.user?.userId;
     if (!userId) {
@@ -55,6 +55,7 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
 };
 
 export const updateProfile = async (req: AuthRequest, res: Response) => {
+// ... (existing implementation)
   try {
     const userId = req.user?.userId;
     if (!userId) {
@@ -166,11 +167,19 @@ export const listFavorites = async (req: AuthRequest, res: Response) => {
   try {
     const favorites = await prisma.favorite.findMany({
       where: { userId },
-      // FIX: Use 'include' to correctly load the relation after schema fix
       include: {
         providerProfile: {
           include: {
-            user: { select: { id: true, firstName: true, lastName: true, email: true } },
+            user: { 
+              select: { 
+                id: true, 
+                firstName: true, 
+                lastName: true, 
+                email: true, 
+                // FIX: Include phone number to match frontend type definition
+                phone: true, 
+              } 
+            },
             services: true,
           },
         },
