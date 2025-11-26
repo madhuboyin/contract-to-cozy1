@@ -18,15 +18,15 @@ import { api } from '@/lib/api/client';
 interface FavoriteProviderData {
   id: string; // ProviderProfile ID
   businessName: string;
-  // FIX: Make averageRating explicitly allow null/undefined if the backend sends it that way
+  // FIX: Make averageRating explicitly allow null/undefined
   averageRating: number | null | undefined;
   totalReviews: number;
-  // Minimal user info from the nested user object
+  // FIX: Allow user property itself to be null/undefined
   user: {
     firstName: string;
     lastName: string;
     phone: string | null; // Added phone based on expected use
-  };
+  } | null | undefined; 
 }
 
 const FAVORITES_QUERY_KEY = ['favorites'];
@@ -146,7 +146,7 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
                             <div className="flex items-center text-sm text-gray-500">
                                 <Star className="h-3 w-3 fill-yellow-500 text-yellow-500 mr-1" />
                                 <span>
-                                    {/* FIX: Safely check for rating before calling toFixed */}
+                                    {/* FIX 2: Safely check for rating before calling toFixed */}
                                     {(provider.averageRating ?? 0).toFixed(1)} 
                                     ({provider.totalReviews})
                                 </span>
@@ -154,8 +154,8 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
                         </div>
                     </div>
                     <div className="flex space-x-2 shrink-0">
-                        {/* Action buttons */}
-                        {provider.user.phone && (
+                        {/* FIX 1: Use optional chaining to safely access provider.user.phone */}
+                        {provider.user?.phone && (
                             <Button variant="ghost" size="icon" asChild>
                                 <a href={`tel:${provider.user.phone}`} title={`Call ${provider.businessName}`}>
                                     <Phone className="h-4 w-4 text-gray-500 hover:text-brand-primary" />
