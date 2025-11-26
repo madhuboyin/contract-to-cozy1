@@ -97,10 +97,24 @@ export default function ProfilePage() {
         
         await refreshUser();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to update profile' });
+        // FIX: Improved error message handling to show validation details
+        let errorMessage = data.error || 'Failed to update profile';
+        
+        if (data.details && Array.isArray(data.details) && data.details.length > 0) {
+          // Use the first detailed error for a concise banner message
+          const firstDetail = data.details[0];
+          
+          let fieldName = firstDetail.path.join('.') || 'A field';
+          // Capitalize first part of the field name
+          fieldName = fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
+          
+          errorMessage = `Validation Error: ${fieldName} - ${firstDetail.message}`;
+        }
+        
+        setMessage({ type: 'error', text: errorMessage });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to update profile' });
+      setMessage({ type: 'error', text: 'Failed to update profile due to a network error.' });
     } finally {
       setIsSaving(false);
     }
@@ -129,7 +143,8 @@ export default function ProfilePage() {
         {!isEditing && (
           <button
             onClick={() => setIsEditing(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            // FIX: Use brand color utilities
+            className="px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary-light transition-colors"
           >
             Edit Profile
           </button>
@@ -160,7 +175,8 @@ export default function ProfilePage() {
                   name="firstName"
                   value={formData.firstName}
                   onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  // FIX: Use brand ring color utility
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                 />
               ) : (
                 <p className="text-gray-900 py-2.5">{formData.firstName || '—'}</p>
@@ -177,7 +193,8 @@ export default function ProfilePage() {
                   name="lastName"
                   value={formData.lastName}
                   onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  // FIX: Use brand ring color utility
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                 />
               ) : (
                 <p className="text-gray-900 py-2.5">{formData.lastName || '—'}</p>
@@ -205,7 +222,8 @@ export default function ProfilePage() {
                   value={formData.phone}
                   onChange={handleChange}
                   placeholder="(555) 123-4567"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  // FIX: Use brand ring color utility
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                 />
               ) : (
                 <p className="text-gray-900 py-2.5">{formData.phone || '—'}</p>
@@ -228,7 +246,8 @@ export default function ProfilePage() {
                   value={formData.address}
                   onChange={handleChange}
                   placeholder="123 Main Street"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  // FIX: Use brand ring color utility
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                 />
               ) : (
                 <p className="text-gray-900 py-2.5">{formData.address || '—'}</p>
@@ -247,7 +266,8 @@ export default function ProfilePage() {
                     value={formData.city}
                     onChange={handleChange}
                     placeholder="New York"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    // FIX: Use brand ring color utility
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                   />
                 ) : (
                   <p className="text-gray-900 py-2.5">{formData.city || '—'}</p>
@@ -263,7 +283,8 @@ export default function ProfilePage() {
                     name="state"
                     value={formData.state}
                     onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    // FIX: Use brand ring color utility
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                   >
                     <option value="">Select State</option>
                     {states.map(state => (
@@ -287,7 +308,8 @@ export default function ProfilePage() {
                     onChange={handleChange}
                     placeholder="10001"
                     maxLength={5}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    // FIX: Use brand ring color utility
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                   />
                 ) : (
                   <p className="text-gray-900 py-2.5">{formData.zipCode || '—'}</p>
@@ -309,7 +331,8 @@ export default function ProfilePage() {
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+              // FIX: Use brand color utilities
+              className="px-6 py-2.5 bg-brand-primary text-white rounded-lg hover:bg-brand-primary-light transition-colors disabled:opacity-50"
             >
               {isSaving ? 'Saving...' : 'Save Changes'}
             </button>

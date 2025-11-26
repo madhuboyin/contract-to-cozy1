@@ -345,8 +345,9 @@ function DesktopUserNav({ user }: { user: User | null }) {
         onClick={handleLogout} 
         variant="ghost" 
         size="sm"
+        // FIX: Replaced hardcoded red classes with destructive color utilities
         className="font-body font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive tracking-wide transition-colors duration-200"
-        >
+      >
         Logout
       </Button>
     </div>
@@ -388,8 +389,9 @@ function MobileUserNav({ user }: { user: User | null }) {
         <Button 
           onClick={handleLogout} 
           variant="ghost" 
+          // FIX: Replaced hardcoded red classes with destructive color utilities
           className="font-body font-semibold text-destructive justify-start hover:bg-destructive/10 hover:text-destructive tracking-wide transition-colors duration-200 -mx-3"
-          >
+        >
           <LogOut className="mr-3 h-4 w-4" />
           Logout
         </Button>

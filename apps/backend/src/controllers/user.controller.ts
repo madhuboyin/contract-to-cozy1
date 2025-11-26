@@ -81,7 +81,9 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
     });
 
     // Handle address separately
-    if (address || city || state || zipCode) {
+    const addressFieldsProvided = address !== undefined || city !== undefined || state !== undefined || zipCode !== undefined;
+    
+    if (addressFieldsProvided) {
       const existingAddress = await prisma.address.findUnique({
         where: { userId },
       });
@@ -91,22 +93,27 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
       if (city !== undefined) addressData.city = city;
       if (state !== undefined) addressData.state = state;
       if (zipCode !== undefined) addressData.zipCode = zipCode;
+      
+      const hasAnyAddressData = Object.keys(addressData).length > 0;
 
       if (existingAddress) {
-        // Update existing
-        await prisma.address.update({
-          where: { userId },
-          data: addressData,
-        });
-      } else if (address && city && state && zipCode) {
-        // Create new (needs all required fields)
+        // Update existing address with any provided fields
+        if (hasAnyAddressData) {
+          await prisma.address.update({
+            where: { userId },
+            data: addressData, // This correctly handles partial updates
+          });
+        }
+      } else if (hasAnyAddressData) {
+        // FIX: Create new address record even if fields are partially provided.
+        // Missing fields are explicitly set to '' to match frontend read logic (|| '').
         await prisma.address.create({
           data: {
             userId,
-            street1: address,
-            city,
-            state,
-            zipCode,
+            street1: addressData.street1 ?? '',
+            city: addressData.city ?? '',
+            state: addressData.state ?? '',
+            zipCode: addressData.zipCode ?? '',
           },
         });
       }
