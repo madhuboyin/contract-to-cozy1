@@ -236,7 +236,7 @@ export const addFavorite = async (req: AuthRequest, res: Response) => {
       // Should not happen if providerProfileId is valid
       return res.status(500).json({ error: 'Failed to retrieve provider profile after adding favorite.' });
     }
-
+    console.log('DEBUG (Backend: addFavorite): Sending complete provider profile:', newFavoriteProvider);
     res.status(201).json({
       success: true,
       message: 'Provider added to favorites.',

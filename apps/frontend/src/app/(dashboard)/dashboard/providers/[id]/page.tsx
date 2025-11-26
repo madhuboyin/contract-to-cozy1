@@ -97,9 +97,12 @@ export default function ProviderDetailPage() {
   // 2. Mutation for adding a favorite
   const addFavoriteMutation = useMutation({
     mutationFn: (id: string) => api.addFavorite(id),
-    onSuccess: () => {
-      // FIX: Removed manual cache update (setQueryData) to prevent stale/incorrect data insertion.
-      // Rely entirely on refetchQueries for data consistency.
+    onSuccess: (mutationResponse: any) => {
+      // FIX: Renamed 'response' to 'mutationResponse' to avoid conflict.
+      // DEBUG: Log the data received on success
+      console.log('DEBUG (Add Favorite Success): Data received from mutation:', mutationResponse.data);
+
+      // Rely on refetchQueries for data consistency.
       queryClient.refetchQueries({ queryKey: ['provider', providerId] });
       queryClient.refetchQueries({ queryKey: FAVORITES_QUERY_KEY });
       
@@ -122,8 +125,7 @@ export default function ProviderDetailPage() {
   const removeFavoriteMutation = useMutation({
     mutationFn: (id: string) => api.removeFavorite(id),
     onSuccess: () => {
-      // FIX: Removed manual cache update (setQueryData) to prevent stale/incorrect data insertion.
-      // Rely entirely on refetchQueries for data consistency.
+      // Rely on refetchQueries for data consistency.
       queryClient.refetchQueries({ queryKey: ['provider', providerId] });
       queryClient.refetchQueries({ queryKey: FAVORITES_QUERY_KEY });
       

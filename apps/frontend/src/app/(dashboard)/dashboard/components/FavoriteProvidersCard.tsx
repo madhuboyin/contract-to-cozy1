@@ -126,6 +126,7 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
           // PHASE 3 FIX: Render the list of favorite providers
           <div className="space-y-4">
              {favorites.map((provider) => {
+                console.log('DEBUG (FavoriteCard): Rendering provider:', provider);
                 const displayName = provider.businessName || 'Unnamed Provider';
                 const totalReviews = provider.totalReviews ?? 0;
                 
