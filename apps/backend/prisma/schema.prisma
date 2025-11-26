@@ -85,6 +85,16 @@ enum RoofType {
   UNKNOWN
 }
 
+// ============================================================================
+// NEW ENUMS FOR RISK ASSESSMENT (PHASE 1)
+// ============================================================================
+
+enum RiskCategory {
+  STRUCTURE
+  SYSTEMS
+  SAFETY
+  FINANCIAL_GAP // Used to categorize non-physical risks like insurance shortfalls
+}
 
 // NEW: Service category configuration for segment targeting
 model ServiceCategoryConfig {
@@ -110,6 +120,57 @@ model ServiceCategoryConfig {
   
   @@index([category])
   @@map("service_category_config")
+}
+
+// ============================================================================
+// RISK ASSESSMENT MANAGEMENT (PHASE 1)
+// ============================================================================
+
+// 1. New Model: SystemComponentConfig
+// Stores the static configuration data (lifespan, cost) used for the risk calculation.
+model SystemComponentConfig {
+  id                String         @id @default(uuid())
+  systemType        String         @unique // e.g., 'HVAC_FURNACE', 'ROOF_SHINGLE'
+  category          RiskCategory   
+  
+  // Financial Data
+  expectedLife      Int            // Years
+  replacementCost   Decimal        @db.Decimal(12, 2)
+  
+  // Warning Flags: Allows configuration of point-based penalties
+  warningFlags      Json?          // e.g., { "hasDrainageIssues": 0.2 }
+  
+  // Status
+  isActive          Boolean        @default(true)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("system_component_configs")
+}
+
+// 2. New Model: RiskAssessmentReport
+// Caches the calculated risk score and detailed breakdown for a property.
+model RiskAssessmentReport {
+  id                       String    @id @default(uuid())
+  propertyId               String    @unique // One report per property (Mandatory 1:1)
+  
+  // Calculated Scores (Phase 2 output)
+  riskScore                Float     // 0.0 to 100.0
+  financialExposureTotal   Decimal   @db.Decimal(12, 2) // Total Risk Dollar Exposure
+  
+  // Detailed Breakdown (JSON object/array to store the data for the full table)
+  details                  Json      // e.g., [{ asset: "HVAC", riskLevel: "High", exposure: 8500, ... }]
+  
+  // Relations
+  property                 Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  // Timestamps
+  lastCalculatedAt DateTime @updatedAt // Tracks when the score was last generated
+  
+  createdAt DateTime @default(now())
+  
+  @@map("risk_assessment_reports")
 }
 
 enum ServiceCategory {
