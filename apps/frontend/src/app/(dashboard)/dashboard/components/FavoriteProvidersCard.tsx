@@ -17,11 +17,12 @@ import { api } from '@/lib/api/client';
 // Define a structural type for the data returned by listFavorites API 
 interface FavoriteProviderData {
   id: string; // ProviderProfile ID
-  businessName: string;
+  businessName: string | null | undefined; // FIX: Ensure businessName is robustly typed
   // FIX: Make averageRating explicitly allow null/undefined
   averageRating: number | null | undefined;
-  totalReviews: number;
-  // FIX: Allow user property itself to be null/undefined
+  // FIX: Make totalReviews explicitly allow null/undefined
+  totalReviews: number | null | undefined;
+  // Minimal user info from the nested user object
   user: {
     firstName: string;
     lastName: string;
@@ -124,7 +125,11 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
         ) : (
           // PHASE 3 FIX: Render the list of favorite providers
           <div className="space-y-4">
-             {favorites.map((provider) => (
+             {favorites.map((provider) => {
+                const displayName = provider.businessName || 'Unnamed Provider';
+                const totalReviews = provider.totalReviews ?? 0;
+                
+                return (
                 <div 
                     key={provider.id} 
                     className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors"
@@ -132,23 +137,24 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
                     <div className="flex items-center space-x-3 min-w-0">
                         <Avatar className="h-10 w-10 shrink-0">
                             <AvatarFallback className="bg-teal-500 text-white text-base font-semibold">
-                                {getInitials(provider.businessName)}
+                                {getInitials(displayName)}
                             </AvatarFallback>
                         </Avatar>
                         <div className="min-w-0">
                             <Link 
                                 href={`/dashboard/providers/${provider.id}`} 
                                 className="font-medium text-gray-900 hover:text-brand-primary truncate block"
-                                title={provider.businessName}
+                                title={displayName}
                             >
-                                {provider.businessName}
+                                {/* FIX: Use the safely derived display name */}
+                                {displayName}
                             </Link>
                             <div className="flex items-center text-sm text-gray-500">
                                 <Star className="h-3 w-3 fill-yellow-500 text-yellow-500 mr-1" />
                                 <span>
-                                    {/* FIX 2: Safely check for rating before calling toFixed */}
+                                    {/* FIX: Safely check for rating and use the calculated total reviews */}
                                     {(provider.averageRating ?? 0).toFixed(1)} 
-                                    ({provider.totalReviews})
+                                    ({totalReviews})
                                 </span>
                             </div>
                         </div>
@@ -157,7 +163,7 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
                         {/* FIX 1: Use optional chaining to safely access provider.user.phone */}
                         {provider.user?.phone && (
                             <Button variant="ghost" size="icon" asChild>
-                                <a href={`tel:${provider.user.phone}`} title={`Call ${provider.businessName}`}>
+                                <a href={`tel:${provider.user.phone}`} title={`Call ${displayName}`}>
                                     <Phone className="h-4 w-4 text-gray-500 hover:text-brand-primary" />
                                 </a>
                             </Button>
@@ -170,7 +176,7 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
                         </Button>
                     </div>
                 </div>
-            ))}
+            )})}
           </div>
         )}
       </CardContent>
