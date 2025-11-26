@@ -153,21 +153,18 @@ model SystemComponentConfig {
 // Caches the calculated risk score and detailed breakdown for a property.
 model RiskAssessmentReport {
   id                       String    @id @default(uuid())
-  propertyId               String    @unique // One report per property (Mandatory 1:1)
+  propertyId               String    @unique // MUST be unique for a 1:1 relation
   
   // Calculated Scores (Phase 2 output)
   riskScore                Float     // 0.0 to 100.0
   financialExposureTotal   Decimal   @db.Decimal(12, 2) // Total Risk Dollar Exposure
+  details                  Json      
   
-  // Detailed Breakdown (JSON object/array to store the data for the full table)
-  details                  Json      // e.g., [{ asset: "HVAC", riskLevel: "High", exposure: 8500, ... }]
-  
-  // Relations
-  property                 Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  // Relations: ***FIX APPLIED: Added @relation(name: "PropertyRiskReport")***
+  property                 Property  @relation(name: "PropertyRiskReport", fields: [propertyId], references: [id], onDelete: Cascade)
   
   // Timestamps
-  lastCalculatedAt DateTime @updatedAt // Tracks when the score was last generated
-  
+  lastCalculatedAt DateTime @updatedAt 
   createdAt DateTime @default(now())
   
   @@map("risk_assessment_reports")
@@ -507,7 +504,8 @@ model Property {
  
   documents        Document[]
 
-  // NEW RELATION FOR RISK ASSESSMENT (Phase 1): ADDED explicit name "PropertyRiskReport"
+
+  // NEW RELATION FOR RISK ASSESSMENT (Phase 1): ***FIX APPLIED: Added @relation(name: "PropertyRiskReport")***
   riskReport       RiskAssessmentReport? @relation(name: "PropertyRiskReport")
   
   createdAt DateTime @default(now())
