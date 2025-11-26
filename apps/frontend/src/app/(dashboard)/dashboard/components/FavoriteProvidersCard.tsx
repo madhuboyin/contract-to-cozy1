@@ -4,7 +4,7 @@
 import React from 'react';
 import Link from 'next/link';
 // FIX: Added Calendar for Book button
-import { Star, Phone, Loader2, Calendar } from 'lucide-react';
+import { Star, Phone, Loader2, Calendar, Search } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'; 
@@ -83,6 +83,15 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
         <CardContent className="flex-1 text-center py-6 text-destructive">
           <p className="font-body text-sm">Error loading favorites: {(error as Error).message}</p>
         </CardContent>
+        {/* Persistent footer with the link, even on error */}
+        <div className="p-4 border-t border-gray-200">
+            <Button variant="outline" className="w-full" asChild>
+                <Link href="/dashboard/providers">
+                    <Search className="h-4 w-4 mr-2" />
+                    Search for Providers
+                </Link>
+            </Button>
+        </div>
       </Card>
     );
   }
@@ -107,9 +116,7 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
         {favorites.length === 0 ? (
           <div className="text-center py-6 text-muted-foreground">
             <p className="font-body text-sm mb-3">Save providers you love here.</p>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/dashboard/providers">Find Providers</Link>
-            </Button>
+            {/* The button is now moved to the persistent footer below */}
           </div>
         ) : (
           // PHASE 3 FIX: Render the list of favorite providers
@@ -157,10 +164,18 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
                     </div>
                 </div>
             ))}
-            {/* REMOVED: <p className="text-muted-foreground text-sm text-center py-6">Showing {favorites.length} providers. List display coming in Phase 3...</p> */}
           </div>
         )}
       </CardContent>
+      {/* FIX: New Persistent Card Footer for Search Link */}
+      <div className="p-4 border-t border-gray-200">
+          <Button variant="outline" className="w-full" asChild>
+              <Link href="/dashboard/providers">
+                  <Search className="h-4 w-4 mr-2" />
+                  Search for Providers
+              </Link>
+          </Button>
+      </div>
     </Card>
   );
 };
