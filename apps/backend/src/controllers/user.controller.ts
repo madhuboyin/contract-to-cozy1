@@ -1,5 +1,6 @@
 import { Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+// FIX: Import Prisma and UserRole
+import { PrismaClient, UserRole, Prisma } from '@prisma/client'; 
 import { z } from 'zod';
 import { AuthRequest } from '../types/auth.types';
 
@@ -105,8 +106,7 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
           });
         }
       } else if (hasAnyAddressData) {
-        // FIX: Create new address record even if fields are partially provided.
-        // Missing fields are explicitly set to '' to match frontend read logic (|| '').
+        // Create new address record even if fields are partially provided.
         await prisma.address.create({
           data: {
             userId,
@@ -145,5 +145,122 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Update profile error:', error);
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+};
+
+
+// ====================================================================
+// NEW: FAVORITE PROVIDER ENDPOINTS
+// ====================================================================
+
+/**
+ * Lists the authenticated homeowner's favorite providers.
+ */
+export const listFavorites = async (req: AuthRequest, res: Response) => {
+  // FIX: Check req.user and req.user.role
+  if (!req.user || req.user.role !== UserRole.HOMEOWNER) {
+    return res.status(403).json({ error: 'Access denied.' });
+  }
+  const userId = req.user.userId;
+
+  try {
+    const favorites = await prisma.favorite.findMany({
+      where: { userId },
+      // FIX: Use 'include' to correctly load the relation after schema fix
+      include: {
+        providerProfile: {
+          include: {
+            user: { select: { id: true, firstName: true, lastName: true, email: true } },
+            services: true,
+          },
+        },
+      },
+    });
+
+    // Extract and clean up the provider profile data
+    const favoriteProviders = favorites
+      .map(f => f.providerProfile)
+      .filter(p => p !== null);
+
+    res.json({
+      success: true,
+      data: { favorites: favoriteProviders },
+    });
+  } catch (error) {
+    console.error('List favorites error:', error);
+    res.status(500).json({ error: 'Failed to fetch favorites' });
+  }
+};
+
+/**
+ * Adds a provider to the homeowner's favorites.
+ */
+export const addFavorite = async (req: AuthRequest, res: Response) => {
+  // FIX: Check req.user and req.user.role
+  if (!req.user || req.user.role !== UserRole.HOMEOWNER) {
+    return res.status(403).json({ error: 'Access denied.' });
+  }
+  const userId = req.user.userId;
+  const { providerProfileId } = req.body;
+
+  if (!providerProfileId) {
+    return res.status(400).json({ error: 'Provider Profile ID is required.' });
+  }
+
+  try {
+    const favorite = await prisma.favorite.create({
+      data: {
+        userId,
+        providerProfileId,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Provider added to favorites.',
+      data: favorite,
+    });
+  } catch (error) {
+    // FIX: Use Prisma.PrismaClientKnownRequestError
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return res.status(409).json({ error: 'Provider is already in favorites.' });
+    }
+    console.error('Add favorite error:', error);
+    res.status(500).json({ error: 'Failed to add favorite' });
+  }
+};
+
+/**
+ * Removes a provider from the homeowner's favorites.
+ */
+export const removeFavorite = async (req: AuthRequest, res: Response) => {
+  // FIX: Check req.user and req.user.role
+  if (!req.user || req.user.role !== UserRole.HOMEOWNER) {
+    return res.status(403).json({ error: 'Access denied.' });
+  }
+  const userId = req.user.userId;
+  const { providerProfileId } = req.params;
+
+  try {
+    await prisma.favorite.delete({
+      where: {
+        userId_providerProfileId: {
+          userId,
+          providerProfileId,
+        },
+      },
+    });
+
+    res.status(204).json({
+      success: true,
+      message: 'Provider removed from favorites.',
+    });
+  } catch (error) {
+    // FIX: Use Prisma.PrismaClientKnownRequestError
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      return res.status(404).json({ error: 'Favorite not found.' });
+    }
+    console.error('Remove favorite error:', error);
+    res.status(500).json({ error: 'Failed to remove favorite' });
   }
 };

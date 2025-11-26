@@ -35,6 +35,13 @@ import {
   UpdateChecklistItemInput, // Added to fix previous issues
 } from '@/types';
 
+// FIX: Define a temporary structural type for ProviderProfile to resolve the 'Cannot find name' error.
+// This structure reflects the data returned by the backend listFavorites controller.
+type ProviderProfile = Provider & {
+  user: User;
+  services: Service[];
+};
+
 // NOTE: Changed to API_BASE_URL to match common convention, but using the provided API_URL environment variable check
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
@@ -944,6 +951,37 @@ class APIClient {
      */
     async listDocuments(): Promise<APIResponse<{ documents: Document[] }>> {
       return this.request<{ documents: Document[] }>('/api/home-management/documents');
+  }
+
+// ==========================================================================
+  // NEW FAVORITES ENDPOINTS (PHASE 1)
+  // ==========================================================================
+
+  /**
+   * Lists the authenticated homeowner's favorite providers.
+   */
+  async listFavorites(): Promise<APIResponse<{ favorites: ProviderProfile[] }>> {
+    // NOTE: Backend returns ProviderProfile with embedded user and services
+    return this.request<{ favorites: ProviderProfile[] }>('/api/users/favorites');
+  }
+
+  /**
+   * Adds a provider to the homeowner's favorites.
+   */
+  async addFavorite(providerProfileId: string): Promise<APIResponse<any>> {
+    return this.request('/api/users/favorites', {
+      method: 'POST',
+      body: { providerProfileId } as unknown as BodyInit,
+    });
+  }
+
+  /**
+   * Removes a provider from the homeowner's favorites.
+   */
+  async removeFavorite(providerProfileId: string): Promise<APIResponse<void>> {
+    return this.request<void>(`/api/users/favorites/${providerProfileId}`, {
+      method: 'DELETE',
+    });
   }
 
 }
