@@ -30,8 +30,10 @@ interface FavoriteProviderData {
 
 const FAVORITES_QUERY_KEY = ['favorites'];
 
-// Helper to create initials for the AvatarFallback
-const getInitials = (name: string) => {
+// FIX: Modified helper function to safely handle null/undefined input
+const getInitials = (name: string | null | undefined): string => {
+    if (!name) return '?'; // Return '?' if name is null, undefined, or empty
+    
     const parts = name.split(' ');
     if (parts.length > 1) {
         return (parts[0][0] || '') + (parts[1][0] || '');
