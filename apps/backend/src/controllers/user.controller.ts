@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { PrismaClient, UserRole, Prisma } from '@prisma/client'; 
+import { PrismaClient, UserRole, Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { AuthRequest } from '../types/auth.types';
 
@@ -16,7 +16,6 @@ const updateProfileSchema = z.object({
 });
 
 export const getProfile = async (req: AuthRequest, res: Response) => {
-// ... (existing implementation)
   try {
     const userId = req.user?.userId;
     if (!userId) {
@@ -55,7 +54,6 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
 };
 
 export const updateProfile = async (req: AuthRequest, res: Response) => {
-// ... (existing implementation)
   try {
     const userId = req.user?.userId;
     if (!userId) {
@@ -217,17 +215,33 @@ export const addFavorite = async (req: AuthRequest, res: Response) => {
   }
 
   try {
-    const favorite = await prisma.favorite.create({
+    // 1. Create the favorite record
+    await prisma.favorite.create({
       data: {
         userId,
         providerProfileId,
       },
     });
 
+    // FIX: 2. Fetch the newly favorited ProviderProfile with necessary details (e.g., businessName)
+    const newFavoriteProvider = await prisma.providerProfile.findUnique({
+      where: { id: providerProfileId },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
+        services: true,
+      },
+    });
+
+    if (!newFavoriteProvider) {
+      // Should not happen if providerProfileId is valid
+      return res.status(500).json({ error: 'Failed to retrieve provider profile after adding favorite.' });
+    }
+
     res.status(201).json({
       success: true,
       message: 'Provider added to favorites.',
-      data: favorite,
+      // FIX: Return the complete ProviderProfile object
+      data: newFavoriteProvider,
     });
   } catch (error) {
     // FIX: Use Prisma.PrismaClientKnownRequestError
