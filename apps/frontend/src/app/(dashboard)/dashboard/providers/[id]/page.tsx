@@ -80,8 +80,11 @@ export default function ProviderDetailPage() {
       console.error("Failed to fetch favorites status:", response.message);
       throw new Error(response.message); // Throw to set isError=true
     },
-    // Set a moderate staleTime
-    staleTime: 5 * 60 * 1000, 
+    // FIX: Set staleTime to 0 and enable aggressive refetching on mount/window focus
+    // This forces a check for fresh data every time the user enters this page.
+    staleTime: 0, 
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
     // Ensure this runs only if we have a providerId to check against
     enabled: !!providerId, 
   });
@@ -95,8 +98,12 @@ export default function ProviderDetailPage() {
   const addFavoriteMutation = useMutation({
     mutationFn: (id: string) => api.addFavorite(id),
     onSuccess: () => {
-      // Invalidate the cache to immediately reflect the change on the dashboard card
-      queryClient.invalidateQueries({ queryKey: FAVORITES_QUERY_KEY });
+      // FIX: Use queryClient.refetchQueries for stronger guarantee of immediate update
+      // This ensures the current page updates if it fetches its data from the cache,
+      // and the dashboard favorites list is also re-fetched immediately.
+      queryClient.refetchQueries({ queryKey: ['provider', providerId] });
+      queryClient.refetchQueries({ queryKey: FAVORITES_QUERY_KEY });
+      
       toast({
         title: "Added to My Pros",
         description: `${provider?.businessName || 'Provider'} is now in your favorites.`,
@@ -116,8 +123,10 @@ export default function ProviderDetailPage() {
   const removeFavoriteMutation = useMutation({
     mutationFn: (id: string) => api.removeFavorite(id),
     onSuccess: () => {
-      // Invalidate the cache to immediately reflect the change on the dashboard card
-      queryClient.invalidateQueries({ queryKey: FAVORITES_QUERY_KEY });
+      // FIX: Use queryClient.refetchQueries for stronger guarantee of immediate update
+      queryClient.refetchQueries({ queryKey: ['provider', providerId] });
+      queryClient.refetchQueries({ queryKey: FAVORITES_QUERY_KEY });
+      
       toast({
         title: "Removed from My Pros",
         description: `${provider?.businessName || 'Provider'} has been removed from your favorites.`,
