@@ -18,7 +18,8 @@ import { api } from '@/lib/api/client';
 interface FavoriteProviderData {
   id: string; // ProviderProfile ID
   businessName: string;
-  averageRating: number;
+  // FIX: Make averageRating explicitly allow null/undefined if the backend sends it that way
+  averageRating: number | null | undefined;
   totalReviews: number;
   // Minimal user info from the nested user object
   user: {
@@ -30,7 +31,7 @@ interface FavoriteProviderData {
 
 const FAVORITES_QUERY_KEY = ['favorites'];
 
-// FIX: Modified helper function to safely handle null/undefined input
+// Helper to create initials for the AvatarFallback
 const getInitials = (name: string | null | undefined): string => {
     if (!name) return '?'; // Return '?' if name is null, undefined, or empty
     
@@ -144,7 +145,11 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
                             </Link>
                             <div className="flex items-center text-sm text-gray-500">
                                 <Star className="h-3 w-3 fill-yellow-500 text-yellow-500 mr-1" />
-                                <span>{provider.averageRating.toFixed(1)} ({provider.totalReviews})</span>
+                                <span>
+                                    {/* FIX: Safely check for rating before calling toFixed */}
+                                    {(provider.averageRating ?? 0).toFixed(1)} 
+                                    ({provider.totalReviews})
+                                </span>
                             </div>
                         </div>
                     </div>
