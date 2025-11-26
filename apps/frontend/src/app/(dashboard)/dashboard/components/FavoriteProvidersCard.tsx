@@ -22,7 +22,7 @@ interface FavoriteProviderData {
   averageRating: number | null | undefined;
   // FIX: Make totalReviews explicitly allow null/undefined
   totalReviews: number | null | undefined;
-  // Minimal user info from the nested user object
+  // FIX: Allow user property itself to be null/undefined
   user: {
     firstName: string;
     lastName: string;
@@ -56,8 +56,8 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
       }
       throw new Error(response.message || 'Failed to fetch favorites.');
     },
-    // Set a short staleTime (e.g., 5 minutes)
-    staleTime: 5 * 60 * 1000, 
+    // FIX: Set staleTime to 0 to force a network request (and guarantee data freshness) every time the component mounts/re-renders.
+    staleTime: 0, 
   });
 
   // Replace placeholder data with fetched data
@@ -126,7 +126,6 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
           // PHASE 3 FIX: Render the list of favorite providers
           <div className="space-y-4">
              {favorites.map((provider) => {
-                console.log('DEBUG (FavoriteCard): Rendering provider:', provider);
                 const displayName = provider.businessName || 'Unnamed Provider';
                 const totalReviews = provider.totalReviews ?? 0;
                 
@@ -153,7 +152,7 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
                             <div className="flex items-center text-sm text-gray-500">
                                 <Star className="h-3 w-3 fill-yellow-500 text-yellow-500 mr-1" />
                                 <span>
-                                    {/* FIX: Safely check for rating and use the calculated total reviews */}
+                                    {/* FIX 2: Safely check for rating and use the calculated total reviews */}
                                     {(provider.averageRating ?? 0).toFixed(1)} 
                                     ({totalReviews})
                                 </span>
