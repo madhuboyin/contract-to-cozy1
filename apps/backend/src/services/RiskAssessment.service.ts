@@ -97,6 +97,35 @@ class RiskAssessmentService {
 
     return updatedReport;
   }
+  
+  /**
+   * [NEW METHOD - PHASE 3.4] Placeholder for generating the PDF report.
+   * In a real application, this would use a library like Puppeteer or PDFKit.
+   * @returns A Buffer containing the PDF data.
+   */
+  async generateRiskReportPdf(propertyId: string): Promise<Buffer> {
+    // 1. Fetch the data needed for the report
+    const report = await this.getOrCreateRiskReport(propertyId);
+
+    if (report === 'QUEUED') {
+        // Handle case where report is still calculating
+        throw new Error("Risk assessment report is currently calculating. Please try again in a moment.");
+    }
+
+    // 2. Mock PDF content (a simple 1x1 pixel GIF/PNG is often used for mock binary data)
+    // A simple 1x1 pixel transparent PNG buffer (100 bytes) is used here for safety.
+    const mockPdfContent = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+      'base64'
+    );
+
+    console.log(`[PDF] Generated mock PDF buffer for property ${propertyId}.`);
+
+    // In production: Use Puppeteer/PDFKit to render HTML template using 'report' data into a real PDF Buffer.
+    // return puppeteerService.generatePdf(report); 
+
+    return mockPdfContent;
+  }
 
   /**
    * Private helper to fetch property details with all required relations.
