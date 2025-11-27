@@ -230,7 +230,7 @@ export default function RiskAssessmentPage() {
     const report: RiskReportFull | undefined = currentStatus === 'CALCULATED' ? (riskQueryPayload as CalculatedData).report : undefined;
     
     const isLoadingReport = riskQuery.isLoading;
-
+    
     // --- Loading and Error States ---
     if (isLoadingProperty || !propertyId) {
         return (
@@ -431,7 +431,7 @@ export default function RiskAssessmentPage() {
                         <Card className="md:col-span-3">
                             <CardHeader><CardTitle>No Detailed Risk Data</CardTitle></CardHeader>
                             <CardContent><CardDescription>Update your property details to generate component risk summaries.</CardDescription></CardContent>
-                        </Card>
+                    </Card>
                     )}
                 </div>
             </div>

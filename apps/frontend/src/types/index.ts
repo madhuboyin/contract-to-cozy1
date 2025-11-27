@@ -57,67 +57,59 @@ export enum RecurrenceFrequency {
  */
 export type HomeownerSegment = 'HOME_BUYER' | 'EXISTING_OWNER';
 
-/**
- * Property Type - Synced with Prisma enum
- */
-export enum PropertyType {
-  SINGLE_FAMILY = 'SINGLE_FAMILY',
-  TOWNHOME = 'TOWNHOME',
-  CONDO = 'CONDO',
-  APARTMENT = 'APARTMENT',
-  MULTI_UNIT = 'MULTI_UNIT',
-  INVESTMENT_PROPERTY = 'INVESTMENT_PROPERTY',
-}
+// ============================================================================
+// NEW PROPERTY ENUMS (FIX: ADDED RUNTIME CONSTANTS)
+// ============================================================================
 
-/**
- * Ownership Type - Synced with Prisma enum
- */
-export enum OwnershipType {
-  OWNER_OCCUPIED = 'OWNER_OCCUPIED',
-  RENTED_OUT = 'RENTED_OUT',
-}
+export const PropertyTypes = {
+  SINGLE_FAMILY: 'SINGLE_FAMILY',
+  TOWNHOME: 'TOWNHOME',
+  CONDO: 'CONDO',
+  APARTMENT: 'APARTMENT',
+  MULTI_UNIT: 'MULTI_UNIT',
+  INVESTMENT_PROPERTY: 'INVESTMENT_PROPERTY',
+} as const;
+export type PropertyType = keyof typeof PropertyTypes;
 
-/**
- * Heating Type - Synced with Prisma enum
- */
-export enum HeatingType {
-  HVAC = 'HVAC',
-  FURNACE = 'FURNACE',
-  HEAT_PUMP = 'HEAT_PUMP',
-  RADIATORS = 'RADIATORS',
-  UNKNOWN = 'UNKNOWN',
-}
+export const OwnershipTypes = {
+  OWNER_OCCUPIED: 'OWNER_OCCUPIED',
+  RENTED_OUT: 'RENTED_OUT',
+} as const;
+export type OwnershipType = keyof typeof OwnershipTypes;
 
-/**
- * Cooling Type - Synced with Prisma enum
- */
-export enum CoolingType {
-  CENTRAL_AC = 'CENTRAL_AC',
-  WINDOW_AC = 'WINDOW_AC',
-  UNKNOWN = 'UNKNOWN',
-}
+export const HeatingTypes = {
+  HVAC: 'HVAC',
+  FURNACE: 'FURNACE',
+  HEAT_PUMP: 'HEAT_PUMP',
+  RADIATORS: 'RADIATORS',
+  UNKNOWN: 'UNKNOWN',
+} as const;
+export type HeatingType = keyof typeof HeatingTypes;
 
-/**
- * Water Heater Type - Synced with Prisma enum
- */
-export enum WaterHeaterType {
-  TANK = 'TANK',
-  TANKLESS = 'TANKLESS',
-  HEAT_PUMP = 'HEAT_PUMP',
-  SOLAR = 'SOLAR',
-  UNKNOWN = 'UNKNOWN',
-}
+export const CoolingTypes = {
+  CENTRAL_AC: 'CENTRAL_AC',
+  WINDOW_AC: 'WINDOW_AC',
+  UNKNOWN: 'UNKNOWN',
+} as const;
+export type CoolingType = keyof typeof CoolingTypes;
 
-/**
- * Roof Type - Synced with Prisma enum
- */
-export enum RoofType {
-  SHINGLE = 'SHINGLE',
-  TILE = 'TILE',
-  FLAT = 'FLAT',
-  METAL = 'METAL',
-  UNKNOWN = 'UNKNOWN',
-}
+export const WaterHeaterTypes = {
+  TANK: 'TANK',
+  TANKLESS: 'TANKLESS',
+  HEAT_PUMP: 'HEAT_PUMP',
+  SOLAR: 'SOLAR',
+  UNKNOWN: 'UNKNOWN',
+} as const;
+export type WaterHeaterType = keyof typeof WaterHeaterTypes;
+
+export const RoofTypes = {
+  SHINGLE: 'SHINGLE',
+  TILE: 'TILE',
+  FLAT: 'FLAT',
+  METAL: 'METAL',
+  UNKNOWN: 'UNKNOWN',
+} as const;
+export type RoofType = keyof typeof RoofTypes;
 
 // ============================================================================
 // NEW RISK ASSESSMENT TYPES (PHASE 3)
@@ -459,19 +451,19 @@ export interface Property {
   isPrimary: boolean;
   
   // New Basic/Migrated Fields
-  propertyType: string | null; // Enum string
+  propertyType: PropertyType | null; // Use new type
   propertySize: number | null;
   yearBuilt: number | null;
   bedrooms: number | null;
   bathrooms: number | null;
   
   // New Advanced Fields
-  ownershipType: string | null;
+  ownershipType: OwnershipType | null; // Use new type
   occupantsCount: number | null;
-  heatingType: string | null;
-  coolingType: string | null;
-  waterHeaterType: string | null;
-  roofType: string | null;
+  heatingType: HeatingType | null; // Use new type
+  coolingType: CoolingType | null; // Use new type
+  waterHeaterType: WaterHeaterType | null; // Use new type
+  roofType: RoofType | null; // Use new type
   hvacInstallYear: number | null;
   waterHeaterInstallYear: number | null;
   roofReplacementYear: number | null;

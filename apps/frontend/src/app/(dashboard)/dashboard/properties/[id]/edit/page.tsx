@@ -4,19 +4,25 @@
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm, type UseFormReturn } from "react-hook-form";
+import { useForm, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Loader2, Save, X, Home as HomeIcon } from "lucide-react";
 
 import {
   PropertyType,
+  PropertyTypes,
   OwnershipType,
+  OwnershipTypes,
   HeatingType,
+  HeatingTypes,
   CoolingType,
+  CoolingTypes,
   WaterHeaterType,
+  WaterHeaterTypes,
   RoofType,
-} from "@/types"; // Assumed types import
+  RoofTypes,
+} from "@/types"; 
 import { api } from "@/lib/api/client";
 import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading } from "@/components/page-header";
@@ -31,96 +37,66 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
 
 
-// --- 1. Form Schema Definition (Including Risk Fields) ---
+// --- 1. Form Schema Definition ---
 const propertySchema = z.object({
-  name: z.string().optional(),
+  name: z.string().optional().nullable(),
+  // FIX 1: Removed z.default(false). We rely on mapDbToForm for initial hydration.
+  // This forces the resolver to see `isPrimary: boolean`, eliminating the type conflict.
   isPrimary: z.boolean(),
   address: z.string().min(1, { message: "Address is required." }),
   city: z.string().min(1, { message: "City is required." }),
   state: z.string().min(2, { message: "State is required." }),
   zipCode: z.string().min(5, { message: "Zip Code is required." }),
   
-  // Risk-related fields
-  propertyType: z.nativeEnum(PropertyType).optional(),
-  propertySize: z.preprocess((val) => {
-    if (val === null || val === undefined || val === '') return null;
-    const num = typeof val === 'string' ? Number(val) : val;
-    return isNaN(num as number) ? null : num;
-  }, z.number().int().positive().nullable().optional()),
-  yearBuilt: z.preprocess((val) => {
-    if (val === null || val === undefined || val === '') return null;
-    const num = typeof val === 'string' ? Number(val) : val;
-    return isNaN(num as number) ? null : num;
-  }, z.number().int().min(1700).nullable().optional()),
+  // Use exported Types for Zod validation
+  propertyType: z.nativeEnum(PropertyTypes).optional().nullable(),
+  propertySize: z.coerce.number().int().positive().optional().nullable(),
+  yearBuilt: z.coerce.number().int().min(1700).optional().nullable(),
   
   // Advanced Risk Fields
-  bedrooms: z.preprocess((val) => {
-    if (val === null || val === undefined || val === '') return null;
-    const num = typeof val === 'string' ? Number(val) : val;
-    return isNaN(num as number) ? null : num;
-  }, z.number().int().min(0).nullable().optional()),
-  bathrooms: z.preprocess((val) => {
-    if (val === null || val === undefined || val === '') return null;
-    const num = typeof val === 'string' ? Number(val) : val;
-    return isNaN(num as number) ? null : num;
-  }, z.number().min(0).nullable().optional()),
-  ownershipType: z.nativeEnum(OwnershipType).optional(),
-  occupantsCount: z.preprocess((val) => {
-    if (val === null || val === undefined || val === '') return null;
-    const num = typeof val === 'string' ? Number(val) : val;
-    return isNaN(num as number) ? null : num;
-  }, z.number().int().min(0).nullable().optional()),
-  heatingType: z.nativeEnum(HeatingType).optional(),
-  coolingType: z.nativeEnum(CoolingType).optional(),
-  waterHeaterType: z.nativeEnum(WaterHeaterType).optional(),
-  roofType: z.nativeEnum(RoofType).optional(),
+  bedrooms: z.coerce.number().int().min(0).optional().nullable(),
+  bathrooms: z.coerce.number().min(0).optional().nullable(),
+  ownershipType: z.nativeEnum(OwnershipTypes).optional().nullable(),
+  occupantsCount: z.coerce.number().int().min(0).optional().nullable(),
+  heatingType: z.nativeEnum(HeatingTypes).optional().nullable(),
+  coolingType: z.nativeEnum(CoolingTypes).optional().nullable(),
+  waterHeaterType: z.nativeEnum(WaterHeaterTypes).optional().nullable(),
+  roofType: z.nativeEnum(RoofTypes).optional().nullable(),
   
-  hvacInstallYear: z.preprocess((val) => {
-    if (val === null || val === undefined || val === '') return null;
-    const num = typeof val === 'string' ? Number(val) : val;
-    return isNaN(num as number) ? null : num;
-  }, z.number().int().min(1900).nullable().optional()),
-  waterHeaterInstallYear: z.preprocess((val) => {
-    if (val === null || val === undefined || val === '') return null;
-    const num = typeof val === 'string' ? Number(val) : val;
-    return isNaN(num as number) ? null : num;
-  }, z.number().int().min(1900).nullable().optional()),
-  roofReplacementYear: z.preprocess((val) => {
-    if (val === null || val === undefined || val === '') return null;
-    const num = typeof val === 'string' ? Number(val) : val;
-    return isNaN(num as number) ? null : num;
-  }, z.number().int().min(1900).nullable().optional()),
+  hvacInstallYear: z.coerce.number().int().min(1900).optional().nullable(),
+  waterHeaterInstallYear: z.coerce.number().int().min(1900).optional().nullable(),
+  roofReplacementYear: z.coerce.number().int().min(1900).optional().nullable(),
   
   hasDrainageIssues: z.boolean().optional(),
   hasSmokeDetectors: z.boolean().optional(),
   hasCoDetectors: z.boolean().optional(),
-  // Assuming applianceAges is handled as a text/JSON string for simplicity in a form
   applianceAges: z.string().optional().nullable(), 
 });
 
 type PropertyFormValues = z.infer<typeof propertySchema>;
 
-// Helper to convert DB data to form data
+// Helper to convert DB data (which uses null) to form data 
 const mapDbToForm = (property: any): PropertyFormValues => ({
-  name: property.name || "",
+  name: property.name || null, 
+  // RETAINED: This ensures isPrimary is always a boolean on initial load (0 or 1 property)
   isPrimary: property.isPrimary || false,
   address: property.address,
   city: property.city,
   state: property.state,
   zipCode: property.zipCode,
   
-  propertyType: property.propertyType || undefined,
+  propertyType: property.propertyType || null, 
   propertySize: property.propertySize,
   yearBuilt: property.yearBuilt,
   
   bedrooms: property.bedrooms,
   bathrooms: property.bathrooms,
-  ownershipType: property.ownershipType || undefined,
+  ownershipType: property.ownershipType || null,
   occupantsCount: property.occupantsCount,
-  heatingType: property.heatingType || undefined,
-  coolingType: property.coolingType || undefined,
-  waterHeaterType: property.waterHeaterType || undefined,
-  roofType: property.roofType || undefined,
+  heatingType: property.heatingType || null,
+  coolingType: property.coolingType || null,
+  waterHeaterType: property.waterHeaterType || null,
+  roofType: property.roofType || null,
   
   hvacInstallYear: property.hvacInstallYear,
   waterHeaterInstallYear: property.waterHeaterInstallYear,
@@ -129,7 +105,8 @@ const mapDbToForm = (property: any): PropertyFormValues => ({
   hasDrainageIssues: property.hasDrainageIssues,
   hasSmokeDetectors: property.hasSmokeDetectors,
   hasCoDetectors: property.hasCoDetectors,
-  applianceAges: JSON.stringify(property.applianceAges || {}),
+  // Convert object to string for the Textarea input
+  applianceAges: property.applianceAges ? JSON.stringify(property.applianceAges) : null,
 });
 
 
@@ -153,9 +130,7 @@ export default function EditPropertyPage() {
 
   const form = useForm<PropertyFormValues>({
     resolver: zodResolver(propertySchema) as any,
-    defaultValues: {
-      isPrimary: false,
-    },
+    // Hydrate form with fetched values
     values: property ? mapDbToForm(property) : undefined,
     mode: "onBlur",
   });
@@ -163,21 +138,42 @@ export default function EditPropertyPage() {
   // 3. Setup Mutation
   const updateMutation = useMutation({
     mutationFn: (data: PropertyFormValues) => {
-      // Convert numbers back from form strings/nullables, converting null to undefined for API
+      // Explicitly map form values (which can be null) to API payload (which should be undefined 
+      // for optional unset fields) using nullish coalescing (?? undefined).
       const payload = {
-        ...data,
+        name: data.name ?? undefined,
+        address: data.address,
+        city: data.city,
+        state: data.state.toUpperCase(), 
+        zipCode: data.zipCode,
+        isPrimary: data.isPrimary,
+        
+        // --- Optional/Nullable fields mapping null -> undefined ---
+        propertyType: data.propertyType ?? undefined,
         propertySize: data.propertySize ?? undefined,
         yearBuilt: data.yearBuilt ?? undefined,
         bedrooms: data.bedrooms ?? undefined,
         bathrooms: data.bathrooms ?? undefined,
+        ownershipType: data.ownershipType ?? undefined,
         occupantsCount: data.occupantsCount ?? undefined,
+        heatingType: data.heatingType ?? undefined,
+        coolingType: data.coolingType ?? undefined,
+        waterHeaterType: data.waterHeaterType ?? undefined,
+        roofType: data.roofType ?? undefined,
         hvacInstallYear: data.hvacInstallYear ?? undefined,
         waterHeaterInstallYear: data.waterHeaterInstallYear ?? undefined,
         roofReplacementYear: data.roofReplacementYear ?? undefined,
-        // Parse the JSON string for applianceAges, converting null to undefined
-        applianceAges: data.applianceAges ? JSON.parse(data.applianceAges) : undefined,
+        
+        hasDrainageIssues: data.hasDrainageIssues,
+        hasSmokeDetectors: data.hasSmokeDetectors,
+        hasCoDetectors: data.hasCoDetectors,
+
+        // JSON Field Handling: Ensure JSON.parse only runs if the string is not empty/null
+        applianceAges: data.applianceAges 
+            ? JSON.parse(data.applianceAges) 
+            : undefined,
       };
-      
+
       return api.updateProperty(propertyId, payload);
     },
     onSuccess: (response) => {
@@ -187,14 +183,9 @@ export default function EditPropertyPage() {
           description: "Property details have been successfully saved and risk scores are recalculating.",
         });
         
-        // 4. CRITICAL FIX: Invalidate queries to update the UI
-        // Invalidate property detail to reflect updates immediately
+        // Invalidate queries to update the UI
         queryClient.invalidateQueries({ queryKey: ['property', propertyId] });
-        
-        // Invalidate the full properties list (for dashboard display updates)
         queryClient.invalidateQueries({ queryKey: ['properties'] }); 
-        
-        // Invalidate the risk report summary (to show 'QUEUED' status on the dashboard)
         queryClient.invalidateQueries({ queryKey: ['riskReportSummary', propertyId] });
         queryClient.invalidateQueries({ queryKey: ['riskReportSummary'] });
 
@@ -217,7 +208,7 @@ export default function EditPropertyPage() {
     },
   });
 
-  const onSubmit = (data: PropertyFormValues) => {
+  const onSubmit: SubmitHandler<PropertyFormValues> = (data) => {
     updateMutation.mutate(data);
   };
 
@@ -363,12 +354,12 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Property Type</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <Select onValueChange={field.onChange} value={field.value || ""}>
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            {Object.values(PropertyType).map(type => (
+                                            {Object.values(PropertyTypes).map(type => (
                                                 <SelectItem key={type} value={type}>{type.replace(/_/g, ' ')}</SelectItem>
                                             ))}
                                         </SelectContent>
@@ -445,12 +436,12 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Heating Type</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <Select onValueChange={field.onChange} value={field.value || ""}>
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            {Object.values(HeatingType).map(type => (
+                                            {Object.values(HeatingTypes).map(type => (
                                                 <SelectItem key={type} value={type}>{type.replace(/_/g, ' ')}</SelectItem>
                                             ))}
                                         </SelectContent>
@@ -465,12 +456,12 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Cooling Type</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <Select onValueChange={field.onChange} value={field.value || ""}>
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            {Object.values(CoolingType).map(type => (
+                                            {Object.values(CoolingTypes).map(type => (
                                                 <SelectItem key={type} value={type}>{type.replace(/_/g, ' ')}</SelectItem>
                                             ))}
                                         </SelectContent>
@@ -485,12 +476,32 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Roof Type</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <Select onValueChange={field.onChange} value={field.value || ""}>
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            {Object.values(RoofType).map(type => (
+                                            {Object.values(RoofTypes).map(type => (
+                                                <SelectItem key={type} value={type}>{type.replace(/_/g, ' ')}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="waterHeaterType"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Water Heater Type</FormLabel>
+                                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                                        <FormControl>
+                                            <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            {Object.values(WaterHeaterTypes).map(type => (
                                                 <SelectItem key={type} value={type}>{type.replace(/_/g, ' ')}</SelectItem>
                                             ))}
                                         </SelectContent>
@@ -516,12 +527,12 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Ownership Status</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <Select onValueChange={field.onChange} value={field.value || ""}>
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            {Object.values(OwnershipType).map(type => (
+                                            {Object.values(OwnershipTypes).map(type => (
                                                 <SelectItem key={type} value={type}>{type.replace(/_/g, ' ')}</SelectItem>
                                             ))}
                                         </SelectContent>
@@ -608,7 +619,8 @@ export default function EditPropertyPage() {
                                     <Textarea 
                                         placeholder={`e.g., {"dishwasher": 2019, "refrigerator": 2022}`} 
                                         {...field}
-                                        value={field.value ?? ''}
+                                        // Coalesce null/undefined to empty string for Textarea value
+                                        value={field.value ?? ""} 
                                     />
                                 </FormControl>
                                 <FormMessage />
