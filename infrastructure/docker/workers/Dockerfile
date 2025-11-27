@@ -43,6 +43,10 @@ RUN npm ci --only=production
 COPY --from=builder /app/apps/backend/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/apps/backend/node_modules/@prisma ./node_modules/@prisma
 
+# FIX: Copy backend source files that workers depends on
+# Workers imports from ../../backend/src/utils and ../../backend/src/config
+COPY apps/backend/src ../backend/src
+
 # Copy workers source and config
 COPY apps/workers/src ./src
 COPY apps/workers/tsconfig.json ./
