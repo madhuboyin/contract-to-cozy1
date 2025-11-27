@@ -392,34 +392,55 @@ export default function RiskAssessmentPage() {
                     />
                 </div>
 
-                {riskQueryPayload && riskQueryPayload.status === 'CALCULATED' && report?.details && <AssetMatrixTable details={report.details} />}
-                
-                <div className="grid gap-4 md:grid-cols-3">
-                    {report && report.details.length > 0 ? (
-                        <React.Fragment>
-                            <RiskCategorySummaryCard 
-                                category={'STRUCTURE'} 
-                                details={report.details} 
-                                riskIcon={Home}
-                            />
-                            <RiskCategorySummaryCard 
-                                category={'SYSTEMS'} 
-                                details={report.details} 
-                                riskIcon={ZapIcon}
-                            />
-                            <RiskCategorySummaryCard 
-                                category={'SAFETY'} 
-                                details={report.details} 
-                                riskIcon={Siren}
-                            />
-                        </React.Fragment>
-                    ) : (
-                        <Card className="md:col-span-3">
-                            <CardHeader><CardTitle>No Detailed Risk Data</CardTitle></CardHeader>
-                            <CardContent><CardDescription>Update your property details to generate component risk summaries.</CardDescription></CardContent>
+                {/* FIX 1: Wrap detailed sections to show loading state first */}
+                {(isCalculating || isQueued) ? (
+                    <Card className="md:col-span-3">
+                        <CardHeader className="flex flex-row items-center justify-start space-y-0 pb-2">
+                            <Loader2 className="h-5 w-5 animate-spin mr-3 text-primary" />
+                            <CardTitle>Awaiting Detailed Risk Report</CardTitle>
+                        </CardHeader>
+                        <CardContent><CardDescription>{isQueued ? 'The risk calculation job is currently queued and will start shortly. This page will auto-update once complete.' : 'Fetching detailed report breakdown...'}</CardDescription></CardContent>
                     </Card>
-                    )}
-                </div>
+                ) : (
+                    <React.Fragment>
+                        {/* --- Asset Breakdown Table --- */}
+                        {report && report.details.length > 0 && <AssetMatrixTable details={report.details} />}
+                        
+                        {/* --- Risk Category Summary Cards / No Data Card --- */}
+                        <div className="grid gap-4 md:grid-cols-4">
+                            {report && report.details.length > 0 ? (
+                                <React.Fragment>
+                                    <RiskCategorySummaryCard 
+                                        category={'STRUCTURE'} 
+                                        details={report.details} 
+                                        riskIcon={Home}
+                                    />
+                                    <RiskCategorySummaryCard 
+                                        category={'SYSTEMS'} 
+                                        details={report.details} 
+                                        riskIcon={ZapIcon}
+                                    />
+                                    <RiskCategorySummaryCard 
+                                        category={'SAFETY'} 
+                                        details={report.details} 
+                                        riskIcon={Siren}
+                                    />
+                                    {/* FIX 2: Add FINANCIAL_GAP card for completeness, and adjust grid to 4 columns */}
+                                    <RiskCategorySummaryCard 
+                                        category={'FINANCIAL_GAP'} 
+                                        details={report.details} 
+                                        riskIcon={DollarSign}
+                                    />
+                                </React.Fragment>
+                            ) : (
+                                <Card className="md:col-span-4">
+                                    <CardHeader><CardTitle>No Detailed Risk Data</CardTitle></CardHeader>
+                                    <CardContent><CardDescription>Update your property details to generate component risk summaries. The score displayed above (if any) is based on general property attributes and defaults.</CardDescription></CardContent>
+                                </Card>
+                            )}
+                        </div>
+                    </React.Fragment>
+                )}
             </div>
             
         </DashboardShell>
