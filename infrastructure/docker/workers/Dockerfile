@@ -1,3 +1,4 @@
+#infrastructure/docker/workers/Dockerfile
 FROM node:20-alpine AS builder
 WORKDIR /app
 RUN apk add --no-cache openssl
@@ -15,24 +16,26 @@ FROM node:20-alpine
 WORKDIR /app/apps/workers
 RUN apk add --no-cache openssl
 COPY apps/workers/package*.json ./
-# Install production dependencies and ts-node/typescript for runtime execution
 RUN npm ci --only=production
-RUN npm install typescript ts-node --force # Install ts-node for direct execution
+
+# FIX: Install ts-node and typescript so they can be executed by npx
+RUN npm install typescript ts-node
 
 COPY --from=builder /app/apps/backend/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/apps/backend/node_modules/@prisma ./node_modules/@prisma
 
-# 1. Copy ALL source files required by the worker's source file (worker.ts)
-# The file structure MUST match the relative imports in worker.ts
+# 1. Copy all source files required for runtime module resolution
 RUN mkdir -p ../../backend/src/utils ../../backend/src/config
 COPY apps/backend/src/utils/riskCalculator.util.ts ../../backend/src/utils/
 COPY apps/backend/src/config/risk-constants.ts ../../backend/src/config/
 COPY apps/workers/src ./src
-COPY apps/workers/tsconfig.docker.json ./tsconfig.json 
+COPY apps/workers/tsconfig.docker.json ./tsconfig.json
 
-# 2. Cleanup dev dependencies (already handled by the npm install above, but safe to keep)
-RUN npm prune --production
+# Cleanup (since we installed dev packages above)
+# NOTE: Pruning is skipped since the `ts-node` dependencies were installed separately.
 
 ENV NODE_ENV=production
-# FIX: Execute the worker directly using ts-node. This eliminates the compilation step and runtime path resolution issues.
-CMD ["ts-node", "src/worker.ts"]
+
+# FINAL FIX: Use npx to correctly resolve and execute the locally installed ts-node binary.
+# This runs the worker directly from its TypeScript source file (src/worker.ts).
+CMD ["npx", "ts-node", "src/worker.ts"]
