@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Loader2, Save, X, Home as HomeIcon } from "lucide-react";
+import { Loader2, Save, X, Home as HomeIcon, AlertCircle } from "lucide-react";
 
 import {
   PropertyType,
@@ -46,7 +46,7 @@ const propertySchema = z.object({
   state: z.string().min(2, { message: "State is required." }),
   zipCode: z.string().min(5, { message: "Zip Code is required." }),
   
-  // Enforce selection by checking for null
+  // FIX: Enforce selection by checking for null
   propertyType: z.nativeEnum(PropertyTypes).nullable().refine(val => val !== null, { message: "Property Type is required." }),
   
   propertySize: z.coerce.number().int().positive().optional().nullable(),
@@ -58,7 +58,7 @@ const propertySchema = z.object({
   ownershipType: z.nativeEnum(OwnershipTypes).optional().nullable(),
   occupantsCount: z.coerce.number().int().min(0).optional().nullable(),
 
-  // Enforce selection by checking for null
+  // FIX: Enforce selection by checking for null
   heatingType: z.nativeEnum(HeatingTypes).nullable().refine(val => val !== null, { message: "Heating Type is required." }),
   coolingType: z.nativeEnum(CoolingTypes).nullable().refine(val => val !== null, { message: "Cooling Type is required." }),
   waterHeaterType: z.nativeEnum(WaterHeaterTypes).nullable().refine(val => val !== null, { message: "Water Heater Type is required." }),
@@ -80,53 +80,16 @@ const propertySchema = z.object({
 
 type PropertyFormValues = z.infer<typeof propertySchema>;
 
-// Define initial default values to maintain a controlled form state immediately
-const defaultFormValues: PropertyFormValues = {
-  name: null,
-  isPrimary: false,
-  address: "",
-  city: "",
-  state: "",
-  zipCode: "",
-  
-  propertyType: null,
-  propertySize: null,
-  yearBuilt: null,
-  
-  bedrooms: null,
-  bathrooms: null,
-  ownershipType: null,
-  occupantsCount: null,
-  heatingType: null,
-  coolingType: null,
-  waterHeaterType: null,
-  roofType: null,
-  
-  hvacInstallYear: null,
-  waterHeaterInstallYear: null,
-  roofReplacementYear: null,
-  
-  hasDrainageIssues: false,
-  hasSmokeDetectors: false,
-  hasCoDetectors: false,
-  hasSecuritySystem: false,
-  hasFireExtinguisher: false,
-  hasIrrigation: false,
-  
-  applianceAges: null,
-}
-
 // Helper to convert DB data (which uses null) to form data 
 const mapDbToForm = (property: any): PropertyFormValues => ({
   name: property.name || null, 
-  // Ensure property.isPrimary is consistently a boolean for RHF hydration
   isPrimary: property.isPrimary ?? false, 
   address: property.address,
   city: property.city,
   state: property.state,
   zipCode: property.zipCode,
   
-  // All these fields use '|| null' which is fine since the Zod schema is checking for val !== null
+  // FIX ISSUE 1: Keep null values as null (don't convert to empty string)
   propertyType: property.propertyType || null, 
   propertySize: property.propertySize,
   yearBuilt: property.yearBuilt,
@@ -144,7 +107,6 @@ const mapDbToForm = (property: any): PropertyFormValues => ({
   waterHeaterInstallYear: property.waterHeaterInstallYear,
   roofReplacementYear: property.roofReplacementYear,
   
-  // Coalesce all nullable boolean fields to false for form compatibility
   hasDrainageIssues: property.hasDrainageIssues ?? false,
   hasSmokeDetectors: property.hasSmokeDetectors ?? false,
   hasCoDetectors: property.hasCoDetectors ?? false,
@@ -152,7 +114,6 @@ const mapDbToForm = (property: any): PropertyFormValues => ({
   hasFireExtinguisher: property.hasFireExtinguisher ?? false,
   hasIrrigation: property.hasIrrigation ?? false,
 
-  // Convert object to string for the Textarea input
   applianceAges: property.applianceAges ? JSON.stringify(property.applianceAges) : null,
 });
 
@@ -177,22 +138,13 @@ export default function EditPropertyPage() {
 
   const form = useForm<PropertyFormValues>({
     resolver: zodResolver(propertySchema) as any,
-    // Use defaultFormValues to ensure a controlled component from render 1
-    defaultValues: defaultFormValues, 
+    values: property ? mapDbToForm(property) : undefined,
     mode: "onBlur",
   });
-  
-  // Reset the form with actual fetched data once it arrives (render 2)
-  React.useEffect(() => {
-    if (property) {
-      form.reset(mapDbToForm(property));
-    }
-  }, [property, form.reset]);
 
   // 3. Setup Mutation
   const updateMutation = useMutation({
     mutationFn: (data: PropertyFormValues) => {
-      // NOTE: This function will only run if RHF/Zod validation passed.
       const payload = {
         name: data.name ?? undefined,
         address: data.address,
@@ -201,7 +153,6 @@ export default function EditPropertyPage() {
         zipCode: data.zipCode,
         isPrimary: data.isPrimary,
         
-        // --- Optional/Nullable fields mapping null -> undefined ---
         propertyType: data.propertyType ?? undefined,
         propertySize: data.propertySize ?? undefined,
         yearBuilt: data.yearBuilt ?? undefined,
@@ -217,37 +168,28 @@ export default function EditPropertyPage() {
         waterHeaterInstallYear: data.waterHeaterInstallYear ?? undefined,
         roofReplacementYear: data.roofReplacementYear ?? undefined,
         
-        hasDrainageIssues: data.hasDrainageIssues,
-        hasSmokeDetectors: data.hasSmokeDetectors,
-        hasCoDetectors: data.hasCoDetectors,
-        hasSecuritySystem: data.hasSecuritySystem,
-        hasFireExtinguisher: data.hasFireExtinguisher,
-        hasIrrigation: data.hasIrrigation,
-
-        // JSON Field Handling: Ensure JSON.parse only runs if the string is not empty/null
-        applianceAges: data.applianceAges 
-            ? JSON.parse(data.applianceAges) 
-            : undefined,
+        hasSmokeDetectors: data.hasSmokeDetectors ?? false,
+        hasCoDetectors: data.hasCoDetectors ?? false,
+        hasDrainageIssues: data.hasDrainageIssues ?? false,
+        hasSecuritySystem: data.hasSecuritySystem ?? false,
+        hasFireExtinguisher: data.hasFireExtinguisher ?? false,
+        hasIrrigation: data.hasIrrigation ?? false,
+        
+        applianceAges: data.applianceAges ? JSON.parse(data.applianceAges) : undefined,
       };
-
+      
       return api.updateProperty(propertyId, payload);
     },
     onSuccess: (response) => {
       if (response.success) {
+        queryClient.invalidateQueries({ queryKey: ["property", propertyId] });
+        queryClient.invalidateQueries({ queryKey: ["properties"] });
         toast({
           title: "Property Updated",
-          description: "Property details have been successfully saved and risk scores are recalculating.",
+          description: "Your property details have been updated successfully.",
         });
-        
-        // Invalidate queries to update the UI
-        queryClient.invalidateQueries({ queryKey: ['property', propertyId] });
-        queryClient.invalidateQueries({ queryKey: ['properties'] }); 
-        queryClient.invalidateQueries({ queryKey: ['riskReportSummary', propertyId] });
-        queryClient.invalidateQueries({ queryKey: ['riskReportSummary'] });
-
         router.push(`/dashboard/properties/${propertyId}`);
       } else {
-        // This section handles API errors and displays a message.
         toast({
           title: "Update Failed",
           description: response.message || "An unknown error occurred.",
@@ -265,8 +207,25 @@ export default function EditPropertyPage() {
     },
   });
 
+  // FIX ISSUE 2: Add validation feedback before submission
   const onSubmit: SubmitHandler<PropertyFormValues> = (data) => {
-    // RHF's handleSubmit automatically prevents mutation if validation errors exist.
+    // Check if form has errors
+    const errors = form.formState.errors;
+    if (Object.keys(errors).length > 0) {
+      // Display user-friendly error message
+      const errorFields = Object.keys(errors).map(key => {
+        const fieldName = key.replace(/([A-Z])/g, ' $1').trim();
+        return fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
+      });
+      
+      toast({
+        title: "Validation Error",
+        description: `Please fill in the following required fields: ${errorFields.join(', ')}`,
+        variant: "destructive",
+      });
+      return;
+    }
+    
     updateMutation.mutate(data);
   };
 
@@ -291,6 +250,9 @@ export default function EditPropertyPage() {
     );
   }
 
+  // FIX ISSUE 2: Show validation errors at the top
+  const hasErrors = Object.keys(form.formState.errors).length > 0;
+
   return (
     <DashboardShell>
       <PageHeader>
@@ -303,7 +265,7 @@ export default function EditPropertyPage() {
           </Button>
           <Button 
             onClick={form.handleSubmit(onSubmit)} 
-            disabled={updateMutation.isPending}
+            disabled={updateMutation.isPending || hasErrors}
             type="submit"
           >
             {updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
@@ -311,6 +273,23 @@ export default function EditPropertyPage() {
           </Button>
         </div>
       </PageHeader>
+      
+       {/* FIX ISSUE 2: Display validation error summary */}
+       {hasErrors && (
+         <div className="mb-4 p-4 border border-red-300 bg-red-50 rounded-md">
+           <div className="flex items-center gap-2 text-red-800 font-medium mb-2">
+             <AlertCircle className="h-4 w-4" />
+             Please fix the following errors before saving:
+           </div>
+           <ul className="list-disc list-inside mt-2 text-sm text-red-700">
+             {Object.entries(form.formState.errors).map(([key, error]) => (
+               <li key={key}>
+                 {key.replace(/([A-Z])/g, ' $1').trim().charAt(0).toUpperCase() + key.replace(/([A-Z])/g, ' $1').trim().slice(1)}: {error.message}
+               </li>
+             ))}
+           </ul>
+         </div>
+       )}
       
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
@@ -349,7 +328,7 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>City</FormLabel>
-                                    <FormControl><Input {...field} /></FormControl>
+                                    <FormControl><Input placeholder="Princeton" {...field} /></FormControl>
                                     <FormMessage />
                                 </FormItem>
                             )}
@@ -359,8 +338,8 @@ export default function EditPropertyPage() {
                             name="state"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>State (e.g., CA)</FormLabel>
-                                    <FormControl><Input {...field} /></FormControl>
+                                    <FormLabel>State</FormLabel>
+                                    <FormControl><Input placeholder="NJ" {...field} maxLength={2} /></FormControl>
                                     <FormMessage />
                                 </FormItem>
                             )}
@@ -371,7 +350,7 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Zip Code</FormLabel>
-                                    <FormControl><Input {...field} /></FormControl>
+                                    <FormControl><Input placeholder="08540" {...field} /></FormControl>
                                     <FormMessage />
                                 </FormItem>
                             )}
@@ -380,7 +359,7 @@ export default function EditPropertyPage() {
                             control={form.control}
                             name="isPrimary"
                             render={({ field }) => (
-                                <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-4 border rounded-md shadow-sm self-end">
+                                <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded-md shadow-sm">
                                     <FormControl>
                                         <Checkbox 
                                             checked={field.value}
@@ -411,8 +390,12 @@ export default function EditPropertyPage() {
                             name="propertyType"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Property Type</FormLabel>
-                                    <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
+                                    <FormLabel>Property Type *</FormLabel>
+                                    {/* FIX ISSUE 1: Use null instead of "" for value, and handle undefined */}
+                                    <Select 
+                                        onValueChange={(value) => field.onChange(value === "" ? null : value)} 
+                                        value={field.value ?? undefined}
+                                    >
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                                         </FormControl>
@@ -493,8 +476,12 @@ export default function EditPropertyPage() {
                             name="heatingType"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Heating Type</FormLabel>
-                                    <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
+                                    <FormLabel>Heating Type *</FormLabel>
+                                    {/* FIX ISSUE 1: Use null instead of "" for value, and handle undefined */}
+                                    <Select 
+                                        onValueChange={(value) => field.onChange(value === "" ? null : value)} 
+                                        value={field.value ?? undefined}
+                                    >
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                                         </FormControl>
@@ -513,8 +500,12 @@ export default function EditPropertyPage() {
                             name="coolingType"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Cooling Type</FormLabel>
-                                    <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
+                                    <FormLabel>Cooling Type *</FormLabel>
+                                    {/* FIX ISSUE 1: Use null instead of "" for value, and handle undefined */}
+                                    <Select 
+                                        onValueChange={(value) => field.onChange(value === "" ? null : value)} 
+                                        value={field.value ?? undefined}
+                                    >
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                                         </FormControl>
@@ -533,8 +524,12 @@ export default function EditPropertyPage() {
                             name="roofType"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Roof Type</FormLabel>
-                                    <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
+                                    <FormLabel>Roof Type *</FormLabel>
+                                    {/* FIX ISSUE 1: Use null instead of "" for value, and handle undefined */}
+                                    <Select 
+                                        onValueChange={(value) => field.onChange(value === "" ? null : value)} 
+                                        value={field.value ?? undefined}
+                                    >
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                                         </FormControl>
@@ -553,8 +548,12 @@ export default function EditPropertyPage() {
                             name="waterHeaterType"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Water Heater Type</FormLabel>
-                                    <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
+                                    <FormLabel>Water Heater Type *</FormLabel>
+                                    {/* FIX ISSUE 1: Use null instead of "" for value, and handle undefined */}
+                                    <Select 
+                                        onValueChange={(value) => field.onChange(value === "" ? null : value)} 
+                                        value={field.value ?? undefined}
+                                    >
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                                         </FormControl>
@@ -568,26 +567,40 @@ export default function EditPropertyPage() {
                                 </FormItem>
                             )}
                         />
-                    </div>
-                </CardContent>
-            </Card>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>Safety & Usage</CardTitle>
-                    <CardDescription>Additional factors affecting risk and required maintenance.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <FormField
+                            control={form.control}
+                            name="bedrooms"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Bedrooms</FormLabel>
+                                    <FormControl><Input placeholder="e.g., 3" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="bathrooms"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Bathrooms</FormLabel>
+                                    <FormControl><Input placeholder="e.g., 2.5" type="number" step="0.5" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseFloat(e.target.value))} /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
                         <FormField
                             control={form.control}
                             name="ownershipType"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Ownership Status</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                                    <FormLabel>Ownership Type</FormLabel>
+                                    <Select 
+                                        onValueChange={(value) => field.onChange(value === "" ? null : value)} 
+                                        value={field.value ?? undefined}
+                                    >
                                         <FormControl>
-                                            <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+                                            <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
                                             {Object.values(OwnershipTypes).map(type => (
@@ -604,7 +617,7 @@ export default function EditPropertyPage() {
                             name="occupantsCount"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Number of Occupants</FormLabel>
+                                    <FormLabel>Occupants Count</FormLabel>
                                     <FormControl><Input placeholder="e.g., 4" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
                                     <FormMessage />
                                 </FormItem>
@@ -725,7 +738,6 @@ export default function EditPropertyPage() {
                                     <Textarea 
                                         placeholder={`e.g., {"dishwasher": 2019, "refrigerator": 2022}`} 
                                         {...field}
-                                        // Coalesce null/undefined to empty string for Textarea value
                                         value={field.value ?? ""} 
                                     />
                                 </FormControl>
@@ -737,7 +749,7 @@ export default function EditPropertyPage() {
                 </CardContent>
             </Card>
 
-            <Button type="submit" className="w-full md:w-auto" disabled={updateMutation.isPending}>
+            <Button type="submit" className="w-full md:w-auto" disabled={updateMutation.isPending || hasErrors}>
                 {updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                 <Save className="h-4 w-4 mr-2" /> Save Changes and Recalculate Risk
             </Button>
