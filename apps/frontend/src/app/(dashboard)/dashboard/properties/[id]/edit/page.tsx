@@ -138,9 +138,19 @@ export default function EditPropertyPage() {
 
   const form = useForm<PropertyFormValues>({
     resolver: zodResolver(propertySchema) as any,
-    values: property ? mapDbToForm(property) : undefined,
+    defaultValues: property ? mapDbToForm(property) : undefined,
     mode: "onBlur",
   });
+
+  // FIX ISSUE 1 (CONTINUED): Reset form when property data loads
+  // This ensures dropdowns display saved values after logout/page refresh
+  React.useEffect(() => {
+    if (property) {
+      const formData = mapDbToForm(property);
+      console.log("🔄 Resetting form with property data:", formData);
+      form.reset(formData);
+    }
+  }, [property, form]);
 
   // 3. Setup Mutation
   const updateMutation = useMutation({
