@@ -17,9 +17,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import React from "react";
-import { useAuth } from "@/lib/auth/AuthContext"; // NEW: Import useAuth for mock premium check
+import { useAuth } from "@/lib/auth/AuthContext"; 
 
-// --- Types for Query Data ---
 type RiskReportFull = RiskAssessmentReport; 
 
 interface QueuedData {
@@ -34,7 +33,6 @@ interface CalculatedData {
 
 type RiskQueryData = QueuedData | CalculatedData;
 
-// --- Helper Functions ---
 const formatCurrency = (amount: number) => new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -50,7 +48,6 @@ const getRiskDetails = (score: number) => {
 };
 
 
-// --- Component for Phase 3.3: Risk Category Summary Card ---
 const RiskCategorySummaryCard = ({ 
     category, 
     details, 
@@ -123,7 +120,6 @@ const RiskCategorySummaryCard = ({
     );
 }
 
-// --- Component for Phase 3.2: Detailed Asset Matrix Table ---
 const AssetMatrixTable = ({ details }: { details: AssetRiskDetail[] }) => {
     const getRiskBadge = (level: AssetRiskDetail['riskLevel']) => {
         if (level === 'LOW') return <Badge variant="secondary" className="bg-green-500/20 text-green-700 hover:bg-green-500/30 border-green-500">Low</Badge>;
@@ -186,13 +182,12 @@ const AssetMatrixTable = ({ details }: { details: AssetRiskDetail[] }) => {
     );
 }
 
-// --- Main Page Component ---
 export default function RiskAssessmentPage() {
     const params = useParams();
     const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
-    const { user } = useAuth(); // NEW: Get user context for mock premium check
+    const { user } = useAuth(); 
 
-    // Mock Premium Check (REPLACE with actual logic)
+    // Mock Premium Check 
     const isPremium = user?.role === 'ADMIN'; 
 
     // 1. Fetch Property Details (to get name/address for header)
@@ -222,7 +217,6 @@ export default function RiskAssessmentPage() {
         enabled: !!propertyId,
     });
 
-    // --- Data Extraction and Status Determination ---
     const riskQueryPayload = riskQuery.data;
     
     const currentStatus = riskQueryPayload?.status;
@@ -231,7 +225,6 @@ export default function RiskAssessmentPage() {
     
     const isLoadingReport = riskQuery.isLoading;
     
-    // --- Loading and Error States ---
     if (isLoadingProperty || !propertyId) {
         return (
             <DashboardShell>
@@ -250,7 +243,6 @@ export default function RiskAssessmentPage() {
     const formattedExposure = formatCurrency(exposure);
     const riskProgressValue = 100 - score;
 
-    // --- NEW: PDF Download Handler (Phase 3.4) ---
     const handleDownloadPdf = async () => {
         if (!isPremium) {
             toast({
@@ -304,7 +296,6 @@ export default function RiskAssessmentPage() {
                 </PageHeaderHeading>
             </PageHeader>
 
-            {/* --- Risk Summary Banner --- */}
             <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-4">
                 <Card className="md:col-span-1 border-2 border-primary/50">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -358,7 +349,6 @@ export default function RiskAssessmentPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-2">
-                            {/* NEW: Download Button with Premium Check */}
                             <Button 
                                 className="w-full" 
                                 disabled={isCalculating || isQueued}
@@ -369,7 +359,6 @@ export default function RiskAssessmentPage() {
                                 {isPremium ? 'Download Full PDF' : 'Upgrade for PDF'}
                             </Button>
                             
-                            {/* NEW: Premium Indicator */}
                             {!isPremium && (
                                 <p className="text-xs text-red-500 font-medium text-center">
                                     *Premium feature (Admin role used as mock check)
@@ -390,7 +379,6 @@ export default function RiskAssessmentPage() {
             </div>
             
             <div className="mt-8 space-y-6">
-                {/* --- Risk Gauge Visualization --- */}
                 <div className="space-y-2">
                     <h3 className="text-xl font-semibold">Overall Risk Gauge: {level}</h3>
                     <div className="flex justify-between text-xs font-medium text-muted-foreground">
@@ -404,10 +392,8 @@ export default function RiskAssessmentPage() {
                     />
                 </div>
 
-                {/* --- Asset Breakdown (Phase 3.2 Implemented) --- */}
                 {riskQueryPayload && riskQueryPayload.status === 'CALCULATED' && report?.details && <AssetMatrixTable details={report.details} />}
                 
-                {/* --- Risk Category Summary Cards (Phase 3.3 Implemented) --- */}
                 <div className="grid gap-4 md:grid-cols-3">
                     {report && report.details.length > 0 ? (
                         <React.Fragment>
