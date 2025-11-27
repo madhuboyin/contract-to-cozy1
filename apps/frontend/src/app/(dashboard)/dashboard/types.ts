@@ -1,5 +1,6 @@
 // apps/frontend/src/app/(dashboard)/dashboard/types.ts
-import { Booking, Property } from '@/types';
+//import { Booking, Property } from '@/types';
+import { Property, HomeownerProfile, AssetRiskDetail, Booking } from "@/types";
 
 // --- TYPES (Centralized and Unified) ---
 
@@ -58,4 +59,21 @@ export interface HealthScoreResult {
  */
 export interface ScoredProperty extends Property { // Assumes Property is imported or available globally
     healthScore: HealthScoreResult;
+}
+
+// NEW TYPE FOR PHASE 2: Risk Assessment
+export interface RiskReportSummary {
+  riskScore: number; // 0 to 100 (100 is low risk)
+  financialExposureTotal: number; // Total estimated cost in USD
+  status: 'QUEUED' | 'CALCULATED';
+  propertyId: string;
+  lastCalculatedAt: Date; // Keep for freshness check, though the service handles staleness
+  details: AssetRiskDetail[];
+}
+
+export interface DashboardData {
+  profile: HomeownerProfile;
+  properties: Property[];
+  primaryProperty: Property | null;
+  riskReportSummary: RiskReportSummary | null; // NEW FIELD
 }

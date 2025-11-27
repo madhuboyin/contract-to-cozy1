@@ -29,11 +29,17 @@ import {
   // NEW DOCUMENT IMPORTS
   Document,
   DocumentUploadInput,
-  // FIX 1: Add Checklist and ChecklistItem types (assuming they exist in @/types)
+  // FIX 1: Add Checklist and ChecklistItem types
   Checklist, 
   ChecklistItem,
-  UpdateChecklistItemInput, // Added to fix previous issues
+  UpdateChecklistItemInput, 
+  // NEW RISK ASSESSMENT TYPES
+  RiskAssessmentReport,
+  AssetRiskDetail,
 } from '@/types';
+
+// NEW IMPORT FOR PHASE 2: Risk Assessment Types - REQUIRED for getRiskReportSummary
+import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types';
 
 // FIX 1: Define a custom Error class to carry API error messages and status
 class APIError extends Error {
@@ -44,14 +50,13 @@ class APIError extends Error {
 }
 
 // FIX 2: Define a temporary structural type for ProviderProfile to resolve the 'Cannot find name' error.
-// This structure reflects the data returned by the backend listFavorites controller.
 type ProviderProfile = Provider & {
   user: User & { phone: string | null }; 
   services: Service[];
 };
 
 
-// NOTE: Changed to API_BASE_URL to match common convention, but using the provided API_URL environment variable check
+// NOTE: Changed to API_BASE_URL to match common convention
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 /**
@@ -344,13 +349,10 @@ class APIClient {
    * Register new user
    */
   async register(input: RegisterInput): Promise<APIResponse<RegisterResponse>> {
-    const response = await this.request<RegisterResponse>('/api/auth/register', {
+    return this.request<RegisterResponse>('/api/auth/register', {
       method: 'POST',
-      // FIX: Cast object to BodyInit
       body: input as unknown as BodyInit,
     });
-    // FIX: Must return the APIResponse structure
-    return response;
   }
 
   /**
@@ -359,11 +361,9 @@ class APIClient {
   async login(input: LoginInput): Promise<APIResponse<LoginResponse>> {
     const response = await this.request<LoginResponse>('/api/auth/login', {
       method: 'POST',
-      // FIX: Cast object to BodyInit
       body: input as unknown as BodyInit,
     });
 
-    // FIX: Add check for response.success to satisfy TypeScript and access 'data' property.
     if (response.success) {
       this.setToken(response.data.accessToken);
       if (typeof window !== 'undefined') {
@@ -412,7 +412,6 @@ class APIClient {
       : null;
 
     if (!refreshToken) {
-      // FIX: Return APIResponse object
       return {
         success: false,
         message: 'No refresh token available',
@@ -430,7 +429,6 @@ class APIClient {
     const data = await response.json();
 
     if (!response.ok) {
-      // FIX: Return APIResponse object
         return {
             success: false,
             message: data.message || 'Failed to refresh token',
@@ -444,7 +442,6 @@ class APIClient {
         localStorage.setItem('refreshToken', data.data.refreshToken);
       }
     }
-    // FIX: Return APIResponse object
     return data;
   }
 
@@ -550,7 +547,6 @@ class APIClient {
   async createBooking(input: CreateBookingInput): Promise<APIResponse<Booking>> {
     return this.request<Booking>('/api/bookings', {
       method: 'POST',
-      // FIX: Cast object to BodyInit
       body: input as unknown as BodyInit,
     });
   }
@@ -600,7 +596,6 @@ class APIClient {
   ): Promise<APIResponse<Booking>> {
     return this.request<Booking>(`/api/bookings/${id}`, {
       method: 'PUT',
-      // FIX: Cast object to BodyInit
       body: updates as unknown as BodyInit,
     });
   }
@@ -637,7 +632,6 @@ class APIClient {
   ): Promise<APIResponse<Booking>> {
     return this.request<Booking>(`/api/bookings/${id}/complete`, {
       method: 'POST',
-      // FIX: Cast object to BodyInit
       body: data as unknown as BodyInit,
     });
   }
@@ -648,7 +642,6 @@ class APIClient {
   async cancelBooking(id: string, reason: string): Promise<APIResponse<Booking>> {
     return this.request<Booking>(`/api/bookings/${id}/cancel`, {
       method: 'POST',
-      // FIX: Cast object to BodyInit
       body: { reason } as unknown as BodyInit,
     });
   }
@@ -684,7 +677,6 @@ class APIClient {
   }): Promise<APIResponse<Property>> {
     return this.request('/api/properties', {
       method: 'POST',
-      // FIX: Cast object to BodyInit
       body: data as unknown as BodyInit,
     });
   }
@@ -734,7 +726,6 @@ class APIClient {
   ): Promise<APIResponse<Property>> {
     return this.request(`/api/properties/${id}`, {
       method: 'PUT',
-      // FIX: Cast object to BodyInit
       body: data as unknown as BodyInit,
     });
   }
@@ -770,7 +761,6 @@ class APIClient {
   }): Promise<APIResponse<{ count: number }>> {
     return this.request('/api/checklist/maintenance-items', {
       method: 'POST',
-      // FIX: Cast object to BodyInit
       body: data as unknown as BodyInit,
     });
   }
@@ -784,7 +774,6 @@ class APIClient {
   }): Promise<APIResponse<{ count: number }>> {
     return this.request('/api/maintenance-templates/custom-items', {
       method: 'POST',
-      // FIX: Cast object to BodyInit
       body: data as unknown as BodyInit,
     });
   }
@@ -817,7 +806,6 @@ class APIClient {
   }): Promise<APIResponse<Service>> {
     return this.request<Service>('/api/providers/services', {
       method: 'POST',
-      // FIX: Cast object to BodyInit
       body: data as unknown as BodyInit,
     });
   }
@@ -842,7 +830,6 @@ class APIClient {
   ): Promise<APIResponse<Service>> {
     return this.request<Service>(`/api/providers/services/${id}`, {
       method: 'PATCH',
-      // FIX: Cast object to BodyInit
       body: data as unknown as BodyInit,
     });
   }
@@ -880,7 +867,6 @@ class APIClient {
     return this.request<Expense>('/api/home-management/expenses', { method: 'POST', body: data as unknown as BodyInit });
   }
   
-  // FIX: Changed return type to APIResponse to allow for failure handling
   async listExpenses(propertyId?: string): Promise<APIResponse<{ expenses: Expense[] }>> {
       const query = propertyId ? `?propertyId=${propertyId}` : '';
       return this.request<{ expenses: Expense[] }>(`/api/home-management/expenses${query}`);
@@ -900,7 +886,6 @@ class APIClient {
     return this.request<Warranty>('/api/home-management/warranties', { method: 'POST', body: data as unknown as BodyInit });
   }
 
-  // FIX: Changed return type to APIResponse to allow for failure handling
   async listWarranties(): Promise<APIResponse<{ warranties: Warranty[] }>> {
     return this.request<{ warranties: Warranty[] }>('/api/home-management/warranties');
   }
@@ -919,7 +904,6 @@ class APIClient {
     return this.request<InsurancePolicy>('/api/home-management/insurance-policies', { method: 'POST', body: data as unknown as BodyInit });
   }
 
-  // FIX: Changed return type to APIResponse to allow for failure handling
   async listInsurancePolicies(): Promise<APIResponse<{ policies: InsurancePolicy[] }>> {
     return this.request<{ policies: InsurancePolicy[] }>('/api/home-management/insurance-policies');
   }
@@ -938,8 +922,6 @@ class APIClient {
 
   /**
    * Uploads a document and associates it with a parent entity.
-   * @param file The file object (from a FileList).
-   * @param data Metadata including the associated ID (propertyId, warrantyId, or policyId).
    */
   async uploadDocument(file: File, data: DocumentUploadInput): Promise<APIResponse<Document>> {
       const formData = new FormData();
@@ -965,6 +947,50 @@ class APIClient {
       return this.request<{ documents: Document[] }>('/api/home-management/documents');
   }
 
+  // ==========================================================================
+  // NEW RISK ASSESSMENT ENDPOINTS 
+  // ==========================================================================
+
+  /**
+   * Fetches the full risk assessment report, queuing a new calculation if stale.
+   * @returns The RiskAssessmentReport object or the string 'QUEUED'.
+   */
+  async getRiskReportSummary(propertyId: string): Promise<RiskAssessmentReport | 'QUEUED'> {
+    // The backend endpoint returns the RiskAssessmentReport object OR the string 'QUEUED'
+    const response = await this.request<RiskAssessmentReport | 'QUEUED'>(`/api/risk/report/${propertyId}`);
+
+    // FIX: Explicitly check for success to narrow the type and safely access 'data'.
+    if (!response.success) {
+      throw new APIError(response.message || 'Risk report request failed unexpectedly.', 500);
+    }
+    
+    // Now, response.data is either RiskAssessmentReport or 'QUEUED' (string).
+    
+    // Check if the payload inside 'data' is the 'QUEUED' string (backend service contract)
+    if (typeof response.data === 'string' && response.data === 'QUEUED') {
+        return 'QUEUED';
+    }
+
+    // If we reach here, response.data is the RiskAssessmentReport object.
+    const rawReport = response.data;
+
+    // We must ensure the decimal fields are converted to numbers for the frontend interface.
+    const processedReport: RiskAssessmentReport = {
+        // ... (spread the other properties if they match exactly)
+        id: rawReport.id,
+        propertyId: rawReport.propertyId,
+        riskScore: rawReport.riskScore,
+        financialExposureTotal: parseFloat(rawReport.financialExposureTotal as unknown as string), 
+        lastCalculatedAt: rawReport.lastCalculatedAt,
+        createdAt: rawReport.createdAt,
+        updatedAt: rawReport.updatedAt,
+        // The 'details' array is already parsed/available from the backend
+        details: rawReport.details as AssetRiskDetail[], 
+    };
+
+    return processedReport;
+  }
+  
   // ==========================================================================
   // NEW FAVORITES ENDPOINTS (PHASE 1)
   // ==========================================================================

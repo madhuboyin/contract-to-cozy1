@@ -58,6 +58,44 @@ export enum RecurrenceFrequency {
 export type HomeownerSegment = 'HOME_BUYER' | 'EXISTING_OWNER';
 
 // ============================================================================
+// NEW RISK ASSESSMENT TYPES (PHASE 3)
+// ============================================================================
+
+export type RiskCategory = 'STRUCTURE' | 'SYSTEMS' | 'SAFETY' | 'FINANCIAL_GAP';
+
+/**
+ * Result structure for a single asset calculation (from backend riskCalculator.util.ts)
+ */
+export interface AssetRiskDetail {
+    assetName: string;
+    systemType: string;
+    category: RiskCategory;
+    age: number;
+    expectedLife: number;
+    replacementCost: number;
+    probability: number;       
+    coverageFactor: number;    
+    outOfPocketCost: number;   
+    riskDollar: number;        
+    riskLevel: 'LOW' | 'MODERATE' | 'ELEVATED' | 'HIGH';
+    actionCta?: string;
+}
+
+/**
+ * Full Risk Assessment Report (Matches Prisma model output for frontend use)
+ */
+export interface RiskAssessmentReport {
+    id: string;
+    propertyId: string;
+    riskScore: number; // 0.0 to 100.0
+    financialExposureTotal: number; // Total Risk Dollar Exposure (Converted from Decimal)
+    details: AssetRiskDetail[]; // Parsed from JSON
+    lastCalculatedAt: string; // ISO Date string
+    createdAt: string;
+    updatedAt: string;
+}
+
+// ============================================================================
 // NEW DOCUMENT UPLOAD TYPES (ADDED)
 // ============================================================================
 
@@ -222,6 +260,31 @@ export interface UpdateChecklistItemInput {
 // ============================================================================
 
 /**
+ * Homeowner Profile (NEWLY ADDED)
+ */
+export interface HomeownerProfile {
+  id: string;
+  userId: string;
+  segment: HomeownerSegment; // 'HOME_BUYER' | 'EXISTING_OWNER'
+
+  // Purchase Information 
+  closingDate: string | null; // ISO Date string
+  purchasePrice: number | null; // Converted from Decimal (12, 2)
+
+  // Preferences
+  preferredContactMethod: string | null;
+  notificationPreferences: any; // JSON
+
+  // Budget tracking
+  totalBudget: number | null; // Converted from Decimal (12, 2)
+  spentAmount: number; // Converted from Decimal (12, 2)
+
+  createdAt: string;
+  updatedAt: string;
+}
+
+
+/**
  * User
  */
 export interface User {
@@ -236,6 +299,7 @@ export interface User {
   createdAt: string; 
   segment?: HomeownerSegment; 
   homeownerProfile?: { 
+    // Now just link to the main type since it's defined separately
     id: string;
     segment: HomeownerSegment;
   } | null;

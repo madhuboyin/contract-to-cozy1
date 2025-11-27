@@ -4,6 +4,10 @@ import { PrismaClient, Property, PropertyType, OwnershipType, HeatingType, Cooli
 // IMPORT REQUIRED: Import the utility and interface
 import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.util'; 
 
+// NEW IMPORTS FOR PHASE 2: Risk Assessment Triggering
+import JobQueueService from './JobQueue.service';
+import { RISK_JOB_TYPES } from '../config/risk-job-types';
+
 const prisma = new PrismaClient();
 
 // REPLACED INTERFACES with complete definitions matching the extended Prisma Property model
@@ -162,6 +166,9 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
     },
   });
 
+  // PHASE 2 ADDITION: Trigger risk calculation after property creation
+  await JobQueueService.addJob(RISK_JOB_TYPES.CALCULATE_RISK, { propertyId: property.id });
+
   // ATTACH SCORE: Calculate and attach score before returning
   return attachHealthScore(property);
 }
@@ -269,6 +276,11 @@ export async function updateProperty(
     where: { id: propertyId },
     data: updatePayload,
   });
+
+  // PHASE 2 ADDITION: Trigger risk calculation after property update
+  if (Object.keys(updatePayload).length > 0) {
+      await JobQueueService.addJob(RISK_JOB_TYPES.CALCULATE_RISK, { propertyId });
+  }
 
   // ATTACH SCORE: Calculate and attach score before returning
   return attachHealthScore(property);
