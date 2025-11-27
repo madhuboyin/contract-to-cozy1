@@ -46,7 +46,7 @@ const propertySchema = z.object({
   state: z.string().min(2, { message: "State is required." }),
   zipCode: z.string().min(5, { message: "Zip Code is required." }),
   
-  // FIX: Removed problematic 'invalid_type_error' parameter, relying on .refine()
+  // FIX: Only check for val !== null (since "" is converted to null by the component logic)
   propertyType: z.nativeEnum(PropertyTypes).nullable().refine(val => val !== null, { message: "Property Type is required." }),
   
   propertySize: z.coerce.number().int().positive().optional().nullable(),
@@ -58,7 +58,7 @@ const propertySchema = z.object({
   ownershipType: z.nativeEnum(OwnershipTypes).optional().nullable(),
   occupantsCount: z.coerce.number().int().min(0).optional().nullable(),
 
-  // FIX: Removed problematic 'invalid_type_error' parameter
+  // FIX: Only check for val !== null
   heatingType: z.nativeEnum(HeatingTypes).nullable().refine(val => val !== null, { message: "Heating Type is required." }),
   coolingType: z.nativeEnum(CoolingTypes).nullable().refine(val => val !== null, { message: "Cooling Type is required." }),
   waterHeaterType: z.nativeEnum(WaterHeaterTypes).nullable().refine(val => val !== null, { message: "Water Heater Type is required." }),
