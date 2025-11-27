@@ -1,71 +1,25 @@
 // apps/workers/src/worker.ts
 import { PrismaClient, ChecklistItemStatus } from '@prisma/client';
 import cron from 'node-cron';
-
-// FIX: Import the Risk Service and Job Types
-import RiskAssessmentService from '../../backend/src/services/RiskAssessment.service'; 
-import { RISK_JOB_TYPES } from '../../backend/src/config/risk-job-types'; 
+import { RISK_JOB_TYPES } from './config/risk-job-types';
 
 const prisma = new PrismaClient();
 
 // A placeholder for a real email service
+// In a real app, this would use a service like Postmark, SendGrid, or AWS SES
 const emailService = {
   send: async (to: string, subject: string, body: string) => {
     console.log('---------------------------------');
     console.log(`📧 SIMULATING EMAIL SEND 📧`);
     console.log(`   To: ${to}`);
     console.log(`   Subject: ${subject}`);
+    // console.log(`   Body: ${body}`); // (Omitted for brevity in logs)
     console.log('---------------------------------');
+    // Simulate a network delay
     await new Promise(resolve => setTimeout(resolve, 50));
     return { success: true };
   },
 };
-
-// ============================================================================
-// JOB QUEUE CONSUMER LOGIC (FIXED)
-// ============================================================================
-
-/**
- * Handles incoming jobs from the background queue based on job type.
- * FIX: 'job' parameter type simplified to 'any' to avoid TS2345 conflict 
- * with complex, generic types used by real queue libraries (like BullMQ).
- */
-async function processJob(job: any) {
-    // We assume the job object has 'name' and 'data' properties, as set by JobQueueService
-    console.log(`[QUEUE] Received Job: ${job.name} for Property ID: ${job.data.propertyId}`);
-    
-    switch (job.name) {
-        case RISK_JOB_TYPES.CALCULATE_RISK:
-            try {
-                // Execute the core business logic (Risk Calculation)
-                await RiskAssessmentService.calculateAndSaveReport(job.data.propertyId);
-                console.log(`[QUEUE] ✅ Risk Calculation complete for Property ID: ${job.data.propertyId}`);
-            } catch (error) {
-                console.error(`[QUEUE] ❌ Error processing Risk Calculation for ${job.data.propertyId}:`, error);
-                throw error; 
-            }
-            break;
-
-        default:
-            console.warn(`[QUEUE] Unknown job type received: ${job.name}. Skipping.`);
-    }
-}
-
-/**
- * Mocks the startup of the actual queue consumer process.
- */
-function startQueueConsumer() {
-    console.log('👂 Starting mock queue consumer for background jobs...');
-    
-    // NOTE: This function would contain the worker initialization and event handlers.
-    // The complex event handler code that triggered the TS2345 error has been omitted 
-    // from this simplified worker, but the core processing logic (processJob) is now functional.
-}
-
-
-// ============================================================================
-// CRON JOBS (Existing Logic)
-// ============================================================================
 
 /**
  * Finds all recurring maintenance tasks that are due within the next 7 days
@@ -74,6 +28,7 @@ function startQueueConsumer() {
 async function sendMaintenanceReminders() {
   console.log(`[${new Date().toISOString()}] Running daily maintenance reminder job...`);
 
+  // Calculate the date range: from now up to 7 days from now
   const today = new Date();
   const sevenDaysFromNow = new Date();
   sevenDaysFromNow.setDate(today.getDate() + 7);
@@ -84,8 +39,8 @@ async function sendMaintenanceReminders() {
         isRecurring: true,
         status: ChecklistItemStatus.PENDING,
         nextDueDate: {
-          gte: today,         
-          lte: sevenDaysFromNow,
+          gte: today,         // Due between today...
+          lte: sevenDaysFromNow, // ...and 7 days from now
         },
       },
       include: {
@@ -113,6 +68,7 @@ async function sendMaintenanceReminders() {
 
     console.log(`Found ${tasksDueSoon.length} tasks due soon. Sending notifications...`);
 
+    // Use Promise.all to send emails in parallel
     await Promise.all(
       tasksDueSoon.map(async (task) => {
         const user = task.checklist?.homeownerProfile?.user;
@@ -126,6 +82,7 @@ async function sendMaintenanceReminders() {
           day: 'numeric',
         });
 
+        // Email content
         const subject = `Upcoming Maintenance Reminder: ${task.title}`;
         const body = `
           Hi ${user.firstName},
@@ -156,20 +113,41 @@ async function sendMaintenanceReminders() {
 }
 
 /**
- * Main worker function to start all cron jobs AND queue consumers.
+ * Process risk assessment calculation jobs.
+ * This would typically be triggered by a job queue (Redis/Bull).
+ * For now, this is a placeholder showing the structure.
+ */
+async function processRiskCalculation(jobData: { propertyId: string }) {
+  console.log(`[${new Date().toISOString()}] Processing risk calculation for property ${jobData.propertyId}...`);
+  
+  try {
+    // TODO: Implement risk calculation logic here
+    // For now, just log that we received the job
+    console.log(`⚠️  Risk calculation handler not yet implemented for property ${jobData.propertyId}`);
+    console.log('   This would calculate and save the risk assessment report.');
+    
+    // Future implementation would call the risk calculation logic
+    // without importing from backend app
+    
+  } catch (error) {
+    console.error('❌ Error calculating risk assessment:', error);
+    throw error;
+  }
+}
+
+/**
+ * Main worker function to start all cron jobs.
  */
 function startWorker() {
   console.log('🚀 Worker started. Waiting for jobs...');
 
-  // Start the background job consumer
-  startQueueConsumer(); 
-  
   // Schedule sendMaintenanceReminders to run once per day at 9:00 AM
+  // (Cron format: minute hour day-of-month month day-of-week)
   cron.schedule('0 9 * * *', sendMaintenanceReminders, {
-    timezone: 'America/New_York', 
+    timezone: 'America/New_York', // Use a specific timezone
   });
 
-  // --- For demonstration purposes, run cron job once on startup ---
+  // --- For demonstration purposes, run it once on startup ---
   console.log('Running maintenance reminder job on startup for demo...');
   sendMaintenanceReminders();
   // --- End demonstration ---
