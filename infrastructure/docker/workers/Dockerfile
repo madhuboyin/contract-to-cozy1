@@ -17,14 +17,9 @@ COPY apps/workers/package-lock.json ./
 RUN npm ci --only=production --no-audit && \
     npm cache clean --force
 
-# Stage 2: Builder
-FROM node:20-alpine AS builder
-WORKDIR /app
+# Stage 2: Builder (Starting after WORKDIR /app and after RUN apk add)
 
-# Install build dependencies
-RUN apk add --no-cache python3 make g++
-
-# FIX: Explicitly copy worker's package and tsconfig files
+# 1. Copy worker app setup files
 COPY apps/workers/package.json ./
 COPY apps/workers/package-lock.json ./
 COPY apps/workers/tsconfig.json ./tsconfig.json
@@ -32,20 +27,19 @@ COPY apps/workers/tsconfig.json ./tsconfig.json
 # Install all dependencies
 RUN npm ci --no-audit
 
-# Copy source code (Worker source)
+# 2. Copy worker source code
+# This copies apps/workers/src/* to /app/src/
 COPY apps/workers/src/ ./src 
 
-# Copy required backend files to match '../../backend/src/...' imports in worker.ts
-COPY apps/backend/src/services/ ./backend/src/services/
-COPY apps/backend/src/config/ ./backend/src/config/
-COPY apps/backend/src/utils/ ./backend/src/utils/
+# 3. CRITICAL FIX: Copy the entire necessary backend directory structure
+# This copies apps/backend/src/ (containing services, config, lib, utils, etc.) 
+# to /app/backend/src/, which correctly resolves the worker's '../../backend/src/' imports.
+COPY apps/backend/src/ ./backend/src/
 
-# Copy the backend schema required for client generation
+# 4. Copy the schema required for client generation
 COPY apps/backend/prisma/schema.prisma ./prisma/schema.prisma
 
 RUN npx prisma generate --schema=./prisma/schema.prisma
-
-# Build TypeScript
 RUN npm run build
 
 # Stage 3: Runner
