@@ -15,35 +15,37 @@ COPY package*.json ./
 RUN npm ci --only=production && \
     npm cache clean --force
 
-# Stage 2: Builder
+# Stage 2: Builder (Replacement block for lines ~21 to 39 in your Dockerfile)
 FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Install build dependencies
 RUN apk add --no-cache python3 make g++
 
-# Copy package files
-COPY package*.json ./\nCOPY tsconfig*.json ./
+# 1. Copy worker app setup files
+# Assumes package*.json and tsconfig.json are for the worker app
+COPY package*.json ./
+COPY tsconfig*.json ./
 
 # Install all dependencies
 RUN npm ci
 
-# Copy source code (Worker source)
-COPY . .
+# 2. Copy worker source code and required backend files to match imports:
+# The worker source (worker.ts) goes into /app/src.
+COPY apps/workers/src/ ./src 
 
-# CRITICAL FIX: Copy the backend's prisma directory to /app/prisma
-# This ensures the schema is available for the subsequent prisma generate command.
-COPY apps/backend/prisma ./prisma
+# The worker.ts imports use '../../backend/src/...', which resolves to /app/backend/src/
+# We copy the backend source folders into the correct sibling path inside the container.
+COPY apps/backend/src/services/ ./backend/src/services/
+COPY apps/backend/src/config/ ./backend/src/config/
+COPY apps/backend/src/utils/ ./backend/src/utils/
 
-# The required backend source files were added in the previous fix:
-COPY apps/backend/src/services/ /app/apps/backend/src/services/
-COPY apps/backend/src/config/ /app/apps/backend/src/config/
-
-RUN npx prisma generate --schema=./prisma/schema.prisma
+# 3. Copy the schema required for client generation
+COPY apps/backend/prisma/schema.prisma ./prisma/schema.prisma
 
 # Build TypeScript
+RUN npx prisma generate --schema=./prisma/schema.prisma
 RUN npm run build
-# ...
 
 # Stage 3: Runner
 FROM node:20-alpine AS runner
