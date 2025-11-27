@@ -10,11 +10,12 @@
     "skipLibCheck": true,
     "moduleResolution": "node",
     "resolveJsonModule": true
-    // "rootDir": "./src" REMOVED/OMITTED to allow cross-project imports
+    // CRITICAL: Ensure "rootDir" is NOT present or is set to the project root 
+    // if using a composite project structure, but removing it is safer here.
   },
   "include": [
     "./src/**/*",
-    // Explicitly includes the backend source folder
+    // CRITICAL FIX: This path enables module resolution for the backend source files.
     "../../backend/src/**/*" 
   ],
   "exclude": [
