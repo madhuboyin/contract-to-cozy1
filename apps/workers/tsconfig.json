@@ -2,17 +2,22 @@
   "compilerOptions": {
     "target": "ES2020",
     "module": "commonjs",
-    "lib": ["ES2020"],
     "outDir": "./dist",
-    "rootDir": "./src",
-    "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "declaration": true,
-    "sourceMap": true
+    "strict": true,
+    "skipLibCheck": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true
+    // FIX: Removed "rootDir": "./src" to allow the compiler to look upwards
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "../backend/**"]
+  "include": [
+    "./src/**/*",
+    // FIX: Explicitly include the backend source directory so the compiler can find 
+    // the imported files at the '../../backend/src/...' path.
+    "../../backend/src/**/*" 
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }
