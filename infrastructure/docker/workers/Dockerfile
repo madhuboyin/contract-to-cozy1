@@ -35,23 +35,29 @@ WORKDIR /app
 # Install OpenSSL for Prisma runtime
 RUN apk add --no-cache openssl
 
-# Copy package files and install production dependencies
+# Copy package files and install production dependencies only
 COPY apps/workers/package*.json ./
 RUN npm ci --only=production
 
-# Copy workers source code
+# Copy workers source and config
 COPY apps/workers/src ./src
 COPY apps/workers/tsconfig.json ./
+
+# Install TypeScript and types for compilation only
+RUN npm install --save-dev typescript @types/node @types/node-cron
+
+# Compile TypeScript to JavaScript
+RUN npx tsc
 
 # Copy generated Prisma client from builder
 COPY --from=builder /app/apps/backend/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/apps/backend/node_modules/@prisma ./node_modules/@prisma
 
-# Install TypeScript for running ts-node
-RUN npm install -g typescript ts-node
+# Remove dev dependencies after compilation
+RUN npm prune --production
 
 # Set environment
 ENV NODE_ENV=production
 
-# Run the worker
-CMD ["ts-node", "src/worker.ts"]
+# Run the compiled JavaScript
+CMD ["node", "dist/worker.js"]

@@ -3,22 +3,15 @@
   "compilerOptions": {
     "target": "ES2020",
     "module": "commonjs",
+    "lib": ["ES2020"],
     "outDir": "./dist",
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
+    "rootDir": "./src",
     "strict": true,
+    "esModuleInterop": true,
     "skipLibCheck": true,
-    "moduleResolution": "node",
+    "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
-    // CRITICAL: Ensure "rootDir" is NOT present or is set to the project root 
-    // if using a composite project structure, but removing it is safer here.
   },
-  "include": [
-    "./src/**/*",
-    // CRITICAL FIX: This path enables module resolution for the backend source files.
-    "../../backend/src/**/*" 
-  ],
-  "exclude": [
-    "node_modules"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
 }
