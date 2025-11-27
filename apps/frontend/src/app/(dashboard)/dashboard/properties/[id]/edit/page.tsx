@@ -67,9 +67,14 @@ const propertySchema = z.object({
   waterHeaterInstallYear: z.coerce.number().int().min(1900).optional().nullable(),
   roofReplacementYear: z.coerce.number().int().min(1900).optional().nullable(),
   
+  // FIX: Added missing boolean fields to the schema
   hasDrainageIssues: z.boolean().optional(),
   hasSmokeDetectors: z.boolean().optional(),
   hasCoDetectors: z.boolean().optional(),
+  hasSecuritySystem: z.boolean().optional(),
+  hasFireExtinguisher: z.boolean().optional(),
+  hasIrrigation: z.boolean().optional(),
+  
   applianceAges: z.string().optional().nullable(), 
 });
 
@@ -102,9 +107,14 @@ const mapDbToForm = (property: any): PropertyFormValues => ({
   waterHeaterInstallYear: property.waterHeaterInstallYear,
   roofReplacementYear: property.roofReplacementYear,
   
-  hasDrainageIssues: property.hasDrainageIssues,
-  hasSmokeDetectors: property.hasSmokeDetectors,
-  hasCoDetectors: property.hasCoDetectors,
+  // FIX: Coalesce all nullable boolean fields to false for form compatibility
+  hasDrainageIssues: property.hasDrainageIssues ?? false,
+  hasSmokeDetectors: property.hasSmokeDetectors ?? false,
+  hasCoDetectors: property.hasCoDetectors ?? false,
+  hasSecuritySystem: property.hasSecuritySystem ?? false,
+  hasFireExtinguisher: property.hasFireExtinguisher ?? false,
+  hasIrrigation: property.hasIrrigation ?? false,
+
   // Convert object to string for the Textarea input
   applianceAges: property.applianceAges ? JSON.stringify(property.applianceAges) : null,
 });
@@ -164,9 +174,13 @@ export default function EditPropertyPage() {
         waterHeaterInstallYear: data.waterHeaterInstallYear ?? undefined,
         roofReplacementYear: data.roofReplacementYear ?? undefined,
         
+        // FIX: Include all boolean fields in the payload
         hasDrainageIssues: data.hasDrainageIssues,
         hasSmokeDetectors: data.hasSmokeDetectors,
         hasCoDetectors: data.hasCoDetectors,
+        hasSecuritySystem: data.hasSecuritySystem,
+        hasFireExtinguisher: data.hasFireExtinguisher,
+        hasIrrigation: data.hasIrrigation,
 
         // JSON Field Handling: Ensure JSON.parse only runs if the string is not empty/null
         applianceAges: data.applianceAges 
@@ -600,6 +614,55 @@ export default function EditPropertyPage() {
                                     <div className="space-y-1 leading-none">
                                         <FormLabel>Has Drainage Issues</FormLabel>
                                         <CardDescription>Can increase STRUCTURE risk penalty.</CardDescription>
+                                    </div>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        {/* FIX: Add missing boolean fields */}
+                        <FormField
+                            control={form.control}
+                            name="hasSecuritySystem"
+                            render={({ field }) => (
+                                <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded-md shadow-sm">
+                                    <FormControl>
+                                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                                    </FormControl>
+                                    <div className="space-y-1 leading-none">
+                                        <FormLabel>Has Security System</FormLabel>
+                                        <CardDescription>Extra safety factor.</CardDescription>
+                                    </div>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="hasFireExtinguisher"
+                            render={({ field }) => (
+                                <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded-md shadow-sm">
+                                    <FormControl>
+                                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                                    </FormControl>
+                                    <div className="space-y-1 leading-none">
+                                        <FormLabel>Has Fire Extinguisher</FormLabel>
+                                        <CardDescription>Safety checklist item.</CardDescription>
+                                    </div>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="hasIrrigation"
+                            render={({ field }) => (
+                                <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded-md shadow-sm">
+                                    <FormControl>
+                                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                                    </FormControl>
+                                    <div className="space-y-1 leading-none">
+                                        <FormLabel>Has Irrigation System</FormLabel>
+                                        <CardDescription>For exterior maintenance.</CardDescription>
                                     </div>
                                     <FormMessage />
                                 </FormItem>

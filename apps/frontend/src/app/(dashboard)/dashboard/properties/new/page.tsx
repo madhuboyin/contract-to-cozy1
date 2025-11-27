@@ -404,7 +404,68 @@ export default function NewPropertyPage() {
 
           {showAdvanced && (
             <div className="p-6 space-y-8 bg-white border-t border-gray-200">
-              {/* Advanced fields omitted for brevity - same as before */}
+              {/* Advanced fields restored */}
+              <h3 className="text-md font-semibold text-gray-800 border-b border-gray-100 pb-2">Usage & Structure</h3>
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                
+                {/* Property Size */}
+                <div>
+                  <label htmlFor="propertySize" className="block text-sm font-medium text-gray-700 mb-2">Square Footage (sqft)</label>
+                  <input type="number" id="propertySize" name="propertySize" value={formData.propertySize} onChange={handleChange} placeholder="e.g., 2500" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+
+                {/* Occupants Count */}
+                <div>
+                  <label htmlFor="occupantsCount" className="block text-sm font-medium text-gray-700 mb-2">Number of Occupants</label>
+                  <input type="number" id="occupantsCount" name="occupantsCount" value={formData.occupantsCount} onChange={handleChange} placeholder="e.g., 4" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                
+                {/* Ownership Type */}
+                <SelectInput label="Ownership Status" name="ownershipType" value={formData.ownershipType} options={OWNERSHIP_OPTIONS} />
+                
+                {/* Roof Type */}
+                <SelectInput label="Roof Type" name="roofType" value={formData.roofType} options={ROOF_OPTIONS} />
+              </div>
+
+              <h3 className="text-md font-semibold text-gray-800 border-b border-gray-100 pb-2 pt-4">Systems Overview</h3>
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {/* Heating Type */}
+                <SelectInput label="Heating Type" name="heatingType" value={formData.heatingType} options={HEATING_OPTIONS} />
+                
+                {/* Cooling Type */}
+                <SelectInput label="Cooling Type" name="coolingType" value={formData.coolingType} options={COOLING_OPTIONS} />
+                
+                {/* Water Heater Type */}
+                <SelectInput label="Water Heater Type" name="waterHeaterType" value={formData.waterHeaterType} options={WATER_HEATER_OPTIONS} />
+                
+                {/* HVAC Install Year */}
+                <div>
+                  <label htmlFor="hvacInstallYear" className="block text-sm font-medium text-gray-700 mb-2">HVAC Install Year</label>
+                  <input type="text" id="hvacInstallYear" name="hvacInstallYear" value={formData.hvacInstallYear} onChange={handleChange} placeholder="e.g., 2018" pattern="\d{4}" maxLength={4} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                
+                {/* Water Heater Install Year */}
+                <div>
+                  <label htmlFor="waterHeaterInstallYear" className="block text-sm font-medium text-gray-700 mb-2">Water Heater Install Year</label>
+                  <input type="text" id="waterHeaterInstallYear" name="waterHeaterInstallYear" value={formData.waterHeaterInstallYear} onChange={handleChange} placeholder="e.g., 2020" pattern="\d{4}" maxLength={4} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                
+                {/* Roof Replacement Year */}
+                <div>
+                  <label htmlFor="roofReplacementYear" className="block text-sm font-medium text-gray-700 mb-2">Roof Replacement Year</label>
+                  <input type="text" id="roofReplacementYear" name="roofReplacementYear" value={formData.roofReplacementYear} onChange={handleChange} placeholder="e.g., 2010" pattern="\d{4}" maxLength={4} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+              
+              <h3 className="text-md font-semibold text-gray-800 border-b border-gray-100 pb-2 pt-4">Safety & Exterior</h3>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <BooleanInput label="Has Smoke Detectors" name="hasSmokeDetectors" checked={formData.hasSmokeDetectors} />
+                <BooleanInput label="Has CO Detectors" name="hasCoDetectors" checked={formData.hasCoDetectors} />
+                <BooleanInput label="Has Security System" name="hasSecuritySystem" checked={formData.hasSecuritySystem} />
+                <BooleanInput label="Has Fire Extinguisher" name="hasFireExtinguisher" checked={formData.hasFireExtinguisher} />
+                <BooleanInput label="Has Irrigation System" name="hasIrrigation" checked={formData.hasIrrigation} />
+                <BooleanInput label="Has Drainage Issues" name="hasDrainageIssues" checked={formData.hasDrainageIssues} />
+              </div>
             </div>
           )}
         </div>

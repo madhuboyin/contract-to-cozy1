@@ -42,7 +42,7 @@ kubectl get pods -n production -l app=frontend
 docker build -t ghcr.io/madhuboyin/contract-to-cozy/workers:latest -f ../../infrastructure/docker/workers/Dockerfile .
 docker push ghcr.io/madhuboyin/contract-to-cozy/workers:latest
 
-kubectl -n production rollout restart deploy/workers
+kubectl -n production rollout restart deploy/worker-deployment
 kubectl delete pods -n production -l app=worker
 kubectl get pods -n production -l app=worker
 
