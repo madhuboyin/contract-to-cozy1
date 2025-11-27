@@ -37,19 +37,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
 
 
-// --- 1. Form Schema Definition ---
+// --- 1. Form Schema Definition (Updated for required fields) ---
 const propertySchema = z.object({
   name: z.string().optional().nullable(),
-  // FIX 1: Removed z.default(false). We rely on mapDbToForm for initial hydration.
-  // This forces the resolver to see `isPrimary: boolean`, eliminating the type conflict.
   isPrimary: z.boolean(),
-  address: z.string().min(1, { message: "Address is required." }),
+  address: z.string().min(1, { message: "Street Address is required." }),
   city: z.string().min(1, { message: "City is required." }),
   state: z.string().min(2, { message: "State is required." }),
   zipCode: z.string().min(5, { message: "Zip Code is required." }),
   
-  // Use exported Types for Zod validation
-  propertyType: z.nativeEnum(PropertyTypes).optional().nullable(),
+  // FIX: Removed problematic 'invalid_type_error' parameter, relying on .refine()
+  propertyType: z.nativeEnum(PropertyTypes).nullable().refine(val => val !== null, { message: "Property Type is required." }),
+  
   propertySize: z.coerce.number().int().positive().optional().nullable(),
   yearBuilt: z.coerce.number().int().min(1700).optional().nullable(),
   
@@ -58,23 +57,24 @@ const propertySchema = z.object({
   bathrooms: z.coerce.number().min(0).optional().nullable(),
   ownershipType: z.nativeEnum(OwnershipTypes).optional().nullable(),
   occupantsCount: z.coerce.number().int().min(0).optional().nullable(),
-  heatingType: z.nativeEnum(HeatingTypes).optional().nullable(),
-  coolingType: z.nativeEnum(CoolingTypes).optional().nullable(),
-  waterHeaterType: z.nativeEnum(WaterHeaterTypes).optional().nullable(),
-  roofType: z.nativeEnum(RoofTypes).optional().nullable(),
+
+  // FIX: Removed problematic 'invalid_type_error' parameter
+  heatingType: z.nativeEnum(HeatingTypes).nullable().refine(val => val !== null, { message: "Heating Type is required." }),
+  coolingType: z.nativeEnum(CoolingTypes).nullable().refine(val => val !== null, { message: "Cooling Type is required." }),
+  waterHeaterType: z.nativeEnum(WaterHeaterTypes).nullable().refine(val => val !== null, { message: "Water Heater Type is required." }),
+  roofType: z.nativeEnum(RoofTypes).nullable().refine(val => val !== null, { message: "Roof Type is required." }),
   
   hvacInstallYear: z.coerce.number().int().min(1900).optional().nullable(),
   waterHeaterInstallYear: z.coerce.number().int().min(1900).optional().nullable(),
   roofReplacementYear: z.coerce.number().int().min(1900).optional().nullable(),
   
-  // FIX: Added missing boolean fields to the schema
   hasDrainageIssues: z.boolean().optional(),
   hasSmokeDetectors: z.boolean().optional(),
   hasCoDetectors: z.boolean().optional(),
   hasSecuritySystem: z.boolean().optional(),
   hasFireExtinguisher: z.boolean().optional(),
   hasIrrigation: z.boolean().optional(),
-  
+
   applianceAges: z.string().optional().nullable(), 
 });
 
@@ -83,13 +83,13 @@ type PropertyFormValues = z.infer<typeof propertySchema>;
 // Helper to convert DB data (which uses null) to form data 
 const mapDbToForm = (property: any): PropertyFormValues => ({
   name: property.name || null, 
-  // RETAINED: This ensures isPrimary is always a boolean on initial load (0 or 1 property)
   isPrimary: property.isPrimary || false,
   address: property.address,
   city: property.city,
   state: property.state,
   zipCode: property.zipCode,
   
+  // Note: These fields are required for saving, but DB can return null initially
   propertyType: property.propertyType || null, 
   propertySize: property.propertySize,
   yearBuilt: property.yearBuilt,
@@ -107,7 +107,7 @@ const mapDbToForm = (property: any): PropertyFormValues => ({
   waterHeaterInstallYear: property.waterHeaterInstallYear,
   roofReplacementYear: property.roofReplacementYear,
   
-  // FIX: Coalesce all nullable boolean fields to false for form compatibility
+  // Coalesce all nullable boolean fields to false for form compatibility
   hasDrainageIssues: property.hasDrainageIssues ?? false,
   hasSmokeDetectors: property.hasSmokeDetectors ?? false,
   hasCoDetectors: property.hasCoDetectors ?? false,
@@ -174,7 +174,6 @@ export default function EditPropertyPage() {
         waterHeaterInstallYear: data.waterHeaterInstallYear ?? undefined,
         roofReplacementYear: data.roofReplacementYear ?? undefined,
         
-        // FIX: Include all boolean fields in the payload
         hasDrainageIssues: data.hasDrainageIssues,
         hasSmokeDetectors: data.hasSmokeDetectors,
         hasCoDetectors: data.hasCoDetectors,
@@ -205,6 +204,7 @@ export default function EditPropertyPage() {
 
         router.push(`/dashboard/properties/${propertyId}`);
       } else {
+        // This section handles API errors and displays a message.
         toast({
           title: "Update Failed",
           description: response.message || "An unknown error occurred.",
@@ -368,7 +368,7 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Property Type</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                                    <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                                         </FormControl>
@@ -450,7 +450,7 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Heating Type</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                                    <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                                         </FormControl>
@@ -470,7 +470,7 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Cooling Type</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                                    <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                                         </FormControl>
@@ -490,7 +490,7 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Roof Type</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                                    <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                                         </FormControl>
@@ -510,7 +510,7 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Water Heater Type</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                                    <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                                         </FormControl>
@@ -619,7 +619,6 @@ export default function EditPropertyPage() {
                                 </FormItem>
                             )}
                         />
-                        {/* FIX: Add missing boolean fields */}
                         <FormField
                             control={form.control}
                             name="hasSecuritySystem"

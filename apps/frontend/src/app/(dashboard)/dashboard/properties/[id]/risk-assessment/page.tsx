@@ -19,6 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import React from "react";
 import { useAuth } from "@/lib/auth/AuthContext"; 
 
+// --- Types for Query Data ---
 type RiskReportFull = RiskAssessmentReport; 
 
 interface QueuedData {
@@ -33,6 +34,7 @@ interface CalculatedData {
 
 type RiskQueryData = QueuedData | CalculatedData;
 
+// --- Helper Functions ---
 const formatCurrency = (amount: number) => new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -48,6 +50,7 @@ const getRiskDetails = (score: number) => {
 };
 
 
+// --- Component for Phase 3.3: Risk Category Summary Card ---
 const RiskCategorySummaryCard = ({ 
     category, 
     details, 
@@ -120,6 +123,7 @@ const RiskCategorySummaryCard = ({
     );
 }
 
+// --- Component for Phase 3.2: Detailed Asset Matrix Table ---
 const AssetMatrixTable = ({ details }: { details: AssetRiskDetail[] }) => {
     const getRiskBadge = (level: AssetRiskDetail['riskLevel']) => {
         if (level === 'LOW') return <Badge variant="secondary" className="bg-green-500/20 text-green-700 hover:bg-green-500/30 border-green-500">Low</Badge>;
@@ -182,12 +186,13 @@ const AssetMatrixTable = ({ details }: { details: AssetRiskDetail[] }) => {
     );
 }
 
+// --- Main Page Component ---
 export default function RiskAssessmentPage() {
     const params = useParams();
     const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
     const { user } = useAuth(); 
 
-    // Mock Premium Check 
+    // Mock Premium Check (REPLACE with actual logic)
     const isPremium = user?.role === 'ADMIN'; 
 
     // 1. Fetch Property Details (to get name/address for header)
@@ -217,6 +222,7 @@ export default function RiskAssessmentPage() {
         enabled: !!propertyId,
     });
 
+    // --- Data Extraction and Status Determination ---
     const riskQueryPayload = riskQuery.data;
     
     const currentStatus = riskQueryPayload?.status;
@@ -225,6 +231,7 @@ export default function RiskAssessmentPage() {
     
     const isLoadingReport = riskQuery.isLoading;
     
+    // --- Loading and Error States ---
     if (isLoadingProperty || !propertyId) {
         return (
             <DashboardShell>
@@ -243,6 +250,7 @@ export default function RiskAssessmentPage() {
     const formattedExposure = formatCurrency(exposure);
     const riskProgressValue = 100 - score;
 
+    // --- PDF Download Handler ---
     const handleDownloadPdf = async () => {
         if (!isPremium) {
             toast({
@@ -282,6 +290,61 @@ export default function RiskAssessmentPage() {
             });
         }
     };
+    
+    // --- Detailed Section Rendering Logic ---
+    const renderDetailedSections = () => {
+        if (isCalculating || isQueued) {
+            return (
+                <Card className="md:col-span-3">
+                    <CardHeader className="flex flex-row items-center justify-start space-y-0 pb-2">
+                        <Loader2 className="h-5 w-5 animate-spin mr-3 text-primary" />
+                        <CardTitle>Awaiting Detailed Risk Report</CardTitle>
+                    </CardHeader>
+                    <CardContent><CardDescription>{isQueued ? 'The risk calculation job is currently queued and will start shortly. This page will auto-update once complete.' : 'Fetching detailed report breakdown...'}</CardDescription></CardContent>
+                </Card>
+            );
+        }
+
+        // Check for calculated report with actual data
+        if (report && report.details && report.details.length > 0) {
+            return (
+                <React.Fragment>
+                    <AssetMatrixTable details={report.details} />
+                    
+                    <div className="grid gap-4 md:grid-cols-4">
+                        <RiskCategorySummaryCard 
+                            category={'STRUCTURE'} 
+                            details={report.details} 
+                            riskIcon={Home}
+                        />
+                        <RiskCategorySummaryCard 
+                            category={'SYSTEMS'} 
+                            details={report.details} 
+                            riskIcon={ZapIcon}
+                        />
+                        <RiskCategorySummaryCard 
+                            category={'SAFETY'} 
+                            details={report.details} 
+                            riskIcon={Siren}
+                        />
+                        <RiskCategorySummaryCard 
+                            category={'FINANCIAL_GAP'} 
+                            details={report.details} 
+                            riskIcon={DollarSign}
+                        />
+                    </div>
+                </React.Fragment>
+            );
+        }
+
+        // Default fallback when not loading and no data found
+        return (
+            <Card className="md:col-span-4">
+                <CardHeader><CardTitle>No Detailed Risk Data</CardTitle></CardHeader>
+                <CardContent><CardDescription>Update your property details (like HVAC install year, roof type, appliance ages) to generate component risk summaries. The score displayed above (if any) is based on general property attributes and defaults.</CardDescription></CardContent>
+            </Card>
+        );
+    };
 
     return (
         <DashboardShell>
@@ -296,6 +359,7 @@ export default function RiskAssessmentPage() {
                 </PageHeaderHeading>
             </PageHeader>
 
+            {/* --- Risk Summary Banner --- */}
             <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-4">
                 <Card className="md:col-span-1 border-2 border-primary/50">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -379,6 +443,7 @@ export default function RiskAssessmentPage() {
             </div>
             
             <div className="mt-8 space-y-6">
+                {/* --- Risk Gauge Visualization --- */}
                 <div className="space-y-2">
                     <h3 className="text-xl font-semibold">Overall Risk Gauge: {level}</h3>
                     <div className="flex justify-between text-xs font-medium text-muted-foreground">
@@ -392,55 +457,8 @@ export default function RiskAssessmentPage() {
                     />
                 </div>
 
-                {/* FIX 1: Wrap detailed sections to show loading state first */}
-                {(isCalculating || isQueued) ? (
-                    <Card className="md:col-span-3">
-                        <CardHeader className="flex flex-row items-center justify-start space-y-0 pb-2">
-                            <Loader2 className="h-5 w-5 animate-spin mr-3 text-primary" />
-                            <CardTitle>Awaiting Detailed Risk Report</CardTitle>
-                        </CardHeader>
-                        <CardContent><CardDescription>{isQueued ? 'The risk calculation job is currently queued and will start shortly. This page will auto-update once complete.' : 'Fetching detailed report breakdown...'}</CardDescription></CardContent>
-                    </Card>
-                ) : (
-                    <React.Fragment>
-                        {/* --- Asset Breakdown Table --- */}
-                        {report && report.details.length > 0 && <AssetMatrixTable details={report.details} />}
-                        
-                        {/* --- Risk Category Summary Cards / No Data Card --- */}
-                        <div className="grid gap-4 md:grid-cols-4">
-                            {report && report.details.length > 0 ? (
-                                <React.Fragment>
-                                    <RiskCategorySummaryCard 
-                                        category={'STRUCTURE'} 
-                                        details={report.details} 
-                                        riskIcon={Home}
-                                    />
-                                    <RiskCategorySummaryCard 
-                                        category={'SYSTEMS'} 
-                                        details={report.details} 
-                                        riskIcon={ZapIcon}
-                                    />
-                                    <RiskCategorySummaryCard 
-                                        category={'SAFETY'} 
-                                        details={report.details} 
-                                        riskIcon={Siren}
-                                    />
-                                    {/* FIX 2: Add FINANCIAL_GAP card for completeness, and adjust grid to 4 columns */}
-                                    <RiskCategorySummaryCard 
-                                        category={'FINANCIAL_GAP'} 
-                                        details={report.details} 
-                                        riskIcon={DollarSign}
-                                    />
-                                </React.Fragment>
-                            ) : (
-                                <Card className="md:col-span-4">
-                                    <CardHeader><CardTitle>No Detailed Risk Data</CardTitle></CardHeader>
-                                    <CardContent><CardDescription>Update your property details to generate component risk summaries. The score displayed above (if any) is based on general property attributes and defaults.</CardDescription></CardContent>
-                                </Card>
-                            )}
-                        </div>
-                    </React.Fragment>
-                )}
+                {/* --- Detailed Section Content --- */}
+                {renderDetailedSections()}
             </div>
             
         </DashboardShell>
