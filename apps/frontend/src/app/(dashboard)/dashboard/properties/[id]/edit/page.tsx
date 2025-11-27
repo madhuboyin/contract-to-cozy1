@@ -46,7 +46,7 @@ const propertySchema = z.object({
   state: z.string().min(2, { message: "State is required." }),
   zipCode: z.string().min(5, { message: "Zip Code is required." }),
   
-  // FIX: Enforce selection by checking for null
+  // Enforce selection by checking for null
   propertyType: z.nativeEnum(PropertyTypes).nullable().refine(val => val !== null, { message: "Property Type is required." }),
   
   propertySize: z.coerce.number().int().positive().optional().nullable(),
@@ -58,7 +58,7 @@ const propertySchema = z.object({
   ownershipType: z.nativeEnum(OwnershipTypes).optional().nullable(),
   occupantsCount: z.coerce.number().int().min(0).optional().nullable(),
 
-  // FIX: Enforce selection by checking for null
+  // Enforce selection by checking for null
   heatingType: z.nativeEnum(HeatingTypes).nullable().refine(val => val !== null, { message: "Heating Type is required." }),
   coolingType: z.nativeEnum(CoolingTypes).nullable().refine(val => val !== null, { message: "Cooling Type is required." }),
   waterHeaterType: z.nativeEnum(WaterHeaterTypes).nullable().refine(val => val !== null, { message: "Water Heater Type is required." }),
@@ -80,17 +80,52 @@ const propertySchema = z.object({
 
 type PropertyFormValues = z.infer<typeof propertySchema>;
 
+// Define initial default values to maintain a controlled form state immediately
+const defaultFormValues: PropertyFormValues = {
+  name: null,
+  isPrimary: false,
+  address: "",
+  city: "",
+  state: "",
+  zipCode: "",
+  
+  propertyType: null,
+  propertySize: null,
+  yearBuilt: null,
+  
+  bedrooms: null,
+  bathrooms: null,
+  ownershipType: null,
+  occupantsCount: null,
+  heatingType: null,
+  coolingType: null,
+  waterHeaterType: null,
+  roofType: null,
+  
+  hvacInstallYear: null,
+  waterHeaterInstallYear: null,
+  roofReplacementYear: null,
+  
+  hasDrainageIssues: false,
+  hasSmokeDetectors: false,
+  hasCoDetectors: false,
+  hasSecuritySystem: false,
+  hasFireExtinguisher: false,
+  hasIrrigation: false,
+  
+  applianceAges: null,
+}
+
 // Helper to convert DB data (which uses null) to form data 
 const mapDbToForm = (property: any): PropertyFormValues => ({
   name: property.name || null, 
-  // FIX: Use ?? false for isPrimary for consistency and to resolve the Controlled/Uncontrolled warning
+  // FIX: Ensure property.isPrimary is consistently a boolean for RHF hydration
   isPrimary: property.isPrimary ?? false, 
   address: property.address,
   city: property.city,
   state: property.state,
   zipCode: property.zipCode,
   
-  // All these fields use '|| null' which is fine since the Zod schema is checking for val !== null
   propertyType: property.propertyType || null, 
   propertySize: property.propertySize,
   yearBuilt: property.yearBuilt,
@@ -108,7 +143,7 @@ const mapDbToForm = (property: any): PropertyFormValues => ({
   waterHeaterInstallYear: property.waterHeaterInstallYear,
   roofReplacementYear: property.roofReplacementYear,
   
-  // All boolean fields correctly coalesce null/undefined to false
+  // Coalesce all nullable boolean fields to false for form compatibility
   hasDrainageIssues: property.hasDrainageIssues ?? false,
   hasSmokeDetectors: property.hasSmokeDetectors ?? false,
   hasCoDetectors: property.hasCoDetectors ?? false,
@@ -141,10 +176,17 @@ export default function EditPropertyPage() {
 
   const form = useForm<PropertyFormValues>({
     resolver: zodResolver(propertySchema) as any,
-    // Hydrate form with fetched values
-    values: property ? mapDbToForm(property) : undefined,
+    // FIX: Use defaultFormValues to ensure a controlled component from render 1
+    defaultValues: defaultFormValues, 
     mode: "onBlur",
   });
+  
+  // FIX: Reset the form with actual fetched data once it arrives (render 2)
+  React.useEffect(() => {
+    if (property) {
+      form.reset(mapDbToForm(property));
+    }
+  }, [property, form.reset]);
 
   // 3. Setup Mutation
   const updateMutation = useMutation({
@@ -369,7 +411,6 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Property Type</FormLabel>
-                                    {/* Set value to null if empty string is selected */}
                                     <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
@@ -452,7 +493,6 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Heating Type</FormLabel>
-                                    {/* Set value to null if empty string is selected */}
                                     <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
@@ -473,7 +513,6 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Cooling Type</FormLabel>
-                                    {/* Set value to null if empty string is selected */}
                                     <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
@@ -494,7 +533,6 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Roof Type</FormLabel>
-                                    {/* Set value to null if empty string is selected */}
                                     <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
@@ -515,7 +553,6 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Water Heater Type</FormLabel>
-                                    {/* Set value to null if empty string is selected */}
                                     <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
