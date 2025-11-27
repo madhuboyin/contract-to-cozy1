@@ -8,43 +8,44 @@ WORKDIR /app
 # Install build dependencies for native modules
 RUN apk add --no-cache python3 make g++
 
-# Copy package files
-COPY package*.json ./
+# FIX: Explicitly copy worker's package files from the monorepo root context
+COPY apps/workers/package.json ./
+COPY apps/workers/package-lock.json ./
 
 # Install production dependencies
-RUN npm ci --only=production && \
+# Added --no-audit to prevent potential network/speed issues in limited environments
+RUN npm ci --only=production --no-audit && \
     npm cache clean --force
 
-# Stage 2: Builder (Replacement block for lines ~21 to 39 in your Dockerfile)
+# Stage 2: Builder
 FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Install build dependencies
 RUN apk add --no-cache python3 make g++
 
-# 1. Copy worker app setup files
-# Assumes package*.json and tsconfig.json are for the worker app
-COPY package*.json ./
-COPY tsconfig*.json ./
+# FIX: Explicitly copy worker's package and tsconfig files
+COPY apps/workers/package.json ./
+COPY apps/workers/package-lock.json ./
+COPY apps/workers/tsconfig.json ./tsconfig.json
 
 # Install all dependencies
-RUN npm ci
+RUN npm ci --no-audit
 
-# 2. Copy worker source code and required backend files to match imports:
-# The worker source (worker.ts) goes into /app/src.
+# Copy source code (Worker source)
 COPY apps/workers/src/ ./src 
 
-# The worker.ts imports use '../../backend/src/...', which resolves to /app/backend/src/
-# We copy the backend source folders into the correct sibling path inside the container.
+# Copy required backend files to match '../../backend/src/...' imports in worker.ts
 COPY apps/backend/src/services/ ./backend/src/services/
 COPY apps/backend/src/config/ ./backend/src/config/
 COPY apps/backend/src/utils/ ./backend/src/utils/
 
-# 3. Copy the schema required for client generation
+# Copy the backend schema required for client generation
 COPY apps/backend/prisma/schema.prisma ./prisma/schema.prisma
 
-# Build TypeScript
 RUN npx prisma generate --schema=./prisma/schema.prisma
+
+# Build TypeScript
 RUN npm run build
 
 # Stage 3: Runner
@@ -80,7 +81,6 @@ USER nodejs
 
 EXPOSE 9090
 
-# FIX: Removed embedded citation tags to resolve the build error
 HEALTHCHECK --interval=60s --timeout=3s --start-period=60s --retries=3 \
  CMD pgrep -f "node dist/worker.js" || exit 1
 
