@@ -1,6 +1,6 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/PropertyRiskScoreCard.tsx
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,26 +38,8 @@ interface PropertyRiskScoreCardProps {
 
 export function PropertyRiskScoreCard({ summary, isLoading, propertyId }: PropertyRiskScoreCardProps) {
   
-  // Use mock data for demonstration if actual data is null or loading
-  const mockSummary: RiskReportSummary = {
-    riskScore: 78,
-    financialExposureTotal: 4500.00,
-    status: 'CALCULATED',
-    propertyId: propertyId,
-  };
-  
-  const data = summary || mockSummary;
-  const { level, color, progressClass } = getRiskDetails(data.riskScore);
-  const formattedExposure = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(data.financialExposureTotal);
-  
-  const riskProgressValue = 100 - data.riskScore; // Invert score for progress bar (higher bar = higher risk)
-  
-  if (isLoading || data.status === 'QUEUED') {
+  // FIX: Explicitly check for null summary (before report created) or 'QUEUED' status.
+  if (isLoading || summary === null || summary.status === 'QUEUED') {
     return (
       <Card className="flex flex-col h-full">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -68,7 +50,10 @@ export function PropertyRiskScoreCard({ summary, isLoading, propertyId }: Proper
         </CardHeader>
         <CardContent className="flex-grow flex items-center justify-center p-6">
           <div className="text-center">
-            <p className="text-xl font-semibold text-blue-500">Calculating...</p>
+            <p className="text-xl font-semibold text-blue-500">
+                {/* Conditional message for better clarity */}
+                {summary === null ? 'Awaiting Calculation' : 'Calculating...'}
+            </p>
             <p className="text-sm text-muted-foreground mt-1">
               Data is being processed by the worker. Check back soon.
             </p>
@@ -78,6 +63,18 @@ export function PropertyRiskScoreCard({ summary, isLoading, propertyId }: Proper
     );
   }
 
+  // If we reach here, summary is non-null and status is 'CALCULATED'.
+  // Use summary directly.
+  const { level, color, progressClass } = getRiskDetails(summary.riskScore);
+  const formattedExposure = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(summary.financialExposureTotal);
+  
+  const riskProgressValue = 100 - summary.riskScore; // Invert score for progress bar (higher bar = higher risk)
+  
   return (
     <Card className="flex flex-col h-full">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -89,8 +86,8 @@ export function PropertyRiskScoreCard({ summary, isLoading, propertyId }: Proper
       <CardContent className="flex-grow flex flex-col justify-between">
         <div>
             <div className="text-2xl font-bold flex items-center gap-2">
-                {data.riskScore}/100 
-                <Badge variant={getRiskDetails(data.riskScore).badgeVariant as any} className="text-xs">
+                {summary.riskScore}/100 
+                <Badge variant={getRiskDetails(summary.riskScore).badgeVariant as any} className="text-xs">
                     {level} RISK
                 </Badge>
             </div>
@@ -119,7 +116,7 @@ export function PropertyRiskScoreCard({ summary, isLoading, propertyId }: Proper
                 className={`h-2 ${progressClass}`} 
                 indicatorClassName={`${progressClass}`} 
             />
-            <Link href={`/dashboard/properties/${data.propertyId}/risk-assessment`} passHref>
+            <Link href={`/dashboard/properties/${summary.propertyId}/risk-assessment`} passHref>
                 <Button variant="link" className="p-0 h-auto mt-2 text-sm font-semibold">
                     View Full Report <ArrowRight className="h-4 w-4 ml-1" />
                 </Button>
