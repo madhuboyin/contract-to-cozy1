@@ -10,13 +10,14 @@ import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading } from "@/components/page-header";
 import { toast } from "@/components/ui/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Zap, Shield, Loader2, DollarSign, Download, ArrowLeft, AlertTriangle, Home, Wrench, Siren } from "lucide-react";
+import { Zap, Shield, Loader2, DollarSign, Download, ArrowLeft, Home, Zap as ZapIcon, Siren } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import React from "react";
+import { useAuth } from "@/lib/auth/AuthContext"; // NEW: Import useAuth for mock premium check
 
 // --- Types for Query Data ---
 type RiskReportFull = RiskAssessmentReport; 
@@ -49,7 +50,7 @@ const getRiskDetails = (score: number) => {
 };
 
 
-// --- Component for Phase 3.3: Risk Category Summary Card (NEWLY IMPLEMENTED) ---
+// --- Component for Phase 3.3: Risk Category Summary Card ---
 const RiskCategorySummaryCard = ({ 
     category, 
     details, 
@@ -62,11 +63,9 @@ const RiskCategorySummaryCard = ({
     
     const relevantAssets = details.filter(item => item.category === category);
     
-    // Calculate total exposure for the category
     const totalExposure = relevantAssets.reduce((sum, item) => sum + item.riskDollar, 0);
     const formattedExposure = formatCurrency(totalExposure);
 
-    // Determine primary CTA and risk status
     const topRiskAsset = relevantAssets.sort((a, b) => b.riskDollar - a.riskDollar)[0];
     
     let title: string = `${category.replace(/_/g, ' ')} Risk`;
@@ -124,7 +123,7 @@ const RiskCategorySummaryCard = ({
     );
 }
 
-// --- Component for Phase 3.2: Detailed Asset Matrix Table (Implemented) ---
+// --- Component for Phase 3.2: Detailed Asset Matrix Table ---
 const AssetMatrixTable = ({ details }: { details: AssetRiskDetail[] }) => {
     const getRiskBadge = (level: AssetRiskDetail['riskLevel']) => {
         if (level === 'LOW') return <Badge variant="secondary" className="bg-green-500/20 text-green-700 hover:bg-green-500/30 border-green-500">Low</Badge>;
@@ -191,6 +190,10 @@ const AssetMatrixTable = ({ details }: { details: AssetRiskDetail[] }) => {
 export default function RiskAssessmentPage() {
     const params = useParams();
     const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
+    const { user } = useAuth(); // NEW: Get user context for mock premium check
+
+    // Mock Premium Check (REPLACE with actual logic)
+    const isPremium = user?.role === 'ADMIN'; 
 
     // 1. Fetch Property Details (to get name/address for header)
     const { data: property, isLoading: isLoadingProperty } = useQuery({
@@ -246,6 +249,47 @@ export default function RiskAssessmentPage() {
     const exposure = report?.financialExposureTotal || 0;
     const formattedExposure = formatCurrency(exposure);
     const riskProgressValue = 100 - score;
+
+    // --- NEW: PDF Download Handler (Phase 3.4) ---
+    const handleDownloadPdf = async () => {
+        if (!isPremium) {
+            toast({
+                title: "Premium Feature Required",
+                description: "Downloading the full PDF report is a premium feature. Please upgrade your account.",
+                variant: "destructive",
+            });
+            return;
+        }
+        
+        if (!report) return;
+
+        try {
+            const pdfBlob = await api.downloadRiskReportPdf(propertyId);
+            
+            // Create a URL for the Blob and trigger download
+            const url = window.URL.createObjectURL(pdfBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `RiskAssessmentReport-${propertyId}-${new Date().toISOString().slice(0, 10)}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            
+            toast({
+                title: "Download Started",
+                description: "Your Risk Assessment PDF report is downloading.",
+            });
+
+        } catch (error: any) {
+            console.error("PDF Download Error:", error);
+            toast({
+                title: "Download Failed",
+                description: error.message || "Could not generate or download the PDF file.",
+                variant: "destructive",
+            });
+        }
+    };
 
     return (
         <DashboardShell>
@@ -314,9 +358,24 @@ export default function RiskAssessmentPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-2">
-                            <Button className="w-full" disabled={isCalculating || isQueued}>
-                                <Download className="h-4 w-4 mr-2" /> Download Full PDF (P3.4)
+                            {/* NEW: Download Button with Premium Check */}
+                            <Button 
+                                className="w-full" 
+                                disabled={isCalculating || isQueued}
+                                onClick={handleDownloadPdf}
+                                variant={isPremium ? 'default' : 'secondary'}
+                            >
+                                <Download className="h-4 w-4 mr-2" /> 
+                                {isPremium ? 'Download Full PDF' : 'Upgrade for PDF'}
                             </Button>
+                            
+                            {/* NEW: Premium Indicator */}
+                            {!isPremium && (
+                                <p className="text-xs text-red-500 font-medium text-center">
+                                    *Premium feature (Admin role used as mock check)
+                                </p>
+                            )}
+
                             {isQueued && (
                                 <Button variant="outline" className="w-full" onClick={() => riskQuery.refetch()}>
                                     Recalculate Now
@@ -360,7 +419,7 @@ export default function RiskAssessmentPage() {
                             <RiskCategorySummaryCard 
                                 category={'SYSTEMS'} 
                                 details={report.details} 
-                                riskIcon={Zap}
+                                riskIcon={ZapIcon}
                             />
                             <RiskCategorySummaryCard 
                                 category={'SAFETY'} 

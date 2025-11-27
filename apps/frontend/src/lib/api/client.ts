@@ -1026,6 +1026,46 @@ class APIClient {
     return response;
   }
 
+// ==========================================================================
+  // NEW RISK ASSESSMENT ENDPOINTS (PDF - PHASE 3.4)
+  // ==========================================================================
+
+  /**
+   * Generates and downloads the Risk Assessment Report as a PDF.
+   * This is typically a premium feature.
+   */
+  async downloadRiskReportPdf(propertyId: string): Promise<Blob> {
+    const token = this.getToken();
+    
+    if (!token) {
+        throw new APIError("Authentication required for PDF download.", 401);
+    }
+
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${token}`,
+    };
+
+    const response = await fetch(`${this.baseURL}/api/risk/report/${propertyId}/pdf`, {
+        method: 'GET',
+        headers: headers,
+    });
+
+    if (!response.ok) {
+        let errorMessage = 'Failed to download PDF.';
+        try {
+            // Attempt to read error message if provided as JSON, otherwise rely on status text
+            const errorData = await response.json();
+            errorMessage = errorData.message || response.statusText;
+        } catch {
+            errorMessage = response.statusText;
+        }
+        throw new APIError(errorMessage, response.status);
+    }
+
+    // Return the response body as a Blob
+    return response.blob();
+  }
+
 }
 
 // Export singleton instance

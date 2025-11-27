@@ -1,29 +1,24 @@
 // apps/backend/src/routes/risk.routes.ts
 
 import { Router } from 'express';
-// FIX APPLIED: Changed to default import to resolve "no exported member 'authMiddleware'"
-import { authenticate as authMiddleware } from '../middleware/auth.middleware'; 
 import RiskAssessmentController from '../controllers/riskAssessment.controller';
+import { authenticate } from '../middleware/auth.middleware'; // Assuming authentication middleware exists
 
 const router = Router();
 
-/**
- * Routes for Property Risk Assessment Module
- * Base path: /api/risk
- */
-
-// GET /api/risk/property/:propertyId/report - Get the main report (cached or calculated)
+// Route 1: GET /api/risk/report/:propertyId - Fetches status/summary
 router.get(
-  '/property/:propertyId/report',
-  authMiddleware,
-  RiskAssessmentController.getRiskReport
+  '/report/:propertyId', 
+  authenticate, 
+  RiskAssessmentController.getRiskReportSummary.bind(RiskAssessmentController)
 );
 
-// POST /api/risk/calculate/:propertyId - Manually trigger a recalculation
-router.post(
-  '/calculate/:propertyId',
-  authMiddleware,
-  RiskAssessmentController.triggerRecalculation
+// Route 2: GET /api/risk/report/:propertyId/pdf - Generates and downloads PDF (Phase 3.4)
+router.get(
+  '/report/:propertyId/pdf', 
+  authenticate, 
+  RiskAssessmentController.generateRiskReportPdf.bind(RiskAssessmentController)
 );
+
 
 export default router;
