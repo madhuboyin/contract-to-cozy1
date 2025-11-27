@@ -26,35 +26,37 @@ RUN npm ci
 RUN npx prisma generate
 
 # ============================================================================
-# Stage 2: Production - Copy only necessary files
+# Stage 2: Production - Copy only necessary files  
 # ============================================================================
 FROM node:20-alpine
 
-WORKDIR /app
+# Set working directory to /app (parent of both workers and backend)
+WORKDIR /app/apps/workers
 
 # Install OpenSSL for Prisma runtime
 RUN apk add --no-cache openssl
 
-# Copy package files and install production dependencies only
+# Copy package files and install production dependencies
 COPY apps/workers/package*.json ./
 RUN npm ci --only=production
 
-# Copy generated Prisma client from builder FIRST
+# Copy generated Prisma client from builder
 COPY --from=builder /app/apps/backend/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/apps/backend/node_modules/@prisma ./node_modules/@prisma
 
-# FIX: Copy backend source files that workers depends on
-# Workers imports from ../../backend/src/utils and ../../backend/src/config
-COPY apps/backend/src ../backend/src
+# FIX: Copy backend source to correct relative path (../../backend/src from workers)
+# This matches the import paths in worker.ts
+COPY apps/backend/src ../../backend/src
 
 # Copy workers source and config
 COPY apps/workers/src ./src
 COPY apps/workers/tsconfig.json ./
 
-# Install TypeScript and types for compilation only
+# Install TypeScript and types for compilation
 RUN npm install --save-dev typescript @types/node @types/node-cron
 
-# Compile TypeScript to JavaScript (Prisma client is now available)
+# Compile TypeScript to JavaScript
+# TypeScript will now find files at ../../backend/src as expected
 RUN npx tsc
 
 # Remove dev dependencies after compilation
