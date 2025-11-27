@@ -4,16 +4,20 @@
     "module": "commonjs",
     "lib": ["ES2020"],
     "outDir": "./dist",
+    "rootDir": "../..",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "baseUrl": ".",
-    "moduleResolution": "node"
+    "baseUrl": "../..",
+    "moduleResolution": "node",
+    "paths": {}
   },
   "include": [
-    "src/**/*"
+    "../../apps/workers/src/**/*",
+    "../../backend/src/utils/riskCalculator.util.ts",
+    "../../backend/src/config/risk-constants.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

@@ -44,11 +44,10 @@ RUN npm ci --only=production
 COPY --from=builder /app/apps/backend/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/apps/backend/node_modules/@prisma ./node_modules/@prisma
 
-# FIX: Copy backend utilities into a local directory structure that matches imports
-# Create the ../../backend/src structure
+# Create backend directory structure
 RUN mkdir -p ../../backend/src/utils ../../backend/src/config
 
-# Copy only the specific backend files workers needs
+# Copy specific backend files workers needs
 COPY apps/backend/src/utils/riskCalculator.util.ts ../../backend/src/utils/
 COPY apps/backend/src/config/risk-constants.ts ../../backend/src/config/
 
@@ -59,8 +58,16 @@ COPY apps/workers/tsconfig.docker.json ./tsconfig.json
 # Install TypeScript and types for compilation
 RUN npm install --save-dev typescript @types/node @types/node-cron
 
+# Debug: Verify files exist
+RUN echo "=== Checking file structure ===" && \
+    ls -la ../../backend/src/utils/ && \
+    ls -la ../../backend/src/config/ && \
+    echo "=== Current directory ===" && \
+    pwd && \
+    echo "=== tsconfig.json ===" && \
+    cat tsconfig.json
+
 # Compile TypeScript to JavaScript
-# Now ../../backend/src files exist at compile time
 RUN npx tsc
 
 # Remove dev dependencies after compilation
@@ -70,4 +77,4 @@ RUN npm prune --production
 ENV NODE_ENV=production
 
 # Run the compiled JavaScript
-CMD ["node", "dist/worker.js"]
+CMD ["node", "dist/apps/workers/src/worker.js"]
