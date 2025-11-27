@@ -29,15 +29,51 @@ COPY apps/workers/src ./src
 COPY apps/workers/tsconfig.docker.json ./tsconfig.json
 RUN npm install --save-dev typescript @types/node @types/node-cron
 
-# Compile TypeScript (this will compile both workers and backend files)
+# First, compile the backend utility files to the expected location
+# The compiled worker.js will be at dist/apps/workers/src/worker.js
+# It imports ../../backend/src/utils/riskCalculator.util
+# So we need files at dist/backend/src/utils/riskCalculator.util.js
+RUN mkdir -p dist/backend/src/utils dist/backend/src/config
+RUN cat > /tmp/backend-tsconfig.json << 'EOF'
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "outDir": "./dist",
+    "rootDir": "../..",
+    "strict": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "baseUrl": "../..",
+    "moduleResolution": "node",
+    "paths": {
+      "@prisma/client": ["apps/workers/node_modules/@prisma/client"]
+    }
+  },
+  "include": [
+    "../../backend/src/config/risk-constants.ts",
+    "../../backend/src/utils/riskCalculator.util.ts"
+  ]
+}
+EOF
+
+# Compile backend files first (will output to dist/backend/src/utils and dist/backend/src/config)
+RUN npx tsc --project /tmp/backend-tsconfig.json 2>&1 | tee /tmp/backend-tsc.log || (cat /tmp/backend-tsc.log && echo "Backend compilation had errors but continuing...")
+
+# Now compile the workers (which imports the backend files)
 RUN npx tsc --project ./tsconfig.json 2>&1 | tee /tmp/tsc-output.log || (cat /tmp/tsc-output.log && exit 1)
 
+# Debug: Show what was compiled
+RUN echo "=== Compiled files structure ===" && \
+    find dist -type f -name "*.js" | sort
+
 # Verify the compiled files exist in the expected locations
-RUN echo "=== Checking compiled worker file ===" && \
-    ls -la dist/apps/workers/src/worker.js && \
-    echo "=== Checking compiled backend files ===" && \
-    ls -la dist/backend/src/utils/riskCalculator.util.js && \
-    ls -la dist/backend/src/config/risk-constants.js || \
+RUN echo "=== Final verification ===" && \
+    test -f dist/apps/workers/src/worker.js && \
+    test -f dist/backend/src/utils/riskCalculator.util.js && \
+    test -f dist/backend/src/config/risk-constants.js && \
+    echo "✓ All required files found" || \
     (echo "ERROR: Required compiled files not found!" && \
      echo "Dist structure:" && find dist -type f -name "*.js" | head -20 && \
      exit 1)
