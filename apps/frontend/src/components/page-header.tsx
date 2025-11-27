@@ -26,7 +26,9 @@ export function PageHeaderHeading({ className, ...props }: PageHeaderHeadingProp
   return (
     <h1
       className={cn(
-        "text-3xl font-bold leading-tight tracking-tighter md:text-5xl lg:leading-[1.1]",
+        // FIXED: Reduced from text-3xl md:text-5xl to text-2xl md:text-3xl (24px → 36px)
+        // FIXED: Reduced from font-bold (700) to font-semibold (600)
+        "text-2xl font-semibold leading-tight tracking-tighter md:text-3xl lg:leading-[1.1]",
         className
       )}
       {...props}
