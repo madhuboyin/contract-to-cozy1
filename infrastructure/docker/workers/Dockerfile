@@ -29,9 +29,14 @@ COPY tsconfig*.json ./
 # Install all dependencies
 RUN npm ci
 
-# Copy source code
+# Copy source code (Worker source)
 COPY . .
 COPY prisma ./prisma
+
+# CRITICAL FIX: Explicitly copy the required backend source files into the container.
+COPY apps/backend/src/services/ /app/apps/backend/src/services/
+COPY apps/backend/src/config/ /app/apps/backend/src/config/
+
 RUN npx prisma generate --schema=./prisma/schema.prisma
 
 # Build TypeScript
@@ -70,7 +75,8 @@ USER nodejs
 
 EXPOSE 9090
 
+# FIX: Removed embedded citation tags to resolve the build error
 HEALTHCHECK --interval=60s --timeout=3s --start-period=60s --retries=3 \
-  CMD pgrep -f "node dist/worker.js" || exit 1
+ CMD pgrep -f "node dist/worker.js" || exit 1
 
 CMD ["node", "dist/worker.js"]

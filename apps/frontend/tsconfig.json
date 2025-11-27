@@ -34,7 +34,7 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
-, "src/lib/api/client.ts.backup"  ],
+, "src/lib/api/client.ts.backup", "src/app/(dashboard)/dashboard/properties/new/page.tsx.backup"  ],
   "exclude": [
     "node_modules"
   ]
