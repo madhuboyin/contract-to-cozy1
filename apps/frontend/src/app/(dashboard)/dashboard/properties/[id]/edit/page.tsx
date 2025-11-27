@@ -10,17 +10,11 @@ import * as z from "zod";
 import { Loader2, Save, X, Home as HomeIcon, AlertCircle } from "lucide-react";
 
 import {
-  PropertyType,
   PropertyTypes,
-  OwnershipType,
   OwnershipTypes,
-  HeatingType,
   HeatingTypes,
-  CoolingType,
   CoolingTypes,
-  WaterHeaterType,
   WaterHeaterTypes,
-  RoofType,
   RoofTypes,
 } from "@/types"; 
 import { api } from "@/lib/api/client";
@@ -136,6 +130,9 @@ export default function EditPropertyPage() {
   const queryClient = useQueryClient();
   const params = useParams();
   const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
+  
+  // Track if we've reset the form to prevent multiple resets
+  const hasResetForm = React.useRef(false);
 
   // 2. Fetch Existing Property Data
   // FIX: Always refetch on mount to ensure we have complete, fresh data
@@ -154,19 +151,70 @@ export default function EditPropertyPage() {
 
   const form = useForm<PropertyFormValues>({
     resolver: zodResolver(propertySchema) as any,
-    defaultValues: property ? mapDbToForm(property) : undefined,
+    defaultValues: {
+      // Set safe defaults to prevent uncontrolled components
+      name: "",
+      isPrimary: false,
+      address: "",
+      city: "",
+      state: "",
+      zipCode: "",
+      propertyType: "" as any,
+      propertySize: null,
+      yearBuilt: null,
+      bedrooms: null,
+      bathrooms: null,
+      ownershipType: "" as any,
+      occupantsCount: null,
+      heatingType: "" as any,
+      coolingType: "" as any,
+      waterHeaterType: "" as any,
+      roofType: "" as any,
+      hvacInstallYear: null,
+      waterHeaterInstallYear: null,
+      roofReplacementYear: null,
+      hasDrainageIssues: false,
+      hasSmokeDetectors: false,
+      hasCoDetectors: false,
+      hasSecuritySystem: false,
+      hasFireExtinguisher: false,
+      hasIrrigation: false,
+      applianceAges: null,
+    },
     mode: "onBlur",
   });
 
-  // FIX ISSUE 1 (CONTINUED): Reset form when property data loads
-  // This ensures dropdowns display saved values after logout/page refresh
+  // FIX RACE CONDITION: Reset form when property data loads
+  // Use ref to ensure we only reset once when data first arrives
   React.useEffect(() => {
-    if (property) {
+    if (property && !isLoadingProperty && !hasResetForm.current) {
       const formData = mapDbToForm(property);
       console.log("🔄 Resetting form with property data:", formData);
-      form.reset(formData);
+      console.log("📊 Property type value:", formData.propertyType);
+      console.log("🔥 Heating type value:", formData.heatingType);
+      
+      // Mark that we've reset the form
+      hasResetForm.current = true;
+      
+      // Use setTimeout to ensure DOM and React are ready
+      setTimeout(() => {
+        form.reset(formData, { 
+          keepErrors: false,
+          keepDirty: false,
+          keepIsSubmitted: false,
+          keepTouched: false,
+          keepIsValid: false,
+          keepSubmitCount: false,
+        });
+        console.log("✅ Form reset complete");
+      }, 100);  // Slightly longer timeout to ensure everything is ready
     }
-  }, [property, form]);
+  }, [property, isLoadingProperty]);
+  
+  // Reset the ref when navigating to a different property
+  React.useEffect(() => {
+    hasResetForm.current = false;
+  }, [propertyId]);
 
   // 3. Setup Mutation
   const updateMutation = useMutation({
