@@ -17,26 +17,26 @@ COPY apps/workers/package-lock.json ./
 RUN npm ci --only=production --no-audit && \
     npm cache clean --force
 
-# Stage 2: Builder (Starting after WORKDIR /app and after RUN apk add)
+# Stage 2: Builder (Starts after WORKDIR /app and runs before RUN npm run build)
 
-# 1. Copy worker app setup files
+# 1. Copy worker app setup files (package/tsconfig)
 COPY apps/workers/package.json ./
 COPY apps/workers/package-lock.json ./
 COPY apps/workers/tsconfig.json ./tsconfig.json
 
-# Install all dependencies
+# Install all dependencies (This relies on the above files existing)
 RUN npm ci --no-audit
 
 # 2. Copy worker source code
-# This copies apps/workers/src/* to /app/src/
+# This copies apps/workers/src/* to /app/src (needed for worker.ts).
 COPY apps/workers/src/ ./src 
 
-# 3. CRITICAL FIX: Copy the entire necessary backend directory structure
-# This copies apps/backend/src/ (containing services, config, lib, utils, etc.) 
-# to /app/backend/src/, which correctly resolves the worker's '../../backend/src/' imports.
+# 3. CRITICAL FIX: Copy the ENTIRE backend source directory (src)
+# This places all services, config, and utility files into /app/backend/src, 
+# which is required to resolve the '../../backend/src/...' imports in worker.ts.
 COPY apps/backend/src/ ./backend/src/
 
-# 4. Copy the schema required for client generation
+# 4. Copy the schema required for Prisma client generation
 COPY apps/backend/prisma/schema.prisma ./prisma/schema.prisma
 
 RUN npx prisma generate --schema=./prisma/schema.prisma
