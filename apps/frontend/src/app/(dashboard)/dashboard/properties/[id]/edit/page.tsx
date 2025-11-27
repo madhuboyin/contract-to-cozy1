@@ -177,12 +177,12 @@ export default function EditPropertyPage() {
 
   const form = useForm<PropertyFormValues>({
     resolver: zodResolver(propertySchema) as any,
-    // FIX: Use defaultFormValues to ensure a controlled component from render 1
+    // Use defaultFormValues to ensure a controlled component from render 1
     defaultValues: defaultFormValues, 
     mode: "onBlur",
   });
   
-  // FIX: Reset the form with actual fetched data once it arrives (render 2)
+  // Reset the form with actual fetched data once it arrives (render 2)
   React.useEffect(() => {
     if (property) {
       form.reset(mapDbToForm(property));
@@ -192,7 +192,7 @@ export default function EditPropertyPage() {
   // 3. Setup Mutation
   const updateMutation = useMutation({
     mutationFn: (data: PropertyFormValues) => {
-      // NOTE: Client-side validation now prevents this from running if required fields are null.
+      // NOTE: This function will only run if RHF/Zod validation passed.
       const payload = {
         name: data.name ?? undefined,
         address: data.address,
@@ -266,8 +266,7 @@ export default function EditPropertyPage() {
   });
 
   const onSubmit: SubmitHandler<PropertyFormValues> = (data) => {
-    // FIX: form.handleSubmit(onSubmit) should automatically trigger validation and prevent mutation
-    // if errors exist. If it still mutates with errors, the component setup will show the message.
+    // RHF's handleSubmit automatically prevents mutation if validation errors exist.
     updateMutation.mutate(data);
   };
 
