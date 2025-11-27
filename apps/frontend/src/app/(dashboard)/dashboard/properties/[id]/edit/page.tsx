@@ -119,13 +119,14 @@ const defaultFormValues: PropertyFormValues = {
 // Helper to convert DB data (which uses null) to form data 
 const mapDbToForm = (property: any): PropertyFormValues => ({
   name: property.name || null, 
-  // FIX: Ensure property.isPrimary is consistently a boolean for RHF hydration
+  // Ensure property.isPrimary is consistently a boolean for RHF hydration
   isPrimary: property.isPrimary ?? false, 
   address: property.address,
   city: property.city,
   state: property.state,
   zipCode: property.zipCode,
   
+  // All these fields use '|| null' which is fine since the Zod schema is checking for val !== null
   propertyType: property.propertyType || null, 
   propertySize: property.propertySize,
   yearBuilt: property.yearBuilt,
@@ -191,8 +192,7 @@ export default function EditPropertyPage() {
   // 3. Setup Mutation
   const updateMutation = useMutation({
     mutationFn: (data: PropertyFormValues) => {
-      // Explicitly map form values (which can be null) to API payload (which should be undefined 
-      // for optional unset fields) using nullish coalescing (?? undefined).
+      // NOTE: Client-side validation now prevents this from running if required fields are null.
       const payload = {
         name: data.name ?? undefined,
         address: data.address,
@@ -266,6 +266,8 @@ export default function EditPropertyPage() {
   });
 
   const onSubmit: SubmitHandler<PropertyFormValues> = (data) => {
+    // FIX: form.handleSubmit(onSubmit) should automatically trigger validation and prevent mutation
+    // if errors exist. If it still mutates with errors, the component setup will show the message.
     updateMutation.mutate(data);
   };
 
