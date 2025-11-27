@@ -30,9 +30,7 @@ COPY apps/workers/tsconfig.docker.json ./tsconfig.json
 # 2. Install TypeScript for compilation
 RUN npm install --save-dev typescript @types/node @types/node-cron
 
-# 3. FIX: Change WORKDIR to /app (monorepo root) and compile all dependent files together.
-# This ensures all required JS files are created in the correct relative 'dist' locations 
-# (e.g., dist/apps/backend/src/...) and resolves the type errors.
+# 3. Compile all dependent files from the monorepo root (/app)
 WORKDIR /app
 RUN npx tsc \
     apps/workers/src/worker.ts \
@@ -49,4 +47,5 @@ WORKDIR /app/apps/workers
 
 RUN npm prune --production
 ENV NODE_ENV=production
-CMD ["node", "dist/apps/workers/src/worker.js"]
+# FIX: Corrected the path to resolve from /app/apps/workers (up two levels to /app, then down into dist)
+CMD ["node", "../../dist/apps/workers/src/worker.js"]
