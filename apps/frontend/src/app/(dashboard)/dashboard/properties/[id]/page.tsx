@@ -31,18 +31,18 @@ const PropertyOverview = ({ property }: { property: Property }) => (
   </div>
 );
 
-// Component for the Risk & Protection Tab (Target for Phase 2.4/3.1)
+// Component for the Risk & Protection Tab (Updated to production text)
 const RiskProtectionTab = ({ propertyId }: { propertyId: string }) => (
-    <div className="p-4 border border-dashed rounded-lg bg-gray-50 dark:bg-gray-800">
+    <div className="p-4 rounded-lg border bg-card/50">
         <h3 className="text-xl font-semibold flex items-center mb-2">
-            Risk Assessment In Progress (Phase 3) <Zap className="h-5 w-5 ml-2 text-yellow-500" />
+            Property Risk & Protection Overview <Shield className="h-5 w-5 ml-2 text-primary" />
         </h3>
-        <p className="text-gray-600 dark:text-gray-400">
-            The **Risk & Protection** tab is now structurally complete. Click below to view the dedicated 
-            report page where the Phase 3 implementation will take place.
+        <p className="text-gray-700 dark:text-gray-300">
+            Access the comprehensive risk report to view calculated risk scores, financial exposure,
+            and a detailed breakdown of your home's systems and structure health.
         </p>
         <Link href={`/dashboard/properties/${propertyId}/risk-assessment`} passHref>
-            <Button className="mt-4">
+            <Button className="mt-4" variant="default">
                 View Risk & Protection Report
             </Button>
         </Link>
