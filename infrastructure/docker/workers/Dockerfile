@@ -23,22 +23,25 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++
 
 # Copy package files
-COPY package*.json ./
-COPY tsconfig*.json ./
+COPY package*.json ./\nCOPY tsconfig*.json ./
 
 # Install all dependencies
 RUN npm ci
 
-# ... (in Stage 2: Builder)
+# Copy source code (Worker source)
 COPY . .
-COPY prisma ./prisma
 
-# These lines require the build context (the '.') to contain 'apps/backend'
+# CRITICAL FIX: Copy the backend's prisma directory to /app/prisma
+# This ensures the schema is available for the subsequent prisma generate command.
+COPY apps/backend/prisma ./prisma
+
+# The required backend source files were added in the previous fix:
 COPY apps/backend/src/services/ /app/apps/backend/src/services/
 COPY apps/backend/src/config/ /app/apps/backend/src/config/
 
 RUN npx prisma generate --schema=./prisma/schema.prisma
 
+# Build TypeScript
 RUN npm run build
 # ...
 
