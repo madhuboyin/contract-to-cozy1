@@ -57,6 +57,68 @@ export enum RecurrenceFrequency {
  */
 export type HomeownerSegment = 'HOME_BUYER' | 'EXISTING_OWNER';
 
+/**
+ * Property Type - Synced with Prisma enum
+ */
+export enum PropertyType {
+  SINGLE_FAMILY = 'SINGLE_FAMILY',
+  TOWNHOME = 'TOWNHOME',
+  CONDO = 'CONDO',
+  APARTMENT = 'APARTMENT',
+  MULTI_UNIT = 'MULTI_UNIT',
+  INVESTMENT_PROPERTY = 'INVESTMENT_PROPERTY',
+}
+
+/**
+ * Ownership Type - Synced with Prisma enum
+ */
+export enum OwnershipType {
+  OWNER_OCCUPIED = 'OWNER_OCCUPIED',
+  RENTED_OUT = 'RENTED_OUT',
+}
+
+/**
+ * Heating Type - Synced with Prisma enum
+ */
+export enum HeatingType {
+  HVAC = 'HVAC',
+  FURNACE = 'FURNACE',
+  HEAT_PUMP = 'HEAT_PUMP',
+  RADIATORS = 'RADIATORS',
+  UNKNOWN = 'UNKNOWN',
+}
+
+/**
+ * Cooling Type - Synced with Prisma enum
+ */
+export enum CoolingType {
+  CENTRAL_AC = 'CENTRAL_AC',
+  WINDOW_AC = 'WINDOW_AC',
+  UNKNOWN = 'UNKNOWN',
+}
+
+/**
+ * Water Heater Type - Synced with Prisma enum
+ */
+export enum WaterHeaterType {
+  TANK = 'TANK',
+  TANKLESS = 'TANKLESS',
+  HEAT_PUMP = 'HEAT_PUMP',
+  SOLAR = 'SOLAR',
+  UNKNOWN = 'UNKNOWN',
+}
+
+/**
+ * Roof Type - Synced with Prisma enum
+ */
+export enum RoofType {
+  SHINGLE = 'SHINGLE',
+  TILE = 'TILE',
+  FLAT = 'FLAT',
+  METAL = 'METAL',
+  UNKNOWN = 'UNKNOWN',
+}
+
 // ============================================================================
 // NEW RISK ASSESSMENT TYPES (PHASE 3)
 // ============================================================================
