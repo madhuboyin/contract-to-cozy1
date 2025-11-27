@@ -30,7 +30,7 @@ RUN npx prisma generate
 # ============================================================================
 FROM node:20-alpine
 
-# Set working directory to /app (parent of both workers and backend)
+# Set working directory to /app/apps/workers
 WORKDIR /app/apps/workers
 
 # Install OpenSSL for Prisma runtime
@@ -44,19 +44,17 @@ RUN npm ci --only=production
 COPY --from=builder /app/apps/backend/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/apps/backend/node_modules/@prisma ./node_modules/@prisma
 
-# FIX: Copy backend source to correct relative path (../../backend/src from workers)
-# This matches the import paths in worker.ts
+# Copy backend source to correct relative path
 COPY apps/backend/src ../../backend/src
 
-# Copy workers source and config
+# Copy workers source and configs
 COPY apps/workers/src ./src
-COPY apps/workers/tsconfig.json ./
+COPY apps/workers/tsconfig.docker.json ./tsconfig.json
 
 # Install TypeScript and types for compilation
 RUN npm install --save-dev typescript @types/node @types/node-cron
 
-# Compile TypeScript to JavaScript
-# TypeScript will now find files at ../../backend/src as expected
+# Compile TypeScript to JavaScript using tsconfig.docker.json
 RUN npx tsc
 
 # Remove dev dependencies after compilation
@@ -66,4 +64,4 @@ RUN npm prune --production
 ENV NODE_ENV=production
 
 # Run the compiled JavaScript
-CMD ["node", "dist/worker.js"]
+CMD ["node", "dist/src/worker.js"]
