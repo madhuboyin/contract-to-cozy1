@@ -138,6 +138,7 @@ export default function EditPropertyPage() {
   const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
 
   // 2. Fetch Existing Property Data
+  // FIX: Always refetch on mount to ensure we have complete, fresh data
   const { data: property, isLoading: isLoadingProperty } = useQuery({
     queryKey: ["property", propertyId],
     queryFn: async () => {
@@ -146,7 +147,9 @@ export default function EditPropertyPage() {
       throw new Error(response.message || "Failed to fetch property.");
     },
     enabled: !!propertyId,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,  // Always consider data stale
+    refetchOnMount: true,  // Always refetch when component mounts
+    refetchOnWindowFocus: false,  // Don't refetch on window focus
   });
 
   const form = useForm<PropertyFormValues>({
