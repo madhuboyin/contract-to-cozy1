@@ -29,18 +29,18 @@ COPY tsconfig*.json ./
 # Install all dependencies
 RUN npm ci
 
-# Copy source code (Worker source)
+# ... (in Stage 2: Builder)
 COPY . .
 COPY prisma ./prisma
 
-# CRITICAL FIX: Explicitly copy the required backend source files into the container.
+# These lines require the build context (the '.') to contain 'apps/backend'
 COPY apps/backend/src/services/ /app/apps/backend/src/services/
 COPY apps/backend/src/config/ /app/apps/backend/src/config/
 
 RUN npx prisma generate --schema=./prisma/schema.prisma
 
-# Build TypeScript
 RUN npm run build
+# ...
 
 # Stage 3: Runner
 FROM node:20-alpine AS runner
