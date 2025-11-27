@@ -59,24 +59,71 @@ RUN cat > /tmp/backend-tsconfig.json << 'EOF'
 EOF
 
 # Compile backend files first (will output to dist/backend/src/utils and dist/backend/src/config)
-RUN npx tsc --project /tmp/backend-tsconfig.json 2>&1 | tee /tmp/backend-tsc.log || (cat /tmp/backend-tsc.log && echo "Backend compilation had errors but continuing...")
+RUN npx tsc --project /tmp/backend-tsconfig.json 2>&1 | tee /tmp/backend-tsc.log && \
+    echo "=== Backend compilation output ===" && \
+    cat /tmp/backend-tsc.log
+
+# Debug: Show what backend files were compiled
+RUN echo "=== Backend compiled files ===" && \
+    find dist -type f -name "*.js" | grep -E "(backend|risk)" | sort || echo "No backend files found yet"
 
 # Now compile the workers (which imports the backend files)
 RUN npx tsc --project ./tsconfig.json 2>&1 | tee /tmp/tsc-output.log || (cat /tmp/tsc-output.log && exit 1)
 
 # Debug: Show what was compiled
-RUN echo "=== Compiled files structure ===" && \
+RUN echo "=== All compiled files structure ===" && \
     find dist -type f -name "*.js" | sort
 
-# Verify the compiled files exist in the expected locations
+# CRITICAL: Ensure backend files are in the exact location the runtime import expects
+# The compiled worker.js at dist/apps/workers/src/worker.js imports ../../backend/src/utils/riskCalculator.util
+# So we need files at dist/backend/src/utils/riskCalculator.util.js
+RUN echo "=== Ensuring backend files are in correct location ===" && \
+    mkdir -p dist/backend/src/utils dist/backend/src/config && \
+    if [ -f dist/backend/src/utils/riskCalculator.util.js ]; then \
+        echo "✓ Backend util already in correct location"; \
+    else \
+        echo "⚠ Backend util not found, searching..." && \
+        BACKEND_UTIL=$(find dist -name "riskCalculator.util.js" 2>/dev/null | head -1) && \
+        if [ -n "$BACKEND_UTIL" ]; then \
+            echo "Found at: $BACKEND_UTIL, copying to expected location" && \
+            cp "$BACKEND_UTIL" dist/backend/src/utils/riskCalculator.util.js; \
+        else \
+            echo "ERROR: riskCalculator.util.js not found anywhere in dist!" && \
+            exit 1; \
+        fi; \
+    fi && \
+    if [ -f dist/backend/src/config/risk-constants.js ]; then \
+        echo "✓ Backend config already in correct location"; \
+    else \
+        echo "⚠ Backend config not found, searching..." && \
+        BACKEND_CONFIG=$(find dist -name "risk-constants.js" 2>/dev/null | head -1) && \
+        if [ -n "$BACKEND_CONFIG" ]; then \
+            echo "Found at: $BACKEND_CONFIG, copying to expected location" && \
+            cp "$BACKEND_CONFIG" dist/backend/src/config/risk-constants.js; \
+        else \
+            echo "ERROR: risk-constants.js not found anywhere in dist!" && \
+            exit 1; \
+        fi; \
+    fi
+
+# Final verification with explicit error messages
 RUN echo "=== Final verification ===" && \
-    test -f dist/apps/workers/src/worker.js && \
-    test -f dist/backend/src/utils/riskCalculator.util.js && \
-    test -f dist/backend/src/config/risk-constants.js && \
-    echo "✓ All required files found" || \
-    (echo "ERROR: Required compiled files not found!" && \
-     echo "Dist structure:" && find dist -type f -name "*.js" | head -20 && \
-     exit 1)
+    if [ ! -f dist/apps/workers/src/worker.js ]; then \
+        echo "ERROR: worker.js not found!" && exit 1; \
+    fi && \
+    if [ ! -f dist/backend/src/utils/riskCalculator.util.js ]; then \
+        echo "ERROR: riskCalculator.util.js not found at dist/backend/src/utils/riskCalculator.util.js" && \
+        echo "Current dist structure:" && find dist -type f | head -20 && \
+        exit 1; \
+    fi && \
+    if [ ! -f dist/backend/src/config/risk-constants.js ]; then \
+        echo "ERROR: risk-constants.js not found at dist/backend/src/config/risk-constants.js" && \
+        exit 1; \
+    fi && \
+    echo "✓ All required files verified:" && \
+    ls -lh dist/apps/workers/src/worker.js && \
+    ls -lh dist/backend/src/utils/riskCalculator.util.js && \
+    ls -lh dist/backend/src/config/risk-constants.js
 
 RUN npm prune --production
 ENV NODE_ENV=production
