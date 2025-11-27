@@ -37,7 +37,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
 
 
-// --- 1. Form Schema Definition (Required fields check val !== null) ---
+// --- 1. Form Schema Definition (Required fields check for non-empty values) ---
 const propertySchema = z.object({
   name: z.string().optional().nullable(),
   isPrimary: z.boolean(),
@@ -46,8 +46,10 @@ const propertySchema = z.object({
   state: z.string().min(2, { message: "State is required." }),
   zipCode: z.string().min(5, { message: "Zip Code is required." }),
   
-  // FIX: Enforce selection by checking for null
-  propertyType: z.nativeEnum(PropertyTypes).nullable().refine(val => val !== null, { message: "Property Type is required." }),
+  // FIX: Treat empty string as null, then validate
+  propertyType: z.union([z.nativeEnum(PropertyTypes), z.literal("")])
+    .transform(val => val === "" ? null : val)
+    .refine(val => val !== null, { message: "Property Type is required." }),
   
   propertySize: z.coerce.number().int().positive().optional().nullable(),
   yearBuilt: z.coerce.number().int().min(1700).optional().nullable(),
@@ -55,14 +57,24 @@ const propertySchema = z.object({
   // Advanced Risk Fields
   bedrooms: z.coerce.number().int().min(0).optional().nullable(),
   bathrooms: z.coerce.number().min(0).optional().nullable(),
-  ownershipType: z.nativeEnum(OwnershipTypes).optional().nullable(),
+  ownershipType: z.union([z.nativeEnum(OwnershipTypes), z.literal("")])
+    .transform(val => val === "" ? null : val)
+    .optional().nullable(),
   occupantsCount: z.coerce.number().int().min(0).optional().nullable(),
 
-  // FIX: Enforce selection by checking for null
-  heatingType: z.nativeEnum(HeatingTypes).nullable().refine(val => val !== null, { message: "Heating Type is required." }),
-  coolingType: z.nativeEnum(CoolingTypes).nullable().refine(val => val !== null, { message: "Cooling Type is required." }),
-  waterHeaterType: z.nativeEnum(WaterHeaterTypes).nullable().refine(val => val !== null, { message: "Water Heater Type is required." }),
-  roofType: z.nativeEnum(RoofTypes).nullable().refine(val => val !== null, { message: "Roof Type is required." }),
+  // FIX: Required dropdown fields - treat empty string as null, then validate
+  heatingType: z.union([z.nativeEnum(HeatingTypes), z.literal("")])
+    .transform(val => val === "" ? null : val)
+    .refine(val => val !== null, { message: "Heating Type is required." }),
+  coolingType: z.union([z.nativeEnum(CoolingTypes), z.literal("")])
+    .transform(val => val === "" ? null : val)
+    .refine(val => val !== null, { message: "Cooling Type is required." }),
+  waterHeaterType: z.union([z.nativeEnum(WaterHeaterTypes), z.literal("")])
+    .transform(val => val === "" ? null : val)
+    .refine(val => val !== null, { message: "Water Heater Type is required." }),
+  roofType: z.union([z.nativeEnum(RoofTypes), z.literal("")])
+    .transform(val => val === "" ? null : val)
+    .refine(val => val !== null, { message: "Roof Type is required." }),
   
   hvacInstallYear: z.coerce.number().int().min(1900).optional().nullable(),
   waterHeaterInstallYear: z.coerce.number().int().min(1900).optional().nullable(),
@@ -89,19 +101,20 @@ const mapDbToForm = (property: any): PropertyFormValues => ({
   state: property.state,
   zipCode: property.zipCode,
   
-  // FIX ISSUE 1: Keep null values as null (don't convert to empty string)
-  propertyType: property.propertyType || null, 
+  // FIX ISSUE 1 (FINAL): For Select components, use empty string instead of null
+  // This keeps them controlled at all times and prevents React warnings
+  propertyType: property.propertyType || ("" as any), 
   propertySize: property.propertySize,
   yearBuilt: property.yearBuilt,
   
   bedrooms: property.bedrooms,
   bathrooms: property.bathrooms,
-  ownershipType: property.ownershipType || null,
+  ownershipType: property.ownershipType || ("" as any),
   occupantsCount: property.occupantsCount,
-  heatingType: property.heatingType || null,
-  coolingType: property.coolingType || null,
-  waterHeaterType: property.waterHeaterType || null,
-  roofType: property.roofType || null,
+  heatingType: property.heatingType || ("" as any),
+  coolingType: property.coolingType || ("" as any),
+  waterHeaterType: property.waterHeaterType || ("" as any),
+  roofType: property.roofType || ("" as any),
   
   hvacInstallYear: property.hvacInstallYear,
   waterHeaterInstallYear: property.waterHeaterInstallYear,
@@ -372,7 +385,7 @@ export default function EditPropertyPage() {
                                 <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded-md shadow-sm">
                                     <FormControl>
                                         <Checkbox 
-                                            checked={field.value}
+                                            checked={field.value ?? false}
                                             onCheckedChange={field.onChange}
                                         />
                                     </FormControl>
@@ -404,7 +417,7 @@ export default function EditPropertyPage() {
                                     {/* FIX ISSUE 1: Use null instead of "" for value, and handle undefined */}
                                     <Select 
                                         onValueChange={(value) => field.onChange(value === "" ? null : value)} 
-                                        value={field.value ?? undefined}
+                                        value={field.value || ""}
                                     >
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
@@ -490,7 +503,7 @@ export default function EditPropertyPage() {
                                     {/* FIX ISSUE 1: Use null instead of "" for value, and handle undefined */}
                                     <Select 
                                         onValueChange={(value) => field.onChange(value === "" ? null : value)} 
-                                        value={field.value ?? undefined}
+                                        value={field.value || ""}
                                     >
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
@@ -514,7 +527,7 @@ export default function EditPropertyPage() {
                                     {/* FIX ISSUE 1: Use null instead of "" for value, and handle undefined */}
                                     <Select 
                                         onValueChange={(value) => field.onChange(value === "" ? null : value)} 
-                                        value={field.value ?? undefined}
+                                        value={field.value || ""}
                                     >
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
@@ -538,7 +551,7 @@ export default function EditPropertyPage() {
                                     {/* FIX ISSUE 1: Use null instead of "" for value, and handle undefined */}
                                     <Select 
                                         onValueChange={(value) => field.onChange(value === "" ? null : value)} 
-                                        value={field.value ?? undefined}
+                                        value={field.value || ""}
                                     >
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
@@ -562,7 +575,7 @@ export default function EditPropertyPage() {
                                     {/* FIX ISSUE 1: Use null instead of "" for value, and handle undefined */}
                                     <Select 
                                         onValueChange={(value) => field.onChange(value === "" ? null : value)} 
-                                        value={field.value ?? undefined}
+                                        value={field.value || ""}
                                     >
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
@@ -607,7 +620,7 @@ export default function EditPropertyPage() {
                                     <FormLabel>Ownership Type</FormLabel>
                                     <Select 
                                         onValueChange={(value) => field.onChange(value === "" ? null : value)} 
-                                        value={field.value ?? undefined}
+                                        value={field.value || ""}
                                     >
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
@@ -644,7 +657,7 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded-md shadow-sm">
                                     <FormControl>
-                                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                                        <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} />
                                     </FormControl>
                                     <div className="space-y-1 leading-none">
                                         <FormLabel>Has Smoke Detectors</FormLabel>
@@ -660,7 +673,7 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded-md shadow-sm">
                                     <FormControl>
-                                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                                        <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} />
                                     </FormControl>
                                     <div className="space-y-1 leading-none">
                                         <FormLabel>Has CO Detectors</FormLabel>
@@ -676,7 +689,7 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded-md shadow-sm">
                                     <FormControl>
-                                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                                        <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} />
                                     </FormControl>
                                     <div className="space-y-1 leading-none">
                                         <FormLabel>Has Drainage Issues</FormLabel>
@@ -692,7 +705,7 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded-md shadow-sm">
                                     <FormControl>
-                                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                                        <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} />
                                     </FormControl>
                                     <div className="space-y-1 leading-none">
                                         <FormLabel>Has Security System</FormLabel>
@@ -708,7 +721,7 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded-md shadow-sm">
                                     <FormControl>
-                                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                                        <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} />
                                     </FormControl>
                                     <div className="space-y-1 leading-none">
                                         <FormLabel>Has Fire Extinguisher</FormLabel>
@@ -724,7 +737,7 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded-md shadow-sm">
                                     <FormControl>
-                                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                                        <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} />
                                     </FormControl>
                                     <div className="space-y-1 leading-none">
                                         <FormLabel>Has Irrigation System</FormLabel>
