@@ -12,6 +12,7 @@ RUN npm ci
 RUN npx prisma generate
 
 FROM node:20-alpine
+# Set WORKDIR to worker for setup tasks
 WORKDIR /app/apps/workers
 RUN apk add --no-cache openssl
 COPY apps/workers/package*.json ./
@@ -19,32 +20,32 @@ RUN npm ci --only=production
 COPY --from=builder /app/apps/backend/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/apps/backend/node_modules/@prisma ./node_modules/@prisma
 
-# FIX START: Ensure external TS dependencies are copied and compiled into the correct final location.
-
-# 1. Set up the expected directory structure for the dependencies relative to the worker's root.
+# 1. Create directory structure for runtime resolution
 RUN mkdir -p ../../backend/src/utils ../../backend/src/config
-
-# 2. Copy the external TS source files to their build-time location (/app/backend/src/...).
 COPY apps/backend/src/utils/riskCalculator.util.ts ../../backend/src/utils/
 COPY apps/backend/src/config/risk-constants.ts ../../backend/src/config/
-
-# 3. Copy the worker's source files.
 COPY apps/workers/src ./src
-
-# 4. Install dev dependencies needed for compilation.
 COPY apps/workers/tsconfig.docker.json ./tsconfig.json
+
+# 2. Install TypeScript for compilation
 RUN npm install --save-dev typescript @types/node @types/node-cron
 
-# 5. Explicitly COMPILE the external dependencies and output the resulting .js files 
-# into the location Node.js will expect them from inside the compiled worker.js.
-# Path resolution: worker.js imports '../../backend/src/utils/...' which resolves at runtime to 'dist/apps/backend/src/utils/...'
-RUN npx tsc --outDir dist/apps/backend/src --module commonjs ../../backend/src/utils/riskCalculator.util.ts
-RUN npx tsc --outDir dist/apps/backend/src --module commonjs ../../backend/src/config/risk-constants.ts
+# 3. FIX: Change WORKDIR to /app (monorepo root) and compile all dependent files together.
+# This ensures all required JS files are created in the correct relative 'dist' locations 
+# (e.g., dist/apps/backend/src/...) and resolves the type errors.
+WORKDIR /app
+RUN npx tsc \
+    apps/workers/src/worker.ts \
+    apps/backend/src/utils/riskCalculator.util.ts \
+    apps/backend/src/config/risk-constants.ts \
+    --outDir dist \
+    --module commonjs \
+    --target ES2020 \
+    --skipLibCheck true \
+    2>&1 | tee /tmp/tsc-output.log || (cat /tmp/tsc-output.log && exit 1)
 
-# 6. Compile the worker's own source code.
-RUN npx tsc --project ./tsconfig.json --listFiles --traceResolution 2>&1 | tee /tmp/tsc-output.log || (cat /tmp/tsc-output.log && exit 1)
-
-# FIX END.
+# 4. Return to the worker's directory for final cleanup steps
+WORKDIR /app/apps/workers
 
 RUN npm prune --production
 ENV NODE_ENV=production
