@@ -4,17 +4,18 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
-import { Property, RiskAssessmentReport, AssetRiskDetail } from "@/types"; 
+import { Property, RiskAssessmentReport, AssetRiskDetail, RiskCategory } from "@/types"; 
 import { api } from "@/lib/api/client";
 import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading } from "@/components/page-header";
 import { toast } from "@/components/ui/use-toast";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Zap, Shield, Loader2, DollarSign, Download, ArrowLeft } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Zap, Shield, Loader2, DollarSign, Download, ArrowLeft, AlertTriangle, Home, Wrench, Siren } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import React from "react";
 
 // --- Types for Query Data ---
@@ -48,17 +49,139 @@ const getRiskDetails = (score: number) => {
 };
 
 
-// --- Placeholder Component for Phase 3.2 ---
+// --- Component for Phase 3.3: Risk Category Summary Card (NEWLY IMPLEMENTED) ---
+const RiskCategorySummaryCard = ({ 
+    category, 
+    details, 
+    riskIcon: RiskIcon 
+}: { 
+    category: RiskCategory; 
+    details: AssetRiskDetail[]; 
+    riskIcon: React.ElementType; 
+}) => {
+    
+    const relevantAssets = details.filter(item => item.category === category);
+    
+    // Calculate total exposure for the category
+    const totalExposure = relevantAssets.reduce((sum, item) => sum + item.riskDollar, 0);
+    const formattedExposure = formatCurrency(totalExposure);
+
+    // Determine primary CTA and risk status
+    const topRiskAsset = relevantAssets.sort((a, b) => b.riskDollar - a.riskDollar)[0];
+    
+    let title: string = `${category.replace(/_/g, ' ')} Risk`;
+    let description: string;
+    let ctaText: string = 'View Details';
+    let ctaVariant: 'default' | 'secondary' | 'destructive' | 'outline' = 'outline';
+    let badgeStatus: string = 'INFO';
+    let badgeColor: 'default' | 'success' | 'warning' | 'destructive' = 'default';
+
+    if (topRiskAsset && topRiskAsset.riskDollar > 500) {
+        title = topRiskAsset.assetName.replace(/_/g, ' ');
+        description = `Top risk: ${topRiskAsset.actionCta || `Requires attention due to age/condition.`}`;
+        ctaText = topRiskAsset.actionCta || `Find Service`;
+        ctaVariant = topRiskAsset.riskLevel === 'HIGH' ? 'destructive' : 'default';
+        badgeStatus = topRiskAsset.riskLevel;
+        badgeColor = topRiskAsset.riskLevel === 'HIGH' ? 'destructive' : topRiskAsset.riskLevel === 'MODERATE' ? 'warning' : 'default';
+    } else if (relevantAssets.length > 0) {
+        title = `${category.replace(/_/g, ' ')} Health`;
+        description = `All components are currently low risk. Exposure: ${formattedExposure}.`;
+        ctaText = 'Add Inspection';
+        ctaVariant = 'secondary';
+        badgeStatus = 'GOOD';
+        badgeColor = 'success';
+    } else {
+        title = `${category.replace(/_/g, ' ')} Data Missing`;
+        description = `No component data available for this category. Please add property details.`;
+        ctaText = 'Update Property Info';
+        ctaVariant = 'outline';
+        badgeStatus = 'INFO';
+        badgeColor = 'default';
+    }
+    
+    return (
+        <Card className="flex flex-col justify-between">
+            <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold flex justify-between items-start">
+                    {title}
+                    <RiskIcon className="h-5 w-5 text-muted-foreground ml-2" />
+                </CardTitle>
+                <CardDescription className="text-xs min-h-[30px]">
+                    {description}
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="flex items-center justify-between mt-2">
+                    <Button variant={ctaVariant} size="sm">
+                        {ctaText}
+                    </Button>
+                    <Badge variant={badgeColor as any}>
+                        {badgeStatus.toUpperCase()}
+                    </Badge>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+// --- Component for Phase 3.2: Detailed Asset Matrix Table (Implemented) ---
 const AssetMatrixTable = ({ details }: { details: AssetRiskDetail[] }) => {
+    const getRiskBadge = (level: AssetRiskDetail['riskLevel']) => {
+        if (level === 'LOW') return <Badge variant="secondary" className="bg-green-500/20 text-green-700 hover:bg-green-500/30 border-green-500">Low</Badge>;
+        if (level === 'MODERATE') return <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-700 hover:bg-yellow-500/30 border-yellow-500">Moderate</Badge>;
+        if (level === 'ELEVATED') return <Badge variant="secondary" className="bg-orange-500/20 text-orange-700 hover:bg-orange-500/30 border-orange-500">Elevated</Badge>;
+        if (level === 'HIGH') return <Badge variant="secondary" className="bg-red-500/20 text-red-700 hover:bg-red-500/30 border-red-500">High</Badge>;
+        return <Badge variant="secondary">N/A</Badge>;
+    };
+
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Detailed Asset Risk Matrix (Phase 3.2)</CardTitle>
+                <CardTitle>Detailed Asset Risk Matrix</CardTitle>
+                <CardDescription>A component-by-component breakdown of your home's risks, exposure, and potential actions.</CardDescription>
             </CardHeader>
             <CardContent>
-                <div className="text-sm text-muted-foreground">
-                    This is where the sortable table will be displayed.
-                </div>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead className="w-[200px]">Asset</TableHead>
+                            <TableHead>Category</TableHead>
+                            <TableHead>Age / Expected Life</TableHead>
+                            <TableHead>Risk Level</TableHead>
+                            <TableHead>Out-of-Pocket Exposure</TableHead>
+                            <TableHead className="w-[150px]">Action</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {details.map((item, index) => (
+                            <TableRow key={index} className={item.riskLevel === 'HIGH' ? 'bg-red-50/50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20' : ''}>
+                                <TableCell className="font-medium">
+                                    {item.assetName.replace(/_/g, ' ')}
+                                    <div className="text-xs text-muted-foreground">{item.systemType.replace(/_/g, ' ')}</div>
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">{item.category.replace(/_/g, ' ')}</TableCell>
+                                <TableCell>
+                                    <span className="font-semibold">{item.age} yrs</span> / {item.expectedLife} yrs
+                                    {item.age > item.expectedLife && <span className="text-red-500 text-xs ml-2">(Past Life)</span>}
+                                </TableCell>
+                                <TableCell>
+                                    {getRiskBadge(item.riskLevel)}
+                                </TableCell>
+                                <TableCell className="font-bold text-red-600">
+                                    {formatCurrency(item.outOfPocketCost)}
+                                    <div className="text-xs text-muted-foreground">P: {item.probability.toFixed(2)} / C: {(item.coverageFactor * 100).toFixed(0)}%</div>
+                                </TableCell>
+                                <TableCell>
+                                    {item.actionCta ? (
+                                        <Button size="sm" variant="secondary">{item.actionCta}</Button>
+                                    ) : (
+                                        <span className="text-muted-foreground text-sm">Review Maintenance</span>
+                                    )}
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
             </CardContent>
         </Card>
     );
@@ -81,8 +204,7 @@ export default function RiskAssessmentPage() {
     });
 
     // 2. Fetch Detailed Risk Report
-    // Use the simplest destructuring form to capture the data payload.
-    const { data, isLoading: isLoadingReport, refetch } = useQuery<RiskQueryData>({
+    const riskQuery = useQuery<RiskQueryData>({
         queryKey: ["riskReport", propertyId],
         queryFn: async () => {
             const result = await api.getRiskReportSummary(propertyId); 
@@ -97,14 +219,15 @@ export default function RiskAssessmentPage() {
         enabled: !!propertyId,
     });
 
-    // --- Data Extraction and Status Determination (The Fix) ---
-    // Safely access the custom 'status' property on the data payload.
-    // FIX: Explicitly type the custom status field to resolve the ambiguity.
-    const customStatus: RiskQueryData['status'] | undefined = data?.status;
+    // --- Data Extraction and Status Determination ---
+    const riskQueryPayload = riskQuery.data;
     
-    const isQueued = customStatus === 'QUEUED';
-    const report: RiskReportFull | undefined = customStatus === 'CALCULATED' ? (data as CalculatedData).report : undefined;
+    const currentStatus = riskQueryPayload?.status;
+    const isQueued = currentStatus === 'QUEUED';
+    const report: RiskReportFull | undefined = currentStatus === 'CALCULATED' ? (riskQueryPayload as CalculatedData).report : undefined;
     
+    const isLoadingReport = riskQuery.isLoading;
+
     // --- Loading and Error States ---
     if (isLoadingProperty || !propertyId) {
         return (
@@ -195,7 +318,7 @@ export default function RiskAssessmentPage() {
                                 <Download className="h-4 w-4 mr-2" /> Download Full PDF (P3.4)
                             </Button>
                             {isQueued && (
-                                <Button variant="outline" className="w-full" onClick={() => refetch()}>
+                                <Button variant="outline" className="w-full" onClick={() => riskQuery.refetch()}>
                                     Recalculate Now
                                 </Button>
                             )}
@@ -222,24 +345,35 @@ export default function RiskAssessmentPage() {
                     />
                 </div>
 
-                {/* --- Asset Breakdown (Phase 3.2 Target) --- */}
-                {/* Ensure data is calculated and details array exists before rendering table */}
-                {data && data.status === 'CALCULATED' && report?.details && <AssetMatrixTable details={report.details} />}
+                {/* --- Asset Breakdown (Phase 3.2 Implemented) --- */}
+                {riskQueryPayload && riskQueryPayload.status === 'CALCULATED' && report?.details && <AssetMatrixTable details={report.details} />}
                 
-                {/* Placeholder for the risk category summary cards (e.g., STRUCTURE, SYSTEMS) */}
+                {/* --- Risk Category Summary Cards (Phase 3.3 Implemented) --- */}
                 <div className="grid gap-4 md:grid-cols-3">
-                    <Card>
-                        <CardHeader><CardTitle className="text-lg">Structural Risk</CardTitle></CardHeader>
-                        <CardContent>Summary Card Content (P3.3)</CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader><CardTitle className="text-lg">Systems Risk</CardTitle></CardHeader>
-                        <CardContent>Summary Card Content (P3.3)</CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader><CardTitle className="text-lg">Safety Gaps</CardTitle></CardHeader>
-                        <CardContent>Summary Card Content (P3.3)</CardContent>
-                    </Card>
+                    {report && report.details.length > 0 ? (
+                        <React.Fragment>
+                            <RiskCategorySummaryCard 
+                                category={'STRUCTURE'} 
+                                details={report.details} 
+                                riskIcon={Home}
+                            />
+                            <RiskCategorySummaryCard 
+                                category={'SYSTEMS'} 
+                                details={report.details} 
+                                riskIcon={Zap}
+                            />
+                            <RiskCategorySummaryCard 
+                                category={'SAFETY'} 
+                                details={report.details} 
+                                riskIcon={Siren}
+                            />
+                        </React.Fragment>
+                    ) : (
+                        <Card className="md:col-span-3">
+                            <CardHeader><CardTitle>No Detailed Risk Data</CardTitle></CardHeader>
+                            <CardContent><CardDescription>Update your property details to generate component risk summaries.</CardDescription></CardContent>
+                        </Card>
+                    )}
                 </div>
             </div>
             
