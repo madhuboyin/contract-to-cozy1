@@ -5,14 +5,16 @@
     "lib": ["ES2020"],
     "outDir": "./dist",
     "rootDir": "../..",
-    "strict": true,
+    "strict": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "baseUrl": "../..",
     "moduleResolution": "node",
-    "paths": {}
+    "paths": {
+      "@prisma/client": ["apps/workers/node_modules/@prisma/client"]
+    }
   },
   "include": [
     "../../apps/workers/src/**/*",

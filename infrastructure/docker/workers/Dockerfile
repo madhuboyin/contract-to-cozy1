@@ -58,16 +58,8 @@ COPY apps/workers/tsconfig.docker.json ./tsconfig.json
 # Install TypeScript and types for compilation
 RUN npm install --save-dev typescript @types/node @types/node-cron
 
-# Debug: Verify files exist
-RUN echo "=== Checking file structure ===" && \
-    ls -la ../../backend/src/utils/ && \
-    ls -la ../../backend/src/config/ && \
-    echo "=== Current directory ===" && \
-    pwd && \
-    echo "=== tsconfig.json ===" && \
-    cat tsconfig.json
-
 # Compile TypeScript to JavaScript
+# tsconfig now has paths mapping for @prisma/client and strict: false
 RUN npx tsc
 
 # Remove dev dependencies after compilation
