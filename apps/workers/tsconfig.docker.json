@@ -17,7 +17,7 @@
     }
   },
   "include": [
-    "../../apps/workers/src/**/*",
+    "src/**/*",
     "../../backend/src/utils/riskCalculator.util.ts",
     "../../backend/src/config/risk-constants.ts"
   ],
