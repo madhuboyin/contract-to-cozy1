@@ -1,81 +1,57 @@
-# Workers Dockerfile - Background Jobs
-# Multi-stage build optimized for Raspberry Pi (ARM64)
+# infrastructure/docker/workers/Dockerfile
+# Multi-stage build for Contract-to-Cozy Workers
 
-# Stage 1: Dependencies
-FROM node:20-alpine AS deps
+# ============================================================================
+# Stage 1: Builder - Install dependencies and generate Prisma client
+# ============================================================================
+FROM node:20-alpine AS builder
+
 WORKDIR /app
 
-# Install build dependencies for native modules
-RUN apk add --no-cache python3 make g++
+# Install OpenSSL for Prisma
+RUN apk add --no-cache openssl
 
-# FIX: Explicitly copy worker's package files from the monorepo root context
-COPY apps/workers/package.json ./
-COPY apps/workers/package-lock.json ./
+# Copy package files
+COPY apps/workers/package*.json ./apps/workers/
+COPY apps/backend/package*.json ./apps/backend/
+COPY apps/backend/prisma ./apps/backend/prisma
 
-# Install production dependencies
-# Added --no-audit to prevent potential network/speed issues in limited environments
-RUN npm ci --only=production --no-audit && \
-    npm cache clean --force
+# Install dependencies
+WORKDIR /app/apps/workers
+RUN npm ci
 
-# Stage 2: Builder (Starts after WORKDIR /app and runs before RUN npm run build)
+# Generate Prisma client (from backend schema)
+WORKDIR /app/apps/backend
+RUN npm ci
+RUN npx prisma generate
 
-# 1. Copy worker app setup files (package/tsconfig)
-COPY apps/workers/package.json ./
-COPY apps/workers/package-lock.json ./
-COPY apps/workers/tsconfig.json ./tsconfig.json
+# ============================================================================
+# Stage 2: Production - Copy only necessary files
+# ============================================================================
+FROM node:20-alpine
 
-# Install all dependencies (This relies on the above files existing)
-RUN npm ci --no-audit
-
-# 2. Copy worker source code
-# This copies apps/workers/src/* to /app/src (needed for worker.ts).
-COPY apps/workers/src/ ./src 
-
-# 3. CRITICAL FIX: Copy the ENTIRE backend source directory (src)
-# This places all services, config, and utility files into /app/backend/src, 
-# which is required to resolve the '../../backend/src/...' imports in worker.ts.
-COPY apps/backend/src/ ./backend/src/
-
-# 4. Copy the schema required for Prisma client generation
-COPY apps/backend/prisma/schema.prisma ./prisma/schema.prisma
-
-RUN npx prisma generate --schema=./prisma/schema.prisma
-RUN npm run build
-
-# Stage 3: Runner
-FROM node:20-alpine AS runner
 WORKDIR /app
 
-ENV NODE_ENV=production
+# Install OpenSSL for Prisma runtime
+RUN apk add --no-cache openssl
 
-# Install runtime dependencies
-RUN apk add --no-cache \
-    postgresql-client \
-    curl
+# Copy package files and install production dependencies
+COPY apps/workers/package*.json ./
+RUN npm ci --only=production
 
-# Create non-root user
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nodejs
-
-# Copy dependencies from deps stage
-COPY --from=deps /app/node_modules ./node_modules
+# Copy workers source code
+COPY apps/workers/src ./src
+COPY apps/workers/tsconfig.json ./
 
 # Copy generated Prisma client from builder
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/apps/backend/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/apps/backend/node_modules/@prisma ./node_modules/@prisma
 
-# Copy built application from builder
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package*.json ./
+# Install TypeScript for running ts-node
+RUN npm install -g typescript ts-node
 
-# Set correct permissions
-RUN chown -R nodejs:nodejs /app
+# Set environment
+ENV NODE_ENV=production
 
-USER nodejs
-
-EXPOSE 9090
-
-HEALTHCHECK --interval=60s --timeout=3s --start-period=60s --retries=3 \
- CMD pgrep -f "node dist/worker.js" || exit 1
-
-CMD ["node", "dist/worker.js"]
+# Run the worker
+CMD ["ts-node", "src/worker.ts"]
