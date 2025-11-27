@@ -39,6 +39,10 @@ RUN apk add --no-cache openssl
 COPY apps/workers/package*.json ./
 RUN npm ci --only=production
 
+# Copy generated Prisma client from builder FIRST
+COPY --from=builder /app/apps/backend/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/apps/backend/node_modules/@prisma ./node_modules/@prisma
+
 # Copy workers source and config
 COPY apps/workers/src ./src
 COPY apps/workers/tsconfig.json ./
@@ -46,12 +50,8 @@ COPY apps/workers/tsconfig.json ./
 # Install TypeScript and types for compilation only
 RUN npm install --save-dev typescript @types/node @types/node-cron
 
-# Compile TypeScript to JavaScript
+# Compile TypeScript to JavaScript (Prisma client is now available)
 RUN npx tsc
-
-# Copy generated Prisma client from builder
-COPY --from=builder /app/apps/backend/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/apps/backend/node_modules/@prisma ./node_modules/@prisma
 
 # Remove dev dependencies after compilation
 RUN npm prune --production
