@@ -947,85 +947,56 @@ class APIClient {
       return this.request<{ documents: Document[] }>('/api/home-management/documents');
   }
 
-  // ==========================================================================
-  // NEW RISK ASSESSMENT ENDPOINTS 
-  // ==========================================================================
 
   /**
    * Fetches the full risk assessment report, queuing a new calculation if stale.
    * @returns The RiskAssessmentReport object or the string 'QUEUED'.
+   * 
+   * NOTE: This endpoint bypasses this.request() because the backend returns
+   * the raw data directly, not wrapped in {success: true, data: ...}
    */
   async getRiskReportSummary(propertyId: string): Promise<RiskAssessmentReport | 'QUEUED'> {
-    // The backend endpoint returns the RiskAssessmentReport object OR the string 'QUEUED'
-    const response = await this.request<RiskAssessmentReport | 'QUEUED'>(`/api/risk/report/${propertyId}`);
-
-    // FIX: Explicitly check for success to narrow the type and safely access 'data'.
-    if (!response.success) {
-      throw new APIError(response.message || 'Risk report request failed unexpectedly.', 500);
-    }
+    const token = this.getToken();
     
-    // Now, response.data is either RiskAssessmentReport or 'QUEUED' (string).
+    if (!token) {
+      throw new APIError("Authentication required.", 401);
+    }
+
+    // Direct fetch to bypass the request() wrapper
+    const response = await fetch(`${this.baseURL}/api/risk/report/${propertyId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Request failed' }));
+      throw new APIError(errorData.message || 'Risk report request failed.', response.status);
+    }
+
+    const data = await response.json();
     
-    // Check if the payload inside 'data' is the 'QUEUED' string (backend service contract)
-    if (typeof response.data === 'string' && response.data === 'QUEUED') {
-        return 'QUEUED';
+    // Check if backend returned 'QUEUED' string
+    if (typeof data === 'string' && data === 'QUEUED') {
+      return 'QUEUED';
     }
 
-    // If we reach here, response.data is the RiskAssessmentReport object.
-    const rawReport = response.data;
+    // Backend returns raw RiskAssessmentReport object
+    const rawReport = data;
 
-    // FIX: Properly handle the 'details' field which comes from Prisma's JSON type
-    // The database stores it as JSON, and it needs explicit parsing/validation
-    let parsedDetails: AssetRiskDetail[] = [];
-
-    if (rawReport.details) {
-        // Case 1: Already an array (ideal scenario)
-        if (Array.isArray(rawReport.details)) {
-            parsedDetails = rawReport.details as AssetRiskDetail[];
-            console.log('API DEBUG: Details is already an array with', parsedDetails.length, 'items');
-        } 
-        // Case 2: JSON string that needs parsing
-        else if (typeof rawReport.details === 'string') {
-            try {
-                const parsed = JSON.parse(rawReport.details);
-                parsedDetails = Array.isArray(parsed) ? parsed : [];
-                console.log('API DEBUG: Parsed details from JSON string, found', parsedDetails.length, 'items');
-            } catch (error) {
-                console.error('API ERROR: Failed to parse details JSON string:', error);
-                parsedDetails = [];
-            }
-        }
-        // Case 3: Object that might be the parsed JSON (edge case)
-        else if (typeof rawReport.details === 'object') {
-            console.warn('API WARNING: Details is an object but not an array. Defaulting to empty array.');
-            parsedDetails = [];
-        }
-    } else {
-        console.log('API DEBUG: No details field present in raw report');
-    }
-
-    console.log('API DEBUG: Final processed details array length:', parsedDetails.length);
-
-    // ============================================================================
-    // ALSO CHANGE THIS LINE in the processedReport object:
-    // FROM: details: rawReport.details as AssetRiskDetail[],
-    // TO:   details: parsedDetails,
-    // ============================================================================
-
-
-    // We must ensure the decimal fields are converted to numbers for the frontend interface.
+    // Process the report - convert decimal fields to numbers
     const processedReport: RiskAssessmentReport = {
-        // ... (spread the other properties if they match exactly)
-        id: rawReport.id,
-        propertyId: rawReport.propertyId,
-        riskScore: rawReport.riskScore,
-        financialExposureTotal: parseFloat(rawReport.financialExposureTotal as unknown as string), 
-        lastCalculatedAt: rawReport.lastCalculatedAt,
-        createdAt: rawReport.createdAt,
-        updatedAt: rawReport.updatedAt,
-        // The 'details' array is already parsed/available from the backend
-        //details: rawReport.details as AssetRiskDetail[], 
-        details: parsedDetails,
+      id: rawReport.id,
+      propertyId: rawReport.propertyId,
+      riskScore: rawReport.riskScore,
+      financialExposureTotal: parseFloat(rawReport.financialExposureTotal as unknown as string), 
+      lastCalculatedAt: rawReport.lastCalculatedAt,
+      createdAt: rawReport.createdAt,
+      updatedAt: rawReport.updatedAt,
+      // The 'details' array should already be parsed from JSON by the backend
+      details: rawReport.details as AssetRiskDetail[], 
     };
 
     return processedReport;
