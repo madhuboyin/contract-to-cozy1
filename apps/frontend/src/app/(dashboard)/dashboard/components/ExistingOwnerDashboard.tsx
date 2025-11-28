@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link'; 
-// FIX: Import ChecklistItem and ScoredProperty from '@/types' (canonical location)
 import { Booking, Property, ChecklistItem, ScoredProperty } from '@/types'; 
 import { UpcomingBookingsCard } from './UpcomingBookingsCard';
 import { RecurringMaintenanceCard } from './RecurringMaintenanceCard';
@@ -56,8 +55,16 @@ export const ExistingOwnerDashboard = ({
   
   // 1. Filter checklist items by selected property
   const propertyChecklistItems = selectedPropertyId
-    // FIX: Explicitly type 'item' as ChecklistItem
-    ? checklistItems.filter((item: ChecklistItem) => item.propertyId === selectedPropertyId)
+    ? checklistItems.filter((item: ChecklistItem) => {
+        // --- FIX: Add logic to handle items with null propertyId for single-property users ---
+        const belongsToSelectedProperty = item.propertyId === selectedPropertyId;
+        
+        // This handles legacy data: if a user has only ONE property AND the item has no ID, assume it belongs.
+        const isLegacyItem = item.propertyId === null && !isMultiProperty && selectedPropertyId === defaultProperty?.id;
+
+        return belongsToSelectedProperty || isLegacyItem;
+        // -------------------------------------------------------------------------------------
+    })
     : [];
   
   // 2. Filter for active (PENDING) tasks for the selected property
