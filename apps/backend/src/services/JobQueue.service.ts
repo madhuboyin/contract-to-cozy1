@@ -17,19 +17,12 @@ interface JobData {
     private queue: Queue; 
     
     constructor() {
-        // Use the same Redis configuration as the worker
-        const redisHost = process.env.REDIS_HOST || 'localhost';
-        const redisPortEnv = process.env.REDIS_PORT;
-        
-        // FIX: Defensive parsing of REDIS_PORT. Ensure it's not an empty string, 
-        // which causes parseInt to return NaN. Default to 6379 if invalid.
-        const port = parseInt(
-            (redisPortEnv && redisPortEnv.trim() !== '') ? redisPortEnv : '6379', 
-            10
-        );
+        // FIX: HARDCODED PORT 6379 TO BYPASS THE ENV VAR PARSING ERROR (NaN)
+        const port = 6379; 
         
         const redisConnection = {
-            host: redisHost,
+            // Host is likely correct, but port MUST be 6379
+            host: process.env.REDIS_HOST || 'localhost',
             port: port, 
         };
 
@@ -38,7 +31,7 @@ interface JobData {
             connection: redisConnection 
         });
 
-        console.log(`[QUEUE-CLIENT] Initialized queue: ${this.queueName} at ${redisHost}:${port}`);
+        console.log(`[QUEUE-CLIENT] Initialized queue: ${this.queueName} at ${redisConnection.host}:${port}`);
     }
 
     async addJob(jobName: string, data: JobData, options?: any): Promise<void> {

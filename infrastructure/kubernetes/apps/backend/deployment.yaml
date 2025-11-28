@@ -64,7 +64,7 @@ spec:
               memory: "800Mi"
             limits:
               cpu: "1000m"
-              memory: "1.2Gi"
+              memory: "1228Mi"
           livenessProbe:
             httpGet:
               path: /api/health
