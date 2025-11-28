@@ -19,20 +19,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import React from "react";
 import { useAuth } from "@/lib/auth/AuthContext"; 
 
-// --- Types for Query Data ---
+// --- Types for Query Data (Simplified for Robustness) ---
 type RiskReportFull = RiskAssessmentReport; 
-
-interface QueuedData {
-    status: 'QUEUED';
-    report?: RiskReportFull;
-}
-
-interface CalculatedData {
-    status: 'CALCULATED';
-    report: RiskReportFull;
-}
-
-type RiskQueryData = QueuedData | CalculatedData;
+// The API returns either the raw report object (RiskReportFull) or the string 'QUEUED'
+type RiskQueryData = RiskReportFull | 'QUEUED'; 
 
 // --- Helper Functions ---
 const formatCurrency = (amount: number) => new Intl.NumberFormat('en-US', {
@@ -50,7 +40,7 @@ const getRiskDetails = (score: number) => {
 };
 
 
-// --- Component for Phase 3.3: Risk Category Summary Card (omitted for brevity) ---
+// --- Component for Phase 3.3: Risk Category Summary Card ---
 const RiskCategorySummaryCard = ({ 
     category, 
     details, 
@@ -123,7 +113,7 @@ const RiskCategorySummaryCard = ({
     );
 }
 
-// --- Component for Phase 3.2: Detailed Asset Matrix Table (omitted for brevity) ---
+// --- Component for Phase 3.2: Detailed Asset Matrix Table ---
 const AssetMatrixTable = ({ details }: { details: AssetRiskDetail[] }) => {
     const getRiskBadge = (level: AssetRiskDetail['riskLevel']) => {
         if (level === 'LOW') return <Badge variant="secondary" className="bg-green-500/20 text-green-700 hover:bg-green-500/30 border-green-500">Low</Badge>;
@@ -213,13 +203,14 @@ export default function RiskAssessmentPage() {
             const result = await api.getRiskReportSummary(propertyId); 
 
             if (result === 'QUEUED') {
-                return { status: 'QUEUED' } as QueuedData;
+                return 'QUEUED' as RiskQueryData;
             }
             
             // The API returns the raw report object, which is passed as 'result'
-            return { status: 'CALCULATED', report: result as RiskReportFull } as CalculatedData;
+            return result as RiskReportFull;
         },
-        refetchInterval: (query) => (query.state.data?.status === 'QUEUED' ? 5000 : false), 
+        // The result of the queryFn is either RiskReportFull or 'QUEUED'
+        refetchInterval: (query) => (query.state.data === 'QUEUED' ? 5000 : false), 
         enabled: !!propertyId,
     });
 
@@ -227,19 +218,19 @@ export default function RiskAssessmentPage() {
     const riskQueryPayload = riskQuery.data; 
     
     // Determine the status and safely extract the report object
-    let currentStatus: string = (riskQueryPayload as any)?.status;
+    let currentStatus: 'QUEUED' | 'CALCULATED' | undefined = undefined;
     let report: RiskReportFull | undefined;
 
-    // 1. Check for the correctly wrapped object
-    if (currentStatus === 'CALCULATED') {
-        report = (riskQueryPayload as CalculatedData).report;
-    } 
-    
-    // 2. Fallback Fix: If the API returns the raw report object directly (the observed bug).
-    // This resolves the issue where 'Report Data: undefined' was logged.
-    if (!report && typeof riskQueryPayload === 'object' && riskQueryPayload !== null && 'id' in riskQueryPayload) {
-        report = riskQueryPayload as unknown as RiskReportFull; 
-        currentStatus = 'CALCULATED'; 
+    // FIX: Simplified the assignment logic to correctly handle the two possible return values: 'QUEUED' or RiskReportFull object.
+    if (riskQueryPayload === 'QUEUED') {
+        currentStatus = 'QUEUED';
+    } else if (typeof riskQueryPayload === 'object' && riskQueryPayload !== null && 'id' in riskQueryPayload) {
+        // This handles the successful return of the raw RiskAssessmentReport object.
+        report = riskQueryPayload as RiskReportFull; 
+        currentStatus = 'CALCULATED';
+    } else {
+        // Handle initial undefined state or other unhandled types
+        currentStatus = undefined;
     }
     
     const isQueued = currentStatus === 'QUEUED';
@@ -260,7 +251,12 @@ export default function RiskAssessmentPage() {
     const score = report?.riskScore || 0;
     const { level, color, progressClass } = getRiskDetails(score);
 
-    const exposure = report?.financialExposureTotal || 0;
+    // FIX: Ensure financialExposureTotal is parsed as a number from the string API returns
+    const exposureString = report?.financialExposureTotal;
+    const exposure = (exposureString && typeof exposureString === 'string') 
+        ? parseFloat(exposureString) 
+        : (typeof exposureString === 'number' ? exposureString : 0);
+    
     const formattedExposure = formatCurrency(exposure);
     const riskProgressValue = 100 - score;
 
