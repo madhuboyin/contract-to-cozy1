@@ -1,7 +1,7 @@
 // apps/backend/src/services/JobQueue.service.ts
 
-import { Queue } from 'bullmq'; // Import BullMQ Queue
-import * as dotenv from 'dotenv'; // For reading Redis config
+import { Queue } from 'bullmq'; 
+import * as dotenv from 'dotenv'; 
 dotenv.config();
 
 interface JobData {
@@ -14,34 +14,41 @@ interface JobData {
    */
   class JobQueueService {
     private queueName = 'main-background-queue';
-    private queue: Queue; // Instance of BullMQ Queue
+    private queue: Queue; 
     
     constructor() {
         // Use the same Redis configuration as the worker
-        const redisConnection = {
-            host: process.env.REDIS_HOST || 'localhost',
-            port: parseInt(process.env.REDIS_PORT || '6379', 10),
-        };
+        const redisHost = process.env.REDIS_HOST || 'localhost';
+        const redisPortEnv = process.env.REDIS_PORT;
         
+        // FIX: Defensive parsing of REDIS_PORT. Ensure it's not an empty string, 
+        // which causes parseInt to return NaN. Default to 6379 if invalid.
+        const port = parseInt(
+            (redisPortEnv && redisPortEnv.trim() !== '') ? redisPortEnv : '6379', 
+            10
+        );
+        
+        const redisConnection = {
+            host: redisHost,
+            port: port, 
+        };
+
         // Initialize the queue connection
         this.queue = new Queue(this.queueName, { 
             connection: redisConnection 
         });
 
-        console.log(`[QUEUE-CLIENT] Initialized queue: ${this.queueName}`);
+        console.log(`[QUEUE-CLIENT] Initialized queue: ${this.queueName} at ${redisHost}:${port}`);
     }
 
     async addJob(jobName: string, data: JobData, options?: any): Promise<void> {
       console.log(`[QUEUE] Job added: ${jobName} for Property ID: ${data.propertyId}`);
       
-      // FIX: Actual queuing logic using BullMQ's queue.add()
       await this.queue.add(
-          jobName, // Job name (e.g., 'calculate_risk')
-          data,    // Job data (e.g., { propertyId })
+          jobName, 
+          data,    
           { 
               ...options, 
-              // Set job options here, like retry logic, which were mistakenly 
-              // placed on the worker earlier.
               attempts: 3, 
               backoff: {
                   type: 'exponential',
@@ -50,7 +57,6 @@ interface JobData {
           }
       );
       
-      // Return void as specified by the method signature
       return; 
     }
   }
