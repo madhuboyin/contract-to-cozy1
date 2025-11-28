@@ -1003,7 +1003,23 @@ class APIClient {
   }
   
   // ==========================================================================
-  // [NEW METHOD] Fetch the lightweight risk summary for the dashboard
+  // [NEW METHOD] Fetch the lightweight risk summary for the dashboard by property ID
+  // ==========================================================================
+  async getRiskSummary(propertyId: string): Promise<PrimaryRiskSummary | null> {
+    const response = await this.request<PrimaryRiskSummary>(`/api/risk/summary/${propertyId}`);
+
+    if (response.success && response.data) {
+        const processedData: PrimaryRiskSummary = {
+            ...response.data,
+            financialExposureTotal: parseFloat(response.data.financialExposureTotal.toString()),
+        };
+        return processedData;
+    }
+    return null;
+  }
+  
+  // ==========================================================================
+  // [ORIGINAL METHOD] Fetch the lightweight risk summary for the primary property
   // ==========================================================================
   async getPrimaryRiskSummary(): Promise<PrimaryRiskSummary | null> {
     // Uses the request helper since the new endpoint returns the standard { success: true, data: ... } wrapper

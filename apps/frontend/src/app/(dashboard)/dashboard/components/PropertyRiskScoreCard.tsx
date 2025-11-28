@@ -4,7 +4,6 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-// ADDED ArrowRight for the explicit "View Risk Report" link in the final state
 import { Zap, Loader2, DollarSign, AlertTriangle, Shield, Home, ArrowRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,26 +24,35 @@ const formatCurrency = (amount: number) => new Intl.NumberFormat('en-US', {
 // Helper to determine risk colors. Mapped to available Badge variants.
 const getRiskDetails = (score: number) => {
     // 100 is the best score (low risk)
-    // CRITICAL FIX: Replaced "warning" with "secondary" to match allowed Badge variants.
     if (score >= 80) return { level: "LOW", color: "text-green-500", badgeVariant: "success" as const };
-    if (score >= 60) return { level: "MODERATE", color: "text-yellow-500", badgeVariant: "secondary" as const }; // Using 'secondary'
-    if (score >= 40) return { level: "ELEVATED", color: "text-orange-500", badgeVariant: "secondary" as const }; // Using 'secondary'
+    if (score >= 60) return { level: "MODERATE", color: "text-yellow-500", badgeVariant: "secondary" as const };
+    if (score >= 40) return { level: "ELEVATED", color: "text-orange-500", badgeVariant: "secondary" as const };
     return { level: "HIGH", color: "text-red-500", badgeVariant: "destructive" as const };
 };
 
+// --- START FIX: Update Props Interface ---
+interface PropertyRiskScoreCardProps {
+    propertyId: string; // Accepts the ID of the property to monitor
+}
+// --- END FIX: Update Props Interface ---
+
+
 /**
- * Self-fetching component to display the Risk Assessment summary on the main dashboard.
+ * Self-fetching component to display the Risk Assessment summary on the dashboard
+ * for a specific property.
  */
-export function PropertyRiskScoreCard() {
+// --- START FIX: Update Function Signature and use propertyId ---
+export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps) {
     const riskQuery = useQuery<PrimaryRiskSummary | null>({
-        queryKey: ["primaryRiskSummary"],
+        // FIX: Update query key to be dependent on propertyId
+        queryKey: ["riskSummary", propertyId],
         queryFn: async () => {
             try {
-                // Fetch data from the new lightweight endpoint
-                const result = await api.getPrimaryRiskSummary();
+                // FIX: Use the new API method to fetch risk summary by ID
+                const result = await api.getRiskSummary(propertyId);
                 return result;
             } catch (error) {
-                console.error("Failed to fetch primary risk summary:", error);
+                console.error("Failed to fetch risk summary for property:", propertyId, error);
                 return null;
             }
         },
@@ -52,34 +60,26 @@ export function PropertyRiskScoreCard() {
         refetchInterval: (query) => (query.state.data?.status === 'QUEUED' ? 5000 : false),
         staleTime: 60 * 1000, // 1 minute stale time for dashboard
         gcTime: 10 * 60 * 1000,
+        // FIX: Only enable if a propertyId is provided
+        enabled: !!propertyId,
     });
+    // --- END FIX: Update Function Signature and use propertyId ---
     
-    const summary = riskQuery.data;
-    const isInitialLoading = riskQuery.isLoading && !summary;
+    // Fallback if data is null (API error or not found)
+    const summary = riskQuery.data || { propertyId: propertyId, propertyName: 'Property', riskScore: 0, financialExposureTotal: 0, lastCalculatedAt: null, status: 'MISSING_DATA' };
+    
+    const isInitialLoading = riskQuery.isLoading && !summary.lastCalculatedAt; // Use a better check for initial loading
     const isFetching = riskQuery.isFetching;
 
-    // --- State 1: No Property Found ---
-    if (summary?.status === 'NO_PROPERTY') {
-        return (
-            <Card className="hover:shadow-lg transition-shadow border-dashed border-2">
-                <CardHeader>
-                    <CardTitle className="flex items-center text-sm font-medium text-gray-500">
-                        <Home className="h-4 w-4 mr-2" /> Risk Assessment
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <p className="text-xl font-semibold mb-2">No Primary Property</p>
-                    <p className="text-sm text-muted-foreground mb-4">You need to add a home to start calculating risk.</p>
-                    <Link href="/dashboard/properties/new" passHref>
-                        <Button size="sm" className="w-full">Add Your First Property</Button>
-                    </Link>
-                </CardContent>
-            </Card>
-        );
-    }
+    // Default values
+    const riskScore = summary.riskScore || 0;
+    const exposure = summary.financialExposureTotal || 0;
+    const { level, color, badgeVariant } = getRiskDetails(riskScore);
+    // Use the propertyId passed to the component
+    const reportLink = `/dashboard/properties/${propertyId}/risk-assessment`; 
 
     // --- State 2: Loading / Initial Fetch Error ---
-    if (isInitialLoading) {
+    if (isInitialLoading) { 
         return (
             <Card className="animate-pulse">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -96,14 +96,8 @@ export function PropertyRiskScoreCard() {
         );
     }
     
-    // Default values
-    const riskScore = summary?.riskScore || 0;
-    const exposure = summary?.financialExposureTotal || 0;
-    const { level, color, badgeVariant } = getRiskDetails(riskScore);
-    const reportLink = summary?.propertyId ? `/dashboard/properties/${summary.propertyId}/risk-assessment` : '/dashboard/properties';
-
     // --- State 3: Missing Data or Queued ---
-    if (summary?.status === 'QUEUED') {
+    if (summary.status === 'QUEUED') {
         const displayStatus = isFetching ? 'Calculating...' : 'Queued';
         const displayMessage = isFetching 
             ? 'Report calculation in progress. Refreshing soon...'
@@ -137,7 +131,7 @@ export function PropertyRiskScoreCard() {
     }
     
     // Fallback for MISSING_DATA (0 score) - Treat as a warning/setup reminder
-    if (riskScore === 0 && summary?.propertyId) {
+    if (summary.status === 'MISSING_DATA') {
         return (
             <Card className="hover:shadow-lg transition-shadow border-2 border-yellow-500/50">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -145,7 +139,6 @@ export function PropertyRiskScoreCard() {
                         <AlertTriangle className="h-4 w-4 mr-2 text-yellow-500" />
                         Risk Data Incomplete
                     </CardTitle>
-                    {/* CRITICAL FIX: Replaced "warning" with "secondary" */}
                     <Badge variant="secondary">Setup</Badge>
                 </CardHeader>
                 <CardContent>
@@ -166,11 +159,10 @@ export function PropertyRiskScoreCard() {
 
     // --- State 4: Calculated Report (The happy path) ---
     return (
-        // REMOVED: Link wrapper around the entire card.
-        <Card className="hover:shadow-lg transition-shadow">
+        <Card className="hover:shadow-lg transition-shadow"> 
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                    Risk Score: {summary?.propertyName || 'Primary Home'}
+                    Risk Score: {summary.propertyName || 'Property'}
                 </CardTitle>
                 <Zap className={`h-4 w-4 ${color}`} />
             </CardHeader>
@@ -186,7 +178,7 @@ export function PropertyRiskScoreCard() {
                 <div className="mt-3">
                     <Badge variant={badgeVariant as any}>{level}</Badge>
                     <span className="text-xs text-muted-foreground ml-2">
-                        Updated {new Date(summary?.lastCalculatedAt as string || '').toLocaleDateString()}
+                        Updated {new Date(summary.lastCalculatedAt as string || '').toLocaleDateString()}
                     </span>
                 </div>
                 {/* ADDED: Explicit link for the happy path */}
