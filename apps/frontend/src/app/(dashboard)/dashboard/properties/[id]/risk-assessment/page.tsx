@@ -214,8 +214,11 @@ export default function RiskAssessmentPage() {
         enabled: !!propertyId,
     });
 
-    // --- Data Extraction and Status Determination (FINAL FIX) ---
+    // --- Data Extraction and Status Determination (COMPREHENSIVE DEBUG FIX) ---
     const riskQueryPayload = riskQuery.data; 
+    
+    console.log('🔍 COMPONENT: riskQueryPayload =', riskQueryPayload);
+    console.log('🔍 COMPONENT: typeof riskQueryPayload =', typeof riskQueryPayload);
     
     // Determine the status and safely extract the report object
     let currentStatus: 'QUEUED' | 'CALCULATED' | undefined = undefined;
@@ -224,14 +227,60 @@ export default function RiskAssessmentPage() {
     // FIX: Simplified the assignment logic to correctly handle the two possible return values: 'QUEUED' or RiskReportFull object.
     if (riskQueryPayload === 'QUEUED') {
         currentStatus = 'QUEUED';
+        console.log('🔍 COMPONENT: Status is QUEUED');
     } else if (typeof riskQueryPayload === 'object' && riskQueryPayload !== null && 'id' in riskQueryPayload) {
         // This handles the successful return of the raw RiskAssessmentReport object.
         report = riskQueryPayload as RiskReportFull; 
         currentStatus = 'CALCULATED';
+        
+        console.log('🔍 COMPONENT: Status is CALCULATED, report =', report);
+        
+        // CRITICAL: Validate and fix the details array
+        if (report && report.details) {
+            console.log('🔍 COMPONENT: report.details exists');
+            console.log('🔍 COMPONENT: typeof report.details =', typeof report.details);
+            console.log('🔍 COMPONENT: Array.isArray(report.details) =', Array.isArray(report.details));
+            
+            if (Array.isArray(report.details)) {
+                console.log('✅ COMPONENT: details is array, length =', report.details.length);
+                if (report.details.length > 0) {
+                    console.log('✅ COMPONENT: First item =', report.details[0]);
+                }
+            } else {
+                console.warn('⚠️ COMPONENT: details is NOT an array, attempting conversion...');
+                
+                // Try to convert from object to array
+                if (typeof report.details === 'object' && report.details !== null) {
+                    const detailsArray = Object.values(report.details);
+                    if (Array.isArray(detailsArray) && detailsArray.length > 0) {
+                        report = { ...report, details: detailsArray as AssetRiskDetail[] };
+                        console.log('✅ COMPONENT: Converted object to array, new length =', report.details.length);
+                    }
+                }
+                // Try to parse from string
+                else if (typeof report.details === 'string') {
+                    try {
+                        const parsed = JSON.parse(report.details);
+                        if (Array.isArray(parsed)) {
+                            report = { ...report, details: parsed as AssetRiskDetail[] };
+                            console.log('✅ COMPONENT: Parsed string to array, new length =', report.details.length);
+                        }
+                    } catch (e) {
+                        console.error('❌ COMPONENT: Failed to parse details string:', e);
+                    }
+                }
+            }
+        } else {
+            console.log('⚠️ COMPONENT: No report.details field found');
+        }
     } else {
         // Handle initial undefined state or other unhandled types
         currentStatus = undefined;
+        console.log('🔍 COMPONENT: Status is undefined (initial load)');
     }
+    
+    console.log('🔍 COMPONENT: Final - currentStatus =', currentStatus, ', report =', report);
+    console.log('🔍 COMPONENT: Final - report?.details type =', report?.details ? (Array.isArray(report.details) ? 'array' : typeof report.details) : 'undefined');
     
     const isQueued = currentStatus === 'QUEUED';
     const isLoadingReport = riskQuery.isLoading;
