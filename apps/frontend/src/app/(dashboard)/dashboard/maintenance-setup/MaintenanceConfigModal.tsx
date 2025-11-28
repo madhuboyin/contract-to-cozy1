@@ -1,8 +1,8 @@
 // apps/frontend/src/app/(dashboard)/dashboard/maintenance-setup/MaintenanceConfigModal.tsx
-// --- FIXED FILE ---
+// --- UNIFIED MODAL FOR BOTH CREATION AND EDITING ---
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   MaintenanceTaskConfig,
   MaintenanceTaskTemplate,
@@ -37,11 +37,11 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { CalendarIcon, Home, Loader2 } from 'lucide-react'; // Added Home and Loader2
-import { format } from 'date-fns';
-import { api } from '@/lib/api/client'; // Import API client
+import { CalendarIcon, Home, Loader2 } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { api } from '@/lib/api/client'; 
 
-// Manually define options instead of using Object.values
+// Manually define options
 const frequencyOptions: RecurrenceFrequency[] = [
   RecurrenceFrequency.MONTHLY,
   RecurrenceFrequency.QUARTERLY,
@@ -49,77 +49,131 @@ const frequencyOptions: RecurrenceFrequency[] = [
   RecurrenceFrequency.ANNUALLY,
 ];
 
-// This array now EXACTLY matches your index.ts file
 const categoryOptions: ServiceCategory[] = [
-  'INSPECTION',
-  'HANDYMAN',
-  'PLUMBING',
-  'ELECTRICAL',
-  'HVAC',
-  'LANDSCAPING',
-  'CLEANING',
-  'MOVING',
-  'PEST_CONTROL',
-  'LOCKSMITH',
+  'INSPECTION', 'HANDYMAN', 'PLUMBING', 'ELECTRICAL', 'HVAC', 'LANDSCAPING', 
+  'CLEANING', 'MOVING', 'PEST_CONTROL', 'LOCKSMITH',
 ];
 
-// Helper to format the enum strings for display
-function formatEnumString(val: string) {
-  if (!val) return '';
-  return val.charAt(0) + val.slice(1).toLowerCase().replace(/_/g, ' ');
+function formatEnumString(val: string | null | undefined) {
+  if (!val) return 'N/A';
+  return val.toString().replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
 
-// === FIX: Updated Props Interface to match page.tsx requirements ===
+// === FIX: Unified Props Interface (All props optional except base Dialog controls) ===
 interface MaintenanceConfigModalProps {
+  // Base Dialog Props (Required)
   isOpen: boolean;
   onClose: () => void;
-  template: MaintenanceTaskTemplate | null;
-  
-  // NEW PROPS
-  onSuccess: (count: number) => void;
-  properties: Property[];
-  selectedPropertyId: string | undefined; // Now accepts undefined
-  onPropertyChange: (id: string) => void;
-  
-  // NOTE: Old props (existingConfig, onSave, onRemove) removed as they are obsolete in this flow
+
+  // --- Creation Flow Props (Only required by maintenance-setup/page.tsx) ---
+  template?: MaintenanceTaskTemplate | null; // The task template used for creation
+  onSuccess?: (count: number) => void;
+  properties?: Property[]; // Full list of properties
+  selectedPropertyId?: string; // Current selected property ID from parent state (Creation flow)
+  onPropertyChange?: (id: string) => void; // State setter for property ID
+
+  // --- Editing Flow Props (Only required by maintenance/page.tsx) ---
+  // NOTE: nextDueDate is a Date | null object in this flow
+  existingConfig?: (MaintenanceTaskConfig & { propertyId: string | null }) | null; // Existing task data
+  onSave?: (config: MaintenanceTaskConfig) => void; // Callback for saving edits
+  onRemove?: (taskId: string) => void; // Callback for removing task
 }
+// === END FIX ===
 
 export function MaintenanceConfigModal({
   template,
+  existingConfig,
   isOpen,
   onClose,
   onSuccess,
-  properties,
-  selectedPropertyId,
+  properties = [],
+  selectedPropertyId: propSelectedPropertyId,
   onPropertyChange,
+  onSave,
+  onRemove,
 }: MaintenanceConfigModalProps) {
-  // Form state
+  // Determine mode and source of initial data
+  const isEditing = !!existingConfig;
+  const isCreation = !!template && !isEditing;
+  const initialConfig = existingConfig || template;
+  
+  // State initialization
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState<string | null>(null);
   const [isRecurring, setIsRecurring] = useState(false);
   const [frequency, setFrequency] = useState<RecurrenceFrequency | null>(null);
   const [nextDueDate, setNextDueDate] = useState<Date | null>(null);
   const [category, setCategory] = useState<ServiceCategory | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false); // NEW STATE FOR SUBMISSION
-  const [serverError, setServerError] = useState<string | null>(null); // NEW STATE FOR ERRORS
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  
+  // Internal state for property ID management
+  const [internalPropertyId, setInternalPropertyId] = useState<string | null>(null);
 
-  // Populate state when template changes
+
+  // 1. Populate state when modal opens/config changes
   useEffect(() => {
-    if (template) {
-      setTitle(template.title);
-      setDescription(template.description || null);
-      setCategory((template.serviceCategory as ServiceCategory) || null);
+    if (initialConfig) {
+      setTitle(initialConfig.title);
+      setDescription(initialConfig.description || null);
+      setCategory((initialConfig.serviceCategory as ServiceCategory) || null);
+      
+      setServerError(null);
 
-      // Defaults for a new template
-      setIsRecurring(true); // Default to recurring
-      setFrequency(template.defaultFrequency as RecurrenceFrequency);
-      setNextDueDate(new Date()); // Default to today
+      // --- FIX START: Mode-specific initialization for recurrence and dates ---
+      if (isEditing) {
+        // Use properties from the existing configuration (ChecklistItem data)
+        const config = existingConfig!; // Guaranteed to be MaintenanceTaskConfig type
+        setInternalPropertyId(config.propertyId);
+        
+        // Recurrence
+        const rec = config.isRecurring;
+        setIsRecurring(rec);
+        setFrequency(rec ? (config.frequency as RecurrenceFrequency) : null);
+
+        // Date - Must handle both Date objects (from page state) and ISO strings (from API)
+        let initialDate: Date | null = null;
+        if (config.nextDueDate) {
+            if (config.nextDueDate instanceof Date) {
+                initialDate = config.nextDueDate;
+            } else {
+                // Assumes ISO string format from API (ChecklistItem/Editing flow)
+                initialDate = parseISO(config.nextDueDate);
+            }
+        }
+        setNextDueDate(initialDate);
+
+      } else if (isCreation) {
+        // Use properties from the template (Creation flow)
+        const temp = template!; // Guaranteed to be MaintenanceTaskTemplate type
+        setInternalPropertyId(propSelectedPropertyId || null);
+        
+        // Defaults for a new template
+        setIsRecurring(true);
+        setFrequency(temp.defaultFrequency as RecurrenceFrequency);
+        setNextDueDate(new Date()); // Default to today
+      }
+      // --- FIX END ---
     }
-  }, [template, isOpen]);
+  }, [template, existingConfig, isEditing, isCreation, propSelectedPropertyId, isOpen]);
+  
+  // Handle change in property selection
+  const handlePropertyChange = (id: string) => {
+    if (isCreation && onPropertyChange) {
+        onPropertyChange(id);
+    }
+    // Update internal state for both flows
+    setInternalPropertyId(id);
+  }
 
+  // 2. Handle Save/Submit Logic (Unified)
   const handleSubmit = async () => {
-    if (!template || !selectedPropertyId) {
-        setServerError("Please ensure a property is selected and a template is configured.");
+    // Determine the task ID and property ID based on mode
+    const idToUse = existingConfig?.templateId || template?.id;
+    const propertyIdToUse = existingConfig?.propertyId || propSelectedPropertyId || internalPropertyId;
+
+    if (!idToUse || !propertyIdToUse) {
+        setServerError("Cannot save: Missing task/template ID or property ID.");
         return;
     }
     if (isRecurring && !frequency) {
@@ -130,37 +184,62 @@ export function MaintenanceConfigModal({
         setServerError("Please select the next due date.");
         return;
     }
+    if (!onSave && !onSuccess) { // Safety check
+        setServerError("Modal configuration error: Missing save/success handler.");
+        return;
+    }
 
     setIsSubmitting(true);
     setServerError(null);
 
-    // 1. Construct MaintenanceTaskConfig DTO
-    const taskConfig: MaintenanceTaskConfig = {
-      templateId: template.id,
+    const config: MaintenanceTaskConfig = {
+      templateId: idToUse, // Used as item ID in editing, or template ID in creation
       title,
       description,
       isRecurring,
       frequency: isRecurring ? frequency : null,
-      nextDueDate: nextDueDate, // Date object is fine, API handles conversion
+      nextDueDate: nextDueDate,
       serviceCategory: category,
-      propertyId: selectedPropertyId, // CRITICAL: Use the prop
+      propertyId: propertyIdToUse, // CRITICAL: Ensure property ID is included
     };
 
     try {
-        const response = await api.createCustomMaintenanceItems({ tasks: [taskConfig] });
-        
-        if (response.success && response.data?.count) {
-          onSuccess(response.data.count); // Call success handler from parent
-        } else {
-          throw new Error(response.message || "Failed to create maintenance task.");
+        if (isEditing && onSave) {
+            // EDITING FLOW: Calls parent's onSave (triggers mutation in maintenance/page.tsx)
+            onSave(config);
+        } else if (isCreation && onSuccess) {
+            // CREATION FLOW: Handles API call internally 
+            const response = await api.createCustomMaintenanceItems({ tasks: [config] });
+            if (response.success && response.data?.count) {
+              onSuccess(response.data.count);
+            } else {
+              throw new Error(response.message || "Failed to create task.");
+            }
         }
+        // If creation/editing was successful, the parent is responsible for calling onClose/clearing state.
     } catch (e: any) {
         console.error("Maintenance task submission failed:", e);
         setServerError(e.message || "Failed to save task configuration. Please try again.");
     } finally {
-        setIsSubmitting(false);
+        // Only clear submitting state here if we are NOT in the creation flow managed by onSuccess
+        if (isEditing) { 
+            setIsSubmitting(false);
+        }
     }
   };
+
+
+  // 3. Handle Remove Logic (Editing Only)
+  const handleRemove = () => {
+    const idToRemove = existingConfig?.templateId;
+    if (idToRemove && onRemove) {
+        onRemove(idToRemove); // Call parent's onRemove handler (triggers deletion mutation)
+    }
+  };
+  
+
+  const isNew = isCreation; 
+  const currentProperty = properties.find(p => p.id === (internalPropertyId || propSelectedPropertyId));
 
 
   return (
@@ -168,23 +247,25 @@ export function MaintenanceConfigModal({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>
-            Configure Task: {template?.title}
+            {isNew ? 'Add Task' : 'Edit Task'}: {title}
           </DialogTitle>
           <DialogDescription>
-            Customize the details for this maintenance task.
+            {isNew ? 'Set the next due date and recurrence.' : 'Update task details and schedule.'}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-6 py-4">
 
-            {/* --- NEW: Property Selection Field --- */}
+            {/* --- Property Selection Field (Visible in both flows, but disabled in editing) --- */}
             <div className="grid gap-2">
                 <Label className="flex items-center gap-1">
                     <Home className="h-4 w-4" /> Property
                 </Label>
                 <Select 
-                    value={selectedPropertyId} 
-                    onValueChange={onPropertyChange}
-                    disabled={properties.length <= 1} // Disable if only one property exists
+                    // Use the property ID appropriate for the flow
+                    value={internalPropertyId || ''} 
+                    onValueChange={handlePropertyChange}
+                    // Disable selection if editing OR if only one property exists
+                    disabled={isEditing || properties.length <= 1} 
                 >
                     <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select a Property" />
@@ -198,10 +279,10 @@ export function MaintenanceConfigModal({
                     </SelectContent>
                 </Select>
                 <p className="text-sm text-gray-500">
-                    This task will be linked to the selected property.
+                    {currentProperty?.name || currentProperty?.address || 'No property selected.'}
                 </p>
             </div>
-            {/* --- END NEW: Property Selection Field --- */}
+            {/* --- End Property Selection Field --- */}
 
           {/* Title */}
           <div className="grid gap-2">
@@ -322,13 +403,18 @@ export function MaintenanceConfigModal({
             </p>
         )}
 
-        <DialogFooter className="sm:justify-end">
+        <DialogFooter className="sm:justify-between">
+          {/* Remove Button (Editing Only) */}
+          {!isNew && (
+            <Button variant="destructive" onClick={handleRemove} disabled={isSubmitting}>
+              Remove Task
+            </Button>
+          )}
           <div className="flex gap-2">
             <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>
-            {/* Call new handleSubmit function */}
-            <Button onClick={handleSubmit} disabled={isSubmitting || !selectedPropertyId}> 
+            <Button onClick={handleSubmit} disabled={isSubmitting || !title.trim()}>
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Save Task'}
             </Button>
           </div>

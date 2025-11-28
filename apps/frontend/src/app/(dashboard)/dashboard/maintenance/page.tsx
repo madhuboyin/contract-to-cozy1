@@ -17,6 +17,7 @@ import {
   RecurrenceFrequency,
   ServiceCategory,
   ChecklistItem, 
+  UpdateChecklistItemInput,
 } from '@/types';
 import {
   Table,
@@ -30,6 +31,11 @@ import {
 
 // Define the type for items fetched from the checklist endpoint
 interface DashboardChecklistItem extends ChecklistItem {}
+
+// Define the custom type needed for the existingConfig prop to resolve the propertyId conflict
+type EditingConfig = MaintenanceTaskConfig & {
+    propertyId: string | null;
+};
 
 // Categories to EXCLUDE (Renewals and Financial items)
 const RENEWAL_CATEGORIES: ServiceCategory[] = [
@@ -55,7 +61,7 @@ const formatDueDate = (dueDateString: string | null) => {
         return { text: `Overdue by ${Math.abs(days)} days`, color: 'text-red-600', isAlert: true };
     }
     if (days === 0) {
-        return { text: `Due Today`, color: 'text-red-600', isAlert: true };
+        return { text: 'Due Today', color: 'text-red-600', isAlert: true };
     }
     if (days <= 30) {
         return { text: `Due in ${days} days`, color: 'text-orange-600', isAlert: true };
@@ -132,16 +138,8 @@ export default function MaintenancePage() {
   };
   
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string, data: Partial<DashboardChecklistItem> }) => {
-      const updateData = {
-          title: data.title,
-          description: data.description,
-          isRecurring: data.isRecurring,
-          frequency: data.frequency,
-          nextDueDate: data.nextDueDate,
-          serviceCategory: data.serviceCategory,
-      }
-      const response = await api.updateChecklistItem(id, updateData); 
+    mutationFn: async ({ id, data }: { id: string, data: UpdateChecklistItemInput }) => {
+      const response = await api.updateChecklistItem(id, data); 
       if (!response.success) {
           throw new Error(response.error?.message || 'Failed to update item.');
       }
@@ -212,7 +210,8 @@ export default function MaintenancePage() {
   const handleSaveTaskUpdate = (config: MaintenanceTaskConfig) => {
     if (!editingTask) return;
 
-    const updateData: Partial<DashboardChecklistItem> = {
+    // Use the UpdateChecklistItemInput DTO
+    const updateData: UpdateChecklistItemInput = {
       title: config.title,
       description: config.description,
       isRecurring: config.isRecurring,
@@ -221,6 +220,7 @@ export default function MaintenancePage() {
         ? format(config.nextDueDate, 'yyyy-MM-dd') 
         : null,
       serviceCategory: config.serviceCategory,
+      // propertyId is NOT mutable via the checklist update DTO
     };
 
     updateMutation.mutate({ id: editingTask.id, data: updateData });
@@ -343,20 +343,23 @@ export default function MaintenancePage() {
         </div>
       )}
 
-      {/* --- MODAL FOR EDITING --- */}
+      {/* --- MODAL FOR EDITING (Now uses unified interface) --- */}
       <MaintenanceConfigModal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
-        template={null} 
-        existingConfig={editingTask ? {
+        template={null} // Editing doesn't use the template object
+        existingConfig={editingTask ? ({
+            // templateId is repurposed to hold the ChecklistItem ID for editing/removal
             templateId: editingTask.id, 
             title: editingTask.title,
             description: editingTask.description,
             isRecurring: editingTask.isRecurring,
-            frequency: editingTask.frequency as RecurrenceFrequency,
+            frequency: editingTask.frequency as RecurrenceFrequency | null,
             nextDueDate: editingTask.nextDueDate ? parseISO(editingTask.nextDueDate) : null,
-            serviceCategory: editingTask.serviceCategory as ServiceCategory,
-        } : null}
+            serviceCategory: editingTask.serviceCategory as ServiceCategory | null,
+            // Pass propertyId which is string | null
+            propertyId: editingTask.propertyId,
+        } as EditingConfig) : null} // Casting the object literal to the custom intersection type
         onSave={handleSaveTaskUpdate} 
         onRemove={() => handleRemoveTask(editingTask?.id || '')} 
       />
