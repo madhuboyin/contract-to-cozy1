@@ -53,30 +53,24 @@ export const ExistingOwnerDashboard = ({
       </div>
 
       {/* NEW LAYOUT IMPLEMENTATION - Use 4 columns on large screens to fit Risk, Health, and Bookings */}
-      {/* Use grid-rows-1/2 to try and make the first row match the second row's heights */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 auto-rows-fr">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         
         {/* ROW 1, Slot 1: Property Health Score */}
         {primaryProperty && (
-            <div className="md:col-span-1 h-full">
-                {/* h-full ensures the card takes max available height in the grid cell */}
+            <div className="md:col-span-1">
                 <PropertyHealthScoreCard property={primaryProperty} />
             </div>
         )}
         
         {/* [NEW ADDITION] ROW 1, Slot 2: Risk Score Card - Place next to Health Check */}
-        <div className="md:col-span-1 h-full">
-             <PropertyRiskScoreCard /> 
-        </div>
+        <PropertyRiskScoreCard /> 
         
-        {/* ROW 1, Slots 3 & 4: Upcoming Bookings Card (Spans two columns on medium/large) */}
-        {/* h-full ensures the card takes max available height in the grid cell */}
-        <div className="md:col-span-2 h-full">
+        {/* FIX: Wrap UpcomingBookingsCard in a div to apply the md:col-span-2 layout class */}
+        <div className="md:col-span-2">
             <UpcomingBookingsCard /> 
         </div>
 
         {/* ROW 2: Recurring Maintenance and Upcoming Renewals */}
-        {/* This row naturally fills the remaining space */}
         <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-6">
           <RecurringMaintenanceCard maintenance={upcomingMaintenance} />
           <UpcomingRenewalsCard />
