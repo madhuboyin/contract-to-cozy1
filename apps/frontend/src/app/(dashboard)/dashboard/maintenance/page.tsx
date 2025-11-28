@@ -18,6 +18,7 @@ import {
   ServiceCategory,
   ChecklistItem, 
   UpdateChecklistItemInput,
+  Property, // Import Property
 } from '@/types';
 import {
   Table,
@@ -91,23 +92,42 @@ export default function MaintenancePage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<DashboardChecklistItem | null>(null);
 
-  // Fetch the user's full checklist
-  const { data: checklistRes, isLoading, refetch } = useQuery({
-    queryKey: ['full-home-checklist'],
-    queryFn: () => api.getChecklist(),
+  // --- START FIX: Fetch Properties and Checklists in parallel ---
+  const { data: mainData, isLoading: isInitialLoading } = useQuery({
+    queryKey: ['maintenance-page-data'],
+    queryFn: async () => {
+      const [checklistRes, propertiesRes] = await Promise.all([
+        api.getChecklist(),
+        api.getProperties(),
+      ]);
+
+      if (!checklistRes.success || !propertiesRes.success) {
+        throw new Error("Failed to fetch dashboard data.");
+      }
+
+      const propertiesMap = new Map<string, Property>();
+      propertiesRes.data.properties.forEach(p => propertiesMap.set(p.id, p));
+
+      return {
+        checklistItems: checklistRes.data.items as DashboardChecklistItem[],
+        propertiesMap: propertiesMap,
+      };
+    },
+    staleTime: 5 * 60 * 1000, // Keep data fresh for 5 mins
   });
+  // --- END FIX ---
 
-  const allChecklistItems = useMemo(() => {
-    const rawData = checklistRes as any;
-
-    if (!rawData || !Array.isArray(rawData.items)) {
-      console.error("Error fetching checklist data: Items array missing or invalid response structure.", rawData?.message || rawData);
-      return [];
-    }
+  // Helper to map property ID to display name
+  const getPropertyName = (propertyId: string | null): string => {
+    if (!propertyId || !mainData?.propertiesMap) return 'No Property Linked';
     
-    return rawData.items as DashboardChecklistItem[];
-  }, [checklistRes]);
+    const property = mainData.propertiesMap.get(propertyId);
+    if (!property) return 'Unknown Property';
 
+    return property.name || property.address;
+  }
+
+  const allChecklistItems = mainData?.checklistItems || [];
 
   // Filter the list for active, recurring, non-renewal maintenance tasks
   const maintenanceItems = useMemo(() => {
@@ -146,7 +166,7 @@ export default function MaintenancePage() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['full-home-checklist'] });
+      queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); // FIX: Invalidate the new query key
       toast({ title: "Task Updated", description: "Maintenance task configuration saved." });
       handleCloseModal();
     },
@@ -168,7 +188,7 @@ export default function MaintenancePage() {
       return id;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['full-home-checklist'] });
+      queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); // FIX: Invalidate the new query key
       toast({ title: "Task Removed", description: "Maintenance task permanently deleted." });
       handleCloseModal();
     },
@@ -190,7 +210,7 @@ export default function MaintenancePage() {
         return response.data;
     },
     onSuccess: (data) => {
-        queryClient.invalidateQueries({ queryKey: ['full-home-checklist'] });
+        queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); // FIX: Invalidate the new query key
         toast({ 
             title: "Task Completed", 
             description: `"${data.title}" reset for its next cycle.`, 
@@ -232,7 +252,7 @@ export default function MaintenancePage() {
   // --- End Modal Handlers & Mutations ---
   
 
-  if (isLoading || updateMutation.isPending || deleteMutation.isPending || handleMarkComplete.isPending) { 
+  if (isInitialLoading || updateMutation.isPending || deleteMutation.isPending || handleMarkComplete.isPending) { 
     return (
       <div className="space-y-6 pb-8">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mt-10" />
@@ -268,11 +288,13 @@ export default function MaintenancePage() {
         </Card>
       )}
 
-      {!isLoading && maintenanceItems.length > 0 && (
+      {!isInitialLoading && maintenanceItems.length > 0 && (
         <div className="rounded-md border bg-white">
           <Table>
             <TableHeader>
               <TableRow>
+                {/* FIX: Added Property Column */}
+                <TableHead className="w-[150px]">Property</TableHead>
                 <TableHead className="w-[200px]">Task</TableHead>
                 <TableHead className="w-[120px]">Category</TableHead>
                 <TableHead className="w-[120px] hidden sm:table-cell">Frequency</TableHead>
@@ -290,6 +312,11 @@ export default function MaintenancePage() {
                     key={item.id} 
                     className={cn(dueDateInfo.isAlert ? 'bg-orange-50/50 hover:bg-orange-50' : 'hover:bg-gray-50')}
                   >
+                    {/* FIX: Display Property Name */}
+                    <TableCell className="font-medium text-sm">
+                        {getPropertyName(item.propertyId)}
+                    </TableCell>
+
                     <TableCell className="font-medium text-gray-900">
                       {item.title}
                       <div className="text-xs text-muted-foreground mt-0.5 max-w-xs truncate">
@@ -348,6 +375,7 @@ export default function MaintenancePage() {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         template={null} // Editing doesn't use the template object
+        properties={mainData?.propertiesMap ? Array.from(mainData.propertiesMap.values()) : []} // Pass properties for display
         existingConfig={editingTask ? ({
             // templateId is repurposed to hold the ChecklistItem ID for editing/removal
             templateId: editingTask.id, 

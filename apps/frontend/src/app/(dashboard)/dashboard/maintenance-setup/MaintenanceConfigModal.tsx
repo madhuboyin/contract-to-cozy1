@@ -59,7 +59,7 @@ function formatEnumString(val: string | null | undefined) {
   return val.toString().replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
 
-// === FIX: Unified Props Interface (All props optional except base Dialog controls) ===
+// === Unified Props Interface ===
 interface MaintenanceConfigModalProps {
   // Base Dialog Props (Required)
   isOpen: boolean;
@@ -73,7 +73,6 @@ interface MaintenanceConfigModalProps {
   onPropertyChange?: (id: string) => void; // State setter for property ID
 
   // --- Editing Flow Props (Only required by maintenance/page.tsx) ---
-  // NOTE: nextDueDate is a Date | null object in this flow
   existingConfig?: (MaintenanceTaskConfig & { propertyId: string | null }) | null; // Existing task data
   onSave?: (config: MaintenanceTaskConfig) => void; // Callback for saving edits
   onRemove?: (taskId: string) => void; // Callback for removing task
@@ -120,7 +119,7 @@ export function MaintenanceConfigModal({
       
       setServerError(null);
 
-      // --- FIX START: Mode-specific initialization for recurrence and dates ---
+      // --- Mode-specific initialization for recurrence and dates ---
       if (isEditing) {
         // Use properties from the existing configuration (ChecklistItem data)
         const config = existingConfig!; // Guaranteed to be MaintenanceTaskConfig type
@@ -138,7 +137,7 @@ export function MaintenanceConfigModal({
                 initialDate = config.nextDueDate;
             } else {
                 // Assumes ISO string format from API (ChecklistItem/Editing flow)
-                initialDate = parseISO(config.nextDueDate);
+                initialDate = parseISO(config.nextDueDate as string);
             }
         }
         setNextDueDate(initialDate);
@@ -153,7 +152,7 @@ export function MaintenanceConfigModal({
         setFrequency(temp.defaultFrequency as RecurrenceFrequency);
         setNextDueDate(new Date()); // Default to today
       }
-      // --- FIX END ---
+      // --- END FIX ---
     }
   }, [template, existingConfig, isEditing, isCreation, propSelectedPropertyId, isOpen]);
   
@@ -216,7 +215,7 @@ export function MaintenanceConfigModal({
               throw new Error(response.message || "Failed to create task.");
             }
         }
-        // If creation/editing was successful, the parent is responsible for calling onClose/clearing state.
+        // If creation/editing was successful, the parent (onSuccess/onSave) is responsible for calling onClose/clearing state.
     } catch (e: any) {
         console.error("Maintenance task submission failed:", e);
         setServerError(e.message || "Failed to save task configuration. Please try again.");
@@ -255,31 +254,41 @@ export function MaintenanceConfigModal({
         </DialogHeader>
         <div className="grid gap-6 py-4">
 
-            {/* --- Property Selection Field (Visible in both flows, but disabled in editing) --- */}
+            {/* --- Property Selection Field --- */}
             <div className="grid gap-2">
                 <Label className="flex items-center gap-1">
                     <Home className="h-4 w-4" /> Property
                 </Label>
-                <Select 
-                    // Use the property ID appropriate for the flow
-                    value={internalPropertyId || ''} 
-                    onValueChange={handlePropertyChange}
-                    // Disable selection if editing OR if only one property exists
-                    disabled={isEditing || properties.length <= 1} 
-                >
-                    <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select a Property" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {properties.map((property) => (
-                            <SelectItem key={property.id} value={property.id}>
-                                {property.name || property.address}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+                
+                {isEditing ? (
+                    // FIX: Editing Mode - Show static, disabled text (Input field)
+                    <Input
+                        value={currentProperty?.name || currentProperty?.address || 'Property Not Linked'}
+                        disabled
+                        className="bg-gray-100 text-gray-700"
+                    />
+                ) : (
+                    // Creation Mode - Show dropdown
+                    <Select 
+                        value={internalPropertyId || ''} 
+                        onValueChange={handlePropertyChange}
+                        disabled={properties.length <= 1} 
+                    >
+                        <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select a Property" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {properties.map((property) => (
+                                <SelectItem key={property.id} value={property.id}>
+                                    {property.name || property.address}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                )}
+                
                 <p className="text-sm text-gray-500">
-                    {currentProperty?.name || currentProperty?.address || 'No property selected.'}
+                    {isEditing ? 'Property link cannot be changed.' : 'This task will be linked to the selected property.'}
                 </p>
             </div>
             {/* --- End Property Selection Field --- */}
