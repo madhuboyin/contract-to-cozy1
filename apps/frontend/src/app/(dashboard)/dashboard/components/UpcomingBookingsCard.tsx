@@ -44,19 +44,28 @@ const getStatusColor = (status: Booking['status']): string => {
     }
 }
 
-export const UpcomingBookingsCard = () => {
+// START FIX: Accept propertyId prop
+interface UpcomingBookingsCardProps {
+    propertyId?: string;
+}
+
+// --- FIX: Use React.FC type definition for proper prop recognition ---
+export const UpcomingBookingsCard: React.FC<UpcomingBookingsCardProps> = ({ propertyId }) => {
   const { data, isLoading, error } = useQuery({
-    queryKey: ['upcoming-bookings'],
+    // FIX: Update query key to include propertyId
+    queryKey: ['upcoming-bookings', propertyId],
     queryFn: () => api.listBookings({
-        // Filter is removed to ensure all bookings are returned and filtered client-side
+        // FIX: Pass propertyId to the API client
+        propertyId: propertyId, 
         sortBy: 'scheduledDate',
         sortOrder: 'asc',
     }),
+    // FIX: Only enable query if propertyId is provided
+    enabled: !!propertyId, 
   });
 
   const rawBookings = data?.success ? data.data.bookings : [];
 
-  // FIX: This definition must precede all usage of 'upcomingBookings'
   const upcomingBookings = React.useMemo(() => {
     if (isLoading || !rawBookings) return [];
     
@@ -94,11 +103,18 @@ export const UpcomingBookingsCard = () => {
         )}
       </CardHeader>
       <CardContent className="flex-1">
-        {isLoading ? (
+        {isLoading || !propertyId ? (
           <div className="space-y-3 pt-2">
-            <div className="h-4 w-1/2 rounded bg-gray-200 animate-pulse" />
-            <div className="h-4 w-2/3 rounded bg-gray-200 animate-pulse" />
-            <div className="h-4 w-1/3 rounded bg-gray-200 animate-pulse" />
+             {/* Display placeholder text instead of just spinners if propertyId is missing */}
+            {!propertyId ? (
+                 <p className="font-body text-sm text-gray-500 pt-2">Select a property to view bookings.</p>
+            ) : (
+                <>
+                    <div className="h-4 w-1/2 rounded bg-gray-200 animate-pulse" />
+                    <div className="h-4 w-2/3 rounded bg-gray-200 animate-pulse" />
+                    <div className="h-4 w-1/3 rounded bg-gray-200 animate-pulse" />
+                </>
+            )}
           </div>
         ) : displayBookings.length > 0 ? (
           <div className="space-y-3">
@@ -127,7 +143,7 @@ export const UpcomingBookingsCard = () => {
             ))}
           </div>
         ) : (
-          <p className="font-body text-sm text-gray-500 pt-2">No upcoming services scheduled.</p>
+          <p className="font-body text-sm text-gray-500 pt-2">No upcoming services scheduled for this property.</p>
         )}
         {(error) && (
           <p className="font-body text-sm text-red-500 pt-2">Error loading bookings.</p>

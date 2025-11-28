@@ -32,25 +32,35 @@ const getDaysUntilExpiry = (expiryDateString: string): number => {
     return differenceInDays(expiryDate, today);
 };
 
+// START FIX: Accept propertyId prop
+interface UpcomingRenewalsCardProps {
+    propertyId?: string;
+}
 
-export const UpcomingRenewalsCard = () => {
+export const UpcomingRenewalsCard = ({ propertyId }: UpcomingRenewalsCardProps) => {
   // Fetch Warranties
   const { data: warrantyData, isLoading: isLoadingWarranties, error: errorW } = useQuery({
-    queryKey: ['warranties-renewals'],
-    queryFn: () => api.listWarranties(),
+    // FIX: Update query key to include propertyId
+    queryKey: ['warranties-renewals', propertyId],
+    // FIX: Pass propertyId to the API client
+    queryFn: () => api.listWarranties(propertyId),
+    enabled: !!propertyId,
   });
 
   // Fetch Insurance Policies
   const { data: insuranceData, isLoading: isLoadingInsurance, error: errorI } = useQuery({
-    queryKey: ['insurance-policies-renewals'],
-    queryFn: () => api.listInsurancePolicies(),
+    // FIX: Update query key to include propertyId
+    queryKey: ['insurance-policies-renewals', propertyId],
+    // FIX: Pass propertyId to the API client
+    queryFn: () => api.listInsurancePolicies(propertyId),
+    enabled: !!propertyId,
   });
 
   const isLoading = isLoadingWarranties || isLoadingInsurance;
 
   let renewalItems: RenewalItem[] = [];
 
-  if (warrantyData?.success && insuranceData?.success) {
+  if (propertyId && warrantyData?.success && insuranceData?.success) {
     const rawWarranties = (warrantyData.data.warranties || []) as Warranty[];
     const rawPolicies = (insuranceData.data.policies || []) as InsurancePolicy[];
 
@@ -121,12 +131,8 @@ export const UpcomingRenewalsCard = () => {
         )}
       </CardHeader>
       <CardContent className="flex-1">
-        {isLoading ? (
-          <div className="space-y-3 pt-2">
-            <div className="h-4 w-1/2 rounded bg-gray-200 animate-pulse" />
-            <div className="h-4 w-2/3 rounded bg-gray-200 animate-pulse" />
-            <div className="h-4 w-1/3 rounded bg-gray-200 animate-pulse" />
-          </div>
+        {isLoading || !propertyId ? (
+           <p className="font-body text-sm text-gray-500 pt-2">Select a property to view renewals.</p>
         ) : displayItems.length > 0 ? (
           <div className="space-y-3">
             {displayItems.map((item, index) => {
@@ -182,7 +188,7 @@ export const UpcomingRenewalsCard = () => {
             })}
           </div>
         ) : (
-          <p className="font-body text-sm text-gray-500 pt-2">No upcoming renewals found.</p>
+          <p className="font-body text-sm text-gray-500 pt-2">No upcoming renewals found for this property.</p>
         )}
       </CardContent>
       

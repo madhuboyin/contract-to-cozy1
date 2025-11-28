@@ -554,6 +554,7 @@ class APIClient {
 
   /**
    * List bookings
+   * FIX: Added propertyId to the parameter type definition
    */
   async listBookings(params?: {
     status?: string;
@@ -564,6 +565,7 @@ class APIClient {
     limit?: number;
     sortBy?: string;
     sortOrder?: string;
+    propertyId?: string; // FIX: Added this parameter
   }): Promise<APIResponse<{
     bookings: Booking[];
     pagination: any;
@@ -887,8 +889,13 @@ class APIClient {
     return this.request<Warranty>('/api/home-management/warranties', { method: 'POST', body: data as unknown as BodyInit });
   }
 
-  async listWarranties(): Promise<APIResponse<{ warranties: Warranty[] }>> {
-    return this.request<{ warranties: Warranty[] }>('/api/home-management/warranties');
+  /**
+   * List warranties
+   * FIX: Added propertyId to the function signature
+   */
+  async listWarranties(propertyId?: string): Promise<APIResponse<{ warranties: Warranty[] }>> {
+    const query = propertyId ? `?propertyId=${propertyId}` : '';
+    return this.request<{ warranties: Warranty[] }>('/api/home-management/warranties' + query);
   }
 
   async updateWarranty(warrantyId: string, data: UpdateWarrantyInput): Promise<APIResponse<Warranty>> {
@@ -905,8 +912,13 @@ class APIClient {
     return this.request<InsurancePolicy>('/api/home-management/insurance-policies', { method: 'POST', body: data as unknown as BodyInit });
   }
 
-  async listInsurancePolicies(): Promise<APIResponse<{ policies: InsurancePolicy[] }>> {
-    return this.request<{ policies: InsurancePolicy[] }>('/api/home-management/insurance-policies');
+  /**
+   * List insurance policies
+   * FIX: Added propertyId to the function signature
+   */
+  async listInsurancePolicies(propertyId?: string): Promise<APIResponse<{ policies: InsurancePolicy[] }>> {
+    const query = propertyId ? `?propertyId=${propertyId}` : '';
+    return this.request<{ policies: InsurancePolicy[] }>('/api/home-management/insurance-policies' + query);
   }
 
   async updateInsurancePolicy(policyId: string, data: UpdateInsurancePolicyInput): Promise<APIResponse<InsurancePolicy>> {

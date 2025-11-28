@@ -296,6 +296,7 @@ export interface ChecklistItem {
   nextDueDate: string | null;
   lastCompletedDate: string | null;
   checklistId: string;
+  propertyId: string | null; // FIX: Added propertyId to the ChecklistItem
   createdAt: string; 
   updatedAt: string;
 }

@@ -30,25 +30,24 @@ const getRiskDetails = (score: number) => {
     return { level: "HIGH", color: "text-red-500", badgeVariant: "destructive" as const };
 };
 
-// --- START FIX: Update Props Interface ---
+// --- FIX: Make propertyId optional in the interface ---
 interface PropertyRiskScoreCardProps {
-    propertyId: string; // Accepts the ID of the property to monitor
+    propertyId?: string; // Changed from string to string?
 }
-// --- END FIX: Update Props Interface ---
-
 
 /**
- * Self-fetching component to display the Risk Assessment summary on the dashboard
- * for a specific property.
+ * Self-fetching component to display the Risk Assessment summary...
  */
-// --- START FIX: Update Function Signature and use propertyId ---
-export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps) {
+// --- FIX: Use React.FC type definition for proper prop recognition ---
+export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ propertyId }) => {
+    // If no propertyId is provided (e.g., initial load, Home Buyer with no properties), skip query
+    const enabled = !!propertyId;
+    
     const riskQuery = useQuery<PrimaryRiskSummary | null>({
-        // FIX: Update query key to be dependent on propertyId
         queryKey: ["riskSummary", propertyId],
         queryFn: async () => {
             try {
-                // FIX: Use the new API method to fetch risk summary by ID
+                if (!propertyId) return null; 
                 const result = await api.getRiskSummary(propertyId);
                 return result;
             } catch (error) {
@@ -56,26 +55,39 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
                 return null;
             }
         },
-        // Refetch every 5 seconds if status is QUEUED to update the dashboard immediately upon calculation
         refetchInterval: (query) => (query.state.data?.status === 'QUEUED' ? 5000 : false),
-        staleTime: 60 * 1000, // 1 minute stale time for dashboard
+        staleTime: 60 * 1000, 
         gcTime: 10 * 60 * 1000,
-        // FIX: Only enable if a propertyId is provided
-        enabled: !!propertyId,
+        enabled: enabled, // Use the boolean value
     });
-    // --- END FIX: Update Function Signature and use propertyId ---
     
-    // Fallback if data is null (API error or not found)
+    // --- State 1: No property selected or data is being loaded/fetched ---
+    if (!propertyId) {
+        return (
+            <Card className="hover:shadow-lg transition-shadow border-dashed border-2">
+                <CardHeader>
+                    <CardTitle className="flex items-center text-sm font-medium text-gray-500">
+                        <Home className="h-4 w-4 mr-2" /> Risk Assessment
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-xl font-semibold mb-2">No Property Selected</p>
+                    <p className="text-sm text-muted-foreground mb-4">Please add a property or select one to view the risk report.</p>
+                </CardContent>
+            </Card>
+        );
+    }
+    
+    // Use fallback for other states
     const summary = riskQuery.data || { propertyId: propertyId, propertyName: 'Property', riskScore: 0, financialExposureTotal: 0, lastCalculatedAt: null, status: 'MISSING_DATA' };
     
-    const isInitialLoading = riskQuery.isLoading && !summary.lastCalculatedAt; // Use a better check for initial loading
+    const isInitialLoading = riskQuery.isLoading && !summary.lastCalculatedAt; 
     const isFetching = riskQuery.isFetching;
 
     // Default values
     const riskScore = summary.riskScore || 0;
     const exposure = summary.financialExposureTotal || 0;
     const { level, color, badgeVariant } = getRiskDetails(riskScore);
-    // Use the propertyId passed to the component
     const reportLink = `/dashboard/properties/${propertyId}/risk-assessment`; 
 
     // --- State 2: Loading / Initial Fetch Error ---
@@ -96,7 +108,7 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
         );
     }
     
-    // --- State 3: Missing Data or Queued ---
+    // --- State 3: Missing Data or Queued (Unchanged logic) ---
     if (summary.status === 'QUEUED') {
         const displayStatus = isFetching ? 'Calculating...' : 'Queued';
         const displayMessage = isFetching 

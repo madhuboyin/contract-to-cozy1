@@ -12,15 +12,13 @@ import { DashboardChecklistItem } from '../types';
 
 interface RecurringMaintenanceCardProps {
   maintenance: DashboardChecklistItem[];
-  className?: string;
+  // Removed className prop for simplicity, can be added back if needed
 }
 
-export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMaintenanceCardProps) => {
+export const RecurringMaintenanceCard = ({ maintenance }: RecurringMaintenanceCardProps) => {
   
-  // CRITICAL FIX: Removed the restrictive filter: `&& t.isRecurring`
-  // We now display all maintenance tasks passed to the component, provided they are PENDING.
+  // Tasks are already filtered by PENDING status and selected property ID by the parent component.
   const allPendingTasks = maintenance
-    .filter(t => t.status === 'PENDING') 
     .sort((a, b) => {
         const dateA = a.nextDueDate ? new Date(a.nextDueDate).getTime() : Infinity;
         const dateB = b.nextDueDate ? new Date(b.nextDueDate).getTime() : Infinity;
@@ -51,14 +49,14 @@ export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMa
   const primaryText = totalItems > 3 ? `View All (${totalItems})` : "View Full List";
 
   return (
-    <Card className={cn("flex flex-col", className)}>
+    <Card className={cn("flex flex-col")}>
       <CardHeader>
         <CardTitle className="font-heading text-xl flex items-center gap-2">
             <Wrench className="w-5 h-5 text-indigo-600" />
             <span>Upcoming Maintenance</span>
         </CardTitle>
         <CardDescription className="font-body text-sm">
-            {totalItems} active tasks. Focus on high priority items for your primary residence.
+            {totalItems} active tasks. Focus on high priority items for your selected home.
         </CardDescription>
       </CardHeader>
       
@@ -67,7 +65,7 @@ export const RecurringMaintenanceCard = ({ maintenance, className }: RecurringMa
           <div className="flex flex-col items-center justify-center h-full p-4 space-y-2">
             <Check className="w-8 h-8 text-green-500" />
             <p className="font-heading text-center text-lg font-medium text-gray-700">All caught up!</p>
-            <p className="font-body text-center text-sm text-gray-500">No active maintenance tasks are currently due.</p>
+            <p className="font-body text-center text-sm text-gray-500">No active maintenance tasks are currently due for this property.</p>
           </div>
         ) : (
           <div className="space-y-3">

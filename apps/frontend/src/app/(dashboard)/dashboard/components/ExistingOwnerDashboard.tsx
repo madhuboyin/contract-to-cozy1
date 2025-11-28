@@ -1,31 +1,30 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/ExistingOwnerDashboard.tsx
 
-import React, { useState, useEffect } from 'react'; // Added useState and useEffect
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link'; 
-import { Booking, Property, ScoredProperty } from '@/types'; // Added Property, ScoredProperty
+// FIX: Import ChecklistItem and ScoredProperty from '@/types' (canonical location)
+import { Booking, Property, ChecklistItem, ScoredProperty } from '@/types'; 
 import { UpcomingBookingsCard } from './UpcomingBookingsCard';
 import { RecurringMaintenanceCard } from './RecurringMaintenanceCard';
 import { UpcomingRenewalsCard } from './UpcomingRenewalsCard'; 
 import { FavoriteProvidersCard } from './FavoriteProvidersCard';
-import { DashboardChecklistItem } from '../types'; 
+// Removed redundant DashboardChecklistItem import
 import { PropertyHealthScoreCard } from './PropertyHealthScoreCard'; 
 import { PropertyRiskScoreCard } from './PropertyRiskScoreCard'; 
-// Added Select components for the dropdown
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-// NOTE: ChevronDown is not strictly necessary here as it is included in SelectTrigger via the component file
+import { ArrowRight } from 'lucide-react';
 
-// --- Temporary/Local Type Definitions (Mirrors backend ScoredProperty) ---
+// --- Updated Props Interface to use canonical types ---
 interface ExistingOwnerDashboardProps {
   bookings: Booking[];
   properties: ScoredProperty[]; 
-  checklistItems: DashboardChecklistItem[];
+  checklistItems: ChecklistItem[]; // Using the now-compatible ChecklistItem
   userFirstName: string;
 }
 
-// Helper to format the address for display
+// Helper to format the address for display (Simplified version: just the address and city)
 const formatAddress = (property: Property) => {
-    // Simplified version: just the address and city
-    return `${property.address}, ${property.city}`;
+    return property.address; 
 }
 
 export const ExistingOwnerDashboard = ({ 
@@ -38,7 +37,7 @@ export const ExistingOwnerDashboard = ({
   // Logic to determine the default property: Primary first, otherwise the first one
   const defaultProperty = properties.find(p => p.isPrimary) || properties[0];
 
-  // --- START FIX: Property Selection State ---
+  // --- Property Selection State ---
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | undefined>(defaultProperty?.id);
   
   const selectedProperty = properties.find(p => p.id === selectedPropertyId);
@@ -51,21 +50,25 @@ export const ExistingOwnerDashboard = ({
   }, [defaultProperty, selectedPropertyId]);
 
   const isMultiProperty = properties.length > 1;
-  // --- END FIX: Property Selection State ---
+  // --- End Property Selection State ---
 
-
-  // Filter Logic (This section is kept mostly original, maintaining its initial scope)
+  // Filter Logic: Now dependent on selectedPropertyId
   const RENEWAL_CATEGORIES = ['INSURANCE', 'WARRANTY', 'FINANCE', 'ADMIN', 'ATTORNEY'];
   
-  // 1. Filter for active (PENDING) tasks
-  // NOTE: This currently filters ALL checklist items regardless of the selected property. 
-  // For proper multi-property filtering, checklistItems must include a propertyId field and be filtered by selectedPropertyId.
-  const activeChecklistItems = checklistItems.filter(item => 
+  // 1. Filter checklist items by selected property
+  const propertyChecklistItems = checklistItems.filter(item => 
+      // This line now compiles and filters correctly
+      item.propertyId === selectedPropertyId
+  );
+  
+  // 2. Filter for active (PENDING) tasks for the selected property
+  const activeChecklistItems = propertyChecklistItems.filter(item => 
     item.status === 'PENDING' 
   );
   
-  // 2. Separate Maintenance from Renewals
+  // 3. Separate Maintenance from Renewals
   const upcomingMaintenance = activeChecklistItems.filter(item => 
+    // Filter out renewal-related categories
     !item.serviceCategory || !RENEWAL_CATEGORIES.includes(item.serviceCategory as string)
   ); 
 
@@ -73,46 +76,43 @@ export const ExistingOwnerDashboard = ({
     <div className="space-y-6 pb-8">
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Welcome back, {userFirstName}</h2>
-        {/* The 'Monitor' message remains in a separate row as requested. */}
         <p className="text-muted-foreground">Monitor your home's health and maintenance schedule.</p>
       </div>
       
-      {/* --- START FIX: Property Selection Row --- */}
+      {/* --- Property Selection Row (NEW) --- */}
       {selectedProperty && (
         <div className="mt-2 flex items-center space-x-3">
             {!isMultiProperty ? (
-                // Scenario 1: Single Property - Show Address as standard paragraph text
+                // Scenario 1: Single Property - Show simplified address as standard paragraph text
                 <p className="text-lg font-medium text-gray-700">
-                    {formatAddress(selectedProperty)}
+                    {selectedProperty.name || 'Your Home'}: {formatAddress(selectedProperty)}
                 </p>
             ) : (
                 // Scenario 2: Multiple Properties - Show Dropdown
                 <div className="flex items-center space-x-2">
-                    {/* Hiding the 'Viewing:' label as it clashes with SelectTrigger UX */}
                     <Select 
                         value={selectedPropertyId} 
                         onValueChange={setSelectedPropertyId}
                     >
-                        <SelectTrigger className="w-[300px]">
+                        <SelectTrigger className="w-[300px] text-lg font-medium">
                             <SelectValue placeholder="Select a property" />
                         </SelectTrigger>
                         <SelectContent>
                             {properties.map((property) => (
                                 <SelectItem key={property.id} value={property.id}>
-                                    {property.name ? `${property.name} (${formatAddress(property)})` : formatAddress(property)}
+                                    {property.name || formatAddress(property)}
                                 </SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
                 </div>
             )}
-            {/* Optional: Add a quick link to manage properties */}
             <Link href="/dashboard/properties" className="text-sm text-blue-500 hover:underline">
-                {isMultiProperty ? 'Manage Properties' : 'View Property Details'}
+                {isMultiProperty ? 'Manage Properties' : 'View Details'}
             </Link>
         </div>
       )}
-      {/* --- END FIX: Property Selection Row --- */}
+      {/* --- End Property Selection Row --- */}
 
       {/* Grid Layout - Cards dynamically update based on selectedProperty */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -120,30 +120,25 @@ export const ExistingOwnerDashboard = ({
         {/* ROW 1, Slot 1: Property Health Score */}
         {selectedProperty && (
             <div className="md:col-span-1">
-                {/* PASSING selectedProperty */}
                 <PropertyHealthScoreCard property={selectedProperty} /> 
             </div>
         )}
         
         {/* ROW 1, Slot 2: Risk Score Card */}
-        {selectedPropertyId && (
-            <div className="md:col-span-1">
-                {/* PASSING selectedPropertyId to the refactored card */}
-                <PropertyRiskScoreCard propertyId={selectedPropertyId} /> 
-            </div>
-        )}
+        <div className="md:col-span-1">
+            <PropertyRiskScoreCard propertyId={selectedPropertyId} /> 
+        </div>
         
         {/* ROW 1, Slot 3/4: Upcoming Bookings Card */}
         <div className="md:col-span-2">
-            {/* NOTE: This card should ideally filter bookings by selectedPropertyId */}
-            <UpcomingBookingsCard /> 
+            <UpcomingBookingsCard propertyId={selectedPropertyId} /> 
         </div>
 
         {/* ROW 2: Recurring Maintenance and Upcoming Renewals */}
         <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <RecurringMaintenanceCard maintenance={upcomingMaintenance} />
-          {/* NOTE: This card should ideally filter renewals by selectedPropertyId */}
-          <UpcomingRenewalsCard /> 
+          <RecurringMaintenanceCard maintenance={upcomingMaintenance as any} />
+          
+          <UpcomingRenewalsCard propertyId={selectedPropertyId} /> 
         </div>
         
         {/* ROW 3: Favorite Providers Card (Spans full width) */}
@@ -152,7 +147,6 @@ export const ExistingOwnerDashboard = ({
         </div>
       </div>
       
-      {/* Link to Maintenance Checklist */}
       <div className="pt-4">
         <Link 
           href="/dashboard/maintenance" 

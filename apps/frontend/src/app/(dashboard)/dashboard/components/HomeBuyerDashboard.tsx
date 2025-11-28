@@ -24,6 +24,10 @@ export const HomeBuyerDashboard = ({
   userFirstName
 }: HomeBuyerDashboardProps) => {
 
+  // FIX: Determine the single property ID to pass to the cards
+  // Home Buyer dashboard defaults to the first available property if one exists.
+  const primaryPropertyId = properties.length > 0 ? properties[0].id : undefined;
+
   // 1. Filter the raw checklistItems down to the set intended for the Home Buyer Card
   // Assuming the Home Buyer card displays all checklist items (since they are non-recurring/initial)
   const homeBuyerItems = checklistItems.filter(item => 
@@ -46,14 +50,15 @@ export const HomeBuyerDashboard = ({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         
         {/* Slot 1: Risk Score Card (High priority for Home Buyers) */}
-        <PropertyRiskScoreCard /> 
+        {/* FIX: Pass the optional primaryPropertyId directly */}
+        <PropertyRiskScoreCard propertyId={primaryPropertyId} /> 
         
-        {/* Slot 2: Upcoming Bookings Card - FIX APPLIED: Wrapped in div to apply layout class */}
+        {/* Slot 2: Upcoming Bookings Card - FIX: Pass the optional propertyId prop */}
         <div className="md:col-span-1">
-            <UpcomingBookingsCard />
+            <UpcomingBookingsCard propertyId={primaryPropertyId} />
         </div>
         
-        {/* Slot 3: My Properties Card - FIX APPLIED: Wrapped in div to apply layout class */}
+        {/* Slot 3: My Properties Card */}
         <div className="md:col-span-1">
             <MyPropertiesCard properties={properties} />
         </div>
