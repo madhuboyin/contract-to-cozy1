@@ -227,6 +227,7 @@ export default function RiskAssessmentPage() {
     
     const currentStatus = riskQueryPayload?.status;
     const isQueued = currentStatus === 'QUEUED';
+    // Ensure report is typed correctly for access
     const report: RiskReportFull | undefined = currentStatus === 'CALCULATED' ? (riskQueryPayload as CalculatedData).report : undefined;
     
     const isLoadingReport = riskQuery.isLoading;
@@ -305,8 +306,9 @@ export default function RiskAssessmentPage() {
             );
         }
 
-        // Check for calculated report with actual data
-        if (report && report.details && report.details.length > 0) {
+        // FIX: Use Array.isArray() to safely verify the 'details' field structure, 
+        // as JSON column data can be tricky to infer its type directly from the backend.
+        if (report && Array.isArray(report.details) && report.details.length > 0) {
             return (
                 <React.Fragment>
                     <AssetMatrixTable details={report.details} />
