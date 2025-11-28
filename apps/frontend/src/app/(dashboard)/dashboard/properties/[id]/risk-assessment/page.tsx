@@ -34,7 +34,7 @@ interface CalculatedData {
 
 type RiskQueryData = QueuedData | CalculatedData;
 
-// --- Helper Functions ---
+// --- Helper Functions (omitted for brevity) ---
 const formatCurrency = (amount: number) => new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -50,7 +50,7 @@ const getRiskDetails = (score: number) => {
 };
 
 
-// --- Component for Phase 3.3: Risk Category Summary Card ---
+// --- Component for Phase 3.3: Risk Category Summary Card (omitted for brevity) ---
 const RiskCategorySummaryCard = ({ 
     category, 
     details, 
@@ -123,7 +123,7 @@ const RiskCategorySummaryCard = ({
     );
 }
 
-// --- Component for Phase 3.2: Detailed Asset Matrix Table ---
+// --- Component for Phase 3.2: Detailed Asset Matrix Table (omitted for brevity) ---
 const AssetMatrixTable = ({ details }: { details: AssetRiskDetail[] }) => {
     const getRiskBadge = (level: AssetRiskDetail['riskLevel']) => {
         if (level === 'LOW') return <Badge variant="secondary" className="bg-green-500/20 text-green-700 hover:bg-green-500/30 border-green-500">Low</Badge>;
@@ -216,20 +216,33 @@ export default function RiskAssessmentPage() {
                 return { status: 'QUEUED' } as QueuedData;
             }
             
-            return { status: 'CALCULATED', report: result } as CalculatedData;
+            // The API returns the raw report object, which is passed as 'result'
+            return { status: 'CALCULATED', report: result as RiskReportFull } as CalculatedData;
         },
         refetchInterval: (query) => (query.state.data?.status === 'QUEUED' ? 5000 : false), 
         enabled: !!propertyId,
     });
 
-    // --- Data Extraction and Status Determination ---
-    const riskQueryPayload = riskQuery.data;
+    // --- Data Extraction and Status Determination (FINAL FIX) ---
+    // Extract the raw data from the query result
+    const riskQueryPayload = riskQuery.data; 
     
-    const currentStatus = riskQueryPayload?.status;
+    // Determine the status and safely extract the report object
+    let currentStatus: string = (riskQueryPayload as any)?.status;
+    let report: RiskReportFull | undefined;
+
+    if (currentStatus === 'CALCULATED') {
+        report = (riskQueryPayload as CalculatedData).report;
+    } 
+    
+    // Fallback Fix for data assignment and TypeScript error
+    // If the query data is the raw report object itself (as observed in logs), use double assertion to assign it.
+    if (!report && typeof riskQueryPayload === 'object' && riskQueryPayload !== null && 'id' in riskQueryPayload) {
+        report = riskQueryPayload as unknown as RiskReportFull; // FIX: Double assertion to resolve ts(2352)
+        currentStatus = 'CALCULATED';
+    }
+    
     const isQueued = currentStatus === 'QUEUED';
-    // Ensure report is typed correctly for access
-    const report: RiskReportFull | undefined = currentStatus === 'CALCULATED' ? (riskQueryPayload as CalculatedData).report : undefined;
-    
     const isLoadingReport = riskQuery.isLoading;
     
     // --- Loading and Error States ---
@@ -251,8 +264,10 @@ export default function RiskAssessmentPage() {
     const formattedExposure = formatCurrency(exposure);
     const riskProgressValue = 100 - score;
 
-    // --- PDF Download Handler ---
+    // --- PDF Download Handler (omitted for brevity) ---
     const handleDownloadPdf = async () => {
+        // ... (PDF logic)
+        
         if (!isPremium) {
             toast({
                 title: "Premium Feature Required",
@@ -301,29 +316,10 @@ export default function RiskAssessmentPage() {
                         <Loader2 className="h-5 w-5 animate-spin mr-3 text-primary" />
                         <CardTitle>Awaiting Detailed Risk Report</CardTitle>
                     </CardHeader>
-                    <CardContent><CardDescription>{isQueued ? 'The risk calculation job is currently queued and will start shortly. This page will auto-update once complete.' : 'Fetching detailed report breakdown...'}</CardDescription></CardContent>
+                    <CardContent><CardDescription>{isQueued ? 'The risk calculation job is currently queued and will start shortly.' : 'Fetching detailed report breakdown...'}</CardDescription></CardContent>
                 </Card>
             );
         }
-        
-        // DEBUG LOGS START
-        console.log("--- RENDER DETAILS DEBUG ---");
-        console.log("Report Data:", report);
-        console.log("isCalculating:", isCalculating, "isQueued:", isQueued);
-
-        if (report) {
-            console.log("report.details existence:", !!report.details);
-            console.log("Is details an Array?", Array.isArray(report.details));
-            console.log("Details Length:", report.details?.length);
-            
-            // Check if the calculation returned an empty array, which can happen if property data is missing
-            if (Array.isArray(report.details) && report.details.length === 0) {
-                 console.log("DETAIL RENDER BLOCKED: Array is empty.");
-            }
-        }
-        console.log("--- RENDER DETAILS DEBUG END ---");
-        // DEBUG LOGS END
-
 
         // Check for calculated report with actual data
         if (report && Array.isArray(report.details) && report.details.length > 0) {
