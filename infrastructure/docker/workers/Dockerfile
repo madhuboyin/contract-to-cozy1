@@ -28,13 +28,20 @@ RUN mkdir -p ../../backend/src/utils ../../backend/src/config
 COPY apps/backend/src/utils/riskCalculator.util.ts ../../backend/src/utils/
 COPY apps/backend/src/config/risk-constants.ts ../../backend/src/config/
 COPY apps/workers/src ./src
-COPY apps/workers/tsconfig.docker.json ./tsconfig.json
+COPY apps/workers/tsconfig.docker.json ./tsconfig.json 
 
-# 2. FIX: Switch WORKDIR to the monorepo root (/app) for execution
-# This allows ts-node to resolve all relative paths correctly.
+# 2. Compile worker locally (using the tsconfig.json copied in the step above)
+# This step is preserved for completeness, as ts-node runs compilation on-the-fly, 
+# but it ensures local file resolution is checked.
+RUN npx tsc --project ./tsconfig.json \
+    2>&1 | tee /tmp/tsc-output.log || (cat /tmp/tsc-output.log && exit 1)
+
+# 3. FIX: Switch WORKDIR to the monorepo root (/app) for execution
+# This allows ts-node to resolve all relative imports from the root context correctly.
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-# 3. FINAL CMD: Use npx and the path relative to the new WORKDIR (/app)
-CMD ["npx", "ts-node", "apps/workers/src/worker.ts"]
+# 4. FINAL CMD: Use npx and explicitly point to the tsconfig file.
+# The tsconfig is at 'apps/workers/tsconfig.json' and the source file is at 'apps/workers/src/worker.ts'.
+CMD ["npx", "ts-node", "--project", "apps/workers/tsconfig.json", "apps/workers/src/worker.ts"]
