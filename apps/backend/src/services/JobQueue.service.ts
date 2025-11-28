@@ -17,13 +17,17 @@ interface JobData {
     private queue: Queue; 
     
     constructor() {
-        // FIX: HARDCODED PORT 6379 TO BYPASS THE ENV VAR PARSING ERROR (NaN)
+        // FIX: Hardcoded port 6379 to bypass deployment env var issues (NaN)
         const port = 6379; 
         
-        const redisConnection = {
-            // Host is likely correct, but port MUST be 6379
+        // Build the connection options object, including optional auth/db
+        const redisConnection: any = { // Using 'any' for the complex BullMQ type definition
             host: process.env.REDIS_HOST || 'localhost',
-            port: port, 
+            port: port,
+            // ADDED: Support for optional Redis password (REDIS_PASSWORD)
+            password: process.env.REDIS_PASSWORD, 
+            // ADDED: Support for Redis DB index (REDIS_DB: "0" from ConfigMap)
+            db: parseInt(process.env.REDIS_DB || '0', 10), 
         };
 
         // Initialize the queue connection
@@ -31,12 +35,13 @@ interface JobData {
             connection: redisConnection 
         });
 
-        console.log(`[QUEUE-CLIENT] Initialized queue: ${this.queueName} at ${redisConnection.host}:${port}`);
+        console.log(`[QUEUE-CLIENT] Initialized queue: ${this.queueName} at ${redisConnection.host}:${port} (DB: ${redisConnection.db})`);
     }
 
     async addJob(jobName: string, data: JobData, options?: any): Promise<void> {
       console.log(`[QUEUE] Job added: ${jobName} for Property ID: ${data.propertyId}`);
       
+      // Actual queuing logic using BullMQ's queue.add()
       await this.queue.add(
           jobName, 
           data,    
