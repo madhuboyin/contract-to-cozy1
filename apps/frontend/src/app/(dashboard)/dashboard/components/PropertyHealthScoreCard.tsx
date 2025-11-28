@@ -28,6 +28,9 @@ interface PropertyHealthScoreCardProps {
     property: ScoredProperty;
 }
 
+// Define the high-priority statuses returned by the backend utility function (Title Case)
+const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection'];
+
 export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardProps) {
     const healthScore = property.healthScore?.totalScore || 0;
     const { level, color, progressClass, badgeVariant } = getHealthDetails(healthScore);
@@ -35,8 +38,12 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
     // Normalize score for progress bar (full bar = 100)
     const progressValue = healthScore > 100 ? 100 : healthScore;
     
-    // Determine number of required actions
-    const totalRequiredActions = property.healthScore?.insights.filter(i => i.status === 'NEEDS_ATTENTION').length || 0;
+    // --- RECOMMENDED LOGIC CHANGE APPLIED HERE ---
+    // Now filters for all three high-priority, title-case status strings to fix the bug
+    // and include 'Needs Review' and 'Needs Inspection'.
+    const totalRequiredActions = property.healthScore?.insights.filter(i => 
+        HIGH_PRIORITY_STATUSES.includes(i.status)
+    ).length || 0;
 
     return (
         <Card>
@@ -57,6 +64,7 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
                 
                 <div className="mt-4">
                     <p className="text-lg font-semibold flex items-center">
+                        {/* Use a danger color for the alert icon */}
                         <Zap className="h-4 w-4 mr-1 text-red-600" />
                         Required Maintenance Actions
                     </p>
