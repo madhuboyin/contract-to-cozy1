@@ -11,7 +11,8 @@ import { PageHeader, PageHeaderHeading, PageHeaderDescription } from "@/componen
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Edit, Zap, Shield, FileText } from "lucide-react";
+// ADDED ArrowLeft to the imports for the back link
+import { Edit, Zap, Shield, FileText, ArrowLeft } from "lucide-react"; 
 import { toast } from "@/components/ui/use-toast";
 
 // Placeholder components for the new tabs
@@ -106,6 +107,17 @@ export default function PropertyDetailPage() {
 
   return (
     <DashboardShell>
+      {/* ADDED: Back Navigation Link */}
+      <div className="mb-4">
+        <Link 
+            href="/dashboard/properties" 
+            className="text-sm font-medium text-gray-500 hover:text-gray-700 inline-flex items-center"
+        >
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            Back to Properties
+        </Link>
+      </div>
+      
       <PageHeader>
         <PageHeaderHeading>{property.name || "My Property"}</PageHeaderHeading>
         <PageHeaderDescription>
