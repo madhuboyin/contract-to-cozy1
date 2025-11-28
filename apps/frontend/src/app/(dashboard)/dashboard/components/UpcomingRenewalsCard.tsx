@@ -11,6 +11,7 @@ import { format, differenceInDays } from 'date-fns';
 import Link from 'next/link';
 import { Home, Shield, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button'; 
+import { ArrowRight } from 'lucide-react'; // Added import
 
 // 1. Define the combined Renewal Item Type
 interface RenewalItem {
@@ -37,7 +38,8 @@ interface UpcomingRenewalsCardProps {
     propertyId?: string;
 }
 
-export const UpcomingRenewalsCard = ({ propertyId }: UpcomingRenewalsCardProps) => {
+// FIX: Use React.FC for correct prop recognition
+export const UpcomingRenewalsCard: React.FC<UpcomingRenewalsCardProps> = ({ propertyId }) => {
   // Fetch Warranties
   const { data: warrantyData, isLoading: isLoadingWarranties, error: errorW } = useQuery({
     // FIX: Update query key to include propertyId
@@ -66,20 +68,26 @@ export const UpcomingRenewalsCard = ({ propertyId }: UpcomingRenewalsCardProps) 
 
     // 2. Combine and Augment Data
     const combined = [
-        ...rawWarranties.map(w => ({
+        // START FIX: Defensive client-side filtering by propertyId
+        ...rawWarranties
+            .filter(w => w.propertyId === propertyId)
+            .map(w => ({
             id: w.id,
             name: `${w.providerName} Warranty`,
             type: 'Warranty' as const,
             expiryDate: w.expiryDate,
             providerName: w.providerName,
         })),
-        ...rawPolicies.map(p => ({
+        ...rawPolicies
+            .filter(p => p.propertyId === propertyId)
+            .map(p => ({
             id: p.id,
             name: `${p.carrierName} Policy`,
             type: 'Insurance' as const,
             expiryDate: p.expiryDate,
             providerName: p.carrierName,
         }))
+        // END FIX
     ];
     
     // 3. Filter, Calculate, and Sort
@@ -131,8 +139,14 @@ export const UpcomingRenewalsCard = ({ propertyId }: UpcomingRenewalsCardProps) 
         )}
       </CardHeader>
       <CardContent className="flex-1">
-        {isLoading || !propertyId ? (
-           <p className="font-body text-sm text-gray-500 pt-2">Select a property to view renewals.</p>
+        {isLoading && propertyId ? (
+          <div className="space-y-3 pt-2">
+            <div className="h-4 w-1/2 rounded bg-gray-200 animate-pulse" />
+            <div className="h-4 w-2/3 rounded bg-gray-200 animate-pulse" />
+            <div className="h-4 w-1/3 rounded bg-gray-200 animate-pulse" />
+          </div>
+        ) : !propertyId ? (
+             <p className="font-body text-sm text-gray-500 pt-2">Select a property to view renewals.</p>
         ) : displayItems.length > 0 ? (
           <div className="space-y-3">
             {displayItems.map((item, index) => {

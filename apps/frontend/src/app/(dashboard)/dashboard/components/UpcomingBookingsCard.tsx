@@ -49,7 +49,6 @@ interface UpcomingBookingsCardProps {
     propertyId?: string;
 }
 
-// --- FIX: Use React.FC type definition for proper prop recognition ---
 export const UpcomingBookingsCard: React.FC<UpcomingBookingsCardProps> = ({ propertyId }) => {
   const { data, isLoading, error } = useQuery({
     // FIX: Update query key to include propertyId
@@ -67,16 +66,19 @@ export const UpcomingBookingsCard: React.FC<UpcomingBookingsCardProps> = ({ prop
   const rawBookings = data?.success ? data.data.bookings : [];
 
   const upcomingBookings = React.useMemo(() => {
-    if (isLoading || !rawBookings) return [];
+    if (isLoading || !rawBookings || !propertyId) return [];
     
     const nonUpcomingStatuses = ['COMPLETED', 'CANCELLED', 'DRAFT'];
 
     return rawBookings
+      // START FIX: Defensive client-side filtering by propertyId
+      .filter(b => b.property?.id === propertyId) 
+      // END FIX
       .filter(b => b.scheduledDate) 
       .filter(b => !isPast(new Date(b.scheduledDate!))) 
       .filter(b => !nonUpcomingStatuses.includes(b.status)) 
       .sort((a, b) => new Date(a.scheduledDate || 0).getTime() - new Date(b.scheduledDate || 0).getTime());
-  }, [rawBookings, isLoading]);
+  }, [rawBookings, isLoading, propertyId]); // Added propertyId to dependency array
 
   const displayBookings = upcomingBookings.slice(0, 3);
   const overflowCount = upcomingBookings.length - displayBookings.length;
@@ -103,19 +105,14 @@ export const UpcomingBookingsCard: React.FC<UpcomingBookingsCardProps> = ({ prop
         )}
       </CardHeader>
       <CardContent className="flex-1">
-        {isLoading || !propertyId ? (
+        {isLoading && propertyId ? (
           <div className="space-y-3 pt-2">
-             {/* Display placeholder text instead of just spinners if propertyId is missing */}
-            {!propertyId ? (
-                 <p className="font-body text-sm text-gray-500 pt-2">Select a property to view bookings.</p>
-            ) : (
-                <>
-                    <div className="h-4 w-1/2 rounded bg-gray-200 animate-pulse" />
-                    <div className="h-4 w-2/3 rounded bg-gray-200 animate-pulse" />
-                    <div className="h-4 w-1/3 rounded bg-gray-200 animate-pulse" />
-                </>
-            )}
+            <div className="h-4 w-1/2 rounded bg-gray-200 animate-pulse" />
+            <div className="h-4 w-2/3 rounded bg-gray-200 animate-pulse" />
+            <div className="h-4 w-1/3 rounded bg-gray-200 animate-pulse" />
           </div>
+        ) : !propertyId ? (
+            <p className="font-body text-sm text-gray-500 pt-2">Select a property to view bookings.</p>
         ) : displayBookings.length > 0 ? (
           <div className="space-y-3">
             {displayBookings.map((booking, index) => (

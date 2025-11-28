@@ -8,17 +8,20 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { DashboardChecklistItem } from '../types'; 
+// FIX: Using canonical ChecklistItem
+import { ChecklistItem } from '@/types'; 
 
 interface RecurringMaintenanceCardProps {
-  maintenance: DashboardChecklistItem[];
-  // Removed className prop for simplicity, can be added back if needed
+  // FIX: Using canonical ChecklistItem array
+  maintenance: ChecklistItem[]; 
 }
 
-export const RecurringMaintenanceCard = ({ maintenance }: RecurringMaintenanceCardProps) => {
+// FIX: Use React.FC for proper prop recognition
+export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> = ({ maintenance }) => {
   
-  // Tasks are already filtered by PENDING status and selected property ID by the parent component.
+  // The 'maintenance' prop is already filtered by property ID by the parent component.
   const allPendingTasks = maintenance
+    .filter(t => t.status === 'PENDING') 
     .sort((a, b) => {
         const dateA = a.nextDueDate ? new Date(a.nextDueDate).getTime() : Infinity;
         const dateB = b.nextDueDate ? new Date(b.nextDueDate).getTime() : Infinity;
@@ -48,6 +51,13 @@ export const RecurringMaintenanceCard = ({ maintenance }: RecurringMaintenanceCa
   const primaryLink = "/dashboard/maintenance";
   const primaryText = totalItems > 3 ? `View All (${totalItems})` : "View Full List";
 
+  // Determine if a property has been selected at all by checking the maintenance array.
+  // If the array is empty and there's a selected property (checked by the parent), it means 
+  // there are no tasks for this property. If the array is empty because no property is selected, 
+  // the parent handles the message.
+  const isNoPropertySelected = maintenance.length === 0 && maintenance[0]?.propertyId === undefined;
+
+
   return (
     <Card className={cn("flex flex-col")}>
       <CardHeader>
@@ -61,7 +71,11 @@ export const RecurringMaintenanceCard = ({ maintenance }: RecurringMaintenanceCa
       </CardHeader>
       
       <CardContent className="flex-grow">
-        {displayTasks.length === 0 ? (
+        {isNoPropertySelected ? (
+             <div className="flex flex-col items-center justify-center h-full p-4 space-y-2">
+                <p className="font-body text-center text-sm text-gray-500 pt-2">Please select a property to view maintenance tasks.</p>
+             </div>
+        ) : displayTasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full p-4 space-y-2">
             <Check className="w-8 h-8 text-green-500" />
             <p className="font-heading text-center text-lg font-medium text-gray-700">All caught up!</p>

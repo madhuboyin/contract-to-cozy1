@@ -8,7 +8,6 @@ import { UpcomingBookingsCard } from './UpcomingBookingsCard';
 import { RecurringMaintenanceCard } from './RecurringMaintenanceCard';
 import { UpcomingRenewalsCard } from './UpcomingRenewalsCard'; 
 import { FavoriteProvidersCard } from './FavoriteProvidersCard';
-// Removed redundant DashboardChecklistItem import
 import { PropertyHealthScoreCard } from './PropertyHealthScoreCard'; 
 import { PropertyRiskScoreCard } from './PropertyRiskScoreCard'; 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -56,19 +55,18 @@ export const ExistingOwnerDashboard = ({
   const RENEWAL_CATEGORIES = ['INSURANCE', 'WARRANTY', 'FINANCE', 'ADMIN', 'ATTORNEY'];
   
   // 1. Filter checklist items by selected property
-  const propertyChecklistItems = checklistItems.filter(item => 
-      // This line now compiles and filters correctly
-      item.propertyId === selectedPropertyId
-  );
+  const propertyChecklistItems = selectedPropertyId
+    // FIX: Explicitly type 'item' as ChecklistItem
+    ? checklistItems.filter((item: ChecklistItem) => item.propertyId === selectedPropertyId)
+    : [];
   
   // 2. Filter for active (PENDING) tasks for the selected property
-  const activeChecklistItems = propertyChecklistItems.filter(item => 
+  const activeChecklistItems = propertyChecklistItems.filter((item: ChecklistItem) => 
     item.status === 'PENDING' 
   );
   
   // 3. Separate Maintenance from Renewals
-  const upcomingMaintenance = activeChecklistItems.filter(item => 
-    // Filter out renewal-related categories
+  const upcomingMaintenance = activeChecklistItems.filter((item: ChecklistItem) => 
     !item.serviceCategory || !RENEWAL_CATEGORIES.includes(item.serviceCategory as string)
   ); 
 
@@ -79,7 +77,7 @@ export const ExistingOwnerDashboard = ({
         <p className="text-muted-foreground">Monitor your home's health and maintenance schedule.</p>
       </div>
       
-      {/* --- Property Selection Row (NEW) --- */}
+      {/* --- Property Selection Row --- */}
       {selectedProperty && (
         <div className="mt-2 flex items-center space-x-3">
             {!isMultiProperty ? (
