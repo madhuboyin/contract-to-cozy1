@@ -8,8 +8,8 @@ import { RecurringMaintenanceCard } from './RecurringMaintenanceCard';
 import { UpcomingRenewalsCard } from './UpcomingRenewalsCard'; 
 import { FavoriteProvidersCard } from './FavoriteProvidersCard';
 import { DashboardChecklistItem, ScoredProperty } from '../types'; 
-import { parseISO, isBefore, addDays } from 'date-fns'; 
 import { PropertyHealthScoreCard } from './PropertyHealthScoreCard'; 
+import { PropertyRiskScoreCard } from './PropertyRiskScoreCard'; 
 
 // --- Temporary/Local Type Definitions (Mirrors backend ScoredProperty) ---
 interface ExistingOwnerDashboardProps {
@@ -52,25 +52,32 @@ export const ExistingOwnerDashboard = ({
         <p className="text-muted-foreground">Monitor your home's health and maintenance schedule.</p>
       </div>
 
-      {/* NEW LAYOUT IMPLEMENTATION */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* NEW LAYOUT IMPLEMENTATION - Use 4 columns on large screens to fit Risk, Health, and Bookings */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         
-        {/* ROW 1: Property Health Score (2/3 width) and Upcoming Bookings (1/3 width) */}
+        {/* ROW 1, Slot 1: Property Health Score */}
         {primaryProperty && (
-            <div className="lg:col-span-2">
+            <div className="md:col-span-1">
                 <PropertyHealthScoreCard property={primaryProperty} />
             </div>
         )}
-        <UpcomingBookingsCard /> 
+        
+        {/* [NEW ADDITION] ROW 1, Slot 2: Risk Score Card - Place next to Health Check */}
+        <PropertyRiskScoreCard /> 
+        
+        {/* FIX: Wrap UpcomingBookingsCard in a div to apply the md:col-span-2 layout class */}
+        <div className="md:col-span-2">
+            <UpcomingBookingsCard /> 
+        </div>
 
-        {/* ROW 2: Recurring Maintenance and Upcoming Renewals (Full width split) */}
-        <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* ROW 2: Recurring Maintenance and Upcoming Renewals */}
+        <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-6">
           <RecurringMaintenanceCard maintenance={upcomingMaintenance} />
           <UpcomingRenewalsCard />
         </div>
         
         {/* ROW 3: Favorite Providers Card (Spans full width) */}
-        <div className="lg:col-span-3"> 
+        <div className="lg:col-span-4"> 
           <FavoriteProvidersCard />
         </div>
       </div>

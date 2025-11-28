@@ -14,6 +14,16 @@ interface PropertyWithRelations extends Property {
   riskReport: RiskAssessmentReport | null;
 }
 
+// [NEW TYPE] Lightweight return type for the dashboard summary
+export type RiskSummaryDto = {
+  propertyId: string;
+  propertyName: string | null;
+  riskScore: number;
+  financialExposureTotal: Prisma.Decimal;
+  lastCalculatedAt: Date;
+  status: 'CALCULATED' | 'QUEUED' | 'MISSING_DATA' | 'NO_PROPERTY';
+};
+
 class RiskAssessmentService {
   /**
    * Fetches an existing risk report. If it's missing or stale, a calculation job 
@@ -40,6 +50,74 @@ class RiskAssessmentService {
     return property.riskReport || 'QUEUED'; 
   }
 
+  // [NEW METHOD] Lightweight summary for the dashboard
+  async getPrimaryPropertyRiskSummary(userId: string): Promise<RiskSummaryDto | null> {
+    // 1. Find the primary property for the user
+    const primaryProperty = await prisma.property.findFirst({
+      where: {
+        homeownerProfile: {
+          userId: userId,
+        },
+        isPrimary: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        riskReport: {
+          select: {
+            riskScore: true,
+            financialExposureTotal: true,
+            lastCalculatedAt: true,
+          }
+        }
+      }
+    });
+
+    if (!primaryProperty) {
+      // Return special status for frontend handling
+      return {
+        propertyId: '',
+        propertyName: null,
+        riskScore: 0,
+        financialExposureTotal: new Prisma.Decimal(0),
+        lastCalculatedAt: new Date(0),
+        status: 'NO_PROPERTY',
+      }; 
+    }
+
+    const report = primaryProperty.riskReport;
+    const propertyId = primaryProperty.id;
+    const propertyName = primaryProperty.name;
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+    // Default values if no report exists (and we queue calculation)
+    const baseResult: Omit<RiskSummaryDto, 'status'> = {
+      propertyId,
+      propertyName,
+      riskScore: report?.riskScore || 0,
+      financialExposureTotal: report?.financialExposureTotal || new Prisma.Decimal(0),
+      lastCalculatedAt: report?.lastCalculatedAt || new Date(0),
+    };
+
+
+    // 2. Check for missing or stale report
+    if (!report || report.lastCalculatedAt.getTime() < thirtyMinutesAgo.getTime()) {
+      // Queue calculation job
+      await JobQueueService.addJob(RISK_JOB_TYPES.CALCULATE_RISK, { propertyId });
+      
+      return {
+        ...baseResult,
+        status: 'QUEUED',
+      };
+    }
+
+    // 3. Return calculated report
+    return {
+      ...baseResult,
+      status: 'CALCULATED',
+    };
+  }
+  
   /**
    * Main logic for calculating the risk score for a property. 
    * This is exclusively called by the background worker.

@@ -149,6 +149,20 @@ export interface RiskAssessmentReport {
     updatedAt: string;
 }
 
+// [NEW TYPE] Lightweight Risk Summary for Dashboard (Epic A)
+export type RiskSummaryStatus = 'CALCULATED' | 'QUEUED' | 'MISSING_DATA' | 'NO_PROPERTY';
+
+export interface PrimaryRiskSummary {
+  propertyId: string;
+  propertyName: string | null;
+  riskScore: number;
+  financialExposureTotal: number; // Converted from Decimal on backend
+  lastCalculatedAt: Date | string; // Date string from API
+  status: RiskSummaryStatus;
+  message?: string; // For NO_PROPERTY status
+}
+
+
 // ============================================================================
 // NEW DOCUMENT UPLOAD TYPES (ADDED)
 // ============================================================================

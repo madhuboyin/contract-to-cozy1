@@ -1,30 +1,57 @@
 // apps/backend/src/controllers/riskAssessment.controller.ts
 
 import { Response, NextFunction } from 'express';
-import RiskAssessmentService from '../services/RiskAssessment.service';
-import { Property } from '@prisma/client';
+import RiskAssessmentService, { RiskSummaryDto } from '../services/RiskAssessment.service';
+import { Property, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../types/auth.types';
+
+// [FIX]: Define the expected structure of the authenticated user.
+interface AuthUserWithId {
+  id: string;
+  homeownerProfile?: { id: string } | null;
+}
 
 
 class RiskAssessmentController {
   
   /**
-   * GET /api/risk/property/:propertyId/report
+   * Helper to perform initial user and profile validation for homeowner-centric routes.
+   * Ensures req.user is present and has a homeownerProfileId.
+   */
+  private checkAuthAndProfile(req: AuthRequest, res: Response): { userId: string, homeownerProfileId: string } | null {
+    // FIX 1: Ensure req.user is present
+    if (!req.user) {
+        res.status(401).json({ message: 'Authentication required.' });
+        return null;
+    }
+
+    // FIX 2: Use two-step casting (to 'unknown' then to 'AuthUserWithId') to bypass the strict type check
+    const user = req.user as unknown as AuthUserWithId;
+    
+    const userId = user.id;
+    // Safely access homeownerProfileId
+    const homeownerProfileId = user.homeownerProfile?.id;
+    
+    if (!homeownerProfileId) {
+        res.status(403).json({ message: 'Access denied. Homeowner profile required for this operation.' });
+        return null;
+    }
+    
+    return { userId, homeownerProfileId };
+  }
+
+  /**
+   * GET /api/risk/report/:propertyId
    */
   async getRiskReport(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      const auth = this.checkAuthAndProfile(req, res);
+      if (!auth) return;
+      const { homeownerProfileId } = auth;
+      
       const { propertyId } = req.params;
       
-      const user = req.user;
-      
-      // Access the homeowner profile ID
-      const homeownerProfileId = user?.homeownerProfile?.id; 
-      
-      if (!homeownerProfileId) {
-         return res.status(403).json({ message: 'Access denied. Homeowner profile required for property access.' });
-      }
-
       // Authorization check: ensure property belongs to the homeowner
       const property: Property | null = await prisma.property.findUnique({
         where: { id: propertyId, homeownerProfileId: homeownerProfileId },
@@ -47,16 +74,12 @@ class RiskAssessmentController {
    */
   async getRiskReportSummary(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      const auth = this.checkAuthAndProfile(req, res);
+      if (!auth) return;
+      const { homeownerProfileId } = auth;
+
       const { propertyId } = req.params;
       
-      const user = req.user;
-      
-      const homeownerProfileId = user?.homeownerProfile?.id; 
-      
-      if (!homeownerProfileId) {
-         return res.status(403).json({ message: 'Access denied. Homeowner profile required for property access.' });
-      }
-
       // Authorization check: ensure property belongs to the homeowner
       const property: Property | null = await prisma.property.findUnique({
         where: { id: propertyId, homeownerProfileId: homeownerProfileId },
@@ -75,20 +98,49 @@ class RiskAssessmentController {
   }
 
   /**
+   * GET /api/risk/summary/primary
+   * Lightweight summary for the dashboard
+   */
+  async getPrimaryPropertyRiskSummary(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      // Direct check for req.user since only userId is needed for this route
+      if (!req.user) { 
+          return res.status(401).json({ message: 'Authentication required.' });
+      }
+      
+      // FIX 3: Use two-step casting to access 'id'
+      const userId = (req.user as unknown as AuthUserWithId).id;
+      const result = await RiskAssessmentService.getPrimaryPropertyRiskSummary(userId);
+
+      if (result === null) {
+        return res.status(200).json({ success: true, data: { status: 'NO_PROPERTY' } });
+      }
+
+      // Convert Prisma Decimal to number for JSON response
+      const responseData: Omit<RiskSummaryDto, 'financialExposureTotal'> & { financialExposureTotal: number } = {
+          ...result,
+          // Safely convert Prisma Decimal to a number
+          financialExposureTotal: (result.financialExposureTotal as unknown as Prisma.Decimal).toNumber(),
+      } as Omit<RiskSummaryDto, 'financialExposureTotal'> & { financialExposureTotal: number };
+
+      res.status(200).json({ success: true, data: responseData });
+
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * GET /api/risk/report/:propertyId/pdf - Generates and downloads PDF (Phase 3.4)
    */
   async generateRiskReportPdf(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      const auth = this.checkAuthAndProfile(req, res);
+      if (!auth) return;
+      const { homeownerProfileId } = auth;
+      
       const { propertyId } = req.params;
       
-      const user = req.user;
-      
-      const homeownerProfileId = user?.homeownerProfile?.id; 
-      
-      if (!homeownerProfileId) {
-         return res.status(403).json({ message: 'Access denied. Homeowner profile required for property access.' });
-      }
-
       // Authorization check: ensure property belongs to the homeowner
       const property: Property | null = await prisma.property.findUnique({
         where: { id: propertyId, homeownerProfileId: homeownerProfileId },
@@ -98,10 +150,21 @@ class RiskAssessmentController {
         return res.status(404).json({ message: 'Property not found or access denied.' });
       }
 
-      // Phase 3.4: PDF generation not yet implemented
-      return res.status(501).json({ 
-        message: 'PDF generation is not yet implemented. This feature will be available in Phase 3.4.',
-      });
+      // Phase 3.4: PDF generation logic (using service placeholder)
+      try {
+        const pdfBuffer = await RiskAssessmentService.generateRiskReportPdf(propertyId);
+        
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="risk-report-${propertyId}.pdf"`);
+        return res.send(pdfBuffer);
+      } catch (pdfError: any) {
+        // Handle errors from the PDF generation service, like 'QUEUED'
+        if (pdfError.message.includes("currently calculating")) {
+          return res.status(409).json({ message: pdfError.message });
+        }
+        throw pdfError;
+      }
+      
     } catch (error) {
       next(error);
     }
@@ -112,15 +175,11 @@ class RiskAssessmentController {
    */
   async triggerRecalculation(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      const auth = this.checkAuthAndProfile(req, res);
+      if (!auth) return;
+      const { homeownerProfileId } = auth;
+      
       const { propertyId } = req.params;
-      
-      const user = req.user;
-
-      const homeownerProfileId = user?.homeownerProfile?.id;
-      
-      if (!homeownerProfileId) {
-         return res.status(403).json({ message: 'Access denied. Homeowner profile required for property access.' });
-      }
 
       // Authorization check
       const property: Property | null = await prisma.property.findUnique({

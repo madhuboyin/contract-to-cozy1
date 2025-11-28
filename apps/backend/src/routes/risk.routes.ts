@@ -27,4 +27,12 @@ router.post(
   RiskAssessmentController.triggerRecalculation.bind(RiskAssessmentController)
 );
 
+// [NEW ROUTE] 4. GET /api/risk/summary/primary - Lightweight summary for dashboard
+router.get(
+  '/summary/primary',
+  authenticate,
+  RiskAssessmentController.getPrimaryPropertyRiskSummary.bind(RiskAssessmentController)
+);
+
+
 export default router;

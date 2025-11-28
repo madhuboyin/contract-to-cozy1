@@ -36,6 +36,7 @@ import {
   // NEW RISK ASSESSMENT TYPES
   RiskAssessmentReport,
   AssetRiskDetail,
+  PrimaryRiskSummary, // [NEW IMPORT]
 } from '@/types';
 
 // NEW IMPORT FOR PHASE 2: Risk Assessment Types - REQUIRED for getRiskReportSummary
@@ -951,8 +952,7 @@ class APIClient {
   /**
    * Fetches the full risk assessment report, queuing a new calculation if stale.
    * @returns The RiskAssessmentReport object or the string 'QUEUED'.
-   * 
-   * NOTE: This endpoint bypasses this.request() because the backend returns
+   * * NOTE: This endpoint bypasses this.request() because the backend returns
    * the raw data directly, not wrapped in {success: true, data: ...}
    */
   async getRiskReportSummary(propertyId: string): Promise<RiskAssessmentReport | 'QUEUED'> {
@@ -1000,6 +1000,31 @@ class APIClient {
     };
 
     return processedReport;
+  }
+  
+  // ==========================================================================
+  // [NEW METHOD] Fetch the lightweight risk summary for the dashboard
+  // ==========================================================================
+  async getPrimaryRiskSummary(): Promise<PrimaryRiskSummary | null> {
+    // Uses the request helper since the new endpoint returns the standard { success: true, data: ... } wrapper
+    const response = await this.request<PrimaryRiskSummary>('/api/risk/summary/primary');
+
+    if (response.success && response.data) {
+      // The backend response is wrapped in { success: true, data: ... }
+      
+      // Convert the financialExposureTotal back to a number since the controller converted it from Decimal
+      const processedData: PrimaryRiskSummary = {
+          ...response.data,
+          financialExposureTotal: parseFloat(response.data.financialExposureTotal.toString()),
+      };
+      
+      return processedData;
+    }
+
+    // If the request helper threw an APIError (e.g., 401, 500) it was caught and re-thrown.
+    // This return is for a theoretical API response that passed HTTP checks but was not successful,
+    // which should be handled by the internal `request` method's error throwing.
+    return null;
   }
   
   // ==========================================================================
