@@ -305,9 +305,27 @@ export default function RiskAssessmentPage() {
                 </Card>
             );
         }
+        
+        // DEBUG LOGS START
+        console.log("--- RENDER DETAILS DEBUG ---");
+        console.log("Report Data:", report);
+        console.log("isCalculating:", isCalculating, "isQueued:", isQueued);
 
-        // FIX: Use Array.isArray() to safely verify the 'details' field structure, 
-        // as JSON column data can be tricky to infer its type directly from the backend.
+        if (report) {
+            console.log("report.details existence:", !!report.details);
+            console.log("Is details an Array?", Array.isArray(report.details));
+            console.log("Details Length:", report.details?.length);
+            
+            // Check if the calculation returned an empty array, which can happen if property data is missing
+            if (Array.isArray(report.details) && report.details.length === 0) {
+                 console.log("DETAIL RENDER BLOCKED: Array is empty.");
+            }
+        }
+        console.log("--- RENDER DETAILS DEBUG END ---");
+        // DEBUG LOGS END
+
+
+        // Check for calculated report with actual data
         if (report && Array.isArray(report.details) && report.details.length > 0) {
             return (
                 <React.Fragment>
