@@ -34,7 +34,7 @@ interface CalculatedData {
 
 type RiskQueryData = QueuedData | CalculatedData;
 
-// --- Helper Functions (omitted for brevity) ---
+// --- Helper Functions ---
 const formatCurrency = (amount: number) => new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -224,22 +224,22 @@ export default function RiskAssessmentPage() {
     });
 
     // --- Data Extraction and Status Determination (FINAL FIX) ---
-    // Extract the raw data from the query result
     const riskQueryPayload = riskQuery.data; 
     
     // Determine the status and safely extract the report object
     let currentStatus: string = (riskQueryPayload as any)?.status;
     let report: RiskReportFull | undefined;
 
+    // 1. Check for the correctly wrapped object
     if (currentStatus === 'CALCULATED') {
         report = (riskQueryPayload as CalculatedData).report;
     } 
     
-    // Fallback Fix for data assignment and TypeScript error
-    // If the query data is the raw report object itself (as observed in logs), use double assertion to assign it.
+    // 2. Fallback Fix: If the API returns the raw report object directly (the observed bug).
+    // This resolves the issue where 'Report Data: undefined' was logged.
     if (!report && typeof riskQueryPayload === 'object' && riskQueryPayload !== null && 'id' in riskQueryPayload) {
-        report = riskQueryPayload as unknown as RiskReportFull; // FIX: Double assertion to resolve ts(2352)
-        currentStatus = 'CALCULATED';
+        report = riskQueryPayload as unknown as RiskReportFull; 
+        currentStatus = 'CALCULATED'; 
     }
     
     const isQueued = currentStatus === 'QUEUED';
@@ -321,7 +321,7 @@ export default function RiskAssessmentPage() {
             );
         }
 
-        // Check for calculated report with actual data
+        // Final check for calculated report with actual data
         if (report && Array.isArray(report.details) && report.details.length > 0) {
             return (
                 <React.Fragment>
