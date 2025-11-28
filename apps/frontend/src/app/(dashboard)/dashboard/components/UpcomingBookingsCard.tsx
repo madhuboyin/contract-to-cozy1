@@ -9,8 +9,10 @@ import { Booking } from '@/types';
 import { Separator } from '@/components/ui/separator';
 import { format, isPast } from 'date-fns';
 import Link from 'next/link';
-import { Calendar, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { Calendar, AlertTriangle, CheckCircle, Clock, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { getStatusColor } from '@/lib/utils/status-colors'; // Assuming this utility exists
 
 /**
  * Helper to format time for display (e.g., 9:00 AM)
@@ -31,7 +33,7 @@ const formatTime = (time: string | null) => {
 /**
  * Helper to get the correct icon color based on booking status
  */
-const getStatusColor = (status: Booking['status']): string => {
+const getIconColor = (status: Booking['status']): string => {
     switch (status) {
         case 'PENDING':
             return 'text-yellow-500';
@@ -48,7 +50,6 @@ export const UpcomingBookingsCard = () => {
   const { data, isLoading, error } = useQuery({
     queryKey: ['upcoming-bookings'],
     queryFn: () => api.listBookings({
-        // Filter is removed to ensure all bookings are returned and filtered client-side
         sortBy: 'scheduledDate',
         sortOrder: 'asc',
     }),
@@ -56,7 +57,6 @@ export const UpcomingBookingsCard = () => {
 
   const rawBookings = data?.success ? data.data.bookings : [];
 
-  // FIX: This definition must precede all usage of 'upcomingBookings'
   const upcomingBookings = React.useMemo(() => {
     if (isLoading || !rawBookings) return [];
     
@@ -73,47 +73,55 @@ export const UpcomingBookingsCard = () => {
   const overflowCount = upcomingBookings.length - displayBookings.length;
   const showMore = overflowCount > 0;
   
-  const isAlert = upcomingBookings.some(b => b.status === 'CONFIRMED' || b.status === 'IN_PROGRESS' || b.status === 'PENDING');
+  const isAlert = upcomingBookings.some(b => b.status === 'PENDING' || b.status === 'CONFIRMED');
 
   return (
     <Card className="h-full flex flex-col">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <div className="space-y-1">
-          <CardTitle className="font-heading text-xl flex items-center gap-2"> 
-            <Calendar className="h-5 w-5 text-blue-600" /> 
-            Upcoming Bookings
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pt-3 pb-2">
+        <div className="space-y-0.5">
+          {/* FIX: Reduced text size from text-xl to text-lg and icon size */}
+          <CardTitle className="font-heading text-lg flex items-center gap-1.5"> 
+            <Calendar className="h-4 w-4 text-blue-600" /> 
+            Upcoming Services
           </CardTitle>
-          <CardDescription className="font-body text-sm">
-            Your scheduled services
+          <CardDescription className="font-body text-xs">
+            Your next scheduled appointments
           </CardDescription>
         </div>
-        {isAlert ? (
-          <AlertTriangle className="h-4 w-4 text-orange-500" />
-        ) : (
-          <CheckCircle className="h-4 w-4 text-green-500" />
-        )}
+        <div className="flex-shrink-0">
+          {isAlert ? (
+            <AlertTriangle className="h-4 w-4 text-orange-500" />
+          ) : (
+            <CheckCircle className="h-4 w-4 text-green-500" />
+          )}
+        </div>
       </CardHeader>
-      <CardContent className="flex-1">
+      
+      {/* FIX: Reduced padding from flex-1 to optimize space, kept height constraint */}
+      <CardContent className="flex-1 pt-0">
         {isLoading ? (
-          <div className="space-y-3 pt-2">
-            <div className="h-4 w-1/2 rounded bg-gray-200 animate-pulse" />
+          <div className="space-y-2 pt-2">
+            <div className="h-4 w-3/4 rounded bg-gray-200 animate-pulse" />
             <div className="h-4 w-2/3 rounded bg-gray-200 animate-pulse" />
-            <div className="h-4 w-1/3 rounded bg-gray-200 animate-pulse" />
+            <div className="h-4 w-1/2 rounded bg-gray-200 animate-pulse" />
           </div>
         ) : displayBookings.length > 0 ? (
-          <div className="space-y-3">
+          // FIX: Reduced spacing from space-y-3 to space-y-2
+          <div className="space-y-2">
             {displayBookings.map((booking, index) => (
               <React.Fragment key={booking.id}>
                 <Link href={`/dashboard/bookings/${booking.id}`} className="block">
-                  <div className="flex justify-between items-center p-2 -m-2 rounded hover:bg-gray-50 transition-colors">
+                  {/* FIX: Reduced item padding from p-2 to p-1 */}
+                  <div className="flex justify-between items-center p-1 -m-1 rounded hover:bg-gray-50 transition-colors">
                     <div className="flex items-center space-x-2">
-                      <Calendar className={`h-4 w-4 flex-shrink-0 ${getStatusColor(booking.status)}`} />
+                      <Calendar className={`h-3 w-3 flex-shrink-0 ${getIconColor(booking.status)}`} />
                       <span className="font-body text-sm font-medium text-foreground truncate">
                         {booking.service.name}
                       </span>
                     </div>
                     <div className="flex-shrink-0 text-right">
-                      <p className="font-body text-sm font-semibold text-gray-700">
+                      {/* Reduced text size for date and time */}
+                      <p className="font-body text-xs font-semibold text-gray-700">
                         {booking.scheduledDate ? format(new Date(booking.scheduledDate), 'MMM dd') : 'TBD'}
                       </p>
                       <p className="font-body text-xs text-gray-500">
@@ -122,7 +130,7 @@ export const UpcomingBookingsCard = () => {
                     </div>
                   </div>
                 </Link>
-                {index < displayBookings.length - 1 && <Separator />}
+                {index < displayBookings.length - 1 && <Separator className="my-1" />}
               </React.Fragment>
             ))}
           </div>
@@ -134,20 +142,21 @@ export const UpcomingBookingsCard = () => {
         )}
       </CardContent>
       
-      <CardFooter className="border-t pt-4">
+      {/* FIX: Reduced padding from pt-4 to pt-3 to reduce footer height */}
+      <CardFooter className="border-t pt-3">
         {displayBookings.length > 0 && showMore ? (
             <Link
                 href="/dashboard/bookings" 
-                className="font-body text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+                className="font-body text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors flex items-center"
             >
-                View {overflowCount} More Booking{overflowCount > 1 ? 's' : ''} →
+                View {overflowCount} More Booking{overflowCount > 1 ? 's' : ''} <ArrowRight className="h-4 w-4 ml-1" />
             </Link>
         ) : (
              <Link 
                 href="/dashboard/bookings"
-                className="font-body text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+                className="font-body text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors flex items-center"
              >
-                View All Bookings →
+                View All Bookings <ArrowRight className="h-4 w-4 ml-1" />
              </Link>
         )}
       </CardFooter>
