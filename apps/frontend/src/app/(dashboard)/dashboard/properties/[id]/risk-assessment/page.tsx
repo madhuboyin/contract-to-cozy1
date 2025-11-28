@@ -214,11 +214,20 @@ export default function RiskAssessmentPage() {
         enabled: !!propertyId,
     });
 
+    // --- ADDED: Track when query data changes ---
+    React.useEffect(() => {
+        console.log('🔄 EFFECT: riskQuery.data changed =', riskQuery.data);
+        console.log('🔄 EFFECT: riskQuery.isLoading =', riskQuery.isLoading);
+        console.log('🔄 EFFECT: riskQuery.isFetching =', riskQuery.isFetching);
+    }, [riskQuery.data, riskQuery.isLoading, riskQuery.isFetching]);
+    
     // --- Data Extraction and Status Determination (COMPREHENSIVE DEBUG FIX) ---
     const riskQueryPayload = riskQuery.data; 
     
     console.log('🔍 COMPONENT: riskQueryPayload =', riskQueryPayload);
     console.log('🔍 COMPONENT: typeof riskQueryPayload =', typeof riskQueryPayload);
+    console.log('🔍 COMPONENT: riskQuery.isLoading =', riskQuery.isLoading);
+    console.log('🔍 COMPONENT: riskQuery.isFetching =', riskQuery.isFetching);
     
     // Determine the status and safely extract the report object
     let currentStatus: 'QUEUED' | 'CALCULATED' | undefined = undefined;
