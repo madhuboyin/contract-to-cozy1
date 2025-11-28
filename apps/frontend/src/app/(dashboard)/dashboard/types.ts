@@ -1,6 +1,5 @@
 // apps/frontend/src/app/(dashboard)/dashboard/types.ts
-//import { Booking, Property } from '@/types';
-import { Property, HomeownerProfile, AssetRiskDetail, Booking } from "@/types";
+import { Property, HomeownerProfile, AssetRiskDetail, Booking, ChecklistItem, RecurrenceFrequency } from "@/types";
 
 // --- TYPES (Centralized and Unified) ---
 
@@ -9,6 +8,8 @@ export type ChecklistItemStatus = 'PENDING' | 'COMPLETED' | 'NOT_NEEDED';
 /**
  * The unified interface for checklist items, used when passing data from 
  * the router (page.tsx) to the segment dashboard components.
+ * FIX: Added missing properties (frequency, lastCompletedDate, checklistId, propertyId)
+ * to be compatible with canonical ChecklistItem.
  */
 export interface DashboardChecklistItem { 
   id: string;
@@ -17,8 +18,14 @@ export interface DashboardChecklistItem {
   status: ChecklistItemStatus | string; 
   serviceCategory: string | null;
   isRecurring: boolean;
+  
+  // FIX: Added missing fields
+  frequency: RecurrenceFrequency | null; // Assumes RecurrenceFrequency is imported/available
+  lastCompletedDate: string | null;
+  checklistId: string;
+  propertyId: string | null; // CRITICAL FIX
+  
   nextDueDate: string | null;
-  // FIX: Added missing properties for sorting and completeness
   createdAt: string; 
   updatedAt: string;
 }

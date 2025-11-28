@@ -6,18 +6,22 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
 import { Loader2 } from 'lucide-react';
-import { Booking, Property, User } from '@/types';
-import { DashboardChecklistItem, ScoredProperty, HealthScoreResult } from './types'; 
+// FIX: Import the canonical ChecklistItem
+import { Booking, Property, User, ChecklistItem } from '@/types'; 
+// FIX: Import only ScoredProperty from local types, use canonical ChecklistItem
+import { ScoredProperty } from './types'; 
 
 import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
 import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
 
+// FIX: Redefine DashboardData to use the canonical ChecklistItem[]
 interface DashboardData {
     bookings: Booking[];
     properties: ScoredProperty[];
-    checklist: { id: string, items: DashboardChecklistItem[] } | null;
+    // Use canonical ChecklistItem array type
+    checklist: { id: string, items: ChecklistItem[] } | null; 
     isLoading: boolean;
     error: string | null;
 }
@@ -163,7 +167,8 @@ export default function DashboardPage() {
       setData({
         bookings: bookingsRes.success ? bookingsRes.data.bookings : [],
         properties: newProperties,
-        checklist: fetchedChecklist,
+        // FIX: The API response should now be correctly assigned to ChecklistItem[]
+        checklist: fetchedChecklist as DashboardData['checklist'], 
         isLoading: false,
         error: null,
       });
@@ -203,7 +208,8 @@ export default function DashboardPage() {
   }
 
   const userSegment = user.segment;
-  const checklistItems = (data.checklist?.items || []) as DashboardChecklistItem[];
+  // FIX: The items fetched should now be fully compatible with the canonical ChecklistItem[]
+  const checklistItems = (data.checklist?.items || []) as ChecklistItem[];
   
   console.log('🎨 Rendering dashboard for', userSegment);
   
