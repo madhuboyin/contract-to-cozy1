@@ -20,5 +20,11 @@ router.get(
   RiskAssessmentController.generateRiskReportPdf.bind(RiskAssessmentController)
 );
 
+// Route 3: POST /api/risk/calculate/:propertyId - Manually triggers recalculation
+router.post(
+  '/calculate/:propertyId', 
+  authenticate, 
+  RiskAssessmentController.triggerRecalculation.bind(RiskAssessmentController)
+);
 
 export default router;
