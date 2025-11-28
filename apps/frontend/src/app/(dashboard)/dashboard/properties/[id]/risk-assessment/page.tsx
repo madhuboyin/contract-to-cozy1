@@ -200,26 +200,52 @@ export default function RiskAssessmentPage() {
     const riskQuery = useQuery<RiskQueryData>({
         queryKey: ["riskReport", propertyId],
         queryFn: async () => {
-            const result = await api.getRiskReportSummary(propertyId); 
-
-            if (result === 'QUEUED') {
-                return 'QUEUED' as RiskQueryData;
-            }
+            console.log('🔵 QUERY FN: Starting getRiskReportSummary for', propertyId);
             
-            // The API returns the raw report object, which is passed as 'result'
-            return result as RiskReportFull;
+            try {
+                const result = await api.getRiskReportSummary(propertyId);
+                
+                console.log('🔵 QUERY FN: getRiskReportSummary returned:', result);
+                console.log('🔵 QUERY FN: result type:', typeof result);
+                console.log('🔵 QUERY FN: result === "QUEUED":', result === 'QUEUED');
+                
+                if (result === 'QUEUED') {
+                    console.log('🔵 QUERY FN: Returning QUEUED status');
+                    return 'QUEUED' as RiskQueryData;
+                }
+                
+                console.log('🔵 QUERY FN: Returning report object:', result);
+                // The API returns the raw report object, which is passed as 'result'
+                return result as RiskReportFull;
+                
+            } catch (error) {
+                console.error('❌ QUERY FN ERROR:', error);
+                throw error;
+            }
         },
         // The result of the queryFn is either RiskReportFull or 'QUEUED'
         refetchInterval: (query) => (query.state.data === 'QUEUED' ? 5000 : false), 
         enabled: !!propertyId,
     });
 
+    // --- ADDED: Expose API for debugging ---
+    React.useEffect(() => {
+        if (typeof window !== 'undefined') {
+            (window as any).testApi = api;
+            console.log('🔧 DEBUG: API exposed as window.testApi');
+            console.log('🔧 TEST: Run this in console:');
+            console.log('   window.testApi.getRiskReportSummary("' + propertyId + '").then(r => console.log("API Result:", r))');
+        }
+    }, [propertyId]);
+    
     // --- ADDED: Track when query data changes ---
     React.useEffect(() => {
         console.log('🔄 EFFECT: riskQuery.data changed =', riskQuery.data);
         console.log('🔄 EFFECT: riskQuery.isLoading =', riskQuery.isLoading);
         console.log('🔄 EFFECT: riskQuery.isFetching =', riskQuery.isFetching);
-    }, [riskQuery.data, riskQuery.isLoading, riskQuery.isFetching]);
+        console.log('🔄 EFFECT: riskQuery.isError =', riskQuery.isError);
+        console.log('🔄 EFFECT: riskQuery.error =', riskQuery.error);
+    }, [riskQuery.data, riskQuery.isLoading, riskQuery.isFetching, riskQuery.isError, riskQuery.error]);
     
     // --- Data Extraction and Status Determination (COMPREHENSIVE DEBUG FIX) ---
     const riskQueryPayload = riskQuery.data; 
