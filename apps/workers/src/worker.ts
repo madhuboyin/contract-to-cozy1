@@ -6,6 +6,9 @@ import {
   Prisma // Added for Decimal type
 } from '@prisma/client';
 import cron from 'node-cron';
+import * as dotenv from 'dotenv'; // Load environment variables for Redis config
+dotenv.config();
+import { Worker } from 'bullmq'; // Import BullMQ Worker class
 import { RISK_JOB_TYPES } from './config/risk-job-types';
 
 // NOTE: In a professional monorepo setup, these should be moved to a shared library 
@@ -15,6 +18,16 @@ import { calculateAssetRisk, calculateTotalRiskScore, AssetRiskDetail } from '..
 import { RISK_ASSET_CONFIG } from '../../backend/src/config/risk-constants';
 
 const prisma = new PrismaClient();
+
+// --- BullMQ Configuration ---
+const RISK_CALCULATION_QUEUE_NAME = 'main-background-queue'; 
+
+// Configure Redis connection details from environment variables
+const redisConnection = {
+  host: process.env.REDIS_HOST || 'localhost',
+  port: parseInt(process.env.REDIS_PORT || '6379', 10),
+};
+// --- End BullMQ Configuration ---
 
 // Type definitions for models that exist in backend schema but not in workers schema
 // These match the backend Prisma schema definitions
@@ -255,8 +268,6 @@ try {
 
 /**
 * Main worker function to start all cron jobs and handle queued jobs.
-* NOTE: The logic for pulling jobs from a queue (e.g., Redis/Bull) is not visible 
-* in the provided files, but this structure allows for a handler to be plugged in.
 */
 function startWorker() {
 console.log('🚀 Worker started. Waiting for jobs...');
@@ -267,13 +278,35 @@ cron.schedule('0 9 * * *', sendMaintenanceReminders, {
   timezone: 'America/New_York', // Use a specific timezone
 });
 
-// Placeholder for job queue consumption (e.g., a Bull/Redis worker listener)
-// When a job comes in, it would match the job type and call the handler:
-/*
-jobQueue.process(RISK_JOB_TYPES.CALCULATE_RISK, (job) => {
-  return processRiskCalculation(job.data);
-});
-*/
+
+// --- BullMQ Job Queue Consumption Implementation ---
+// Initialize the Worker to listen for jobs on the defined queue
+const riskWorker = new Worker(
+  RISK_CALCULATION_QUEUE_NAME,
+  async (job) => {
+    // Only process the expected risk calculation job type
+    if (job.name === RISK_JOB_TYPES.CALCULATE_RISK) {
+      console.log(`[QUEUE] Starting job: ${job.name} (ID: ${job.id})`);
+      // job.data contains { propertyId: string }
+      await processRiskCalculation(job.data as { propertyId: string });
+      console.log(`[QUEUE] Completed job: ${job.name} (ID: ${job.id})`);
+    } else {
+      console.warn(`[QUEUE] Unknown job type received: ${job.name}. Skipping.`);
+    }
+  },
+  { 
+    // Fix: 'attempts' and 'backoff' are properties of JobOptions (added in Queue.add), 
+    // not WorkerOptions. Only 'connection' is required here.
+    connection: redisConnection,
+  }
+);
+
+// Add listeners for worker events for logging/monitoring
+riskWorker.on('ready', () => console.log(`[QUEUE] Worker connected to Redis and ready to process ${RISK_CALCULATION_QUEUE_NAME}.`));
+riskWorker.on('error', (err) => console.error('[QUEUE] Worker experienced an error:', err));
+riskWorker.on('failed', (job, err) => console.error(`[QUEUE] Job ${job?.id} (${job?.name}) failed with error:`, err));
+
+// --- End BullMQ Job Queue Consumption Implementation ---
 
 
 // --- For demonstration purposes, run it once on startup ---
