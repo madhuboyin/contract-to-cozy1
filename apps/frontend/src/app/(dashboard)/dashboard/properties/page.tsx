@@ -159,21 +159,31 @@ export default function PropertiesPage() {
                   </div>
                 </div>
 
-                {/* Actions */}
+                {/* Actions: Reconfigured to prioritize View Details */}
                 <div className="mt-6 flex items-center justify-between pt-4 border-t border-gray-200">
+                  {/* Left: Primary Action (View) */}
                   <Link
-                    href={`/dashboard/properties/${property.id}/edit`}
-                    className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                    href={`/dashboard/properties/${property.id}`}
+                    className="text-sm font-semibold text-blue-600 hover:text-blue-800"
                   >
-                    Edit
+                    View Details
                   </Link>
-                  <button
-                    onClick={() => handleDelete(property.id, property.name || property.address)}
-                    disabled={deleting === property.id}
-                    className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {deleting === property.id ? 'Deleting...' : 'Delete'}
-                  </button>
+                  {/* Right: Secondary Actions (Edit and Delete) */}
+                  <div className="flex items-center space-x-4">
+                    <Link
+                      href={`/dashboard/properties/${property.id}/edit`}
+                      className="text-sm font-medium text-gray-600 hover:text-gray-900"
+                    >
+                      Edit
+                    </Link>
+                    <button
+                      onClick={() => handleDelete(property.id, property.name || property.address)}
+                      disabled={deleting === property.id}
+                      className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {deleting === property.id ? 'Deleting...' : 'Delete'}
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
