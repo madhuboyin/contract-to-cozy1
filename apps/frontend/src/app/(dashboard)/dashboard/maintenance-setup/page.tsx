@@ -3,7 +3,8 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+// FIX: Import useQueryClient
+import { useQuery, useQueryClient } from '@tanstack/react-query'; 
 import { api } from '@/lib/api/client';
 import { DashboardShell } from '@/components/DashboardShell';
 import { PageHeader, PageHeaderHeading, PageHeaderDescription } from '@/components/page-header';
@@ -17,11 +18,13 @@ import Link from 'next/link';
 
 export default function MaintenanceSetupPage() {
   const router = useRouter();
+  // FIX: Initialize useQueryClient
+  const queryClient = useQueryClient();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<MaintenanceTaskTemplate | null>(null);
 
-  // --- START FIX: Property and Selection State ---
+  // --- Property and Selection State ---
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | undefined>(undefined);
   
   // 1. Fetch Properties (Needed for selection in modal)
@@ -46,7 +49,7 @@ export default function MaintenanceSetupPage() {
     }
   }, [properties, selectedPropertyId]);
 
-  // --- END FIX ---
+  // --- End Property and Selection State ---
   
   const templates = templatesData?.success ? templatesData.data.templates : [];
   const isLoading = isLoadingProperties || isLoadingTemplates;
@@ -59,7 +62,6 @@ export default function MaintenanceSetupPage() {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedTemplate(null);
-    // Optionally reset modal state if needed, but the form handles this.
   };
   
   const handleSuccess = (count: number) => {
@@ -68,8 +70,11 @@ export default function MaintenanceSetupPage() {
       description: `${count} maintenance task(s) added successfully!`,
       variant: "default",
     });
+    
+    // FIX: Invalidate the query for the maintenance list page
+    queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); 
+    
     handleCloseModal();
-    // Redirect to the main maintenance page after successful setup
     router.push('/dashboard/maintenance');
   };
 
@@ -152,7 +157,7 @@ export default function MaintenanceSetupPage() {
         </Card>
         
         {/* Maintenance Config Modal - Only show if necessary data is available */}
-        {selectedTemplate && selectedPropertyId && (
+        {selectedTemplate && (
           <MaintenanceConfigModal
             isOpen={isModalOpen}
             onClose={handleCloseModal}
