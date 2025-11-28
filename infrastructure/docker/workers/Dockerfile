@@ -11,7 +11,7 @@ RUN npm ci
 RUN npx prisma generate
 
 FROM node:20-alpine
-# Set WORKDIR to the worker's root directory for all subsequent commands.
+# Set WORKDIR to the worker's root directory for all setup and execution.
 WORKDIR /app/apps/workers
 RUN apk add --no-cache openssl
 COPY apps/workers/package*.json ./
@@ -19,24 +19,25 @@ RUN npm ci --only=production
 COPY --from=builder /app/apps/backend/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/apps/backend/node_modules/@prisma ./node_modules/@prisma
 
-# 1. Copy source files to the expected monorepo structure
-RUN mkdir -p ../../backend/src/utils ../../backend/src/config
-COPY apps/backend/src/utils/riskCalculator.util.ts ../../backend/src/utils/
-COPY apps/backend/src/config/risk-constants.ts ../../backend/src/config/
+# 1. FIX: Copy external source files INTO the worker's source tree under a 'shared' folder.
+# This makes them resolvable by TSC locally without complex paths configuration.
+RUN mkdir -p src/shared/backend/utils src/shared/backend/config
+COPY apps/backend/src/utils/riskCalculator.util.ts src/shared/backend/utils/
+COPY apps/backend/src/config/risk-constants.ts src/shared/backend/config/
 COPY apps/workers/src ./src
 COPY apps/workers/tsconfig.json ./tsconfig.json 
 
-# 2. Install TypeScript for compilation (Happens in WORKDIR /app/apps/workers)
+# 2. Install TypeScript for compilation
 RUN npm install --save-dev typescript @types/node @types/node-cron
 
-# 3. FIX: Compile Backend Dependencies from the current WORKDIR.
-# Input is relative to current directory (../../backend/src/...)
-# Output is explicitly set to the final location (../../backend/src/...)
-# This resolves the 'tsc not found' error by using the locally installed binary.
-RUN npx tsc ../../backend/src/utils/riskCalculator.util.ts --outDir ../../backend/src/utils --module commonjs
-RUN npx tsc ../../backend/src/config/risk-constants.ts --outDir ../../backend/src/config --module commonjs
+# 3. FIX: Rewrite the import paths in worker.ts using sed, as the files are now local (./shared/backend/...).
+# We must install sed first.
+RUN apk add --no-cache sed
+RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/backend\/utils\/riskCalculator\.util/g' src/worker.ts
+RUN sed -i 's/\.\.\/\.\.\/backend\/src\/config\/risk-constants/\.\/shared\/backend\/config\/risk-constants/g' src/worker.ts
 
-# 4. Compile Worker (Output goes to ./dist/worker.js due to tsconfig rootDir)
+# 4. Compile Worker (tsc can now resolve all imports locally)
+# Output goes to ./dist/worker.js due to tsconfig rootDir: "./src" and outDir: "./dist"
 RUN npx tsc --project ./tsconfig.json \
     2>&1 | tee /tmp/tsc-output.log || (cat /tmp/tsc-output.log && exit 1)
 
