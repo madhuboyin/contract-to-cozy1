@@ -19,10 +19,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import React from "react";
 import { useAuth } from "@/lib/auth/AuthContext"; 
 
-// --- Types for Query Data (Simplified for Robustness) ---
+// --- Types for Query Data ---
 type RiskReportFull = RiskAssessmentReport; 
 // The API returns either the raw report object (RiskReportFull) or the string 'QUEUED'
-type RiskQueryData = RiskReportFull | 'QUEUED'; 
+type RiskQueryData = RiskAssessmentReport | 'QUEUED'; 
 
 // --- Helper Functions ---
 const formatCurrency = (amount: number) => new Intl.NumberFormat('en-US', {
@@ -211,12 +211,12 @@ export default function RiskAssessmentPage() {
                 
                 if (result === 'QUEUED') {
                     console.log('🔵 QUERY FN: Returning QUEUED status');
-                    return 'QUEUED' as RiskQueryData;
+                    return 'QUEUED';
                 }
                 
                 console.log('🔵 QUERY FN: Returning report object:', result);
-                // The API returns the raw report object, which is passed as 'result'
-                return result as RiskReportFull;
+                // The API returns the raw report object
+                return result;
                 
             } catch (error) {
                 console.error('❌ QUERY FN ERROR:', error);
@@ -226,6 +226,9 @@ export default function RiskAssessmentPage() {
         // The result of the queryFn is either RiskReportFull or 'QUEUED'
         refetchInterval: (query) => (query.state.data === 'QUEUED' ? 5000 : false), 
         enabled: !!propertyId,
+        retry: 1, // Retry once on failure
+        staleTime: 0, // Always consider data stale
+        gcTime: 0, // Don't cache results (renamed from cacheTime in v5+)
     });
 
     // --- ADDED: Expose API for debugging ---
@@ -257,15 +260,15 @@ export default function RiskAssessmentPage() {
     
     // Determine the status and safely extract the report object
     let currentStatus: 'QUEUED' | 'CALCULATED' | undefined = undefined;
-    let report: RiskReportFull | undefined;
+    let report: RiskAssessmentReport | undefined;
 
-    // FIX: Simplified the assignment logic to correctly handle the two possible return values: 'QUEUED' or RiskReportFull object.
+    // Handle the two possible return values: 'QUEUED' or RiskAssessmentReport object
     if (riskQueryPayload === 'QUEUED') {
         currentStatus = 'QUEUED';
         console.log('🔍 COMPONENT: Status is QUEUED');
-    } else if (typeof riskQueryPayload === 'object' && riskQueryPayload !== null && 'id' in riskQueryPayload) {
-        // This handles the successful return of the raw RiskAssessmentReport object.
-        report = riskQueryPayload as RiskReportFull; 
+    } else if (typeof riskQueryPayload === 'object' && riskQueryPayload !== null) {
+        // This is the RiskAssessmentReport object
+        report = riskQueryPayload;
         currentStatus = 'CALCULATED';
         
         console.log('🔍 COMPONENT: Status is CALCULATED, report =', report);
