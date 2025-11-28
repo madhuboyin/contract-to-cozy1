@@ -1,287 +1,171 @@
 // apps/frontend/src/app/(dashboard)/dashboard/maintenance-setup/page.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/client';
-import {
-  MaintenanceTaskTemplate,
-  MaintenanceTaskConfig,
-  ServiceCategory, // Import ServiceCategory for type-checking the filter
-} from '@/types';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { DashboardShell } from '@/components/DashboardShell';
+import { PageHeader, PageHeaderHeading, PageHeaderDescription } from '@/components/page-header';
+import { MaintenanceTaskTemplate, Property } from '@/types';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ServiceCategoryIcon } from '@/components/ServiceCategoryIcon';
-import { Loader2, AlertCircle, Sparkles, Pencil, Wrench } from 'lucide-react'; // Added Wrench icon for consistency
-import { cn } from '@/lib/utils';
-import { MaintenanceConfigModal } from './MaintenanceConfigModal'; 
-// NEW IMPORT
-import { useQueryClient } from '@tanstack/react-query';
-
-// FIX 1: Define excluded renewal/financial categories
-const RENEWAL_CATEGORIES: ServiceCategory[] = [
-  'INSURANCE',
-  'WARRANTY',
-  'FINANCE',
-  'ADMIN',
-  'ATTORNEY',
-];
-
-
-// Helper function (no change)
-function formatFrequency(frequency: string | null): string {
-  if (!frequency) return 'One-time';
-  return frequency
-    .split('-')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
+import { Zap, Wrench, ChevronRight, Home, Loader2 } from 'lucide-react';
+import { toast } from '@/components/ui/use-toast';
+import { MaintenanceConfigModal } from './MaintenanceConfigModal';
+import Link from 'next/link';
 
 export default function MaintenanceSetupPage() {
   const router = useRouter();
-  // FIX 2: Initialize the queryClient
-  const queryClient = useQueryClient();
-  const [templates, setTemplates] = useState<MaintenanceTaskTemplate[]>([]);
-
-  const [selectedTasks, setSelectedTasks] = useState<
-    Record<string, MaintenanceTaskConfig>
-  >({});
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingTemplate, setEditingTemplate] =
-    useState<MaintenanceTaskTemplate | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<MaintenanceTaskTemplate | null>(null);
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // --- START FIX: Property and Selection State ---
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string | undefined>(undefined);
+  
+  // 1. Fetch Properties (Needed for selection in modal)
+  const { data: propertiesData, isLoading: isLoadingProperties } = useQuery({
+    queryKey: ['userProperties'],
+    queryFn: () => api.getProperties(),
+  });
+  
+  // 2. Fetch Templates
+  const { data: templatesData, isLoading: isLoadingTemplates } = useQuery({
+    queryKey: ['maintenanceTemplates'],
+    queryFn: () => api.getMaintenanceTemplates(),
+  });
+  
+  const properties = propertiesData?.success ? propertiesData.data.properties : [];
+  
+  // 3. Set default property ID (Primary or first) on load
+  React.useEffect(() => {
+    if (!selectedPropertyId && properties.length > 0) {
+      const defaultProp = properties.find(p => p.isPrimary) || properties[0];
+      setSelectedPropertyId(defaultProp.id);
+    }
+  }, [properties, selectedPropertyId]);
 
-  // FIX 2: Modified fetchTemplates to filter results
-  useEffect(() => {
-    const fetchTemplates = async () => {
-      try {
-        setLoading(true);
-        const response = await api.getMaintenanceTemplates();
-        if (response.success) {
-          
-          // Apply the filter to remove renewal/financial templates
-          const filteredTemplates = response.data.templates.filter(
-            (t) => 
-                // Keep templates with no service category (e.g., general admin tasks)
-                t.serviceCategory === null || 
-                // Exclude any known renewal/financial categories
-                !RENEWAL_CATEGORIES.includes(t.serviceCategory)
-          );
-          
-          setTemplates(filteredTemplates);
-        } else {
-          throw new Error(
-            response.error?.message || 'Failed to load maintenance tasks.'
-          );
-        }
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchTemplates();
-  }, []);
+  // --- END FIX ---
+  
+  const templates = templatesData?.success ? templatesData.data.templates : [];
+  const isLoading = isLoadingProperties || isLoadingTemplates;
 
-
-  // --- NEW HANDLERS (No Change) ---
-  const handleOpenModal = (template: MaintenanceTaskTemplate) => {
-    setEditingTemplate(template);
+  const handleTemplateSelect = (template: MaintenanceTaskTemplate) => {
+    setSelectedTemplate(template);
     setIsModalOpen(true);
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setEditingTemplate(null);
+    setSelectedTemplate(null);
+    // Optionally reset modal state if needed, but the form handles this.
   };
-
-  const handleSaveTaskConfig = (config: MaintenanceTaskConfig) => {
-    setSelectedTasks((prev) => ({
-      ...prev,
-      [config.templateId]: config,
-    }));
-    handleCloseModal();
-  };
-
-  const handleRemoveTask = (templateId: string) => {
-    setSelectedTasks((prev) => {
-      const newState = { ...prev };
-      delete newState[templateId];
-      return newState;
+  
+  const handleSuccess = (count: number) => {
+    toast({
+      title: "Success",
+      description: `${count} maintenance task(s) added successfully!`,
+      variant: "default",
     });
     handleCloseModal();
-  };
-  // --- END NEW HANDLERS ---
-
-// --- MODIFIED: handleSave (Added Query Invalidation and Corrected Redirect) ---
-const handleSave = async () => {
-  setSaving(true);
-  
-  const tasksToSave = Object.values(selectedTasks);
-
-  if (tasksToSave.length > 0) {
-    try {
-      const response = await api.createCustomMaintenanceItems({
-        tasks: tasksToSave,
-      });
-      if (!response.success) {
-        throw new Error(
-          response.error?.message || 'Failed to save tasks.'
-        );
-      }
-      
-      // FIX 1: Invalidate the maintenance list query cache to force a refresh on the next page
-      queryClient.invalidateQueries({ queryKey: ['full-home-checklist'] });
-
-    } catch (err: any) {
-      setError(err.message);
-      setSaving(false);
-      return;
-    }
-  }
-  // FIX 2: Redirect to the correct Maintenance List page for Existing Owners
-  router.push('/dashboard/maintenance'); 
-};
-
-  // handleSkip (no change)
-  const handleSkip = () => {
-    router.push('/dashboard');
+    // Redirect to the main maintenance page after successful setup
+    router.push('/dashboard/maintenance');
   };
 
-  // Loading state (no change)
-  if (loading) {
+  if (isLoading) {
     return (
-      <div className="flex h-[80vh] w-full items-center justify-center p-8">
-        <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
-      </div>
-    );
-  }
-
-  // Error state (no change)
-  if (error) {
-    return (
-      <div className="container mx-auto max-w-3xl py-12">
-        <div className="flex h-64 w-full flex-col items-center justify-center rounded-lg border-2 border-red-200 bg-red-50 p-8 text-center">
-          <AlertCircle className="h-8 w-8 text-red-600" />
-          <h2 className="mt-4 text-xl font-semibold text-red-900">
-            Something went wrong
-          </h2>
-          <p className="mt-2 text-muted-foreground">{error}</p>
-          <Button onClick={handleSkip} variant="outline" className="mt-4">
-            Back to Dashboard
-          </Button>
+      <DashboardShell>
+        <div className="flex justify-center items-center h-64">
+             <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
         </div>
-      </div>
+      </DashboardShell>
     );
   }
+  
+  // Scenario: No properties exist. User must create one first.
+  if (properties.length === 0) {
+      return (
+          <DashboardShell>
+              <PageHeader>
+                  <PageHeaderHeading>Maintenance Setup</PageHeaderHeading>
+                  <PageHeaderDescription>
+                      You must add a property before setting up maintenance tasks.
+                  </PageHeaderDescription>
+              </PageHeader>
+              <Card className="mt-8 p-6 text-center">
+                  <Home className="w-10 h-10 mx-auto text-gray-400 mb-4" />
+                  <p className="text-lg font-medium">No Properties Found</p>
+                  <p className="text-sm text-gray-500 mb-4">Maintenance tasks must be linked to a home.</p>
+                  <Link href="/dashboard/properties/new" passHref>
+                      <Button>Add Your First Property</Button>
+                  </Link>
+              </Card>
+          </DashboardShell>
+      );
+  }
 
-  // 7. Render Main Content
+
   return (
-    // FIX 3: Updated container classes for dashboard page consistency
-    <div className="space-y-6 pb-8 max-w-4xl mx-auto py-12">
-      <Card>
-        <CardHeader>
-          <div className="w-14 h-14 rounded-lg bg-blue-100 flex items-center justify-center mb-4">
-            <Sparkles className="w-8 h-8 text-blue-600" />
-          </div>
-          <CardTitle className="text-3xl font-bold">
-            Set Up Your Home Maintenance Plan
-          </CardTitle>
-          <CardDescription className="text-lg text-muted-foreground">
-            Let's create a recurring schedule for your home. Select the tasks
-            you'd like to track.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ul className="divide-y divide-gray-200">
-            {templates.map((template) => (
-              <li
-                key={template.id}
-                className={cn(
-                  'flex items-start space-x-4 p-5 rounded-lg',
-                  selectedTasks[template.id] && 'bg-blue-50'
-                )}
-              >
-                <div className="grid gap-0.5 flex-1 min-w-0">
-                  <label className="font-medium flex items-center">
-                    {template.serviceCategory && (
-                      <ServiceCategoryIcon
-                        icon={template.serviceCategory}
-                        className="h-4 w-4 mr-2 text-muted-foreground"
-                      />
-                    )}
-                    {template.title}
-                  </label>
-                  {template.description && (
-                    <p className="text-sm text-muted-foreground">
-                      {template.description}
-                    </p>
-                  )}
-                  <p className="text-xs font-medium text-blue-600 mt-1">
-                    Recommended: {formatFrequency(template.defaultFrequency)}
-                  </p>
-                </div>
+    <DashboardShell>
+      <PageHeader>
+        <PageHeaderHeading>Maintenance Setup</PageHeaderHeading>
+        <PageHeaderDescription>
+          Select from predefined templates or create custom tasks to build your home maintenance plan.
+        </PageHeaderDescription>
+      </PageHeader>
 
-                <div className="ml-auto flex-shrink-0">
-                  {selectedTasks[template.id] ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleOpenModal(template)}
-                    >
-                      <Pencil className="h-4 w-4 mr-2" />
-                      Edit
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleOpenModal(template)}
-                    >
-                      Select
-                    </Button>
-                  )}
+      <div className="space-y-8">
+        
+        {/* Templates List */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-2xl flex items-center gap-2">
+              <Wrench className="w-6 h-6 text-indigo-600" /> Predefined Maintenance Templates
+            </CardTitle>
+            <CardDescription>
+              Select recommended recurring tasks based on common property systems.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {templates.map(template => (
+              <div key={template.id} className="flex justify-between items-center p-3 border rounded-md hover:bg-gray-500/5 transition-colors">
+                <div>
+                  <h3 className="font-semibold">{template.title}</h3>
+                  <p className="text-sm text-gray-500">Frequency: {template.defaultFrequency.toLowerCase()} | Category: {template.serviceCategory || 'General'}</p>
                 </div>
-              </li>
+                <Button 
+                  size="sm" 
+                  onClick={() => handleTemplateSelect(template)}
+                  disabled={!selectedPropertyId} // Disable if no property is selected
+                >
+                  Select <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </div>
             ))}
-          </ul>
-        </CardContent>
-        <CardFooter className="flex justify-between">
-          <Button
-            variant="ghost"
-            onClick={handleSkip}
-            disabled={saving}
-          >
-            Skip for now
-          </Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {saving ? 'Saving...' : 'Save & Continue'}
-          </Button>
-        </CardFooter>
-      </Card>
-
-      {/* --- MODAL (No Change) --- */}
-      <MaintenanceConfigModal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        template={editingTemplate}
-        existingConfig={
-          editingTemplate ? selectedTasks[editingTemplate.id] : null
-        }
-        onSave={handleSaveTaskConfig}
-        onRemove={handleRemoveTask}
-      />
-    </div>
+            {!selectedPropertyId && (
+                <p className="text-sm font-medium text-red-500 flex items-center gap-1">
+                    <Home className="w-4 h-4"/> Please wait for properties to load or add a property.
+                </p>
+            )}
+          </CardContent>
+        </Card>
+        
+        {/* Maintenance Config Modal - Only show if necessary data is available */}
+        {selectedTemplate && selectedPropertyId && (
+          <MaintenanceConfigModal
+            isOpen={isModalOpen}
+            onClose={handleCloseModal}
+            template={selectedTemplate}
+            onSuccess={handleSuccess}
+            // PASS FIX: Pass the list of properties and the selection state
+            properties={properties}
+            selectedPropertyId={selectedPropertyId}
+            onPropertyChange={setSelectedPropertyId}
+          />
+        )}
+      </div>
+      
+    </DashboardShell>
   );
 }

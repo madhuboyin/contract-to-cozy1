@@ -761,6 +761,7 @@ class APIClient {
    */
   async createMaintenanceItems(data: {
     templateIds: string[];
+    propertyId: string; // FIX: Added propertyId
   }): Promise<APIResponse<{ count: number }>> {
     return this.request('/api/checklist/maintenance-items', {
       method: 'POST',

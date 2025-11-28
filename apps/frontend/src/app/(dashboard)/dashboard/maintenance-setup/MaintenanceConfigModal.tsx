@@ -8,6 +8,7 @@ import {
   MaintenanceTaskTemplate,
   RecurrenceFrequency,
   ServiceCategory,
+  Property, // Import Property type
 } from '@/types';
 import { Button } from '@/components/ui/button';
 import {
@@ -36,17 +37,9 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, Home, Loader2 } from 'lucide-react'; // Added Home and Loader2
 import { format } from 'date-fns';
-
-interface Props {
-  template: MaintenanceTaskTemplate | null;
-  existingConfig: MaintenanceTaskConfig | null;
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (config: MaintenanceTaskConfig) => void;
-  onRemove: (templateId: string) => void;
-}
+import { api } from '@/lib/api/client'; // Import API client
 
 // Manually define options instead of using Object.values
 const frequencyOptions: RecurrenceFrequency[] = [
@@ -70,20 +63,36 @@ const categoryOptions: ServiceCategory[] = [
   'LOCKSMITH',
 ];
 
-// Helper to format the enum strings for display (e.g., "SEMI_ANNUALLY" -> "Semi_annually")
+// Helper to format the enum strings for display
 function formatEnumString(val: string) {
   if (!val) return '';
   return val.charAt(0) + val.slice(1).toLowerCase().replace(/_/g, ' ');
 }
 
+// === FIX: Updated Props Interface to match page.tsx requirements ===
+interface MaintenanceConfigModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  template: MaintenanceTaskTemplate | null;
+  
+  // NEW PROPS
+  onSuccess: (count: number) => void;
+  properties: Property[];
+  selectedPropertyId: string | undefined; // Now accepts undefined
+  onPropertyChange: (id: string) => void;
+  
+  // NOTE: Old props (existingConfig, onSave, onRemove) removed as they are obsolete in this flow
+}
+
 export function MaintenanceConfigModal({
   template,
-  existingConfig,
   isOpen,
   onClose,
-  onSave,
-  onRemove,
-}: Props) {
+  onSuccess,
+  properties,
+  selectedPropertyId,
+  onPropertyChange,
+}: MaintenanceConfigModalProps) {
   // Form state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState<string | null>(null);
@@ -91,73 +100,109 @@ export function MaintenanceConfigModal({
   const [frequency, setFrequency] = useState<RecurrenceFrequency | null>(null);
   const [nextDueDate, setNextDueDate] = useState<Date | null>(null);
   const [category, setCategory] = useState<ServiceCategory | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false); // NEW STATE FOR SUBMISSION
+  const [serverError, setServerError] = useState<string | null>(null); // NEW STATE FOR ERRORS
 
-  // Populate state when template or config changes
+  // Populate state when template changes
   useEffect(() => {
-    const config = existingConfig || template; // Use existing config if it exists
-    if (config) {
-      setTitle(config.title);
-      setDescription(config.description || null);
-      // Cast the string from the API to the ServiceCategory enum
-      setCategory((config.serviceCategory as ServiceCategory) || null);
+    if (template) {
+      setTitle(template.title);
+      setDescription(template.description || null);
+      setCategory((template.serviceCategory as ServiceCategory) || null);
 
-      // Handle recurrence fields
-      if (existingConfig) {
-        setIsRecurring(existingConfig.isRecurring);
-        setFrequency(existingConfig.frequency);
-        setNextDueDate(existingConfig.nextDueDate);
-      } else if (template) {
-        // Defaults for a new template
-        setIsRecurring(true); // Default to recurring
-        // Cast the string from the API to the RecurrenceFrequency enum
-        setFrequency(template.defaultFrequency as RecurrenceFrequency);
-        // Default next due date
-        setNextDueDate(new Date());
-      }
+      // Defaults for a new template
+      setIsRecurring(true); // Default to recurring
+      setFrequency(template.defaultFrequency as RecurrenceFrequency);
+      setNextDueDate(new Date()); // Default to today
     }
-  }, [template, existingConfig, isOpen]);
+  }, [template, isOpen]);
 
-  const handleSave = () => {
-    if (!template) return;
+  const handleSubmit = async () => {
+    if (!template || !selectedPropertyId) {
+        setServerError("Please ensure a property is selected and a template is configured.");
+        return;
+    }
+    if (isRecurring && !frequency) {
+        setServerError("Please select a recurrence frequency.");
+        return;
+    }
+    if (!nextDueDate) {
+        setServerError("Please select the next due date.");
+        return;
+    }
 
-    onSave({
+    setIsSubmitting(true);
+    setServerError(null);
+
+    // 1. Construct MaintenanceTaskConfig DTO
+    const taskConfig: MaintenanceTaskConfig = {
       templateId: template.id,
       title,
       description,
       isRecurring,
       frequency: isRecurring ? frequency : null,
-      nextDueDate: isRecurring ? nextDueDate : null,
+      nextDueDate: nextDueDate, // Date object is fine, API handles conversion
       serviceCategory: category,
-    });
+      propertyId: selectedPropertyId, // CRITICAL: Use the prop
+    };
+
+    try {
+        const response = await api.createCustomMaintenanceItems({ tasks: [taskConfig] });
+        
+        if (response.success && response.data?.count) {
+          onSuccess(response.data.count); // Call success handler from parent
+        } else {
+          throw new Error(response.message || "Failed to create maintenance task.");
+        }
+    } catch (e: any) {
+        console.error("Maintenance task submission failed:", e);
+        setServerError(e.message || "Failed to save task configuration. Please try again.");
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
-  // FIX: Updated logic to use the task ID from either existingConfig or template
-  const handleRemove = () => {
-    // Get the ID from the existing task config if present, otherwise from the template
-    const idToRemove = existingConfig?.templateId || template?.id;
-
-    if (!idToRemove) return;
-    
-    // Call the parent's onRemove handler with the correct ID
-    onRemove(idToRemove);
-  };
-  // --- END FIX ---
-
-  const isNew = !existingConfig;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>
-            {isNew ? 'Add Task' : 'Edit Task'}: {template?.title}
+            Configure Task: {template?.title}
           </DialogTitle>
           <DialogDescription>
             Customize the details for this maintenance task.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-6 py-4">
-          {/* --- FIX: Changed to 1-column grid --- */}
+
+            {/* --- NEW: Property Selection Field --- */}
+            <div className="grid gap-2">
+                <Label className="flex items-center gap-1">
+                    <Home className="h-4 w-4" /> Property
+                </Label>
+                <Select 
+                    value={selectedPropertyId} 
+                    onValueChange={onPropertyChange}
+                    disabled={properties.length <= 1} // Disable if only one property exists
+                >
+                    <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a Property" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {properties.map((property) => (
+                            <SelectItem key={property.id} value={property.id}>
+                                {property.name || property.address}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <p className="text-sm text-gray-500">
+                    This task will be linked to the selected property.
+                </p>
+            </div>
+            {/* --- END NEW: Property Selection Field --- */}
+
           {/* Title */}
           <div className="grid gap-2">
             <Label htmlFor="title">Task Name</Label>
@@ -168,7 +213,6 @@ export function MaintenanceConfigModal({
             />
           </div>
 
-          {/* --- FIX: Changed to 1-column grid --- */}
           {/* Description */}
           <div className="grid gap-2">
             <Label htmlFor="description">Notes</Label>
@@ -180,7 +224,6 @@ export function MaintenanceConfigModal({
             />
           </div>
 
-          {/* --- FIX: Changed to 1-column grid --- */}
           {/* Service Category */}
           <div className="grid gap-2">
             <Label htmlFor="category">Category</Label>
@@ -204,7 +247,6 @@ export function MaintenanceConfigModal({
             </Select>
           </div>
 
-          {/* --- FIX: Removed col-start-2 and col-span-3 --- */}
           {/* Is Recurring */}
           <div className="flex items-center space-x-2">
             <Checkbox
@@ -218,7 +260,6 @@ export function MaintenanceConfigModal({
           {/* Frequency & Due Date (Conditional) */}
           {isRecurring && (
             <>
-              {/* --- FIX: Changed to 1-column grid --- */}
               {/* Frequency */}
               <div className="grid gap-2">
                 <Label htmlFor="frequency">Frequency</Label>
@@ -241,7 +282,6 @@ export function MaintenanceConfigModal({
                 </Select>
               </div>
 
-              {/* --- FIX: Changed to 1-column grid --- */}
               {/* Next Due Date */}
               <div className="grid gap-2">
                 <Label htmlFor="nextDueDate">Next Due Date</Label>
@@ -250,7 +290,6 @@ export function MaintenanceConfigModal({
                     <Button
                       variant={'outline'}
                       className={cn(
-                        // --- FIX: Removed col-span-3, added w-full ---
                         'w-full justify-start text-left font-normal',
                         !nextDueDate && 'text-muted-foreground'
                       )}
@@ -276,19 +315,22 @@ export function MaintenanceConfigModal({
             </>
           )}
         </div>
-        <DialogFooter className="sm:justify-between">
-          {!isNew ? (
-            <Button variant="destructive" onClick={handleRemove}>
-              Remove Task
-            </Button>
-          ) : (
-            <div /> // Placeholder
-          )}
+        
+        {serverError && (
+            <p className="text-sm font-medium text-red-600">
+                {serverError}
+            </p>
+        )}
+
+        <DialogFooter className="sm:justify-end">
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={onClose}>
+            <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button onClick={handleSave}>Save Task</Button>
+            {/* Call new handleSubmit function */}
+            <Button onClick={handleSubmit} disabled={isSubmitting || !selectedPropertyId}> 
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Save Task'}
+            </Button>
           </div>
         </DialogFooter>
       </DialogContent>

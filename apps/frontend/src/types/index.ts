@@ -678,6 +678,7 @@ export interface MaintenanceTaskConfig {
   frequency: RecurrenceFrequency | null;
   nextDueDate: Date | null;
   serviceCategory: ServiceCategory | null;
+  propertyId: string; // FIX: ADDED propertyId
 }
 
 // NEW DTOs for Home Management
