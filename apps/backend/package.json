@@ -32,7 +32,7 @@
     "@types/multer": "^2.0.0",
     "@types/node": "^20.19.25",
     "nodemon": "^3.0.2",
-    "prisma": "^5.7.1",
+    "prisma": "^7.0.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   }
