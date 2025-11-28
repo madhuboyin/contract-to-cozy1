@@ -26,10 +26,15 @@ const RISK_CALCULATION_QUEUE_NAME = 'main-background-queue';
 // FIX: Hardcoded port 6379 to bypass the deployment env var issues (NaN)
 const workerPort = 6379; 
 
+// FIX: Ensure REDIS_HOST resolves to the correct Kubernetes service name
+const redisHost = (process.env.REDIS_HOST && process.env.REDIS_HOST.trim() !== '') 
+    ? process.env.REDIS_HOST 
+    : 'redis.production.svc.cluster.local'; // <-- Set the explicit K8s DNS name as the fallback
+
 // Configure Redis connection details
 const redisConnection = {
-  host: process.env.REDIS_HOST || 'localhost',
-  port: workerPort, // Use the hardcoded port
+  host: redisHost, // Use the determined host
+  port: workerPort, 
   db: parseInt(process.env.REDIS_DB || '0', 10),
   password: process.env.REDIS_PASSWORD,
 };
