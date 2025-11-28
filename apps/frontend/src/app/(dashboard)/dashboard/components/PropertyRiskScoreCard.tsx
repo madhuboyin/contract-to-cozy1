@@ -4,7 +4,8 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Zap, Loader2, DollarSign, AlertTriangle, Shield, Home } from 'lucide-react';
+// ADDED ArrowRight for the explicit "View Risk Report" link in the final state
+import { Zap, Loader2, DollarSign, AlertTriangle, Shield, Home, ArrowRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -165,31 +166,36 @@ export function PropertyRiskScoreCard() {
 
     // --- State 4: Calculated Report (The happy path) ---
     return (
-        <Link href={reportLink} passHref legacyBehavior>
-            <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">
-                        Risk Score: {summary?.propertyName || 'Primary Home'}
-                    </CardTitle>
-                    <Zap className={`h-4 w-4 ${color}`} />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-4xl font-extrabold flex items-baseline">
-                        <span className={color}>{riskScore}</span>
-                        <span className="text-xl font-semibold text-muted-foreground ml-1">/100</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-2 flex items-center">
-                        <DollarSign className="h-4 w-4 mr-1 text-red-600" />
-                        Exposure: <span className="font-bold text-red-600 ml-1">{formatCurrency(exposure)}</span>
-                    </p>
-                    <div className="mt-3">
-                        <Badge variant={badgeVariant as any}>{level}</Badge>
-                        <span className="text-xs text-muted-foreground ml-2">
-                            Updated {new Date(summary?.lastCalculatedAt as string || '').toLocaleDateString()}
-                        </span>
-                    </div>
-                </CardContent>
-            </Card>
-        </Link>
+        // REMOVED: Link wrapper around the entire card.
+        <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                    Risk Score: {summary?.propertyName || 'Primary Home'}
+                </CardTitle>
+                <Zap className={`h-4 w-4 ${color}`} />
+            </CardHeader>
+            <CardContent>
+                <div className="text-4xl font-extrabold flex items-baseline">
+                    <span className={color}>{riskScore}</span>
+                    <span className="text-xl font-semibold text-muted-foreground ml-1">/100</span>
+                </div>
+                <p className="text-sm text-muted-foreground mt-2 flex items-center">
+                    <DollarSign className="h-4 w-4 mr-1 text-red-600" />
+                    Exposure: <span className="font-bold text-red-600 ml-1">{formatCurrency(exposure)}</span>
+                </p>
+                <div className="mt-3">
+                    <Badge variant={badgeVariant as any}>{level}</Badge>
+                    <span className="text-xs text-muted-foreground ml-2">
+                        Updated {new Date(summary?.lastCalculatedAt as string || '').toLocaleDateString()}
+                    </span>
+                </div>
+                {/* ADDED: Explicit link for the happy path */}
+                <Link href={reportLink} passHref>
+                    <Button variant="link" className="p-0 h-auto mt-3 text-sm font-semibold">
+                        View Risk Report <ArrowRight className="h-4 w-4 ml-1" />
+                    </Button>
+                </Link>
+            </CardContent>
+        </Card>
     );
 }
