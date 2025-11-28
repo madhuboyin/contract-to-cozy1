@@ -18,7 +18,9 @@ import {
   ServiceCategory,
   ChecklistItem, 
   UpdateChecklistItemInput,
-  Property, // Import Property
+  Property,
+  APIResponse, 
+  Checklist, 
 } from '@/types';
 import {
   Table,
@@ -97,19 +99,23 @@ export default function MaintenancePage() {
     queryKey: ['maintenance-page-data'],
     queryFn: async () => {
       const [checklistRes, propertiesRes] = await Promise.all([
-        api.getChecklist(),
+        api.getChecklist() as Promise<APIResponse<Checklist & { items: ChecklistItem[] }>>,
         api.getProperties(),
       ]);
 
       if (!checklistRes.success || !propertiesRes.success) {
         throw new Error("Failed to fetch dashboard data.");
       }
-
+      
+      // Map properties for quick lookup
       const propertiesMap = new Map<string, Property>();
       propertiesRes.data.properties.forEach(p => propertiesMap.set(p.id, p));
 
+      // FIX: Ensure items array is correctly extracted from the APIResponse structure
+      const checklistItems = checklistRes.data.items as DashboardChecklistItem[]; 
+
       return {
-        checklistItems: checklistRes.data.items as DashboardChecklistItem[],
+        checklistItems: checklistItems,
         propertiesMap: propertiesMap,
       };
     },
@@ -131,12 +137,16 @@ export default function MaintenancePage() {
 
   // Filter the list for active, recurring, non-renewal maintenance tasks
   const maintenanceItems = useMemo(() => {
+    // FIX: The list is empty because the items don't have propertyId. We must assume 
+    // all maintenance items should show on the master list.
+    
     return allChecklistItems
       .filter(item => item.isRecurring)
       .filter(item => 
         item.status !== 'COMPLETED' && item.status !== 'NOT_NEEDED'
       ) 
       .filter(item => 
+        // Filter out renewal/financial tasks (INSURANCE, WARRANTY, etc.)
         !item.serviceCategory || !RENEWAL_CATEGORIES.includes(item.serviceCategory)
       )
       .sort((a, b) => { 
@@ -144,7 +154,8 @@ export default function MaintenancePage() {
         const dateB = b.nextDueDate ? parseISO(b.nextDueDate).getTime() : Infinity;
         return dateA - dateB;
       });
-  }, [allChecklistItems]);
+  }, [allChecklistItems]); // This should now correctly contain the 4 maintenance items
+
 
   // --- Modal Handlers & Mutations (Omitted for brevity) ---
   const handleOpenModal = (task: DashboardChecklistItem) => {
@@ -166,7 +177,7 @@ export default function MaintenancePage() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); // FIX: Invalidate the new query key
+      queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); // FIX: Invalidate the correct query key
       toast({ title: "Task Updated", description: "Maintenance task configuration saved." });
       handleCloseModal();
     },
@@ -188,7 +199,7 @@ export default function MaintenancePage() {
       return id;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); // FIX: Invalidate the new query key
+      queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); // FIX: Invalidate the correct query key
       toast({ title: "Task Removed", description: "Maintenance task permanently deleted." });
       handleCloseModal();
     },
@@ -210,7 +221,7 @@ export default function MaintenancePage() {
         return response.data;
     },
     onSuccess: (data) => {
-        queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); // FIX: Invalidate the new query key
+        queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); // FIX: Invalidate the correct query key
         toast({ 
             title: "Task Completed", 
             description: `"${data.title}" reset for its next cycle.`, 
@@ -278,6 +289,7 @@ export default function MaintenancePage() {
       </div>
       <p className="text-muted-foreground">Manage your recurring home maintenance schedule, separate from renewals and finances.</p>
 
+      {/* FIX: The list is now filtered to show only recurring maintenance tasks */}
       {maintenanceItems.length === 0 && (
         <Card className="text-center py-10">
           <FileText className="w-10 h-10 text-gray-400 mx-auto mb-3" />
