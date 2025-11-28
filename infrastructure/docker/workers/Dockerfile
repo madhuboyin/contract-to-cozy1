@@ -1,4 +1,3 @@
-#infrastructure/docker/workers/Dockerfile
 FROM node:20-alpine AS builder
 WORKDIR /app
 RUN apk add --no-cache openssl
@@ -12,30 +11,30 @@ RUN npm ci
 RUN npx prisma generate
 
 FROM node:20-alpine
-# Set WORKDIR to the worker's root directory for all setup and execution.
+# Set WORKDIR to worker for setting up local dependencies (ts-node)
 WORKDIR /app/apps/workers
 RUN apk add --no-cache openssl
 COPY apps/workers/package*.json ./
 RUN npm ci --only=production
 
-# FIX: Install ts-node and typescript so they can be executed by npx
+# FIX: Install ts-node and typescript for runtime execution via npx
 RUN npm install typescript ts-node
 
 COPY --from=builder /app/apps/backend/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/apps/backend/node_modules/@prisma ./node_modules/@prisma
 
-# 1. Copy all source files required for runtime module resolution
+# 1. Copy all source files required by the worker, maintaining the relative path structure
 RUN mkdir -p ../../backend/src/utils ../../backend/src/config
 COPY apps/backend/src/utils/riskCalculator.util.ts ../../backend/src/utils/
 COPY apps/backend/src/config/risk-constants.ts ../../backend/src/config/
 COPY apps/workers/src ./src
 COPY apps/workers/tsconfig.docker.json ./tsconfig.json
 
-# Cleanup (since we installed dev packages above)
-# NOTE: Pruning is skipped since the `ts-node` dependencies were installed separately.
+# 2. FIX: Switch WORKDIR to the monorepo root (/app) for execution
+# This allows ts-node to resolve all relative paths correctly.
+WORKDIR /app
 
 ENV NODE_ENV=production
 
-# FINAL FIX: Use npx to correctly resolve and execute the locally installed ts-node binary.
-# This runs the worker directly from its TypeScript source file (src/worker.ts).
-CMD ["npx", "ts-node", "src/worker.ts"]
+# 3. FINAL CMD: Use npx and the path relative to the new WORKDIR (/app)
+CMD ["npx", "ts-node", "apps/workers/src/worker.ts"]
