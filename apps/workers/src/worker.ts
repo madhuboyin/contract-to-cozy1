@@ -22,10 +22,16 @@ const prisma = new PrismaClient();
 // --- BullMQ Configuration ---
 const RISK_CALCULATION_QUEUE_NAME = 'main-background-queue'; 
 
-// Configure Redis connection details from environment variables
+// FIX: Hardcoded port 6379 to bypass the deployment env var issues (NaN)
+const workerPort = 6379; // <-- This is the crucial fix
+
+// Configure Redis connection details
 const redisConnection = {
   host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379', 10),
+  port: workerPort, // Use the hardcoded port
+  // Include optional db/password if your deployment needs them
+  db: parseInt(process.env.REDIS_DB || '0', 10),
+  password: process.env.REDIS_PASSWORD,
 };
 // --- End BullMQ Configuration ---
 
