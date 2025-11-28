@@ -6,6 +6,7 @@ import {
   Prisma // Added for Decimal type
 } from '@prisma/client';
 import cron from 'node-cron';
+// --- START FIX INJECTION ---
 import * as dotenv from 'dotenv'; // Load environment variables for Redis config
 dotenv.config();
 import { Worker } from 'bullmq'; // Import BullMQ Worker class
@@ -23,17 +24,19 @@ const prisma = new PrismaClient();
 const RISK_CALCULATION_QUEUE_NAME = 'main-background-queue'; 
 
 // FIX: Hardcoded port 6379 to bypass the deployment env var issues (NaN)
-const workerPort = 6379; // <-- This is the crucial fix
+const workerPort = 6379; 
 
 // Configure Redis connection details
 const redisConnection = {
   host: process.env.REDIS_HOST || 'localhost',
   port: workerPort, // Use the hardcoded port
-  // Include optional db/password if your deployment needs them
   db: parseInt(process.env.REDIS_DB || '0', 10),
   password: process.env.REDIS_PASSWORD,
 };
 // --- End BullMQ Configuration ---
+
+// --- END FIX INJECTION ---
+
 
 // Type definitions for models that exist in backend schema but not in workers schema
 // These match the backend Prisma schema definitions
@@ -284,8 +287,8 @@ cron.schedule('0 9 * * *', sendMaintenanceReminders, {
   timezone: 'America/New_York', // Use a specific timezone
 });
 
+// --- BullMQ Job Queue Consumption Implementation (FIX) ---
 
-// --- BullMQ Job Queue Consumption Implementation ---
 // Initialize the Worker to listen for jobs on the defined queue
 const riskWorker = new Worker(
   RISK_CALCULATION_QUEUE_NAME,
@@ -293,7 +296,6 @@ const riskWorker = new Worker(
     // Only process the expected risk calculation job type
     if (job.name === RISK_JOB_TYPES.CALCULATE_RISK) {
       console.log(`[QUEUE] Starting job: ${job.name} (ID: ${job.id})`);
-      // job.data contains { propertyId: string }
       await processRiskCalculation(job.data as { propertyId: string });
       console.log(`[QUEUE] Completed job: ${job.name} (ID: ${job.id})`);
     } else {
@@ -301,9 +303,7 @@ const riskWorker = new Worker(
     }
   },
   { 
-    // Fix: 'attempts' and 'backoff' are properties of JobOptions (added in Queue.add), 
-    // not WorkerOptions. Only 'connection' is required here.
-    connection: redisConnection,
+    connection: redisConnection, // Using the fixed connection here
   }
 );
 
