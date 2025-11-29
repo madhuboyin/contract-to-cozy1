@@ -50,20 +50,24 @@ export const ExistingOwnerDashboard = ({
   const isMultiProperty = properties.length > 1;
   // --- End Property Selection State ---
 
+  // Get the boolean status of property selection
+  const isPropertySelected = !!selectedProperty;
+
   // Filter Logic: Now dependent on selectedPropertyId
   const RENEWAL_CATEGORIES = ['INSURANCE', 'WARRANTY', 'FINANCE', 'ADMIN', 'ATTORNEY'];
   
   // 1. Filter checklist items by selected property
   const propertyChecklistItems = selectedPropertyId
     ? checklistItems.filter((item: ChecklistItem) => {
-        // --- FIX: Add logic to handle items with null propertyId for single-property users ---
+        
         const belongsToSelectedProperty = item.propertyId === selectedPropertyId;
         
-        // This handles legacy data: if a user has only ONE property AND the item has no ID, assume it belongs.
-        const isLegacyItem = item.propertyId === null && !isMultiProperty && selectedPropertyId === defaultProperty?.id;
+        // FIX: Update logic to handle missing (undefined) or null propertyId for single-property users.
+        // If item.propertyId is falsy (null, undefined, or empty string) AND user is single-property, 
+        // assume it belongs to the selected default property.
+        const isLegacyItem = !item.propertyId && !isMultiProperty && selectedPropertyId === defaultProperty?.id;
 
         return belongsToSelectedProperty || isLegacyItem;
-        // -------------------------------------------------------------------------------------
     })
     : [];
   
@@ -76,9 +80,6 @@ export const ExistingOwnerDashboard = ({
   const upcomingMaintenance = activeChecklistItems.filter((item: ChecklistItem) => 
     !item.serviceCategory || !RENEWAL_CATEGORIES.includes(item.serviceCategory as string)
   ); 
-  
-  // 4. Determine if a property is explicitly selected
-  const isPropertySelected = !!selectedProperty; // true if selectedProperty is not null/undefined
 
   return (
     <div className="space-y-6 pb-8">
@@ -146,7 +147,7 @@ export const ExistingOwnerDashboard = ({
         <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-6">
           <RecurringMaintenanceCard 
             maintenance={upcomingMaintenance as any}
-            isPropertySelected={isPropertySelected} // <-- Pass the new prop
+            isPropertySelected={isPropertySelected} 
           />
           
           <UpcomingRenewalsCard propertyId={selectedPropertyId} /> 
