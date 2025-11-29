@@ -136,17 +136,46 @@ export default function MaintenancePage() {
   }
 
   const allChecklistItems = mainData?.checklistItems || [];
+  
+  // --- START FIX: Determine property context for filtering unassigned tasks ---
+  const properties = mainData?.propertiesMap ? Array.from(mainData.propertiesMap.values()) : [];
+  const isMultiProperty = properties.length > 1;
+  const defaultPropertyId = properties[0]?.id || null; // Gets the ID of the first (or only) property
+  // --- END FIX ---
+
 
   // Filter the list for active, recurring, non-renewal maintenance tasks
   const maintenanceItems = useMemo(() => {
-    // FIX: The list is empty because the items don't have propertyId. We must assume 
-    // all maintenance items should show on the master list.
     
-    return allChecklistItems
+    // FIX: Apply the necessary property filtering logic to correctly include tasks 
+    // without an explicit propertyId for single-property users (legacy data).
+    const filteredByProperty = allChecklistItems.filter(item => {
+      // 1. Get the assigned status
+      const belongsToAssignedProperty = !!item.propertyId;
+
+      // 2. Legacy/Unassigned Check (The key fix): 
+      // If the item has a Falsy propertyId (null or undefined) 
+      // AND the user is a single-property owner, include it.
+      const isLegacyUnassignedItem = !item.propertyId && !isMultiProperty && !!defaultPropertyId;
+      
+      if (isMultiProperty) {
+          // If multi-property, only show items explicitly assigned to a property.
+          return belongsToAssignedProperty; 
+      } else {
+          // Single property user: show items that are either assigned to their property
+          // (which should be the defaultPropertyId) or are unassigned (legacy).
+          return belongsToAssignedProperty || isLegacyUnassignedItem;
+      }
+    });
+
+
+    return filteredByProperty
+      // 2. Filter by recurring status and active status
       .filter(item => item.isRecurring)
       .filter(item => 
         item.status !== 'COMPLETED' && item.status !== 'NOT_NEEDED'
       ) 
+      // 3. Filter out renewals
       .filter(item => 
         // Filter out renewal/financial tasks (INSURANCE, WARRANTY, etc.)
         !item.serviceCategory || !RENEWAL_CATEGORIES.includes(item.serviceCategory)
@@ -156,7 +185,7 @@ export default function MaintenancePage() {
         const dateB = b.nextDueDate ? parseISO(b.nextDueDate).getTime() : Infinity;
         return dateA - dateB;
       });
-  }, [allChecklistItems]); // This should now correctly contain the 4 maintenance items
+  }, [allChecklistItems, isMultiProperty, defaultPropertyId]); // Added dependencies
 
 
   // --- Modal Handlers & Mutations (Omitted for brevity) ---
