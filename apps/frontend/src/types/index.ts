@@ -157,7 +157,8 @@ export interface PrimaryRiskSummary {
   propertyName: string | null;
   riskScore: number;
   financialExposureTotal: number; // Converted from Decimal on backend
-  lastCalculatedAt: Date | string; // Date string from API
+  // FIX: Added | null to support the fallback summary state in the dashboard component
+  lastCalculatedAt: Date | string | null; 
   status: RiskSummaryStatus;
   message?: string; // For NO_PROPERTY status
 }
@@ -321,7 +322,6 @@ export interface UpdateChecklistItemInput {
   frequency?: RecurrenceFrequency | null;
   nextDueDate?: string | null; // ISO Date string
   lastCompletedDate?: string | null; // ISO Date string
-  propertyId?: string | null;
 }
 // --- END CHECKLIST TYPES ---
 

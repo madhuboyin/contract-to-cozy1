@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api/client';
-import { PrimaryRiskSummary } from '@/types';
+// Import both types for transformation
+import { PrimaryRiskSummary, RiskAssessmentReport, RiskSummaryStatus } from '@/types'; 
 import React from 'react';
 
 
@@ -43,16 +44,59 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
     // If no propertyId is provided (e.g., initial load, Home Buyer with no properties), skip query
     const enabled = !!propertyId;
     
+    // Define the fallback object as a constant conforming to PrimaryRiskSummary
+    const FALLBACK_SUMMARY: PrimaryRiskSummary = { 
+        propertyId: propertyId || '', // Must not be null for property-scoped operations
+        propertyName: 'Property', 
+        riskScore: 0, 
+        financialExposureTotal: 0, 
+        lastCalculatedAt: null, 
+        status: 'MISSING_DATA' 
+    };
+
     const riskQuery = useQuery<PrimaryRiskSummary | null>({
         queryKey: ["riskSummary", propertyId],
         queryFn: async () => {
             try {
                 if (!propertyId) return null; 
-                const result = await api.getRiskSummary(propertyId);
-                return result;
+                
+                // The API call returns RiskAssessmentReport | "QUEUED" | null (or null on 404/error)
+                const result = await api.getRiskReportSummary(propertyId); 
+
+                if (!result) {
+                    return FALLBACK_SUMMARY;
+                }
+
+                // Handle QUEUED string response
+                if (typeof result === 'string') {
+                    // Assume result is the status string "QUEUED"
+                    return {
+                        ...FALLBACK_SUMMARY,
+                        propertyId,
+                        status: result as RiskSummaryStatus, 
+                    };
+                }
+
+                // Handle successful RiskAssessmentReport object response
+                const report = result as RiskAssessmentReport;
+                
+                const status: RiskSummaryStatus = report.riskScore > 0 
+                    ? 'CALCULATED' 
+                    : 'MISSING_DATA'; 
+
+                // FIX: Map RiskAssessmentReport fields to PrimaryRiskSummary fields
+                return {
+                    propertyId: report.propertyId,
+                    propertyName: 'Property', // Placeholder: Must be derived from a separate source
+                    riskScore: report.riskScore,
+                    financialExposureTotal: report.financialExposureTotal,
+                    lastCalculatedAt: report.lastCalculatedAt,
+                    status: status,
+                } as PrimaryRiskSummary;
+
             } catch (error) {
-                console.error("Failed to fetch risk summary for property:", propertyId, error);
-                return null;
+                 // Handle API request error (e.g., 404)
+                return FALLBACK_SUMMARY;
             }
         },
         refetchInterval: (query) => (query.state.data?.status === 'QUEUED' ? 5000 : false),
@@ -61,7 +105,19 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
         enabled: enabled, // Use the boolean value
     });
     
-    // --- State 1: No property selected or data is being loaded/fetched ---
+    // Assign summary, leveraging the explicit type PrimaryRiskSummary
+    const summary = riskQuery.data || FALLBACK_SUMMARY; 
+    
+    const isInitialLoading = riskQuery.isLoading && !summary.lastCalculatedAt; 
+    const isFetching = riskQuery.isFetching;
+
+    // Default values
+    const riskScore = summary.riskScore || 0;
+    const exposure = summary.financialExposureTotal || 0;
+    const { level, color, badgeVariant } = getRiskDetails(riskScore);
+    const reportLink = `/dashboard/properties/${propertyId}/risk-assessment`; 
+
+    // --- State 2: No property selected or data is being loaded/fetched ---
     if (!propertyId) {
         return (
             <Card className="hover:shadow-lg transition-shadow border-dashed border-2">
@@ -77,23 +133,6 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
             </Card>
         );
     }
-    
-    // Use fallback for other states
-    const summary = riskQuery.data || { propertyId: propertyId, propertyName: 'Property', riskScore: 0, financialExposureTotal: 0, lastCalculatedAt: null, status: 'MISSING_DATA' };
-    
-    const isInitialLoading = riskQuery.isLoading && !summary.lastCalculatedAt; 
-    const isFetching = riskQuery.isFetching;
-
-    // Default values
-    const riskScore = summary.riskScore || 0;
-    const exposure = summary.financialExposureTotal || 0;
-    const { level, color, badgeVariant } = getRiskDetails(riskScore);
-    const reportLink = `/dashboard/properties/${propertyId}/risk-assessment`; 
-    
-    // Determine state based on calculated data fields, not just status string
-    const isQueued = summary.status === 'QUEUED';
-    // A report is calculated if the score is > 0 OR if a calculation timestamp exists
-    const isCalculated = riskScore > 0 || !!summary.lastCalculatedAt; 
 
     // --- State 2: Loading / Initial Fetch Error ---
     if (isInitialLoading) { 
@@ -113,6 +152,11 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
         );
     }
     
+    // Determine state based on calculated data fields, not just status string
+    const isQueued = summary.status === 'QUEUED';
+    // A report is calculated if the score is > 0 OR if a calculation timestamp exists
+    const isCalculated = riskScore > 0 || !!summary.lastCalculatedAt; 
+
     // --- State 3: Queued ---
     if (isQueued) {
         const displayStatus = isFetching ? 'Calculating...' : 'Queued';
