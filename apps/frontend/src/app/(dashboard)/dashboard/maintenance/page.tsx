@@ -127,6 +127,7 @@ export default function MaintenancePage() {
 
   // Helper to map property ID to display name
   const getPropertyName = (propertyId: string | null): string => {
+    // NOTE: If propertyId is null/undefined, this returns 'No Property Linked'
     if (!propertyId || !mainData?.propertiesMap) return 'No Property Linked';
     
     const property = mainData.propertiesMap.get(propertyId);
@@ -136,46 +137,20 @@ export default function MaintenancePage() {
   }
 
   const allChecklistItems = mainData?.checklistItems || [];
-  
-  // --- START FIX: Determine property context for filtering unassigned tasks ---
-  const properties = mainData?.propertiesMap ? Array.from(mainData.propertiesMap.values()) : [];
-  const isMultiProperty = properties.length > 1;
-  const defaultPropertyId = properties[0]?.id || null; // Gets the ID of the first (or only) property
-  // --- END FIX ---
-
 
   // Filter the list for active, recurring, non-renewal maintenance tasks
   const maintenanceItems = useMemo(() => {
+    // FIX: Removed incorrect property filtering logic. The master list should show 
+    // ALL recurring tasks associated with the user's checklist.
     
-    // FIX: Apply the necessary property filtering logic to correctly include tasks 
-    // without an explicit propertyId for single-property users (legacy data).
-    const filteredByProperty = allChecklistItems.filter(item => {
-      // 1. Get the assigned status
-      const belongsToAssignedProperty = !!item.propertyId;
-
-      // 2. Legacy/Unassigned Check (The key fix): 
-      // If the item has a Falsy propertyId (null or undefined) 
-      // AND the user is a single-property owner, include it.
-      const isLegacyUnassignedItem = !item.propertyId && !isMultiProperty && !!defaultPropertyId;
-      
-      if (isMultiProperty) {
-          // If multi-property, only show items explicitly assigned to a property.
-          return belongsToAssignedProperty; 
-      } else {
-          // Single property user: show items that are either assigned to their property
-          // (which should be the defaultPropertyId) or are unassigned (legacy).
-          return belongsToAssignedProperty || isLegacyUnassignedItem;
-      }
-    });
-
-
-    return filteredByProperty
-      // 2. Filter by recurring status and active status
+    return allChecklistItems
+      // 1. Must be recurring
       .filter(item => item.isRecurring)
+      // 2. Must be active (not COMPLETED or NOT_NEEDED)
       .filter(item => 
         item.status !== 'COMPLETED' && item.status !== 'NOT_NEEDED'
       ) 
-      // 3. Filter out renewals
+      // 3. Must NOT be a renewal/financial task
       .filter(item => 
         // Filter out renewal/financial tasks (INSURANCE, WARRANTY, etc.)
         !item.serviceCategory || !RENEWAL_CATEGORIES.includes(item.serviceCategory)
@@ -185,7 +160,7 @@ export default function MaintenancePage() {
         const dateB = b.nextDueDate ? parseISO(b.nextDueDate).getTime() : Infinity;
         return dateA - dateB;
       });
-  }, [allChecklistItems, isMultiProperty, defaultPropertyId]); // Added dependencies
+  }, [allChecklistItems]); // The dependency list is correctly minimized
 
 
   // --- Modal Handlers & Mutations (Omitted for brevity) ---
@@ -337,7 +312,7 @@ export default function MaintenancePage() {
       </div>
       <p className="text-muted-foreground">Manage your recurring home maintenance schedule, separate from renewals and finances.</p>
 
-      {/* FIX: The list is now filtered to show only recurring maintenance tasks */}
+      {/* FIX: The list should now correctly show tasks because the property filter was removed. */}
       {maintenanceItems.length === 0 && (
         <Card className="text-center py-10">
           <FileText className="w-10 h-10 text-gray-400 mx-auto mb-3" />
