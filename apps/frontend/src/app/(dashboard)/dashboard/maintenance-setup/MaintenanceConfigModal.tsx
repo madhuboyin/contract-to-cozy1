@@ -2,7 +2,7 @@
 // --- UNIFIED MODAL FOR BOTH CREATION AND EDITING ---
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   MaintenanceTaskConfig,
   MaintenanceTaskTemplate,
@@ -112,6 +112,9 @@ export function MaintenanceConfigModal({
   const isRenewalTask = useMemo(() => {
     return !!initialConfig?.serviceCategory && RENEWAL_CATEGORIES.includes(initialConfig.serviceCategory as ServiceCategory);
   }, [initialConfig?.serviceCategory]);
+
+  // Determine if the category field should be locked (it should be for all template/existing items)
+  const shouldLockCategory = isEditing || isCreation;
   
   // Map category to a friendly path for redirection (Step 2.4)
   const renewalPath = useMemo(() => {
@@ -137,6 +140,15 @@ export function MaintenanceConfigModal({
   
   // Internal state for property ID management
   const [internalPropertyId, setInternalPropertyId] = useState<string | null>(null);
+
+
+  // Step 2.4: Handle Redirection (Made stable with useCallback)
+  const handleRenewalRedirection = useCallback(() => {
+    if (renewalPath) {
+        router.push(renewalPath);
+        onClose(); // Close the modal after triggering navigation
+    }
+  }, [renewalPath, router, onClose]);
 
 
   // 1. Populate state when modal opens/config changes
@@ -183,7 +195,23 @@ export function MaintenanceConfigModal({
       }
       // --- END FIX ---
     }
-  }, [template, existingConfig, isEditing, isCreation, propSelectedPropertyId, isOpen]);
+    
+    // NEW FIX: Immediately redirect if it's a renewal task when the modal is opened
+    // This bypasses the need for the user to click the "Go to X Management" button.
+    if (isOpen && isRenewalTask && renewalPath) {
+        handleRenewalRedirection();
+    }
+  }, [
+    template, 
+    existingConfig, 
+    isEditing, 
+    isCreation, 
+    propSelectedPropertyId, 
+    isOpen, 
+    isRenewalTask, 
+    renewalPath, 
+    handleRenewalRedirection
+  ]);
   
   // Handle change in property selection
   const handlePropertyChange = (id: string) => {
@@ -194,14 +222,6 @@ export function MaintenanceConfigModal({
     setInternalPropertyId(id);
   }
   
-  // Step 2.4: Handle Redirection
-  const handleRenewalRedirection = () => {
-    if (renewalPath) {
-        router.push(renewalPath);
-        onClose(); // Close the modal after triggering navigation
-    }
-  }
-
   // 2. Handle Save/Submit Logic (Unified)
   const handleSubmit = async () => {
     // Determine the task ID and property ID based on mode
@@ -351,16 +371,17 @@ export function MaintenanceConfigModal({
             />
           </div>
 
-          {/* Service Category (Step 2.2) */}
+          {/* Service Category */}
           <div className="grid gap-2">
             <Label htmlFor="category">Category</Label>
-            {isRenewalTask ? ( // Display fixed category for renewal tasks
+            {shouldLockCategory ? ( // LOCK THE CATEGORY FIELD for all template/existing items
                 <Input
                     value={formatEnumString(category)}
                     disabled
-                    className="bg-red-50/50 text-red-700 font-medium"
+                    // Use cn to apply different disabled styling based on renewal status
+                    className={cn("font-medium", isRenewalTask ? "bg-red-50/50 text-red-700" : "bg-gray-100 text-gray-700")}
                 />
-            ) : ( // Existing dropdown for maintenance tasks
+            ) : ( // Show editable dropdown only if it's a completely new, custom task not from a template
                 <Select
                   value={category || 'NONE'}
                   onValueChange={(val) =>
