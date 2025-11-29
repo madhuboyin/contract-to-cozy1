@@ -12,7 +12,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-// FIX: Ensure APIError is explicitly imported from types
 import { Warranty, CreateWarrantyInput, UpdateWarrantyInput, Property, APIResponse, APIError, Document, DocumentUploadInput, DocumentType } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
@@ -407,10 +406,16 @@ export default function WarrantiesPage() {
   };
   
   const closeAddEditModal = () => {
+    const wasOpenedFromSetup = openedFromSetup;
     setIsAddEditModalOpen(false);
     setEditingWarranty(undefined);
-    // Clear the 'action' and 'from' parameters from the URL history on close
-    if (searchParams.has('action') || searchParams.has('from')) {
+    setOpenedFromSetup(false);
+    
+    if (wasOpenedFromSetup) {
+        // If canceled after being opened from maintenance-setup, navigate back.
+        router.push('/dashboard/maintenance-setup');
+    } else if (searchParams.has('action') || searchParams.has('from')) {
+        // Otherwise, clean up the URL without navigating away from the current page.
         router.replace('/dashboard/warranties', { scroll: false });
     }
   };
