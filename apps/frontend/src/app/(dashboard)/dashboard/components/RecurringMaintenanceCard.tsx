@@ -14,10 +14,12 @@ import { ChecklistItem } from '@/types';
 interface RecurringMaintenanceCardProps {
   // FIX: Using canonical ChecklistItem array
   maintenance: ChecklistItem[]; 
+  // FIX: Add explicit property selection status flag
+  isPropertySelected: boolean; 
 }
 
 // FIX: Use React.FC for proper prop recognition
-export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> = ({ maintenance }) => {
+export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> = ({ maintenance, isPropertySelected }) => {
   
   // The 'maintenance' prop is already filtered by property ID by the parent component.
   const allPendingTasks = maintenance
@@ -51,11 +53,8 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
   const primaryLink = "/dashboard/maintenance";
   const primaryText = totalItems > 3 ? `View All (${totalItems})` : "View Full List";
 
-  // Determine if a property has been selected at all by checking the maintenance array.
-  // If the array is empty and there's a selected property (checked by the parent), it means 
-  // there are no tasks for this property. If the array is empty because no property is selected, 
-  // the parent handles the message.
-  const isNoPropertySelected = maintenance.length === 0 && maintenance[0]?.propertyId === undefined;
+  // Use the new explicit prop to determine the message
+  const shouldShowSelectPropertyMessage = !isPropertySelected;
 
 
   return (
@@ -71,7 +70,7 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
       </CardHeader>
       
       <CardContent className="flex-grow">
-        {isNoPropertySelected ? (
+        {shouldShowSelectPropertyMessage ? (
              <div className="flex flex-col items-center justify-center h-full p-4 space-y-2">
                 <p className="font-body text-center text-sm text-gray-500 pt-2">Please select a property to view maintenance tasks.</p>
              </div>

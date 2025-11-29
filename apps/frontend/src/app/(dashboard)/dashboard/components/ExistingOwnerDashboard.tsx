@@ -76,6 +76,9 @@ export const ExistingOwnerDashboard = ({
   const upcomingMaintenance = activeChecklistItems.filter((item: ChecklistItem) => 
     !item.serviceCategory || !RENEWAL_CATEGORIES.includes(item.serviceCategory as string)
   ); 
+  
+  // 4. Determine if a property is explicitly selected
+  const isPropertySelected = !!selectedProperty; // true if selectedProperty is not null/undefined
 
   return (
     <div className="space-y-6 pb-8">
@@ -141,7 +144,10 @@ export const ExistingOwnerDashboard = ({
 
         {/* ROW 2: Recurring Maintenance and Upcoming Renewals */}
         <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <RecurringMaintenanceCard maintenance={upcomingMaintenance as any} />
+          <RecurringMaintenanceCard 
+            maintenance={upcomingMaintenance as any}
+            isPropertySelected={isPropertySelected} // <-- Pass the new prop
+          />
           
           <UpcomingRenewalsCard propertyId={selectedPropertyId} /> 
         </div>
