@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { FileText, Plus, Loader2, Wrench, Trash2, Edit, X, Save, Upload, ExternalLink, AlertCircle } from 'lucide-react';
 import { format, parseISO, isPast } from 'date-fns';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Warranty, CreateWarrantyInput, UpdateWarrantyInput, Property, APIResponse, Document, DocumentUploadInput, DocumentType } from '@/types';
+// FIX: Ensure APIError is explicitly imported from types
+import { Warranty, CreateWarrantyInput, UpdateWarrantyInput, Property, APIResponse, APIError, Document, DocumentUploadInput, DocumentType } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
@@ -92,7 +94,7 @@ const DocumentUploadModal = ({ parentEntityId, parentEntityType, onUploadSuccess
     } else {
       toast({ 
         title: 'Upload Failed', 
-        description: res.message, 
+        description: (res as APIError).message, 
         variant: 'destructive' 
       });
     }
@@ -299,6 +301,11 @@ export default function WarrantiesPage() {
   const [uploadingToWarrantyId, setUploadingToWarrantyId] = useState<string | null>(null);
 
   const { toast } = useToast();
+  
+  // NEW: Navigation Hooks
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [openedFromSetup, setOpenedFromSetup] = useState(false); // State to track if the modal opened automatically
 
   const fetchDependencies = useCallback(async () => {
     setIsLoading(true);
@@ -312,7 +319,7 @@ export default function WarrantiesPage() {
     } else {
       toast({
         title: "Error fetching warranties",
-        description: warrantiesRes.message,
+        description: (warrantiesRes as APIError).message,
         variant: "destructive",
       });
       setWarranties([]);
@@ -324,9 +331,22 @@ export default function WarrantiesPage() {
     setIsLoading(false);
   }, [toast]); 
 
-  // Initial Data Fetch
+  // NEW: Handle initial load based on query parameters
   useEffect(() => {
     fetchDependencies();
+
+    const action = searchParams.get('action');
+    const from = searchParams.get('from');
+    
+    if (action === 'new' && !isAddEditModalOpen) {
+        openAddEditModal(undefined);
+        
+        // Check if navigation originated from the maintenance setup page
+        if (from === 'maintenance-setup') {
+            setOpenedFromSetup(true);
+        }
+    }
+
   }, [fetchDependencies]);
 
   const handleSave = async (data: CreateWarrantyInput | UpdateWarrantyInput) => {
@@ -344,13 +364,18 @@ export default function WarrantiesPage() {
         title: editingWarranty ? 'Warranty Updated' : 'Warranty Created',
         description: `${res.data.providerName}'s policy was saved successfully.`,
       });
-      await fetchDependencies(); 
-      setIsAddEditModalOpen(false);
-      setEditingWarranty(undefined);
+      
+      // NEW: Conditional redirection after successful creation
+      if (!editingWarranty && openedFromSetup) {
+          router.push('/dashboard/maintenance-setup'); // Navigate back to setup page
+      } else {
+          await fetchDependencies(); // Refresh list to show new/updated item
+          closeAddEditModal();
+      }
     } else {
       toast({
         title: 'Operation Failed',
-        description: res.message,
+        description: (res as APIError).message,
         variant: 'destructive',
       });
     }
@@ -369,7 +394,7 @@ export default function WarrantiesPage() {
       toast({ title: 'Warranty Deleted', description: 'The warranty record was removed.' });
       await fetchDependencies(); 
     } else {
-      toast({ title: 'Deletion Failed', description: res.message, variant: 'destructive' });
+      toast({ title: 'Deletion Failed', description: (res as APIError).message, variant: 'destructive' });
       setIsLoading(false);
     }
   };
@@ -377,12 +402,17 @@ export default function WarrantiesPage() {
   // Handlers for Add/Edit Modal
   const openAddEditModal = (warranty?: Warranty) => {
     setEditingWarranty(warranty);
+    setOpenedFromSetup(false); // Reset for manual opens
     setIsAddEditModalOpen(true);
   };
   
   const closeAddEditModal = () => {
     setIsAddEditModalOpen(false);
     setEditingWarranty(undefined);
+    // Clear the 'action' and 'from' parameters from the URL history on close
+    if (searchParams.has('action') || searchParams.has('from')) {
+        router.replace('/dashboard/warranties', { scroll: false });
+    }
   };
 
   // NEW Handlers for Document Upload Modal

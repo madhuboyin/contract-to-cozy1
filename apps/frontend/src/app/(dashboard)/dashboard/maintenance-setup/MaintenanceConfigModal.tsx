@@ -120,11 +120,13 @@ export function MaintenanceConfigModal({
   const renewalPath = useMemo(() => {
     switch(initialConfig?.serviceCategory) {
       case 'INSURANCE':
-        return '/dashboard/insurance';
+        // Updated path for deep linking to modal + return address
+        return '/dashboard/insurance?action=new&from=maintenance-setup'; 
       case 'WARRANTY':
-        return '/dashboard/warranties';
+        // Updated path for deep linking to modal + return address
+        return '/dashboard/warranties?action=new&from=maintenance-setup';
       default:
-        return '/dashboard/profile'; // General redirect for other financial/admin tasks
+        return '/dashboard/profile';
     }
   }, [initialConfig?.serviceCategory]);
 
@@ -197,7 +199,6 @@ export function MaintenanceConfigModal({
     }
     
     // NEW FIX: Immediately redirect if it's a renewal task when the modal is opened
-    // This bypasses the need for the user to click the "Go to X Management" button.
     if (isOpen && isRenewalTask && renewalPath) {
         handleRenewalRedirection();
     }

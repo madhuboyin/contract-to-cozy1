@@ -11,11 +11,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+// FIX: Ensure APIError is explicitly imported from types
 import { InsurancePolicy, CreateInsurancePolicyInput, UpdateInsurancePolicyInput, Property, APIResponse, APIError, Document, DocumentType, DocumentUploadInput } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 // NEW IMPORTS for Table structure
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Table,
   TableBody,
@@ -310,6 +312,11 @@ export default function InsurancePage() {
 
   const { toast } = useToast();
   
+  // NEW: Navigation Hooks
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [openedFromSetup, setOpenedFromSetup] = useState(false); // State to track if the modal opened automatically
+  
   const fetchDependencies = useCallback(async () => {
     setIsLoading(true);
     const [policiesRes, propertiesRes] = await Promise.all([
@@ -334,8 +341,21 @@ export default function InsurancePage() {
     setIsLoading(false);
   }, [toast]); 
 
+  // NEW: Handle initial load based on query parameters
   useEffect(() => {
     fetchDependencies();
+
+    const action = searchParams.get('action');
+    const from = searchParams.get('from');
+    
+    if (action === 'new' && !isAddEditModalOpen) {
+        openAddEditModal(undefined);
+        
+        // Check if navigation originated from the maintenance setup page
+        if (from === 'maintenance-setup') {
+            setOpenedFromSetup(true);
+        }
+    }
   }, [fetchDependencies]);
 
   const handleSave = async (data: CreateInsurancePolicyInput | UpdateInsurancePolicyInput) => {
@@ -353,9 +373,14 @@ export default function InsurancePage() {
         title: editingPolicy ? 'Policy Updated' : 'Policy Created',
         description: `${res.data.carrierName}'s policy was saved successfully.`,
       });
-      await fetchDependencies(); // Refresh list to show new/updated item
-      setIsAddEditModalOpen(false);
-      setEditingPolicy(undefined);
+      
+      // NEW: Conditional redirection after successful creation
+      if (!editingPolicy && openedFromSetup) {
+          router.push('/dashboard/maintenance-setup'); // Navigate back to setup page
+      } else {
+          await fetchDependencies(); // Refresh list to show new/updated item
+          closeAddEditModal();
+      }
     } else {
       toast({
         title: 'Operation Failed',
@@ -386,12 +411,17 @@ export default function InsurancePage() {
   // Handlers for Add/Edit Modal
   const openAddEditModal = (policy?: InsurancePolicy) => {
     setEditingPolicy(policy);
+    setOpenedFromSetup(false); // Reset for manual opens
     setIsAddEditModalOpen(true);
   };
   
   const closeAddEditModal = () => {
     setIsAddEditModalOpen(false);
     setEditingPolicy(undefined);
+    // Clear the 'action' and 'from' parameters from the URL history on close
+    if (searchParams.has('action') || searchParams.has('from')) {
+        router.replace('/dashboard/insurance', { scroll: false });
+    }
   };
   
   // Handlers for Document Upload Modal
