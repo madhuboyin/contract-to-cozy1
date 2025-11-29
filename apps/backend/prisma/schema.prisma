@@ -510,7 +510,6 @@ model Property {
 
   // NEW RELATION FOR RISK ASSESSMENT (Phase 1): ***FIX APPLIED: Added @relation(name: "PropertyRiskReport")***
   riskReport       RiskAssessmentReport? @relation(name: "PropertyRiskReport")
-  @relation(fields: [propertyId], references: [id]) // NEW RELATION
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
