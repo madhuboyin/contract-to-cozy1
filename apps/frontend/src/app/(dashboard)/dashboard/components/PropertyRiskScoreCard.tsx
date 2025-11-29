@@ -108,7 +108,7 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
         );
     }
     
-    // --- State 3: Missing Data or Queued (Unchanged logic) ---
+    // --- State 3: Queued (Unchanged logic) ---
     if (summary.status === 'QUEUED') {
         const displayStatus = isFetching ? 'Calculating...' : 'Queued';
         const displayMessage = isFetching 
@@ -142,8 +142,10 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
         );
     }
     
-    // Fallback for MISSING_DATA (0 score) - Treat as a warning/setup reminder
-    if (summary.status === 'MISSING_DATA') {
+    // Fallback for MISSING_DATA - Treat as a warning/setup reminder
+    // FIX: Only show MISSING_DATA if the risk score is actually 0. This prevents showing "Needs Data"
+    // when a score has been calculated, but the backend status is incorrectly labeled.
+    if (summary.status === 'MISSING_DATA' && riskScore === 0) {
         return (
             <Card className="hover:shadow-lg transition-shadow border-2 border-yellow-500/50">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
