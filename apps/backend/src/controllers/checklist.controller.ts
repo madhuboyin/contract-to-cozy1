@@ -115,7 +115,7 @@ const handleCreateMaintenanceItems = async (
       return res.status(401).json({ message: 'Authentication required.' });
     }
     const userId = req.user.userId;
-    const { templateIds } = req.body;
+    const { templateIds, propertyId } = req.body; // FIX: Extract propertyId from request
 
     if (!Array.isArray(templateIds) || templateIds.length === 0) {
       return res.status(400).json({
@@ -125,7 +125,8 @@ const handleCreateMaintenanceItems = async (
 
     const result = await ChecklistService.addMaintenanceItemsToChecklist(
       userId,
-      templateIds
+      templateIds,
+      propertyId // FIX: Pass propertyId to service
     );
 
     res

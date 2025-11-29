@@ -318,10 +318,12 @@ export class ChecklistService {
    * Adds new recurring maintenance items to a user's checklist.
    * @param userId The ID of the user.
    * @param templateIds An array of MaintenanceTaskTemplate IDs to add.
+   * @param propertyId Optional property ID to associate tasks with.
    */
   static async addMaintenanceItemsToChecklist(
     userId: string,
-    templateIds: string[]
+    templateIds: string[],
+    propertyId?: string
   ): Promise<{ count: number }> {
     // 1. Get the user's checklist (or create one if it doesn't exist)
     const checklist = await this.getOrCreateChecklist(userId);
@@ -352,6 +354,7 @@ export class ChecklistService {
       frequency: template.defaultFrequency,
       nextDueDate: calculateNextDueDate(template.defaultFrequency),
       sortOrder: template.sortOrder || 0,
+      propertyId: propertyId || null, // FIX: Include propertyId
     }));
 
     // 4. Create all new items in the database
@@ -392,6 +395,9 @@ export class ChecklistService {
       isRecurring: task.isRecurring,
       frequency: task.isRecurring ? task.frequency : null,
       nextDueDate: task.isRecurring ? task.nextDueDate : null,
+      
+      // FIX: Include propertyId from the task config
+      propertyId: task.propertyId || null,
       
       // Set sort order based on the array order
       sortOrder: index, 

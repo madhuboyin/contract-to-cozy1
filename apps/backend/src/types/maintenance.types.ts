@@ -1,5 +1,5 @@
 // apps/backend/src/types/maintenance.types.ts
-// --- NEW FILE ---
+// --- FIXED VERSION ---
 
 import { z } from 'zod';
 import { RecurrenceFrequency, ServiceCategory } from '@prisma/client';
@@ -24,6 +24,10 @@ const maintenanceTaskConfigSchema = z.object({
   }, z.date().nullable().optional()),
   
   serviceCategory: serviceCategoryEnum.nullable().optional(),
+  
+  // FIX: Add propertyId field
+  propertyId: z.string().nullable().optional(),
+  
 }).refine(data => {
   // If it's recurring, frequency and nextDueDate must be provided
   if (data.isRecurring) {
