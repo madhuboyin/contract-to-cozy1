@@ -424,6 +424,7 @@ model ChecklistItem {
   checklistId        String
   propertyId         String?
   checklist   Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  property    Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)  // ← ADD THIS
   sortOrder   Int @default(0)
 
   @@index([checklistId])
@@ -509,7 +510,7 @@ model Property {
 
   // NEW RELATION FOR RISK ASSESSMENT (Phase 1): ***FIX APPLIED: Added @relation(name: "PropertyRiskReport")***
   riskReport       RiskAssessmentReport? @relation(name: "PropertyRiskReport")
-  checklistItems   ChecklistItem[] @relation(fields: [propertyId], references: [id]) // NEW RELATION
+  @relation(fields: [propertyId], references: [id]) // NEW RELATION
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
