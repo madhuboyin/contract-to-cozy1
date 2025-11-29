@@ -321,6 +321,7 @@ export interface UpdateChecklistItemInput {
   frequency?: RecurrenceFrequency | null;
   nextDueDate?: string | null; // ISO Date string
   lastCompletedDate?: string | null; // ISO Date string
+  propertyId?: string | null;
 }
 // --- END CHECKLIST TYPES ---
 

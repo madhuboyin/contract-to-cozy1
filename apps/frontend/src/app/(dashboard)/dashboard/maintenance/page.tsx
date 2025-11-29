@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'; 
+import { useRouter } from 'next/navigation'; 
 import { MaintenanceConfigModal } from '../maintenance-setup/MaintenanceConfigModal'; 
 import { 
   MaintenanceTaskConfig, 
@@ -90,6 +91,7 @@ function formatCategory(category: ServiceCategory | null) {
 export default function MaintenancePage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<DashboardChecklistItem | null>(null);
@@ -158,7 +160,24 @@ export default function MaintenancePage() {
 
 
   // --- Modal Handlers & Mutations (Omitted for brevity) ---
+  // Step 3.1: Update handleOpenModal for redirection
   const handleOpenModal = (task: DashboardChecklistItem) => {
+    // Check for renewal category and redirect if necessary
+    if (task.serviceCategory && RENEWAL_CATEGORIES.includes(task.serviceCategory)) {
+        let redirectPath = '/dashboard/profile'; // Default safe redirect for general financial/admin tasks
+        
+        if (task.serviceCategory === 'INSURANCE') {
+            redirectPath = '/dashboard/insurance';
+        } else if (task.serviceCategory === 'WARRANTY') {
+            redirectPath = '/dashboard/warranties';
+        }
+
+        router.push(redirectPath);
+        toast({ title: "Renewal Task", description: `Please manage "${task.title}" directly on the ${formatEnumString(task.serviceCategory)} management page.` });
+        return; // Skip opening the modal
+    }
+    
+    // Proceed to open modal for actual maintenance tasks
     setEditingTask(task);
     setIsModalOpen(true);
   };

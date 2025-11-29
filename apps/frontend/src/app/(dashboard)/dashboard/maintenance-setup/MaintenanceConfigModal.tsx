@@ -39,6 +39,7 @@ import {
 import { cn } from '@/lib/utils';
 import { CalendarIcon, Home, Loader2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client'; 
 
 // Manually define options
@@ -52,6 +53,15 @@ const frequencyOptions: RecurrenceFrequency[] = [
 const categoryOptions: ServiceCategory[] = [
   'INSPECTION', 'HANDYMAN', 'PLUMBING', 'ELECTRICAL', 'HVAC', 'LANDSCAPING', 
   'CLEANING', 'MOVING', 'PEST_CONTROL', 'LOCKSMITH',
+];
+
+// Step 2.1: Define RENEWAL_CATEGORIES
+const RENEWAL_CATEGORIES: ServiceCategory[] = [
+  'INSURANCE',
+  'WARRANTY',
+  'FINANCE',
+  'ADMIN',
+  'ATTORNEY',
 ];
 
 function formatEnumString(val: string | null | undefined) {
@@ -91,11 +101,30 @@ export function MaintenanceConfigModal({
   onSave,
   onRemove,
 }: MaintenanceConfigModalProps) {
+  const router = useRouter();
+
   // Determine mode and source of initial data
   const isEditing = !!existingConfig;
   const isCreation = !!template && !isEditing;
   const initialConfig = existingConfig || template;
   
+  // Determine if it's a renewal task (Step 2.1, 2.3)
+  const isRenewalTask = useMemo(() => {
+    return !!initialConfig?.serviceCategory && RENEWAL_CATEGORIES.includes(initialConfig.serviceCategory as ServiceCategory);
+  }, [initialConfig?.serviceCategory]);
+  
+  // Map category to a friendly path for redirection (Step 2.4)
+  const renewalPath = useMemo(() => {
+    switch(initialConfig?.serviceCategory) {
+      case 'INSURANCE':
+        return '/dashboard/insurance';
+      case 'WARRANTY':
+        return '/dashboard/warranties';
+      default:
+        return '/dashboard/profile'; // General redirect for other financial/admin tasks
+    }
+  }, [initialConfig?.serviceCategory]);
+
   // State initialization
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState<string | null>(null);
@@ -163,6 +192,14 @@ export function MaintenanceConfigModal({
     }
     // Update internal state for both flows
     setInternalPropertyId(id);
+  }
+  
+  // Step 2.4: Handle Redirection
+  const handleRenewalRedirection = () => {
+    if (renewalPath) {
+        router.push(renewalPath);
+        onClose(); // Close the modal after triggering navigation
+    }
   }
 
   // 2. Handle Save/Submit Logic (Unified)
@@ -314,94 +351,114 @@ export function MaintenanceConfigModal({
             />
           </div>
 
-          {/* Service Category */}
+          {/* Service Category (Step 2.2) */}
           <div className="grid gap-2">
             <Label htmlFor="category">Category</Label>
-            <Select
-              value={category || 'NONE'}
-              onValueChange={(val) =>
-                setCategory(val === 'NONE' ? null : (val as ServiceCategory))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="NONE">None</SelectItem>
-                {categoryOptions.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {formatEnumString(cat)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Is Recurring */}
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="isRecurring"
-              checked={isRecurring}
-              onCheckedChange={(checked) => setIsRecurring(!!checked)}
-            />
-            <Label htmlFor="isRecurring">Make this a recurring task?</Label>
-          </div>
-
-          {/* Frequency & Due Date (Conditional) */}
-          {isRecurring && (
-            <>
-              {/* Frequency */}
-              <div className="grid gap-2">
-                <Label htmlFor="frequency">Frequency</Label>
+            {isRenewalTask ? ( // Display fixed category for renewal tasks
+                <Input
+                    value={formatEnumString(category)}
+                    disabled
+                    className="bg-red-50/50 text-red-700 font-medium"
+                />
+            ) : ( // Existing dropdown for maintenance tasks
                 <Select
-                  value={frequency || ''}
+                  value={category || 'NONE'}
                   onValueChange={(val) =>
-                    setFrequency(val as RecurrenceFrequency)
+                    setCategory(val === 'NONE' ? null : (val as ServiceCategory))
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a frequency" />
+                    <SelectValue placeholder="Select a category" />
                   </SelectTrigger>
                   <SelectContent>
-                    {frequencyOptions.map((freq) => (
-                      <SelectItem key={freq} value={freq}>
-                        {formatEnumString(freq)}
+                    <SelectItem value="NONE">None</SelectItem>
+                    {categoryOptions.map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {formatEnumString(cat)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
+            )}
+            
+            {/* Renewal Callout (Step 2.3) */}
+            {isRenewalTask && (
+                <p className="text-sm text-red-500 font-medium mt-1">
+                    This is a Renewal/Financial task. You must manage its due date and details directly on the associated management page.
+                </p>
+            )}
+          </div>
 
-              {/* Next Due Date */}
-              <div className="grid gap-2">
-                <Label htmlFor="nextDueDate">Next Due Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant={'outline'}
-                      className={cn(
-                        'w-full justify-start text-left font-normal',
-                        !nextDueDate && 'text-muted-foreground'
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {nextDueDate ? (
-                        format(nextDueDate, 'PPP')
-                      ) : (
-                        <span>Pick a date</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={nextDueDate || undefined}
-                      onSelect={(date) => setNextDueDate(date || null)}
-                      initialFocus
+          {/* Maintenance Fields - Conditional Render (Step 2.3) */}
+          {!isRenewalTask && (
+            <>
+                {/* Is Recurring */}
+                <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="isRecurring"
+                      checked={isRecurring}
+                      onCheckedChange={(checked) => setIsRecurring(!!checked)}
                     />
-                  </PopoverContent>
-                </Popover>
-              </div>
+                    <Label htmlFor="isRecurring">Make this a recurring task?</Label>
+                </div>
+
+                {/* Frequency & Due Date (Conditional) */}
+                {isRecurring && (
+                    <>
+                      {/* Frequency */}
+                      <div className="grid gap-2">
+                        <Label htmlFor="frequency">Frequency</Label>
+                        <Select
+                          value={frequency || ''}
+                          onValueChange={(val) =>
+                            setFrequency(val as RecurrenceFrequency)
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a frequency" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {frequencyOptions.map((freq) => (
+                              <SelectItem key={freq} value={freq}>
+                                {formatEnumString(freq)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Next Due Date */}
+                      <div className="grid gap-2">
+                        <Label htmlFor="nextDueDate">Next Due Date</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant={'outline'}
+                              className={cn(
+                                'w-full justify-start text-left font-normal',
+                                !nextDueDate && 'text-muted-foreground'
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {nextDueDate ? (
+                                format(nextDueDate, 'PPP')
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={nextDueDate || undefined}
+                              onSelect={(date) => setNextDueDate(date || null)}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </>
+                )}
             </>
           )}
         </div>
@@ -423,9 +480,17 @@ export function MaintenanceConfigModal({
             <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting || !title.trim()}>
+            
+            {/* Save/Redirection Button (Step 2.4) */}
+            {isRenewalTask && renewalPath ? (
+                <Button onClick={handleRenewalRedirection} variant="default">
+                    Go to {formatEnumString(category)} Management
+                </Button>
+            ) : (
+                <Button onClick={handleSubmit} disabled={isSubmitting || !title.trim()}>
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Save Task'}
-            </Button>
+                </Button>
+            )}
           </div>
         </DialogFooter>
       </DialogContent>
