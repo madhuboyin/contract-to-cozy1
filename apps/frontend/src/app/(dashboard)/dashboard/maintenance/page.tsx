@@ -137,31 +137,52 @@ export default function MaintenancePage() {
   }
 
   const allChecklistItems = mainData?.checklistItems || [];
+  
+  // DEBUG: Check how many items we received before filtering
+  console.log('--- MAINTENANCE DEBUG START ---');
+  console.log('DEBUG (Outside UseMemo): Total items from data source:', allChecklistItems.length);
+  
+  // NOTE: This logic is intentionally simplified back to the "master list" view,
+  // expecting to show all tasks regardless of propertyId association, which is what 
+  // the user expects for the /maintenance list page.
 
   // Filter the list for active, recurring, non-renewal maintenance tasks
   const maintenanceItems = useMemo(() => {
-    // FIX: Removed incorrect property filtering logic. The master list should show 
-    // ALL recurring tasks associated with the user's checklist.
+    let items = allChecklistItems;
+    console.log('DEBUG 1 (Inside UseMemo): Starting count:', items.length);
     
-    return allChecklistItems
-      // 1. Must be recurring
-      .filter(item => item.isRecurring)
-      // 2. Must be active (not COMPLETED or NOT_NEEDED)
-      .filter(item => 
-        item.status !== 'COMPLETED' && item.status !== 'NOT_NEEDED'
-      ) 
-      // 3. Must NOT be a renewal/financial task
-      .filter(item => 
-        // Filter out renewal/financial tasks (INSURANCE, WARRANTY, etc.)
-        !item.serviceCategory || !RENEWAL_CATEGORIES.includes(item.serviceCategory)
-      )
+    // 1. Must be recurring
+    items = items.filter(item => {
+        const result = item.isRecurring;
+        return result;
+    });
+    console.log('DEBUG 2: After isRecurring filter (must be true):', items.length);
+    
+    // 2. Must be active (not COMPLETED or NOT_NEEDED)
+    items = items.filter(item => 
+      item.status !== 'COMPLETED' && item.status !== 'NOT_NEEDED'
+    );
+    console.log('DEBUG 3: After status filter (must be PENDING):', items.length);
+
+    // 3. Must NOT be a renewal/financial task
+    items = items.filter(item => {
+        const isRenewal = item.serviceCategory && RENEWAL_CATEGORIES.includes(item.serviceCategory);
+        return !isRenewal;
+    });
+    console.log('DEBUG 4: After category filter (MAINTENANCE only):', items.length);
+
+    // Sort and return
+    return items
       .sort((a, b) => { 
         const dateA = a.nextDueDate ? parseISO(a.nextDueDate).getTime() : Infinity;
         const dateB = b.nextDueDate ? parseISO(b.nextDueDate).getTime() : Infinity;
         return dateA - dateB;
       });
-  }, [allChecklistItems]); // The dependency list is correctly minimized
+  }, [allChecklistItems]); 
 
+  // DEBUG: Final check
+  console.log('DEBUG (Outside UseMemo): Final maintenanceItems count:', maintenanceItems.length);
+  console.log('--- MAINTENANCE DEBUG END ---');
 
   // --- Modal Handlers & Mutations (Omitted for brevity) ---
   // Step 3.1: Update handleOpenModal for redirection

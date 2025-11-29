@@ -2,7 +2,7 @@
 
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,7 +38,6 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
     // Normalize score for progress bar (full bar = 100)
     const progressValue = healthScore > 100 ? 100 : healthScore;
     
-    // --- RECOMMENDED LOGIC CHANGE APPLIED HERE ---
     // Now filters for all three high-priority, title-case status strings to fix the bug
     // and include 'Needs Review' and 'Needs Inspection'.
     const totalRequiredActions = property.healthScore?.insights.filter(i => 
@@ -48,43 +47,47 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
     return (
         <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                    {property.name || 'Primary Home'} Health Score
-                </CardTitle>
-                <Shield className={`h-4 w-4 ${color}`} />
+                <div className="space-y-1">
+                    <CardTitle className="font-heading text-xl flex items-center gap-2">
+                        <Shield className={`h-5 w-5 ${color}`} />
+                        Property Health
+                    </CardTitle>
+                    <CardDescription className="font-body text-sm">
+                        {property.name || 'Primary Home'} overall condition
+                    </CardDescription>
+                </div>
             </CardHeader>
             <CardContent>
                 <div className="text-4xl font-extrabold flex items-baseline">
                     <span className={color}>{healthScore}</span>
                     <span className="text-xl font-semibold text-muted-foreground ml-1">/100</span>
                 </div>
-                <p className="text-sm text-muted-foreground mt-1">
+                <p className="font-body text-sm text-muted-foreground mt-1">
                     Status: <Badge variant={badgeVariant} className="text-xs">{level}</Badge>
                 </p>
                 
                 <div className="mt-4">
-                    <p className="text-lg font-semibold flex items-center">
-                        {/* Use a danger color for the alert icon */}
+                    <p className="font-body text-lg font-semibold flex items-center">
                         <Zap className="h-4 w-4 mr-1 text-red-600" />
                         Required Maintenance Actions
                     </p>
                     <p className="text-3xl font-extrabold text-red-600">
                         {totalRequiredActions}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="font-body text-xs text-muted-foreground mt-1">
                         High-priority tasks identified in the last assessment.
                     </p>
                 </div>
                 
                 <div className="mt-4">
-                    <h4 className="text-sm font-medium mb-1">Health Gauge ({level})</h4>
+                    <h4 className="font-body text-sm font-medium mb-1">Health Gauge ({level})</h4>
                     <Progress 
                         value={progressValue} 
                         className="h-2" 
                         indicatorClassName={progressClass} 
                     />
                     <Link href={`/dashboard/properties/${property.id}/`} passHref>
-                        <Button variant="link" className="p-0 h-auto mt-2 text-sm font-semibold">
+                        <Button variant="link" className="p-0 h-auto mt-2 font-body text-sm font-semibold">
                             View Full Maintenance Plan <ArrowRight className="h-4 w-4 ml-1" />
                         </Button>
                     </Link>
