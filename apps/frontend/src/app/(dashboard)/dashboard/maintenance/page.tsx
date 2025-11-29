@@ -101,20 +101,30 @@ export default function MaintenancePage() {
     queryKey: ['maintenance-page-data'],
     queryFn: async () => {
       const [checklistRes, propertiesRes] = await Promise.all([
-        api.getChecklist() as Promise<APIResponse<Checklist & { items: ChecklistItem[] }>>,
+        api.getChecklist(),
         api.getProperties(),
       ]);
 
-      if (!checklistRes.success || !propertiesRes.success) {
-        throw new Error("Failed to fetch dashboard data.");
+      // Properties response is wrapped in APIResponse
+      if (!propertiesRes.success) {
+        throw new Error("Failed to fetch properties.");
       }
       
       // Map properties for quick lookup
       const propertiesMap = new Map<string, Property>();
       propertiesRes.data.properties.forEach(p => propertiesMap.set(p.id, p));
 
-      // FIX: Ensure items array is correctly extracted from the APIResponse structure
-      const checklistItems = checklistRes.data.items as DashboardChecklistItem[]; 
+      // FIX: Handle checklist response - backend returns checklist directly (not wrapped)
+      // The type says APIResponse but backend actually returns { id, items, ... } directly
+      let checklistItems: DashboardChecklistItem[] = [];
+      
+      if ('success' in checklistRes && checklistRes.success) {
+        // If it's wrapped (type definition case)
+        checklistItems = checklistRes.data.items as DashboardChecklistItem[];
+      } else if ('items' in checklistRes) {
+        // If it's direct (actual backend behavior)
+        checklistItems = (checklistRes as any).items as DashboardChecklistItem[];
+      }
 
       return {
         checklistItems: checklistItems,
