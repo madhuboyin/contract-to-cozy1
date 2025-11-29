@@ -421,7 +421,8 @@ model ChecklistItem {
   frequency          RecurrenceFrequency?
   nextDueDate        DateTime?
   lastCompletedDate  DateTime?
-  checklistId String
+  checklistId        String
+  propertyId         String?
   checklist   Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
   sortOrder   Int @default(0)
 
@@ -501,12 +502,14 @@ model Property {
   warranties       Warranty[]
   insurancePolicies InsurancePolicy[]
   expenses         Expense[]
+  checklistItems   ChecklistItem[]
  
   documents        Document[]
 
 
   // NEW RELATION FOR RISK ASSESSMENT (Phase 1): ***FIX APPLIED: Added @relation(name: "PropertyRiskReport")***
   riskReport       RiskAssessmentReport? @relation(name: "PropertyRiskReport")
+  checklistItems   ChecklistItem[] @relation(fields: [propertyId], references: [id]) // NEW RELATION
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
