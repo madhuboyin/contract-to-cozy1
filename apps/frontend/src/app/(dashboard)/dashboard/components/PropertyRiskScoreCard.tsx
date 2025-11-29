@@ -89,6 +89,11 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
     const exposure = summary.financialExposureTotal || 0;
     const { level, color, badgeVariant } = getRiskDetails(riskScore);
     const reportLink = `/dashboard/properties/${propertyId}/risk-assessment`; 
+    
+    // Determine state based on calculated data fields, not just status string
+    const isQueued = summary.status === 'QUEUED';
+    // A report is calculated if the score is > 0 OR if a calculation timestamp exists
+    const isCalculated = riskScore > 0 || !!summary.lastCalculatedAt; 
 
     // --- State 2: Loading / Initial Fetch Error ---
     if (isInitialLoading) { 
@@ -108,8 +113,8 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
         );
     }
     
-    // --- State 3: Queued (Unchanged logic) ---
-    if (summary.status === 'QUEUED') {
+    // --- State 3: Queued ---
+    if (isQueued) {
         const displayStatus = isFetching ? 'Calculating...' : 'Queued';
         const displayMessage = isFetching 
             ? 'Report calculation in progress. Refreshing soon...'
@@ -142,10 +147,9 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
         );
     }
     
-    // Fallback for MISSING_DATA - Treat as a warning/setup reminder
-    // FIX: Only show MISSING_DATA if the risk score is actually 0. This prevents showing "Needs Data"
-    // when a score has been calculated, but the backend status is incorrectly labeled.
-    if (summary.status === 'MISSING_DATA' && riskScore === 0) {
+    // --- State 4: Missing Data / Not Calculated ---
+    // If not QUEUED, and not CALCULATED, display the missing data card.
+    if (!isCalculated) {
         return (
             <Card className="hover:shadow-lg transition-shadow border-2 border-yellow-500/50">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -171,7 +175,7 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
     }
 
 
-    // --- State 4: Calculated Report (The happy path) ---
+    // --- State 5: Calculated Report (The happy path) ---
     return (
         <Card className="hover:shadow-lg transition-shadow"> 
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
