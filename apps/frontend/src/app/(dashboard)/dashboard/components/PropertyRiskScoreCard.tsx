@@ -1,4 +1,5 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/PropertyRiskScoreCard.tsx
+// FIX: Added h-full flex flex-col to all Card states for equal height in grid
 
 "use client";
 
@@ -9,12 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api/client';
-// Import both types for transformation
 import { PrimaryRiskSummary, RiskAssessmentReport, RiskSummaryStatus } from '@/types'; 
 import React from 'react';
 
-
-// Helper to format currency
 const formatCurrency = (amount: number) => new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -22,105 +20,56 @@ const formatCurrency = (amount: number) => new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 0,
 }).format(amount);
 
-// Helper to determine risk colors. Mapped to available Badge variants.
 const getRiskDetails = (score: number) => {
-    // 100 is the best score (low risk)
     if (score >= 80) return { level: "LOW", color: "text-green-500", badgeVariant: "success" as const };
     if (score >= 60) return { level: "MODERATE", color: "text-yellow-500", badgeVariant: "secondary" as const };
     if (score >= 40) return { level: "ELEVATED", color: "text-orange-500", badgeVariant: "secondary" as const };
     return { level: "HIGH", color: "text-red-500", badgeVariant: "destructive" as const };
 };
 
-// --- FIX: Make propertyId optional in the interface ---
 interface PropertyRiskScoreCardProps {
-    propertyId?: string; // Changed from string to string?
+    propertyId?: string;
 }
 
-/**
- * Self-fetching component to display the Risk Assessment summary...
- */
-// --- FIX: Use React.FC type definition for proper prop recognition ---
 export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ propertyId }) => {
-    // If no propertyId is provided (e.g., initial load, Home Buyer with no properties), skip query
     const enabled = !!propertyId;
     
-    // Define the fallback object as a constant conforming to PrimaryRiskSummary
-    const FALLBACK_SUMMARY: PrimaryRiskSummary = { 
-        propertyId: propertyId || '', // Must not be null for property-scoped operations
-        propertyName: 'Property', 
-        riskScore: 0, 
-        financialExposureTotal: 0, 
-        lastCalculatedAt: null, 
-        status: 'MISSING_DATA' 
+    const FALLBACK_SUMMARY: PrimaryRiskSummary = {
+        propertyId: propertyId || '',
+        propertyName: null,
+        riskScore: 0,
+        financialExposureTotal: 0,
+        lastCalculatedAt: null,
+        status: 'NO_PROPERTY' as RiskSummaryStatus,
     };
-
-    const riskQuery = useQuery<PrimaryRiskSummary | null>({
-        queryKey: ["riskSummary", propertyId],
+    
+    const riskQuery = useQuery({
+        queryKey: ['primary-risk-summary', propertyId],
         queryFn: async () => {
-            try {
-                if (!propertyId) return null; 
-                
-                // The API call returns RiskAssessmentReport | "QUEUED" | null (or null on 404/error)
-                const result = await api.getRiskReportSummary(propertyId); 
-
-                if (!result) {
-                    return FALLBACK_SUMMARY;
-                }
-
-                // Handle QUEUED string response
-                if (typeof result === 'string') {
-                    // Assume result is the status string "QUEUED"
-                    return {
-                        ...FALLBACK_SUMMARY,
-                        propertyId,
-                        status: result as RiskSummaryStatus, 
-                    };
-                }
-
-                // Handle successful RiskAssessmentReport object response
-                const report = result as RiskAssessmentReport;
-                
-                const status: RiskSummaryStatus = report.riskScore > 0 
-                    ? 'CALCULATED' 
-                    : 'MISSING_DATA'; 
-
-                // FIX: Map RiskAssessmentReport fields to PrimaryRiskSummary fields
-                return {
-                    propertyId: report.propertyId,
-                    propertyName: 'Property', // Placeholder: Must be derived from a separate source
-                    riskScore: report.riskScore,
-                    financialExposureTotal: report.financialExposureTotal,
-                    lastCalculatedAt: report.lastCalculatedAt,
-                    status: status,
-                } as PrimaryRiskSummary;
-
-            } catch (error) {
-                 // Handle API request error (e.g., 404)
-                return FALLBACK_SUMMARY;
-            }
+            const response = await api.getPrimaryRiskSummary() as PrimaryRiskSummary;
+            return response;
         },
-        refetchInterval: (query) => (query.state.data?.status === 'QUEUED' ? 5000 : false),
+        retry: (failureCount, error: any) => (error?.message?.includes('No property') || error?.message?.includes('5000') ? false : failureCount < 2),
+        retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
+        refetchInterval: (query) => ((query.state.data as PrimaryRiskSummary)?.status === 'QUEUED' ? 5000 : false),
         staleTime: 60 * 1000, 
         gcTime: 10 * 60 * 1000,
-        enabled: enabled, // Use the boolean value
+        enabled: enabled,
     });
     
-    // Assign summary, leveraging the explicit type PrimaryRiskSummary
     const summary = riskQuery.data || FALLBACK_SUMMARY; 
-    
     const isInitialLoading = riskQuery.isLoading && !summary.lastCalculatedAt; 
     const isFetching = riskQuery.isFetching;
 
-    // Default values
     const riskScore = summary.riskScore || 0;
     const exposure = summary.financialExposureTotal || 0;
     const { level, color, badgeVariant } = getRiskDetails(riskScore);
     const reportLink = `/dashboard/properties/${propertyId}/risk-assessment`; 
 
-    // --- State 1: No property selected ---
+    // State 1: No property selected
     if (!propertyId) {
         return (
-            <Card className="border-dashed border-2">
+            <Card className="h-full flex flex-col border-dashed border-2">
                 <CardHeader>
                     <div className="space-y-1">
                         <CardTitle className="font-heading text-xl flex items-center gap-2">
@@ -132,102 +81,92 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
                         </CardDescription>
                     </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="flex-1">
                     <p className="font-body text-xl font-semibold mb-2">No Property Selected</p>
                     <p className="font-body text-sm text-muted-foreground mb-4">
                         Please add a property or select one to view the risk report.
                     </p>
-                </CardContent>
-            </Card>
-        );
-    }
-
-    // --- State 2: Loading / Initial Fetch ---
-    if (isInitialLoading) { 
-        return (
-            <Card className="animate-pulse">
-                <CardHeader>
-                    <div className="space-y-1">
-                        <CardTitle className="font-heading text-xl flex items-center gap-2">
-                            <Shield className="h-5 w-5 text-muted-foreground" />
-                            Risk Score
-                        </CardTitle>
-                        <CardDescription className="font-body text-sm">
-                            {summary.propertyName || 'Property'} risk analysis
-                        </CardDescription>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold flex items-center">
-                        <Loader2 className="h-5 w-5 mr-3 animate-spin text-primary" />
-                    </div>
-                    <p className="font-body text-xs text-muted-foreground pt-1">Loading report data...</p>
-                </CardContent>
-            </Card>
-        );
-    }
-    
-    // Determine state based on calculated data fields, not just status string
-    const isQueued = summary.status === 'QUEUED';
-    // A report is calculated if the score is > 0 OR if a calculation timestamp exists
-    const isCalculated = riskScore > 0 || !!summary.lastCalculatedAt; 
-
-    // --- State 3: Queued ---
-    if (isQueued) {
-        const displayStatus = isFetching ? 'Calculating...' : 'Queued';
-        const displayMessage = isFetching 
-            ? 'Report calculation in progress. Refreshing soon...'
-            : 'Report needs recalculation. Click below to view status.';
-        
-        return (
-            <Card className="border-2 border-yellow-500">
-                <CardHeader>
-                    <div className="space-y-1">
-                        <CardTitle className="font-heading text-xl flex items-center gap-2">
-                            <Zap className="h-5 w-5 text-yellow-500" />
-                            Risk Score
-                        </CardTitle>
-                        <CardDescription className="font-body text-sm">
-                            {summary.propertyName || 'Property'} risk analysis
-                        </CardDescription>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex items-center space-x-2 text-lg font-semibold text-yellow-600">
-                        {isFetching && <Loader2 className="h-4 w-4 animate-spin" />}
-                        <span className="font-body">{displayStatus}</span>
-                    </div>
-                    <p className="font-body text-sm text-muted-foreground mt-2">{displayMessage}</p>
-                    <Link href={reportLink} passHref>
-                        <Button variant="secondary" size="sm" className="mt-3 w-full font-body">
-                            View Risk Report
+                    <Link href="/dashboard/properties" passHref>
+                        <Button variant="secondary" size="sm" className="w-full font-body">
+                            Manage Properties
                         </Button>
                     </Link>
                 </CardContent>
             </Card>
         );
     }
-    
-    // --- State 4: Missing Data / Not Calculated ---
-    // If not QUEUED, and not CALCULATED, display the missing data card.
-    if (!isCalculated) {
+
+    // State 2: Loading
+    if (isInitialLoading) {
         return (
-            <Card className="border-2 border-gray-300">
+            <Card className="h-full flex flex-col">
                 <CardHeader>
                     <div className="space-y-1">
                         <CardTitle className="font-heading text-xl flex items-center gap-2">
-                            <Shield className="h-5 w-5 text-gray-500" />
-                            Risk Score
+                            <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                            Risk Assessment
                         </CardTitle>
                         <CardDescription className="font-body text-sm">
-                            {summary.propertyName || 'Property'} risk analysis
+                            Loading risk data...
                         </CardDescription>
                     </div>
                 </CardHeader>
-                <CardContent>
-                    <p className="font-body text-xl font-semibold mb-2">Incomplete Data</p>
-                    <p className="font-body text-sm text-muted-foreground mb-3">
-                        Add property details to unlock your full risk report.
+                <CardContent className="flex-1">
+                    <div className="space-y-3 pt-2">
+                        <div className="h-4 w-1/2 rounded bg-gray-200 animate-pulse" />
+                        <div className="h-4 w-2/3 rounded bg-gray-200 animate-pulse" />
+                        <div className="h-4 w-1/3 rounded bg-gray-200 animate-pulse" />
+                    </div>
+                </CardContent>
+            </Card>
+        );
+    }
+
+    // State 3: Queued for calculation
+    if (summary.status === 'QUEUED') {
+        return (
+            <Card className="h-full flex flex-col border-2 border-yellow-500">
+                <CardHeader>
+                    <div className="space-y-1">
+                        <CardTitle className="font-heading text-xl flex items-center gap-2">
+                            <Loader2 className="h-5 w-5 animate-spin text-yellow-600" />
+                            Risk Assessment
+                        </CardTitle>
+                        <CardDescription className="font-body text-sm">
+                            Calculating risk score...
+                        </CardDescription>
+                    </div>
+                </CardHeader>
+                <CardContent className="flex-1">
+                    <p className="font-body text-xl font-semibold mb-2 text-yellow-600">Calculation In Progress</p>
+                    <p className="font-body text-sm text-muted-foreground mb-4">
+                        Your property risk report is being generated. This typically takes 10-30 seconds. Results will appear automatically.
+                    </p>
+                    <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">Queued for Processing</Badge>
+                </CardContent>
+            </Card>
+        );
+    }
+
+    // State 4: Missing data - need more property details
+    if (summary.status === 'MISSING_DATA') {
+        return (
+            <Card className="h-full flex flex-col border-2 border-gray-300">
+                <CardHeader>
+                    <div className="space-y-1">
+                        <CardTitle className="font-heading text-xl flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-gray-500" />
+                            Risk Assessment
+                        </CardTitle>
+                        <CardDescription className="font-body text-sm">
+                            Incomplete property data
+                        </CardDescription>
+                    </div>
+                </CardHeader>
+                <CardContent className="flex-1">
+                    <p className="font-body text-xl font-semibold mb-2 text-gray-700">More Details Needed</p>
+                    <p className="font-body text-sm text-muted-foreground mb-4">
+                        Please complete your property details to generate an accurate risk assessment.
                     </p>
                     <Link href={reportLink} passHref>
                         <Button variant="secondary" size="sm" className="mt-3 w-full font-body">
@@ -239,10 +178,9 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
         );
     }
 
-
-    // --- State 5: Calculated Report (The happy path) ---
+    // State 5: Calculated Report (Happy path)
     return (
-        <Card> 
+        <Card className="h-full flex flex-col"> 
             <CardHeader>
                 <div className="space-y-1">
                     <CardTitle className="font-heading text-xl flex items-center gap-2">
@@ -254,7 +192,7 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
                     </CardDescription>
                 </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1">
                 <div className="text-4xl font-extrabold flex items-baseline">
                     <span className={color}>{riskScore}</span>
                     <span className="text-xl font-semibold text-muted-foreground ml-1">/100</span>

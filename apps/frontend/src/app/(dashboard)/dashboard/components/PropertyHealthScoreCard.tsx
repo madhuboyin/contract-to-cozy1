@@ -1,4 +1,5 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/PropertyHealthScoreCard.tsx
+// FIX: Added h-full flex flex-col to Card for equal height in grid
 
 "use client";
 
@@ -11,7 +12,6 @@ import Link from "next/link";
 import { ScoredProperty } from "@/app/(dashboard)/dashboard/types";
 import React from 'react';
 
-// Helper function (assuming it exists in a utility file for consistency)
 const getHealthDetails = (score: number) => {
     if (score >= 85) {
         return { level: "EXCELLENT", color: "text-green-500", progressClass: "bg-green-500", badgeVariant: "success" as const };
@@ -28,24 +28,19 @@ interface PropertyHealthScoreCardProps {
     property: ScoredProperty;
 }
 
-// Define the high-priority statuses returned by the backend utility function (Title Case)
 const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection'];
 
 export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardProps) {
     const healthScore = property.healthScore?.totalScore || 0;
     const { level, color, progressClass, badgeVariant } = getHealthDetails(healthScore);
-    
-    // Normalize score for progress bar (full bar = 100)
     const progressValue = healthScore > 100 ? 100 : healthScore;
     
-    // Now filters for all three high-priority, title-case status strings to fix the bug
-    // and include 'Needs Review' and 'Needs Inspection'.
     const totalRequiredActions = property.healthScore?.insights.filter(i => 
         HIGH_PRIORITY_STATUSES.includes(i.status)
     ).length || 0;
 
     return (
-        <Card>
+        <Card className="h-full flex flex-col">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <div className="space-y-1">
                     <CardTitle className="font-heading text-xl flex items-center gap-2">
@@ -57,7 +52,7 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
                     </CardDescription>
                 </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1">
                 <div className="text-4xl font-extrabold flex items-baseline">
                     <span className={color}>{healthScore}</span>
                     <span className="text-xl font-semibold text-muted-foreground ml-1">/100</span>
@@ -86,7 +81,6 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
                         className="h-2" 
                         indicatorClassName={progressClass} 
                     />
-                    {/* ADDED: ?tab=maintenance query parameter to land directly on the Maintenance tab */}
                     <Link href={`/dashboard/properties/${property.id}/?tab=maintenance`} passHref>
                         <Button variant="link" className="p-0 h-auto mt-2 font-body text-sm font-semibold">
                             View Full Maintenance Plan <ArrowRight className="h-4 w-4 ml-1" />
