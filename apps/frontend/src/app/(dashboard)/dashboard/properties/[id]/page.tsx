@@ -18,7 +18,7 @@ import { toast } from "@/components/ui/use-toast";
 
 // UPDATED: PropertyOverview with Card structure and Phase 2 typography
 const PropertyOverview = ({ property }: { property: Property }) => (
-  <div className="space-y-4">
+  <div className="space-y-3">
     {/* Basic Information Card */}
     <Card>
       <CardHeader className="p-4">
@@ -27,7 +27,7 @@ const PropertyOverview = ({ property }: { property: Property }) => (
           Core property details and location
         </CardDescription>
       </CardHeader>
-      <CardContent className="p-4 pt-0 space-y-4">
+      <CardContent className="p-4 pt-0 space-y-3">
         {/* Address Section */}
         <div className="space-y-2">
           <h4 className="font-heading text-sm font-medium text-gray-700 flex items-center gap-2">
@@ -43,7 +43,7 @@ const PropertyOverview = ({ property }: { property: Property }) => (
         </div>
 
         {/* Property Details Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t">
           {/* Year Built */}
           <div className="space-y-1">
             <p className="font-body text-xs text-gray-500 flex items-center gap-1">
@@ -80,7 +80,7 @@ const PropertyOverview = ({ property }: { property: Property }) => (
 
         {/* Bedrooms & Bathrooms (if available) */}
         {(property.bedrooms || property.bathrooms) && (
-          <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+          <div className="grid grid-cols-2 gap-4 pt-3 border-t">
             {property.bedrooms && (
               <div className="space-y-1">
                 <p className="font-body text-xs text-gray-500">Bedrooms</p>
@@ -110,7 +110,7 @@ const PropertyOverview = ({ property }: { property: Property }) => (
           Critical system information for maintenance planning
         </CardDescription>
       </CardHeader>
-      <CardContent className="p-4 pt-0 space-y-4">
+      <CardContent className="p-4 pt-0 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Heating Type */}
           <div className="space-y-1">
@@ -147,7 +147,7 @@ const PropertyOverview = ({ property }: { property: Property }) => (
 
         {/* System Ages (if available) */}
         {(property.hvacInstallYear || property.waterHeaterInstallYear || property.roofReplacementYear) && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t">
             {property.hvacInstallYear && (
               <div className="space-y-1">
                 <p className="font-body text-xs text-gray-500">HVAC Install Year</p>
@@ -201,7 +201,7 @@ const MaintenancePlanTab = ({ propertyId }: { propertyId: string }) => (
         View and manage all scheduled maintenance tasks for this property
       </CardDescription>
     </CardHeader>
-    <CardContent className="p-4 pt-0 space-y-4">
+    <CardContent className="p-4 pt-0 space-y-3">
       <p className="font-body text-base text-gray-700">
         This tab will display the full, scheduled, and required maintenance tasks for this property.
       </p>
@@ -227,7 +227,7 @@ const RiskProtectionTab = ({ propertyId }: { propertyId: string }) => (
         Access comprehensive risk assessment and financial exposure analysis
       </CardDescription>
     </CardHeader>
-    <CardContent className="p-4 pt-0 space-y-4">
+    <CardContent className="p-4 pt-0 space-y-3">
       <p className="font-body text-base text-gray-700">
         Access the comprehensive risk report to view calculated risk scores, financial exposure,
         and a detailed breakdown of your home's systems and structure health.
@@ -254,7 +254,7 @@ const DocumentsTab = ({ propertyId }: { propertyId: string }) => (
         Manage all documents associated with this property
       </CardDescription>
     </CardHeader>
-    <CardContent className="p-4 pt-0 space-y-4">
+    <CardContent className="p-4 pt-0 space-y-3">
       <p className="font-body text-base text-gray-700">
         Documents associated with this property will be listed here, including warranties, 
         insurance policies, inspection reports, and more.
@@ -321,9 +321,9 @@ export default function PropertyDetailPage() {
   }
 
   return (
-    <DashboardShell className="gap-3">
-      {/* UPDATED: Back Navigation - Reduced to mb-3 for compact layout */}
-      <div className="mb-3">
+    <DashboardShell className="gap-2">
+      {/* UPDATED: Back Navigation - Reduced to mb-2 for tighter spacing */}
+      <div className="mb-2">
         <Link 
           href="/dashboard/properties" 
           className="font-body text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center transition-colors"
@@ -333,8 +333,8 @@ export default function PropertyDetailPage() {
         </Link>
       </div>
       
-      {/* UPDATED: Override all PageHeader spacing - padding AND gap */}
-      <PageHeader className="pt-3 pb-3 gap-1">
+      {/* UPDATED: Minimal PageHeader spacing for tight layout */}
+      <PageHeader className="pt-2 pb-2 gap-1">
         <PageHeaderHeading>{property.name || "My Property"}</PageHeaderHeading>
         <PageHeaderDescription>
           {property.address}, {property.city}
