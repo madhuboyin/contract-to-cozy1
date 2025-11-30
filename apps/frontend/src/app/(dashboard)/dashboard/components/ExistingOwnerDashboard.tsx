@@ -1,4 +1,5 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/ExistingOwnerDashboard.tsx
+// UPDATED: Row 1 changed from 4-column to 3-column grid
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link'; 
@@ -16,11 +17,11 @@ import { ArrowRight } from 'lucide-react';
 interface ExistingOwnerDashboardProps {
   bookings: Booking[];
   properties: ScoredProperty[]; 
-  checklistItems: ChecklistItem[]; // Using the now-compatible ChecklistItem
+  checklistItems: ChecklistItem[];
   userFirstName: string;
 }
 
-// Helper to format the address for display (Simplified version: just the address and city)
+// Helper to format the address for display
 const formatAddress = (property: Property) => {
     return property.address; 
 }
@@ -63,8 +64,6 @@ export const ExistingOwnerDashboard = ({
         const belongsToSelectedProperty = item.propertyId === selectedPropertyId;
         
         // FIX: Update logic to handle missing (undefined) or null propertyId for single-property users.
-        // If item.propertyId is falsy (null, undefined, or empty string) AND user is single-property, 
-        // assume it belongs to the selected default property.
         const isLegacyItem = !item.propertyId && !isMultiProperty && selectedPropertyId === defaultProperty?.id;
 
         return belongsToSelectedProperty || isLegacyItem;
@@ -123,8 +122,8 @@ export const ExistingOwnerDashboard = ({
       )}
       {/* --- End Property Selection Row --- */}
 
-      {/* Grid Layout - Cards dynamically update based on selectedProperty */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* UPDATED: Row 1 - Changed from 4-column to 3-column grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         
         {/* ROW 1, Slot 1: Property Health Score */}
         {selectedProperty && (
@@ -138,25 +137,25 @@ export const ExistingOwnerDashboard = ({
             <PropertyRiskScoreCard propertyId={selectedPropertyId} /> 
         </div>
         
-        {/* ROW 1, Slot 3/4: Upcoming Bookings Card */}
-        <div className="md:col-span-2">
+        {/* ROW 1, Slot 3: Upcoming Bookings Card */}
+        <div className="md:col-span-1">
             <UpcomingBookingsCard propertyId={selectedPropertyId} /> 
         </div>
+      </div>
 
-        {/* ROW 2: Recurring Maintenance and Upcoming Renewals */}
-        <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <RecurringMaintenanceCard 
-            maintenance={upcomingMaintenance as any}
-            isPropertySelected={isPropertySelected} 
-          />
-          
-          <UpcomingRenewalsCard propertyId={selectedPropertyId} /> 
-        </div>
+      {/* ROW 2: Recurring Maintenance and Upcoming Renewals */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <RecurringMaintenanceCard 
+          maintenance={upcomingMaintenance as any}
+          isPropertySelected={isPropertySelected} 
+        />
         
-        {/* ROW 3: Favorite Providers Card (Spans full width) */}
-        <div className="lg:col-span-4"> 
-          <FavoriteProvidersCard />
-        </div>
+        <UpcomingRenewalsCard propertyId={selectedPropertyId} /> 
+      </div>
+      
+      {/* ROW 3: Favorite Providers Card (Spans full width) */}
+      <div className="w-full"> 
+        <FavoriteProvidersCard />
       </div>
       
       <div className="pt-4">
