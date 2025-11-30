@@ -34,7 +34,7 @@ const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspec
 
 // Circular Gauge configuration constants
 const RADIUS = 45; 
-const STROKE_WIDTH = 10;
+const STROKE_WIDTH = 10; 
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardProps) {
@@ -46,7 +46,6 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
         HIGH_PRIORITY_STATUSES.includes(i.status)
     ).length || 0;
 
-    // Calculation for the stroke offset to simulate circular progress
     const offset = CIRCUMFERENCE - (progressValue / 100) * CIRCUMFERENCE;
 
     return (
@@ -65,7 +64,7 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
             {/* Retained flex flex-col justify-between to manage content layout */}
             <CardContent className="flex-1 flex flex-col justify-between">
                 
-                {/* *** GAUGE ICON AND SCORE DISPLAY (Reverted to Circular Gauge) *** */}
+                {/* *** GAUGE ICON AND SCORE DISPLAY (Circular Gauge) *** */}
                 <div className="flex flex-col items-center justify-center pt-4 pb-6">
                     <div className="relative w-32 h-32 flex items-center justify-center">
                         <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
@@ -92,7 +91,7 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
                                 style={{ transition: 'stroke-dashoffset 0.5s ease' }}
                             />
                         </svg>
-                        {/* Score Text in Center (Confirms "displaying score" requirement) */}
+                        {/* Score Text in Center */}
                         <div className="absolute flex flex-col items-center justify-center">
                             <span className={`text-4xl font-extrabold ${color}`}>{healthScore}</span>
                             <span className="text-xl font-semibold text-muted-foreground ml-1">/100</span>
@@ -104,16 +103,23 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
                     </p>
                 </div>
 
-                {/* *** REQUIRED MAINTENANCE ACTIONS (Fixing text wrapping) *** */}
+                {/* *** REQUIRED MAINTENANCE ACTIONS (Merging into a single row) *** */}
                 <div className="mt-2 border-t pt-4"> 
-                    {/* Applied text-base (down from text-lg) and whitespace-nowrap to fix two-row issue */}
-                    <p className="font-body text-base font-semibold flex items-center whitespace-nowrap">
-                        <Zap className="h-4 w-4 mr-1 text-red-600" />
-                        Required Maintenance Actions
-                    </p>
-                    <p className="text-3xl font-extrabold text-red-600">
-                        {totalRequiredActions}
-                    </p>
+                    {/* MERGED: Heading, Count, and Zap icon into a single flex row. 
+                        The count is still bolded but is now inline with the text.
+                    */}
+                    <div className="flex items-center justify-between">
+                         <p className="font-body text-base font-semibold flex items-center whitespace-nowrap">
+                            <Zap className="h-4 w-4 mr-1 text-red-600" />
+                            Required Maintenance Actions
+                        </p>
+                        <p className="text-2xl font-extrabold text-red-600">
+                            {totalRequiredActions}
+                        </p>
+                    </div>
+
+                    {/* Removed the redundant 3xl text block */}
+                    
                     <p className="font-body text-xs text-muted-foreground mt-1">
                         High-priority tasks identified in the last assessment.
                     </p>
