@@ -322,8 +322,8 @@ export default function PropertyDetailPage() {
 
   return (
     <DashboardShell>
-      {/* UPDATED: Back Navigation - Increased spacing and improved visibility */}
-      <div className="mb-6">
+      {/* UPDATED: Back Navigation - Reduced spacing for balanced layout */}
+      <div className="mb-4">
         <Link 
           href="/dashboard/properties" 
           className="font-body text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center transition-colors"
@@ -333,14 +333,16 @@ export default function PropertyDetailPage() {
         </Link>
       </div>
       
-      <PageHeader>
+      {/* UPDATED: Override PageHeader padding for compact spacing */}
+      <PageHeader className="pt-4 pb-4 md:pt-6 md:pb-6">
         <PageHeaderHeading>{property.name || "My Property"}</PageHeaderHeading>
         <PageHeaderDescription>
           {property.address}, {property.city}
         </PageHeaderDescription>
       </PageHeader>
 
-      <div className="space-y-6">
+      {/* UPDATED: Reduced container spacing from space-y-6 to space-y-4 */}
+      <div className="space-y-4">
         <Tabs defaultValue={defaultTab} className="w-full">
           <TabsList>
             <TabsTrigger value="overview" className="flex items-center gap-2">
