@@ -18,7 +18,7 @@ import { toast } from "@/components/ui/use-toast";
 
 // UPDATED: PropertyOverview with Card structure and Phase 2 typography
 const PropertyOverview = ({ property }: { property: Property }) => (
-  <div className="space-y-6">
+  <div className="space-y-4">
     {/* Basic Information Card */}
     <Card>
       <CardHeader>
@@ -321,9 +321,9 @@ export default function PropertyDetailPage() {
   }
 
   return (
-    <DashboardShell>
-      {/* UPDATED: Back Navigation - Reduced spacing for balanced layout */}
-      <div className="mb-4">
+    <DashboardShell className="gap-3">
+      {/* UPDATED: Back Navigation - Reduced to mb-3 for compact layout */}
+      <div className="mb-3">
         <Link 
           href="/dashboard/properties" 
           className="font-body text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center transition-colors"
@@ -333,17 +333,16 @@ export default function PropertyDetailPage() {
         </Link>
       </div>
       
-      {/* UPDATED: Override PageHeader padding for compact spacing */}
-      <PageHeader className="pt-4 pb-4 md:pt-6 md:pb-6">
+      {/* UPDATED: Further reduced PageHeader padding for tight spacing */}
+      <PageHeader className="pt-3 pb-3">
         <PageHeaderHeading>{property.name || "My Property"}</PageHeaderHeading>
         <PageHeaderDescription>
           {property.address}, {property.city}
         </PageHeaderDescription>
       </PageHeader>
 
-      {/* UPDATED: Reduced container spacing from space-y-6 to space-y-4 */}
-      <div className="space-y-4">
-        <Tabs defaultValue={defaultTab} className="w-full">
+      {/* UPDATED: Removed space-y-4 wrapper - no container spacing needed */}
+      <Tabs defaultValue={defaultTab} className="w-full">
           <TabsList>
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <Edit className="h-4 w-4" /> Overview & Details
@@ -359,24 +358,23 @@ export default function PropertyDetailPage() {
             </TabsTrigger>
           </TabsList>
           
-          {/* UPDATED: Increased tab content spacing from mt-4 to mt-6 */}
-          <TabsContent value="overview" className="mt-6">
+          {/* UPDATED: Reduced tab content spacing from mt-6 to mt-4 */}
+          <TabsContent value="overview" className="mt-4">
             <PropertyOverview property={property} />
           </TabsContent>
           
-          <TabsContent value="maintenance" className="mt-6">
+          <TabsContent value="maintenance" className="mt-4">
             <MaintenancePlanTab propertyId={property.id} />
           </TabsContent>
 
-          <TabsContent value="risk-protection" className="mt-6">
+          <TabsContent value="risk-protection" className="mt-4">
             <RiskProtectionTab propertyId={property.id} />
           </TabsContent>
           
-          <TabsContent value="documents" className="mt-6">
+          <TabsContent value="documents" className="mt-4">
             <DocumentsTab propertyId={property.id} />
           </TabsContent>
         </Tabs>
-      </div>
-    </DashboardShell>
+      </DashboardShell>
   );
 }
