@@ -23,7 +23,7 @@ interface ExistingOwnerDashboardProps {
 
 // Helper to format the address for display
 const formatAddress = (property: Property) => {
-    return property.address; 
+    return `${property.address}, ${property.city}, ${property.state}`;
 }
 
 export const ExistingOwnerDashboard = ({ 
