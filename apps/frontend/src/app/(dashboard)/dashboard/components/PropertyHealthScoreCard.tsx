@@ -86,7 +86,8 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
                         className="h-2" 
                         indicatorClassName={progressClass} 
                     />
-                    <Link href={`/dashboard/properties/${property.id}/`} passHref>
+                    {/* ADDED: ?tab=maintenance query parameter to land directly on the Maintenance tab */}
+                    <Link href={`/dashboard/properties/${property.id}/?tab=maintenance`} passHref>
                         <Button variant="link" className="p-0 h-auto mt-2 font-body text-sm font-semibold">
                             View Full Maintenance Plan <ArrowRight className="h-4 w-4 ml-1" />
                         </Button>

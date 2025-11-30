@@ -3,7 +3,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "next/navigation";
+// UPDATED: Added useSearchParams to read the URL query parameter for default tab
+import { useParams, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api/client";
 import { Property } from "@/types";
 import { DashboardShell } from "@/components/DashboardShell";
@@ -11,11 +12,10 @@ import { PageHeader, PageHeaderHeading, PageHeaderDescription } from "@/componen
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-// ADDED ArrowLeft to the imports for the back link
 import { Edit, Zap, Shield, FileText, ArrowLeft } from "lucide-react"; 
 import { toast } from "@/components/ui/use-toast";
 
-// Placeholder components for the new tabs
+// Placeholder component for the Overview Tab
 const PropertyOverview = ({ property }: { property: Property }) => (
   <div className="space-y-4">
     <p className="text-lg">Address: {property.address}, {property.city}, {property.state} {property.zipCode}</p>
@@ -32,7 +32,24 @@ const PropertyOverview = ({ property }: { property: Property }) => (
   </div>
 );
 
-// Component for the Risk & Protection Tab (Updated to production text)
+// NEW COMPONENT: Component for the Maintenance Plan Tab
+const MaintenancePlanTab = ({ propertyId }: { propertyId: string }) => (
+    <div className="p-4 rounded-lg border bg-card/50">
+        <h3 className="text-xl font-semibold flex items-center mb-2">
+            Property Maintenance Plan <Zap className="h-5 w-5 ml-2 text-red-600" />
+        </h3>
+        <p className="text-gray-700 dark:text-gray-300">
+            This tab will display the full, scheduled, and required maintenance tasks for this property.
+        </p>
+        <Link href={`/dashboard/maintenance?propertyId=${propertyId}`} passHref>
+            <Button className="mt-4" variant="default">
+                Manage Maintenance Tasks
+            </Button>
+        </Link>
+    </div>
+);
+
+// Component for the Risk & Protection Tab
 const RiskProtectionTab = ({ propertyId }: { propertyId: string }) => (
     <div className="p-4 rounded-lg border bg-card/50">
         <h3 className="text-xl font-semibold flex items-center mb-2">
@@ -66,6 +83,16 @@ const DocumentsTab = ({ propertyId }: { propertyId: string }) => (
 export default function PropertyDetailPage() {
   const params = useParams();
   const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
+  
+  // NEW LOGIC: Get query params and determine default tab
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get('tab');
+  
+  // Validate and set default tab, prioritizing the URL param 'maintenance' if present
+  const defaultTab = initialTab && ['overview', 'maintenance', 'risk-protection', 'documents'].includes(initialTab) 
+    ? initialTab 
+    : 'overview';
+
 
   const { data: property, isLoading } = useQuery({
     queryKey: ["property", propertyId],
@@ -126,12 +153,17 @@ export default function PropertyDetailPage() {
       </PageHeader>
 
       <div className="space-y-6">
-        <Tabs defaultValue="overview" className="w-full">
+        {/* UPDATED: Use the dynamic defaultTab */}
+        <Tabs defaultValue={defaultTab} className="w-full">
           <TabsList>
             <TabsTrigger value="overview" className="flex items-center gap-2">
                 <Edit className="h-4 w-4" /> Overview & Details
             </TabsTrigger>
-            {/* NEW TAB ADDED FOR PHASE 2.4 */}
+            {/* NEW TAB ADDED: Maintenance Plan */}
+            <TabsTrigger value="maintenance" className="flex items-center gap-2">
+                <Zap className="h-4 w-4" /> Maintenance Plan
+            </TabsTrigger>
+            {/* Existing tabs */}
             <TabsTrigger value="risk-protection" className="flex items-center gap-2">
                 <Shield className="h-4 w-4" /> Risk & Protection
             </TabsTrigger>
@@ -144,7 +176,12 @@ export default function PropertyDetailPage() {
             <PropertyOverview property={property} />
           </TabsContent>
           
-          {/* NEW TAB CONTENT FOR PHASE 2.4 */}
+          {/* NEW TAB CONTENT: Maintenance Plan */}
+          <TabsContent value="maintenance" className="mt-4">
+            <MaintenancePlanTab propertyId={property.id} />
+          </TabsContent>
+
+          {/* Existing tabs content */}
           <TabsContent value="risk-protection" className="mt-4">
             <RiskProtectionTab propertyId={property.id} />
           </TabsContent>
