@@ -21,13 +21,13 @@ const PropertyOverview = ({ property }: { property: Property }) => (
   <div className="space-y-4">
     {/* Basic Information Card */}
     <Card>
-      <CardHeader>
+      <CardHeader className="p-4">
         <CardTitle className="font-heading text-xl">Basic Information</CardTitle>
         <CardDescription className="font-body text-sm">
           Core property details and location
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="p-4 pt-0 space-y-4">
         {/* Address Section */}
         <div className="space-y-2">
           <h4 className="font-heading text-sm font-medium text-gray-700 flex items-center gap-2">
@@ -104,13 +104,13 @@ const PropertyOverview = ({ property }: { property: Property }) => (
 
     {/* Systems Information Card */}
     <Card>
-      <CardHeader>
+      <CardHeader className="p-4">
         <CardTitle className="font-heading text-xl">Home Systems</CardTitle>
         <CardDescription className="font-body text-sm">
           Critical system information for maintenance planning
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="p-4 pt-0 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Heating Type */}
           <div className="space-y-1">
@@ -189,10 +189,10 @@ const PropertyOverview = ({ property }: { property: Property }) => (
   </div>
 );
 
-// UPDATED: MaintenancePlanTab with Phase 2 typography
+// UPDATED: MaintenancePlanTab with Phase 2 typography and compact spacing
 const MaintenancePlanTab = ({ propertyId }: { propertyId: string }) => (
   <Card>
-    <CardHeader>
+    <CardHeader className="p-4">
       <CardTitle className="font-heading text-xl flex items-center gap-2">
         <Zap className="h-5 w-5 text-red-600" />
         Property Maintenance Plan
@@ -201,7 +201,7 @@ const MaintenancePlanTab = ({ propertyId }: { propertyId: string }) => (
         View and manage all scheduled maintenance tasks for this property
       </CardDescription>
     </CardHeader>
-    <CardContent className="space-y-4">
+    <CardContent className="p-4 pt-0 space-y-4">
       <p className="font-body text-base text-gray-700">
         This tab will display the full, scheduled, and required maintenance tasks for this property.
       </p>
@@ -215,10 +215,10 @@ const MaintenancePlanTab = ({ propertyId }: { propertyId: string }) => (
   </Card>
 );
 
-// UPDATED: RiskProtectionTab with Phase 2 typography
+// UPDATED: RiskProtectionTab with Phase 2 typography and compact spacing
 const RiskProtectionTab = ({ propertyId }: { propertyId: string }) => (
   <Card>
-    <CardHeader>
+    <CardHeader className="p-4">
       <CardTitle className="font-heading text-xl flex items-center gap-2">
         <Shield className="h-5 w-5 text-primary" />
         Property Risk & Protection Overview
@@ -227,7 +227,7 @@ const RiskProtectionTab = ({ propertyId }: { propertyId: string }) => (
         Access comprehensive risk assessment and financial exposure analysis
       </CardDescription>
     </CardHeader>
-    <CardContent className="space-y-4">
+    <CardContent className="p-4 pt-0 space-y-4">
       <p className="font-body text-base text-gray-700">
         Access the comprehensive risk report to view calculated risk scores, financial exposure,
         and a detailed breakdown of your home's systems and structure health.
@@ -242,10 +242,10 @@ const RiskProtectionTab = ({ propertyId }: { propertyId: string }) => (
   </Card>
 );
 
-// UPDATED: DocumentsTab with Phase 2 typography
+// UPDATED: DocumentsTab with Phase 2 typography and compact spacing
 const DocumentsTab = ({ propertyId }: { propertyId: string }) => (
   <Card>
-    <CardHeader>
+    <CardHeader className="p-4">
       <CardTitle className="font-heading text-xl flex items-center gap-2">
         <FileText className="h-5 w-5 text-blue-600" />
         Property Documents
@@ -254,7 +254,7 @@ const DocumentsTab = ({ propertyId }: { propertyId: string }) => (
         Manage all documents associated with this property
       </CardDescription>
     </CardHeader>
-    <CardContent className="space-y-4">
+    <CardContent className="p-4 pt-0 space-y-4">
       <p className="font-body text-base text-gray-700">
         Documents associated with this property will be listed here, including warranties, 
         insurance policies, inspection reports, and more.
@@ -333,8 +333,8 @@ export default function PropertyDetailPage() {
         </Link>
       </div>
       
-      {/* UPDATED: Further reduced PageHeader padding for tight spacing */}
-      <PageHeader className="pt-3 pb-3">
+      {/* UPDATED: Override all PageHeader spacing - padding AND gap */}
+      <PageHeader className="pt-3 pb-3 gap-1">
         <PageHeaderHeading>{property.name || "My Property"}</PageHeaderHeading>
         <PageHeaderDescription>
           {property.address}, {property.city}
