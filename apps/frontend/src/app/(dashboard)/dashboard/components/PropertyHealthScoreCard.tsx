@@ -103,23 +103,19 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
                     </p>
                 </div>
 
-                {/* *** REQUIRED MAINTENANCE ACTIONS (Merging into a single row) *** */}
+                {/* *** REQUIRED MAINTENANCE ACTIONS (Font size reduced to text-xl) *** */}
                 <div className="mt-2 border-t pt-4"> 
-                    {/* MERGED: Heading, Count, and Zap icon into a single flex row. 
-                        The count is still bolded but is now inline with the text.
-                    */}
                     <div className="flex items-center justify-between">
                          <p className="font-body text-base font-semibold flex items-center whitespace-nowrap">
                             <Zap className="h-4 w-4 mr-1 text-red-600" />
                             Required Maintenance Actions
                         </p>
-                        <p className="text-2xl font-extrabold text-red-600">
+                        {/* REDUCED FONT SIZE HERE: from text-2xl to text-xl */}
+                        <p className="text-xl font-extrabold text-red-600">
                             {totalRequiredActions}
                         </p>
                     </div>
 
-                    {/* Removed the redundant 3xl text block */}
-                    
                     <p className="font-body text-xs text-muted-foreground mt-1">
                         High-priority tasks identified in the last assessment.
                     </p>
