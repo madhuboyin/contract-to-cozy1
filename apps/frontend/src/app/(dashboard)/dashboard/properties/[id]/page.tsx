@@ -1,9 +1,9 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/page.tsx
+// UPDATED: Priority 1 Critical Fixes - Typography, Spacing, Card Structure
 
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-// UPDATED: Added useSearchParams to read the URL query parameter for default tab
 import { useParams, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api/client";
 import { Property } from "@/types";
@@ -11,72 +11,262 @@ import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading, PageHeaderDescription } from "@/components/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-import { Edit, Zap, Shield, FileText, ArrowLeft } from "lucide-react"; 
+import { Edit, Zap, Shield, FileText, ArrowLeft, Home, Calendar, Ruler } from "lucide-react"; 
 import { toast } from "@/components/ui/use-toast";
 
-// Placeholder component for the Overview Tab
+// UPDATED: PropertyOverview with Card structure and Phase 2 typography
 const PropertyOverview = ({ property }: { property: Property }) => (
-  <div className="space-y-4">
-    <p className="text-lg">Address: {property.address}, {property.city}, {property.state} {property.zipCode}</p>
-    <p>Built: {property.yearBuilt || 'N/A'}</p>
-    <p>Size: {property.propertySize || 'N/A'} sqft</p>
-    {/* Add more property details here */}
-    <div className="mt-6">
-        <Link href={`/dashboard/properties/${property.id}/edit`} passHref>
-            <Button variant="outline">
-                Edit Details <Edit className="ml-2 h-4 w-4" />
-            </Button>
-        </Link>
+  <div className="space-y-6">
+    {/* Basic Information Card */}
+    <Card>
+      <CardHeader>
+        <CardTitle className="font-heading text-xl">Basic Information</CardTitle>
+        <CardDescription className="font-body text-sm">
+          Core property details and location
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Address Section */}
+        <div className="space-y-2">
+          <h4 className="font-heading text-sm font-medium text-gray-700 flex items-center gap-2">
+            <Home className="h-4 w-4 text-blue-600" />
+            Address
+          </h4>
+          <div className="font-body text-base text-gray-900 ml-6">
+            <p>{property.address}</p>
+            <p className="text-sm text-gray-600">
+              {property.city}, {property.state} {property.zipCode}
+            </p>
+          </div>
+        </div>
+
+        {/* Property Details Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
+          {/* Year Built */}
+          <div className="space-y-1">
+            <p className="font-body text-xs text-gray-500 flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              Year Built
+            </p>
+            <p className="font-heading text-lg font-semibold text-gray-900">
+              {property.yearBuilt || 'N/A'}
+            </p>
+          </div>
+
+          {/* Property Size */}
+          <div className="space-y-1">
+            <p className="font-body text-xs text-gray-500 flex items-center gap-1">
+              <Ruler className="h-3 w-3" />
+              Property Size
+            </p>
+            <p className="font-heading text-lg font-semibold text-gray-900">
+              {property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : 'N/A'}
+            </p>
+          </div>
+
+          {/* Property Type */}
+          <div className="space-y-1">
+            <p className="font-body text-xs text-gray-500 flex items-center gap-1">
+              <Home className="h-3 w-3" />
+              Property Type
+            </p>
+            <p className="font-heading text-lg font-semibold text-gray-900">
+              {property.propertyType ? property.propertyType.replace(/_/g, ' ') : 'N/A'}
+            </p>
+          </div>
+        </div>
+
+        {/* Bedrooms & Bathrooms (if available) */}
+        {(property.bedrooms || property.bathrooms) && (
+          <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+            {property.bedrooms && (
+              <div className="space-y-1">
+                <p className="font-body text-xs text-gray-500">Bedrooms</p>
+                <p className="font-heading text-lg font-semibold text-gray-900">
+                  {property.bedrooms}
+                </p>
+              </div>
+            )}
+            {property.bathrooms && (
+              <div className="space-y-1">
+                <p className="font-body text-xs text-gray-500">Bathrooms</p>
+                <p className="font-heading text-lg font-semibold text-gray-900">
+                  {property.bathrooms}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+
+    {/* Systems Information Card */}
+    <Card>
+      <CardHeader>
+        <CardTitle className="font-heading text-xl">Home Systems</CardTitle>
+        <CardDescription className="font-body text-sm">
+          Critical system information for maintenance planning
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Heating Type */}
+          <div className="space-y-1">
+            <p className="font-body text-xs text-gray-500">Heating Type</p>
+            <p className="font-heading text-base font-medium text-gray-900">
+              {property.heatingType ? property.heatingType.replace(/_/g, ' ') : 'Not specified'}
+            </p>
+          </div>
+
+          {/* Cooling Type */}
+          <div className="space-y-1">
+            <p className="font-body text-xs text-gray-500">Cooling Type</p>
+            <p className="font-heading text-base font-medium text-gray-900">
+              {property.coolingType ? property.coolingType.replace(/_/g, ' ') : 'Not specified'}
+            </p>
+          </div>
+
+          {/* Water Heater Type */}
+          <div className="space-y-1">
+            <p className="font-body text-xs text-gray-500">Water Heater Type</p>
+            <p className="font-heading text-base font-medium text-gray-900">
+              {property.waterHeaterType ? property.waterHeaterType.replace(/_/g, ' ') : 'Not specified'}
+            </p>
+          </div>
+
+          {/* Roof Type */}
+          <div className="space-y-1">
+            <p className="font-body text-xs text-gray-500">Roof Type</p>
+            <p className="font-heading text-base font-medium text-gray-900">
+              {property.roofType ? property.roofType.replace(/_/g, ' ') : 'Not specified'}
+            </p>
+          </div>
+        </div>
+
+        {/* System Ages (if available) */}
+        {(property.hvacInstallYear || property.waterHeaterInstallYear || property.roofReplacementYear) && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
+            {property.hvacInstallYear && (
+              <div className="space-y-1">
+                <p className="font-body text-xs text-gray-500">HVAC Install Year</p>
+                <p className="font-heading text-base font-semibold text-gray-900">
+                  {property.hvacInstallYear}
+                </p>
+              </div>
+            )}
+            {property.waterHeaterInstallYear && (
+              <div className="space-y-1">
+                <p className="font-body text-xs text-gray-500">Water Heater Install Year</p>
+                <p className="font-heading text-base font-semibold text-gray-900">
+                  {property.waterHeaterInstallYear}
+                </p>
+              </div>
+            )}
+            {property.roofReplacementYear && (
+              <div className="space-y-1">
+                <p className="font-body text-xs text-gray-500">Roof Replacement Year</p>
+                <p className="font-heading text-base font-semibold text-gray-900">
+                  {property.roofReplacementYear}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+
+    {/* Action Button */}
+    <div className="flex justify-start">
+      <Link href={`/dashboard/properties/${property.id}/edit`} passHref>
+        <Button variant="default">
+          <Edit className="mr-2 h-4 w-4" />
+          Edit Property Details
+        </Button>
+      </Link>
     </div>
   </div>
 );
 
-// NEW COMPONENT: Component for the Maintenance Plan Tab
+// UPDATED: MaintenancePlanTab with Phase 2 typography
 const MaintenancePlanTab = ({ propertyId }: { propertyId: string }) => (
-    <div className="p-4 rounded-lg border bg-card/50">
-        <h3 className="text-xl font-semibold flex items-center mb-2">
-            Property Maintenance Plan <Zap className="h-5 w-5 ml-2 text-red-600" />
-        </h3>
-        <p className="text-gray-700 dark:text-gray-300">
-            This tab will display the full, scheduled, and required maintenance tasks for this property.
-        </p>
-        <Link href={`/dashboard/maintenance?propertyId=${propertyId}`} passHref>
-            <Button className="mt-4" variant="default">
-                Manage Maintenance Tasks
-            </Button>
-        </Link>
-    </div>
+  <Card>
+    <CardHeader>
+      <CardTitle className="font-heading text-xl flex items-center gap-2">
+        <Zap className="h-5 w-5 text-red-600" />
+        Property Maintenance Plan
+      </CardTitle>
+      <CardDescription className="font-body text-sm">
+        View and manage all scheduled maintenance tasks for this property
+      </CardDescription>
+    </CardHeader>
+    <CardContent className="space-y-4">
+      <p className="font-body text-base text-gray-700">
+        This tab will display the full, scheduled, and required maintenance tasks for this property.
+      </p>
+      <Link href={`/dashboard/maintenance?propertyId=${propertyId}`} passHref>
+        <Button variant="default">
+          <Zap className="mr-2 h-4 w-4" />
+          Manage Maintenance Tasks
+        </Button>
+      </Link>
+    </CardContent>
+  </Card>
 );
 
-// Component for the Risk & Protection Tab
+// UPDATED: RiskProtectionTab with Phase 2 typography
 const RiskProtectionTab = ({ propertyId }: { propertyId: string }) => (
-    <div className="p-4 rounded-lg border bg-card/50">
-        <h3 className="text-xl font-semibold flex items-center mb-2">
-            Property Risk & Protection Overview <Shield className="h-5 w-5 ml-2 text-primary" />
-        </h3>
-        <p className="text-gray-700 dark:text-gray-300">
-            Access the comprehensive risk report to view calculated risk scores, financial exposure,
-            and a detailed breakdown of your home's systems and structure health.
-        </p>
-        <Link href={`/dashboard/properties/${propertyId}/risk-assessment`} passHref>
-            <Button className="mt-4" variant="default">
-                View Risk & Protection Report
-            </Button>
-        </Link>
-    </div>
+  <Card>
+    <CardHeader>
+      <CardTitle className="font-heading text-xl flex items-center gap-2">
+        <Shield className="h-5 w-5 text-primary" />
+        Property Risk & Protection Overview
+      </CardTitle>
+      <CardDescription className="font-body text-sm">
+        Access comprehensive risk assessment and financial exposure analysis
+      </CardDescription>
+    </CardHeader>
+    <CardContent className="space-y-4">
+      <p className="font-body text-base text-gray-700">
+        Access the comprehensive risk report to view calculated risk scores, financial exposure,
+        and a detailed breakdown of your home's systems and structure health.
+      </p>
+      <Link href={`/dashboard/properties/${propertyId}/risk-assessment`} passHref>
+        <Button variant="default">
+          <Shield className="mr-2 h-4 w-4" />
+          View Risk & Protection Report
+        </Button>
+      </Link>
+    </CardContent>
+  </Card>
 );
 
-// Placeholder for the documents tab
+// UPDATED: DocumentsTab with Phase 2 typography
 const DocumentsTab = ({ propertyId }: { propertyId: string }) => (
-    <div className="p-4">
-        <p className="text-lg">Documents associated with this property will be listed here.</p>
-        <Link href={`/dashboard/documents?propertyId=${propertyId}`} passHref>
-            <Button variant="outline" className="mt-4">
-                Manage Documents
-            </Button>
-        </Link>
-    </div>
+  <Card>
+    <CardHeader>
+      <CardTitle className="font-heading text-xl flex items-center gap-2">
+        <FileText className="h-5 w-5 text-blue-600" />
+        Property Documents
+      </CardTitle>
+      <CardDescription className="font-body text-sm">
+        Manage all documents associated with this property
+      </CardDescription>
+    </CardHeader>
+    <CardContent className="space-y-4">
+      <p className="font-body text-base text-gray-700">
+        Documents associated with this property will be listed here, including warranties, 
+        insurance policies, inspection reports, and more.
+      </p>
+      <Link href={`/dashboard/documents?propertyId=${propertyId}`} passHref>
+        <Button variant="outline">
+          <FileText className="mr-2 h-4 w-4" />
+          Manage Documents
+        </Button>
+      </Link>
+    </CardContent>
+  </Card>
 );
 
 
@@ -84,11 +274,9 @@ export default function PropertyDetailPage() {
   const params = useParams();
   const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
   
-  // NEW LOGIC: Get query params and determine default tab
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab');
   
-  // Validate and set default tab, prioritizing the URL param 'maintenance' if present
   const defaultTab = initialTab && ['overview', 'maintenance', 'risk-protection', 'documents'].includes(initialTab) 
     ? initialTab 
     : 'overview';
@@ -134,14 +322,14 @@ export default function PropertyDetailPage() {
 
   return (
     <DashboardShell>
-      {/* ADDED: Back Navigation Link */}
-      <div className="mb-4">
+      {/* UPDATED: Back Navigation - Increased spacing and improved visibility */}
+      <div className="mb-6">
         <Link 
-            href="/dashboard/properties" 
-            className="text-sm font-medium text-gray-500 hover:text-gray-700 inline-flex items-center"
+          href="/dashboard/properties" 
+          className="font-body text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center transition-colors"
         >
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Back to Properties
+          <ArrowLeft className="h-4 w-4 mr-1.5" />
+          Back to Properties
         </Link>
       </div>
       
@@ -153,40 +341,36 @@ export default function PropertyDetailPage() {
       </PageHeader>
 
       <div className="space-y-6">
-        {/* UPDATED: Use the dynamic defaultTab */}
         <Tabs defaultValue={defaultTab} className="w-full">
           <TabsList>
             <TabsTrigger value="overview" className="flex items-center gap-2">
-                <Edit className="h-4 w-4" /> Overview & Details
+              <Edit className="h-4 w-4" /> Overview & Details
             </TabsTrigger>
-            {/* NEW TAB ADDED: Maintenance Plan */}
             <TabsTrigger value="maintenance" className="flex items-center gap-2">
-                <Zap className="h-4 w-4" /> Maintenance Plan
+              <Zap className="h-4 w-4" /> Maintenance Plan
             </TabsTrigger>
-            {/* Existing tabs */}
             <TabsTrigger value="risk-protection" className="flex items-center gap-2">
-                <Shield className="h-4 w-4" /> Risk & Protection
+              <Shield className="h-4 w-4" /> Risk & Protection
             </TabsTrigger>
             <TabsTrigger value="documents" className="flex items-center gap-2">
-                <FileText className="h-4 w-4" /> Documents
+              <FileText className="h-4 w-4" /> Documents
             </TabsTrigger>
           </TabsList>
           
-          <TabsContent value="overview" className="mt-4">
+          {/* UPDATED: Increased tab content spacing from mt-4 to mt-6 */}
+          <TabsContent value="overview" className="mt-6">
             <PropertyOverview property={property} />
           </TabsContent>
           
-          {/* NEW TAB CONTENT: Maintenance Plan */}
-          <TabsContent value="maintenance" className="mt-4">
+          <TabsContent value="maintenance" className="mt-6">
             <MaintenancePlanTab propertyId={property.id} />
           </TabsContent>
 
-          {/* Existing tabs content */}
-          <TabsContent value="risk-protection" className="mt-4">
+          <TabsContent value="risk-protection" className="mt-6">
             <RiskProtectionTab propertyId={property.id} />
           </TabsContent>
           
-          <TabsContent value="documents" className="mt-4">
+          <TabsContent value="documents" className="mt-6">
             <DocumentsTab propertyId={property.id} />
           </TabsContent>
         </Tabs>
