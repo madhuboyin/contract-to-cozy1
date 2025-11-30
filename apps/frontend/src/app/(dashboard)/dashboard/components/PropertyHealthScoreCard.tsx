@@ -15,8 +15,8 @@ import React from 'react';
 // import { Progress } from "@/components/ui/progress"; 
 
 const getHealthDetails = (score: number) => {
+    // ... (existing logic, ensured to return stroke- classes for clarity)
     if (score >= 85) {
-        // progressClass: bg-xxx is mapped to stroke-xxx color for SVG
         return { level: "EXCELLENT", color: "text-green-500", progressClass: "stroke-green-500", badgeVariant: "success" as const };
     } else if (score >= 70) {
         return { level: "GOOD", color: "text-blue-500", progressClass: "stroke-blue-500", badgeVariant: "secondary" as const };
@@ -48,11 +48,7 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
         HIGH_PRIORITY_STATUSES.includes(i.status)
     ).length || 0;
 
-    // The length of the stroke for the current score. Maps 0-100 to 0-ARC_LENGTH
     const progressStrokeLength = (progressValue / 100) * ARC_LENGTH;
-    
-    // The visual offset applied to the arc to show progress from 0% to N%
-    // We reverse the fill direction, so the offset is the remaining arc length.
     const progressOffset = ARC_LENGTH - progressStrokeLength;
     
     // Needle Rotation: Maps 0-100 to an angle range of 180 degrees.
@@ -74,19 +70,24 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
             </CardHeader>
             <CardContent className="flex-1 flex flex-col justify-between">
                 
-                {/* *** SPEEDOMETER DISPLAY (New Implementation) *** */}
+                {/* *** SPEEDOMETER DISPLAY FIXES *** */}
                 <div className="flex flex-col items-center justify-center pt-4 pb-6">
-                    <div className="relative w-36 h-20 -mb-2"> {/* Adjusted height for semi-circle */}
-                        <svg className="w-full h-full transform rotate-180" viewBox="0 0 100 50">
+                    {/* Increased container size and added a definitive 2:1 aspect for the SVG display */}
+                    <div className="relative w-40 h-20 overflow-hidden -mb-2"> 
+                        <svg 
+                            className="w-full h-full transform rotate-180" 
+                            viewBox="0 0 100 50" // viewBox adjusted for the semi-circle geometry (center at 50,50, showing top half)
+                            preserveAspectRatio="xMidYMax meet" // Ensures it fits correctly within the container
+                        >
                             {/* Base Track (Semi-Circle Arc) */}
                             <circle
                                 cx="50"
-                                cy="50" // Center Y is 50, but viewBox shows 0-50, resulting in the top half
+                                cy="50"
                                 r={RADIUS}
                                 fill="none"
                                 stroke="hsl(var(--muted))" 
                                 strokeWidth={STROKE_WIDTH}
-                                strokeDasharray={ARC_LENGTH} // Cuts the circle to a semi-circle length
+                                strokeDasharray={ARC_LENGTH} 
                                 strokeDashoffset={0} 
                             />
                             {/* Progress Arc (Color Fill) */}
@@ -95,28 +96,30 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
                                 cy="50"
                                 r={RADIUS}
                                 fill="none"
-                                className={progressClass} // Dynamic color based on score
+                                className={progressClass} 
                                 strokeWidth={STROKE_WIDTH}
                                 strokeLinecap="round"
-                                strokeDasharray={ARC_LENGTH} // Full semi-circle length
-                                strokeDashoffset={progressOffset} // Shows only the progress
+                                strokeDasharray={ARC_LENGTH} 
+                                strokeDashoffset={progressOffset} 
                                 style={{ transition: 'stroke-dashoffset 0.5s ease' }}
                             />
                         </svg>
                         
-                        {/* Needle (The Pointer) */}
+                        {/* Needle (The Pointer) - Adjusted positioning for better centering */}
                         <div 
-                            className="absolute left-1/2 top-full transform -translate-x-1/2 -translate-y-1/2 origin-bottom transition-transform duration-500 ease-in-out"
+                            className="absolute left-1/2 top-full transform -translate-x-1/2 -translate-y-full origin-bottom transition-transform duration-500 ease-in-out"
                             style={{ 
-                                transform: `translateX(-50%) translateY(-50%) rotate(${needleAngle}deg)`,
+                                // Needle pivots from the bottom center of the SVG
+                                transform: `translateX(-50%) translateY(0%) rotate(${needleAngle}deg)`,
+                                transformOrigin: 'center 100%',
                             }}
                         >
-                            <div className={`w-[2px] h-[55px] ${progressClass.replace('stroke-', 'bg-')} rounded-t-full`}></div>
-                            <div className="w-3 h-3 bg-card border-2 border-primary rounded-full absolute -bottom-[6px] left-1/2 transform -translate-x-1/2"></div>
+                            <div className={`w-[2px] h-[50px] ${progressClass.replace('stroke-', 'bg-')} rounded-t-full`}></div>
+                            <div className="w-3 h-3 bg-card border-2 border-primary rounded-full absolute -bottom-1 left-1/2 transform -translate-x-1/2"></div>
                         </div>
 
-                        {/* Score Text (Confirms "displaying score" requirement) */}
-                        <div className="absolute left-1/2 bottom-0 transform -translate-x-1/2 flex flex-col items-center justify-center -translate-y-1">
+                        {/* Score Text in Center (Positioned near the base of the speedometer) */}
+                        <div className="absolute left-1/2 bottom-0 transform -translate-x-1/2 flex flex-col items-center justify-center translate-y-2">
                             <span className={`text-3xl font-extrabold ${color}`}>{healthScore}</span>
                             <span className="text-xs font-semibold text-muted-foreground mt-0.5">/100</span>
                         </div>
@@ -142,7 +145,7 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
                     </p>
                 </div>
 
-                {/* *** VIEW FULL MAINTENANCE PLAN LINK (Retained and pushed to bottom) *** */}
+                {/* *** VIEW FULL MAINTENANCE PLAN LINK (Retained) *** */}
                 <div className="mt-4">
                     <Link href={`/dashboard/properties/${property.id}/?tab=maintenance`} passHref>
                         <Button variant="link" className="p-0 h-auto font-body text-sm font-semibold flex items-center">
