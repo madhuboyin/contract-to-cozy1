@@ -108,7 +108,7 @@ export const ExistingOwnerDashboard = ({
                         <SelectContent>
                             {properties.map((property) => (
                                 <SelectItem key={property.id} value={property.id}>
-                                    {property.name || formatAddress(property)}
+                                    {property.name ? `${property.name} - ${formatAddress(property)}` : formatAddress(property)}
                                 </SelectItem>
                             ))}
                         </SelectContent>
