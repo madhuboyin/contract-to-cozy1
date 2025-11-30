@@ -4,6 +4,8 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+// Re-importing Progress (though we use SVG for the gauge icon)
+import { Progress } from "@/components/ui/progress"; 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Zap, Shield, ArrowRight } from "lucide-react";
@@ -11,11 +13,8 @@ import Link from "next/link";
 import { ScoredProperty } from "@/app/(dashboard)/dashboard/types";
 import React from 'react';
 
-// NOTE: Progress component is not used for the custom SVG speedometer
-// import { Progress } from "@/components/ui/progress"; 
-
+// Adjusted to return stroke- classes for the SVG gauge color, ensuring contrast
 const getHealthDetails = (score: number) => {
-    // ... (existing logic, ensured to return stroke- classes for clarity)
     if (score >= 85) {
         return { level: "EXCELLENT", color: "text-green-500", progressClass: "stroke-green-500", badgeVariant: "success" as const };
     } else if (score >= 70) {
@@ -33,11 +32,10 @@ interface PropertyHealthScoreCardProps {
 
 const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection'];
 
-// Speedometer configuration constants
-const RADIUS = 45;
-const STROKE_WIDTH = 8;
+// Circular Gauge configuration constants
+const RADIUS = 45; 
+const STROKE_WIDTH = 10;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-const ARC_LENGTH = CIRCUMFERENCE / 2; // Semi-circle is 1/2 the circumference
 
 export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardProps) {
     const healthScore = property.healthScore?.totalScore || 0;
@@ -48,12 +46,8 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
         HIGH_PRIORITY_STATUSES.includes(i.status)
     ).length || 0;
 
-    const progressStrokeLength = (progressValue / 100) * ARC_LENGTH;
-    const progressOffset = ARC_LENGTH - progressStrokeLength;
-    
-    // Needle Rotation: Maps 0-100 to an angle range of 180 degrees.
-    // Score 0 is -90deg (pointing left). Score 100 is +90deg (pointing right).
-    const needleAngle = (progressValue / 100) * 180 - 90;
+    // Calculation for the stroke offset to simulate circular progress
+    const offset = CIRCUMFERENCE - (progressValue / 100) * CIRCUMFERENCE;
 
     return (
         <Card className="h-full flex flex-col">
@@ -68,18 +62,14 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
                     </CardDescription>
                 </div>
             </CardHeader>
+            {/* Retained flex flex-col justify-between to manage content layout */}
             <CardContent className="flex-1 flex flex-col justify-between">
                 
-                {/* *** SPEEDOMETER DISPLAY FIXES *** */}
+                {/* *** GAUGE ICON AND SCORE DISPLAY (Reverted to Circular Gauge) *** */}
                 <div className="flex flex-col items-center justify-center pt-4 pb-6">
-                    {/* Increased container size and added a definitive 2:1 aspect for the SVG display */}
-                    <div className="relative w-40 h-20 overflow-hidden -mb-2"> 
-                        <svg 
-                            className="w-full h-full transform rotate-180" 
-                            viewBox="0 0 100 50" // viewBox adjusted for the semi-circle geometry (center at 50,50, showing top half)
-                            preserveAspectRatio="xMidYMax meet" // Ensures it fits correctly within the container
-                        >
-                            {/* Base Track (Semi-Circle Arc) */}
+                    <div className="relative w-32 h-32 flex items-center justify-center">
+                        <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                            {/* Background Circle (Track) */}
                             <circle
                                 cx="50"
                                 cy="50"
@@ -87,53 +77,37 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
                                 fill="none"
                                 stroke="hsl(var(--muted))" 
                                 strokeWidth={STROKE_WIDTH}
-                                strokeDasharray={ARC_LENGTH} 
-                                strokeDashoffset={0} 
                             />
-                            {/* Progress Arc (Color Fill) */}
+                            {/* Progress Arc (Fill) - Color added based on score */}
                             <circle
                                 cx="50"
                                 cy="50"
                                 r={RADIUS}
                                 fill="none"
-                                className={progressClass} 
+                                className={progressClass} // Dynamic color based on score
                                 strokeWidth={STROKE_WIDTH}
                                 strokeLinecap="round"
-                                strokeDasharray={ARC_LENGTH} 
-                                strokeDashoffset={progressOffset} 
+                                strokeDasharray={CIRCUMFERENCE}
+                                strokeDashoffset={offset}
                                 style={{ transition: 'stroke-dashoffset 0.5s ease' }}
                             />
                         </svg>
-                        
-                        {/* Needle (The Pointer) - Adjusted positioning for better centering */}
-                        <div 
-                            className="absolute left-1/2 top-full transform -translate-x-1/2 -translate-y-full origin-bottom transition-transform duration-500 ease-in-out"
-                            style={{ 
-                                // Needle pivots from the bottom center of the SVG
-                                transform: `translateX(-50%) translateY(0%) rotate(${needleAngle}deg)`,
-                                transformOrigin: 'center 100%',
-                            }}
-                        >
-                            <div className={`w-[2px] h-[50px] ${progressClass.replace('stroke-', 'bg-')} rounded-t-full`}></div>
-                            <div className="w-3 h-3 bg-card border-2 border-primary rounded-full absolute -bottom-1 left-1/2 transform -translate-x-1/2"></div>
-                        </div>
-
-                        {/* Score Text in Center (Positioned near the base of the speedometer) */}
-                        <div className="absolute left-1/2 bottom-0 transform -translate-x-1/2 flex flex-col items-center justify-center translate-y-2">
-                            <span className={`text-3xl font-extrabold ${color}`}>{healthScore}</span>
-                            <span className="text-xs font-semibold text-muted-foreground mt-0.5">/100</span>
+                        {/* Score Text in Center (Confirms "displaying score" requirement) */}
+                        <div className="absolute flex flex-col items-center justify-center">
+                            <span className={`text-4xl font-extrabold ${color}`}>{healthScore}</span>
+                            <span className="text-xl font-semibold text-muted-foreground ml-1">/100</span>
                         </div>
                     </div>
-                    
                     {/* Status Badge */}
-                    <p className="font-body text-sm text-muted-foreground mt-8">
+                    <p className="font-body text-sm text-muted-foreground mt-2">
                         Overall Status: <Badge variant={badgeVariant} className="text-xs">{level}</Badge>
                     </p>
                 </div>
 
-                {/* *** REQUIRED MAINTENANCE ACTIONS (Retained) *** */}
+                {/* *** REQUIRED MAINTENANCE ACTIONS (Fixing text wrapping) *** */}
                 <div className="mt-2 border-t pt-4"> 
-                    <p className="font-body text-lg font-semibold flex items-center">
+                    {/* Applied text-base (down from text-lg) and whitespace-nowrap to fix two-row issue */}
+                    <p className="font-body text-base font-semibold flex items-center whitespace-nowrap">
                         <Zap className="h-4 w-4 mr-1 text-red-600" />
                         Required Maintenance Actions
                     </p>
