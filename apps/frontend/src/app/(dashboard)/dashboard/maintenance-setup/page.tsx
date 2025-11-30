@@ -1,9 +1,9 @@
 // apps/frontend/src/app/(dashboard)/dashboard/maintenance-setup/page.tsx
+// UPDATED: Phase 2 Typography & Styling Corrections Applied
 'use client';
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-// FIX: Import useQueryClient
 import { useQuery, useQueryClient } from '@tanstack/react-query'; 
 import { api } from '@/lib/api/client';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -18,7 +18,6 @@ import Link from 'next/link';
 
 export default function MaintenanceSetupPage() {
   const router = useRouter();
-  // FIX: Initialize useQueryClient
   const queryClient = useQueryClient();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -71,7 +70,6 @@ export default function MaintenanceSetupPage() {
       variant: "default",
     });
     
-    // FIX: Invalidate the query for the maintenance list page
     queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); 
     
     handleCloseModal();
@@ -100,8 +98,8 @@ export default function MaintenanceSetupPage() {
               </PageHeader>
               <Card className="mt-8 p-6 text-center">
                   <Home className="w-10 h-10 mx-auto text-gray-400 mb-4" />
-                  <p className="text-lg font-medium">No Properties Found</p>
-                  <p className="text-sm text-gray-500 mb-4">Maintenance tasks must be linked to a home.</p>
+                  <p className="font-heading text-lg font-medium">No Properties Found</p>
+                  <p className="font-body text-sm text-gray-500 mb-4">Maintenance tasks must be linked to a home.</p>
                   <Link href="/dashboard/properties/new" passHref>
                       <Button>Add Your First Property</Button>
                   </Link>
@@ -114,7 +112,10 @@ export default function MaintenanceSetupPage() {
   return (
     <DashboardShell>
       <PageHeader>
-        <PageHeaderHeading>Maintenance Setup</PageHeaderHeading>
+        {/* FIX: Updated icon color from text-yellow-500 to text-blue-600 */}
+        <PageHeaderHeading className="flex items-center gap-2">
+          <Zap className="w-8 h-8 text-blue-600" /> Maintenance Setup
+        </PageHeaderHeading>
         <PageHeaderDescription>
           Select from predefined templates or create custom tasks to build your home maintenance plan.
         </PageHeaderDescription>
@@ -125,31 +126,37 @@ export default function MaintenanceSetupPage() {
         {/* Templates List */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl flex items-center gap-2">
-              <Wrench className="w-6 h-6 text-indigo-600" /> Predefined Maintenance Templates
+            {/* FIX: Updated from text-2xl to font-heading text-xl, icon from w-6 h-6 to w-5 h-5, color from text-indigo-600 to text-blue-600 */}
+            <CardTitle className="font-heading text-xl flex items-center gap-2">
+              <Wrench className="w-5 h-5 text-blue-600" /> Predefined Maintenance Templates
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="font-body text-sm">
               Select recommended recurring tasks based on common property systems.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {templates.map(template => (
-              <div key={template.id} className="flex justify-between items-center p-3 border rounded-md hover:bg-gray-500/5 transition-colors">
+              <div key={template.id} className="flex justify-between items-center p-3 border rounded-md hover:bg-gray-50 transition-colors">
                 <div>
-                  <h3 className="font-semibold">{template.title}</h3>
-                  <p className="text-sm text-gray-500">Frequency: {template.defaultFrequency.toLowerCase()} | Category: {template.serviceCategory || 'General'}</p>
+                  {/* FIX: Added font-heading class */}
+                  <h3 className="font-heading font-semibold text-gray-900">{template.title}</h3>
+                  {/* FIX: Added font-body class */}
+                  <p className="font-body text-sm text-gray-500">
+                    Frequency: {template.defaultFrequency.toLowerCase()} | Category: {template.serviceCategory || 'General'}
+                  </p>
                 </div>
                 <Button 
                   size="sm" 
                   onClick={() => handleTemplateSelect(template)}
-                  disabled={!selectedPropertyId} // Disable if no property is selected
+                  disabled={!selectedPropertyId}
                 >
                   Select <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               </div>
             ))}
+            {/* FIX: Added font-body class */}
             {!selectedPropertyId && (
-                <p className="text-sm font-medium text-red-500 flex items-center gap-1">
+                <p className="font-body text-sm font-medium text-red-500 flex items-center gap-1">
                     <Home className="w-4 h-4"/> Please wait for properties to load or add a property.
                 </p>
             )}
@@ -163,7 +170,6 @@ export default function MaintenanceSetupPage() {
             onClose={handleCloseModal}
             template={selectedTemplate}
             onSuccess={handleSuccess}
-            // PASS FIX: Pass the list of properties and the selection state
             properties={properties}
             selectedPropertyId={selectedPropertyId}
             onPropertyChange={setSelectedPropertyId}
