@@ -1,0 +1,43 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: prisma-migrate-homeasset-TIMESTAMP
+  namespace: production
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: migrate
+        image: node:20-alpine
+        command:
+          - sh
+          - -c
+          - |
+            set -e
+            echo "📦 Installing Prisma..."
+            apk add --no-cache openssl openssl-dev
+            npm install -g prisma@5.22.0
+            
+            echo "📋 Setting up schema..."
+            mkdir -p /app/prisma
+            cp /config/schema.prisma /app/prisma/schema.prisma
+            
+            cd /app
+            
+            echo "🚀 Pushing schema changes..."
+            npx prisma db push --accept-data-loss --skip-generate
+            
+            echo "✅ Migration complete!"
+        env:
+        - name: DATABASE_URL
+          value: "postgresql://postgres:PASSWORD_HERE@postgres.production.svc.cluster.local:5432/contracttocozy?schema=public"
+        volumeMounts:
+        - name: schema
+          mountPath: /config
+      volumes:
+      - name: schema
+        configMap:
+          name: prisma-schema
