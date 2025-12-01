@@ -8,6 +8,13 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
 
+// NEW: Structured data type for appliance inputs
+interface ApplianceInput {
+  id: number; // Unique ID for keying/deletion
+  type: string; // Appliance type from MAJOR_APPLIANCE_OPTIONS
+  installYear: string; // The year it was installed (YYYY)
+}
+
 interface PropertyFormData {
   name: string;
   address: string;
@@ -33,8 +40,7 @@ interface PropertyFormData {
   hasFireExtinguisher: boolean;
   hasIrrigation: boolean;
   hasDrainageIssues: boolean;
-  // FIX: Add missing field for Appliance Ages
-  applianceAges: string;
+  // REMOVED: applianceAges: string; (Managed internally by majorAppliances state)
 }
 
 const PROPERTY_TYPE_OPTIONS = ['SINGLE_FAMILY', 'TOWNHOME', 'CONDO', 'APARTMENT', 'MULTI_UNIT', 'INVESTMENT_PROPERTY'];
@@ -44,11 +50,25 @@ const COOLING_OPTIONS = ['CENTRAL_AC', 'WINDOW_AC', 'UNKNOWN'];
 const WATER_HEATER_OPTIONS = ['TANK', 'TANKLESS', 'HEAT_PUMP', 'SOLAR', 'UNKNOWN'];
 const ROOF_OPTIONS = ['SHINGLE', 'TILE', 'FLAT', 'METAL', 'UNKNOWN'];
 
+// NEW: Canonical list of major appliances for the Select input
+const MAJOR_APPLIANCE_OPTIONS = [
+    'DISHWASHER',
+    'REFRIGERATOR',
+    'OVEN_RANGE',
+    'WASHER_DRYER',
+    'MICROWAVE_HOOD',
+    'WATER_SOFTENER',
+];
+
+
 export default function NewPropertyPage() {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // NEW STATE: Structured input for appliances (empty array initially)
+  const [majorAppliances, setMajorAppliances] = useState<ApplianceInput[]>([]); 
 
   // Log on mount
   useEffect(() => {
@@ -81,8 +101,7 @@ export default function NewPropertyPage() {
     hasFireExtinguisher: false,
     hasIrrigation: false,
     hasDrainageIssues: false,
-    // FIX: Initialize applianceAges
-    applianceAges: '',
+    // REMOVED: applianceAges: '',
   });
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -102,6 +121,25 @@ export default function NewPropertyPage() {
       [name]: value,
     }));
   };
+  
+  // NEW: Appliance management helpers
+  const addAppliance = () => {
+    setMajorAppliances(prev => [
+        ...prev,
+        { id: Date.now(), type: '', installYear: '' }
+    ]);
+  };
+
+  const removeAppliance = (id: number) => {
+    setMajorAppliances(prev => prev.filter(app => app.id !== id));
+  };
+
+  const handleApplianceChange = (id: number, field: keyof Omit<ApplianceInput, 'id'>, value: string) => {
+    setMajorAppliances(prev => prev.map(app => 
+        app.id === id ? { ...app, [field]: value } : app
+    ));
+  };
+
 
   const validateBasicFields = () => {
     if (!formData.address.trim()) return 'Street Address is required.';
@@ -111,17 +149,14 @@ export default function NewPropertyPage() {
     if (!formData.propertyType) return 'Property Type is required.';
     if (!/^\d{4}$/.test(formData.yearBuilt)) return 'Year Built must be a 4-digit year.';
 
-    // Validate Appliance Ages if provided (minimal check for JSON structure)
-    if (formData.applianceAges.trim()) {
-        try {
-            const parsed = JSON.parse(formData.applianceAges.trim());
-            if (typeof parsed !== 'object' || Array.isArray(parsed) || parsed === null) {
-                return 'Major Appliance Ages must be valid JSON object (e.g., {"dishwasher": 2019}).';
-            }
-        } catch (e) {
-            return 'Major Appliance Ages must be valid JSON.';
+    // NEW: Validate structured appliance inputs
+    for (const app of majorAppliances) {
+        if (app.type && !/^\d{4}$/.test(app.installYear)) {
+            return `Appliance "${app.type.replace(/_/g, ' ')}" must have a valid 4-digit installation year.`;
         }
     }
+
+    // REMOVED: Old JSON validation logic is gone.
 
     return null;
   };
@@ -135,6 +170,21 @@ export default function NewPropertyPage() {
       setError(basicError);
       return;
     }
+    
+    // NEW STEP: Convert structured appliances array back into the required JSON object
+    const applianceAgesObject: Record<string, number> = {};
+    majorAppliances.forEach(app => {
+        if (app.type && app.installYear) {
+            // Note: The appliance type here acts as the key in the final JSON
+            applianceAgesObject[app.type.toUpperCase()] = parseInt(app.installYear);
+        }
+    });
+    
+
+    // Determine the final applianceAges payload: an object or undefined
+    const applianceAgesPayload = Object.keys(applianceAgesObject).length > 0
+        ? applianceAgesObject
+        : undefined;
 
     const payload = {
       name: formData.name.trim() || undefined,
@@ -164,10 +214,8 @@ export default function NewPropertyPage() {
       hasIrrigation: formData.hasIrrigation,
       hasDrainageIssues: formData.hasDrainageIssues,
 
-      // FIX: Handle applianceAges JSON parsing
-      applianceAges: formData.applianceAges.trim() 
-        ? JSON.parse(formData.applianceAges.trim()) 
-        : undefined,
+      // FIXED: Send the structured object (or undefined)
+      applianceAges: applianceAgesPayload,
     };
 
     setSubmitting(true);
@@ -392,6 +440,73 @@ export default function NewPropertyPage() {
     </div>
   );
 
+  const ApplianceInputList = (
+    <div className="border-t border-gray-200 pt-6 space-y-4">
+        <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-3">
+            Major Appliance Ages
+        </h3>
+        
+        <div className="space-y-4">
+            {majorAppliances.map((app) => (
+                <div key={app.id} className="flex gap-4 items-center bg-gray-50 p-3 rounded-md border border-gray-200">
+                    
+                    {/* Appliance Type Select */}
+                    <div className="flex-1">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Appliance Type</label>
+                        <select
+                            value={app.type}
+                            onChange={(e) => handleApplianceChange(app.id, 'type', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+                        >
+                            <option value="" disabled>Select Appliance</option>
+                            {MAJOR_APPLIANCE_OPTIONS.map(option => (
+                                <option key={option} value={option}>
+                                    {option.replace(/_/g, ' ')}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    
+                    {/* Install Year Input */}
+                    <div className="w-24">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Install Year</label>
+                        <input
+                            type="text"
+                            value={app.installYear}
+                            onChange={(e) => handleApplianceChange(app.id, 'installYear', e.target.value)}
+                            placeholder="YYYY"
+                            pattern="\d{4}"
+                            maxLength={4}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        />
+                    </div>
+
+                    {/* Remove Button */}
+                    <button
+                        type="button"
+                        onClick={() => removeAppliance(app.id)}
+                        className="p-2 text-red-600 hover:text-red-800 transition-colors self-end mb-0.5"
+                        aria-label="Remove appliance"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                </div>
+            ))}
+        </div>
+        
+        <button
+            type="button"
+            onClick={addAppliance}
+            className="w-full px-4 py-2 border border-dashed border-blue-400 text-blue-600 rounded-md hover:bg-blue-50 transition-colors"
+        >
+            + Add Appliance
+        </button>
+        <p className="text-xs text-gray-500 mt-2">
+            Providing this information improves the accuracy of your Health and Risk Scores.
+        </p>
+    </div>
+  );
+
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
       <div className="mb-8">
@@ -494,22 +609,9 @@ export default function NewPropertyPage() {
                 <BooleanInput label="Has Drainage Issues" name="hasDrainageIssues" checked={formData.hasDrainageIssues} />
               </div>
 
-              {/* FIX: Add Major Appliance Ages field for consistency */}
-              <div className="border-t border-gray-200 pt-6 space-y-4">
-                <label htmlFor="applianceAges" className="block text-sm font-medium text-gray-700 mb-2">
-                  Major Appliance Ages (JSON format)
-                </label>
-                <textarea
-                  id="applianceAges"
-                  name="applianceAges"
-                  value={formData.applianceAges}
-                  onChange={handleChange}
-                  placeholder={`e.g., {"dishwasher": 2019, "refrigerator": 2022}`} 
-                  rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="text-xs text-gray-500">Must be a valid JSON object. Used to calculate system risk.</p>
-              </div>
+              {/* FIXED: Replaced JSON Textarea with Structured Input List */}
+              {ApplianceInputList}
+              
             </div>
           )}
         </div>
