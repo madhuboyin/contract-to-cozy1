@@ -327,20 +327,16 @@ export default function EditPropertyPage() {
     hasResetForm.current = false;
   }, [propertyId]);
 
-  // 3. Setup Mutation
   const updateMutation = useMutation({
     mutationFn: (data: PropertyFormValues) => {
       
-      // NEW: Convert structured array back to backend's expected JSON format
-      const applianceAgesObject: Record<string, number> = {};
-      data.appliances?.forEach(app => {
-          if (app.type && app.installYear) {
-              applianceAgesObject[app.type.toUpperCase()] = app.installYear;
-          }
-      });
-      const applianceAgesPayload = Object.keys(applianceAgesObject).length > 0
-          ? applianceAgesObject
-          : undefined;
+      // FIXED: Convert structured array to backend's expected homeAssets format
+      const homeAssetsPayload = data.appliances
+        ?.filter(app => app.type && app.installYear)
+        .map(app => ({
+          type: app.type.toUpperCase(),
+          installYear: app.installYear
+        }));
       
       const payload = {
         name: data.name ?? undefined,
@@ -372,8 +368,8 @@ export default function EditPropertyPage() {
         hasFireExtinguisher: data.hasFireExtinguisher ?? false,
         hasIrrigation: data.hasIrrigation ?? false,
         
-        // OLD FIELD: Send the correctly formatted JSON object
-        applianceAges: applianceAgesPayload,
+        // FIXED: Send homeAssets array to backend
+        homeAssets: homeAssetsPayload,
       };
       
       return api.updateProperty(propertyId, payload);

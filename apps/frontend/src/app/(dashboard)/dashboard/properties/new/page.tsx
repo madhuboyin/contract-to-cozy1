@@ -171,20 +171,13 @@ export default function NewPropertyPage() {
       return;
     }
     
-    // NEW STEP: Convert structured appliances array back into the required JSON object
-    const applianceAgesObject: Record<string, number> = {};
-    majorAppliances.forEach(app => {
-        if (app.type && app.installYear) {
-            // Note: The appliance type here acts as the key in the final JSON
-            applianceAgesObject[app.type.toUpperCase()] = parseInt(app.installYear);
-        }
-    });
-    
-
-    // Determine the final applianceAges payload: an object or undefined
-    const applianceAgesPayload = Object.keys(applianceAgesObject).length > 0
-        ? applianceAgesObject
-        : undefined;
+    // FIXED: Convert structured appliances array to backend's expected homeAssets format
+    const homeAssetsPayload = majorAppliances
+      .filter(app => app.type && app.installYear)
+      .map(app => ({
+        type: app.type.toUpperCase(),
+        installYear: parseInt(app.installYear)
+      }));
 
     const payload = {
       name: formData.name.trim() || undefined,
@@ -214,8 +207,8 @@ export default function NewPropertyPage() {
       hasIrrigation: formData.hasIrrigation,
       hasDrainageIssues: formData.hasDrainageIssues,
 
-      // FIXED: Send the structured object (or undefined)
-      applianceAges: applianceAgesPayload,
+      // FIXED: Send homeAssets array to backend
+      homeAssets: homeAssetsPayload.length > 0 ? homeAssetsPayload : undefined,
     };
 
     setSubmitting(true);
