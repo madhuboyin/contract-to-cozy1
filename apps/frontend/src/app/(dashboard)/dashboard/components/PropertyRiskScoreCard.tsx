@@ -46,12 +46,21 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
     const riskQuery = useQuery({
         queryKey: ['primary-risk-summary', propertyId],
         queryFn: async () => {
+            // NOTE: The backend service will handle re-queuing the job if the report is stale.
             const response = await api.getPrimaryRiskSummary() as PrimaryRiskSummary;
             return response;
         },
         retry: (failureCount, error: any) => (error?.message?.includes('No property') || error?.message?.includes('5000') ? false : failureCount < 2),
         retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
-        refetchInterval: (query) => ((query.state.data as PrimaryRiskSummary)?.status === 'QUEUED' ? 5000 : false),
+        
+        // FIX START: Increase interval and only refetch if QUEUED status is confirmed
+        refetchInterval: (query) => {
+            const currentStatus = (query.state.data as PrimaryRiskSummary)?.status;
+            // Refetch every 10 seconds only if the status is explicitly QUEUED
+            return currentStatus === 'QUEUED' ? 10000 : false;
+        },
+        // FIX END
+        
         staleTime: 60 * 1000, 
         gcTime: 10 * 60 * 1000,
         enabled: enabled,
@@ -142,7 +151,11 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
                     <p className="font-body text-sm text-muted-foreground mb-4">
                         Your property risk report is being generated. This typically takes 10-30 seconds. Results will appear automatically.
                     </p>
-                    <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">Queued for Processing</Badge>
+                    {/* Add visual feedback for refetching status */}
+                    <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 flex items-center gap-1">
+                        {isFetching ? <Loader2 className="h-3 w-3 animate-spin" /> : <AlertTriangle className="h-3 w-3" />}
+                        {isFetching ? 'Checking Worker Status...' : 'Queued for Processing'}
+                    </Badge>
                 </CardContent>
             </Card>
         );
