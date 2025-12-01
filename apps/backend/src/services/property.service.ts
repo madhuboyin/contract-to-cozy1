@@ -46,7 +46,7 @@ interface CreatePropertyData {
   hasCoDetectors?: boolean;
   hasSecuritySystem?: boolean;
   hasFireExtinguisher?: boolean;
-  applianceAges?: any; // Prisma Json type maps to 'any'
+  // REMOVED: applianceAges?: any; // Field removed from schema
 }
 
 interface UpdatePropertyData extends Partial<CreatePropertyData> {
@@ -62,33 +62,32 @@ export interface ScoredProperty extends Property {
  * Helper function to calculate and attach the score to a property object.
  */
 async function attachHealthScore(property: Property): Promise<ScoredProperty> {
-  const documentCount = await prisma.document.count({
-      where: { propertyId: property.id }
-  });
-  
-  let healthScore: HealthScoreResult;
-  try {
-      // This is the line most likely throwing the unhandled exception (500)
-      healthScore = calculateHealthScore(property, documentCount);
-  } catch (error) {
-      console.error(`CRITICAL: Health score calculation failed for Property ID ${property.id}. Returning default score.`, error);
-      // Fallback to a zero score and default insights to prevent server crash
-      healthScore = { 
-          totalScore: 0, 
-          baseScore: 0, 
-          unlockedScore: 0, 
-          maxPotentialScore: 100,
-          maxBaseScore: 100,
-          maxExtraScore: 0,
-          insights: [{ factor: "Calculation Error", status: "CRASHED", score: 0 }],
-          ctaNeeded: true
-      };
-  }
-  
-  return {
-      ...property,
-      healthScore,
-  } as ScoredProperty;
+    const documentCount = await prisma.document.count({
+        where: { propertyId: property.id }
+    });
+    // FIX: Add try/catch block for defensive coding against errors in scoring utility
+    let healthScore: HealthScoreResult;
+    try {
+        healthScore = calculateHealthScore(property, documentCount);
+    } catch (error) {
+        console.error(`CRITICAL: Health score calculation failed for Property ID ${property.id}. Returning default score.`, error);
+        // Fallback to a zero score and default insights to prevent server crash
+        healthScore = { 
+            totalScore: 0, 
+            baseScore: 0, 
+            unlockedScore: 0, 
+            maxPotentialScore: 100,
+            maxBaseScore: 55,
+            maxExtraScore: 45,
+            insights: [{ factor: "Calculation Error", status: "CRASHED", score: 0 }],
+            ctaNeeded: true
+        };
+    }
+
+    return {
+        ...property,
+        healthScore,
+    } as ScoredProperty;
 }
 
 /**
@@ -180,7 +179,7 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       hasCoDetectors: data.hasCoDetectors,
       hasSecuritySystem: data.hasSecuritySystem,
       hasFireExtinguisher: data.hasFireExtinguisher,
-      applianceAges: data.applianceAges,
+      // REMOVED: applianceAges: data.applianceAges, // Field removed
       // END PHASE 2 ADDITIONS
     },
   });
@@ -288,7 +287,7 @@ export async function updateProperty(
   if (data.hasCoDetectors !== undefined) updatePayload.hasCoDetectors = data.hasCoDetectors;
   if (data.hasSecuritySystem !== undefined) updatePayload.hasSecuritySystem = data.hasSecuritySystem;
   if (data.hasFireExtinguisher !== undefined) updatePayload.hasFireExtinguisher = data.hasFireExtinguisher;
-  if (data.applianceAges !== undefined) updatePayload.applianceAges = data.applianceAges;
+  // REMOVED: if (data.applianceAges !== undefined) updatePayload.applianceAges = data.applianceAges; // Field removed
   // END PHASE 2 ADDITIONS
 
   const property = await prisma.property.update({
