@@ -106,15 +106,29 @@ type PropertyFormValues = z.infer<typeof propertySchema>;
 const mapDbToForm = (property: any): PropertyFormValues => {
     // 1. Convert DB JSON (applianceAges: {TYPE: YEAR, ...}) to structured array
     let structuredAppliances: z.infer<typeof applianceSchema>[] = [];
-    const applianceAges = property.applianceAges;
+    let applianceAges = property.applianceAges;
     
+    // FIX START: Defensive parsing for JSON string retrieved from API/DB
+    if (typeof applianceAges === 'string' && applianceAges.trim()) {
+        try {
+            applianceAges = JSON.parse(applianceAges);
+        } catch (e) {
+            console.error("Failed to parse applianceAges JSON string:", e);
+            applianceAges = null; // Treat as invalid if parsing fails
+        }
+    }
+    // FIX END
+
     if (applianceAges && typeof applianceAges === 'object') {
-        structuredAppliances = Object.entries(applianceAges).map(([type, year], index) => ({
-            // Unique ID for internal React keying/tracking
-            id: `app-${index}-${type}`, 
-            type: type,
-            installYear: year as number,
-        }));
+        // Ensure it's not an Array (though it shouldn't be based on schema)
+        if (!Array.isArray(applianceAges)) {
+            structuredAppliances = Object.entries(applianceAges).map(([type, year], index) => ({
+                // Unique ID for internal React keying/tracking
+                id: `app-${index}-${type}`, 
+                type: type,
+                installYear: year as number,
+            }));
+        }
     }
 
     return {
