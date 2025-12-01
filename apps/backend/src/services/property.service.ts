@@ -1,6 +1,6 @@
 // apps/backend/src/services/property.service.ts
 
-import { PrismaClient, Property, PropertyType, OwnershipType, HeatingType, CoolingType, WaterHeaterType, RoofType } from '@prisma/client';
+import { PrismaClient, Property, PropertyType, OwnershipType, HeatingType, CoolingType, WaterHeaterType, RoofType, HomeAsset, Prisma } from '@prisma/client';
 // IMPORT REQUIRED: Import the utility and interface
 import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.util'; 
 
@@ -9,6 +9,14 @@ import JobQueueService from './JobQueue.service';
 import { RISK_JOB_TYPES } from '../config/risk-job-types';
 
 const prisma = new PrismaClient();
+
+// --- NEW STRUCTURED INPUT INTERFACES ---
+
+interface HomeAssetInput {
+  id?: string; // Optional: Used for client-side tracking, ignored by service but kept for consistency
+  type: string; // The canonical appliance type (e.g., 'DISHWASHER')
+  installYear: number; // The installation year
+}
 
 // REPLACED INTERFACES with complete definitions matching the extended Prisma Property model
 interface CreatePropertyData {
@@ -46,28 +54,85 @@ interface CreatePropertyData {
   hasCoDetectors?: boolean;
   hasSecuritySystem?: boolean;
   hasFireExtinguisher?: boolean;
-  // FIX: applianceAges field removed
+  // REMOVED: applianceAges field
+  
+  homeAssets?: HomeAssetInput[]; // <-- NEW: Array of structured assets
 }
 
 interface UpdatePropertyData extends Partial<CreatePropertyData> {
   // All fields are optional for update
 }
 
+// --- NEW DB RETRIEVAL AND RESPONSE INTERFACES ---
+
+// DB retrieval interface including the mandatory HomeAssets relation
+export interface PropertyWithAssets extends Property {
+    homeAssets: HomeAsset[];
+}
+
 // NEW INTERFACE for API response
-export interface ScoredProperty extends Property {
+export interface ScoredProperty extends PropertyWithAssets {
     healthScore: HealthScoreResult;
 }
+
+// --- CORE ASSET SYNC LOGIC ---
+
+/**
+ * Helper function to create/update HomeAsset records in a transaction.
+ * This handles the normalization (upsert/delete) of assets linked to the property.
+ */
+async function syncHomeAssets(propertyId: string, assets: HomeAssetInput[]): Promise<void> {
+  const assetTypes = assets.map(a => a.type);
+
+  // 1. Delete assets on this property that are NOT present in the incoming array.
+  // This handles the removal of items the user deleted on the frontend.
+  await prisma.homeAsset.deleteMany({
+    where: {
+      propertyId: propertyId,
+      assetType: {
+        notIn: assetTypes,
+      }
+    }
+  });
+
+  // 2. Create or Update existing assets (Upsert strategy)
+  // We cannot use batch upsert directly, so we map to a series of upsert calls in a transaction.
+  const upsertOperations = assets.map(asset => {
+    return prisma.homeAsset.upsert({
+      where: {
+        // Assuming unique constraint on (propertyId, assetType) for core assets
+        propertyId_assetType: {
+          propertyId: propertyId,
+          assetType: asset.type as any, // Cast for simplicity/compatibility with AssetType Enum
+        }
+      },
+      update: {
+        installationYear: asset.installYear,
+      },
+      create: {
+        propertyId: propertyId,
+        assetType: asset.type as any,
+        installationYear: asset.installYear,
+      },
+    });
+  });
+
+  await prisma.$transaction(upsertOperations);
+}
+
+// --- SCORE ATTACHMENT ---
 
 /**
  * Helper function to calculate and attach the score to a property object.
  */
-async function attachHealthScore(property: Property): Promise<ScoredProperty> {
+async function attachHealthScore(property: PropertyWithAssets): Promise<ScoredProperty> {
     const documentCount = await prisma.document.count({
         where: { propertyId: property.id }
     });
     // FIX: Add try/catch block for defensive coding against errors in scoring utility
     let healthScore: HealthScoreResult;
     try {
+        // The scoring utility must now be updated to consume property.homeAssets
         healthScore = calculateHealthScore(property, documentCount);
     } catch (error) {
         console.error(`CRITICAL: Health score calculation failed for Property ID ${property.id}. Returning default score.`, error);
@@ -105,6 +170,8 @@ async function getHomeownerProfileId(userId: string): Promise<string> {
   return profile.id;
 }
 
+// --- CRUD OPERATIONS ---
+
 /**
  * Get all properties for a user
  */
@@ -117,6 +184,9 @@ export async function getUserProperties(userId: string): Promise<ScoredProperty[
       { isPrimary: 'desc' },
       { createdAt: 'desc' },
     ],
+    include: {
+      homeAssets: true, // MUST INCLUDE new relation
+    }
   });
   
   // MAP REQUIRED: Calculate and attach score for all properties
@@ -179,16 +249,28 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       hasCoDetectors: data.hasCoDetectors,
       hasSecuritySystem: data.hasSecuritySystem,
       hasFireExtinguisher: data.hasFireExtinguisher,
-      // FIX: applianceAges removed
+      // REMOVED: applianceAges: data.applianceAges,
       // END PHASE 2 ADDITIONS
     },
   });
 
+  // NEW STEP: Handle assets AFTER property creation
+  if (data.homeAssets && data.homeAssets.length > 0) {
+    await syncHomeAssets(property.id, data.homeAssets);
+  }
+
   // PHASE 2 ADDITION: Trigger risk calculation after property creation
   await JobQueueService.addJob(RISK_JOB_TYPES.CALCULATE_RISK, { propertyId: property.id });
 
+  // FETCH FULL PROPERTY: Must include homeAssets for scoring/return
+  const fullProperty = await prisma.property.findUnique({
+      where: { id: property.id },
+      include: { homeAssets: true }
+  });
+
   // ATTACH SCORE: Calculate and attach score before returning
-  return attachHealthScore(property);
+  // Ensure fullProperty is not null (shouldn't be right after creation)
+  return attachHealthScore(fullProperty as PropertyWithAssets);
 }
 
 /**
@@ -202,6 +284,9 @@ export async function getPropertyById(propertyId: string, userId: string): Promi
       id: propertyId,
       homeownerProfileId,
     },
+    include: {
+      homeAssets: true, // MUST INCLUDE new relation
+    }
   });
 
   if (!property) return null;
@@ -244,8 +329,13 @@ export async function updateProperty(
     });
   }
 
+  // NEW STEP: Sync assets if they are present in the update payload.
+  if (data.homeAssets !== undefined) {
+      await syncHomeAssets(propertyId, data.homeAssets);
+  }
+
   // Use a proper type for updatePayload for better type checking
-  const updatePayload: Partial<Omit<CreatePropertyData, 'address' | 'city' | 'state' | 'zipCode'>> & {
+  const updatePayload: Partial<Omit<CreatePropertyData, 'address' | 'city' | 'state' | 'zipCode' | 'homeAssets'>> & {
     name?: string | null;
     address?: string;
     city?: string;
@@ -287,7 +377,7 @@ export async function updateProperty(
   if (data.hasCoDetectors !== undefined) updatePayload.hasCoDetectors = data.hasCoDetectors;
   if (data.hasSecuritySystem !== undefined) updatePayload.hasSecuritySystem = data.hasSecuritySystem;
   if (data.hasFireExtinguisher !== undefined) updatePayload.hasFireExtinguisher = data.hasFireExtinguisher;
-  // FIX: data.applianceAges removed
+  // applianceAges is explicitly excluded here
   // END PHASE 2 ADDITIONS
 
   const property = await prisma.property.update({
@@ -300,8 +390,14 @@ export async function updateProperty(
       await JobQueueService.addJob(RISK_JOB_TYPES.CALCULATE_RISK, { propertyId });
   }
 
+  // FETCH FULL PROPERTY: Must include homeAssets for return/scoring
+  const updatedProperty = await prisma.property.findUnique({
+      where: { id: propertyId },
+      include: { homeAssets: true }
+  });
+
   // ATTACH SCORE: Calculate and attach score before returning
-  return attachHealthScore(property);
+  return attachHealthScore(updatedProperty as PropertyWithAssets);
 }
 
 /**
