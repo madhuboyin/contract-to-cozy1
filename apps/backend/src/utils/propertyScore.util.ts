@@ -1,3 +1,4 @@
+// apps/backend/src/utils/propertyScore.util.ts
 import { Property, PropertyType, HeatingType, CoolingType, WaterHeaterType, RoofType } from '@prisma/client';
 
 export interface HealthScoreResult {
@@ -202,12 +203,10 @@ export function calculateHealthScore(property: Property, documentCount: number):
   }
   
   // 7. Appliance Ages (Max 5)
-  if (property.applianceAges && Object.keys(property.applianceAges).length > 0) {
-    extraScore += EXTRA_WEIGHTS.APPLIANCES;
-    insights.push({ factor: 'Appliances', status: 'Tracked', score: EXTRA_WEIGHTS.APPLIANCES });
-  } else {
-    maxUnlockableScore += EXTRA_WEIGHTS.APPLIANCES;
-  }
+  // FIX: Appliance Ages field removed from Property model. Points reserved as missing data.
+  insights.push({ factor: 'Appliances', status: 'Missing Data', score: 0 });
+  maxUnlockableScore += EXTRA_WEIGHTS.APPLIANCES;
+
 
   // --- FINAL RESULT ---
 

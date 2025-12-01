@@ -46,7 +46,7 @@ interface CreatePropertyData {
   hasCoDetectors?: boolean;
   hasSecuritySystem?: boolean;
   hasFireExtinguisher?: boolean;
-  // REMOVED: applianceAges?: any; // Field removed from schema
+  // FIX: applianceAges field removed
 }
 
 interface UpdatePropertyData extends Partial<CreatePropertyData> {
@@ -179,7 +179,7 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       hasCoDetectors: data.hasCoDetectors,
       hasSecuritySystem: data.hasSecuritySystem,
       hasFireExtinguisher: data.hasFireExtinguisher,
-      // REMOVED: applianceAges: data.applianceAges, // Field removed
+      // FIX: applianceAges removed
       // END PHASE 2 ADDITIONS
     },
   });
@@ -287,7 +287,7 @@ export async function updateProperty(
   if (data.hasCoDetectors !== undefined) updatePayload.hasCoDetectors = data.hasCoDetectors;
   if (data.hasSecuritySystem !== undefined) updatePayload.hasSecuritySystem = data.hasSecuritySystem;
   if (data.hasFireExtinguisher !== undefined) updatePayload.hasFireExtinguisher = data.hasFireExtinguisher;
-  // REMOVED: if (data.applianceAges !== undefined) updatePayload.applianceAges = data.applianceAges; // Field removed
+  // FIX: data.applianceAges removed
   // END PHASE 2 ADDITIONS
 
   const property = await prisma.property.update({
