@@ -62,14 +62,33 @@ export interface ScoredProperty extends Property {
  * Helper function to calculate and attach the score to a property object.
  */
 async function attachHealthScore(property: Property): Promise<ScoredProperty> {
-    const documentCount = await prisma.document.count({
-        where: { propertyId: property.id }
-    });
-    const healthScore = calculateHealthScore(property, documentCount);
-    return {
-        ...property,
-        healthScore,
-    } as ScoredProperty;
+  const documentCount = await prisma.document.count({
+      where: { propertyId: property.id }
+  });
+  
+  let healthScore: HealthScoreResult;
+  try {
+      // This is the line most likely throwing the unhandled exception (500)
+      healthScore = calculateHealthScore(property, documentCount);
+  } catch (error) {
+      console.error(`CRITICAL: Health score calculation failed for Property ID ${property.id}. Returning default score.`, error);
+      // Fallback to a zero score and default insights to prevent server crash
+      healthScore = { 
+          totalScore: 0, 
+          baseScore: 0, 
+          unlockedScore: 0, 
+          maxPotentialScore: 100,
+          maxBaseScore: 100,
+          maxExtraScore: 0,
+          insights: [{ factor: "Calculation Error", status: "CRASHED", score: 0 }],
+          ctaNeeded: true
+      };
+  }
+  
+  return {
+      ...property,
+      healthScore,
+  } as ScoredProperty;
 }
 
 /**
