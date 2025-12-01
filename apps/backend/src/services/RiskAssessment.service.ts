@@ -92,11 +92,11 @@ class RiskAssessmentService {
 
     // Default values if no report exists (and we queue calculation)
     const baseResult: Omit<RiskSummaryDto, 'status'> = {
-      propertyId,
-      propertyName,
       riskScore: report?.riskScore || 0,
       financialExposureTotal: report?.financialExposureTotal || new Prisma.Decimal(0),
       lastCalculatedAt: report?.lastCalculatedAt || new Date(0),
+      propertyId,
+      propertyName,
     };
 
 
@@ -138,38 +138,76 @@ class RiskAssessmentService {
 
     const currentYear = new Date().getFullYear();
     const assetRisks: AssetRiskDetail[] = [];
-    
-    // 1. Calculate Risk for each configured asset
-    for (const config of RISK_ASSET_CONFIG) {
-      const assetRisk = calculateAssetRisk(
-        config.systemType,
-        config,
-        property as PropertyWithRelations, 
-        currentYear
-      );
+    let reportData: any; // FIX: Use 'any' to avoid local type conflicts
 
-      if (assetRisk) {
-        assetRisks.push(assetRisk);
-      }
+    try {
+        // 1. Calculate Risk for each configured asset
+        for (const config of RISK_ASSET_CONFIG) {
+          const assetRisk = calculateAssetRisk(
+            config.systemType,
+            config,
+            property as PropertyWithRelations, 
+            currentYear
+          );
+
+          if (assetRisk) {
+            assetRisks.push(assetRisk);
+          }
+        }
+
+        // 2. Calculate Total Risk Score and Financial Exposure
+        const calculatedResult = calculateTotalRiskScore(property as PropertyWithRelations, assetRisks);
+        
+        reportData = {
+            ...calculatedResult,
+            lastCalculatedAt: new Date(), // Explicitly set success time
+        };
+
+    } catch (error) {
+        console.error(`RISK CALCULATION FAILED for property ${propertyId}:`, error);
+        
+        // --- DEFENSIVE FALLBACK ON FAILURE ---
+        // Create a failure report to break the QUEUED loop on the frontend.
+        reportData = {
+            riskScore: 0,
+            financialExposureTotal: new Prisma.Decimal(0),
+            details: [{ 
+                assetName: 'Calculation Failure', 
+                systemType: 'System', 
+                category: 'SAFETY' as any, 
+                age: 0, 
+                expectedLife: 0, 
+                replacementCost: 0, 
+                probability: 1,       
+                coverageFactor: 0,    
+                outOfPocketCost: 0,   
+                riskDollar: 0,        
+                riskLevel: 'HIGH',
+                actionCta: 'CRITICAL: Data issue preventing risk calculation.',
+            }],
+            lastCalculatedAt: new Date(), // Set time to break the queue loop
+        };
+        // --- END FALLBACK ---
     }
 
-    // 2. Calculate Total Risk Score and Financial Exposure
-    const reportData = calculateTotalRiskScore(property as PropertyWithRelations, assetRisks);
 
-    // 3. Save or Update the RiskAssessmentReport
+    // 3. Save or Update the RiskAssessmentReport - This step always runs now
     const updatedReport = await prisma.riskAssessmentReport.upsert({
       where: { propertyId: propertyId },
       update: {
         riskScore: reportData.riskScore,
         financialExposureTotal: reportData.financialExposureTotal, 
-        details: reportData.details as Prisma.InputJsonValue,
+        // FIX: Use explicit double cast to satisfy TypeScript's stricter check for Json fields
+        details: reportData.details as unknown as Prisma.InputJsonValue,
         lastCalculatedAt: reportData.lastCalculatedAt,
       },
       create: {
         propertyId: propertyId,
         riskScore: reportData.riskScore,
         financialExposureTotal: reportData.financialExposureTotal,
-        details: reportData.details as Prisma.InputJsonValue,
+        // FIX: Use explicit double cast to satisfy TypeScript's stricter check for Json fields
+        details: reportData.details as unknown as Prisma.InputJsonValue,
+        lastCalculatedAt: reportData.lastCalculatedAt, // Ensure create also uses the calculated time
       },
     });
 
