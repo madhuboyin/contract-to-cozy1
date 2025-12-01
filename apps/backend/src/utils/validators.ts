@@ -25,6 +25,19 @@ const RoofTypeEnum = z.enum(['SHINGLE', 'TILE', 'FLAT', 'METAL', 'UNKNOWN']);
 
 
 // ============================================================================
+// NEW ASSET SCHEMA (Strategic Fix for HomeAsset Table)
+// ============================================================================
+
+// Schema for a single HomeAsset record being sent from the frontend
+const HomeAssetInputSchema = z.object({
+  // ID is needed for the robust sync logic in the service (Update/Delete tracking)
+  id: z.string().optional(), 
+  type: z.string().min(1, 'Asset type is required'),
+  installYear: z.number().int().min(1900, 'Invalid installation year'),
+});
+
+
+// ============================================================================
 // AUTH & USER SCHEMAS (Existing)
 // ============================================================================
 
@@ -139,7 +152,9 @@ export const createPropertySchema = z.object({
   hasCoDetectors: z.boolean().optional(),
   hasSecuritySystem: z.boolean().optional(),
   hasFireExtinguisher: z.boolean().optional(),
-  applianceAges: z.record(z.string(), z.any()).optional(), // Flexible JSON object
+  
+  // FIX: REMOVED applianceAges and ADDED homeAssets array
+  homeAssets: z.array(HomeAssetInputSchema).optional(), // NEW STRUCTURED FIELD
 });
 
 export const updatePropertySchema = createPropertySchema.partial();
