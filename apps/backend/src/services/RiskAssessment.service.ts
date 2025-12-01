@@ -138,7 +138,7 @@ class RiskAssessmentService {
 
     const currentYear = new Date().getFullYear();
     const assetRisks: AssetRiskDetail[] = [];
-    let reportData: any; // FIX: Use 'any' to avoid local type conflicts
+    let reportData: any; // FIX: Use 'any' to avoid local type conflicts with Prisma's JsonValue
 
     try {
         // 1. Calculate Risk for each configured asset
