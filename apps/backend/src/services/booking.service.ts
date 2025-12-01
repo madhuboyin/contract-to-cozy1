@@ -133,6 +133,7 @@ export class BookingService {
 
   /**
    * List bookings with filters
+   * FIX: Implemented defensive coding to prevent formatting errors from crashing the endpoint.
    */
   static async listBookings(
     userId: string,
@@ -206,8 +207,23 @@ export class BookingService {
       byStatus[group.status] = group._count;
     });
 
+    // FIX START: Resilient data formatting to prevent 500 errors
+    const formattedBookings: BookingResponse[] = [];
+    
+    for (const booking of bookings) {
+        try {
+            formattedBookings.push(this.formatBookingResponse(booking));
+        } catch (error) {
+            // Log the error for later investigation but prevent crash
+            // The console.error will appear in the server logs, alerting DevOps/Engineering
+            console.error(`CRITICAL: Failed to format booking ID ${booking.id}. Skipping record.`, error);
+        }
+    }
+    // FIX END
+
     return {
-      bookings: bookings.map((b) => this.formatBookingResponse(b)),
+      // Use the resilient, filtered list of bookings
+      bookings: formattedBookings,
       pagination: {
         page,
         limit,
