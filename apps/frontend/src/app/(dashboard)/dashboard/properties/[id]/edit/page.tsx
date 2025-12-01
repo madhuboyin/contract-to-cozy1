@@ -4,10 +4,10 @@
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm, SubmitHandler } from "react-hook-form";
+import { useForm, SubmitHandler, useFieldArray, useFormContext } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Loader2, Save, X, Home as HomeIcon, AlertCircle } from "lucide-react";
+import { Loader2, Save, X, Home as HomeIcon, AlertCircle, Trash2, Plus } from "lucide-react";
 
 import {
   PropertyTypes,
@@ -27,20 +27,37 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
 
 
-// --- 1. Form Schema Definition (Required fields check for non-empty values) ---
+// --- Appliance Constants and Schemas ---
+const CURRENT_YEAR = new Date().getFullYear();
+const MAJOR_APPLIANCE_OPTIONS = [
+    'DISHWASHER',
+    'REFRIGERATOR',
+    'OVEN_RANGE',
+    'WASHER_DRYER',
+    'MICROWAVE_HOOD',
+    'WATER_SOFTENER',
+];
+
+// New Appliance Schema for array items
+const applianceSchema = z.object({
+  // Use a string ID for React key management (client-side only)
+  id: z.string().optional(), 
+  type: z.string().min(1, "Type required"),
+  installYear: z.coerce.number().int().min(1900, "Min 1900").max(CURRENT_YEAR, `Max ${CURRENT_YEAR}`),
+});
+
+// --- 1. Form Schema Definition ---
 const propertySchema = z.object({
   name: z.string().optional().nullable(),
   isPrimary: z.boolean(),
   address: z.string().min(1, { message: "Street Address is required." }),
   city: z.string().min(1, { message: "City is required." }),
-  state: z.string().min(2, { message: "State is required." }),
+  state: z.string().min(2, { message: "State must be 2 characters." }),
   zipCode: z.string().min(5, { message: "Zip Code is required." }),
   
-  // FIX: Treat empty string as null, then validate
   propertyType: z.union([z.nativeEnum(PropertyTypes), z.literal("")])
     .transform(val => val === "" ? null : val)
     .refine(val => val !== null, { message: "Property Type is required." }),
@@ -48,7 +65,6 @@ const propertySchema = z.object({
   propertySize: z.coerce.number().int().positive().optional().nullable(),
   yearBuilt: z.coerce.number().int().min(1700).optional().nullable(),
   
-  // Advanced Risk Fields
   bedrooms: z.coerce.number().int().min(0).optional().nullable(),
   bathrooms: z.coerce.number().min(0).optional().nullable(),
   ownershipType: z.union([z.nativeEnum(OwnershipTypes), z.literal("")])
@@ -56,7 +72,6 @@ const propertySchema = z.object({
     .optional().nullable(),
   occupantsCount: z.coerce.number().int().min(0).optional().nullable(),
 
-  // FIX: Required dropdown fields - treat empty string as null, then validate
   heatingType: z.union([z.nativeEnum(HeatingTypes), z.literal("")])
     .transform(val => val === "" ? null : val)
     .refine(val => val !== null, { message: "Heating Type is required." }),
@@ -81,48 +96,160 @@ const propertySchema = z.object({
   hasFireExtinguisher: z.boolean().optional(),
   hasIrrigation: z.boolean().optional(),
 
-  applianceAges: z.string().optional().nullable(), 
+  // NEW FIELD: Structured appliance data
+  appliances: z.array(applianceSchema).optional(), 
 });
 
 type PropertyFormValues = z.infer<typeof propertySchema>;
 
-// Helper to convert DB data (which uses null) to form data 
-const mapDbToForm = (property: any): PropertyFormValues => ({
-  name: property.name || null, 
-  isPrimary: property.isPrimary ?? false, 
-  address: property.address,
-  city: property.city,
-  state: property.state,
-  zipCode: property.zipCode,
-  
-  // FIX ISSUE 1 (FINAL): For Select components, use empty string instead of null
-  // This keeps them controlled at all times and prevents React warnings
-  propertyType: property.propertyType || ("" as any), 
-  propertySize: property.propertySize,
-  yearBuilt: property.yearBuilt,
-  
-  bedrooms: property.bedrooms,
-  bathrooms: property.bathrooms,
-  ownershipType: property.ownershipType || ("" as any),
-  occupantsCount: property.occupantsCount,
-  heatingType: property.heatingType || ("" as any),
-  coolingType: property.coolingType || ("" as any),
-  waterHeaterType: property.waterHeaterType || ("" as any),
-  roofType: property.roofType || ("" as any),
-  
-  hvacInstallYear: property.hvacInstallYear,
-  waterHeaterInstallYear: property.waterHeaterInstallYear,
-  roofReplacementYear: property.roofReplacementYear,
-  
-  hasDrainageIssues: property.hasDrainageIssues ?? false,
-  hasSmokeDetectors: property.hasSmokeDetectors ?? false,
-  hasCoDetectors: property.hasCoDetectors ?? false,
-  hasSecuritySystem: property.hasSecuritySystem ?? false,
-  hasFireExtinguisher: property.hasFireExtinguisher ?? false,
-  hasIrrigation: property.hasIrrigation ?? false,
+// Helper to convert DB data (JSON string/object) to structured form data 
+const mapDbToForm = (property: any): PropertyFormValues => {
+    // 1. Convert DB JSON (applianceAges: {TYPE: YEAR, ...}) to structured array
+    let structuredAppliances: z.infer<typeof applianceSchema>[] = [];
+    const applianceAges = property.applianceAges;
+    
+    if (applianceAges && typeof applianceAges === 'object') {
+        structuredAppliances = Object.entries(applianceAges).map(([type, year], index) => ({
+            // Unique ID for internal React keying/tracking
+            id: `app-${index}-${type}`, 
+            type: type,
+            installYear: year as number,
+        }));
+    }
 
-  applianceAges: property.applianceAges ? JSON.stringify(property.applianceAges) : null,
-});
+    return {
+        name: property.name || null, 
+        isPrimary: property.isPrimary ?? false, 
+        address: property.address,
+        city: property.city,
+        state: property.state,
+        zipCode: property.zipCode,
+        
+        propertyType: property.propertyType || ("" as any), 
+        propertySize: property.propertySize,
+        yearBuilt: property.yearBuilt,
+        
+        bedrooms: property.bedrooms,
+        bathrooms: property.bathrooms,
+        ownershipType: property.ownershipType || ("" as any),
+        occupantsCount: property.occupantsCount,
+        heatingType: property.heatingType || ("" as any),
+        coolingType: property.coolingType || ("" as any),
+        waterHeaterType: property.waterHeaterType || ("" as any),
+        roofType: property.roofType || ("" as any),
+        
+        hvacInstallYear: property.hvacInstallYear,
+        waterHeaterInstallYear: property.waterHeaterInstallYear,
+        roofReplacementYear: property.roofReplacementYear,
+        
+        hasDrainageIssues: property.hasDrainageIssues ?? false,
+        hasSmokeDetectors: property.hasSmokeDetectors ?? false,
+        hasCoDetectors: property.hasCoDetectors ?? false,
+        hasSecuritySystem: property.hasSecuritySystem ?? false,
+        hasFireExtinguisher: property.hasFireExtinguisher ?? false,
+        hasIrrigation: property.hasIrrigation ?? false,
+
+        // NEW FIELD: Load structured array
+        appliances: structuredAppliances,
+    };
+};
+
+// --- Appliance Field Array Component ---
+const ApplianceFieldArray = () => {
+    // Must use useFormContext since the component is nested inside <Form>
+    const { control, formState: { errors } } = useFormContext<PropertyFormValues>();
+    const { fields, append, remove } = useFieldArray({
+        control,
+        name: "appliances",
+    });
+
+    return (
+        <div className="border-t border-gray-200 pt-6 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-3">
+                Major Appliance Details
+            </h3>
+            
+            <div className="space-y-4">
+                {fields.map((field, index) => (
+                    <div key={field.id} className="flex flex-col sm:flex-row gap-2 sm:gap-4 items-end bg-gray-50 p-3 rounded-md border border-gray-200">
+                        
+                        {/* Appliance Type Select */}
+                        <FormField
+                            control={control}
+                            name={`appliances.${index}.type`}
+                            render={({ field: selectField }) => (
+                                <FormItem className="flex-1 w-full sm:w-auto">
+                                    <FormLabel className="text-xs">Appliance Type</FormLabel>
+                                    <Select 
+                                        onValueChange={selectField.onChange} 
+                                        value={selectField.value}
+                                    >
+                                        <FormControl>
+                                            <SelectTrigger className="h-9"><SelectValue placeholder="Select Appliance" /></SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            {MAJOR_APPLIANCE_OPTIONS.map(type => (
+                                                <SelectItem key={type} value={type}>{type.replace(/_/g, ' ')}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage>{(errors.appliances?.[index] as any)?.type?.message}</FormMessage>
+                                </FormItem>
+                            )}
+                        />
+                        
+                        {/* Install Year Input */}
+                        <FormField
+                            control={control}
+                            name={`appliances.${index}.installYear`}
+                            render={({ field: yearField }) => (
+                                <FormItem className="w-full sm:w-24">
+                                    <FormLabel className="text-xs">Install Year</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            placeholder="YYYY"
+                                            type="number"
+                                            maxLength={4}
+                                            {...yearField}
+                                            value={yearField.value ?? ''}
+                                            onChange={e => yearField.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))}
+                                            className="h-9"
+                                        />
+                                    </FormControl>
+                                    <FormMessage>{(errors.appliances?.[index] as any)?.installYear?.message}</FormMessage>
+                                </FormItem>
+                            )}
+                        />
+
+                        {/* Remove Button */}
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            size="icon"
+                            onClick={() => remove(index)}
+                            className="h-9 w-9 self-end"
+                        >
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    </div>
+                ))}
+            </div>
+            
+            <Button
+                type="button"
+                variant="outline"
+                onClick={() => append({ id: Date.now().toString(), type: '', installYear: null as any })}
+                className="w-full px-4 py-2 border-dashed border-blue-400 text-blue-600 hover:bg-blue-50"
+            >
+                <Plus className="h-4 w-4 mr-2" /> Add Appliance
+            </Button>
+            
+            <p className="text-xs text-gray-500 mt-2">
+                Structured appliance data replaces the old JSON format.
+            </p>
+        </div>
+    );
+};
 
 
 export default function EditPropertyPage() {
@@ -131,11 +258,9 @@ export default function EditPropertyPage() {
   const params = useParams();
   const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
   
-  // Track if we've reset the form to prevent multiple resets
   const hasResetForm = React.useRef(false);
 
   // 2. Fetch Existing Property Data
-  // FIX: Always refetch on mount to ensure we have complete, fresh data
   const { data: property, isLoading: isLoadingProperty } = useQuery({
     queryKey: ["property", propertyId],
     queryFn: async () => {
@@ -144,59 +269,33 @@ export default function EditPropertyPage() {
       throw new Error(response.message || "Failed to fetch property.");
     },
     enabled: !!propertyId,
-    staleTime: 0,  // Always consider data stale
-    refetchOnMount: true,  // Always refetch when component mounts
-    refetchOnWindowFocus: false,  // Don't refetch on window focus
+    staleTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   });
 
   const form = useForm<PropertyFormValues>({
     resolver: zodResolver(propertySchema) as any,
     defaultValues: {
-      // Set safe defaults to prevent uncontrolled components
-      name: "",
-      isPrimary: false,
-      address: "",
-      city: "",
-      state: "",
-      zipCode: "",
-      propertyType: "" as any,
-      propertySize: null,
-      yearBuilt: null,
-      bedrooms: null,
-      bathrooms: null,
-      ownershipType: "" as any,
-      occupantsCount: null,
-      heatingType: "" as any,
-      coolingType: "" as any,
-      waterHeaterType: "" as any,
-      roofType: "" as any,
-      hvacInstallYear: null,
-      waterHeaterInstallYear: null,
-      roofReplacementYear: null,
-      hasDrainageIssues: false,
-      hasSmokeDetectors: false,
-      hasCoDetectors: false,
-      hasSecuritySystem: false,
-      hasFireExtinguisher: false,
+      name: "", isPrimary: false, address: "", city: "", state: "", zipCode: "",
+      propertyType: "" as any, propertySize: null, yearBuilt: null, bedrooms: null,
+      bathrooms: null, ownershipType: "" as any, occupantsCount: null,
+      heatingType: "" as any, coolingType: "" as any, waterHeaterType: "" as any, 
+      roofType: "" as any, hvacInstallYear: null, waterHeaterInstallYear: null,
+      roofReplacementYear: null, hasDrainageIssues: false, hasSmokeDetectors: false,
+      hasCoDetectors: false, hasSecuritySystem: false, hasFireExtinguisher: false,
       hasIrrigation: false,
-      applianceAges: null,
+      appliances: [], // Set default to empty array
     },
     mode: "onBlur",
   });
 
   // FIX RACE CONDITION: Reset form when property data loads
-  // Use ref to ensure we only reset once when data first arrives
   React.useEffect(() => {
     if (property && !isLoadingProperty && !hasResetForm.current) {
       const formData = mapDbToForm(property);
-      console.log("🔄 Resetting form with property data:", formData);
-      console.log("📊 Property type value:", formData.propertyType);
-      console.log("🔥 Heating type value:", formData.heatingType);
-      
-      // Mark that we've reset the form
       hasResetForm.current = true;
       
-      // Use setTimeout to ensure DOM and React are ready
       setTimeout(() => {
         form.reset(formData, { 
           keepErrors: false,
@@ -206,12 +305,10 @@ export default function EditPropertyPage() {
           keepIsValid: false,
           keepSubmitCount: false,
         });
-        console.log("✅ Form reset complete");
-      }, 100);  // Slightly longer timeout to ensure everything is ready
+      }, 100); 
     }
-  }, [property, isLoadingProperty]);
+  }, [property, isLoadingProperty, form]);
   
-  // Reset the ref when navigating to a different property
   React.useEffect(() => {
     hasResetForm.current = false;
   }, [propertyId]);
@@ -219,6 +316,18 @@ export default function EditPropertyPage() {
   // 3. Setup Mutation
   const updateMutation = useMutation({
     mutationFn: (data: PropertyFormValues) => {
+      
+      // NEW: Convert structured array back to backend's expected JSON format
+      const applianceAgesObject: Record<string, number> = {};
+      data.appliances?.forEach(app => {
+          if (app.type && app.installYear) {
+              applianceAgesObject[app.type.toUpperCase()] = app.installYear;
+          }
+      });
+      const applianceAgesPayload = Object.keys(applianceAgesObject).length > 0
+          ? applianceAgesObject
+          : undefined;
+      
       const payload = {
         name: data.name ?? undefined,
         address: data.address,
@@ -249,7 +358,8 @@ export default function EditPropertyPage() {
         hasFireExtinguisher: data.hasFireExtinguisher ?? false,
         hasIrrigation: data.hasIrrigation ?? false,
         
-        applianceAges: data.applianceAges ? JSON.parse(data.applianceAges) : undefined,
+        // OLD FIELD: Send the correctly formatted JSON object
+        applianceAges: applianceAgesPayload,
       };
       
       return api.updateProperty(propertyId, payload);
@@ -281,12 +391,9 @@ export default function EditPropertyPage() {
     },
   });
 
-  // FIX ISSUE 2: Add validation feedback before submission
   const onSubmit: SubmitHandler<PropertyFormValues> = (data) => {
-    // Check if form has errors
     const errors = form.formState.errors;
     if (Object.keys(errors).length > 0) {
-      // Display user-friendly error message
       const errorFields = Object.keys(errors).map(key => {
         const fieldName = key.replace(/([A-Z])/g, ' $1').trim();
         return fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
@@ -294,7 +401,7 @@ export default function EditPropertyPage() {
       
       toast({
         title: "Validation Error",
-        description: `Please fill in the following required fields: ${errorFields.join(', ')}`,
+        description: `Please fill in the required fields: ${errorFields.join(', ')}`,
         variant: "destructive",
       });
       return;
@@ -324,7 +431,6 @@ export default function EditPropertyPage() {
     );
   }
 
-  // FIX ISSUE 2: Show validation errors at the top
   const hasErrors = Object.keys(form.formState.errors).length > 0;
 
   return (
@@ -339,7 +445,7 @@ export default function EditPropertyPage() {
           </Button>
           <Button 
             onClick={form.handleSubmit(onSubmit)} 
-            disabled={updateMutation.isPending || hasErrors}
+            disabled={updateMutation.isPending}
             type="submit"
           >
             {updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
@@ -348,7 +454,6 @@ export default function EditPropertyPage() {
         </div>
       </PageHeader>
       
-       {/* FIX ISSUE 2: Display validation error summary */}
        {hasErrors && (
          <div className="mb-4 p-4 border border-red-300 bg-red-50 rounded-md">
            <div className="flex items-center gap-2 text-red-800 font-medium mb-2">
@@ -358,7 +463,7 @@ export default function EditPropertyPage() {
            <ul className="list-disc list-inside mt-2 text-sm text-red-700">
              {Object.entries(form.formState.errors).map(([key, error]) => (
                <li key={key}>
-                 {key.replace(/([A-Z])/g, ' $1').trim().charAt(0).toUpperCase() + key.replace(/([A-Z])/g, ' $1').trim().slice(1)}: {error.message}
+                 {key.replace(/([A-Z])/g, ' $1').trim().charAt(0).toUpperCase() + key.replace(/([A-Z])/g, ' $1').trim().slice(1)}: {(error as any).message || "Invalid value."}
                </li>
              ))}
            </ul>
@@ -465,7 +570,6 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Property Type *</FormLabel>
-                                    {/* FIX ISSUE 1: Use null instead of "" for value, and handle undefined */}
                                     <Select 
                                         onValueChange={(value) => field.onChange(value === "" ? null : value)} 
                                         value={field.value || ""}
@@ -551,7 +655,6 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Heating Type *</FormLabel>
-                                    {/* FIX ISSUE 1: Use null instead of "" for value, and handle undefined */}
                                     <Select 
                                         onValueChange={(value) => field.onChange(value === "" ? null : value)} 
                                         value={field.value || ""}
@@ -575,7 +678,6 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Cooling Type *</FormLabel>
-                                    {/* FIX ISSUE 1: Use null instead of "" for value, and handle undefined */}
                                     <Select 
                                         onValueChange={(value) => field.onChange(value === "" ? null : value)} 
                                         value={field.value || ""}
@@ -599,7 +701,6 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Roof Type *</FormLabel>
-                                    {/* FIX ISSUE 1: Use null instead of "" for value, and handle undefined */}
                                     <Select 
                                         onValueChange={(value) => field.onChange(value === "" ? null : value)} 
                                         value={field.value || ""}
@@ -623,7 +724,6 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Water Heater Type *</FormLabel>
-                                    {/* FIX ISSUE 1: Use null instead of "" for value, and handle undefined */}
                                     <Select 
                                         onValueChange={(value) => field.onChange(value === "" ? null : value)} 
                                         value={field.value || ""}
@@ -802,23 +902,8 @@ export default function EditPropertyPage() {
                     
                     <Separator className="my-4" />
 
-                    <FormField
-                        control={form.control}
-                        name="applianceAges"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Major Appliance Ages (JSON format)</FormLabel>
-                                <FormControl>
-                                    <Textarea 
-                                        placeholder={`e.g., {"dishwasher": 2019, "refrigerator": 2022}`} 
-                                        {...field}
-                                        value={field.value ?? ""} 
-                                    />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
+                    {/* NEW: Structured Appliance Input */}
+                    <ApplianceFieldArray />
 
                 </CardContent>
             </Card>
