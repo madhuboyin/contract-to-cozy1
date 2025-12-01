@@ -28,7 +28,6 @@ class RiskAssessmentService {
   /**
    * Fetches an existing risk report. If it's missing or stale, a calculation job 
    * is queued in the background and 'QUEUED' is returned as a status.
-   * * FIX: This is the sole implementation signature for this method.
    */
   async getOrCreateRiskReport(propertyId: string): Promise<RiskAssessmentReport | 'QUEUED'> {
     const property = await this.fetchPropertyDetails(propertyId);
