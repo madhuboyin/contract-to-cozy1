@@ -41,9 +41,8 @@ const MAJOR_APPLIANCE_OPTIONS = [
     'WATER_SOFTENER',
 ];
 
-// New Appliance Schema for array items
+// Schema for a single HomeAsset record being sent from the frontend
 const applianceSchema = z.object({
-  // Use a string ID for React key management (client-side only)
   id: z.string().optional(), 
   type: z.string().min(1, "Type required"),
   installYear: z.coerce.number().int().min(1900, "Min 1900").max(CURRENT_YEAR, `Max ${CURRENT_YEAR}`),
@@ -102,34 +101,44 @@ const propertySchema = z.object({
 
 type PropertyFormValues = z.infer<typeof propertySchema>;
 
-// Helper to convert DB data (JSON string/object) to structured form data 
+// Helper to convert DB data (JSON string/object OR the new HomeAsset array) to structured form data 
 const mapDbToForm = (property: any): PropertyFormValues => {
-    // 1. Convert DB JSON (applianceAges: {TYPE: YEAR, ...}) to structured array
     let structuredAppliances: z.infer<typeof applianceSchema>[] = [];
-    let applianceAges = property.applianceAges;
     
-    // FIX START: Defensive parsing for JSON string retrieved from API/DB
-    if (typeof applianceAges === 'string' && applianceAges.trim()) {
-        try {
-            applianceAges = JSON.parse(applianceAges);
-        } catch (e) {
-            console.error("Failed to parse applianceAges JSON string:", e);
-            applianceAges = null; // Treat as invalid if parsing fails
+    // --- FIX START: Prioritize new HomeAsset relation and fall back defensively ---
+    
+    // 1. Prioritize NEW HomeAsset[] relation if it exists and is populated
+    if (property.homeAssets && Array.isArray(property.homeAssets) && property.homeAssets.length > 0) {
+        structuredAppliances = property.homeAssets.map((asset: any, index: number) => ({
+            // CRITICAL: Map the DB ID to the form ID for persistence (Update/Delete tracking)
+            id: asset.id, 
+            type: asset.assetType, // DB field name
+            installYear: asset.installationYear, // DB field name
+        }));
+    } 
+    // 2. Fallback to parsing OLD JSON field if the new relation is empty (for migration/old data)
+    else if (property.applianceAges) {
+        let applianceAges = property.applianceAges;
+        
+        // Defensive parsing
+        if (typeof applianceAges === 'string' && applianceAges.trim()) {
+            try {
+                applianceAges = JSON.parse(applianceAges);
+            } catch (e) {
+                applianceAges = null; 
+            }
         }
-    }
-    // FIX END
-
-    if (applianceAges && typeof applianceAges === 'object') {
-        // Ensure it's not an Array (though it shouldn't be based on schema)
-        if (!Array.isArray(applianceAges)) {
+        
+        if (applianceAges && typeof applianceAges === 'object' && !Array.isArray(applianceAges)) {
             structuredAppliances = Object.entries(applianceAges).map(([type, year], index) => ({
-                // Unique ID for internal React keying/tracking
-                id: `app-${index}-${type}`, 
+                id: `old-${index}-${type}`, // Generate a temporary client ID for old data
                 type: type,
                 installYear: year as number,
             }));
         }
     }
+    // --- FIX END ---
+
 
     return {
         name: property.name || null, 
@@ -170,7 +179,6 @@ const mapDbToForm = (property: any): PropertyFormValues => {
 
 // --- Appliance Field Array Component ---
 const ApplianceFieldArray = () => {
-    // Must use useFormContext since the component is nested inside <Form>
     const { control, formState: { errors } } = useFormContext<PropertyFormValues>();
     const { fields, append, remove } = useFieldArray({
         control,
@@ -327,16 +335,9 @@ export default function EditPropertyPage() {
     hasResetForm.current = false;
   }, [propertyId]);
 
+  // 3. Setup Mutation
   const updateMutation = useMutation({
     mutationFn: (data: PropertyFormValues) => {
-      
-      // FIXED: Convert structured array to backend's expected homeAssets format
-      const homeAssetsPayload = data.appliances
-        ?.filter(app => app.type && app.installYear)
-        .map(app => ({
-          type: app.type.toUpperCase(),
-          installYear: app.installYear
-        }));
       
       const payload = {
         name: data.name ?? undefined,
@@ -368,10 +369,16 @@ export default function EditPropertyPage() {
         hasFireExtinguisher: data.hasFireExtinguisher ?? false,
         hasIrrigation: data.hasIrrigation ?? false,
         
-        // FIXED: Send homeAssets array to backend
-        homeAssets: homeAssetsPayload,
+        // FIX: Send the structured array under the correct backend key: homeAssets
+        homeAssets: data.appliances?.map(app => ({
+            // CRITICAL FIX: Ensure the database ID is passed for existing records
+            id: app.id, 
+            type: app.type, 
+            installYear: app.installYear,
+        })) || [], 
       };
-      
+
+      // Send the payload with the correct key and structure
       return api.updateProperty(propertyId, payload);
     },
     onSuccess: (response) => {
@@ -918,9 +925,9 @@ export default function EditPropertyPage() {
                 </CardContent>
             </Card>
 
-            <Button type="submit" className="w-full md:w-auto" disabled={updateMutation.isPending || hasErrors}>
+            <Button type="submit" className="w-full md:w-auto" disabled={updateMutation.isPending}>
                 {updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                <Save className="h-4 w-4 mr-2" /> Save Changes and Recalculate Risk
+                <Save className="h-4 w-4 mr-2" /> Save Changes
             </Button>
         </form>
       </Form>
