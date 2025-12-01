@@ -489,7 +489,7 @@ model Property {
   hasFireExtinguisher Boolean?
   
   // Appliances
-  applianceAges       Json?  // Major appliance ages
+  homeAssets          HomeAsset[]
 
   // ============================================================================
   // END NEW PROPERTY DETAILS
@@ -987,6 +987,22 @@ model Expense {
   @@index([category])
   @@index([transactionDate])
   @@map("expenses")
+}
+
+model HomeAsset {
+  id          String    @id @default(uuid())
+  propertyId  String
+  property    Property  @relation(fields: [propertyId], references: [id])
+  assetType   String    // e.g., "HVAC_FURNACE", "WATER_HEATER" - should map to an Enum
+  installationYear Int? // Year the user installed it (more accurate than age)
+  modelNumber String?
+  serialNumber String?
+  // Optional fields for Maintenance Readiness/Energy:
+  lastServiced DateTime? 
+  efficiencyRating String? 
+
+  @@index([propertyId])
+  @@unique([propertyId, assetType]) // Usually only one furnace per house
 }
 
 // ============================================================================
