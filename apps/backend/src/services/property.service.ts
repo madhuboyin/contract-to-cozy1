@@ -54,7 +54,6 @@ interface CreatePropertyData {
   hasCoDetectors?: boolean;
   hasSecuritySystem?: boolean;
   hasFireExtinguisher?: boolean;
-  // REMOVED: applianceAges field
   
   homeAssets?: HomeAssetInput[]; // <-- NEW: Array of structured assets
 }
@@ -75,49 +74,63 @@ export interface ScoredProperty extends PropertyWithAssets {
     healthScore: HealthScoreResult;
 }
 
-// --- CORE ASSET SYNC LOGIC ---
+// --- CORE ASSET SYNC LOGIC (FIXED) ---
 
 /**
- * Helper function to create/update HomeAsset records in a transaction.
- * This handles the normalization (upsert/delete) of assets linked to the property.
+ * Helper function to create/update/delete HomeAsset records.
  */
-async function syncHomeAssets(propertyId: string, assets: HomeAssetInput[]): Promise<void> {
-  const assetTypes = assets.map(a => a.type);
+async function syncHomeAssets(propertyId: string, incomingAssets: HomeAssetInput[]): Promise<void> {
+  
+  // 1. Fetch existing assets for the property
+  const existingAssets = await prisma.homeAsset.findMany({
+    where: { propertyId: propertyId },
+  });
 
-  // 1. Delete assets on this property that are NOT present in the incoming array.
-  // This handles the removal of items the user deleted on the frontend.
-  await prisma.homeAsset.deleteMany({
-    where: {
-      propertyId: propertyId,
-      assetType: {
-        notIn: assetTypes,
+  const operations: Prisma.PrismaPromise<any>[] = [];
+  const existingAssetMap = new Map(existingAssets.map(a => [a.assetType, a]));
+  const incomingAssetTypes = new Set(incomingAssets.map(a => a.type));
+
+  // 2. Identify and queue UPDATE or CREATE operations
+  for (const incoming of incomingAssets) {
+    if (!incoming.type) continue;
+    
+    // Check if asset already exists (by assetType)
+    const existing = existingAssetMap.get(incoming.type);
+
+    if (existing) {
+      // Update existing asset
+      if (existing.installationYear !== incoming.installYear) {
+        operations.push(prisma.homeAsset.update({
+          where: { id: existing.id },
+          data: { installationYear: incoming.installYear },
+        }));
       }
-    }
-  });
-
-  // 2. Create or Update existing assets (Upsert strategy)
-  // We cannot use batch upsert directly, so we map to a series of upsert calls in a transaction.
-  const upsertOperations = assets.map(asset => {
-    return prisma.homeAsset.upsert({
-      where: {
-        // Assuming unique constraint on (propertyId, assetType) for core assets
-        propertyId_assetType: {
+    } else {
+      // Create new asset
+      operations.push(prisma.homeAsset.create({
+        data: {
           propertyId: propertyId,
-          assetType: asset.type as any, // Cast for simplicity/compatibility with AssetType Enum
-        }
-      },
-      update: {
-        installationYear: asset.installYear,
-      },
-      create: {
-        propertyId: propertyId,
-        assetType: asset.type as any,
-        installationYear: asset.installYear,
-      },
-    });
-  });
+          assetType: incoming.type as any, // Cast to match Enum/Type
+          installationYear: incoming.installYear,
+        },
+      }));
+    }
+  }
 
-  await prisma.$transaction(upsertOperations);
+  // 3. Identify and queue DELETE operations
+  for (const existing of existingAssets) {
+    if (!incomingAssetTypes.has(existing.assetType)) {
+      // Delete asset that was present but is now missing from the incoming list
+      operations.push(prisma.homeAsset.delete({
+        where: { id: existing.id },
+      }));
+    }
+  }
+
+  // 4. Execute all operations in a single transaction
+  if (operations.length > 0) {
+    await prisma.$transaction(operations);
+  }
 }
 
 // --- SCORE ATTACHMENT ---
@@ -249,7 +262,7 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       hasCoDetectors: data.hasCoDetectors,
       hasSecuritySystem: data.hasSecuritySystem,
       hasFireExtinguisher: data.hasFireExtinguisher,
-      // REMOVED: applianceAges: data.applianceAges,
+      // REMOVED: applianceAges was here
       // END PHASE 2 ADDITIONS
     },
   });
@@ -330,6 +343,7 @@ export async function updateProperty(
   }
 
   // NEW STEP: Sync assets if they are present in the update payload.
+  // The 'undefined' check ensures we only sync if the frontend explicitly sends the field (which it does)
   if (data.homeAssets !== undefined) {
       await syncHomeAssets(propertyId, data.homeAssets);
   }
