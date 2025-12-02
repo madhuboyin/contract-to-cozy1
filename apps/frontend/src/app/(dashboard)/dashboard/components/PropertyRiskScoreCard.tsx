@@ -53,16 +53,15 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
         retry: (failureCount, error: any) => (error?.message?.includes('No property') || error?.message?.includes('5000') ? false : failureCount < 2),
         retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
         
-        // FIX START: Increase interval and only refetch if QUEUED status is confirmed
+        // FIX: Remove staleTime and gcTime to force fresh fetch and match the detail page's aggressiveness
         refetchInterval: (query) => {
             const currentStatus = (query.state.data as PrimaryRiskSummary)?.status;
             // Refetch every 10 seconds only if the status is explicitly QUEUED
             return currentStatus === 'QUEUED' ? 10000 : false;
         },
-        // FIX END
         
-        staleTime: 60 * 1000, 
-        gcTime: 10 * 60 * 1000,
+        staleTime: 0, 
+        gcTime: 0,
         enabled: enabled,
     });
     
@@ -211,7 +210,7 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
                     <span className="text-xl font-semibold text-muted-foreground ml-1">/100</span>
                 </div>
                 <p className="font-body text-sm text-muted-foreground mt-2 flex items-center">
-                    <DollarSign className="h-4 w-4 mr-1 text-red-600" />
+                    {/* FIX: Removed redundant DollarSign icon to prevent the double '$' issue. */}
                     Exposure: <span className="font-bold text-red-600 ml-1">{formatCurrency(exposure)}</span>
                 </p>
                 <div className="mt-3">
