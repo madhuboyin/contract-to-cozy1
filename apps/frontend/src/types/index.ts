@@ -164,19 +164,49 @@ export interface PrimaryRiskSummary {
 }
 
 
+// ============================================================================
+// NEW FINANCIAL EFFICIENCY TYPES (PHASE 2 - FES)
+// ============================================================================
+
 /**
- * Home Asset Interface - represents major appliances and systems
+ * Status for the Financial Efficiency calculation job.
  */
-export interface HomeAsset {
+export type FinancialSummaryStatus = 'CALCULATED' | 'QUEUED' | 'MISSING_DATA' | 'NO_PROPERTY';
+
+/**
+ * Full Financial Efficiency Report (Matches Prisma model output)
+ */
+export interface FinancialEfficiencyReport {
   id: string;
   propertyId: string;
-  assetType: string; // e.g., 'DISHWASHER', 'REFRIGERATOR', 'HVAC_FURNACE'
-  installationYear: number;
-  modelNumber?: string | null;
-  serialNumber?: string | null;
-  lastServiced?: string | null;
-  efficiencyRating?: string | null;
+  // The final calculated FES score
+  financialEfficiencyScore: number; // 0.0 to 100.0+
+  
+  // Component Breakdown (Actual Costs converted from Decimal on the backend)
+  actualInsuranceCost: number;
+  actualUtilityCost: number;
+  actualWarrantyCost: number;
+  marketAverageTotal: number; // Total market average for comparison
+  
+  // Timestamps
+  lastCalculatedAt: string; // ISO Date string
+  createdAt: string;
+  updatedAt: string;
 }
+
+/**
+ * Lightweight Financial Efficiency Summary for Dashboard Card.
+ */
+export interface FinancialReportSummary {
+  propertyId: string;
+  financialEfficiencyScore: number;
+  // Total actual annual cost (AC_Total) for display on the card
+  financialExposureTotal: number; 
+  status: FinancialSummaryStatus;
+  lastCalculatedAt: Date | string | null;
+  message?: string;
+}
+
 
 // ============================================================================
 // NEW DOCUMENT UPLOAD TYPES (ADDED)
@@ -508,7 +538,6 @@ export interface Property {
   hasSecuritySystem: boolean | null;
   hasFireExtinguisher: boolean | null;
   applianceAges: any;
-  homeAssets: HomeAsset[];
   
   createdAt: string;
   updatedAt: string;

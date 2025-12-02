@@ -37,10 +37,12 @@ import {
   RiskAssessmentReport,
   AssetRiskDetail,
   PrimaryRiskSummary, // [NEW IMPORT]
+  // NEW FINANCIAL EFFICIENCY TYPES
+  FinancialEfficiencyReport, // [NEW IMPORT]
+  FinancialReportSummary, // [NEW IMPORT]
 } from '@/types';
 
-// NEW IMPORT FOR PHASE 2: Risk Assessment Types - REQUIRED for getRiskReportSummary
-import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types';
+// REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
 
 // FIX 1: Define a custom Error class to carry API error messages and status
 class APIError extends Error {
@@ -961,6 +963,9 @@ class APIClient {
       return this.request<{ documents: Document[] }>('/api/home-management/documents');
   }
 
+  // ==========================================================================
+  // RISK ASSESSMENT ENDPOINTS 
+  // ==========================================================================
 
   /**
    * Fetches the full risk assessment report, queuing a new calculation if stale.
@@ -1015,9 +1020,9 @@ class APIClient {
     return processedReport;
   }
   
-  // ==========================================================================
-  // [NEW METHOD] Fetch the lightweight risk summary for the dashboard by property ID
-  // ==========================================================================
+  /**
+   * [NEW METHOD] Fetch the lightweight risk summary for the selected property
+   */
   async getRiskSummary(propertyId: string): Promise<PrimaryRiskSummary | null> {
     const response = await this.request<PrimaryRiskSummary>(`/api/risk/summary/${propertyId}`);
 
@@ -1031,9 +1036,9 @@ class APIClient {
     return null;
   }
   
-  // ==========================================================================
-  // [ORIGINAL METHOD] Fetch the lightweight risk summary for the primary property
-  // ==========================================================================
+  /**
+   * [ORIGINAL METHOD] Fetch the lightweight risk summary for the primary property
+   */
   async getPrimaryRiskSummary(): Promise<PrimaryRiskSummary | null> {
     // Uses the request helper since the new endpoint returns the standard { success: true, data: ... } wrapper
     const response = await this.request<PrimaryRiskSummary>('/api/risk/summary/primary');
@@ -1050,10 +1055,77 @@ class APIClient {
       return processedData;
     }
 
-    // If the request helper threw an APIError (e.g., 401, 500) it was caught and re-thrown.
-    // This return is for a theoretical API response that passed HTTP checks but was not successful,
-    // which should be handled by the internal `request` method's error throwing.
     return null;
+  }
+  
+  // ==========================================================================
+  // [NEW IMPLEMENTATION] FINANCIAL EFFICIENCY ENDPOINTS (PHASE 2.5)
+  // ==========================================================================
+
+  /**
+   * Fetches the lightweight financial efficiency summary for the dashboard card.
+   * Calls GET /api/v1/financial-efficiency/summary?propertyId=... 
+   */
+  async getFinancialReportSummary(propertyId: string): Promise<FinancialReportSummary | null> {
+    const response = await this.request<FinancialReportSummary>(`/api/v1/financial-efficiency/summary?propertyId=${propertyId}`);
+
+    if (response.success && response.data) {
+        // Convert the financialExposureTotal (AC_Total) back to a number
+        const processedData: FinancialReportSummary = {
+            ...response.data,
+            financialExposureTotal: parseFloat(response.data.financialExposureTotal.toString()),
+        };
+        return processedData;
+    }
+    return null;
+  }
+  
+  /**
+   * Fetches the full detailed FES report, queuing a new calculation if stale/missing.
+   * @returns The FinancialEfficiencyReport object or the string 'QUEUED'.
+   */
+  async getDetailedFESReport(propertyId: string): Promise<FinancialEfficiencyReport | 'QUEUED'> {
+    // Calls GET /api/v1/properties/:propertyId/financial-efficiency
+    const response = await this.request<FinancialEfficiencyReport>(`/api/v1/properties/${propertyId}/financial-efficiency`);
+
+    if (response.success) {
+      const rawReport = response.data;
+      
+      // Check if backend returned 'QUEUED' status
+      if ((rawReport as any).status === 'QUEUED') {
+        return 'QUEUED';
+      }
+
+      // Process the report - convert decimal fields to numbers
+      const processedReport: FinancialEfficiencyReport = {
+        id: rawReport.id,
+        propertyId: rawReport.propertyId,
+        financialEfficiencyScore: rawReport.financialEfficiencyScore,
+        // Convert all relevant decimal-based fields to number
+        actualInsuranceCost: parseFloat((rawReport as any).actualInsuranceCost.toString()), 
+        actualUtilityCost: parseFloat((rawReport as any).actualUtilityCost.toString()), 
+        actualWarrantyCost: parseFloat((rawReport as any).actualWarrantyCost.toString()), 
+        marketAverageTotal: parseFloat((rawReport as any).marketAverageTotal.toString()), 
+        lastCalculatedAt: rawReport.lastCalculatedAt,
+        createdAt: rawReport.createdAt,
+        updatedAt: rawReport.updatedAt,
+      };
+
+      return processedReport;
+    } 
+    // If response.success is false, request() would have thrown an APIError.
+    throw new Error("Failed to retrieve detailed FES report."); 
+  }
+  
+  /**
+   * Triggers an on-demand FES calculation job.
+   * Calls POST /api/v1/properties/:propertyId/financial-efficiency/recalculate
+   */
+  async recalculateFES(propertyId: string): Promise<APIResponse<{ success: boolean; status: 'QUEUED' }>> {
+    return this.request<{ success: boolean; status: 'QUEUED' }>(`/api/v1/properties/${propertyId}/financial-efficiency/recalculate`, {
+      method: 'POST',
+      body: {} as unknown as BodyInit,
+    });
   }
   
   // ==========================================================================

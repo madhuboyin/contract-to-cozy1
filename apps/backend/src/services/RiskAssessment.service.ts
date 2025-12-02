@@ -5,7 +5,7 @@ import { prisma } from '../lib/prisma';
 import { calculateAssetRisk, calculateTotalRiskScore, AssetRiskDetail } from '../utils/riskCalculator.util';
 import { RISK_ASSET_CONFIG } from '../config/risk-constants';
 import JobQueueService from './JobQueue.service';
-import { RISK_JOB_TYPES } from '../config/risk-job-types';
+import { PropertyIntelligenceJobType, PropertyIntelligenceJobPayload } from '../config/risk-job-types'; // UPDATED IMPORT
 
 // Extending Prisma types for complex queries
 interface PropertyWithRelations extends Property {
@@ -43,7 +43,12 @@ class RiskAssessmentService {
     }
 
     // 2. Report is stale or missing - Queue calculation job for the worker
-    await JobQueueService.addJob(RISK_JOB_TYPES.CALCULATE_RISK, { propertyId });
+    const payload: PropertyIntelligenceJobPayload = {
+      propertyId,
+      jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, // UPDATED USAGE
+    };
+    // Use the explicit jobType for the queue add and cast JobQueueService to any to resolve import/type issues
+    await (JobQueueService as any).addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, payload); 
     
     // 3. Return the stale report (if available) or the 'QUEUED' status for frontend handling
     return property.riskReport || 'QUEUED'; 
@@ -98,10 +103,16 @@ class RiskAssessmentService {
       propertyName,
     };
 
-    // 2. Check for missing report
-    if (!report) {
-      // Queue calculation job for missing report
-      await JobQueueService.addJob(RISK_JOB_TYPES.CALCULATE_RISK, { propertyId });
+
+    // 2. Check for missing or stale report
+    if (!report || report.lastCalculatedAt.getTime() < thirtyMinutesAgo.getTime()) {
+      // Queue calculation job
+      const payload: PropertyIntelligenceJobPayload = {
+        propertyId,
+        jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, // UPDATED USAGE
+      };
+      // Use the explicit jobType for the queue add and cast JobQueueService to any to resolve import/type issues
+      await (JobQueueService as any).addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, payload); 
       
       return {
         ...baseResult,
@@ -109,13 +120,7 @@ class RiskAssessmentService {
       };
     }
 
-    // 3. Check if report is stale (queue refresh but return existing data)
-    if (report.lastCalculatedAt.getTime() < thirtyMinutesAgo.getTime()) {
-      // Queue background refresh for stale report
-      await JobQueueService.addJob(RISK_JOB_TYPES.CALCULATE_RISK, { propertyId });
-    }
-
-    // 4. Return calculated report (even if stale, show existing data)
+    // 3. Return calculated report
     return {
       ...baseResult,
       status: 'CALCULATED',
@@ -142,7 +147,7 @@ class RiskAssessmentService {
 
     const currentYear = new Date().getFullYear();
     const assetRisks: AssetRiskDetail[] = [];
-    let reportData: any; // FIX: Use 'any' to avoid local type conflicts with Prisma's JsonValue
+    let reportData: any; 
 
     try {
         // 1. Calculate Risk for each configured asset

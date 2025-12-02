@@ -16,6 +16,7 @@ import serviceCategoryRoutes from './routes/service-category.routes';
 import maintenanceRoutes from './routes/maintenance.routes';
 import homeownerManagementRoutes from './routes/home-management.routes';
 import riskRoutes from './routes/risk.routes';
+import financialRoutes from './routes/financialEfficiency.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
@@ -109,7 +110,10 @@ app.use('/api/service-categories', serviceCategoryRoutes);
 app.use('/api/maintenance-templates', maintenanceRoutes);
 app.use('/api/home-management', homeownerManagementRoutes); // NEW LINE
 app.use('/api/risk', riskRoutes);
-
+// Handles: /api/v1/financial-efficiency/summary
+app.use('/api/v1/financial-efficiency', financialRoutes); 
+// Handles: /api/v1/properties/:propertyId/financial-efficiency/*
+app.use('/api/v1/properties', financialRoutes);
 // =============================================================================
 // 404 HANDLER
 // =============================================================================

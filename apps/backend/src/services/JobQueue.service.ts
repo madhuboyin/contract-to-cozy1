@@ -1,62 +1,148 @@
 // apps/backend/src/services/JobQueue.service.ts
 
-import { Queue } from 'bullmq'; 
+import { Queue, Worker, Job } from 'bullmq'; 
 import * as dotenv from 'dotenv'; 
 dotenv.config();
 
-interface JobData {
-    propertyId: string;
-    [key: string]: any;
-  }
-  
-  /**
-   * Simplified service wrapper for adding jobs to the asynchronous background queue.
-   */
-  class JobQueueService {
-    private queueName = 'main-background-queue';
-    private queue: Queue; 
-    
-    constructor() {
-        // FIX: Hardcoded port 6379 to bypass deployment env var issues (NaN)
-        const port = 6379; 
-        
-        // Build the connection options object, including optional auth/db
-        const redisConnection: any = { // Using 'any' for the complex BullMQ type definition
-            host: process.env.REDIS_HOST || 'localhost',
-            port: port,
-            // ADDED: Support for optional Redis password (REDIS_PASSWORD)
-            password: process.env.REDIS_PASSWORD, 
-            // ADDED: Support for Redis DB index (REDIS_DB: "0" from ConfigMap)
-            db: parseInt(process.env.REDIS_DB || '0', 10), 
+// Imports for Property Intelligence System
+import { PropertyIntelligenceJobType, PropertyIntelligenceJobPayload } from '../config/risk-job-types'; 
+import RiskAssessmentService from './RiskAssessment.service'; // Use default import
+import { FinancialReportService } from './FinancialReport.service'; // Use named import
+
+// --- Shared Redis Connection Configuration ---
+const connection = {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: 6379, // FIX: Hardcoded port from previous file
+    password: process.env.REDIS_PASSWORD,
+    db: parseInt(process.env.REDIS_DB || '0', 10),
+};
+
+// Define the Queue instance shared by the client and worker
+export const propertyIntelligenceQueue = new Queue<PropertyIntelligenceJobPayload>('property-intelligence-queue', { connection });
+
+// Initialize services (instantiate the class)
+const riskAssessmentService = RiskAssessmentService; // Use the default exported instance
+const financialReportService = new FinancialReportService(); 
+
+
+/**
+ * Specialized Job Queue Service for Property Intelligence.
+ */
+export class JobQueueService {
+
+    /**
+     * Enqueues all property intelligence calculations for a given property.
+     * This is typically called after a property is created or critical data is updated.
+     * @param propertyId The ID of the property.
+     */
+    public async enqueuePropertyIntelligenceJobs(propertyId: string): Promise<void> {
+        console.log(`[QUEUE-MANAGER] Enqueueing all intelligence jobs for property: ${propertyId}`);
+
+        const defaultOptions = {
+            attempts: 3, 
+            backoff: { type: 'exponential', delay: 5000 },
         };
 
-        // Initialize the queue connection
-        this.queue = new Queue(this.queueName, { 
-            connection: redisConnection 
+        const riskJob: PropertyIntelligenceJobPayload = {
+            propertyId,
+            jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT,
+        };
+        
+        // NEW: Enqueue the Financial Efficiency Score calculation
+        const fesJob: PropertyIntelligenceJobPayload = {
+            propertyId,
+            jobType: PropertyIntelligenceJobType.CALCULATE_FES,
+        };
+
+        // 1. Risk Report Job
+        await propertyIntelligenceQueue.add(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, riskJob, { 
+            jobId: `${propertyId}-${PropertyIntelligenceJobType.CALCULATE_RISK_REPORT}`,
+            ...defaultOptions 
+        });
+        
+        // 2. FES Report Job (NEW)
+        await propertyIntelligenceQueue.add(PropertyIntelligenceJobType.CALCULATE_FES, fesJob, { 
+            jobId: `${propertyId}-${PropertyIntelligenceJobType.CALCULATE_FES}`,
+            ...defaultOptions
         });
 
-        console.log(`[QUEUE-CLIENT] Initialized queue: ${this.queueName} at ${redisConnection.host}:${port} (DB: ${redisConnection.db})`);
+        console.log(`[QUEUE-MANAGER] Enqueued Risk and FES jobs for ${propertyId}.`);
     }
 
-    async addJob(jobName: string, data: JobData, options?: any): Promise<void> {
-      console.log(`[QUEUE] Job added: ${jobName} for Property ID: ${data.propertyId}`);
-      
-      // Actual queuing logic using BullMQ's queue.add()
-      await this.queue.add(
-          jobName, 
-          data,    
-          { 
-              ...options, 
-              attempts: 3, 
-              backoff: {
-                  type: 'exponential',
-                  delay: 5000,
-              },
-          }
-      );
-      
-      return; 
+    /**
+     * The worker function that processes jobs from the queue.
+     * @param job The BullMQ job object.
+     */
+    private async processJob(job: Job<PropertyIntelligenceJobPayload>): Promise<void> {
+        const { jobType, propertyId } = job.data;
+        
+        console.log(`[WORKER] Processing Job [${jobType}] for Property [${propertyId}]`);
+
+        try {
+            switch (jobType) {
+                case PropertyIntelligenceJobType.CALCULATE_RISK_REPORT:
+                    await riskAssessmentService.calculateAndSaveReport(propertyId);
+                    break;
+                    
+                // NEW: Handle the Financial Efficiency Score calculation
+                case PropertyIntelligenceJobType.CALCULATE_FES:
+                    await financialReportService.calculateAndSaveFES(propertyId);
+                    break;
+
+                default:
+                    console.error(`[WORKER] Unknown job type: ${jobType}`);
+                    throw new Error(`Unknown job type: ${jobType}`);
+            }
+            console.log(`[WORKER] Successfully completed Job [${jobType}] for Property [${propertyId}]`);
+        } catch (error) {
+            console.error(`[WORKER] Job [${jobType}] failed for ${propertyId}:`, error);
+            // Re-throw to allow BullMQ to handle retries/failures
+            throw error;
+        }
     }
-  }
-  
-  export default new JobQueueService();
+    
+    /**
+     * Starts the BullMQ Worker to process jobs.
+     */
+    public startWorker() {
+        const worker = new Worker<PropertyIntelligenceJobPayload>(
+            propertyIntelligenceQueue.name,
+            (job) => this.processJob(job), 
+            { connection, concurrency: 5 }
+        );
+
+        worker.on('completed', job => {
+            console.log(`[WORKER] Job ${job.id} (${job.data.jobType}) completed.`);
+        });
+
+        worker.on('failed', (job, err) => {
+            console.error(`[WORKER] Job ${job?.id} (${job?.data.jobType}) failed with error: ${err.message}`);
+        });
+
+        console.log(`[WORKER] Property Intelligence Worker started for queue: ${propertyIntelligenceQueue.name}`);
+        return worker;
+    }
+
+    /**
+     * Compatibility wrapper for other services (like RiskAssessment.service) that use a generic addJob call.
+     */
+    async addJob(jobName: PropertyIntelligenceJobType, data: PropertyIntelligenceJobPayload, options?: any): Promise<void> {
+        console.log(`[QUEUE] Job added (Compatibility): ${jobName} for Property ID: ${data.propertyId}`);
+        
+        await propertyIntelligenceQueue.add(
+            jobName, 
+            data,    
+            { 
+                ...options, 
+                attempts: 3, 
+                backoff: {
+                    type: 'exponential',
+                    delay: 5000,
+                },
+            }
+        );
+    }
+}
+
+// Export a single instance for use by controllers and other services
+export default new JobQueueService();

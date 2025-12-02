@@ -19,6 +19,8 @@ interface ExistingOwnerDashboardProps {
   properties: ScoredProperty[]; 
   checklistItems: ChecklistItem[];
   userFirstName: string;
+  // FIX: Added selectedPropertyId to the props interface to resolve the compile error
+  selectedPropertyId: string | undefined; 
 }
 
 // Helper to format the address for display
@@ -30,23 +32,27 @@ export const ExistingOwnerDashboard = ({
   bookings, 
   properties, 
   checklistItems,
-  userFirstName
+  userFirstName,
+  // Destructure the prop passed from the parent (DashboardPage)
+  selectedPropertyId: parentSelectedPropertyId
 }: ExistingOwnerDashboardProps) => {
   
   // Logic to determine the default property: Primary first, otherwise the first one
   const defaultProperty = properties.find(p => p.isPrimary) || properties[0];
 
   // --- Property Selection State ---
-  const [selectedPropertyId, setSelectedPropertyId] = useState<string | undefined>(defaultProperty?.id);
+  // Use a local state for property ID selection, initialized with the ID provided by the parent.
+  // The parent passes the *default* selected ID, but the local component manages changes via the Select dropdown.
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string | undefined>(parentSelectedPropertyId);
   
   const selectedProperty = properties.find(p => p.id === selectedPropertyId);
 
-  // Set default selected property ID on mount if properties are available
+  // Sync internal state with external prop, primarily on initial load
   useEffect(() => {
-    if (!selectedPropertyId && defaultProperty) {
-        setSelectedPropertyId(defaultProperty.id);
+    if (parentSelectedPropertyId && parentSelectedPropertyId !== selectedPropertyId) {
+        setSelectedPropertyId(parentSelectedPropertyId);
     }
-  }, [defaultProperty, selectedPropertyId]);
+  }, [parentSelectedPropertyId]);
 
   const isMultiProperty = properties.length > 1;
   // --- End Property Selection State ---
@@ -87,7 +93,7 @@ export const ExistingOwnerDashboard = ({
         <p className="text-muted-foreground">Monitor your home's health and maintenance schedule.</p>
       </div>
       
-      {/* --- Property Selection Row --- */}
+      {/* --- Property Selection Row (MANAGES LOCAL STATE FOR PROPERTY ID) --- */}
       {selectedProperty && (
         <div className="mt-2 flex items-center space-x-3">
             {!isMultiProperty ? (
@@ -122,26 +128,7 @@ export const ExistingOwnerDashboard = ({
       )}
       {/* --- End Property Selection Row --- */}
 
-      {/* UPDATED: Row 1 - Changed from 4-column to 3-column grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        
-        {/* ROW 1, Slot 1: Property Health Score */}
-        {selectedProperty && (
-            <div className="md:col-span-1">
-                <PropertyHealthScoreCard property={selectedProperty} /> 
-            </div>
-        )}
-        
-        {/* ROW 1, Slot 2: Risk Score Card */}
-        <div className="md:col-span-1">
-            <PropertyRiskScoreCard propertyId={selectedPropertyId} /> 
-        </div>
-        
-        {/* ROW 1, Slot 3: Upcoming Bookings Card */}
-        <div className="md:col-span-1">
-            <UpcomingBookingsCard propertyId={selectedPropertyId} /> 
-        </div>
-      </div>
+      {/* ROW 1: Intelligence Scorecards are now rendered by the parent DashboardPage.tsx */}
 
       {/* ROW 2: Recurring Maintenance and Upcoming Renewals */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -163,7 +150,7 @@ export const ExistingOwnerDashboard = ({
           href="/dashboard/maintenance" 
           className="text-lg font-semibold text-blue-600 hover:text-blue-700 transition-colors flex items-center"
         >
-          View Full Home Management Checklist &rarr;
+          View Full Home Management Checklist <ArrowRight className="h-4 w-4 ml-1" />
         </Link>
       </div>
     </div>
