@@ -152,6 +152,7 @@ class RiskAssessmentService {
       });
       
       // FIX 3: If stale and no job is active, return CALCULATED. 
+      // This displays the old score, fixing the permanent "Calculating" screen.
       return {
         ...baseResult,
         status: 'CALCULATED',
@@ -174,57 +175,79 @@ class RiskAssessmentService {
     property?: PropertyWithRelations
   ): Promise<RiskAssessmentReport> {
     
-    // FIX: Explicitly declare the type to include null, which fetchPropertyDetails returns.
     let fetchedProperty: PropertyWithRelations | null | undefined = property; 
     let reportData: any; 
-    let finalError: any = null; 
 
     try {
         // --- STEP 0: FETCH AND VALIDATE PROPERTY (MUST BE FIRST) ---
         if (!fetchedProperty) {
-            // Assignment here now works because fetchedProperty allows null
             fetchedProperty = await this.fetchPropertyDetails(propertyId);
             if (!fetchedProperty) {
-                // If property is not found, throw to generate a generic error report
+                // Throwing this will be caught below to create the failure report
                 throw new Error("Property not found or access denied for calculation.");
             }
         }
-        property = fetchedProperty; // Assign valid fetched property (PropertyWithRelations)
+        property = fetchedProperty;
 
-        const currentYear = new Date().getFullYear();
-        const assetRisks: AssetRiskDetail[] = [];
+        // --- STEP 1: CHECK FOR ESSENTIAL DATA (FIX for permanent QUEUED status) ---
+        const isBasicDataMissing = !property.propertySize || !property.yearBuilt; 
 
-        // --- STEP 1 & 2: CALCULATE ASSET RISKS AND TOTAL SCORE ---
-        for (const config of RISK_ASSET_CONFIG) {
-          const assetRisk = calculateAssetRisk(
-            config.systemType,
-            config,
-            property as PropertyWithRelations, 
-            currentYear
-          );
+        if (isBasicDataMissing) {
+             console.warn(`[RISK-CALC] Skipping full calculation for ${propertyId}: Basic property data missing (Size/Year Built). Persisting fallback report.`);
+             // Skip complex calculation and set fallback report data
+             reportData = {
+                riskScore: 0,
+                financialExposureTotal: new Prisma.Decimal(0),
+                details: [{ 
+                    assetName: 'Data Missing', 
+                    systemType: 'System', 
+                    category: 'SAFETY' as any, 
+                    age: 0, 
+                    expectedLife: 0, 
+                    replacementCost: 0, 
+                    probability: 1,       
+                    coverageFactor: 0,    
+                    outOfPocketCost: 0,   
+                    riskDollar: 0,        
+                    riskLevel: 'HIGH',
+                    actionCta: 'CRITICAL: Complete property details to run full assessment.',
+                }],
+                lastCalculatedAt: new Date(),
+            };
+        } else {
+            // --- STEP 2: Execute Complex Calculation ---
+            const currentYear = new Date().getFullYear();
+            const assetRisks: AssetRiskDetail[] = [];
 
-          if (assetRisk) {
-            assetRisks.push(assetRisk);
-          }
+            for (const config of RISK_ASSET_CONFIG) {
+              const assetRisk = calculateAssetRisk(
+                config.systemType,
+                config,
+                property as PropertyWithRelations, 
+                currentYear
+              );
+              if (assetRisk) {
+                assetRisks.push(assetRisk);
+              }
+            }
+
+            const calculatedResult = calculateTotalRiskScore(property as PropertyWithRelations, assetRisks);
+            
+            reportData = {
+                ...calculatedResult,
+                lastCalculatedAt: new Date(),
+            };
         }
 
-        const calculatedResult = calculateTotalRiskScore(property as PropertyWithRelations, assetRisks);
+    } catch (error: any) { // Final catch for any unexpected errors during fetch/validation
+        console.error(`RISK CALCULATION FAILED (Fatal Error during Job) for property ${propertyId}:`, error);
         
-        reportData = {
-            ...calculatedResult,
-            lastCalculatedAt: new Date(), // Explicitly set success time
-        };
-
-    } catch (error: any) { // Catch any error: Fetching, validation, or calculation error
-        console.error(`RISK CALCULATION FAILED for property ${propertyId}:`, error);
-        finalError = error; // Flag that an error occurred
-        
-        // --- DEFENSIVE FALLBACK ON FAILURE ---
+        // --- DEFENSIVE FALLBACK ON FATAL FAILURE ---
         reportData = {
             riskScore: 0,
             financialExposureTotal: new Prisma.Decimal(0),
             details: [{ 
-                assetName: 'Calculation Failure', 
+                assetName: 'Fatal Error', 
                 systemType: 'System', 
                 category: 'SAFETY' as any, 
                 age: 0, 
@@ -235,13 +258,13 @@ class RiskAssessmentService {
                 outOfPocketCost: 0,   
                 riskDollar: 0,        
                 riskLevel: 'HIGH',
-                actionCta: `CRITICAL: Calculation failed during job processing. Error: ${error.message || 'Unknown'}.`,
+                actionCta: `CRITICAL: Calculation failed. Error: ${error.message || 'Unknown'}.`,
             }],
-            lastCalculatedAt: new Date(), // Set time to break the queue loop
+            lastCalculatedAt: new Date(),
         };
     }
     
-    // --- STEP 3: PERSIST REPORT (Always attempts to run) ---
+    // --- STEP 3: PERSIST REPORT (Guaranteed job completion) ---
     const updatedReport = await prisma.riskAssessmentReport.upsert({
       where: { propertyId: propertyId },
       update: {
@@ -259,7 +282,7 @@ class RiskAssessmentService {
       },
     });
 
-    // The function returns 'updatedReport', resolving the worker's promise successfully.
+    // The persistence step marks the job as complete in the queue.
     return updatedReport;
   }
   
