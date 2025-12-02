@@ -177,19 +177,20 @@ class RiskAssessmentService {
     
     let fetchedProperty: PropertyWithRelations | null | undefined = property; 
     let reportData: any; 
+    let finalError: any = null; 
 
     try {
         // --- STEP 0: FETCH AND VALIDATE PROPERTY (MUST BE FIRST) ---
         if (!fetchedProperty) {
             fetchedProperty = await this.fetchPropertyDetails(propertyId);
             if (!fetchedProperty) {
-                // Throwing this will be caught below to create the failure report
                 throw new Error("Property not found or access denied for calculation.");
             }
         }
         property = fetchedProperty;
 
         // --- STEP 1: CHECK FOR ESSENTIAL DATA (FIX for permanent QUEUED status) ---
+        // If essential data is missing, we must skip the crash-prone calculation logic
         const isBasicDataMissing = !property.propertySize || !property.yearBuilt; 
 
         if (isBasicDataMissing) {
@@ -241,6 +242,7 @@ class RiskAssessmentService {
 
     } catch (error: any) { // Final catch for any unexpected errors during fetch/validation
         console.error(`RISK CALCULATION FAILED (Fatal Error during Job) for property ${propertyId}:`, error);
+        finalError = error; // Flag that an error occurred
         
         // --- DEFENSIVE FALLBACK ON FATAL FAILURE ---
         reportData = {
