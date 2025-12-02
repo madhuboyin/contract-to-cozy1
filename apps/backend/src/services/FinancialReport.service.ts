@@ -6,7 +6,7 @@ import { FinancialEfficiencyReport, PropertyType } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 // Import the singleton instance (the value) AND the named constant
 import JobQueueService, { propertyIntelligenceQueue } from './JobQueue.service'; 
-import { PropertyIntelligenceJobType } from '../config/risk-job-types'; 
+import { PropertyIntelligenceJobType, PropertyIntelligenceJobPayload } from '../config/risk-job-types'; 
 
 
 // Define expected structure for the public-facing report summary
@@ -68,12 +68,23 @@ export class FinancialReportService {
     }
     
     /**
-     * FIX: Renamed method from 'getPrimaryFESSummary' to 'getFinancialEfficiencySummary'
-     * to resolve the compilation error in the controller.
-     * * Retrieves the summary report (used by the dashboard scorecard).
+     * Retrieves the summary report (used by the dashboard scorecard).
      * This method handles queuing the job if the report is missing or checking its status.
+     * @param propertyId The ID of the property (can be undefined during initial load).
      */
-    public async getFinancialEfficiencySummary(propertyId: string): Promise<FinancialReportSummary> {
+    public async getFinancialEfficiencySummary(propertyId: string | undefined): Promise<FinancialReportSummary> {
+        
+        // FIX: Exit gracefully if propertyId is missing or invalid
+        if (!propertyId || typeof propertyId !== 'string') {
+            return {
+                propertyId: '',
+                financialEfficiencyScore: 0,
+                financialExposureTotal: 0,
+                status: 'NO_PROPERTY', 
+                lastCalculatedAt: null,
+            };
+        }
+
         const report = await prisma.financialEfficiencyReport.findUnique({
             where: { propertyId },
         });
@@ -144,6 +155,14 @@ export class FinancialReportService {
      * Retrieves the full detailed FES report.
      */
     public async getFinancialEfficiencyReport(propertyId: string): Promise<FinancialEfficiencyReport | 'QUEUED' | 'MISSING_DATA'> {
+        
+        // FIX: Exit gracefully if propertyId is missing
+        if (!propertyId || typeof propertyId !== 'string') {
+             // In the detailed report, this should probably be handled by the controller 
+             // ensuring propertyId is present, but for safety:
+             return 'MISSING_DATA';
+        }
+
         const report = await prisma.financialEfficiencyReport.findUnique({
             where: { propertyId },
         });
