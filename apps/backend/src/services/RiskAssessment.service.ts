@@ -152,7 +152,6 @@ class RiskAssessmentService {
       });
       
       // FIX 3: If stale and no job is active, return CALCULATED. 
-      // This displays the old score, fixing the permanent "Calculating" screen.
       return {
         ...baseResult,
         status: 'CALCULATED',
@@ -175,22 +174,27 @@ class RiskAssessmentService {
     property?: PropertyWithRelations
   ): Promise<RiskAssessmentReport> {
     
-    // Fetch detailed property data if not provided (needed by the worker job handler)
-    if (!property) {
-      const fetchedProperty = await this.fetchPropertyDetails(propertyId);
-      if (!fetchedProperty) {
-        throw new Error("Property not found for calculation.");
-      }
-      property = fetchedProperty;
-    }
-
-    const currentYear = new Date().getFullYear();
-    const assetRisks: AssetRiskDetail[] = [];
+    // FIX: Explicitly declare the type to include null, which fetchPropertyDetails returns.
+    let fetchedProperty: PropertyWithRelations | null | undefined = property; 
     let reportData: any; 
-    let finalError: any = null; // Variable to track if an internal error occurred
+    let finalError: any = null; 
 
     try {
-        // 1. Calculate Risk for each configured asset
+        // --- STEP 0: FETCH AND VALIDATE PROPERTY (MUST BE FIRST) ---
+        if (!fetchedProperty) {
+            // Assignment here now works because fetchedProperty allows null
+            fetchedProperty = await this.fetchPropertyDetails(propertyId);
+            if (!fetchedProperty) {
+                // If property is not found, throw to generate a generic error report
+                throw new Error("Property not found or access denied for calculation.");
+            }
+        }
+        property = fetchedProperty; // Assign valid fetched property (PropertyWithRelations)
+
+        const currentYear = new Date().getFullYear();
+        const assetRisks: AssetRiskDetail[] = [];
+
+        // --- STEP 1 & 2: CALCULATE ASSET RISKS AND TOTAL SCORE ---
         for (const config of RISK_ASSET_CONFIG) {
           const assetRisk = calculateAssetRisk(
             config.systemType,
@@ -204,7 +208,6 @@ class RiskAssessmentService {
           }
         }
 
-        // 2. Calculate Total Risk Score and Financial Exposure
         const calculatedResult = calculateTotalRiskScore(property as PropertyWithRelations, assetRisks);
         
         reportData = {
@@ -212,12 +215,11 @@ class RiskAssessmentService {
             lastCalculatedAt: new Date(), // Explicitly set success time
         };
 
-    } catch (error) { // Calculation failed (e.g., null property field)
+    } catch (error: any) { // Catch any error: Fetching, validation, or calculation error
         console.error(`RISK CALCULATION FAILED for property ${propertyId}:`, error);
         finalError = error; // Flag that an error occurred
         
         // --- DEFENSIVE FALLBACK ON FAILURE ---
-        // Create a failure report to ensure the front-end breaks the QUEUED loop.
         reportData = {
             riskScore: 0,
             financialExposureTotal: new Prisma.Decimal(0),
@@ -233,15 +235,13 @@ class RiskAssessmentService {
                 outOfPocketCost: 0,   
                 riskDollar: 0,        
                 riskLevel: 'HIGH',
-                actionCta: 'CRITICAL: Data issue preventing risk calculation.',
+                actionCta: `CRITICAL: Calculation failed during job processing. Error: ${error.message || 'Unknown'}.`,
             }],
             lastCalculatedAt: new Date(), // Set time to break the queue loop
         };
-        // --- END FALLBACK ---
     }
-
-
-    // 3. Save or Update the RiskAssessmentReport - This step always runs now
+    
+    // --- STEP 3: PERSIST REPORT (Always attempts to run) ---
     const updatedReport = await prisma.riskAssessmentReport.upsert({
       where: { propertyId: propertyId },
       update: {
@@ -258,14 +258,8 @@ class RiskAssessmentService {
         lastCalculatedAt: reportData.lastCalculatedAt,
       },
     });
-    
-    // FIX 4: Do not re-throw the internal calculation error (finalError). 
-    // Since the persistence step succeeded (updatedReport), the job is functionally complete.
-    if (finalError) {
-        console.warn(`[WORKER] Job for ${propertyId} completed successfully by persisting fallback data. Original calculation failed: ${finalError.message}`);
-        // The function returns 'updatedReport', resolving the worker's promise successfully.
-    }
 
+    // The function returns 'updatedReport', resolving the worker's promise successfully.
     return updatedReport;
   }
   
