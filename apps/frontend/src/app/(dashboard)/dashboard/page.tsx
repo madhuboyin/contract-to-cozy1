@@ -260,7 +260,8 @@ export default function DashboardPage() {
       
       {/* --- FIX 3: Property Selection Row (MOVED HERE) --- */}
       {selectedProperty && (
-          <div className="mt-2 flex items-center space-x-3 mb-6">
+          // FIX 4: Removed 'mt-2' to reduce space after PageHeaderHeading, and reduced 'mb-6' to 'mb-4'
+          <div className="flex items-center space-x-3 mb-4"> 
               {!isMultiProperty ? (
                   // Scenario 1: Single Property - Show simplified address as standard paragraph text
                   <p className="text-lg font-medium text-gray-700">
