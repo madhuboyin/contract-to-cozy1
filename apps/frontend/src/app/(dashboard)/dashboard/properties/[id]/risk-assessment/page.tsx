@@ -528,13 +528,34 @@ export default function RiskAssessmentPage() {
                                 </p>
                             )}
 
-                            {isQueued && (
-                                <Button variant="outline" className="w-full" onClick={() => riskQuery.refetch()}>
-                                    Recalculate Now
+                            {/* FIX START: Replace conditional queue logic with explicit Generate/Check Status button */}
+                            {isQueued ? (
+                                <Button 
+                                    variant="outline" 
+                                    className="w-full" 
+                                    onClick={() => riskQuery.refetch()} 
+                                    disabled={riskQuery.isFetching}
+                                >
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Checking Calculation Status...
+                                </Button>
+                            ) : (
+                                <Button 
+                                    variant="secondary" 
+                                    className="w-full" 
+                                    onClick={() => riskQuery.refetch()} 
+                                    disabled={riskQuery.isFetching || isCalculating} // Disabled if initiating a fetch
+                                >
+                                    Generate New Report
                                 </Button>
                             )}
-                            {!isQueued && !isCalculating && (
-                                <p className="text-xs text-muted-foreground">Last calculated: {new Date(report?.lastCalculatedAt || '').toLocaleString()}</p>
+                            {/* FIX END */}
+
+                            {/* Display the timestamp if a report has been successfully calculated (not queued/calculating) */}
+                            {!isQueued && !isCalculating && report?.lastCalculatedAt && (
+                                <p className="text-xs text-muted-foreground">
+                                    Last calculated: {new Date(report.lastCalculatedAt).toLocaleString()}
+                                </p>
                             )}
                         </div>
                     </CardContent>
