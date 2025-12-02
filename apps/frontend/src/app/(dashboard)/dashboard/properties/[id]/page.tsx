@@ -13,7 +13,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-import { Edit, Zap, Shield, FileText, ArrowLeft, Home, Calendar, Ruler } from "lucide-react"; 
+// ADDED DollarSign ICON
+import { Edit, Zap, Shield, FileText, ArrowLeft, Home, Calendar, Ruler, DollarSign } from "lucide-react"; 
 import { toast } from "@/components/ui/use-toast";
 
 // UPDATED: PropertyOverview with Card structure and Phase 2 typography
@@ -271,6 +272,33 @@ const RiskProtectionTab = ({ propertyId }: { propertyId: string }) => (
   </Card>
 );
 
+// NEW: FinancialEfficiencyTab
+const FinancialEfficiencyTab = ({ propertyId }: { propertyId: string }) => (
+  <Card>
+    <CardHeader className="p-4">
+      <CardTitle className="font-heading text-xl flex items-center gap-2">
+        <DollarSign className="h-5 w-5 text-green-600" />
+        Financial Efficiency Report
+      </CardTitle>
+      <CardDescription className="font-body text-sm">
+        View a detailed comparison of your annual home expenses against market benchmarks.
+      </CardDescription>
+    </CardHeader>
+    <CardContent className="p-4 pt-0 space-y-3">
+      <p className="font-body text-base text-gray-700">
+        Access the Financial Efficiency Score (FES) report to analyze your annual spending on insurance,
+        utilities, and warranties relative to market averages.
+      </p>
+      <Link href={`/dashboard/properties/${propertyId}/financial-efficiency`} passHref>
+        <Button variant="default">
+          <DollarSign className="mr-2 h-4 w-4" />
+          View Financial Efficiency Report
+        </Button>
+      </Link>
+    </CardContent>
+  </Card>
+);
+
 // UPDATED: DocumentsTab with Phase 2 typography and compact spacing
 const DocumentsTab = ({ propertyId }: { propertyId: string }) => (
   <Card>
@@ -306,7 +334,8 @@ export default function PropertyDetailPage() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab');
   
-  const defaultTab = initialTab && ['overview', 'maintenance', 'risk-protection', 'documents'].includes(initialTab) 
+  // Updated defaultTab logic to include the new 'financial-efficiency' tab
+  const defaultTab = initialTab && ['overview', 'maintenance', 'risk-protection', 'financial-efficiency', 'documents'].includes(initialTab) 
     ? initialTab 
     : 'overview';
 
@@ -382,6 +411,10 @@ export default function PropertyDetailPage() {
             <TabsTrigger value="risk-protection" className="flex items-center gap-2">
               <Shield className="h-4 w-4" /> Risk & Protection
             </TabsTrigger>
+            {/* NEW TRIGGER: Financial Efficiency */}
+            <TabsTrigger value="financial-efficiency" className="flex items-center gap-2">
+              <DollarSign className="h-4 w-4" /> Financial Efficiency
+            </TabsTrigger>
             <TabsTrigger value="documents" className="flex items-center gap-2">
               <FileText className="h-4 w-4" /> Documents
             </TabsTrigger>
@@ -398,6 +431,11 @@ export default function PropertyDetailPage() {
 
           <TabsContent value="risk-protection" className="mt-4">
             <RiskProtectionTab propertyId={property.id} />
+          </TabsContent>
+          
+          {/* NEW CONTENT: Financial Efficiency */}
+          <TabsContent value="financial-efficiency" className="mt-4">
+            <FinancialEfficiencyTab propertyId={property.id} />
           </TabsContent>
           
           <TabsContent value="documents" className="mt-4">
