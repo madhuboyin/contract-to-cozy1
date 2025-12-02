@@ -41,9 +41,8 @@ const clamp = (num: number, min: number, max: number): number => {
 };
 
 const getAgeInYears = (installYear: number | null, currentYear: number): number => {
-    // Diagnostic Log: Check what installYear is
-    console.log(`[RISK-UTIL] getAgeInYears: InstallYear=${installYear}, CurrentYear=${currentYear}`);
-    if (!installYear || typeof installYear !== 'number') return 0; // Assume new or unknown
+    // Defensive Check 1: Ensure installYear is a number before subtraction
+    if (!installYear || typeof installYear !== 'number') return 0; 
     return clamp(currentYear - installYear, 0, 100);
 };
 
@@ -56,7 +55,6 @@ const calculateProbability = (age: number, expectedLife: number, warningBump: nu
     const ageRatio = clamp(age / expectedLife, 0, 2); 
     
     // Non-linear P based on (Age Ratio)^2. P goes from 0 to 1.0 sharply near end of life.
-    // Base probability starts low (0.1) and scales exponentially
     const P_base = 0.1 + 0.9 * Math.pow(ageRatio, 2);
 
     let P = clamp(P_base + warningBump, 0, 1);
@@ -80,9 +78,6 @@ const calculateOutofPocket = (
   let uncoveredCost = replacementCost;
   const standardDeductible = 1000; // Assume a typical deductible for insurance
   const warrantyDeductible = 150; // Assume a typical service fee/deductible for home warranty
-
-  // Logic: When P is high (old age), the risk is Wear-and-Tear (W&T), which Insurance often doesn't cover.
-  // When P is low, the risk is sudden accidental damage, which Insurance usually covers.
 
   // 1. Coverage for High Probability Failures (W&T, Age-related):
   if (probability > 0.7) {
@@ -135,7 +130,6 @@ export const calculateAssetRisk = (
     case "ROOF_TILE_METAL":
       installYear = property.roofReplacementYear;
       break;
-    // ... extend with more granular mapping later
     default:
         // For components like Detectors, assume age based on a fixed 10-year rule
         if (assetConfig.category === RiskCategory.SAFETY) {
@@ -145,17 +139,10 @@ export const calculateAssetRisk = (
         break;
   }
   
-  // Diagnostic Log: Trace the value of installYear right before age calculation
-  console.log(`[RISK-UTIL:ASSET] ${assetName}: Determined installYear=${installYear}`);
-
   // If we can't determine the age, skip this asset for now
   if (!installYear) return null;
 
   const age = getAgeInYears(installYear, currentYear);
-  
-  // Diagnostic Log: Trace the calculated age
-  console.log(`[RISK-UTIL:ASSET] ${assetName}: Calculated age=${age}`);
-
   const expectedLife = assetConfig.expectedLife;
   const replacementCost = assetConfig.replacementCost;
 
@@ -228,15 +215,12 @@ export const calculateTotalRiskScore = (
   // Using property size (sqft) * a fixed cost as a simplified proxy for total asset value/replacement cost.
   const PROPERTY_VALUE_RATE = 25; // $25 per square foot of total internal assets
   
-  // DEFENSIVE CHECK: Ensure property.propertySize is a number before multiplication
+  // DEFENSIVE FIX: Ensure property.propertySize is a number, defaulting to 2000 if null/0/invalid
   const propertySize = (typeof property.propertySize === 'number' && property.propertySize > 0) 
       ? property.propertySize 
-      : 2000; // Use a default size (2000 sqft) if null/0/invalid
+      : 2000; 
       
-  const maxPotentialExposure = propertySize * PROPERTY_VALUE_RATE; // Now guaranteed to be numeric
-  
-  // Diagnostic Log: Trace the key inputs for normalization
-  console.log(`[RISK-UTIL:TOTAL] PropertySize=${propertySize}, TotalRiskDollar=${totalRiskDollar}`);
+  const maxPotentialExposure = propertySize * PROPERTY_VALUE_RATE; 
   
   // Max tolerable risk is 20% of the max potential exposure (a tuning parameter)
   const MAX_RISK_DOLLAR = maxPotentialExposure * 0.20; 
@@ -244,9 +228,6 @@ export const calculateTotalRiskScore = (
   // Non-Linear Mapping (Squared Inverse): Punishes high-risk exposure more severely.
   const riskRatio = clamp(totalRiskDollar / MAX_RISK_DOLLAR, 0, 1);
   const score = 100 * (1 - Math.pow(riskRatio, 2));
-
-  // Diagnostic Log: Trace the final score calculation
-  console.log(`[RISK-UTIL:TOTAL] MAX_RISK_DOLLAR=${MAX_RISK_DOLLAR}, RiskRatio=${riskRatio.toFixed(2)}, FinalScore=${score.toFixed(2)}`);
 
   // --- STEP 6: COLOR BUCKETS (Final Score Status) ---
   const finalScore = Math.round(score);
