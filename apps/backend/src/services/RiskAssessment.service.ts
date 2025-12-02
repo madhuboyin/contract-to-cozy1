@@ -4,7 +4,8 @@ import { Prisma, Property, RiskAssessmentReport, Warranty, InsurancePolicy } fro
 import { prisma } from '../lib/prisma'; 
 import { calculateAssetRisk, calculateTotalRiskScore, AssetRiskDetail } from '../utils/riskCalculator.util';
 import { RISK_ASSET_CONFIG } from '../config/risk-constants';
-import JobQueueService from './JobQueue.service';
+// FIX 1: Import the named export propertyIntelligenceQueue for job status checking
+import JobQueueService, { propertyIntelligenceQueue } from './JobQueue.service'; 
 import { PropertyIntelligenceJobType, PropertyIntelligenceJobPayload } from '../config/risk-job-types'; // UPDATED IMPORT
 
 // Extending Prisma types for complex queries
@@ -25,6 +26,13 @@ export type RiskSummaryDto = {
 };
 
 class RiskAssessmentService {
+  /**
+   * Private getter to retrieve the JobQueueService instance for compatibility with existing code.
+   */
+  private get jobQueueService(): typeof JobQueueService {
+    return JobQueueService; 
+  }
+  
   /**
    * Fetches an existing risk report. If it's missing or stale, a calculation job 
    * is queued in the background and 'QUEUED' is returned as a status.
@@ -48,7 +56,7 @@ class RiskAssessmentService {
       jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, // UPDATED USAGE
     };
     // Use the explicit jobType for the queue add and cast JobQueueService to any to resolve import/type issues
-    await (JobQueueService as any).addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, payload); 
+    await (this.jobQueueService as any).addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, payload); 
     
     // 3. Return the stale report (if available) or the 'QUEUED' status for frontend handling
     return property.riskReport || 'QUEUED'; 
@@ -107,7 +115,7 @@ class RiskAssessmentService {
     // 2. Check for missing report
     if (!report) {
       // Queue calculation job for missing report
-      await JobQueueService.addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, { 
+      await this.jobQueueService.addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, { 
         propertyId,
         jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT 
       });
@@ -117,26 +125,39 @@ class RiskAssessmentService {
         status: 'QUEUED',
       };
     }
+    
+    const jobName = PropertyIntelligenceJobType.CALCULATE_RISK_REPORT;
+    const jobId = `${propertyId}-${jobName}`;
+    
+    // FIX 2: Check if a job is actively running/queued for this property
+    const jobStatus = await propertyIntelligenceQueue.getJob(jobId);
+    
+    if (jobStatus) {
+        const state = await jobStatus.getState();
+        if (['waiting', 'active', 'delayed', 'prioritized'].includes(state)) {
+            // If job is actively running/queued, ALWAYS show the QUEUED status on the card
+            return {
+                ...baseResult,
+                status: 'QUEUED',
+            };
+        }
+    }
+
 
     // 3. Check if report is stale (queue refresh)
     if (report.lastCalculatedAt.getTime() < thirtyMinutesAgo.getTime()) {
       // Queue background refresh for stale report
-      await JobQueueService.addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, { 
+      await this.jobQueueService.addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, { 
         propertyId,
         jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT 
       });
       
-      // *** FIX START ***
-      // Return QUEUED status instead of CALCULATED if the data is stale. 
-      // This forces the dashboard card to display the calculating state, hiding the old 100/$98 score.
-      return {
-        ...baseResult,
-        status: 'QUEUED',
-      };
-      // *** FIX END ***
+      // FIX 3: If stale and no job is active (checked above), return CALCULATED.
+      // This displays the old data, avoiding the continuous "Calculating..." message.
+      // The background job queued above will eventually update this.
     }
 
-    // 4. Report is fresh - Return calculated report
+    // 4. Report is fresh or stale but displayable - Return calculated report
     return {
       ...baseResult,
       status: 'CALCULATED',
