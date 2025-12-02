@@ -164,6 +164,20 @@ export interface PrimaryRiskSummary {
 }
 
 
+/**
+ * Home Asset Interface - represents major appliances and systems
+ */
+export interface HomeAsset {
+  id: string;
+  propertyId: string;
+  assetType: string; // e.g., 'DISHWASHER', 'REFRIGERATOR', 'HVAC_FURNACE'
+  installationYear: number;
+  modelNumber?: string | null;
+  serialNumber?: string | null;
+  lastServiced?: string | null;
+  efficiencyRating?: string | null;
+}
+
 // ============================================================================
 // NEW DOCUMENT UPLOAD TYPES (ADDED)
 // ============================================================================
@@ -494,6 +508,7 @@ export interface Property {
   hasSecuritySystem: boolean | null;
   hasFireExtinguisher: boolean | null;
   applianceAges: any;
+  homeAssets: HomeAsset[];
   
   createdAt: string;
   updatedAt: string;

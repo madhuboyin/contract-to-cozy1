@@ -177,6 +177,35 @@ const PropertyOverview = ({ property }: { property: Property }) => (
       </CardContent>
     </Card>
 
+    {/* Major Appliances Card */}
+    {property.homeAssets && property.homeAssets.length > 0 && (
+      <Card>
+        <CardHeader className="p-4">
+          <CardTitle className="font-heading text-xl">Major Appliances</CardTitle>
+          <CardDescription className="font-body text-sm">
+            Installed appliances and their ages
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 pt-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {property.homeAssets.map((asset: any, index: number) => (
+              <div key={index} className="space-y-1 p-3 bg-gray-50 rounded-md border border-gray-200">
+                <p className="font-body text-xs text-gray-500 uppercase tracking-wide">
+                  {asset.assetType.replace(/_/g, ' ')}
+                </p>
+                <p className="font-heading text-base font-medium text-gray-900">
+                  Installed: {asset.installationYear}
+                </p>
+                <p className="text-sm text-gray-600">
+                  Age: {new Date().getFullYear() - asset.installationYear} years
+                </p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    )}
+
     {/* Action Button */}
     <div className="flex justify-start">
       <Link href={`/dashboard/properties/${property.id}/edit`} passHref>
