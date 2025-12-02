@@ -15,7 +15,10 @@ import { PageHeader, PageHeaderHeading } from '@/components/page-header';
 import { PropertyHealthScoreCard } from './components/PropertyHealthScoreCard'; 
 import { PropertyRiskScoreCard } from './components/PropertyRiskScoreCard'; 
 import { FinancialEfficiencyScoreCard } from './components/FinancialEfficiencyScoreCard'; 
-import { MyPropertiesCard } from './components/MyPropertiesCard'; // Retained import for Home Buyer, but excluded below
+import { MyPropertiesCard } from './components/MyPropertiesCard'; 
+// NEW IMPORTS FOR PROPERTY SELECTION
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import Link from 'next/link';
 // END NEW IMPORTS
 
 import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
@@ -31,6 +34,11 @@ interface DashboardData {
     error: string | null;
 }
 
+// Helper to format the address for display
+const formatAddress = (property: Property) => {
+    return `${property.address}, ${property.city}, ${property.state}`;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: userLoading } = useAuth();
@@ -43,6 +51,10 @@ export default function DashboardPage() {
     isLoading: true,
     error: null,
   });
+  
+  // Property Selection State managed at the top level
+  const [localSelectedPropertyId, setLocalSelectedPropertyId] = useState<string | undefined>(undefined);
+
 
   // HIGHEST PRIORITY: Check redirect IMMEDIATELY
   useEffect(() => {
@@ -169,6 +181,8 @@ export default function DashboardPage() {
       
       console.log('✅ Dashboard data loaded');
 
+      const defaultPropId = newProperties.find(p => p.isPrimary)?.id || newProperties[0]?.id;
+      
       setData({
         bookings: bookingsRes.success ? bookingsRes.data.bookings : [],
         properties: newProperties,
@@ -176,6 +190,9 @@ export default function DashboardPage() {
         isLoading: false,
         error: null,
       });
+      
+      // Initialize local state with the default property ID
+      setLocalSelectedPropertyId(defaultPropId);
 
     } catch (error: any) {
       console.error('❌ Failed to fetch dashboard data:', error);
@@ -189,6 +206,7 @@ export default function DashboardPage() {
       fetchDashboardData();
     }
   }, [user, userLoading, redirectChecked, shouldRedirect]);
+
 
   // Show loading while redirect check is happening OR during redirect
   if (userLoading || !redirectChecked || shouldRedirect || data.isLoading) {
@@ -214,10 +232,10 @@ export default function DashboardPage() {
   const userSegment = user.segment;
   const checklistItems = (data.checklist?.items || []) as ChecklistItem[];
   
-  // Logic to determine the selected property ID (default to primary or first property)
+  // Derived property values using the local state
   const properties = data.properties;
-  const selectedProperty = properties.find(p => p.isPrimary) || properties[0];
-  const selectedPropertyId = selectedProperty?.id;
+  const selectedProperty = properties.find(p => p.id === localSelectedPropertyId);
+  const isMultiProperty = properties.length > 1;
 
   console.log('🎨 Rendering dashboard for', userSegment);
   
@@ -236,15 +254,50 @@ export default function DashboardPage() {
   return (
     <DashboardShell>
       <PageHeader>
-        {/* FIX: Welcome message moved to the top and personalized */}
+        {/* FIX 1: Welcome message moved to the top and personalized */}
         <PageHeaderHeading>Welcome, {user.firstName}! Property Intelligence Dashboard</PageHeaderHeading>
       </PageHeader>
       
+      {/* --- FIX 3: Property Selection Row (MOVED HERE) --- */}
+      {selectedProperty && (
+          <div className="mt-2 flex items-center space-x-3 mb-6">
+              {!isMultiProperty ? (
+                  // Scenario 1: Single Property - Show simplified address as standard paragraph text
+                  <p className="text-lg font-medium text-gray-700">
+                      {selectedProperty.name || 'Your Home'}: {formatAddress(selectedProperty)}
+                  </p>
+              ) : (
+                  // Scenario 2: Multiple Properties - Show Dropdown
+                  <div className="flex items-center space-x-2">
+                      <Select 
+                          value={localSelectedPropertyId} 
+                          onValueChange={setLocalSelectedPropertyId}
+                      >
+                          <SelectTrigger className="w-[300px] text-lg font-medium">
+                              <SelectValue placeholder="Select a property" />
+                          </SelectTrigger>
+                          <SelectContent>
+                              {properties.map((property) => (
+                                  <SelectItem key={property.id} value={property.id}>
+                                      {property.name ? `${property.name} - ${formatAddress(property)}` : formatAddress(property)}
+                                  </SelectItem>
+                              ))}
+                          </SelectContent>
+                      </Select>
+                  </div>
+              )}
+              <Link href="/dashboard/properties" className="text-sm text-blue-500 hover:underline">
+                  {isMultiProperty ? 'Manage Properties' : 'View Details'}
+              </Link>
+          </div>
+      )}
+      {/* --- END Property Selection Row --- */}
+
       {/* Scorecards Grid - Now displays exactly 3 cards */}
-      {/* FIX: Grid layout adjusted to 3 columns on large screens to accommodate only the 3 scorecards */}
+      {/* FIX 2: Grid layout adjusted to 3 columns on large screens to accommodate only the 3 scorecards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
         
-        {/* 1. Property Health Score: Only render if a property is actually selected to pass a valid object */}
+        {/* 1. Property Health Score: Uses localSelectedPropertyId */}
         {selectedProperty ? (
           <div className="md:col-span-1">
             <PropertyHealthScoreCard property={selectedProperty} /> 
@@ -255,17 +308,17 @@ export default function DashboardPage() {
            </div>
         )}
         
-        {/* 2. Risk Assessment Score: Uses ID (handles undefined internally) */}
+        {/* 2. Risk Assessment Score: Uses localSelectedPropertyId */}
         <div className="md:col-span-1">
-            <PropertyRiskScoreCard propertyId={selectedPropertyId} />
+            <PropertyRiskScoreCard propertyId={localSelectedPropertyId} />
         </div>
         
-        {/* 3. Financial Efficiency Score: Uses ID (handles undefined internally) */}
+        {/* 3. Financial Efficiency Score: Uses localSelectedPropertyId */}
         <div className="md:col-span-1">
-            <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
+            <FinancialEfficiencyScoreCard propertyId={localSelectedPropertyId} />
         </div>
         
-        {/* 4. MyPropertiesCard (REMOVED for EXISTING_OWNER to enforce 3-card layout) */}
+        {/* 4. MyPropertiesCard (REMOVED for EXISTING_OWNER) */}
         
       </div>
       
@@ -275,7 +328,7 @@ export default function DashboardPage() {
         bookings={data.bookings}
         properties={data.properties}
         checklistItems={checklistItems}
-        selectedPropertyId={selectedPropertyId} // Pass selected ID for sub-components
+        selectedPropertyId={localSelectedPropertyId} // Pass selected ID from local state
       />
     </DashboardShell>
   );
