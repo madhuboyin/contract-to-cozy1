@@ -497,6 +497,20 @@ export interface HealthScoreResult {
 }
 
 /**
+ * HomeAsset interface matching the Prisma schema
+ */
+export interface HomeAsset {
+  id: string;
+  propertyId: string;
+  assetType: string;
+  installationYear: number | null;
+  modelNumber: string | null;
+  serialNumber: string | null;
+  lastServiced: string | null;
+  efficiencyRating: string | null;
+}
+
+/**
  * The standard Property interface, updated to include all new optional fields 
  * from the extended database schema (Phase 1).
  */
@@ -538,6 +552,9 @@ export interface Property {
   hasSecuritySystem: boolean | null;
   hasFireExtinguisher: boolean | null;
   applianceAges: any;
+  
+  // Home Assets relation
+  homeAssets?: HomeAsset[];
   
   createdAt: string;
   updatedAt: string;
