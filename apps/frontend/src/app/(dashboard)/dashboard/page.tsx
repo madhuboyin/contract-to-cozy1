@@ -6,21 +6,26 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
 import { Loader2 } from 'lucide-react';
-// FIX: Import the canonical ChecklistItem
 import { Booking, Property, User, ChecklistItem } from '@/types'; 
-// FIX: Import only ScoredProperty from local types, use canonical ChecklistItem
 import { ScoredProperty } from './types'; 
+
+// NEW IMPORTS FOR SCORECARDS AND LAYOUT
+import { DashboardShell } from '@/components/DashboardShell';
+import { PageHeader, PageHeaderHeading } from '@/components/page-header';
+import { PropertyHealthScoreCard } from './components/PropertyHealthScoreCard'; 
+import { PropertyRiskScoreCard } from './components/PropertyRiskScoreCard'; 
+import { FinancialEfficiencyScoreCard } from './components/FinancialEfficiencyScoreCard'; 
+import { MyPropertiesCard } from './components/MyPropertiesCard'; 
+// END NEW IMPORTS
 
 import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
 import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
 
-// FIX: Redefine DashboardData to use the canonical ChecklistItem[]
 interface DashboardData {
     bookings: Booking[];
     properties: ScoredProperty[];
-    // Use canonical ChecklistItem array type
     checklist: { id: string, items: ChecklistItem[] } | null; 
     isLoading: boolean;
     error: string | null;
@@ -167,7 +172,6 @@ export default function DashboardPage() {
       setData({
         bookings: bookingsRes.success ? bookingsRes.data.bookings : [],
         properties: newProperties,
-        // FIX: The API response should now be correctly assigned to ChecklistItem[]
         checklist: fetchedChecklist as DashboardData['checklist'], 
         isLoading: false,
         error: null,
@@ -208,9 +212,13 @@ export default function DashboardPage() {
   }
 
   const userSegment = user.segment;
-  // FIX: The items fetched should now be fully compatible with the canonical ChecklistItem[]
   const checklistItems = (data.checklist?.items || []) as ChecklistItem[];
   
+  // Logic to determine the selected property ID (default to primary or first property)
+  const properties = data.properties;
+  const selectedProperty = properties.find(p => p.isPrimary) || properties[0];
+  const selectedPropertyId = selectedProperty?.id;
+
   console.log('🎨 Rendering dashboard for', userSegment);
   
   if (userSegment === 'HOME_BUYER') {
@@ -224,12 +232,53 @@ export default function DashboardPage() {
     );
   }
 
+  // Existing Owner Dashboard (now incorporates the scorecard grid at the top level)
   return (
-    <ExistingOwnerDashboard 
-      userFirstName={user.firstName}
-      bookings={data.bookings}
-      properties={data.properties}
-      checklistItems={checklistItems}
-    />
+    <DashboardShell>
+      <PageHeader>
+        <PageHeaderHeading>Property Intelligence Dashboard</PageHeaderHeading>
+      </PageHeader>
+      
+      {/* Scorecards Grid - Phase 3.2 Implementation */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        
+        {/* 1. Property Health Score: FIX: Changed prop from 'propertyId' to 'property' */}
+        {/* Only render if a property is actually selected to pass a valid object */}
+        {selectedProperty ? (
+          <div className="md:col-span-1">
+            <PropertyHealthScoreCard property={selectedProperty} /> 
+          </div>
+        ) : (
+           <div className="md:col-span-1">
+            <PropertyHealthScoreCard property={{} as ScoredProperty} />
+           </div>
+        )}
+        
+        {/* 2. Risk Assessment Score: Uses ID (handles undefined internally) */}
+        <div className="md:col-span-1">
+            <PropertyRiskScoreCard propertyId={selectedPropertyId} />
+        </div>
+        
+        {/* 3. NEW: Financial Efficiency Score: Uses ID (handles undefined internally) */}
+        <div className="md:col-span-1">
+            <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
+        </div>
+        
+        {/* 4. Placeholder / Properties Card: FIX: Removed invalid 'selectedPropertyId' prop. */}
+        <div className="md:col-span-1">
+          <MyPropertiesCard properties={properties} />
+        </div>
+        
+      </div>
+      
+      {/* ExistingOwnerDashboard renders the rest of the layout below the scorecards */}
+      <ExistingOwnerDashboard 
+        userFirstName={user.firstName}
+        bookings={data.bookings}
+        properties={data.properties}
+        checklistItems={checklistItems}
+        selectedPropertyId={selectedPropertyId} // Pass selected ID for sub-components
+      />
+    </DashboardShell>
   );
 }
