@@ -52,7 +52,6 @@ export class FinancialReportService {
                 actualUtilityCost: result.actualUtilityCost,
                 actualWarrantyCost: result.actualWarrantyCost,
                 marketAverageTotal: result.marketAverageTotal,
-                // FIX: Removed 'details' field as it does not exist in the schema for FinancialEfficiencyReport.
             },
             create: {
                 propertyId: propertyId,
@@ -61,7 +60,6 @@ export class FinancialReportService {
                 actualUtilityCost: result.actualUtilityCost,
                 actualWarrantyCost: result.actualWarrantyCost,
                 marketAverageTotal: result.marketAverageTotal,
-                // FIX: Removed 'details' field
             }
         });
 
@@ -70,10 +68,12 @@ export class FinancialReportService {
     }
     
     /**
-     * Retrieves the summary report (used by the dashboard scorecard).
+     * FIX: Renamed method from 'getPrimaryFESSummary' to 'getFinancialEfficiencySummary'
+     * to resolve the compilation error in the controller.
+     * * Retrieves the summary report (used by the dashboard scorecard).
      * This method handles queuing the job if the report is missing or checking its status.
      */
-    public async getPrimaryFESSummary(propertyId: string): Promise<FinancialReportSummary> {
+    public async getFinancialEfficiencySummary(propertyId: string): Promise<FinancialReportSummary> {
         const report = await prisma.financialEfficiencyReport.findUnique({
             where: { propertyId },
         });
