@@ -10,8 +10,8 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 import { Worker } from 'bullmq';
 
-// Import shared utilities from backend
-import { calculateAssetRisk, calculateTotalRiskScore, AssetRiskDetail } from '../../backend/src/utils/riskCalculator.util';
+// Import shared utilities from backend - ADDED filterRelevantAssets
+import { calculateAssetRisk, calculateTotalRiskScore, filterRelevantAssets, AssetRiskDetail } from '../../backend/src/utils/riskCalculator.util';
 import { RISK_ASSET_CONFIG } from '../../backend/src/config/risk-constants';
 
 const prisma = new PrismaClient();
@@ -88,6 +88,19 @@ interface PropertyWithRelations extends Property {
   warranties: Warranty[];
   insurancePolicies: InsurancePolicy[];
   riskReport: RiskAssessmentReport | null;
+  // Add property type fields for filtering
+  heatingType?: string | null;
+  waterHeaterType?: string | null;
+  roofType?: string | null;
+  electricalPanelAge?: number | null;
+  foundationType?: string | null;
+  hasSmokeDetectors?: boolean | null;
+  hasCoDetectors?: boolean | null;
+  hasDrainageIssues?: boolean | null;
+  hvacInstallYear?: number | null;
+  waterHeaterInstallYear?: number | null;
+  roofReplacementYear?: number | null;
+  yearBuilt?: number | null;
 }
 
 /**
@@ -184,7 +197,7 @@ async function sendMaintenanceReminders() {
 }
 
 /**
- * Process risk assessment calculation
+ * Process risk assessment calculation - UPDATED WITH ASSET FILTERING
  */
 async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
   console.log(`[${new Date().toISOString()}] Processing risk calculation for property ${jobData.propertyId}...`);
@@ -202,8 +215,15 @@ async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
     const currentYear = new Date().getFullYear();
     const assetRisks: AssetRiskDetail[] = [];
     
-    // Calculate risk for each configured asset
-    for (const config of RISK_ASSET_CONFIG) {
+    // === FIX: Filter assets to only those that exist on the property ===
+    console.log(`[RISK-CALC] Filtering assets for property ${propertyId}...`);
+    console.log(`[RISK-CALC] Property config: heatingType=${property.heatingType}, waterHeaterType=${property.waterHeaterType}, roofType=${property.roofType}`);
+    
+    const relevantConfigs = filterRelevantAssets(property as any, RISK_ASSET_CONFIG);
+    console.log(`[RISK-CALC] Filtered from ${RISK_ASSET_CONFIG.length} to ${relevantConfigs.length} relevant assets`);
+    
+    // Calculate risk ONLY for relevant assets
+    for (const config of relevantConfigs) {
       const assetRisk = calculateAssetRisk(
         config.systemType,
         config,
@@ -213,8 +233,13 @@ async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
 
       if (assetRisk) {
         assetRisks.push(assetRisk);
+        console.log(`[RISK-CALC] Calculated risk for ${config.systemType}: $${assetRisk.riskDollar}`);
+      } else {
+        console.warn(`[RISK-CALC] Skipped ${config.systemType} (no install year)`);
       }
     }
+
+    console.log(`[RISK-CALC] Total assets with calculated risk: ${assetRisks.length}`);
 
     // Calculate total risk score
     const reportData = calculateTotalRiskScore(property as any, assetRisks);
@@ -236,7 +261,8 @@ async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
       },
     });
 
-    console.log(`✅ Risk assessment successfully calculated and saved for property ${propertyId}.`);
+    console.log(`✅ Risk assessment calculated and saved for property ${propertyId}.`);
+    console.log(`   Score: ${reportData.riskScore}, Exposure: $${reportData.financialExposureTotal}, Assets: ${assetRisks.length}`);
     
   } catch (error) {
     console.error('❌ Error calculating risk assessment:', error);

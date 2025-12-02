@@ -2,7 +2,7 @@
 
 import { Prisma, Property, RiskAssessmentReport, Warranty, InsurancePolicy } from '@prisma/client'; 
 import { prisma } from '../lib/prisma'; 
-import { calculateAssetRisk, calculateTotalRiskScore, AssetRiskDetail } from '../utils/riskCalculator.util';
+import { calculateAssetRisk, calculateTotalRiskScore, filterRelevantAssets, AssetRiskDetail } from '../utils/riskCalculator.util';
 import { RISK_ASSET_CONFIG } from '../config/risk-constants';
 // Import the singleton instance (the value) AND the named constant
 import JobQueueService, { propertyIntelligenceQueue } from './JobQueue.service'; 
@@ -221,7 +221,12 @@ class RiskAssessmentService {
             const currentYear = new Date().getFullYear();
             const assetRisks: AssetRiskDetail[] = [];
 
-            for (const config of RISK_ASSET_CONFIG) {
+            // === FIX: Filter assets to only those that exist on the property ===
+            console.log(`[RISK-SERVICE] Filtering assets for property ${propertyId}...`);
+            const relevantConfigs = filterRelevantAssets(property as PropertyWithRelations, RISK_ASSET_CONFIG);
+            console.log(`[RISK-SERVICE] Filtered from ${RISK_ASSET_CONFIG.length} to ${relevantConfigs.length} relevant assets`);
+
+            for (const config of relevantConfigs) {
               const assetRisk = calculateAssetRisk(
                 config.systemType,
                 config,
@@ -232,6 +237,8 @@ class RiskAssessmentService {
                 assetRisks.push(assetRisk);
               }
             }
+
+            console.log(`[RISK-SERVICE] Calculated risk for ${assetRisks.length} assets`);
 
             const calculatedResult = calculateTotalRiskScore(property as PropertyWithRelations, assetRisks);
             

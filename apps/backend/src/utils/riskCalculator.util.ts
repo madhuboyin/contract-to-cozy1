@@ -103,6 +103,88 @@ const calculateOutofPocket = (
   return clamp(uncoveredCost, 0, replacementCost);
 };
 
+// --- ASSET FILTERING ---
+
+/**
+ * Filters asset configs to only those that exist on the property.
+ * Prevents calculating risk for HVAC types, water heaters, roofs, etc. that the property doesn't have.
+ */
+export const filterRelevantAssets = (
+  property: PropertyWithDetails,
+  allConfigs: SystemRiskConfig[]
+): SystemRiskConfig[] => {
+  const relevantConfigs: SystemRiskConfig[] = [];
+
+  for (const config of allConfigs) {
+    let shouldInclude = false;
+
+    switch (config.systemType) {
+      // HVAC - only include the type the property actually has
+      case 'HVAC_FURNACE':
+        shouldInclude = property.heatingType === 'FURNACE' || property.heatingType === 'HVAC';
+        break;
+      case 'HVAC_HEAT_PUMP':
+        shouldInclude = property.heatingType === 'HEAT_PUMP';
+        break;
+
+      // Water Heater - only include the type the property actually has
+      case 'WATER_HEATER_TANK':
+        shouldInclude = property.waterHeaterType === 'TANK';
+        break;
+      case 'WATER_HEATER_TANKLESS':
+        shouldInclude = property.waterHeaterType === 'TANKLESS';
+        break;
+
+      // Roof - only include the type the property actually has
+      case 'ROOF_SHINGLE':
+        shouldInclude = property.roofType === 'SHINGLE';
+        break;
+      case 'ROOF_TILE_METAL':
+        shouldInclude = property.roofType === 'TILE' || property.roofType === 'METAL';
+        break;
+
+      // Electrical Panel - based on age
+      case 'ELECTRICAL_PANEL_MODERN':
+        shouldInclude = !property.electricalPanelAge || property.electricalPanelAge < 30;
+        break;
+      case 'ELECTRICAL_PANEL_OLD':
+        shouldInclude = property.electricalPanelAge !== null && property.electricalPanelAge >= 30;
+        break;
+
+      // Foundation - include if matches or is default
+      case 'FOUNDATION_CONCRETE_SLAB':
+        shouldInclude = !property.foundationType || 
+                       Boolean(property.foundationType && (
+                         property.foundationType.includes('SLAB') || 
+                         property.foundationType.includes('CONCRETE')
+                       ));
+        break;
+
+      // Safety - include if property has detectors
+      case 'SAFETY_SMOKE_CO_DETECTORS':
+        shouldInclude = property.hasSmokeDetectors === true || property.hasCoDetectors === true;
+        break;
+
+      // Major Appliances - assume all properties have these
+      case 'MAJOR_APPLIANCE_FRIDGE':
+      case 'MAJOR_APPLIANCE_DISHWASHER':
+        shouldInclude = true;
+        break;
+
+      default:
+        shouldInclude = false;
+        console.warn(`[RISK-UTIL:FILTER] Unknown asset type: ${config.systemType} - skipping`);
+    }
+
+    if (shouldInclude) {
+      relevantConfigs.push(config);
+    }
+  }
+
+  console.log(`[RISK-UTIL:FILTER] Filtered from ${allConfigs.length} to ${relevantConfigs.length} assets for property`);
+  return relevantConfigs;
+};
+
 // --- MAIN CALCULATION FUNCTIONS ---
 
 /**
