@@ -216,7 +216,11 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
                 <div className="mt-3">
                     <Badge variant={badgeVariant as any}>{level} Efficiency</Badge>
                     <span className="font-body text-xs text-muted-foreground ml-2">
-                        Updated {new Date(summary.lastCalculatedAt as string || '').toLocaleDateString()}
+                        {/* FIX: Check for lastCalculatedAt before formatting the date */}
+                        Updated {summary.lastCalculatedAt 
+                            ? new Date(summary.lastCalculatedAt as string).toLocaleDateString()
+                            : 'N/A'
+                        }
                     </span>
                 </div>
                 <Link href={reportLink} passHref>
