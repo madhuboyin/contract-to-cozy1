@@ -6,7 +6,7 @@ import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.
 
 // NEW IMPORTS FOR PHASE 2: Risk Assessment Triggering
 import JobQueueService from './JobQueue.service';
-import { RISK_JOB_TYPES } from '../config/risk-job-types';
+import { PropertyIntelligenceJobType } from '../config/risk-job-types';
 
 const prisma = new PrismaClient();
 
@@ -273,7 +273,10 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
   }
 
   // PHASE 2 ADDITION: Trigger risk calculation after property creation
-  await JobQueueService.addJob(RISK_JOB_TYPES.CALCULATE_RISK, { propertyId: property.id });
+  await JobQueueService.addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, { 
+    propertyId: property.id,
+    jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT 
+  });
 
   // FETCH FULL PROPERTY: Must include homeAssets for scoring/return
   const fullProperty = await prisma.property.findUnique({
@@ -401,7 +404,10 @@ export async function updateProperty(
 
   // PHASE 2 ADDITION: Trigger risk calculation after property update
   if (Object.keys(updatePayload).length > 0) {
-      await JobQueueService.addJob(RISK_JOB_TYPES.CALCULATE_RISK, { propertyId });
+      await JobQueueService.addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, { 
+        propertyId,
+        jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT 
+      });
   }
 
   // FETCH FULL PROPERTY: Must include homeAssets for return/scoring
