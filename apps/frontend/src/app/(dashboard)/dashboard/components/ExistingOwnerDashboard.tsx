@@ -1,5 +1,4 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/ExistingOwnerDashboard.tsx
-// UPDATED: Row 1 changed from 4-column to 3-column grid
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link'; 
@@ -8,8 +7,9 @@ import { UpcomingBookingsCard } from './UpcomingBookingsCard';
 import { RecurringMaintenanceCard } from './RecurringMaintenanceCard';
 import { UpcomingRenewalsCard } from './UpcomingRenewalsCard'; 
 import { FavoriteProvidersCard } from './FavoriteProvidersCard';
-import { PropertyHealthScoreCard } from './PropertyHealthScoreCard'; 
-import { PropertyRiskScoreCard } from './PropertyRiskScoreCard'; 
+// These imports are not needed here as they are rendered in the parent:
+// import { PropertyHealthScoreCard } from './PropertyHealthScoreCard'; 
+// import { PropertyRiskScoreCard } from './PropertyRiskScoreCard'; 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowRight } from 'lucide-react';
 
@@ -19,7 +19,6 @@ interface ExistingOwnerDashboardProps {
   properties: ScoredProperty[]; 
   checklistItems: ChecklistItem[];
   userFirstName: string;
-  // FIX: Added selectedPropertyId to the props interface to resolve the compile error
   selectedPropertyId: string | undefined; 
 }
 
@@ -42,7 +41,6 @@ export const ExistingOwnerDashboard = ({
 
   // --- Property Selection State ---
   // Use a local state for property ID selection, initialized with the ID provided by the parent.
-  // The parent passes the *default* selected ID, but the local component manages changes via the Select dropdown.
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | undefined>(parentSelectedPropertyId);
   
   const selectedProperty = properties.find(p => p.id === selectedPropertyId);
@@ -85,13 +83,15 @@ export const ExistingOwnerDashboard = ({
   const upcomingMaintenance = activeChecklistItems.filter((item: ChecklistItem) => 
     !item.serviceCategory || !RENEWAL_CATEGORIES.includes(item.serviceCategory as string)
   ); 
+  
+  // 4. Filter bookings relevant to the selected property
+  // Note: UpcomingBookingsCard handles its own filtering/fetching by propertyId,
+  // but we can pre-filter here if we were using the parent's bookings array directly.
+  // Since UpcomingBookingsCard uses react-query, we just pass the ID.
 
   return (
     <div className="space-y-6 pb-8">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Welcome back, {userFirstName}</h2>
-        <p className="text-muted-foreground">Monitor your home's health and maintenance schedule.</p>
-      </div>
+      {/* FIX: Removed the duplicated "Welcome back" h2 block. It is now handled by the PageHeader in the parent. */}
       
       {/* --- Property Selection Row (MANAGES LOCAL STATE FOR PROPERTY ID) --- */}
       {selectedProperty && (
@@ -128,10 +128,15 @@ export const ExistingOwnerDashboard = ({
       )}
       {/* --- End Property Selection Row --- */}
 
-      {/* ROW 1: Intelligence Scorecards are now rendered by the parent DashboardPage.tsx */}
+      
+      {/* NEW ROW 2: Upcoming Bookings Card (Full width for prominence) */}
+      {/* FIX: Added the missing bookings card */}
+      <div className="w-full">
+        <UpcomingBookingsCard propertyId={selectedPropertyId} />
+      </div>
 
-      {/* ROW 2: Recurring Maintenance and Upcoming Renewals */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* ROW 3: Recurring Maintenance and Upcoming Renewals */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
         <RecurringMaintenanceCard 
           maintenance={upcomingMaintenance as any}
           isPropertySelected={isPropertySelected} 
@@ -140,7 +145,7 @@ export const ExistingOwnerDashboard = ({
         <UpcomingRenewalsCard propertyId={selectedPropertyId} /> 
       </div>
       
-      {/* ROW 3: Favorite Providers Card (Spans full width) */}
+      {/* ROW 4: Favorite Providers Card (Spans full width) */}
       <div className="w-full"> 
         <FavoriteProvidersCard />
       </div>

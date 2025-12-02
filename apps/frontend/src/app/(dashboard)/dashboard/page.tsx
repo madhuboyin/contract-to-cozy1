@@ -15,7 +15,7 @@ import { PageHeader, PageHeaderHeading } from '@/components/page-header';
 import { PropertyHealthScoreCard } from './components/PropertyHealthScoreCard'; 
 import { PropertyRiskScoreCard } from './components/PropertyRiskScoreCard'; 
 import { FinancialEfficiencyScoreCard } from './components/FinancialEfficiencyScoreCard'; 
-import { MyPropertiesCard } from './components/MyPropertiesCard'; 
+import { MyPropertiesCard } from './components/MyPropertiesCard'; // Retained import for Home Buyer, but excluded below
 // END NEW IMPORTS
 
 import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
@@ -236,14 +236,15 @@ export default function DashboardPage() {
   return (
     <DashboardShell>
       <PageHeader>
-        <PageHeaderHeading>Property Intelligence Dashboard</PageHeaderHeading>
+        {/* FIX: Welcome message moved to the top and personalized */}
+        <PageHeaderHeading>Welcome, {user.firstName}! Property Intelligence Dashboard</PageHeaderHeading>
       </PageHeader>
       
-      {/* Scorecards Grid - Phase 3.2 Implementation */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {/* Scorecards Grid - Now displays exactly 3 cards */}
+      {/* FIX: Grid layout adjusted to 3 columns on large screens to accommodate only the 3 scorecards */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
         
-        {/* 1. Property Health Score: FIX: Changed prop from 'propertyId' to 'property' */}
-        {/* Only render if a property is actually selected to pass a valid object */}
+        {/* 1. Property Health Score: Only render if a property is actually selected to pass a valid object */}
         {selectedProperty ? (
           <div className="md:col-span-1">
             <PropertyHealthScoreCard property={selectedProperty} /> 
@@ -259,15 +260,12 @@ export default function DashboardPage() {
             <PropertyRiskScoreCard propertyId={selectedPropertyId} />
         </div>
         
-        {/* 3. NEW: Financial Efficiency Score: Uses ID (handles undefined internally) */}
+        {/* 3. Financial Efficiency Score: Uses ID (handles undefined internally) */}
         <div className="md:col-span-1">
             <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
         </div>
         
-        {/* 4. Placeholder / Properties Card: FIX: Removed invalid 'selectedPropertyId' prop. */}
-        <div className="md:col-span-1">
-          <MyPropertiesCard properties={properties} />
-        </div>
+        {/* 4. MyPropertiesCard (REMOVED for EXISTING_OWNER to enforce 3-card layout) */}
         
       </div>
       

@@ -44,7 +44,6 @@ const getStatusColor = (status: Booking['status']): string => {
     }
 }
 
-// START FIX: Accept propertyId prop
 interface UpcomingBookingsCardProps {
     propertyId?: string;
 }
