@@ -118,16 +118,25 @@ class RiskAssessmentService {
       };
     }
 
-    // 3. Check if report is stale (queue refresh but return existing data)
+    // 3. Check if report is stale (queue refresh)
     if (report.lastCalculatedAt.getTime() < thirtyMinutesAgo.getTime()) {
       // Queue background refresh for stale report
       await JobQueueService.addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, { 
         propertyId,
         jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT 
       });
+      
+      // *** FIX START ***
+      // Return QUEUED status instead of CALCULATED if the data is stale. 
+      // This forces the dashboard card to display the calculating state, hiding the old 100/$98 score.
+      return {
+        ...baseResult,
+        status: 'QUEUED',
+      };
+      // *** FIX END ***
     }
 
-    // 4. Return calculated report (even if stale, show existing data)
+    // 4. Report is fresh - Return calculated report
     return {
       ...baseResult,
       status: 'CALCULATED',
