@@ -189,13 +189,14 @@ class RiskAssessmentService {
         }
         property = fetchedProperty;
 
-        // --- STEP 1: CHECK FOR ESSENTIAL DATA (FIX for permanent QUEUED status) ---
+        // --- STEP 1: CONDITIONAL CALCULATION START ---
         // If essential data is missing, we must skip the crash-prone calculation logic
         const isBasicDataMissing = !property.propertySize || !property.yearBuilt; 
 
         if (isBasicDataMissing) {
              console.warn(`[RISK-CALC] Skipping full calculation for ${propertyId}: Basic property data missing (Size/Year Built). Persisting fallback report.`);
-             // Skip complex calculation and set fallback report data
+             
+             // Setup fallback report data
              reportData = {
                 riskScore: 0,
                 financialExposureTotal: new Prisma.Decimal(0),
@@ -216,7 +217,7 @@ class RiskAssessmentService {
                 lastCalculatedAt: new Date(),
             };
         } else {
-            // --- STEP 2: Execute Complex Calculation ---
+            // --- STEP 2: Execute Complex Calculation (Will run if basic data exists) ---
             const currentYear = new Date().getFullYear();
             const assetRisks: AssetRiskDetail[] = [];
 
@@ -240,7 +241,7 @@ class RiskAssessmentService {
             };
         }
 
-    } catch (error: any) { // Final catch for any unexpected errors during fetch/validation
+    } catch (error: any) { // Final catch for any unexpected errors during fetch/validation/calculation
         console.error(`RISK CALCULATION FAILED (Fatal Error during Job) for property ${propertyId}:`, error);
         finalError = error; // Flag that an error occurred
         
@@ -267,6 +268,7 @@ class RiskAssessmentService {
     }
     
     // --- STEP 3: PERSIST REPORT (Guaranteed job completion) ---
+    // Since this is the final persistence step, it guarantees the job is marked as done.
     const updatedReport = await prisma.riskAssessmentReport.upsert({
       where: { propertyId: propertyId },
       update: {
