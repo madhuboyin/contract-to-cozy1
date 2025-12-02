@@ -18,9 +18,10 @@ interface HomeAssetInput {
   installYear: number; // The installation year
 }
 
-// REPLACED INTERFACES with complete definitions matching the extended Prisma Property model
+// === FIX: UPDATE INTERFACES TO USE 'FIELD?: TYPE | null' ===
+// This resolves the compilation error by explicitly allowing null for optional DB fields.
 interface CreatePropertyData {
-  name?: string;
+  name?: string | null; // Allow null for optional string
   address: string;
   city: string;
   state: string;
@@ -28,26 +29,26 @@ interface CreatePropertyData {
   isPrimary?: boolean;
 
   // Layer 1 - Basic/Migrated Fields
-  propertyType?: PropertyType;
-  propertySize?: number;
-  yearBuilt?: number;
+  propertyType?: PropertyType | null;
+  propertySize?: number | null; // FIX
+  yearBuilt?: number | null;     // FIX
   
   // Layer 2 - Advanced Fields (Migrated and New)
-  bedrooms?: number;
-  bathrooms?: number;
-  ownershipType?: OwnershipType;
-  occupantsCount?: number;
-  heatingType?: HeatingType;
-  coolingType?: CoolingType;
-  waterHeaterType?: WaterHeaterType;
-  roofType?: RoofType;
-  hvacInstallYear?: number;
-  waterHeaterInstallYear?: number;
-  roofReplacementYear?: number;
-  foundationType?: string;
-  sidingType?: string;
-  electricalPanelAge?: number;
-  lotSize?: number;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  ownershipType?: OwnershipType | null;
+  occupantsCount?: number | null;
+  heatingType?: HeatingType | null;
+  coolingType?: CoolingType | null;
+  waterHeaterType?: WaterHeaterType | null;
+  roofType?: RoofType | null;
+  hvacInstallYear?: number | null;
+  waterHeaterInstallYear?: number | null;
+  roofReplacementYear?: number | null;
+  foundationType?: string | null;
+  sidingType?: string | null;
+  electricalPanelAge?: number | null;
+  lotSize?: number | null; // FIX
   hasIrrigation?: boolean;
   hasDrainageIssues?: boolean;
   hasSmokeDetectors?: boolean;
@@ -55,24 +56,22 @@ interface CreatePropertyData {
   hasSecuritySystem?: boolean;
   hasFireExtinguisher?: boolean;
   
-  homeAssets?: HomeAssetInput[]; // <-- NEW: Array of structured assets
+  homeAssets?: HomeAssetInput[];
 }
 
 interface UpdatePropertyData extends Partial<CreatePropertyData> {
   // All fields are optional for update
 }
 
-// --- NEW DB RETRIEVAL AND RESPONSE INTERFACES ---
-
-// DB retrieval interface including the mandatory HomeAssets relation
+// === INJECT MISSING INTERFACE DEFINITIONS ===
 export interface PropertyWithAssets extends Property {
     homeAssets: HomeAsset[];
 }
 
-// NEW INTERFACE for API response
 export interface ScoredProperty extends PropertyWithAssets {
     healthScore: HealthScoreResult;
 }
+// ===============================================
 
 // --- CORE ASSET SYNC LOGIC (FIXED) ---
 
@@ -237,32 +236,31 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       zipCode: data.zipCode,
       isPrimary: data.isPrimary || false,
       
-      // PHASE 2 ADDITIONS - New Property Details
-      propertyType: data.propertyType,
-      propertySize: data.propertySize,
-      yearBuilt: data.yearBuilt,
-      bedrooms: data.bedrooms,
-      bathrooms: data.bathrooms,
-      ownershipType: data.ownershipType,
-      occupantsCount: data.occupantsCount,
-      heatingType: data.heatingType,
-      coolingType: data.coolingType,
-      waterHeaterType: data.waterHeaterType,
-      roofType: data.roofType,
-      hvacInstallYear: data.hvacInstallYear,
-      waterHeaterInstallYear: data.waterHeaterInstallYear,
-      roofReplacementYear: data.roofReplacementYear,
-      foundationType: data.foundationType,
-      sidingType: data.sidingType,
-      electricalPanelAge: data.electricalPanelAge,
-      lotSize: data.lotSize,
+      // PHASE 2 ADDITIONS - FIX: Ensure all optional fields are explicitly null if undefined/missing
+      propertyType: data.propertyType || null,
+      propertySize: data.propertySize || null,
+      yearBuilt: data.yearBuilt || null,
+      bedrooms: data.bedrooms || null,
+      bathrooms: data.bathrooms || null,
+      ownershipType: data.ownershipType || null,
+      occupantsCount: data.occupantsCount || null,
+      heatingType: data.heatingType || null,
+      coolingType: data.coolingType || null,
+      waterHeaterType: data.waterHeaterType || null,
+      roofType: data.roofType || null,
+      hvacInstallYear: data.hvacInstallYear || null,
+      waterHeaterInstallYear: data.waterHeaterInstallYear || null,
+      roofReplacementYear: data.roofReplacementYear || null,
+      foundationType: data.foundationType || null,
+      sidingType: data.sidingType || null,
+      electricalPanelAge: data.electricalPanelAge || null,
+      lotSize: data.lotSize || null,
       hasIrrigation: data.hasIrrigation,
       hasDrainageIssues: data.hasDrainageIssues,
       hasSmokeDetectors: data.hasSmokeDetectors,
       hasCoDetectors: data.hasCoDetectors,
       hasSecuritySystem: data.hasSecuritySystem,
       hasFireExtinguisher: data.hasFireExtinguisher,
-      // REMOVED: applianceAges was here
       // END PHASE 2 ADDITIONS
     },
   });
@@ -272,11 +270,9 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
     await syncHomeAssets(property.id, data.homeAssets);
   }
 
-  // PHASE 2 ADDITION: Trigger risk calculation after property creation
-  await JobQueueService.addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, { 
-    propertyId: property.id,
-    jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT 
-  });
+  // PHASE 2 ADDITION: FIX: Use the comprehensive job enqueuer
+  // This triggers both Risk and FES calculations
+  await JobQueueService.enqueuePropertyIntelligenceJobs(property.id);
 
   // FETCH FULL PROPERTY: Must include homeAssets for scoring/return
   const fullProperty = await prisma.property.findUnique({
@@ -370,24 +366,26 @@ export async function updateProperty(
   if (data.isPrimary !== undefined) updatePayload.isPrimary = data.isPrimary;
   
   // PHASE 2 ADDITIONS - Dynamically set new fields for update
-  if (data.propertyType !== undefined) updatePayload.propertyType = data.propertyType;
-  if (data.propertySize !== undefined) updatePayload.propertySize = data.propertySize;
-  if (data.yearBuilt !== undefined) updatePayload.yearBuilt = data.yearBuilt;
-  if (data.bedrooms !== undefined) updatePayload.bedrooms = data.bedrooms;
-  if (data.bathrooms !== undefined) updatePayload.bathrooms = data.bathrooms;
-  if (data.ownershipType !== undefined) updatePayload.ownershipType = data.ownershipType;
-  if (data.occupantsCount !== undefined) updatePayload.occupantsCount = data.occupantsCount;
-  if (data.heatingType !== undefined) updatePayload.heatingType = data.heatingType;
-  if (data.coolingType !== undefined) updatePayload.coolingType = data.coolingType;
-  if (data.waterHeaterType !== undefined) updatePayload.waterHeaterType = data.waterHeaterType;
-  if (data.roofType !== undefined) updatePayload.roofType = data.roofType;
-  if (data.hvacInstallYear !== undefined) updatePayload.hvacInstallYear = data.hvacInstallYear;
-  if (data.waterHeaterInstallYear !== undefined) updatePayload.waterHeaterInstallYear = data.waterHeaterInstallYear;
-  if (data.roofReplacementYear !== undefined) updatePayload.roofReplacementYear = data.roofReplacementYear;
-  if (data.foundationType !== undefined) updatePayload.foundationType = data.foundationType;
-  if (data.sidingType !== undefined) updatePayload.sidingType = data.sidingType;
-  if (data.electricalPanelAge !== undefined) updatePayload.electricalPanelAge = data.electricalPanelAge;
-  if (data.lotSize !== undefined) updatePayload.lotSize = data.lotSize;
+  // FIX: Ensure optional fields are explicitly handled to prevent undefined data corruption
+  if (data.propertyType !== undefined) updatePayload.propertyType = data.propertyType || null;
+  if (data.propertySize !== undefined) updatePayload.propertySize = data.propertySize || null;
+  if (data.yearBuilt !== undefined) updatePayload.yearBuilt = data.yearBuilt || null;
+  if (data.bedrooms !== undefined) updatePayload.bedrooms = data.bedrooms || null;
+  if (data.bathrooms !== undefined) updatePayload.bathrooms = data.bathrooms || null;
+  if (data.ownershipType !== undefined) updatePayload.ownershipType = data.ownershipType || null;
+  if (data.occupantsCount !== undefined) updatePayload.occupantsCount = data.occupantsCount || null;
+  if (data.heatingType !== undefined) updatePayload.heatingType = data.heatingType || null;
+  if (data.coolingType !== undefined) updatePayload.coolingType = data.coolingType || null;
+  if (data.waterHeaterType !== undefined) updatePayload.waterHeaterType = data.waterHeaterType || null;
+  if (data.roofType !== undefined) updatePayload.roofType = data.roofType || null;
+  if (data.hvacInstallYear !== undefined) updatePayload.hvacInstallYear = data.hvacInstallYear || null;
+  if (data.waterHeaterInstallYear !== undefined) updatePayload.waterHeaterInstallYear = data.waterHeaterInstallYear || null;
+  if (data.roofReplacementYear !== undefined) updatePayload.roofReplacementYear = data.roofReplacementYear || null;
+  if (data.foundationType !== undefined) updatePayload.foundationType = data.foundationType || null;
+  if (data.sidingType !== undefined) updatePayload.sidingType = data.sidingType || null;
+  if (data.electricalPanelAge !== undefined) updatePayload.electricalPanelAge = data.electricalPanelAge || null;
+  if (data.lotSize !== undefined) updatePayload.lotSize = data.lotSize || null;
+  
   if (data.hasIrrigation !== undefined) updatePayload.hasIrrigation = data.hasIrrigation;
   if (data.hasDrainageIssues !== undefined) updatePayload.hasDrainageIssues = data.hasDrainageIssues;
   if (data.hasSmokeDetectors !== undefined) updatePayload.hasSmokeDetectors = data.hasSmokeDetectors;
@@ -402,12 +400,9 @@ export async function updateProperty(
     data: updatePayload,
   });
 
-  // PHASE 2 ADDITION: Trigger risk calculation after property update
+  // PHASE 2 ADDITION: FIX: Use the comprehensive job enqueuer
   if (Object.keys(updatePayload).length > 0) {
-      await JobQueueService.addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, { 
-        propertyId,
-        jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT 
-      });
+      await JobQueueService.enqueuePropertyIntelligenceJobs(propertyId);
   }
 
   // FETCH FULL PROPERTY: Must include homeAssets for return/scoring
