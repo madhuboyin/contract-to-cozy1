@@ -4,7 +4,7 @@ import { Prisma, Property, RiskAssessmentReport, Warranty, InsurancePolicy } fro
 import { prisma } from '../lib/prisma'; 
 import { calculateAssetRisk, calculateTotalRiskScore, AssetRiskDetail } from '../utils/riskCalculator.util';
 import { RISK_ASSET_CONFIG } from '../config/risk-constants';
-// FIX 1: Import the named export propertyIntelligenceQueue for job status checking
+// Import the singleton instance (the value) AND the named constant
 import JobQueueService, { propertyIntelligenceQueue } from './JobQueue.service'; 
 import { PropertyIntelligenceJobType, PropertyIntelligenceJobPayload } from '../config/risk-job-types'; // UPDATED IMPORT
 
@@ -26,13 +26,11 @@ export type RiskSummaryDto = {
 };
 
 class RiskAssessmentService {
-  /**
-   * Private getter to retrieve the JobQueueService instance for compatibility with existing code.
-   */
-  private get jobQueueService(): typeof JobQueueService {
+
+  private get jobQueueService(): typeof JobQueueService { 
     return JobQueueService; 
   }
-  
+
   /**
    * Fetches an existing risk report. If it's missing or stale, a calculation job 
    * is queued in the background and 'QUEUED' is returned as a status.
@@ -152,12 +150,14 @@ class RiskAssessmentService {
         jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT 
       });
       
-      // FIX 3: If stale and no job is active (checked above), return CALCULATED.
-      // This displays the old data, avoiding the continuous "Calculating..." message.
-      // The background job queued above will eventually update this.
+      // *** CRITICAL FIX: Return QUEUED status immediately to hide the stale (incorrect) score ***
+      return {
+        ...baseResult,
+        status: 'QUEUED',
+      };
     }
 
-    // 4. Report is fresh or stale but displayable - Return calculated report
+    // 4. Report is fresh - Return calculated report
     return {
       ...baseResult,
       status: 'CALCULATED',
