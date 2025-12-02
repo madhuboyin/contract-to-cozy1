@@ -104,15 +104,13 @@ class RiskAssessmentService {
     };
 
 
-    // 2. Check for missing or stale report
-    if (!report || report.lastCalculatedAt.getTime() < thirtyMinutesAgo.getTime()) {
-      // Queue calculation job
-      const payload: PropertyIntelligenceJobPayload = {
+    // 2. Check for missing report
+    if (!report) {
+      // Queue calculation job for missing report
+      await JobQueueService.addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, { 
         propertyId,
-        jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, // UPDATED USAGE
-      };
-      // Use the explicit jobType for the queue add and cast JobQueueService to any to resolve import/type issues
-      await (JobQueueService as any).addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, payload); 
+        jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT 
+      });
       
       return {
         ...baseResult,
@@ -120,7 +118,16 @@ class RiskAssessmentService {
       };
     }
 
-    // 3. Return calculated report
+    // 3. Check if report is stale (queue refresh but return existing data)
+    if (report.lastCalculatedAt.getTime() < thirtyMinutesAgo.getTime()) {
+      // Queue background refresh for stale report
+      await JobQueueService.addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, { 
+        propertyId,
+        jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT 
+      });
+    }
+
+    // 4. Return calculated report (even if stale, show existing data)
     return {
       ...baseResult,
       status: 'CALCULATED',
