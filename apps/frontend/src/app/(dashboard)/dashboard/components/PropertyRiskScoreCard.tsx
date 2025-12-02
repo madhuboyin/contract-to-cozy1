@@ -46,9 +46,41 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
     const riskQuery = useQuery({
         queryKey: ['primary-risk-summary', propertyId],
         queryFn: async () => {
-            // NOTE: The backend service will handle re-queuing the job if the report is stale.
-            const response = await api.getPrimaryRiskSummary() as PrimaryRiskSummary;
-            return response;
+            
+            // FIX 1: If propertyId is missing, return fallback immediately to prevent API call
+            if (!propertyId) {
+                return FALLBACK_SUMMARY;
+            }
+            
+            // FIX 2: Call the detailed report summary endpoint to get the freshest data for the specific property ID.
+            // This endpoint is the source of truth used by the risk-assessment page.
+            const reportOrStatus = await api.getRiskReportSummary(propertyId);
+            
+            // Type guard: check if it's a string status (QUEUED) or an object (RiskAssessmentReport)
+            if (typeof reportOrStatus === 'string') {
+                // Map the status back to the summary DTO structure
+                return {
+                    propertyId: propertyId,
+                    propertyName: null,
+                    riskScore: 0,
+                    financialExposureTotal: 0,
+                    lastCalculatedAt: null,
+                    status: reportOrStatus as RiskSummaryStatus,
+                } as PrimaryRiskSummary;
+            }
+
+            // Map the full report object to the lightweight summary DTO
+            const report = reportOrStatus;
+            
+            return {
+                propertyId: report.propertyId,
+                propertyName: null,
+                riskScore: report.riskScore,
+                financialExposureTotal: parseFloat(report.financialExposureTotal as unknown as string),
+                lastCalculatedAt: report.lastCalculatedAt,
+                status: 'CALCULATED' as RiskSummaryStatus,
+            } as PrimaryRiskSummary;
+
         },
         retry: (failureCount, error: any) => (error?.message?.includes('No property') || error?.message?.includes('5000') ? false : failureCount < 2),
         retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
@@ -75,7 +107,7 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
     const reportLink = `/dashboard/properties/${propertyId}/risk-assessment`; 
 
     // State 1: No property selected
-    if (!propertyId) {
+    if (!propertyId || summary.status === 'NO_PROPERTY') {
         return (
             <Card className="h-full flex flex-col border-dashed border-2">
                 <CardHeader>
@@ -210,7 +242,6 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
                     <span className="text-xl font-semibold text-muted-foreground ml-1">/100</span>
                 </div>
                 <p className="font-body text-sm text-muted-foreground mt-2 flex items-center">
-                    {/* FIX: Removed redundant DollarSign icon to prevent the double '$' issue. */}
                     Exposure: <span className="font-bold text-red-600 ml-1">{formatCurrency(exposure)}</span>
                 </p>
                 <div className="mt-3">

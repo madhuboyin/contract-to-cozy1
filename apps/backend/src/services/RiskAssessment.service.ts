@@ -118,6 +118,7 @@ class RiskAssessmentService {
         jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT 
       });
       
+      // FIX 1: If report is entirely missing, return QUEUED status.
       return {
         ...baseResult,
         status: 'QUEUED',
@@ -145,15 +146,16 @@ class RiskAssessmentService {
     // 3. Check if report is stale (queue refresh)
     if (report.lastCalculatedAt.getTime() < thirtyMinutesAgo.getTime()) {
       // Queue background refresh for stale report
-      await this.jobQueueService.addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, { 
+      this.jobQueueService.addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, { 
         propertyId,
         jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT 
       });
       
-      // *** CRITICAL FIX: Return QUEUED status immediately to hide the stale (incorrect) score ***
+      // FIX 3: If stale and no job is active, return CALCULATED. 
+      // This displays the old score, fixing the permanent "Calculating" screen.
       return {
         ...baseResult,
-        status: 'QUEUED',
+        status: 'CALCULATED',
       };
     }
 
