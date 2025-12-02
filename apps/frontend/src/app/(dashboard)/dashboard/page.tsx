@@ -253,7 +253,7 @@ export default function DashboardPage() {
   // Existing Owner Dashboard (now incorporates the scorecard grid at the top level)
   return (
     <DashboardShell>
-      <PageHeader>
+      <PageHeader className="pt-2 pb-2 gap-1">
         {/* FIX 1: Welcome message moved to the top and personalized */}
         <PageHeaderHeading>Welcome, {user.firstName}! Property Intelligence Dashboard</PageHeaderHeading>
       </PageHeader>
