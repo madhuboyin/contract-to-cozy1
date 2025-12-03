@@ -202,6 +202,15 @@ export function MaintenanceConfigModal({
                 initialDate = parseISO(config.nextDueDate as string);
             }
         }
+        
+        // --- START FIX for N/A bug ---
+        // If the task is a CONFIG_REDIRECT_CATEGORY (FINANCE or ADMIN) and the date is missing, 
+        // default it to today's date to force the user to save a corrected value.
+        if (isConfigRedirectTask && !initialDate) {
+            initialDate = new Date();
+        }
+        // --- END FIX ---
+        
         setNextDueDate(initialDate);
 
       } else if (isCreation) {
@@ -233,7 +242,8 @@ export function MaintenanceConfigModal({
     isOpen, 
     isDirectRedirectTask, 
     finalDestinationPath, 
-    handleRedirection
+    handleRedirection,
+    isConfigRedirectTask // Added dependency
   ]);
   
   // Handle change in property selection
@@ -270,7 +280,7 @@ export function MaintenanceConfigModal({
         return;
     }
     if (!nextDueDate) {
-        const dateFieldError = isTemplateAdmin ? "Please select a reminder date." : "Please select the next due date.";
+        const dateFieldError = isCurrentCategoryAdmin ? "Please select a reminder date." : "Please select the next due date.";
         setServerError(dateFieldError);
         return;
     }
@@ -300,13 +310,14 @@ export function MaintenanceConfigModal({
     setServerError(null);
     
     // This config object is used for the onSave (editing) flow where the parent handles final serialization.
+    // The parent in maintenance/page.tsx needs the Date object to format, so we pass the Date.
     const configForEdit: MaintenanceTaskConfig = {
         templateId: idToUse,
         title,
         description,
         isRecurring: isRecurring,
         frequency: frequency,
-        nextDueDate: nextDueDate,
+        nextDueDate: nextDueDate, // Pass Date object
         serviceCategory: category,
         propertyId: propertyIdToUse,
     };
