@@ -288,8 +288,10 @@ export function MaintenanceConfigModal({
     }
 
     // 3. Format Date for API DTO (Required to ensure date is saved as string, fixing 'N/A' issue)
-    // CRITICAL FIX: Use date-fns format for consistent ISO date string required by backend
-    const finalNextDueDateString = format(nextDueDate, 'yyyy-MM-dd');
+    // CRITICAL FIX: Format the date as a full ISO timestamp ('YYYY-MM-DD' plus UTC time),
+    // which the backend's DateTime field requires.
+    const datePart = format(nextDueDate, 'yyyy-MM-dd');
+    const finalNextDueDateString = `${datePart}T00:00:00.000Z`; // Guarantees full ISO format is sent
 
     // 4. Construct the DTO for the API call (used for creation)
     const configForApi = {
@@ -298,7 +300,7 @@ export function MaintenanceConfigModal({
         description: description || null,
         isRecurring: finalIsRecurring, 
         frequency: finalFrequency,     
-        nextDueDate: finalNextDueDateString, // <-- CRITICAL FIX APPLIED: Guaranteed format
+        nextDueDate: finalNextDueDateString, // <-- Uses the guaranteed full ISO format
         serviceCategory: category,
         propertyId: propertyIdToUse,
     };
@@ -310,7 +312,7 @@ export function MaintenanceConfigModal({
         description,
         isRecurring: isRecurring,
         frequency: frequency,
-        nextDueDate: nextDueDate,
+        nextDueDate: nextDueDate, // Pass Date object
         serviceCategory: category,
         propertyId: propertyIdToUse,
     };
