@@ -60,7 +60,7 @@ const categoryOptions: ServiceCategory[] = [
 const DIRECT_REDIRECT_CATEGORIES: ServiceCategory[] = [
   'INSURANCE',
   'WARRANTY',
-  'ATTORNEY', // Keep Attorney here for immediate redirect
+  'ATTORNEY',
 ];
 
 // Categories that require configuration but navigate to a management page post-save (Finance, Admin)
@@ -247,77 +247,89 @@ export function MaintenanceConfigModal({
   
   // 2. Handle Save/Submit Logic (Unified)
   const handleSubmit = async () => {
+    // Determine the task ID and property ID based on mode
     const idToUse = existingConfig?.templateId || template?.id;
     const propertyIdToUse = existingConfig?.propertyId || propSelectedPropertyId || internalPropertyId;
-    const isTemplateAdmin = template?.serviceCategory === 'ADMIN';
 
     if (!idToUse || !propertyIdToUse) {
         setServerError("Cannot save: Missing task/template ID or property ID.");
         return;
     }
-
-    // Determine final recurrence and frequency values for submission
-    let finalIsRecurring = isRecurring;
-    let finalFrequency = frequency;
-
-    if (isTemplateAdmin) {
-        // ADMIN tasks must be submitted as non-recurring (user request)
-        finalIsRecurring = false;
-        finalFrequency = null;
-    }
     
-    // Validate submission based on final recurrence status
+    // --- START FIX: Logic to handle recurrence and date formatting for API DTO ---
+    const isTemplateAdmin = template?.serviceCategory === 'ADMIN';
+
+    // 1. Calculate final state variables
+    // ADMIN tasks are always non-recurring (isRecurring: false, frequency: null)
+    const finalIsRecurring = isTemplateAdmin ? false : isRecurring;
+    const finalFrequency = finalIsRecurring ? frequency : null;
+
+    // 2. Validation based on final state
     if (finalIsRecurring && !finalFrequency) {
         setServerError("Please select a recurrence frequency.");
         return;
     }
     if (!nextDueDate) {
-        // Use the customized label in the error message
         const dateFieldError = isTemplateAdmin ? "Please select a reminder date." : "Please select the next due date.";
         setServerError(dateFieldError);
         return;
     }
-    if (!onSave && !onSuccess) { 
+    if (!onSave && !onSuccess) { // Safety check
         setServerError("Modal configuration error: Missing save/success handler.");
         return;
     }
 
+    // 3. Format Date for API DTO (Required to ensure date is saved as string, fixing 'N/A' issue)
+    const finalNextDueDateString = format(nextDueDate, 'yyyy-MM-dd');
+
+    // 4. Construct the DTO for the API call (used for creation)
+    const configForApi = {
+        templateId: idToUse,
+        title,
+        description,
+        isRecurring: finalIsRecurring, 
+        frequency: finalFrequency,     
+        nextDueDate: finalNextDueDateString, // <-- CRITICAL FIX: Formatted string
+        serviceCategory: category,
+        propertyId: propertyIdToUse,
+    }
+    // --- END FIX ---
+
+
     setIsSubmitting(true);
     setServerError(null);
-
-    const config: MaintenanceTaskConfig = {
-      templateId: idToUse,
-      title,
-      description,
-      isRecurring: finalIsRecurring, // <-- Use calculated non-recurring value for ADMIN
-      frequency: finalFrequency,     // <-- Will be null for ADMIN
-      nextDueDate: nextDueDate,
-      serviceCategory: category,
-      propertyId: propertyIdToUse,
+    
+    // This config object is used for the onSave (editing) flow where the parent handles final serialization.
+    const configForEdit: MaintenanceTaskConfig = {
+        templateId: idToUse,
+        title,
+        description,
+        isRecurring: isRecurring,
+        frequency: frequency,
+        nextDueDate: nextDueDate,
+        serviceCategory: category,
+        propertyId: propertyIdToUse,
     };
 
     try {
         if (isEditing && onSave) {
-            // EDITING FLOW
-            onSave(config);
+            // EDITING FLOW: Calls parent's onSave (parent handles DTO formatting)
+            onSave(configForEdit);
         } else if (isCreation && onSuccess) {
-            // CREATION FLOW
-            const response = await api.createCustomMaintenanceItems({ tasks: [config] });
+            // CREATION FLOW: Handles API call internally, passing the explicitly formatted DTO
+            const response = await api.createCustomMaintenanceItems({ tasks: [configForApi as any] }); 
             if (response.success && response.data?.count) {
               onSuccess(response.data.count);
               
-              // NEW: Post-creation routing for Management Config Tasks (FINANCE/ADMIN)
+              // Post-creation routing for Management Config Tasks (FINANCE/ADMIN)
               if (isConfigRedirectTask) {
-                  // The onSuccess handler will display the toast, then we trigger navigation
                   handleRedirection();
-                  return; // Exit here as handleRedirection closes the modal
+                  return; 
               }
-              // For Service/Non-Config tasks, onSuccess handles modal closing and standard maintenance page navigation.
             } else {
               throw new Error(response.message || "Failed to create task.");
             }
         }
-        // If editing was successful, the parent is responsible for calling onClose/clearing state.
     } catch (e: any) {
         console.error("Maintenance task submission failed:", e);
         setServerError(e.message || "Failed to save task configuration. Please try again.");
