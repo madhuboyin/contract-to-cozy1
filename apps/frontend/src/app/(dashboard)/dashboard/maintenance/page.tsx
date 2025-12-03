@@ -286,9 +286,13 @@ export default function MaintenancePage() {
       description: config.description,
       isRecurring: config.isRecurring,
       frequency: config.isRecurring ? config.frequency : null,
-      nextDueDate: config.isRecurring && config.nextDueDate 
+      
+      // FIX: Simplified nextDueDate assignment. It is guaranteed to be a Date object
+      // or null from the modal, so we just format it if it exists.
+      nextDueDate: config.nextDueDate 
         ? format(config.nextDueDate, 'yyyy-MM-dd') 
-        : (config.nextDueDate ? format(config.nextDueDate, 'yyyy-MM-dd') : null), // Use nextDueDate even if non-recurring (for ADMIN reminder date)
+        : null,
+        
       serviceCategory: config.serviceCategory,
     };
 
