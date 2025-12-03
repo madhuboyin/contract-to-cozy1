@@ -41,14 +41,19 @@ type EditingConfig = MaintenanceTaskConfig & {
     propertyId: string | null;
 };
 
-// Categories to EXCLUDE (Renewals and Financial items)
-const RENEWAL_CATEGORIES: ServiceCategory[] = [
+// --- START: UPDATED CATEGORY LOGIC ---
+// Categories that trigger immediate redirection and should be filtered OUT of this list
+const DIRECT_NAVIGATION_CATEGORIES: ServiceCategory[] = [
   'INSURANCE',
   'WARRANTY',
-  'FINANCE',
-  'ADMIN',
   'ATTORNEY',
 ];
+
+// Helper to check if a task belongs to the immediate redirect group
+const isDirectNavigationTask = (category: ServiceCategory | null): boolean => {
+    return !!category && DIRECT_NAVIGATION_CATEGORIES.includes(category);
+}
+// --- END: UPDATED CATEGORY LOGIC ---
 
 
 // Helper to format days until due
@@ -114,15 +119,11 @@ export default function MaintenancePage() {
       const propertiesMap = new Map<string, Property>();
       propertiesRes.data.properties.forEach(p => propertiesMap.set(p.id, p));
 
-      // FIX: Handle checklist response - backend returns checklist directly (not wrapped)
-      // The type says APIResponse but backend actually returns { id, items, ... } directly
       let checklistItems: DashboardChecklistItem[] = [];
       
       if ('success' in checklistRes && checklistRes.success) {
-        // If it's wrapped (type definition case)
         checklistItems = checklistRes.data.items as DashboardChecklistItem[];
       } else if ('items' in checklistRes) {
-        // If it's direct (actual backend behavior)
         checklistItems = (checklistRes as any).items as DashboardChecklistItem[];
       }
 
@@ -137,7 +138,6 @@ export default function MaintenancePage() {
 
   // Helper to map property ID to display name
   const getPropertyName = (propertyId: string | null): string => {
-    // NOTE: If propertyId is null/undefined, this returns 'No Property Linked'
     if (!propertyId || !mainData?.propertiesMap) return 'No Property Linked';
     
     const property = mainData.propertiesMap.get(propertyId);
@@ -148,40 +148,22 @@ export default function MaintenancePage() {
 
   const allChecklistItems = mainData?.checklistItems || [];
   
-  // DEBUG: Check how many items we received before filtering
-  console.log('--- MAINTENANCE DEBUG START ---');
-  console.log('DEBUG (Outside UseMemo): Total items from data source:', allChecklistItems.length);
-  
-  // NOTE: This logic is intentionally simplified back to the "master list" view,
-  // expecting to show all tasks regardless of propertyId association, which is what 
-  // the user expects for the /maintenance list page.
-
-  // Filter the list for active, recurring, non-renewal maintenance tasks
+  // Filter the list for active tasks, excluding direct navigation categories (INSURANCE, WARRANTY, ATTORNEY)
   const maintenanceItems = useMemo(() => {
     let items = allChecklistItems;
-    console.log('DEBUG 1 (Inside UseMemo): Starting count:', items.length);
     
-    // 1. Must be recurring
-    items = items.filter(item => {
-        const result = item.isRecurring;
-        return result;
-    });
-    console.log('DEBUG 2: After isRecurring filter (must be true):', items.length);
-    
-    // 2. Must be active (not COMPLETED or NOT_NEEDED)
+    // 1. Must be active (not COMPLETED or NOT_NEEDED)
     items = items.filter(item => 
       item.status !== 'COMPLETED' && item.status !== 'NOT_NEEDED'
     );
-    console.log('DEBUG 3: After status filter (must be PENDING):', items.length);
 
-    // 3. Must NOT be a renewal/financial task
+    // 2. Must NOT be a direct navigation task (Keeps FINANCE and ADMIN)
     items = items.filter(item => {
-        const isRenewal = item.serviceCategory && RENEWAL_CATEGORIES.includes(item.serviceCategory);
-        return !isRenewal;
+        const isExcluded = isDirectNavigationTask(item.serviceCategory);
+        return !isExcluded;
     });
-    console.log('DEBUG 4: After category filter (MAINTENANCE only):', items.length);
 
-    // Sort and return
+    // Sort and return (by Next Due Date)
     return items
       .sort((a, b) => { 
         const dateA = a.nextDueDate ? parseISO(a.nextDueDate).getTime() : Infinity;
@@ -190,29 +172,32 @@ export default function MaintenancePage() {
       });
   }, [allChecklistItems]); 
 
-  // DEBUG: Final check
-  console.log('DEBUG (Outside UseMemo): Final maintenanceItems count:', maintenanceItems.length);
-  console.log('--- MAINTENANCE DEBUG END ---');
-
-  // --- Modal Handlers & Mutations (Omitted for brevity) ---
+  // --- Modal Handlers & Mutations ---
+  
   // Step 3.1: Update handleOpenModal for redirection
   const handleOpenModal = (task: DashboardChecklistItem) => {
-    // Check for renewal category and redirect if necessary
-    if (task.serviceCategory && RENEWAL_CATEGORIES.includes(task.serviceCategory)) {
-        let redirectPath = '/dashboard/profile'; // Default safe redirect for general financial/admin tasks
+    // Check for categories that require immediate redirection (INSURANCE, WARRANTY, ATTORNEY)
+    if (isDirectNavigationTask(task.serviceCategory)) {
+        let redirectPath = '/dashboard/profile'; // Default safe redirect
         
         if (task.serviceCategory === 'INSURANCE') {
             redirectPath = '/dashboard/insurance';
         } else if (task.serviceCategory === 'WARRANTY') {
             redirectPath = '/dashboard/warranties';
+        } else if (task.serviceCategory === 'ATTORNEY') {
+            redirectPath = '/dashboard/profile'; // Or whatever the dedicated Attorney page is
         }
 
         router.push(redirectPath);
-        toast({ title: "Renewal Task", description: `Please manage "${task.title}" directly on the ${formatEnumString(task.serviceCategory)} management page.` });
+        toast({ 
+          title: "Task Management", 
+          description: `Please manage "${task.title}" directly on the ${formatEnumString(task.serviceCategory)} management page.`,
+          variant: 'default' // Using default variant for informational toast
+        });
         return; // Skip opening the modal
     }
     
-    // Proceed to open modal for actual maintenance tasks
+    // For MAINTENANCE, FINANCE, and ADMIN tasks, proceed to open the modal for configuration/reminders
     setEditingTask(task);
     setIsModalOpen(true);
   };
@@ -231,7 +216,7 @@ export default function MaintenancePage() {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); // FIX: Invalidate the correct query key
+      queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); 
       toast({ title: "Task Updated", description: "Maintenance task configuration saved." });
       handleCloseModal();
     },
@@ -253,7 +238,7 @@ export default function MaintenancePage() {
       return id;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); // FIX: Invalidate the correct query key
+      queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); 
       toast({ title: "Task Removed", description: "Maintenance task permanently deleted." });
       handleCloseModal();
     },
@@ -275,7 +260,7 @@ export default function MaintenancePage() {
         return response.data;
     },
     onSuccess: (data) => {
-        queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); // FIX: Invalidate the correct query key
+        queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); 
         toast({ 
             title: "Task Completed", 
             description: `"${data.title}" reset for its next cycle.`, 
@@ -303,9 +288,8 @@ export default function MaintenancePage() {
       frequency: config.isRecurring ? config.frequency : null,
       nextDueDate: config.isRecurring && config.nextDueDate 
         ? format(config.nextDueDate, 'yyyy-MM-dd') 
-        : null,
+        : (config.nextDueDate ? format(config.nextDueDate, 'yyyy-MM-dd') : null), // Use nextDueDate even if non-recurring (for ADMIN reminder date)
       serviceCategory: config.serviceCategory,
-      // propertyId is NOT mutable via the checklist update DTO
     };
 
     updateMutation.mutate({ id: editingTask.id, data: updateData });
@@ -330,8 +314,9 @@ export default function MaintenancePage() {
   return (
     <div className="space-y-6 pb-8 max-w-7xl mx-auto px-4 md:px-8">
       <div className="flex justify-between items-center">
+        {/* Updated heading to be more inclusive of reminders */}
         <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Wrench className="w-7 h-7 text-blue-600" /> Recurring Maintenance
+          <Wrench className="w-7 h-7 text-blue-600" /> Home Tasks & Reminders
         </h2>
         
         {/* Link to the Setup Page to add new tasks */}
@@ -341,15 +326,15 @@ export default function MaintenancePage() {
           </Link>
         </Button>
       </div>
-      <p className="text-muted-foreground">Manage your recurring home maintenance schedule, separate from renewals and finances.</p>
+      <p className="text-muted-foreground">Manage your scheduled maintenance, as well as crucial administrative and financial reminders.</p>
 
-      {/* FIX: The list should now correctly show tasks because the property filter was removed. */}
+      {/* FIX: The list should now correctly show tasks because the filter was adjusted. */}
       {maintenanceItems.length === 0 && (
         <Card className="text-center py-10">
           <FileText className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-          <CardTitle>No Recurring Maintenance Found</CardTitle>
+          <CardTitle>No Active Tasks Found</CardTitle>
           <CardDescription>
-            Visit <Link href="/dashboard/maintenance-setup" className="text-blue-600 hover:underline">Maintenance Setup</Link> to add scheduled tasks.
+            Visit <Link href="/dashboard/maintenance-setup" className="text-blue-600 hover:underline">Task Setup</Link> to add scheduled maintenance or financial reminders.
           </CardDescription>
         </Card>
       )}
@@ -359,11 +344,10 @@ export default function MaintenancePage() {
           <Table>
             <TableHeader>
               <TableRow>
-                {/* FIX: Added Property Column */}
                 <TableHead className="w-[150px]">Property</TableHead>
                 <TableHead className="w-[200px]">Task</TableHead>
                 <TableHead className="w-[120px]">Category</TableHead>
-                <TableHead className="w-[120px] hidden sm:table-cell">Frequency</TableHead>
+                <TableHead className="w-[120px] hidden sm:table-cell">Frequency/Type</TableHead>
                 <TableHead className="w-[150px]">Last Done</TableHead>
                 <TableHead className="w-[150px] text-center">Next Due</TableHead>
                 <TableHead className="w-[150px] text-center">Actions</TableHead>
@@ -372,6 +356,10 @@ export default function MaintenancePage() {
             <TableBody>
               {maintenanceItems.map(item => {
                 const dueDateInfo = formatDueDate(item.nextDueDate);
+                // Display 'One-Time' or 'Recurring' for ADMIN tasks, otherwise show Frequency
+                const frequencyDisplay = item.isRecurring 
+                  ? formatEnumString(item.frequency) 
+                  : 'One-Time Reminder'; 
                 
                 return (
                   <TableRow 
@@ -393,8 +381,7 @@ export default function MaintenancePage() {
                       {formatCategory(item.serviceCategory)}
                     </TableCell>
                     <TableCell className="text-sm hidden sm:table-cell">
-                      {/* FIX: Use the generic formatter on the frequency string */}
-                      {formatEnumString(item.frequency)}
+                      {frequencyDisplay}
                     </TableCell>
                     <TableCell className="text-sm text-gray-500">
                         {item.lastCompletedDate ? format(parseISO(item.lastCompletedDate), 'MMM dd, yyyy') : 'Never'}
@@ -436,7 +423,7 @@ export default function MaintenancePage() {
         </div>
       )}
 
-      {/* --- MODAL FOR EDITING (Now uses unified interface) --- */}
+      {/* --- MODAL FOR EDITING (Now handles FINANCE/ADMIN flow) --- */}
       <MaintenanceConfigModal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
