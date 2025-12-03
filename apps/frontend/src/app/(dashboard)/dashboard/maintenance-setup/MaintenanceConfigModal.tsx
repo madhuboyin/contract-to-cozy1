@@ -268,8 +268,10 @@ export function MaintenanceConfigModal({
     const isTemplateAdmin = template?.serviceCategory === 'ADMIN';
 
     // 1. Calculate final state variables
-    const finalIsRecurring = isTemplateAdmin ? false : isRecurring;
-    const finalFrequency = finalIsRecurring ? frequency : null;
+    // CRITICAL WORKAROUND: If ADMIN, force isRecurring to true and set a dummy frequency 
+    // to bypass backend nullification logic and save the date.
+    const finalIsRecurring = isTemplateAdmin ? true : isRecurring;
+    const finalFrequency = isTemplateAdmin ? RecurrenceFrequency.ANNUALLY : finalIsRecurring ? frequency : null;
 
     // 2. Validation based on final state
     if (finalIsRecurring && !finalFrequency) {
@@ -277,7 +279,6 @@ export function MaintenanceConfigModal({
         return;
     }
     if (!nextDueDate) {
-        // Use isCurrentCategoryAdmin for the error message display, but rely on nextDueDate state
         const dateFieldError = isCurrentCategoryAdmin ? "Please select a reminder date." : "Please select the next due date.";
         setServerError(dateFieldError);
         return;
@@ -298,8 +299,8 @@ export function MaintenanceConfigModal({
         templateId: idToUse,
         title,
         description: description || null,
-        isRecurring: finalIsRecurring, 
-        frequency: finalFrequency,     
+        isRecurring: finalIsRecurring, // <-- WORKAROUND: Will be true for ADMIN
+        frequency: finalFrequency,     // <-- WORKAROUND: Will be ANNUAL for ADMIN
         nextDueDate: finalNextDueDateString, // <-- Uses the guaranteed full ISO format
         serviceCategory: category,
         propertyId: propertyIdToUse,
@@ -310,7 +311,7 @@ export function MaintenanceConfigModal({
         templateId: idToUse,
         title,
         description,
-        isRecurring: isRecurring,
+        isRecurring: isRecurring, // Pass actual UI state for editing flow
         frequency: frequency,
         nextDueDate: nextDueDate, // Pass Date object
         serviceCategory: category,
