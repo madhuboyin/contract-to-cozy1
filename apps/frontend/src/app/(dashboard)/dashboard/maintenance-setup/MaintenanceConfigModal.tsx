@@ -203,13 +203,11 @@ export function MaintenanceConfigModal({
             }
         }
         
-        // --- START FIX for N/A bug ---
-        // If the task is a CONFIG_REDIRECT_CATEGORY (FINANCE or ADMIN) and the date is missing, 
+        // FIX: If the task is a CONFIG_REDIRECT_CATEGORY (FINANCE or ADMIN) and the date is missing, 
         // default it to today's date to force the user to save a corrected value.
         if (isConfigRedirectTask && !initialDate) {
             initialDate = new Date();
         }
-        // --- END FIX ---
         
         setNextDueDate(initialDate);
 
@@ -243,7 +241,7 @@ export function MaintenanceConfigModal({
     isDirectRedirectTask, 
     finalDestinationPath, 
     handleRedirection,
-    isConfigRedirectTask // Added dependency
+    isConfigRedirectTask 
   ]);
   
   // Handle change in property selection
@@ -266,11 +264,10 @@ export function MaintenanceConfigModal({
         return;
     }
     
-    // --- START FIX: Logic to handle recurrence and date formatting for API DTO ---
+    // --- Logic to handle recurrence and date formatting for API DTO ---
     const isTemplateAdmin = template?.serviceCategory === 'ADMIN';
 
     // 1. Calculate final state variables
-    // ADMIN tasks are always non-recurring (isRecurring: false, frequency: null)
     const finalIsRecurring = isTemplateAdmin ? false : isRecurring;
     const finalFrequency = finalIsRecurring ? frequency : null;
 
@@ -280,6 +277,7 @@ export function MaintenanceConfigModal({
         return;
     }
     if (!nextDueDate) {
+        // Use isCurrentCategoryAdmin for the error message display, but rely on nextDueDate state
         const dateFieldError = isCurrentCategoryAdmin ? "Please select a reminder date." : "Please select the next due date.";
         setServerError(dateFieldError);
         return;
@@ -290,41 +288,39 @@ export function MaintenanceConfigModal({
     }
 
     // 3. Format Date for API DTO (Required to ensure date is saved as string, fixing 'N/A' issue)
+    // CRITICAL FIX: Use date-fns format for consistent ISO date string required by backend
     const finalNextDueDateString = format(nextDueDate, 'yyyy-MM-dd');
 
     // 4. Construct the DTO for the API call (used for creation)
     const configForApi = {
         templateId: idToUse,
         title,
-        description,
+        description: description || null,
         isRecurring: finalIsRecurring, 
         frequency: finalFrequency,     
-        nextDueDate: finalNextDueDateString, // <-- CRITICAL FIX: Formatted string
+        nextDueDate: finalNextDueDateString, // <-- CRITICAL FIX APPLIED: Guaranteed format
         serviceCategory: category,
         propertyId: propertyIdToUse,
-    }
-    // --- END FIX ---
-
-
-    setIsSubmitting(true);
-    setServerError(null);
+    };
     
     // This config object is used for the onSave (editing) flow where the parent handles final serialization.
-    // The parent in maintenance/page.tsx needs the Date object to format, so we pass the Date.
     const configForEdit: MaintenanceTaskConfig = {
         templateId: idToUse,
         title,
         description,
         isRecurring: isRecurring,
         frequency: frequency,
-        nextDueDate: nextDueDate, // Pass Date object
+        nextDueDate: nextDueDate,
         serviceCategory: category,
         propertyId: propertyIdToUse,
     };
 
+    setIsSubmitting(true);
+    setServerError(null);
+
     try {
         if (isEditing && onSave) {
-            // EDITING FLOW: Calls parent's onSave (parent handles DTO formatting)
+            // EDITING FLOW: Calls parent's onSave 
             onSave(configForEdit);
         } else if (isCreation && onSuccess) {
             // CREATION FLOW: Handles API call internally, passing the explicitly formatted DTO
