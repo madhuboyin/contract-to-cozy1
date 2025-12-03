@@ -55,14 +55,20 @@ const categoryOptions: ServiceCategory[] = [
   'CLEANING', 'MOVING', 'PEST_CONTROL', 'LOCKSMITH',
 ];
 
-// Step 2.1: Define RENEWAL_CATEGORIES
-const RENEWAL_CATEGORIES: ServiceCategory[] = [
+// START: UPDATED LOGIC FOR ROUTING
+// Categories that immediately redirect upon selection (Insurance, Warranty)
+const DIRECT_REDIRECT_CATEGORIES: ServiceCategory[] = [
   'INSURANCE',
   'WARRANTY',
+  'ATTORNEY', // Keep Attorney here for immediate redirect
+];
+
+// Categories that require configuration but navigate to a management page post-save (Finance, Admin)
+const CONFIG_REDIRECT_CATEGORIES: ServiceCategory[] = [
   'FINANCE',
   'ADMIN',
-  'ATTORNEY',
 ];
+// END: UPDATED LOGIC FOR ROUTING
 
 function formatEnumString(val: string | null | undefined) {
   if (!val) return 'N/A';
@@ -108,25 +114,34 @@ export function MaintenanceConfigModal({
   const isCreation = !!template && !isEditing;
   const initialConfig = existingConfig || template;
   
-  // Determine if it's a renewal task (Step 2.1, 2.3)
-  const isRenewalTask = useMemo(() => {
-    return !!initialConfig?.serviceCategory && RENEWAL_CATEGORIES.includes(initialConfig.serviceCategory as ServiceCategory);
+  // Determine if it's a direct redirect task (INSURANCE, WARRANTY)
+  const isDirectRedirectTask = useMemo(() => {
+    return !!initialConfig?.serviceCategory && DIRECT_REDIRECT_CATEGORIES.includes(initialConfig.serviceCategory as ServiceCategory);
+  }, [initialConfig?.serviceCategory]);
+  
+  // Determine if it's a task that requires post-config navigation (FINANCE, ADMIN)
+  const isConfigRedirectTask = useMemo(() => {
+    return !!initialConfig?.serviceCategory && CONFIG_REDIRECT_CATEGORIES.includes(initialConfig.serviceCategory as ServiceCategory);
   }, [initialConfig?.serviceCategory]);
 
-  // Determine if the category field should be locked (it should be for all template/existing items)
+  // Determine if the category field should be locked
   const shouldLockCategory = isEditing || isCreation;
   
-  // Map category to a friendly path for redirection (Step 2.4)
-  const renewalPath = useMemo(() => {
+  // Map category to a friendly path for redirection
+  const finalDestinationPath = useMemo(() => {
     switch(initialConfig?.serviceCategory) {
       case 'INSURANCE':
-        // Updated path for deep linking to modal + return address
-        return '/dashboard/insurance?action=new&from=maintenance-setup'; 
+        return '/dashboard/insurance'; 
       case 'WARRANTY':
-        // Updated path for deep linking to modal + return address
-        return '/dashboard/warranties?action=new&from=maintenance-setup';
-      default:
+        return '/dashboard/warranties';
+      case 'FINANCE':
+        return '/dashboard/expenses'; // Final Destination for Finance
+      case 'ADMIN':
+        return '/dashboard/documents'; // Final Destination for Admin
+      case 'ATTORNEY':
         return '/dashboard/profile';
+      default:
+        return null;
     }
   }, [initialConfig?.serviceCategory]);
 
@@ -144,13 +159,16 @@ export function MaintenanceConfigModal({
   const [internalPropertyId, setInternalPropertyId] = useState<string | null>(null);
 
 
-  // Step 2.4: Handle Redirection (Made stable with useCallback)
-  const handleRenewalRedirection = useCallback(() => {
-    if (renewalPath) {
-        router.push(renewalPath);
-        onClose(); // Close the modal after triggering navigation
+  // Handle Redirection (Used for direct redirects and post-save for FINANCE/ADMIN)
+  const handleRedirection = useCallback(() => {
+    if (finalDestinationPath) {
+        // Use a slight delay to ensure the modal closes visually before navigating
+        setTimeout(() => {
+            router.push(finalDestinationPath);
+        }, 100);
+        onClose(); // Close the modal
     }
-  }, [renewalPath, router, onClose]);
+  }, [finalDestinationPath, router, onClose]);
 
 
   // 1. Populate state when modal opens/config changes
@@ -161,11 +179,13 @@ export function MaintenanceConfigModal({
       setCategory((initialConfig.serviceCategory as ServiceCategory) || null);
       
       setServerError(null);
+      
+      const isTemplateAdmin = initialConfig.serviceCategory === 'ADMIN';
 
       // --- Mode-specific initialization for recurrence and dates ---
       if (isEditing) {
         // Use properties from the existing configuration (ChecklistItem data)
-        const config = existingConfig!; // Guaranteed to be MaintenanceTaskConfig type
+        const config = existingConfig!; 
         setInternalPropertyId(config.propertyId);
         
         // Recurrence
@@ -179,7 +199,6 @@ export function MaintenanceConfigModal({
             if (config.nextDueDate instanceof Date) {
                 initialDate = config.nextDueDate;
             } else {
-                // Assumes ISO string format from API (ChecklistItem/Editing flow)
                 initialDate = parseISO(config.nextDueDate as string);
             }
         }
@@ -187,20 +206,23 @@ export function MaintenanceConfigModal({
 
       } else if (isCreation) {
         // Use properties from the template (Creation flow)
-        const temp = template!; // Guaranteed to be MaintenanceTaskTemplate type
+        const temp = template!; 
         setInternalPropertyId(propSelectedPropertyId || null);
         
         // Defaults for a new template
-        setIsRecurring(true);
-        setFrequency(temp.defaultFrequency as RecurrenceFrequency);
+        // ADMIN tasks are non-recurring by user request, FINANCE is recurring (default true)
+        const initialIsRecurring = !isTemplateAdmin; 
+        setIsRecurring(initialIsRecurring);
+        
+        // Only set frequency if it's explicitly recurring.
+        setFrequency(initialIsRecurring ? (temp.defaultFrequency as RecurrenceFrequency) : null);
         setNextDueDate(new Date()); // Default to today
       }
-      // --- END FIX ---
     }
     
-    // NEW FIX: Immediately redirect if it's a renewal task when the modal is opened
-    if (isOpen && isRenewalTask && renewalPath) {
-        handleRenewalRedirection();
+    // NEW LOGIC: Immediately redirect only for DIRECT_REDIRECT_CATEGORIES
+    if (isOpen && isDirectRedirectTask && finalDestinationPath) {
+        handleRedirection();
     }
   }, [
     template, 
@@ -209,9 +231,9 @@ export function MaintenanceConfigModal({
     isCreation, 
     propSelectedPropertyId, 
     isOpen, 
-    isRenewalTask, 
-    renewalPath, 
-    handleRenewalRedirection
+    isDirectRedirectTask, 
+    finalDestinationPath, 
+    handleRedirection
   ]);
   
   // Handle change in property selection
@@ -225,23 +247,37 @@ export function MaintenanceConfigModal({
   
   // 2. Handle Save/Submit Logic (Unified)
   const handleSubmit = async () => {
-    // Determine the task ID and property ID based on mode
     const idToUse = existingConfig?.templateId || template?.id;
     const propertyIdToUse = existingConfig?.propertyId || propSelectedPropertyId || internalPropertyId;
+    const isTemplateAdmin = template?.serviceCategory === 'ADMIN';
 
     if (!idToUse || !propertyIdToUse) {
         setServerError("Cannot save: Missing task/template ID or property ID.");
         return;
     }
-    if (isRecurring && !frequency) {
+
+    // Determine final recurrence and frequency values for submission
+    let finalIsRecurring = isRecurring;
+    let finalFrequency = frequency;
+
+    if (isTemplateAdmin) {
+        // ADMIN tasks must be submitted as non-recurring (user request)
+        finalIsRecurring = false;
+        finalFrequency = null;
+    }
+    
+    // Validate submission based on final recurrence status
+    if (finalIsRecurring && !finalFrequency) {
         setServerError("Please select a recurrence frequency.");
         return;
     }
     if (!nextDueDate) {
-        setServerError("Please select the next due date.");
+        // Use the customized label in the error message
+        const dateFieldError = isTemplateAdmin ? "Please select a reminder date." : "Please select the next due date.";
+        setServerError(dateFieldError);
         return;
     }
-    if (!onSave && !onSuccess) { // Safety check
+    if (!onSave && !onSuccess) { 
         setServerError("Modal configuration error: Missing save/success handler.");
         return;
     }
@@ -250,35 +286,42 @@ export function MaintenanceConfigModal({
     setServerError(null);
 
     const config: MaintenanceTaskConfig = {
-      templateId: idToUse, // Used as item ID in editing, or template ID in creation
+      templateId: idToUse,
       title,
       description,
-      isRecurring,
-      frequency: isRecurring ? frequency : null,
+      isRecurring: finalIsRecurring, // <-- Use calculated non-recurring value for ADMIN
+      frequency: finalFrequency,     // <-- Will be null for ADMIN
       nextDueDate: nextDueDate,
       serviceCategory: category,
-      propertyId: propertyIdToUse, // CRITICAL: Ensure property ID is included
+      propertyId: propertyIdToUse,
     };
 
     try {
         if (isEditing && onSave) {
-            // EDITING FLOW: Calls parent's onSave (triggers mutation in maintenance/page.tsx)
+            // EDITING FLOW
             onSave(config);
         } else if (isCreation && onSuccess) {
-            // CREATION FLOW: Handles API call internally 
+            // CREATION FLOW
             const response = await api.createCustomMaintenanceItems({ tasks: [config] });
             if (response.success && response.data?.count) {
               onSuccess(response.data.count);
+              
+              // NEW: Post-creation routing for Management Config Tasks (FINANCE/ADMIN)
+              if (isConfigRedirectTask) {
+                  // The onSuccess handler will display the toast, then we trigger navigation
+                  handleRedirection();
+                  return; // Exit here as handleRedirection closes the modal
+              }
+              // For Service/Non-Config tasks, onSuccess handles modal closing and standard maintenance page navigation.
             } else {
               throw new Error(response.message || "Failed to create task.");
             }
         }
-        // If creation/editing was successful, the parent (onSuccess/onSave) is responsible for calling onClose/clearing state.
+        // If editing was successful, the parent is responsible for calling onClose/clearing state.
     } catch (e: any) {
         console.error("Maintenance task submission failed:", e);
         setServerError(e.message || "Failed to save task configuration. Please try again.");
     } finally {
-        // Only clear submitting state here if we are NOT in the creation flow managed by onSuccess
         if (isEditing) { 
             setIsSubmitting(false);
         }
@@ -297,6 +340,27 @@ export function MaintenanceConfigModal({
 
   const isNew = isCreation; 
   const currentProperty = properties.find(p => p.id === (internalPropertyId || propSelectedPropertyId));
+
+  // UI Customization Flags based on current category
+  const isCurrentCategoryAdmin = category === 'ADMIN';
+  const isCurrentCategoryFinance = category === 'FINANCE';
+  
+  // Show recurrence checkbox for general tasks and FINANCE, but hide for ADMIN
+  const showRecurrenceCheckbox = !isCurrentCategoryAdmin;
+  
+  // Show frequency field only if recurrence is checked AND it's not an ADMIN task
+  const showFrequencyField = isRecurring && !isCurrentCategoryAdmin;
+  
+  // Show date fields if recurring OR if it's an ADMIN/FINANCE task (always needs a date set)
+  const showDateFields = isRecurring || isCurrentCategoryAdmin || isCurrentCategoryFinance;
+  
+  // Dynamically set date field label (Reminder Date for ADMIN)
+  const dateLabel = isCurrentCategoryAdmin ? 'Reminder Date' : 'Next Due Date';
+  
+  // If it's a direct redirect task, don't render the modal as the redirect is immediate
+  if (isDirectRedirectTask) {
+      return null;
+  }
 
 
   return (
@@ -319,14 +383,12 @@ export function MaintenanceConfigModal({
                 </Label>
                 
                 {isEditing ? (
-                    // FIX: Editing Mode - Show static, disabled text (Input field)
                     <Input
                         value={currentProperty?.name || currentProperty?.address || 'Property Not Linked'}
                         disabled
                         className="bg-gray-100 text-gray-700"
                     />
                 ) : (
-                    // Creation Mode - Show dropdown
                     <Select 
                         value={internalPropertyId || ''} 
                         onValueChange={handlePropertyChange}
@@ -375,14 +437,14 @@ export function MaintenanceConfigModal({
           {/* Service Category */}
           <div className="grid gap-2">
             <Label htmlFor="category">Category</Label>
-            {shouldLockCategory ? ( // LOCK THE CATEGORY FIELD for all template/existing items
+            {shouldLockCategory ? ( 
                 <Input
                     value={formatEnumString(category)}
                     disabled
-                    // Use cn to apply different disabled styling based on renewal status
-                    className={cn("font-medium", isRenewalTask ? "bg-red-50/50 text-red-700" : "bg-gray-100 text-gray-700")}
+                    // Highlight categories that result in an immediate post-save action
+                    className={cn("font-medium", isConfigRedirectTask ? "bg-blue-50/50 text-blue-700" : "bg-gray-100 text-gray-700")}
                 />
-            ) : ( // Show editable dropdown only if it's a completely new, custom task not from a template
+            ) : ( 
                 <Select
                   value={category || 'NONE'}
                   onValueChange={(val) =>
@@ -403,84 +465,91 @@ export function MaintenanceConfigModal({
                 </Select>
             )}
             
-            {/* Renewal Callout (Step 2.3) */}
-            {isRenewalTask && (
-                <p className="text-sm text-red-500 font-medium mt-1">
-                    This is a Renewal/Financial task. You must manage its due date and details directly on the associated management page.
+            {/* Contextual description for FINANCE/ADMIN */}
+            {isCurrentCategoryFinance && (
+                <p className="text-sm text-gray-500 font-medium mt-1">
+                    This task sets a **recurring reminder** for a financial event. After setup, you'll be directed to the Expenses page.
+                </p>
+            )}
+            {isCurrentCategoryAdmin && (
+                <p className="text-sm text-gray-500 font-medium mt-1">
+                    This task sets a **one-time reminder** to review documents. After setup, you'll be directed to the Documents page.
                 </p>
             )}
           </div>
 
-          {/* Maintenance Fields - Conditional Render (Step 2.3) */}
-          {!isRenewalTask && (
+          {/* Maintenance Fields - Customization applied here */}
+          
+          {/* Is Recurring Checkbox (Visible for Service/FINANCE, Hidden for ADMIN) */}
+          {showRecurrenceCheckbox && (
+              <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="isRecurring"
+                    checked={isRecurring}
+                    onCheckedChange={(checked) => setIsRecurring(!!checked)}
+                  />
+                  <Label htmlFor="isRecurring">Make this a recurring task?</Label>
+              </div>
+          )}
+
+          {/* Frequency & Due Date/Reminder Date Fields */}
+          {showDateFields && (
             <>
-                {/* Is Recurring */}
-                <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="isRecurring"
-                      checked={isRecurring}
-                      onCheckedChange={(checked) => setIsRecurring(!!checked)}
+              {/* Frequency - Visible only if recurring AND NOT ADMIN */}
+              {showFrequencyField && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="frequency">Frequency</Label>
+                    <Select
+                      value={frequency || ''}
+                      onValueChange={(val) =>
+                        setFrequency(val as RecurrenceFrequency)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a frequency" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {frequencyOptions.map((freq) => (
+                          <SelectItem key={freq} value={freq}>
+                            {formatEnumString(freq)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+              )}
+
+              {/* Next Due Date / Reminder Date */}
+              <div className="grid gap-2">
+                {/* Use dynamic dateLabel */}
+                <Label htmlFor="nextDueDate">{dateLabel}</Label> 
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={'outline'}
+                      className={cn(
+                        'w-full justify-start text-left font-normal',
+                        !nextDueDate && 'text-muted-foreground'
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {nextDueDate ? (
+                        format(nextDueDate, 'PPP')
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={nextDueDate || undefined}
+                      onSelect={(date) => setNextDueDate(date || null)}
+                      initialFocus
                     />
-                    <Label htmlFor="isRecurring">Make this a recurring task?</Label>
-                </div>
-
-                {/* Frequency & Due Date (Conditional) */}
-                {isRecurring && (
-                    <>
-                      {/* Frequency */}
-                      <div className="grid gap-2">
-                        <Label htmlFor="frequency">Frequency</Label>
-                        <Select
-                          value={frequency || ''}
-                          onValueChange={(val) =>
-                            setFrequency(val as RecurrenceFrequency)
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a frequency" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {frequencyOptions.map((freq) => (
-                              <SelectItem key={freq} value={freq}>
-                                {formatEnumString(freq)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* Next Due Date */}
-                      <div className="grid gap-2">
-                        <Label htmlFor="nextDueDate">Next Due Date</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant={'outline'}
-                              className={cn(
-                                'w-full justify-start text-left font-normal',
-                                !nextDueDate && 'text-muted-foreground'
-                              )}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {nextDueDate ? (
-                                format(nextDueDate, 'PPP')
-                              ) : (
-                                <span>Pick a date</span>
-                              )}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar
-                              mode="single"
-                              selected={nextDueDate || undefined}
-                              onSelect={(date) => setNextDueDate(date || null)}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                    </>
-                )}
+                  </PopoverContent>
+                </Popover>
+              </div>
             </>
           )}
         </div>
@@ -503,16 +572,10 @@ export function MaintenanceConfigModal({
               Cancel
             </Button>
             
-            {/* Save/Redirection Button (Step 2.4) */}
-            {isRenewalTask && renewalPath ? (
-                <Button onClick={handleRenewalRedirection} variant="default">
-                    Go to {formatEnumString(category)} Management
-                </Button>
-            ) : (
-                <Button onClick={handleSubmit} disabled={isSubmitting || !title.trim()}>
-                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Save Task'}
-                </Button>
-            )}
+            {/* Save Button (used for Service, FINANCE, and ADMIN config) */}
+            <Button onClick={handleSubmit} disabled={isSubmitting || !title.trim()}>
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Save Task'}
+            </Button>
           </div>
         </DialogFooter>
       </DialogContent>
