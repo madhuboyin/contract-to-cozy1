@@ -287,8 +287,7 @@ export default function MaintenancePage() {
       isRecurring: config.isRecurring,
       frequency: config.isRecurring ? config.frequency : null,
       
-      // FIX: Simplified nextDueDate assignment. It is guaranteed to be a Date object
-      // or null from the modal, so we just format it if it exists.
+      // FIX: nextDueDate assignment. Format the Date object to ISO string if it exists.
       nextDueDate: config.nextDueDate 
         ? format(config.nextDueDate, 'yyyy-MM-dd') 
         : null,
@@ -360,10 +359,14 @@ export default function MaintenancePage() {
             <TableBody>
               {maintenanceItems.map(item => {
                 const dueDateInfo = formatDueDate(item.nextDueDate);
-                // Display 'One-Time' or 'Recurring' for ADMIN tasks, otherwise show Frequency
-                const frequencyDisplay = item.isRecurring 
-                  ? formatEnumString(item.frequency) 
-                  : 'One-Time Reminder'; 
+                
+                // FINAL FIX: Explicitly check for ADMIN and override the display based on the category,
+                // ignoring the overridden isRecurring/frequency flags saved in the database.
+                const frequencyDisplay = item.serviceCategory === 'ADMIN'
+                  ? 'One-Time Reminder' // FIX: Hardcoded based on Category logic
+                  : item.isRecurring 
+                    ? formatEnumString(item.frequency) 
+                    : 'One-Time Reminder'; // Fallback for general non-recurring
                 
                 return (
                   <TableRow 
