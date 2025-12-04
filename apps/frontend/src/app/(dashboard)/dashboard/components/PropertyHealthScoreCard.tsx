@@ -123,10 +123,11 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
 
                 {/* *** VIEW FULL MAINTENANCE PLAN LINK (Retained) *** */}
                 <div className="mt-4">
-                    <Link href={`/dashboard/properties/${property.id}/?tab=maintenance`} passHref>
-                        <Button variant="link" className="p-0 h-auto font-body text-sm font-semibold flex items-center">
-                            View Full Maintenance Plan <ArrowRight className="h-4 w-4 ml-1" />
-                        </Button>
+                    <Link 
+                        href={`/dashboard/properties/${property.id}/?tab=maintenance`}
+                        className="inline-flex items-center text-sm font-semibold text-primary hover:text-primary/80 transition-colors no-underline"
+                    >
+                        View Full Maintenance Plan <ArrowRight className="h-4 w-4 ml-1" />
                     </Link>
                 </div>
             </CardContent>
