@@ -32,6 +32,9 @@ import { Badge } from '@/components/ui/badge';
 import { User } from '@/types';
 import { PropertySetupBanner } from '@/components/PropertySetupBanner';
 import { api } from '@/lib/api/client';
+// --- NEW IMPORT ---
+import { AIChat } from '@/components/AIChat';
+
 
 interface NavLink {
   name: string;
@@ -206,6 +209,12 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </main>
+
+      {/* --- NEW: FLOATING AI CHAT WIDGET --- */}
+      {/* Renders the chat widget in a fixed position across all dashboard pages */}
+      <AIChat />
+      {/* ------------------------------------ */}
+      
     </div>
   );
 }
