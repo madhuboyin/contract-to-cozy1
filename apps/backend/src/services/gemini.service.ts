@@ -3,7 +3,7 @@
 import { GoogleGenAI, Chat, Content } from "@google/genai";
 import * as dotenv from 'dotenv';
 
-// [RE-FIX] Import the necessary function and interface (PropertyAIGuidance) directly
+// [FIXED IMPORT] Import the necessary function and interface (PropertyAIGuidance) directly
 import { getPropertyContextForAI, PropertyAIGuidance } from './property.service'; 
 
 // Load environment variables
@@ -21,14 +21,14 @@ class GeminiService {
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      // Throwing this error is the correct way to fail fast if the key is missing.
+      // This is a known point of failure if the key is not configured in the deployed environment.
       throw new Error("GEMINI_API_KEY is not set in environment variables.");
     }
     this.ai = new GoogleGenAI({ apiKey });
   }
 
   /**
-   * [RE-IMPLEMENTATION] Helper to serialize key property facts into a concise string.
+   * Helper to serialize key property facts into a concise string.
    */
   private getPropertyContext(property: PropertyAIGuidance): string {
     const contextLines: string[] = [];
@@ -51,7 +51,7 @@ class GeminiService {
 
 
   /**
-   * [RE-IMPLEMENTATION] Retrieves or creates a new chat session, optionally injecting property context.
+   * Retrieves or creates a new chat session, optionally injecting property context.
    */
   private getOrCreateChat(sessionId: string, propertyContext?: string): Chat { 
     if (chatSessions.has(sessionId)) {
@@ -78,20 +78,19 @@ class GeminiService {
   }
 
   /**
-   * [RE-IMPLEMENTATION] Sends a message to the Gemini model and returns the response.
-   * Signature MUST match the one called by the controller (4 arguments).
+   * Sends a message to the Gemini model and returns the response.
    */
   public async sendMessageToChat(
-    userId: string, // <-- CRITICAL: This argument was missing in the version you provided
+    userId: string, 
     sessionId: string, 
     message: string, 
-    propertyId?: string // <-- CRITICAL: This argument was missing in the version you provided
+    propertyId?: string 
   ): Promise<string> {
     
     let propertyContext: string | undefined;
 
     if (propertyId) {
-        // Fetch and authenticate the property
+        // Fetch and authenticate the property (Database operation)
         const property = await getPropertyContextForAI(propertyId, userId);
 
         if (!property) {
@@ -118,9 +117,6 @@ class GeminiService {
       return response.text;
     } catch (error) {
       console.error("Gemini API call error:", error);
-      // If the error comes from the AI service (e.g., API key issue), 
-      // the message below is correct. If it's the GEMINI_API_KEY check, 
-      // the error will be thrown earlier.
       throw new Error("Failed to get response from AI service.");
     }
   }
