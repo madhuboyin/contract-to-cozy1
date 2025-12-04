@@ -58,6 +58,16 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: REDIS_HOST
+            - name: GEMINI_CHAT_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: GEMINI_CHAT_ENABLED 
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: GEMINI_API_KEY
           resources:
             requests:
               cpu: "500m"
