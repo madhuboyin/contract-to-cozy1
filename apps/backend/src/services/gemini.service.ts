@@ -127,12 +127,13 @@ class GeminiService {
       return chatSessions.get(sessionId)!;
     }
 
-    let instruction = "You are a helpful AI assistant for a home management platform. Your purpose is to answer homeowner and property-related questions, and help plan maintenance. Be concise, friendly, and professional.";
+    // CRITICAL FIX: Explicitly define the inverse scoring mechanism.
+    let instruction = "You are a helpful AI assistant for a home management platform. Your purpose is to answer homeowner and property-related questions, and help plan maintenance. Be concise, friendly, and professional. **IMPORTANT: The Risk Score in this system is INVERSE: 100 means BEST (minimum risk), and 0 means WORST (maximum risk).**";
 
     // Augment system instruction if context is provided
     if (propertyContext) {
         // Updated instruction to guide AI on using the now-present risk data
-        instruction = `You are an expert AI assistant providing advice for the user's specific property. The following are key facts about the property: [${propertyContext}]. Use this context to personalize your advice, especially on property risk and maintenance. If a specific detail is missing from the facts, state that you do not have that specific detail for the property.`;
+        instruction = `You are an expert AI assistant providing advice for the user's specific property. The following are key facts about the property: [${propertyContext}]. Use this context to personalize your advice, especially on property risk and maintenance. **REMINDER: The Risk Score is inverse (100=BEST, 0=WORST).** If a specific detail is missing from the facts, state that you do not have that specific detail for the property.`;
     }
 
     const chat = this.ai.chats.create({
