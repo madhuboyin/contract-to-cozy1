@@ -638,6 +638,14 @@ export interface Booking {
   updatedAt: string;
 }
 
+// --- ADD CHAT TYPES ---
+export type ChatMessageRole = 'user' | 'model';
+
+export interface ChatMessage {
+  role: ChatMessageRole;
+  text: string;
+}
+
 /**
  * API Response Types
  */

@@ -23,8 +23,14 @@ import Link from 'next/link';
 
 import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
 import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
+// --- NEW IMPORT ---
+import { AIChatWindow } from './components/AIChatWindow';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
+
+// --- FEATURE FLAG CHECK ---
+const isChatEnabled = process.env.NEXT_PUBLIC_GEMINI_CHAT_ENABLED === 'true';
+// --------------------------
 
 interface DashboardData {
     bookings: Booking[];
@@ -323,14 +329,29 @@ export default function DashboardPage() {
         
       </div>
       
-      {/* ExistingOwnerDashboard renders the rest of the layout below the scorecards */}
-      <ExistingOwnerDashboard 
-        userFirstName={user.firstName}
-        bookings={data.bookings}
-        properties={data.properties}
-        checklistItems={checklistItems}
-        selectedPropertyId={localSelectedPropertyId} // Pass selected ID from local state
-      />
+      {/* --- MAIN CONTENT GRID (INCLUDING CHAT WINDOW) --- */}
+      <div className={`grid gap-6 mt-6 grid-cols-12`}>
+        
+        {/* ExistingOwnerDashboard renders the main content. Adjust column span based on feature flag. */}
+        <div className={isChatEnabled ? "col-span-12 lg:col-span-8" : "col-span-12"}>
+          <ExistingOwnerDashboard 
+            userFirstName={user.firstName}
+            bookings={data.bookings}
+            properties={data.properties}
+            checklistItems={checklistItems}
+            selectedPropertyId={localSelectedPropertyId} // Pass selected ID from local state
+          />
+        </div>
+        
+        {/* Sidebar/AI Chat (AIChatWindow) - Conditionally rendered */}
+        {isChatEnabled && (
+          <div className="col-span-12 lg:col-span-4">
+            <AIChatWindow />
+          </div>
+        )}
+      </div>
+      {/* --- END MAIN CONTENT GRID --- */}
+      
     </DashboardShell>
   );
 }

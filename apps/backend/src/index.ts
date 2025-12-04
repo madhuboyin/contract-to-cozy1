@@ -17,6 +17,7 @@ import maintenanceRoutes from './routes/maintenance.routes';
 import homeownerManagementRoutes from './routes/home-management.routes';
 import riskRoutes from './routes/risk.routes';
 import financialRoutes from './routes/financialEfficiency.routes';
+import geminiRoutes from './routes/gemini.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
@@ -117,6 +118,7 @@ app.use('/api/v1/properties', financialRoutes);
 // =============================================================================
 // 404 HANDLER
 // =============================================================================
+app.use('/api/gemini', geminiRoutes);
 
 app.use((req: Request, res: Response) => {
   res.status(404).json({

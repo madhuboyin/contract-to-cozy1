@@ -58,6 +58,17 @@ type ProviderProfile = Provider & {
   services: Service[];
 };
 
+// --- NEW GEMINI CHAT TYPES ---
+interface SendMessageToChatPayload {
+  sessionId: string;
+  message: string;
+}
+
+interface ChatResponse {
+  text: string; // The backend returns the model's text in the 'text' field
+}
+// -----------------------------
+
 
 // NOTE: Changed to API_BASE_URL to match common convention
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
@@ -478,6 +489,21 @@ class APIClient {
   async deleteChecklistItem(id: string): Promise<APIResponse<void>> {
     return this.request<void>(`/api/checklist/items/${id}`, {
       method: 'DELETE',
+    });
+  }
+
+
+  // ==========================================================================
+  // NEW GEMINI/AI CHAT ENDPOINTS 
+  // ==========================================================================
+
+  /**
+   * Sends a message to the secure backend Gemini proxy.
+   */
+  async sendMessageToChat(payload: SendMessageToChatPayload): Promise<APIResponse<ChatResponse>> {
+    return this.request<ChatResponse>('/api/gemini/chat', {
+      method: 'POST',
+      body: payload as unknown as BodyInit,
     });
   }
 
