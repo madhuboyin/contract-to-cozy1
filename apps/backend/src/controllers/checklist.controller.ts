@@ -45,7 +45,10 @@ const handleUpdateChecklistItem = async (
 
     // Basic validation
     if (!status || !Object.values(ChecklistItemStatus).includes(status)) {
-      return res.status(400).json({ message: 'Invalid or missing status.' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid or missing status.' 
+      });
     }
 
     const updatedItem = await ChecklistService.updateChecklistItemStatus(
@@ -54,14 +57,21 @@ const handleUpdateChecklistItem = async (
       status
     );
 
-    res.status(200).json(updatedItem);
+    // FIX: Wrap response in standard APIResponse format
+    res.status(200).json({
+      success: true,
+      data: updatedItem
+    });
   } catch (error) {
     // Handle specific error from the service
     if (
       error instanceof Error &&
       (error.message.includes('access') || error.message.includes('not found'))
     ) {
-      return res.status(404).json({ message: error.message });
+      return res.status(404).json({ 
+        success: false,
+        message: error.message 
+      });
     }
     next(error);
   }
@@ -90,13 +100,20 @@ const handlePatchChecklistItem = async (
       updateData
     );
 
-    res.status(200).json(updatedItem);
+    // FIX: Wrap response in standard APIResponse format
+    res.status(200).json({
+      success: true,
+      data: updatedItem
+    });
   } catch (error) {
     if (
       error instanceof Error &&
       (error.message.includes('access') || error.message.includes('not found'))
     ) {
-      return res.status(404).json({ message: error.message });
+      return res.status(404).json({ 
+        success: false,
+        message: error.message 
+      });
     }
     next(error);
   }
