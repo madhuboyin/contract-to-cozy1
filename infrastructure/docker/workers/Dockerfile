@@ -23,6 +23,7 @@ COPY --from=builder /app/apps/backend/node_modules/@prisma ./node_modules/@prism
 # This makes them resolvable by TSC locally without complex paths configuration.
 RUN mkdir -p src/shared/backend/utils src/shared/backend/config
 COPY apps/backend/src/utils/riskCalculator.util.ts src/shared/backend/utils/
+COPY apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils/
 COPY apps/backend/src/config/risk-constants.ts src/shared/backend/config/
 COPY apps/workers/src ./src
 COPY apps/workers/tsconfig.json ./tsconfig.json 
@@ -34,6 +35,7 @@ RUN npm install --save-dev typescript @types/node @types/node-cron
 # We must install sed first.
 RUN apk add --no-cache sed
 RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/backend\/utils\/riskCalculator\.util/g' src/worker.ts
+RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/FinancialCalculator\.util/\.\/shared\/backend\/utils\/FinancialCalculator\.util/g' src/worker.ts
 RUN sed -i 's/\.\.\/\.\.\/backend\/src\/config\/risk-constants/\.\/shared\/backend\/config\/risk-constants/g' src/worker.ts
 
 # 4. Compile Worker (tsc can now resolve all imports locally)
