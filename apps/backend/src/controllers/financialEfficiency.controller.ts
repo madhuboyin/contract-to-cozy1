@@ -2,6 +2,7 @@
 
 import { Request, Response } from 'express';
 import { FinancialReportService } from '../services/FinancialReport.service';
+import { prisma } from '../lib/prisma';
 import JobQueueService from '../services/JobQueue.service';
 import { PropertyIntelligenceJobType, PropertyIntelligenceJobPayload } from '../config/risk-job-types';
 
@@ -9,29 +10,44 @@ const financialReportService = new FinancialReportService();
 
 // Controller for Financial Efficiency Score (FES) endpoints
 
-/**
- * GET /api/v1/financial-efficiency/summary
- * Retrieves the FES summary for the user's primary property, intended for the dashboard card.
- */
 export const getPrimaryFESSummary = async (req: Request, res: Response) => {
-  // Assuming a middleware populates req.user with the authenticated user's details, including userId
   const userId = (req as any).user.id; 
 
   try {
-    const summary = await financialReportService.getFinancialEfficiencySummary(userId);
+    // 1. Get user's primary property
+    const homeownerProfile = await prisma.homeownerProfile.findUnique({
+      where: { userId },
+      include: {
+        properties: {
+          where: { isPrimary: true },
+          take: 1,
+        },
+      },
+    });
+
+    // If no primary property, get the first property
+    let primaryProperty = homeownerProfile?.properties[0];
+    
+    if (!primaryProperty && homeownerProfile) {
+      // No primary property set, get any property
+      const allProperties = await prisma.property.findFirst({
+        where: { homeownerProfileId: homeownerProfile.id },
+      });
+      primaryProperty = allProperties || undefined;
+    }
+
+    // 2. Pass the propertyId to the service
+    const summary = await financialReportService.getFinancialEfficiencySummary(
+      primaryProperty?.id
+    );
     
     // If the report is QUEUED or non-existent, ensure a calculation job is running
-    if (summary.status === 'QUEUED' || summary.status === 'NO_PROPERTY') {
-      // If NO_PROPERTY, propertyId is likely empty/mocked, skip job queuing
-      if (summary.propertyId) {
-          // Trigger a job (safe to call multiple times, queue handles idempotency via jobId)
-          const payload: PropertyIntelligenceJobPayload = {
-            propertyId: summary.propertyId, 
-            jobType: PropertyIntelligenceJobType.CALCULATE_FES 
-          };
-          // Use the explicit jobType for the queue add and cast JobQueueService to any to resolve import/type issues
-          await (JobQueueService as any).addJob(PropertyIntelligenceJobType.CALCULATE_FES, payload);
-      }
+    if (summary.status === 'QUEUED' && summary.propertyId) {
+      const payload: PropertyIntelligenceJobPayload = {
+        propertyId: summary.propertyId, 
+        jobType: PropertyIntelligenceJobType.CALCULATE_FES 
+      };
+      await (JobQueueService as any).addJob(PropertyIntelligenceJobType.CALCULATE_FES, payload);
     }
 
     return res.status(200).json(summary);
