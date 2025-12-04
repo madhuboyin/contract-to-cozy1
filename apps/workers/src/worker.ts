@@ -276,16 +276,65 @@ async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
  /**
  * Process FES calculation
  */
+/**
+ * Process FES calculation
+ */
 async function processFESCalculation(jobData: PropertyIntelligenceJobPayload) {
   console.log(`[${new Date().toISOString()}] Processing FES calculation for property ${jobData.propertyId}...`);
   
   const propertyId = jobData.propertyId;
 
   try {
-    // 1. Calculate the FES (using imported function)
-    const result = await calculateFinancialEfficiency(propertyId);
+    // 1. Fetch property with all financial data (like risk does with fetchPropertyDetails)
+    const property = await (prisma as any).property.findUnique({
+      where: { id: propertyId },
+      include: {
+        insurancePolicies: true,
+        warranties: true,
+        expenses: {
+          where: {
+            category: 'UTILITY',
+            transactionDate: { gte: new Date(new Date().setFullYear(new Date().getFullYear() - 1)) },
+          },
+        },
+      },
+    });
 
-    // 2. Save to database
+    if (!property) {
+      console.error(`Property ${propertyId} not found. Job failed.`);
+      throw new Error("Property not found for FES calculation.");
+    }
+
+    // 2. Get benchmark (matching the old getBenchmark logic)
+    let benchmark = null;
+    if (property.propertyType) {
+      benchmark = await (prisma as any).financialEfficiencyConfig.findUnique({
+        where: { 
+          zipCode_propertyType: { 
+            zipCode: property.zipCode, 
+            propertyType: property.propertyType 
+          } 
+        },
+      });
+      
+      // Fallback to global benchmark for property type
+      if (!benchmark) {
+        benchmark = await (prisma as any).financialEfficiencyConfig.findFirst({
+          where: { zipCode: null, propertyType: property.propertyType },
+        });
+      }
+    }
+
+    // 3. Calculate FES (pure function, no database access)
+    const result = calculateFinancialEfficiency({
+      property,
+      insurancePolicies: property.insurancePolicies,
+      warranties: property.warranties,
+      utilityExpenses: property.expenses,
+      benchmark,
+    });
+
+    // 4. Save result to database
     await (prisma as any).financialEfficiencyReport.upsert({
       where: { propertyId },
       update: {
