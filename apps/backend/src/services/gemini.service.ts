@@ -2,7 +2,8 @@
 
 import { GoogleGenAI, Chat, Content } from "@google/genai";
 import * as dotenv from 'dotenv';
-// [FIX] Import the necessary function and interface (PropertyAIGuidance) directly
+
+// [RE-FIX] Import the necessary function and interface (PropertyAIGuidance) directly
 import { getPropertyContextForAI, PropertyAIGuidance } from './property.service'; 
 
 // Load environment variables
@@ -10,29 +11,26 @@ dotenv.config();
 
 /**
  * A simple in-memory map to hold active chat sessions.
- * In a production environment, this should be a persistent store (e.g., Redis)
- * to prevent session loss on service restarts.
  */
 const chatSessions = new Map<string, Chat>();
 
 class GeminiService {
   private ai: GoogleGenAI;
-  private model: string = "gemini-2.5-flash"; // A fast and capable model for chat
+  private model: string = "gemini-2.5-flash"; 
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
+      // Throwing this error is the correct way to fail fast if the key is missing.
       throw new Error("GEMINI_API_KEY is not set in environment variables.");
     }
     this.ai = new GoogleGenAI({ apiKey });
-    // [FIX] Removed initialization of PropertyService as it's not a class export
   }
 
   /**
-   * [NEW METHOD] Helper to serialize key property facts into a concise string.
-   * @param property The PropertyAIGuidance object containing key facts.
+   * [RE-IMPLEMENTATION] Helper to serialize key property facts into a concise string.
    */
-  private getPropertyContext(property: PropertyAIGuidance): string { // [MODIFICATION] Use imported interface
+  private getPropertyContext(property: PropertyAIGuidance): string {
     const contextLines: string[] = [];
 
     // Address details
@@ -53,19 +51,16 @@ class GeminiService {
 
 
   /**
-   * Retrieves or creates a new chat session for a given user ID.
-   * @param sessionId A unique identifier for the user's chat session.
-   * @param propertyContext Optional serialized property data for system instruction.
-   * @returns The existing or new Chat object.
+   * [RE-IMPLEMENTATION] Retrieves or creates a new chat session, optionally injecting property context.
    */
-  private getOrCreateChat(sessionId: string, propertyContext?: string): Chat {
+  private getOrCreateChat(sessionId: string, propertyContext?: string): Chat { 
     if (chatSessions.has(sessionId)) {
       return chatSessions.get(sessionId)!;
     }
 
     let instruction = "You are a helpful AI assistant for a home management platform. Your purpose is to answer homeowner and property-related questions, and help plan maintenance. Be concise, friendly, and professional.";
 
-    // [MODIFICATION] Augment system instruction if context is provided
+    // Augment system instruction if context is provided
     if (propertyContext) {
         instruction = `You are an expert AI assistant providing advice for the user's specific property. The following are key facts about the property: [${propertyContext}]. Use this context to personalize your advice. If a question is generic, try to connect it to the provided property facts. If a specific detail is missing from the facts, state that you do not have that specific detail for the property.`;
     }
@@ -83,38 +78,33 @@ class GeminiService {
   }
 
   /**
-   * Sends a message to the Gemini model and returns the response.
-   * @param userId The ID of the authenticated user (for security/lookup).
-   * @param sessionId The unique ID for the chat session.
-   * @param message The user's text message.
-   * @param propertyId The optional ID of the property to fetch context for.
-   * @returns The model's response text.
+   * [RE-IMPLEMENTATION] Sends a message to the Gemini model and returns the response.
+   * Signature MUST match the one called by the controller (4 arguments).
    */
   public async sendMessageToChat(
-    userId: string, 
+    userId: string, // <-- CRITICAL: This argument was missing in the version you provided
     sessionId: string, 
     message: string, 
-    propertyId?: string 
+    propertyId?: string // <-- CRITICAL: This argument was missing in the version you provided
   ): Promise<string> {
     
     let propertyContext: string | undefined;
 
     if (propertyId) {
-        // [FIX] Call the imported function directly
+        // Fetch and authenticate the property
         const property = await getPropertyContextForAI(propertyId, userId);
 
         if (!property) {
-            // Critical security and data validation check
             console.warn(`User ${userId} attempted to access missing or unauthorized property ${propertyId} for chat context.`);
             throw new Error("Property data does not exist or access is unauthorized.");
         }
 
-        // [MODIFICATION] Generate context string
+        // Generate context string
         propertyContext = this.getPropertyContext(property);
     }
 
     try {
-      // [MODIFICATION] Pass the generated property context to the session creator
+      // Pass the generated property context to the session creator
       const chat = this.getOrCreateChat(sessionId, propertyContext);
       
       const response = await chat.sendMessage({
@@ -128,6 +118,9 @@ class GeminiService {
       return response.text;
     } catch (error) {
       console.error("Gemini API call error:", error);
+      // If the error comes from the AI service (e.g., API key issue), 
+      // the message below is correct. If it's the GEMINI_API_KEY check, 
+      // the error will be thrown earlier.
       throw new Error("Failed to get response from AI service.");
     }
   }
