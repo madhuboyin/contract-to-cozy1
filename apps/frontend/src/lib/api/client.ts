@@ -502,7 +502,7 @@ class APIClient {
     data: UpdateChecklistItemInput
   ): Promise<APIResponse<ChecklistItem>> {
     return this.request<ChecklistItem>(`/api/checklist/items/${id}`, {
-      method: 'PATCH', // Use PATCH for partial updates
+      method: 'PUT', // Use PATCH for partial updates
       body: data as unknown as BodyInit,
     });
   }
