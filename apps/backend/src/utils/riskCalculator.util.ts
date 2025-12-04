@@ -81,21 +81,20 @@ const calculateOutofPocket = (
 
   // 1. Coverage for High Probability Failures (W&T, Age-related):
   if (probability > 0.7) {
-    if (hasActiveWarranty) {
-      // Warranty covers W&T. Risk is reduced to the service fee.
-      uncoveredCost = warrantyDeductible;
-    } else {
-      // No warranty, and insurance won't cover W&T due to age. Full exposure.
-      uncoveredCost = replacementCost;
-    }
+    // FIX: For high probability failures (end-of-life/W&T), assume NO coverage (full replacement cost)
+    // as standard insurance and home warranties typically exclude these.
+    uncoveredCost = replacementCost;
   } 
   // 2. Coverage for Low/Moderate Probability Failures (Accident/Sudden Loss):
   else {
-    if (hasDwellingInsurance) {
-      // Insurance covers sudden loss. Risk is reduced to the deductible.
+    if (hasActiveWarranty) {
+      // FIX: Prefer the lower Home Warranty deductible for sudden failures/accidents.
+      uncoveredCost = warrantyDeductible;
+    } else if (hasDwellingInsurance) {
+      // If no warranty, insurance covers sudden loss (higher deductible).
       uncoveredCost = standardDeductible;
     } else {
-      // No insurance/warranty for accidental damage. Full exposure.
+      // No coverage for accidental damage. Full exposure.
       uncoveredCost = replacementCost;
     }
   }
