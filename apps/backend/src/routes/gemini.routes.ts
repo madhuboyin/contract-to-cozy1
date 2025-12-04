@@ -12,6 +12,6 @@ const router = Router();
  * @access  Private (Requires authentication)
  * @body    { sessionId: string, message: string }
  */
-router.post('/chat', authenticate, geminiController.handleChatMessage);
+router.post('/chat', authenticate, geminiController.sendMessageToChat);
 
 export default router;
