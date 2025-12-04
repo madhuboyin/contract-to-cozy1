@@ -8,40 +8,28 @@ import { PropertyIntelligenceJobType, PropertyIntelligenceJobPayload } from '../
 
 const financialReportService = new FinancialReportService();
 
-// Controller for Financial Efficiency Score (FES) endpoints
-
+/**
+ * GET /api/v1/financial-efficiency/summary
+ * Retrieves the FES summary for a specific property (propertyId passed as query param).
+ */
 export const getPrimaryFESSummary = async (req: Request, res: Response) => {
-  const userId = (req as any).user.id; 
+  const propertyId = req.query.propertyId as string;
+  
+  if (!propertyId) {
+    return res.status(400).json({ 
+      message: 'Property ID is required',
+      propertyId: '',
+      financialEfficiencyScore: 0,
+      financialExposureTotal: 0,
+      status: 'NO_PROPERTY',
+      lastCalculatedAt: null,
+    });
+  }
 
   try {
-    // 1. Get user's primary property
-    const homeownerProfile = await prisma.homeownerProfile.findUnique({
-      where: { userId },
-      include: {
-        properties: {
-          where: { isPrimary: true },
-          take: 1,
-        },
-      },
-    });
-
-    // If no primary property, get the first property
-    let primaryProperty = homeownerProfile?.properties[0];
+    const summary = await financialReportService.getFinancialEfficiencySummary(propertyId);
     
-    if (!primaryProperty && homeownerProfile) {
-      // No primary property set, get any property
-      const allProperties = await prisma.property.findFirst({
-        where: { homeownerProfileId: homeownerProfile.id },
-      });
-      primaryProperty = allProperties || undefined;
-    }
-
-    // 2. Pass the propertyId to the service
-    const summary = await financialReportService.getFinancialEfficiencySummary(
-      primaryProperty?.id
-    );
-    
-    // If the report is QUEUED or non-existent, ensure a calculation job is running
+    // If the report is QUEUED, ensure a calculation job is running
     if (summary.status === 'QUEUED' && summary.propertyId) {
       const payload: PropertyIntelligenceJobPayload = {
         propertyId: summary.propertyId, 
