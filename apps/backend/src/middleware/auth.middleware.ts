@@ -89,8 +89,9 @@ export const authenticate = async (
     }
 
     // Attach user to request, including the new profile IDs
+    // [FIXED] Removed 'id: user.id' to comply with AuthUser type
     req.user = {
-      userId: user.id,
+      userId: user.id, // This is the correct property name expected by AuthUser
       email: user.email,
       role: user.role as UserRole,
       firstName: user.firstName,
