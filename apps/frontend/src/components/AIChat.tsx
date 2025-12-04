@@ -5,11 +5,10 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { X, Send, Sparkles } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
-import { User } from '@/types'; // Assuming User type is imported from '@/types'
-import { cn } from '@/lib/utils'; // Utility for combining class names
+import { User } from '@/types';
+import { cn } from '@/lib/utils'; 
 
-// --- FEATURE FLAG CHECK (Determines if the component should be rendered at all) ---
-// Note: This must be set in apps/frontend/.env.local (NEXT_PUBLIC_GEMINI_CHAT_ENABLED=true)
+// --- FEATURE FLAG CHECK ---
 const isChatEnabled = process.env.NEXT_PUBLIC_GEMINI_CHAT_ENABLED === 'true';
 
 // Helper to determine the personalized welcome message based on user segment
@@ -34,94 +33,83 @@ interface ChatMessage {
 
 export const AIChat: React.FC = () => {
   if (!isChatEnabled) {
-      return null; // Don't render if feature flag is false
+      return null;
   }
     
   const { user } = useAuth();
   
-  // Use a persistent unique ID for the session, generated once per component lifecycle
-  // This replaces the need for the userType prop, as the backend manages history by this ID.
   const [sessionId] = useState(() => Date.now().toString());
 
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   
-  // Initialize messages with personalized welcome message
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     { role: 'model', text: getWelcomeMessage(user) }
   ]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll on new message or when opening the chat
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOpen]);
     
-  // Re-initialize welcome message if user loads later or changes
   useEffect(() => {
-      // Logic to update the initial message if user data loads after initial render
       if (messages.length === 1 && user && messages[0].text !== getWelcomeMessage(user)) {
           setMessages([{ role: 'model', text: getWelcomeMessage(user) }]);
       }
-  }, [user]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]); // Only run when user object changes
 
-    // apps/frontend/src/components/AIChat.tsx (Modification to handleSend)
+  const handleSend = useCallback(async () => {
+    if (!input.trim() || loading) return;
 
-    const handleSend = useCallback(async () => {
-        if (!input.trim() || loading) return;
+    const userMsg = input.trim();
+    setInput('');
+    
+    // 1. Add user message
+    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+    setLoading(true);
 
-        const userMsg = input.trim();
-        setInput('');
+    try {
+        const response = await api.sendMessageToChat({
+            sessionId: sessionId, 
+            message: userMsg,
+        });
         
-        // 1. Add user message
-        setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
-        setLoading(true);
-
-        try {
-            // 2. Call the secure backend proxy
-            // The API client is typed to return the APIResponse object (which includes success and data properties)
-            const response = await api.sendMessageToChat({
-                sessionId: sessionId, 
-                message: userMsg,
-            });
-            
-            // *** FIX: Check for success before accessing data ***
-            if (!response.success || !response.data) {
-                // While client.ts should throw for failure, this handles edge cases 
-                // where the structure is valid but success is false.
-                throw new Error(response.message || "AI service returned an unexpected failure.");
-            }
-
-            // 3. Update state with the backend response
-            const modelResponseText = response.data.text; 
-            
-            if (!modelResponseText) {
-                throw new Error("Invalid response format from AI service.");
-            }
-            
-            setMessages(prev => [...prev, { role: 'model', text: modelResponseText }]);
-
-        } catch (error: any) {
-            console.error("AI chat error:", error);
-            
-            // Error handling logic remains the same
-            const errorMessage = error.status === 403 
-                ? "The AI chat feature is currently disabled by configuration." 
-                : `Sorry, I ran into an error: ${error.message || 'Please try again.'}`;
-                
-            setMessages(prev => [...prev, { 
-                role: 'model', 
-                text: errorMessage, 
-            }]);
-        } finally {
-            setLoading(false);
+        // --- FIX for 'Property data does not exist' error: Check for success ---
+        if (!response.success || !response.data) {
+             throw new Error(response.message || "AI service returned an unexpected failure.");
         }
-    }, [input, loading, sessionId, user]); // Note: input should be removed from dependency array if using useCallback with local state
+        
+        // 2. Update state with the backend response
+        const modelResponseText = response.data.text; 
+        
+        if (!modelResponseText) {
+             throw new Error("Invalid response format from AI service.");
+        }
+        
+        setMessages(prev => [...prev, { role: 'model', text: modelResponseText }]);
+
+    } catch (error: any) {
+        console.error("AI chat error:", error);
+        
+        const errorMessage = error.status === 403 
+            ? "The AI chat feature is currently disabled by configuration." 
+            : `Sorry, I ran into an error: ${error.message || 'Please try again.'}`;
+            
+        setMessages(prev => [...prev, { 
+            role: 'model', 
+            text: errorMessage, 
+        }]);
+    } finally {
+        setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [input, loading, sessionId]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-      e.preventDefault(); // Prevent line break in input
+      e.preventDefault();
       handleSend();
     }
   };
