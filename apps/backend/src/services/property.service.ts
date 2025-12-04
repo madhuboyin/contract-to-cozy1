@@ -71,6 +71,21 @@ export interface PropertyWithAssets extends Property {
 export interface ScoredProperty extends PropertyWithAssets {
     healthScore: HealthScoreResult;
 }
+
+// [NEW INTERFACE] Defines the minimal subset of data needed for AI context.
+export interface PropertyAIGuidance {
+  id: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  propertyType: PropertyType | null;
+  yearBuilt: number | null;
+  heatingType: HeatingType | null;
+  coolingType: CoolingType | null;
+  roofType: RoofType | null;
+  hvacInstallYear: number | null;
+}
 // ===============================================
 
 // --- CORE ASSET SYNC LOGIC (FIXED) ---
@@ -305,6 +320,37 @@ export async function getPropertyById(propertyId: string, userId: string): Promi
 
   // ATTACH SCORE: Calculate and attach score before returning
   return attachHealthScore(property);
+}
+
+/**
+ * [NEW FUNCTION] Get a subset of property data required for AI context, 
+ * enforcing ownership but bypassing scoring/asset loading.
+ */
+export async function getPropertyContextForAI(propertyId: string, userId: string): Promise<PropertyAIGuidance | null> {
+  const homeownerProfileId = await getHomeownerProfileId(userId);
+
+  const property = await prisma.property.findFirst({
+    where: {
+      id: propertyId,
+      homeownerProfileId, // Ownership verification
+    },
+    select: { // Select only fields relevant for AI personalization
+      id: true,
+      address: true,
+      city: true,
+      state: true,
+      zipCode: true,
+      propertyType: true,
+      yearBuilt: true,
+      heatingType: true,
+      coolingType: true,
+      roofType: true,
+      hvacInstallYear: true,
+    }
+  });
+
+  // Prisma's findFirst returns type PropertyAIGuidance | null directly due to the select statement
+  return property; 
 }
 
 /**

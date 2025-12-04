@@ -34,6 +34,7 @@ import { PropertySetupBanner } from '@/components/PropertySetupBanner';
 import { api } from '@/lib/api/client';
 // --- NEW IMPORT ---
 import { AIChat } from '@/components/AIChat';
+import { PropertyProvider } from '@/lib/property/PropertyContext';
 
 
 interface NavLink {
@@ -201,19 +202,19 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
         </Sheet>
       </header>
 
-      {/* Banner placed here - between header and main content */}
-      <PropertySetupBanner show={showBanner} />
+      {/* [MODIFICATION] Wrap main content with PropertyProvider */}
+      <PropertyProvider> 
+          <main className="flex-1 bg-gray-50">
+            <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
+              {children}
+            </div>
+          </main>
 
-      <main className="flex-1 bg-gray-50">
-        <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
-          {children}
-        </div>
-      </main>
-
-      {/* --- NEW: FLOATING AI CHAT WIDGET --- */}
-      {/* Renders the chat widget in a fixed position across all dashboard pages */}
-      <AIChat />
-      {/* ------------------------------------ */}
+          {/* --- NEW: FLOATING AI CHAT WIDGET --- */}
+          {/* Renders the chat widget in a fixed position across all dashboard pages */}
+          <AIChat />
+          {/* ------------------------------------ */}
+      </PropertyProvider>
       
     </div>
   );

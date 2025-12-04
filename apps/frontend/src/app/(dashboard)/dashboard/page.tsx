@@ -19,6 +19,8 @@ import { MyPropertiesCard } from './components/MyPropertiesCard';
 // NEW IMPORTS FOR PROPERTY SELECTION
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from 'next/link';
+// [NEW IMPORT]
+import { usePropertyContext } from '@/lib/property/PropertyContext';
 // END NEW IMPORTS
 
 import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
@@ -52,8 +54,8 @@ export default function DashboardPage() {
     error: null,
   });
   
-  // Property Selection State managed at the top level
-  const [localSelectedPropertyId, setLocalSelectedPropertyId] = useState<string | undefined>(undefined);
+  // [MODIFICATION] Replaced local property selection state with context hook
+  const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
 
 
   // HIGHEST PRIORITY: Check redirect IMMEDIATELY
@@ -191,8 +193,8 @@ export default function DashboardPage() {
         error: null,
       });
       
-      // Initialize local state with the default property ID
-      setLocalSelectedPropertyId(defaultPropId);
+      // [MODIFICATION] Initialize context state with the default property ID
+      setSelectedPropertyId(defaultPropId);
 
     } catch (error: any) {
       console.error('❌ Failed to fetch dashboard data:', error);
@@ -232,9 +234,10 @@ export default function DashboardPage() {
   const userSegment = user.segment;
   const checklistItems = (data.checklist?.items || []) as ChecklistItem[];
   
-  // Derived property values using the local state
+  // Derived property values using the context state
   const properties = data.properties;
-  const selectedProperty = properties.find(p => p.id === localSelectedPropertyId);
+  // [MODIFICATION] Use context value here
+  const selectedProperty = properties.find(p => p.id === selectedPropertyId); 
   const isMultiProperty = properties.length > 1;
 
   console.log('🎨 Rendering dashboard for', userSegment);
@@ -271,8 +274,10 @@ export default function DashboardPage() {
                   // Scenario 2: Multiple Properties - Show Dropdown
                   <div className="flex items-center space-x-2">
                       <Select 
-                          value={localSelectedPropertyId} 
-                          onValueChange={setLocalSelectedPropertyId}
+                          // [MODIFICATION] Bind Select value to context value
+                          value={selectedPropertyId} 
+                          // [MODIFICATION] Bind Select onValueChange to context setter
+                          onValueChange={setSelectedPropertyId}
                       >
                           <SelectTrigger className="w-[300px] text-lg font-medium">
                               <SelectValue placeholder="Select a property" />
@@ -298,7 +303,7 @@ export default function DashboardPage() {
       {/* FIX 2: Grid layout adjusted to 3 columns on large screens to accommodate only the 3 scorecards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
         
-        {/* 1. Property Health Score: Uses localSelectedPropertyId */}
+        {/* 1. Property Health Score: Uses selectedPropertyId */}
         {selectedProperty ? (
           <div className="md:col-span-1">
             <PropertyHealthScoreCard property={selectedProperty} /> 
@@ -309,14 +314,16 @@ export default function DashboardPage() {
            </div>
         )}
         
-        {/* 2. Risk Assessment Score: Uses localSelectedPropertyId */}
+        {/* 2. Risk Assessment Score: Uses selectedPropertyId */}
         <div className="md:col-span-1">
-            <PropertyRiskScoreCard propertyId={localSelectedPropertyId} />
+            {/* [MODIFICATION] Use context value here */}
+            <PropertyRiskScoreCard propertyId={selectedPropertyId} />
         </div>
         
-        {/* 3. Financial Efficiency Score: Uses localSelectedPropertyId */}
+        {/* 3. Financial Efficiency Score: Uses selectedPropertyId */}
         <div className="md:col-span-1">
-            <FinancialEfficiencyScoreCard propertyId={localSelectedPropertyId} />
+            {/* [MODIFICATION] Use context value here */}
+            <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
         </div>
         
         {/* 4. MyPropertiesCard (REMOVED for EXISTING_OWNER) */}
@@ -330,7 +337,7 @@ export default function DashboardPage() {
         bookings={data.bookings}
         properties={data.properties}
         checklistItems={checklistItems}
-        selectedPropertyId={localSelectedPropertyId} // Pass selected ID from local state
+        selectedPropertyId={selectedPropertyId} // Pass selected ID from context state
       />
     </DashboardShell>
   );

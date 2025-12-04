@@ -7,6 +7,8 @@ import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
 import { User } from '@/types';
 import { cn } from '@/lib/utils'; 
+// [NEW IMPORT]
+import { usePropertyContext } from '@/lib/property/PropertyContext';
 
 // --- FEATURE FLAG CHECK ---
 const isChatEnabled = process.env.NEXT_PUBLIC_GEMINI_CHAT_ENABLED === 'true';
@@ -37,6 +39,8 @@ export const AIChat: React.FC = () => {
   }
     
   const { user } = useAuth();
+  // [MODIFICATION] Get selectedPropertyId from context
+  const { selectedPropertyId } = usePropertyContext();
   
   const [sessionId] = useState(() => Date.now().toString());
 
@@ -74,6 +78,8 @@ export const AIChat: React.FC = () => {
         const response = await api.sendMessageToChat({
             sessionId: sessionId, 
             message: userMsg,
+            // [MODIFICATION] Pass the selectedPropertyId from context
+            propertyId: selectedPropertyId,
         });
         
         // --- FIX for 'Property data does not exist' error: Check for success ---
@@ -104,8 +110,8 @@ export const AIChat: React.FC = () => {
     } finally {
         setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [input, loading, sessionId]);
+    // [MODIFICATION] Add selectedPropertyId to useCallback dependencies
+  }, [input, loading, sessionId, selectedPropertyId]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {

@@ -62,6 +62,7 @@ type ProviderProfile = Provider & {
 interface SendMessageToChatPayload {
   sessionId: string;
   message: string;
+  propertyId?: string;
 }
 
 interface ChatResponse {
