@@ -1,8 +1,9 @@
 // apps/backend/src/controllers/gemini.controller.ts
 
-import { Request, Response, NextFunction } from 'express';
+import { Response, NextFunction } from 'express';
 import { geminiService } from '../services/gemini.service';
-import { APIError } from '../types'; // Assuming APIError is imported or defined
+import { APIError } from '../types';
+import { AuthRequest } from '../types/auth.types';
 
 class GeminiController {
   
@@ -10,18 +11,16 @@ class GeminiController {
    * Handles sending a message to the Gemini chat service, 
    * now including an optional propertyId for context injection.
    */
-  public sendMessageToChat = async (req: Request, res: Response, next: NextFunction) => {
+  public sendMessageToChat = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const { sessionId, message, propertyId } = req.body; 
       
-      // [FIX] Robustly extract the authenticated user's ID
-      // NOTE: We rely on Express typings augmentation from the project, casting to 'any' for safety here.
-      const userId = (req as any).user?.id; 
+      // FIX: Changed from (req as any).user?.id to req.user?.userId
+      // The AuthUser interface uses 'userId' not 'id'
+      const userId = req.user?.userId;
 
-      // [CRITICAL FIX] Ensure userId is present after authentication middleware.
+      // Ensure userId is present after authentication middleware
       if (!userId) {
-        // If the authentication middleware ran but failed to set the ID, or req.user is missing/malformed.
-        // This causes the "User undefined" error.
         throw new Error('Authentication failure: User ID not found in request.');
       }
 
@@ -43,7 +42,7 @@ class GeminiController {
 
       res.status(200).json({
         success: true,
-        data: response, 
+        data: { text: response }, 
       });
     } catch (error) {
       // Catch the explicit error from geminiService and return a structured response
