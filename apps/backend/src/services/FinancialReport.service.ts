@@ -7,6 +7,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 // Import the singleton instance (the value) AND the named constant
 import JobQueueService, { propertyIntelligenceQueue } from './JobQueue.service'; 
 import { PropertyIntelligenceJobType, PropertyIntelligenceJobPayload } from '../config/risk-job-types'; 
+import { FinancialCalculationResult } from '../utils/FinancialCalculator.util';
 
 
 // Define expected structure for the public-facing report summary
@@ -35,15 +36,59 @@ export class FinancialReportService {
     public async calculateAndSaveFES(propertyId: string): Promise<FinancialEfficiencyReport> {
         console.log(`Starting FES calculation for property: ${propertyId}`);
         
-        // 1. Get Calculation Results
-        const result = await calculateFinancialEfficiency(propertyId);
-
+        // 1. Fetch property with all financial data
+        const property = await prisma.property.findUnique({
+            where: { id: propertyId },
+            include: {
+                insurancePolicies: true,
+                warranties: true,
+                expenses: {
+                    where: {
+                        category: 'UTILITY',
+                        transactionDate: { gte: new Date(new Date().setFullYear(new Date().getFullYear() - 1)) },
+                    },
+                },
+            },
+        });
+    
+        if (!property) {
+            throw new Error(`Property with ID ${propertyId} not found.`);
+        }
+    
+        // 2. Get benchmark
+        let benchmark: any = null;
+        if (property.propertyType) {
+            benchmark = await prisma.financialEfficiencyConfig.findUnique({
+                where: { 
+                    zipCode_propertyType: { 
+                        zipCode: property.zipCode, 
+                        propertyType: property.propertyType 
+                    } 
+                },
+            });
+            
+            if (!benchmark) {
+                benchmark = await prisma.financialEfficiencyConfig.findFirst({
+                    where: { zipCode: null, propertyType: property.propertyType },
+                });
+            }
+        }
+    
+        // 3. Calculate (using pure function)
+        const result = calculateFinancialEfficiency({
+            property,
+            insurancePolicies: property.insurancePolicies,
+            warranties: property.warranties,
+            utilityExpenses: property.expenses,
+            benchmark,
+        });
+    
         // Calculate the Financial Exposure Total (Actual Cost, AC_Total) for logging/return value
         const financialExposureTotal = result.actualInsuranceCost
             .plus(result.actualUtilityCost)
             .plus(result.actualWarrantyCost);
-
-        // 2. Persist the result to the database (using upsert)
+    
+        // 4. Persist the result to the database (using upsert)
         const report = await prisma.financialEfficiencyReport.upsert({
             where: { propertyId },
             update: {
@@ -62,7 +107,7 @@ export class FinancialReportService {
                 marketAverageTotal: result.marketAverageTotal,
             }
         });
-
+    
         console.log(`FES report saved for ${propertyId}. Score: ${report.financialEfficiencyScore}, Exposure: ${financialExposureTotal.toFixed(2)}`);
         return report;
     }
