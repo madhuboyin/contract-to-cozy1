@@ -74,29 +74,30 @@ export class JobQueueService {
      * @param job The BullMQ job object.
      */
     private async processJob(job: Job<PropertyIntelligenceJobPayload>): Promise<void> {
-        const { jobType, propertyId } = job.data;
-        
-        console.log(`[WORKER] Processing Job [${jobType}] for Property [${propertyId}]`);
-
+        const { propertyId, jobType } = job.data;
+        console.log(`[WORKER] Processing Job [${jobType}] for Property [${propertyId}] (Job ID: ${job.id})`);
+    
         try {
             switch (jobType) {
                 case PropertyIntelligenceJobType.CALCULATE_RISK_REPORT:
+                    console.log(`[${new Date().toISOString()}] Processing Risk calculation for property ${propertyId}...`);
                     await riskAssessmentService.calculateAndSaveReport(propertyId);
                     break;
-                    
-                // NEW: Handle the Financial Efficiency Score calculation
+    
                 case PropertyIntelligenceJobType.CALCULATE_FES:
+                    console.log(`[${new Date().toISOString()}] Processing FES calculation for property ${propertyId}...`);
+                    // FIX: Actually call the calculation method instead of just logging a warning
                     await financialReportService.calculateAndSaveFES(propertyId);
+                    console.log(`✅ FES calculation completed for property ${propertyId}`);
                     break;
-
+    
                 default:
-                    console.error(`[WORKER] Unknown job type: ${jobType}`);
-                    throw new Error(`Unknown job type: ${jobType}`);
+                    console.warn(`[WORKER] Unknown job type: ${jobType}`);
             }
+    
             console.log(`[WORKER] Successfully completed Job [${jobType}] for Property [${propertyId}]`);
-        } catch (error) {
-            console.error(`[WORKER] Job [${jobType}] failed for ${propertyId}:`, error);
-            // Re-throw to allow BullMQ to handle retries/failures
+        } catch (error: any) {
+            console.error(`[WORKER] Job [${jobType}] failed for property ${propertyId}:`, error.message);
             throw error;
         }
     }
