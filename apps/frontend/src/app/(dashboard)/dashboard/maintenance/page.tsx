@@ -253,26 +253,40 @@ export default function MaintenancePage() {
 
   const handleMarkComplete = useMutation({
     mutationFn: async (item: DashboardChecklistItem) => {
-        const response = await api.updateChecklistItem(item.id, { status: 'COMPLETED' });
-        if (!response.success) {
-            throw new Error(response.error?.message || 'Failed to mark as complete.');
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/checklist/items/${item.id}`,
+        {
+          method: 'PUT', // Use PUT for status updates
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status: 'COMPLETED' }),
         }
-        return response.data;
+      );
+  
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to mark as complete.');
+      }
+  
+      return response.json();
     },
     onSuccess: (data) => {
-        queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); 
-        toast({ 
-            title: "Task Completed", 
-            description: `"${data.title}" reset for its next cycle.`, 
-            variant: 'default'
-        });
+      queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); 
+      toast({ 
+        title: "Task Completed", 
+        description: `"${data.title}" reset for its next cycle.`, 
+        variant: 'default'
+      });
     },
     onError: (error) => {
-        toast({
-            title: "Completion Failed",
-            description: error.message || "Could not mark task as complete.",
-            variant: "destructive",
-        });
+      toast({
+        title: "Completion Failed",
+        description: error.message || "Could not mark task as complete.",
+        variant: "destructive",
+      });
     }
   });
 

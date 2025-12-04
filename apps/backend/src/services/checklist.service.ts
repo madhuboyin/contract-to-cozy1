@@ -7,6 +7,7 @@ import {
   ServiceCategory,
   Prisma,
   ChecklistItem,
+  RecurrenceFrequency,
 } from '@prisma/client';
 import { MaintenanceTaskConfig } from '../types/maintenance.types';
 
@@ -453,6 +454,62 @@ export class ChecklistService {
         id: itemId,
       },
       data: dataToUpdate,
+    });
+
+    return updatedItem;
+  }
+
+    /**
+   * Update configuration of a checklist item (not just status).
+   * @param userId The ID of the user.
+   * @param itemId The ID of the checklist item to update.
+   * @param data Partial data to update (title, description, isRecurring, frequency, nextDueDate, serviceCategory).
+   */
+  static async updateChecklistItemConfig(
+    userId: string,
+    itemId: string,
+    data: {
+      title?: string;
+      description?: string;
+      isRecurring?: boolean;
+      frequency?: RecurrenceFrequency | null;
+      nextDueDate?: string | null;
+      serviceCategory?: string | null;
+    }
+  ): Promise<ChecklistItem> {
+    // 1. Verify the checklist item belongs to the user for security
+    const item = await prisma.checklistItem.findFirst({
+      where: {
+        id: itemId,
+        checklist: {
+          homeownerProfile: {
+            userId: userId,
+          },
+        },
+      },
+    });
+
+    if (!item) {
+      throw new Error('Checklist item not found or user does not have access.');
+    }
+
+    // 2. Update the item with the provided data
+    const updatedItem = await prisma.checklistItem.update({
+      where: {
+        id: itemId,
+      },
+      data: {
+        ...(data.title !== undefined && { title: data.title }),
+        ...(data.description !== undefined && { description: data.description }),
+        ...(data.isRecurring !== undefined && { isRecurring: data.isRecurring }),
+        ...(data.frequency !== undefined && { frequency: data.frequency }),
+        ...(data.nextDueDate !== undefined && { 
+          nextDueDate: data.nextDueDate ? new Date(data.nextDueDate) : null 
+        }),
+        ...(data.serviceCategory !== undefined && { 
+          serviceCategory: data.serviceCategory as ServiceCategory | null 
+        }),
+      },
     });
 
     return updatedItem;

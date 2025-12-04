@@ -67,6 +67,41 @@ const handleUpdateChecklistItem = async (
   }
 };
 
+/**
+ * Updates configuration of a single checklist item (PATCH).
+ */
+const handlePatchChecklistItem = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required.' });
+    }
+    const userId = req.user.userId;
+
+    const { itemId } = req.params;
+    const updateData = req.body;
+
+    const updatedItem = await ChecklistService.updateChecklistItemConfig(
+      userId,
+      itemId,
+      updateData
+    );
+
+    res.status(200).json(updatedItem);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.message.includes('access') || error.message.includes('not found'))
+    ) {
+      return res.status(404).json({ message: error.message });
+    }
+    next(error);
+  }
+};
+
 // --- NEW FUNCTION for DELETE (ADDED) ---
 /**
  * Deletes a single checklist item.
@@ -141,6 +176,7 @@ const handleCreateMaintenanceItems = async (
 export const checklistController = {
   handleGetChecklist,
   handleUpdateChecklistItem,
+  handlePatchChecklistItem,
   handleCreateMaintenanceItems,
   // FIX: Add the new handler to the exported object
   handleDeleteChecklistItem,

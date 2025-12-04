@@ -23,18 +23,27 @@ router.put(
   checklistController.handleUpdateChecklistItem
 );
 
-// --- NEW ROUTE: DELETE Checklist Item ---
+/**
+ * @route   PATCH /api/checklist/items/:itemId
+ * @desc    Update a checklist item's configuration (title, description, etc.)
+ * @access  Private
+ */
+router.patch(
+  '/items/:itemId',
+  authenticate,
+  checklistController.handlePatchChecklistItem
+);
+
 /**
  * @route   DELETE /api/checklist/items/:itemId
  * @desc    Delete a checklist item (used for recurring maintenance tasks)
  * @access  Private
  */
 router.delete(
-  '/items/:itemId', // <--- ADDED DELETE ROUTE
+  '/items/:itemId',
   authenticate,
   checklistController.handleDeleteChecklistItem
 );
-// ----------------------------------------
 
 /**
  * @route   POST /api/checklist/maintenance-items
@@ -47,6 +56,5 @@ router.post(
   authenticate,
   checklistController.handleCreateMaintenanceItems
 );
-// --- END NEW ROUTE ---
 
 export default router;
