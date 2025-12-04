@@ -1,5 +1,7 @@
+// apps/backend/src/utils/jwt.util.ts
+
 import jwt from 'jsonwebtoken';
-import { jwtConfig } from '../config/jwt.config'; // Keep import for other config data (expiresIn)
+import { jwtConfig } from '../config/jwt.config'; // Keep import for expiration times and other keys
 
 export interface JWTPayload {
   userId: string;
@@ -12,11 +14,11 @@ export interface TokenPair {
   refreshToken: string;
 }
 
-// Helper to ensure the JWT_SECRET is available and cast to string
+// CRITICAL HELPER: Ensures we get the secret directly from the environment
 const getJwtSecret = (): string => {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
-    // This will cause a crash on service startup if the variable is missing, which is correct
+    // Fail-fast if the master secret is missing
     throw new Error('FATAL: JWT_SECRET environment variable is missing.');
   }
   return secret;
@@ -24,7 +26,7 @@ const getJwtSecret = (): string => {
 
 
 /**
- * Generate access token (FIXED to use ENV variable)
+ * Generate access token (FIXED to use ENV variable for signing)
  */
 export const generateAccessToken = (payload: JWTPayload): string => {
   return jwt.sign(payload, getJwtSecret(), {
@@ -33,10 +35,10 @@ export const generateAccessToken = (payload: JWTPayload): string => {
 };
 
 /**
- * Generate refresh token (FIXED to use ENV variable)
+ * Generate refresh token (FIXED to use ENV variable for signing)
  */
 export const generateRefreshToken = (payload: JWTPayload): string => {
-  // NOTE: Assuming refresh tokens use the same main JWT_SECRET, which is a common practice.
+  // Uses the same main secret for consistency and reliability
   return jwt.sign(payload, getJwtSecret(), {
     expiresIn: jwtConfig.refreshToken.expiresIn,
   } as jwt.SignOptions);
@@ -53,11 +55,10 @@ export const generateTokenPair = (payload: JWTPayload): TokenPair => {
 };
 
 /**
- * Verify access token (FIXED to use ENV variable)
+ * Verify access token (FIXED to use ENV variable for verification)
  */
 export const verifyAccessToken = (token: string): JWTPayload => {
   try {
-    // CRITICAL FIX: Use the directly verified environment variable secret
     const decoded = jwt.verify(token, getJwtSecret()) as JWTPayload;
     return decoded;
   } catch (error) {
@@ -66,11 +67,10 @@ export const verifyAccessToken = (token: string): JWTPayload => {
 };
 
 /**
- * Verify refresh token (FIXED to use ENV variable)
+ * Verify refresh token (FIXED to use ENV variable for verification)
  */
 export const verifyRefreshToken = (token: string): JWTPayload => {
   try {
-    // CRITICAL FIX: Use the directly verified environment variable secret
     const decoded = jwt.verify(token, getJwtSecret()) as JWTPayload;
     return decoded;
   } catch (error) {
@@ -79,12 +79,12 @@ export const verifyRefreshToken = (token: string): JWTPayload => {
 };
 
 /**
- * Generate email verification token (FIXED to use ENV variable)
+ * Generate email verification token (Retained original logic for secondary secrets)
  */
 export const generateEmailVerificationToken = (userId: string, email: string): string => {
   return jwt.sign(
     { userId, email, purpose: 'email_verification' },
-    jwtConfig.emailVerificationToken.secret, // Assuming specific secrets for these are correctly loaded via config
+    jwtConfig.emailVerificationToken.secret, 
     { expiresIn: jwtConfig.emailVerificationToken.expiresIn } as jwt.SignOptions
   );
 };
