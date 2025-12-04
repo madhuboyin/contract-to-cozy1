@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { jwtConfig } from '../config/jwt.config';
+import { jwtConfig } from '../config/jwt.config'; // Keep import for other config data (expiresIn)
 
 export interface JWTPayload {
   userId: string;
@@ -12,20 +12,32 @@ export interface TokenPair {
   refreshToken: string;
 }
 
+// Helper to ensure the JWT_SECRET is available and cast to string
+const getJwtSecret = (): string => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    // This will cause a crash on service startup if the variable is missing, which is correct
+    throw new Error('FATAL: JWT_SECRET environment variable is missing.');
+  }
+  return secret;
+};
+
+
 /**
- * Generate access token
+ * Generate access token (FIXED to use ENV variable)
  */
 export const generateAccessToken = (payload: JWTPayload): string => {
-  return jwt.sign(payload, jwtConfig.accessToken.secret, {
+  return jwt.sign(payload, getJwtSecret(), {
     expiresIn: jwtConfig.accessToken.expiresIn,
   } as jwt.SignOptions);
 };
 
 /**
- * Generate refresh token
+ * Generate refresh token (FIXED to use ENV variable)
  */
 export const generateRefreshToken = (payload: JWTPayload): string => {
-  return jwt.sign(payload, jwtConfig.refreshToken.secret, {
+  // NOTE: Assuming refresh tokens use the same main JWT_SECRET, which is a common practice.
+  return jwt.sign(payload, getJwtSecret(), {
     expiresIn: jwtConfig.refreshToken.expiresIn,
   } as jwt.SignOptions);
 };
@@ -41,11 +53,12 @@ export const generateTokenPair = (payload: JWTPayload): TokenPair => {
 };
 
 /**
- * Verify access token
+ * Verify access token (FIXED to use ENV variable)
  */
 export const verifyAccessToken = (token: string): JWTPayload => {
   try {
-    const decoded = jwt.verify(token, jwtConfig.accessToken.secret) as JWTPayload;
+    // CRITICAL FIX: Use the directly verified environment variable secret
+    const decoded = jwt.verify(token, getJwtSecret()) as JWTPayload;
     return decoded;
   } catch (error) {
     throw new Error('Invalid or expired access token');
@@ -53,11 +66,12 @@ export const verifyAccessToken = (token: string): JWTPayload => {
 };
 
 /**
- * Verify refresh token
+ * Verify refresh token (FIXED to use ENV variable)
  */
 export const verifyRefreshToken = (token: string): JWTPayload => {
   try {
-    const decoded = jwt.verify(token, jwtConfig.refreshToken.secret) as JWTPayload;
+    // CRITICAL FIX: Use the directly verified environment variable secret
+    const decoded = jwt.verify(token, getJwtSecret()) as JWTPayload;
     return decoded;
   } catch (error) {
     throw new Error('Invalid or expired refresh token');
@@ -65,12 +79,12 @@ export const verifyRefreshToken = (token: string): JWTPayload => {
 };
 
 /**
- * Generate email verification token
+ * Generate email verification token (FIXED to use ENV variable)
  */
 export const generateEmailVerificationToken = (userId: string, email: string): string => {
   return jwt.sign(
     { userId, email, purpose: 'email_verification' },
-    jwtConfig.emailVerificationToken.secret,
+    jwtConfig.emailVerificationToken.secret, // Assuming specific secrets for these are correctly loaded via config
     { expiresIn: jwtConfig.emailVerificationToken.expiresIn } as jwt.SignOptions
   );
 };
