@@ -62,7 +62,7 @@ type ProviderProfile = Provider & {
 interface SendMessageToChatPayload {
   sessionId: string;
   message: string;
-  propertyId?: string;
+  propertyId?: string; // [MODIFICATION] Add optional propertyId
 }
 
 interface ChatResponse {
@@ -259,19 +259,42 @@ class APIClient {
 
       // 3a. Check for generic non-OK response (e.g., 400, 404, 500)
       if (!response.ok) {
-        const errorMessage = (data && data.error) || (data && data.message) || `HTTP Error: ${response.status}`;
+        // [MODIFICATION START] Make error message extraction robust
+        let rawError = (data && data.error) || (data && data.message) || `HTTP Error: ${response.status}`;
+        
+        // If the error property is an object (e.g., from a validation middleware), try to find its message
+        if (typeof rawError === 'object' && rawError !== null && (rawError as any).message) {
+            rawError = (rawError as any).message;
+        } else if (typeof rawError === 'object' && rawError !== null) {
+            // Last resort: JSON stringify the object if it's still an object
+            rawError = JSON.stringify(rawError);
+        }
+        
+        const errorMessage = typeof rawError === 'string' ? rawError : `HTTP Error: ${response.status}`;
+        // [MODIFICATION END]
+        
         // CRITICAL FIX: THROW an error instead of returning a success: false object
         throw new APIError(errorMessage, response.status);
       }
 
       // 3b. Check for API logic failure (e.g., backend uses HTTP 200 but sends { success: false })
       if (data && data.success === false) {
-          const errorMessage = data.message || (data.error && data.error.message) || 'Request failed due to business logic error.';
+          // [MODIFICATION START] Apply same robust extraction here
+          let rawError = data.message || (data.error && data.error.message) || 'Request failed due to business logic error.';
+          
+          if (typeof rawError === 'object' && rawError !== null && (rawError as any).message) {
+              rawError = (rawError as any).message;
+          } else if (typeof rawError === 'object' && rawError !== null) {
+              rawError = JSON.stringify(rawError);
+          }
+
+          const errorMessage = typeof rawError === 'string' ? rawError : 'Request failed due to business logic error.';
+          // [MODIFICATION END]
+          
           // CRITICAL FIX: THROW an error for business logic failure
           throw new APIError(errorMessage, response.status); 
       }
       // --- END: FIX 3 ---
-
 
       // --- DEBUG LOG 3: Log Final Data ---
       console.log('API DEBUG: Final Response Data:', data);

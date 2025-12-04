@@ -99,9 +99,17 @@ export const AIChat: React.FC = () => {
     } catch (error: any) {
         console.error("AI chat error:", error);
         
+        // [MODIFICATION START] Safely extract error message
+        const displayMessage = error.message 
+        ? error.message // Use the cleaned message from APIError
+        : String(error) !== '[object Object]' 
+          ? String(error) // Use error.toString() if it's not the generic placeholder
+          : 'Please try again.';
+
         const errorMessage = error.status === 403 
-            ? "The AI chat feature is currently disabled by configuration." 
-            : `Sorry, I ran into an error: ${error.message || 'Please try again.'}`;
+          ? "The AI chat feature is currently disabled by configuration." 
+          : `Sorry, I ran into an error: ${displayMessage}`;
+        // [MODIFICATION END]
             
         setMessages(prev => [...prev, { 
             role: 'model', 
