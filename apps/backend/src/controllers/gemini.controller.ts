@@ -2,9 +2,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { geminiService } from '../services/gemini.service';
-// Note: Assuming Request has been augmented in the project's types 
-// (e.g., in a @types/express declaration file) to include `req.user.id` 
-// from the authentication middleware.
+import { APIError } from '../types'; // Assuming APIError is imported or defined
 
 class GeminiController {
   
@@ -14,14 +12,20 @@ class GeminiController {
    */
   public sendMessageToChat = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      // 1. Extract sessionId, message, and the new optional propertyId from req.body
       const { sessionId, message, propertyId } = req.body; 
       
-      // 2. Access the authenticated user's ID
-      // Assuming req.user exists and has an id property populated by middleware
-      const userId = (req as any).user.id; 
+      // [FIX] Robustly extract the authenticated user's ID
+      // NOTE: We rely on Express typings augmentation from the project, casting to 'any' for safety here.
+      const userId = (req as any).user?.id; 
 
-      // Basic input validation check (a proper solution would use validation middleware)
+      // [CRITICAL FIX] Ensure userId is present after authentication middleware.
+      if (!userId) {
+        // If the authentication middleware ran but failed to set the ID, or req.user is missing/malformed.
+        // This causes the "User undefined" error.
+        throw new Error('Authentication failure: User ID not found in request.');
+      }
+
+      // Basic input validation check
       if (!sessionId || !message || typeof sessionId !== 'string' || typeof message !== 'string') {
         return res.status(400).json({ success: false, message: 'Invalid session or message data.' });
       }
@@ -29,7 +33,7 @@ class GeminiController {
         return res.status(400).json({ success: false, message: 'Invalid propertyId format.' });
       }
 
-      // 3. Update the service call: pass userId, sessionId, message, and propertyId
+      // Pass userId, sessionId, message, and propertyId to the service
       const response = await geminiService.sendMessageToChat(
         userId, 
         sessionId, 
@@ -42,6 +46,15 @@ class GeminiController {
         data: response, 
       });
     } catch (error) {
+      // Catch the explicit error from geminiService and return a structured response
+      if (error instanceof Error && error.message.includes('Property data does not exist')) {
+        return res.status(403).json({ success: false, message: error.message });
+      }
+      // Catch the Critical Fix error above
+      if (error instanceof Error && error.message.includes('Authentication failure')) {
+         return res.status(401).json({ success: false, message: 'Invalid session. Please log in again.' });
+      }
+      // Pass other errors (like Gemini API errors) to the general error handler
       next(error);
     }
   };
