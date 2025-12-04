@@ -8,7 +8,7 @@ import { api } from '@/lib/api/client';
 import { User } from '@/types';
 import { cn } from '@/lib/utils'; 
 // [NEW IMPORT]
-import { usePropertyContext } from '@/lib/property/PropertyContext';
+import { usePropertyContext } from '@/lib/property/PropertyContext'; 
 
 // --- FEATURE FLAG CHECK ---
 const isChatEnabled = process.env.NEXT_PUBLIC_GEMINI_CHAT_ENABLED === 'true';
@@ -99,17 +99,14 @@ export const AIChat: React.FC = () => {
     } catch (error: any) {
         console.error("AI chat error:", error);
         
-        // [MODIFICATION START] Safely extract error message
+        // [MODIFICATION] Robustly extract and format error message
         const displayMessage = error.message 
-        ? error.message // Use the cleaned message from APIError
-        : String(error) !== '[object Object]' 
-          ? String(error) // Use error.toString() if it's not the generic placeholder
-          : 'Please try again.';
-
+          ? error.message 
+          : 'An unexpected API or network error occurred. Please check the console.';
+        
         const errorMessage = error.status === 403 
-          ? "The AI chat feature is currently disabled by configuration." 
-          : `Sorry, I ran into an error: ${displayMessage}`;
-        // [MODIFICATION END]
+            ? "The AI chat feature is currently disabled by configuration." 
+            : `Sorry, I ran into an error: ${displayMessage}`;
             
         setMessages(prev => [...prev, { 
             role: 'model', 
@@ -118,7 +115,7 @@ export const AIChat: React.FC = () => {
     } finally {
         setLoading(false);
     }
-    // [MODIFICATION] Add selectedPropertyId to useCallback dependencies
+    // [MODIFICATION] Added selectedPropertyId to dependencies
   }, [input, loading, sessionId, selectedPropertyId]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
