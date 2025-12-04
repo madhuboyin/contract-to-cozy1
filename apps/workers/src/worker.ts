@@ -233,6 +233,7 @@ async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
 
       if (assetRisk) {
         assetRisks.push(assetRisk);
+        console.log(`[RISK-CALC-WORKER] Asset ${config.systemType} - P: ${assetRisk.probability}, OOP: ${assetRisk.outOfPocketCost}, Risk: ${assetRisk.riskDollar}`);
         console.log(`[RISK-CALC] Calculated risk for ${config.systemType}: $${assetRisk.riskDollar}`);
       } else {
         console.warn(`[RISK-CALC] Skipped ${config.systemType} (no install year)`);
@@ -243,6 +244,7 @@ async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
 
     // Calculate total risk score
     const reportData = calculateTotalRiskScore(property as any, assetRisks);
+    console.log(`[RISK-CALC-WORKER] Final Score: ${reportData.riskScore}, Total Exposure: $${reportData.financialExposureTotal}`);
 
     // Save or update the report
     await (prisma as any).riskAssessmentReport.upsert({
