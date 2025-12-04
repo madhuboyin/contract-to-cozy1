@@ -13,6 +13,7 @@ import { Worker } from 'bullmq';
 // Import shared utilities from backend - ADDED filterRelevantAssets
 import { calculateAssetRisk, calculateTotalRiskScore, filterRelevantAssets, AssetRiskDetail } from '../../backend/src/utils/riskCalculator.util';
 import { RISK_ASSET_CONFIG } from '../../backend/src/config/risk-constants';
+import { calculateFinancialEfficiency } from '../../backend/src/utils/FinancialCalculator.util';
 
 const prisma = new PrismaClient();
 
@@ -272,7 +273,7 @@ async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
   }
 }
 
-/**
+ /**
  * Process FES calculation
  */
 async function processFESCalculation(jobData: PropertyIntelligenceJobPayload) {
@@ -281,10 +282,7 @@ async function processFESCalculation(jobData: PropertyIntelligenceJobPayload) {
   const propertyId = jobData.propertyId;
 
   try {
-    // Import the calculation function from backend
-    const { calculateFinancialEfficiency } = require('../../backend/src/utils/FinancialCalculator.util');
-    
-    // 1. Calculate the FES
+    // 1. Calculate the FES (using imported function)
     const result = await calculateFinancialEfficiency(propertyId);
 
     // 2. Save to database
