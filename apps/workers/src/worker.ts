@@ -273,13 +273,52 @@ async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
 }
 
 /**
- * Process FES calculation (placeholder)
+ * Process FES calculation
  */
 async function processFESCalculation(jobData: PropertyIntelligenceJobPayload) {
   console.log(`[${new Date().toISOString()}] Processing FES calculation for property ${jobData.propertyId}...`);
   
-  // TODO: Implement FES calculation logic
-  console.log(`⚠️ FES calculation not yet implemented for property ${jobData.propertyId}.`);
+  const propertyId = jobData.propertyId;
+
+  try {
+    // Import the calculation function from backend
+    const { calculateFinancialEfficiency } = require('../../backend/src/utils/FinancialCalculator.util');
+    
+    // 1. Calculate the FES
+    const result = await calculateFinancialEfficiency(propertyId);
+
+    // 2. Save to database
+    await (prisma as any).financialEfficiencyReport.upsert({
+      where: { propertyId },
+      update: {
+        financialEfficiencyScore: result.score,
+        actualInsuranceCost: result.actualInsuranceCost,
+        actualUtilityCost: result.actualUtilityCost,
+        actualWarrantyCost: result.actualWarrantyCost,
+        marketAverageTotal: result.marketAverageTotal,
+        lastCalculatedAt: new Date(),
+      },
+      create: {
+        propertyId: propertyId,
+        financialEfficiencyScore: result.score,
+        actualInsuranceCost: result.actualInsuranceCost,
+        actualUtilityCost: result.actualUtilityCost,
+        actualWarrantyCost: result.actualWarrantyCost,
+        marketAverageTotal: result.marketAverageTotal,
+      }
+    });
+
+    const totalExposure = result.actualInsuranceCost
+      .plus(result.actualUtilityCost)
+      .plus(result.actualWarrantyCost);
+
+    console.log(`✅ FES calculation completed for property ${propertyId}.`);
+    console.log(`   Score: ${result.score}, Exposure: $${totalExposure.toFixed(2)}`);
+    
+  } catch (error) {
+    console.error('❌ Error calculating FES:', error);
+    throw error;
+  }
 }
 
 /**
