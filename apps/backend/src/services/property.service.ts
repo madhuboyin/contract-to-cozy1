@@ -1,6 +1,6 @@
 // apps/backend/src/services/property.service.ts
 
-import { PrismaClient, Property, PropertyType, OwnershipType, HeatingType, CoolingType, WaterHeaterType, RoofType, HomeAsset, Prisma } from '@prisma/client';
+import { PrismaClient, Property, PropertyType, OwnershipType, HeatingType, CoolingType, WaterHeaterType, RoofType, HomeAsset, Prisma, ChecklistItem } from '@prisma/client';
 // IMPORT REQUIRED: Import the utility and interface
 import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.util'; 
 
@@ -72,7 +72,22 @@ export interface ScoredProperty extends PropertyWithAssets {
     healthScore: HealthScoreResult;
 }
 
-// [NEW INTERFACE] Defines the minimal subset of data needed for AI context.
+// [NEW INTERFACE] Defines the minimal subset of Risk Report data needed for AI context.
+interface RiskAssessmentReportForAI {
+  riskScore: number;
+  financialExposureTotal: Prisma.Decimal;
+  details: Prisma.InputJsonValue;
+  lastCalculatedAt: Date;
+}
+
+// Type for renewals (combines warranties and insurance policies)
+export interface Renewal {
+  id: string;
+  expiryDate: Date;
+  type: string;
+}
+
+// [UPDATED INTERFACE] Defines the minimal subset of data needed for AI context.
 export interface PropertyAIGuidance {
   id: string;
   address: string;
@@ -85,6 +100,11 @@ export interface PropertyAIGuidance {
   coolingType: CoolingType | null;
   roofType: RoofType | null;
   hvacInstallYear: number | null;
+  // FIX 1: Add Risk Report relation
+  riskReport: RiskAssessmentReportForAI | null; 
+  // FIX 2: Add missing relations for maintenance and renewals
+  maintenanceTasks: ChecklistItem[];
+  renewals: Renewal[];
 }
 // ===============================================
 
@@ -323,8 +343,8 @@ export async function getPropertyById(propertyId: string, userId: string): Promi
 }
 
 /**
- * [NEW FUNCTION] Get a subset of property data required for AI context, 
- * enforcing ownership but bypassing scoring/asset loading.
+ * [FIXED FUNCTION] Get a subset of property data required for AI context, 
+ * enforcing ownership and now including the Risk Report, Maintenance, and Renewals.
  */
 export async function getPropertyContextForAI(propertyId: string, userId: string): Promise<PropertyAIGuidance | null> {
   const homeownerProfileId = await getHomeownerProfileId(userId);
@@ -346,11 +366,58 @@ export async function getPropertyContextForAI(propertyId: string, userId: string
       coolingType: true,
       roofType: true,
       hvacInstallYear: true,
+      // === FIX 1: Add riskReport selection here ===
+      riskReport: {
+        select: {
+          riskScore: true,
+          financialExposureTotal: true,
+          details: true, // Fetch the asset risk details JSON
+          lastCalculatedAt: true,
+        }
+      },
+      // === FIX 2: Add missing relations for maintenance and renewals ===
+      checklistItems: true,
+      warranties: {
+        select: {
+          id: true,
+          expiryDate: true,
+          providerName: true,
+        }
+      },
+      insurancePolicies: {
+        select: {
+          id: true,
+          expiryDate: true,
+          carrierName: true,
+          coverageType: true,
+        }
+      },
     }
   });
 
-  // Prisma's findFirst returns type PropertyAIGuidance | null directly due to the select statement
-  return property; 
+  if (!property) {
+    return null;
+  }
+
+  // Transform to match PropertyAIGuidance interface
+  const renewals: Renewal[] = [
+    ...property.warranties.map(w => ({
+      id: w.id,
+      expiryDate: w.expiryDate,
+      type: `Warranty: ${w.providerName}`,
+    })),
+    ...property.insurancePolicies.map(p => ({
+      id: p.id,
+      expiryDate: p.expiryDate,
+      type: `Insurance: ${p.carrierName}${p.coverageType ? ` (${p.coverageType})` : ''}`,
+    })),
+  ];
+
+  return {
+    ...property,
+    maintenanceTasks: property.checklistItems,
+    renewals,
+  } as PropertyAIGuidance; 
 }
 
 /**
