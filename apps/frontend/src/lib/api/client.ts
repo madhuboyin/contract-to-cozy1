@@ -1117,18 +1117,27 @@ class APIClient {
    * Calls GET /api/v1/financial-efficiency/summary?propertyId=... 
    */
   async getFinancialReportSummary(propertyId: string): Promise<FinancialReportSummary | null> {
+    // The summary endpoint returns the data directly, not wrapped in success/data
     const response = await this.request<FinancialReportSummary>(`/api/v1/financial-efficiency/summary?propertyId=${propertyId}`);
 
+    // FIX: Handle both wrapped and direct responses
     if (response.success && response.data) {
-        // Convert the financialExposureTotal (AC_Total) back to a number
+        // Wrapped response format
         const processedData: FinancialReportSummary = {
             ...response.data,
             financialExposureTotal: parseFloat(response.data.financialExposureTotal.toString()),
         };
         return processedData;
+    } else if ((response as any).propertyId) {
+        // Direct response format (what the backend actually returns)
+        const directResponse = response as any as FinancialReportSummary;
+        return {
+            ...directResponse,
+            financialExposureTotal: parseFloat(directResponse.financialExposureTotal.toString()),
+        };
     }
     return null;
-  }
+}
   
   /**
    * Fetches the full detailed FES report, queuing a new calculation if stale/missing.
