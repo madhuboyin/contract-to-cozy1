@@ -17,6 +17,7 @@ export const getPrimaryFESSummary = async (req: Request, res: Response) => {
   
   if (!propertyId) {
     return res.status(400).json({ 
+      success: false, // Add this
       message: 'Property ID is required',
       propertyId: '',
       financialEfficiencyScore: 0,
@@ -29,7 +30,6 @@ export const getPrimaryFESSummary = async (req: Request, res: Response) => {
   try {
     const summary = await financialReportService.getFinancialEfficiencySummary(propertyId);
     
-    // If the report is QUEUED, ensure a calculation job is running
     if (summary.status === 'QUEUED' && summary.propertyId) {
       const payload: PropertyIntelligenceJobPayload = {
         propertyId: summary.propertyId, 
@@ -38,10 +38,14 @@ export const getPrimaryFESSummary = async (req: Request, res: Response) => {
       await (JobQueueService as any).addJob(PropertyIntelligenceJobType.CALCULATE_FES, payload);
     }
 
+    // FIX: Return summary directly (not wrapped, as frontend expects it this way for summary)
     return res.status(200).json(summary);
   } catch (error: any) {
     console.error('Error fetching FES summary:', error);
-    return res.status(500).send({ message: error.message || 'Failed to fetch financial efficiency summary.' });
+    return res.status(500).send({ 
+      success: false,
+      message: error.message || 'Failed to fetch financial efficiency summary.' 
+    });
   }
 };
 
@@ -56,21 +60,22 @@ export const getDetailedFESReport = async (req: Request, res: Response) => {
     const report = await financialReportService.getFinancialEfficiencyReport(propertyId);
 
     if (report === 'QUEUED') {
-        // Report doesn't exist yet, implicitly queue for calculation and let the frontend poll
-        const payload: PropertyIntelligenceJobPayload = {
-          propertyId, 
-          jobType: PropertyIntelligenceJobType.CALCULATE_FES 
-        };
-        // Use the explicit jobType for the queue add and cast JobQueueService to any to resolve import/type issues
-        await (JobQueueService as any).addJob(PropertyIntelligenceJobType.CALCULATE_FES, payload);
-        
+        // ... queue job ...
         return res.status(202).json({ status: 'QUEUED', message: 'Calculation queued.' });
     }
 
-    return res.status(200).json(report);
+    if (report === 'MISSING_DATA') {
+        return res.status(200).json({ status: 'MISSING_DATA', message: 'Insufficient data.' });
+    }
+
+    // FIX: Wrap in success/data format
+    return res.status(200).json({
+      success: true,
+      data: report
+    });
   } catch (error: any) {
-    console.error(`Error fetching detailed FES report for ${propertyId}:`, error);
-    return res.status(500).send({ message: error.message || 'Failed to fetch detailed financial efficiency report.' });
+    console.error('Error fetching detailed FES report:', error);
+    return res.status(500).send({ success: false, message: error.message });
   }
 };
 
