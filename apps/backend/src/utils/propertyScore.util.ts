@@ -59,7 +59,25 @@ export function calculateHealthScore(
     // 15 points max, drops to 0 after 60 years.
     const ageScore = Math.max(0, BASE_WEIGHTS.AGE * (1 - age / 60));
     baseScore += ageScore;
-    insights.push({ factor: 'Age Factor', status: age < 15 ? 'Excellent' : age < 30 ? 'Good' : 'Needs Review', score: ageScore });
+    
+    // START FIX: Apply conditional status based on active bookings for the general Age Factor
+    let status = 'Good';
+    if (age < 15) {
+        status = 'Excellent';
+    } else if (age < 30) {
+        status = 'Good';
+    } else {
+        // Age >= 30, triggers 'Needs Review'
+        if (activeBookingCategories.includes('INSPECTION')) {
+            // FIX: Downgrade status if a general Home Inspection is booked
+            status = 'Action Pending'; 
+        } else {
+            status = 'Needs Review'; // High urgency
+        }
+    }
+    // END FIX
+
+    insights.push({ factor: 'Age Factor', status, score: ageScore });
   } else {
     insights.push({ factor: 'Age Factor', status: 'Missing Data', score: 0 });
     maxUnlockableScore += BASE_WEIGHTS.AGE; 
