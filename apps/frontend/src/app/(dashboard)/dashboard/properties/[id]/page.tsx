@@ -36,7 +36,7 @@ const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspec
 
 /**
  * Helper function to render a button based on the insight factor/status
- * FIXED: Logic now correctly uses the 'INSPECTION' ServiceCategory enum value for assessments.
+ * FIXED: Logic now maps all categories to the correct, uppercase Prisma ENUMs.
  */
 const renderContextualButton = (insight: any, propertyId: string) => {
     
@@ -51,7 +51,7 @@ const renderContextualButton = (insight: any, propertyId: string) => {
         
         // --- FIXED LOGIC: Map to valid ENUMs for Provider Search ---
         if (insight.factor.includes('Age Factor') || insight.factor.includes('Roof')) {
-            // These require comprehensive assessment/inspection, which is 'INSPECTION'
+            // Assessments go to INSPECTION category
             category = 'INSPECTION'; 
         } else if (insight.factor.includes('HVAC')) {
             category = 'HVAC';
@@ -60,7 +60,7 @@ const renderContextualButton = (insight: any, propertyId: string) => {
         } else if (insight.factor.includes('Exterior') || insight.factor.includes('Drainage')) {
             category = 'HANDYMAN'; 
         } else {
-            // Default to INSPECTION for any unmapped assessment/review status
+            // Default to INSPECTION for unmapped assessments/reviews
             category = 'INSPECTION';
         }
         // --- END FIXED LOGIC ---
@@ -86,6 +86,7 @@ const renderContextualButton = (insight: any, propertyId: string) => {
                 asChild 
                 className="w-full sm:w-auto"
             >
+                {/* Ensure the category query parameter uses the fixed ENUM string */}
                 <Link href={`/dashboard/providers?category=${category}`}>
                     {buttonLabel} <Wrench className="ml-2 h-4 w-4" />
                 </Link>
