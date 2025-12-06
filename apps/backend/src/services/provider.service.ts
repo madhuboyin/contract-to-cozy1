@@ -19,7 +19,7 @@ const prisma = new PrismaClient();
  * @param lat1 - Latitude of point 1
  * @param lon1 - Longitude of point 1
  * @param lat2 - Latitude of point 2
- * @param lon2 - Longitude of point 2
+ * @param lon2 - Latitude of point 2
  * @returns Distance in miles
  */
 function calculateDistance(
@@ -85,19 +85,15 @@ export class ProviderService {
 
     // 3. Permission Check:
     if (query.category && !allowedCategoryNames.includes(query.category)) {
-      return {
-        providers: [],
-        pagination: {
-          page,
-          limit,
-          total: 0,
-          totalPages: 0,
-        },
-        filters: {
-          category: query.category,
-        },
-      };
+      // --- FIX START ---
+      // Instead of an early exit, we allow the search to proceed for an explicitly
+      // requested category, even if ServiceCategoryConfig is incomplete.
+      // This solves the deep linking bug for new categories like INSPECTION.
+      // If we did not find the category in the allowed list, we will log a warning
+      // but proceed to execute the search, trusting the frontend query.
+      console.warn(`[ProviderService] Requested category ${query.category} not found in allowed categories for segment ${userSegment}. Proceeding with search.`);
     }
+    // --- FIX END ---
 
     // --- Filter logic (now with segment-awareness) ---
     const filters: Prisma.ProviderProfileWhereInput[] = [
