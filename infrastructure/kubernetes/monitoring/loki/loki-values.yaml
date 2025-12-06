@@ -1,69 +1,30 @@
-deploymentMode: SingleBinary
-
 loki:
-  auth_enabled: false
-
-  server:
-    http_listen_port: 3100
-
   storage:
     type: filesystem
-
-  storage_config:
-    filesystem:
-      directory: /var/loki/chunks
-    tsdb_shipper:
-      active_index_directory: /var/loki/index
-      shared_store: filesystem
-
-  schema_config:
-    configs:
-      - from: "2023-10-01"
-        store: tsdb
-        object_store: filesystem
-        schema: v13
-        index:
-          prefix: loki_index_
-          period: 24h
-
-  ruler:
-    enable_api: true
-    enable_alertmanager_v2: true
-    storage:
-      type: local
-      local:
-        directory: /var/loki/rules
-
-  limits_config:
-    retention_period: 7d
 
   compactor:
     retention_enabled: true
 
-singleBinary:
-  replicas: 1
-  persistence:
-    enabled: true
-    size: 10Gi
+  limits_config:
+    retention_period: 7d
 
-# Force ALL scalable components OFF 
-backend:
-  replicas: 0
-read:
-  replicas: 0
 write:
-  replicas: 0
-ingester:
-  replicas: 0
-distributor:
-  replicas: 0
-querier:
-  replicas: 0
-queryFrontend:
-  replicas: 0
-configs:
-  replicas: 0
+  replicas: 1
+
+read:
+  replicas: 1
+
+backend:
+  replicas: 1
+
+singleBinary:
+  enabled: false
+
 gateway:
-  replicas: 0
-indexGateway:
-  replicas: 0
+  enabled: false
+
+chunksCache:
+  enabled: false
+
+resultsCache:
+  enabled: false
