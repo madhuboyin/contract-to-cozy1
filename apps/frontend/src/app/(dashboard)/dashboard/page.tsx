@@ -21,12 +21,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import Link from 'next/link';
 // [NEW IMPORT]
 import { usePropertyContext } from '@/lib/property/PropertyContext';
+// [NEW IMPORT]
+import { WelcomeModal } from './components/WelcomeModal'; // <-- NEW IMPORT
 // END NEW IMPORTS
 
 import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
 import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
 
-const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
+// DEPRECATE: This local storage key is no longer used for forced redirect logic.
+const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
 
 interface DashboardData {
     bookings: Booking[];
@@ -45,7 +48,11 @@ export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: userLoading } = useAuth();
   const [redirectChecked, setRedirectChecked] = useState(false);
-  const [shouldRedirect, setShouldRedirect] = useState(false);
+  // [MODIFICATION] Removed unused shouldRedirect state
+  // const [shouldRedirect, setShouldRedirect] = useState(false); 
+  // [NEW STATE] To control the soft redirect overlay
+  const [showWelcomeScreen, setShowWelcomeScreen] = useState(false);
+  
   const [data, setData] = useState<DashboardData>({
     bookings: [],
     properties: [],
@@ -54,15 +61,14 @@ export default function DashboardPage() {
     error: null,
   });
   
-  // [MODIFICATION] Replaced local property selection state with context hook
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
 
 
-  // HIGHEST PRIORITY: Check redirect IMMEDIATELY
+  // HIGHEST PRIORITY: Check initial state and determine if soft redirect is needed
   useEffect(() => {
     const checkRedirect = async () => {
       console.log('╔════════════════════════════════════════════════════════╗');
-      console.log('║           REDIRECT CHECK - HIGHEST PRIORITY            ║');
+      console.log('║           ONBOARDING CHECK - Soft Redirect             ║');
       console.log('╚════════════════════════════════════════════════════════╝');
       
       if (userLoading) {
@@ -71,42 +77,32 @@ export default function DashboardPage() {
       }
 
       if (!user) {
-        console.log('❌ No user, skipping redirect check');
+        console.log('❌ No user, skipping check');
         setRedirectChecked(true);
         return;
       }
 
       if (redirectChecked) {
-        console.log('✅ Already checked redirect');
+        console.log('✅ Already checked initial state');
         return;
       }
 
       console.log('👤 User:', user.firstName);
       console.log('👤 User segment:', user.segment);
 
-      // Only EXISTING_OWNER needs redirect check
+      // Only EXISTING_OWNER needs this check
       if (user.segment !== 'EXISTING_OWNER') {
-        console.log('✋ Not EXISTING_OWNER, no redirect needed');
+        console.log('✋ Not EXISTING_OWNER, no soft redirect needed');
         setRedirectChecked(true);
         return;
       }
 
-      // Check skip flag FIRST
-      const skipFlag = localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY);
-      const hasSkipped = skipFlag === 'true';
-      
-      console.log('📦 localStorage skip flag value:', skipFlag);
-      console.log('✅ Has skipped?', hasSkipped);
-
-      if (hasSkipped) {
-        console.log('✋ User HAS SKIPPED, no redirect needed');
-        console.log('   Banner will be shown on dashboard');
-        setRedirectChecked(true);
-        return;
-      }
+      // [MODIFICATION] REMOVE CHECK FOR PROPERTY_SETUP_SKIPPED_KEY
+      // The flow is now intentionally blocked until setup starts.
+      // We still rely on the banner for existing users who might have skipped before.
 
       // User has NOT skipped - check properties
-      console.log('🔍 User has NOT skipped - checking property count...');
+      console.log('🔍 Checking property count...');
       try {
         const propertiesRes = await api.getProperties();
         const propertyCount = propertiesRes.success ? propertiesRes.data.properties.length : 0;
@@ -115,30 +111,27 @@ export default function DashboardPage() {
 
         if (propertyCount === 0) {
           console.log('');
-          console.log('🚀 REDIRECT TRIGGERED!');
-          console.log('   ├─ User segment: EXISTING_OWNER ✅');
-          console.log('   ├─ Property count: 0 ✅');
-          console.log('   ├─ Has NOT skipped ✅');
-          console.log('   └─ Redirecting to: /dashboard/properties/new');
-          console.log('');
+          console.log('🚀 SOFT REDIRECT TRIGGERED: Show WelcomeModal!');
           
-          setShouldRedirect(true);
-          router.push('/dashboard/properties/new');
-          // Don't set redirectChecked - keep loading state
+          // [MODIFICATION] Set new state to display the Welcome Modal/Overlay
+          setShowWelcomeScreen(true);
+          setRedirectChecked(true); // Treat this as the end of the redirect check
+          setData(prev => ({ ...prev, isLoading: false })); // Stop loading spinner in main render
         } else {
-          console.log('✋ User has', propertyCount, 'properties, no redirect needed');
+          console.log('✋ User has', propertyCount, 'properties, proceed to load dashboard data');
           setRedirectChecked(true);
         }
       } catch (error) {
         console.error('❌ Error checking properties:', error);
         setRedirectChecked(true);
+        setData(prev => ({ ...prev, error: 'Failed to check property status.', isLoading: false }));
       }
     };
 
     checkRedirect();
   }, [user, userLoading, redirectChecked, router]);
 
-  // Load dashboard data ONLY after redirect check completes
+  // Load dashboard data ONLY if not showing the welcome screen and redirect check completes
   const fetchDashboardData = async () => {
     if (!user) {
       console.log('DEBUG: User not logged in, halting fetch.');
@@ -193,7 +186,6 @@ export default function DashboardPage() {
         error: null,
       });
       
-      // [MODIFICATION] Initialize context state with the default property ID
       setSelectedPropertyId(defaultPropId);
 
     } catch (error: any) {
@@ -203,23 +195,30 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    if (user && !userLoading && redirectChecked && !shouldRedirect) {
+    // [MODIFICATION] Only fetch data if the user has properties (i.e., Welcome Screen is not showing)
+    if (user && !userLoading && redirectChecked && !showWelcomeScreen) {
       console.log('📊 Redirect check complete, fetching dashboard data...');
       fetchDashboardData();
     }
-  }, [user, userLoading, redirectChecked, shouldRedirect]);
+  }, [user, userLoading, redirectChecked, showWelcomeScreen]); // Dependency update
 
 
-  // Show loading while redirect check is happening OR during redirect
-  if (userLoading || !redirectChecked || shouldRedirect || data.isLoading) {
+  // --- CONDITIONAL RENDERING FOR LOADING AND MODAL ---
+  
+  if (userLoading || !redirectChecked || data.isLoading) {
+    // [MODIFICATION] Added a check to show a dedicated loading message while property count is being checked.
+    const loadingMessage = showWelcomeScreen ? 'Preparing welcome screen...' : 'Loading your personalized dashboard...';
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-        <p className="ml-3 text-lg text-gray-600">
-          {shouldRedirect ? 'Redirecting to property setup...' : 'Loading your personalized dashboard...'}
-        </p>
+        <p className="ml-3 text-lg text-gray-600">{loadingMessage}</p>
       </div>
     );
+  }
+
+  // [NEW RENDER CHECK] Display the Welcome Modal if triggered
+  if (showWelcomeScreen && user) {
+    return <WelcomeModal userFirstName={user.firstName} />;
   }
 
   if (!user || data.error) {
@@ -230,13 +229,14 @@ export default function DashboardPage() {
       </div>
     );
   }
+  // --- END CONDITIONAL RENDERING ---
+
 
   const userSegment = user.segment;
   const checklistItems = (data.checklist?.items || []) as ChecklistItem[];
   
   // Derived property values using the context state
   const properties = data.properties;
-  // [MODIFICATION] Use context value here
   const selectedProperty = properties.find(p => p.id === selectedPropertyId); 
   const isMultiProperty = properties.length > 1;
 
@@ -261,9 +261,8 @@ export default function DashboardPage() {
         <PageHeaderHeading>Welcome, {user.firstName}! Property Intelligence Dashboard</PageHeaderHeading>
       </PageHeader>
       
-      {/* --- FIX 3: Property Selection Row (MOVED HERE) --- */}
+      {/* --- Property Selection Row --- */}
       {selectedProperty && (
-          // FIX 4: Removed 'mt-2' to reduce space after PageHeaderHeading, and reduced 'mb-6' to 'mb-4'
           <div className="flex items-center space-x-3 mb-4"> 
               {!isMultiProperty ? (
                   // Scenario 1: Single Property - Show simplified address as standard paragraph text
@@ -274,9 +273,7 @@ export default function DashboardPage() {
                   // Scenario 2: Multiple Properties - Show Dropdown
                   <div className="flex items-center space-x-2">
                       <Select 
-                          // [MODIFICATION] Bind Select value to context value
                           value={selectedPropertyId} 
-                          // [MODIFICATION] Bind Select onValueChange to context setter
                           onValueChange={setSelectedPropertyId}
                       >
                           <SelectTrigger className="w-[300px] text-lg font-medium">
@@ -299,8 +296,7 @@ export default function DashboardPage() {
       )}
       {/* --- END Property Selection Row --- */}
 
-      {/* Scorecards Grid - Now displays exactly 3 cards */}
-      {/* FIX 2: Grid layout adjusted to 3 columns on large screens to accommodate only the 3 scorecards */}
+      {/* Scorecards Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
         
         {/* 1. Property Health Score: Uses selectedPropertyId */}
@@ -316,22 +312,17 @@ export default function DashboardPage() {
         
         {/* 2. Risk Assessment Score: Uses selectedPropertyId */}
         <div className="md:col-span-1">
-            {/* [MODIFICATION] Use context value here */}
             <PropertyRiskScoreCard propertyId={selectedPropertyId} />
         </div>
         
         {/* 3. Financial Efficiency Score: Uses selectedPropertyId */}
         <div className="md:col-span-1">
-            {/* [MODIFICATION] Use context value here */}
             <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
         </div>
-        
-        {/* 4. MyPropertiesCard (REMOVED for EXISTING_OWNER) */}
         
       </div>
       
       {/* ExistingOwnerDashboard renders the rest of the layout below the scorecards */}
-      {/* This section now occupies the full width below the scorecards, as the chat is floating. */}
       <ExistingOwnerDashboard 
         userFirstName={user.firstName}
         bookings={data.bookings}
