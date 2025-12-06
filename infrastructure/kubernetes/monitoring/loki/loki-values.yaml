@@ -1,20 +1,47 @@
+# Force Loki into single-binary mode
 deploymentMode: SingleBinary
 
-loki:
-  commonConfig:
-    replication_factor: 1
+# Disable ALL simple scalable components (required)
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+ingester:
+  replicas: 0
+distributor:
+  replicas: 0
+querier:
+  replicas: 0
+queryFrontend:
+  replicas: 0
+configs:
+  replicas: 0
+gateway:
+  replicas: 0
+compactor:
+  replicas: 0
+indexGateway:
+  replicas: 0
 
-  storage:
-    type: filesystem
-
-  limits_config:
-    retention_period: 7d
-
-  compactor:
-    retention_enabled: true
-
+# Enable ONLY the singleBinary Loki pod
 singleBinary:
   replicas: 1
   persistence:
     enabled: true
     size: 10Gi
+
+# Loki main configuration
+loki:
+  storage:
+    type: filesystem
+
+  commonConfig:
+    replication_factor: 1
+
+  limits_config:
+    retention_period: 7d   # CHANGE AS NEEDED: 1d, 7d, 30d, 90d
+
+  compactor:
+    retention_enabled: true
