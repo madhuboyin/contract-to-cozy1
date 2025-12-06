@@ -1,13 +1,53 @@
 deploymentMode: SingleBinary
 
-# Loki single binary deployment
-singleBinary:
-  replicas: 1
-  persistence:
-    enabled: true
-    size: 10Gi
+loki:
+  auth_enabled: false
 
-# Disable all scalable components
+  commonConfig:
+    replication_factor: 1
+
+  storage:
+    type: filesystem
+
+    # REQUIRED for Helm chart >= 6.0
+    bucketNames:
+      chunks: chunks
+      ruler: ruler
+      admin: admin
+
+  schema_config:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+
+  storage_config:
+    filesystem:
+      directory: /var/loki/chunks
+
+    tsdb_shipper:
+      active_index_directory: /var/loki/index
+      shared_store: filesystem
+
+  ruler:
+    enable_api: true
+    enable_alertmanager_v2: true
+    storage:
+      type: local
+      local:
+        directory: /var/loki/rules
+
+  limits_config:
+    retention_period: 7d
+
+  compactor:
+    retention_enabled: true
+
+# Disable scalable components
 backend:
   replicas: 0
 read:
@@ -31,30 +71,9 @@ compactor:
 indexGateway:
   replicas: 0
 
-# Loki configuration block
-loki:
-  auth_enabled: false
-
-  commonConfig:
-    replication_factor: 1
-
-  limits_config:
-    retention_period: 7d
-
-  compactor:
-    retention_enabled: true
-
-# REQUIRED for Helm chart v6.x
-lokiStorageConfig:
-  filesystem:
-    chunks_directory: /var/loki/chunks
-    rules_directory: /var/loki/rules
-
-  tsdb_shipper:
-    active_index_directory: /var/loki/index
-    shared_store: filesystem
-
-  schema_config:
-    configs:
-      - from: "2024-01-01"
-        store: tsd
+# Enable single binary statefulset
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true
+    size: 10Gi
