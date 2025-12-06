@@ -1,17 +1,17 @@
+deploymentMode: SingleBinary
+
 loki:
   commonConfig:
-    replication_factor: 1   # For single node or small K3s cluster
+    replication_factor: 1
 
   storage:
-    type: filesystem        # Raspberry Pi uses local disk
+    type: filesystem
 
   limits_config:
-    retention_period: 7d    # Change to 30d / 90d as needed
-    ingestion_rate_mb: 8
-    ingestion_burst_size_mb: 16
+    retention_period: 7d
 
   compactor:
-    retention_enabled: true # Required for log deletion
+    retention_enabled: true
 
 singleBinary:
   replicas: 1
