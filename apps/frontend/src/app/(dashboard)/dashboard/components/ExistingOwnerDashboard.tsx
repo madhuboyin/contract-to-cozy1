@@ -10,6 +10,9 @@ import { FavoriteProvidersCard } from './FavoriteProvidersCard';
 import { ArrowRight } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
+// [NEW IMPORT] Component that triggers the call-to-action
+import { MaintenanceNudgeCard } from './MaintenanceNudgeCard'; 
+
 // --- Updated Props Interface ---
 interface ExistingOwnerDashboardProps {
   bookings: Booking[];
@@ -69,13 +72,26 @@ export const ExistingOwnerDashboard = ({
     !item.serviceCategory || !RENEWAL_CATEGORIES.includes(item.serviceCategory as string)
   ); 
 
+  // [NEW LOGIC] Renders the high-contrast nudge card if action is required.
+  const renderNudgeCard = selectedProperty ? (
+    // Add margin top to separate it from the scorecards grid above it in page.tsx
+    <div className="mt-4">
+      <MaintenanceNudgeCard property={selectedProperty} />
+    </div>
+  ) : null;
+
+
   return (
     <div className="space-y-6 pb-8">
       {/* FIX: Removed duplicate welcome message block */}
       
       {/* FIX: Removed the Property Selection Row JSX */}
+      
+      {/* [NEW ROW 1: MAINTENANCE NUDGE CARD] Inserted here for high visibility after scores */}
+      {renderNudgeCard}
 
       {/* NEW ROW 2: Upcoming Bookings Card (Full width for prominence) */}
+      {/* NOTE: This component remains here but will now be rendered below the Nudge Card */}
       <div className="w-full">
         <UpcomingBookingsCard propertyId={selectedPropertyId} />
       </div>

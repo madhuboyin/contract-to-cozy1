@@ -238,6 +238,7 @@ export default function DashboardPage() {
   // Derived property values using the context state
   const properties = data.properties;
   const selectedProperty = properties.find(p => p.id === selectedPropertyId); 
+  console.log('🔍 Selected property:', selectedProperty);
   const isMultiProperty = properties.length > 1;
 
   console.log('🎨 Rendering dashboard for', userSegment);
