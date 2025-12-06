@@ -176,11 +176,29 @@ async function attachHealthScore(property: PropertyWithAssets): Promise<ScoredPr
     const documentCount = await prisma.document.count({
         where: { propertyId: property.id }
     });
+
+    // --- PHASE 2 IMPLEMENTATION START: Fetch Active Bookings ---
+    // Fetch bookings that are in progress or confirmed to detect if an issue is being resolved.
+    const activeBookings = await prisma.booking.findMany({
+        where: {
+            propertyId: property.id,
+            // We check for PENDING (scheduled but not done), CONFIRMED, or IN_PROGRESS.
+            // COMPLETED/CANCELLED do not count as "active resolution in progress".
+            status: { in: ['PENDING', 'CONFIRMED', 'IN_PROGRESS'] } 
+        },
+        select: { category: true }
+    });
+
+    // Map to a simple string array of categories (e.g., ['ROOFING', 'INSPECTION'])
+    // We cast to string[] to ensure compatibility with the utility function
+    const activeCategories = activeBookings.map(b => b.category.toString());
+    // --- PHASE 2 IMPLEMENTATION END ---
+
     // FIX: Add try/catch block for defensive coding against errors in scoring utility
     let healthScore: HealthScoreResult;
     try {
-        // The scoring utility must now be updated to consume property.homeAssets
-        healthScore = calculateHealthScore(property, documentCount);
+        // UPDATED CALL: Pass activeCategories to the calculator
+        healthScore = calculateHealthScore(property, documentCount, activeCategories);
     } catch (error) {
         console.error(`CRITICAL: Health score calculation failed for Property ID ${property.id}. Returning default score.`, error);
         // Fallback to a zero score and default insights to prevent server crash

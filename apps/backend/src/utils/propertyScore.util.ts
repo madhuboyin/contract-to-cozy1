@@ -38,8 +38,13 @@ const EXTRA_WEIGHTS = {
  * Calculates the Property Health Score based on property attributes and related data.
  * @param property The full Property object from Prisma.
  * @param documentCount The number of documents linked to the property.
+ * @param activeBookingCategories A list of service categories (e.g. 'INSPECTION', 'ROOFING') that have open bookings.
  */
-export function calculateHealthScore(property: Property, documentCount: number): HealthScoreResult {
+export function calculateHealthScore(
+  property: Property, 
+  documentCount: number,
+  activeBookingCategories: string[] = [] // Default to empty for backward compatibility
+): HealthScoreResult {
   const currentYear = new Date().getFullYear();
   let baseScore = 0;
   let extraScore = 0;
@@ -138,7 +143,17 @@ export function calculateHealthScore(property: Property, documentCount: number):
     const age = currentYear - property.hvacInstallYear;
     const hvacScore = Math.max(0, EXTRA_WEIGHTS.HVAC_AGE * (1 - age / 20));
     extraScore += hvacScore;
-    insights.push({ factor: 'HVAC Age', status: age < 8 ? 'Good' : 'Aging', score: hvacScore });
+    
+    let status = age < 8 ? 'Good' : 'Aging';
+    // Logic: If aging AND no active booking, then warn.
+    if (age >= 15) {
+        if (activeBookingCategories.includes('INSPECTION') || activeBookingCategories.includes('HVAC')) {
+            status = 'Action Pending'; // Downgrade urgency if booked
+        } else {
+            status = 'Needs Inspection'; // High urgency
+        }
+    }
+    insights.push({ factor: 'HVAC Age', status, score: hvacScore });
   } else {
     maxUnlockableScore += EXTRA_WEIGHTS.HVAC_AGE;
   }
@@ -148,7 +163,16 @@ export function calculateHealthScore(property: Property, documentCount: number):
     const age = currentYear - property.waterHeaterInstallYear;
     const whScore = Math.max(0, EXTRA_WEIGHTS.WATER_HEATER_AGE * (1 - age / 12));
     extraScore += whScore;
-    insights.push({ factor: 'Water Heater Age', status: age < 5 ? 'Good' : 'Aging', score: whScore });
+    
+    let status = age < 5 ? 'Good' : 'Aging';
+    if (age >= 10) {
+        if (activeBookingCategories.includes('INSPECTION') || activeBookingCategories.includes('PLUMBING')) {
+            status = 'Action Pending';
+        } else {
+            status = 'Needs Review';
+        }
+    }
+    insights.push({ factor: 'Water Heater Age', status, score: whScore });
   } else {
     maxUnlockableScore += EXTRA_WEIGHTS.WATER_HEATER_AGE;
   }
@@ -158,7 +182,16 @@ export function calculateHealthScore(property: Property, documentCount: number):
     const age = currentYear - property.roofReplacementYear;
     const roofScore = Math.max(0, EXTRA_WEIGHTS.ROOF_AGE * (1 - age / 25));
     extraScore += roofScore;
-    insights.push({ factor: 'Roof Age', status: age < 15 ? 'Good' : 'Needs Inspection', score: roofScore });
+    
+    let status = age < 15 ? 'Good' : 'Aging';
+    if (age >= 20) {
+        if (activeBookingCategories.includes('INSPECTION') || activeBookingCategories.includes('ROOFING') || activeBookingCategories.includes('HANDYMAN')) {
+            status = 'Action Pending';
+        } else {
+            status = 'Needs Inspection';
+        }
+    }
+    insights.push({ factor: 'Roof Age', status, score: roofScore });
   } else {
     maxUnlockableScore += EXTRA_WEIGHTS.ROOF_AGE;
   }
@@ -188,7 +221,16 @@ export function calculateHealthScore(property: Property, documentCount: number):
       if (property.hasDrainageIssues === true) extScore -= 2.5; // Penalty
       if (property.hasIrrigation === true) extScore += 2.5; // Bonus/Feature
       extraScore += Math.min(5, extScore);
-      insights.push({ factor: 'Exterior', status: property.hasDrainageIssues === true ? 'Needs Attention' : 'Good', score: extraScore });
+      
+      let status = 'Good';
+      if (property.hasDrainageIssues === true) {
+          if (activeBookingCategories.includes('INSPECTION') || activeBookingCategories.includes('HANDYMAN') || activeBookingCategories.includes('PLUMBING')) {
+              status = 'Action Pending';
+          } else {
+              status = 'Needs Attention';
+          }
+      }
+      insights.push({ factor: 'Exterior', status, score: extraScore });
   } else {
     maxUnlockableScore += EXTRA_WEIGHTS.EXTERIOR;
   }
@@ -220,7 +262,15 @@ export function calculateHealthScore(property: Property, documentCount: number):
     maxPotentialScore: Math.min(maxPotentialScore, MAX_SCORE),
     maxBaseScore: MAX_BASE_SCORE,
     maxExtraScore: MAX_EXTRA_SCORE,
-    insights: insights.filter(i => i.score > 0 || i.status === 'Missing Data' || i.status === 'Needs Review' || i.status === 'Needs Inspection'),
+    // Filter out items that are perfect (unless you want to show "Action Pending" even if score is okay, which might be nice)
+    insights: insights.filter(i => 
+        i.score > 0 || 
+        i.status === 'Missing Data' || 
+        i.status === 'Needs Review' || 
+        i.status === 'Needs Inspection' ||
+        i.status === 'Needs Attention' ||
+        i.status === 'Action Pending' // Explicitly keep this so users see their progress
+    ),
     ctaNeeded: maxUnlockableScore > 0,
   };
 }

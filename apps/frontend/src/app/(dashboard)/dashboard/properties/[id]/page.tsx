@@ -31,7 +31,10 @@ interface HealthScoreResult {
 // Using an intersection type to define the expected structure of the fetched property
 type ScoredProperty = Property & { healthScore?: HealthScoreResult };
 
-
+// PHASE 4 VERIFICATION:
+// 'Action Pending' is intentionally excluded. This ensures that when the backend 
+// detects an active booking and switches status to 'Action Pending', the item
+// automatically disappears from this "Immediate Action" list.
 const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data'];
 
 /**

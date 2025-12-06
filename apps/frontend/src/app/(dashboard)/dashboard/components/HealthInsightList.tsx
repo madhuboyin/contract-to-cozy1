@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { ScoredProperty } from "@/app/(dashboard)/dashboard/types";
 
 // High priority statuses mirrored from PropertyHealthScoreCard.tsx
+// NOTE: 'Action Pending' is intentionally EXCLUDED from this list.
+// Items with open bookings ('Action Pending') will be filtered out, 
+// correctly removing them from the "Immediate Action Required" list.
 const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data'];
 
 interface HealthInsightListProps {
@@ -23,6 +26,7 @@ export function HealthInsightList({ property }: HealthInsightListProps) {
     }
 
     // Filter for insights that match the high-priority statuses
+    // This will now exclude items where status has been changed to 'Action Pending' by the backend
     const criticalInsights = property.healthScore.insights.filter(i => 
         HIGH_PRIORITY_STATUSES.includes(i.status)
     );

@@ -13,6 +13,9 @@ import {
   VALID_STATUS_TRANSITIONS,
 } from '../types/booking.types';
 
+// PHASE 3 IMPLEMENTATION: Import JobQueueService
+import JobQueueService from './JobQueue.service';
+
 const prisma = new PrismaClient();
 
 export class BookingService {
@@ -127,6 +130,18 @@ export class BookingService {
         },
       },
     });
+
+    // --- PHASE 3 IMPLEMENTATION START ---
+    // Trigger re-calculation of Health Score / Risk Report immediately.
+    // This ensures the "IMMEDIATE ACTION" count drops to 0 instantly after booking.
+    try {
+        console.log(`[BOOKING-SERVICE] Triggering risk update for property ${input.propertyId}`);
+        await JobQueueService.enqueuePropertyIntelligenceJobs(input.propertyId);
+    } catch (error) {
+        // Non-blocking error logging. We don't want to fail the booking if the queue is down.
+        console.error(`[BOOKING-SERVICE] Failed to enqueue risk update job:`, error);
+    }
+    // --- PHASE 3 IMPLEMENTATION END ---
 
     return this.formatBookingResponse(booking);
   }
