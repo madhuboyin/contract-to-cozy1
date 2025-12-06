@@ -1,5 +1,4 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/page.tsx
-// UPDATED: Priority 1 Critical Fixes - Typography, Spacing, Card Structure
 
 "use client";
 
@@ -37,12 +36,12 @@ const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspec
 
 /**
  * Helper function to render a button based on the insight factor/status
- * MODIFIED: Refined logic to provide more explicit action labels for professionals.
+ * FIXED: Logic now correctly uses the 'INSPECTION' ServiceCategory enum value for assessments.
  */
 const renderContextualButton = (insight: any, propertyId: string) => {
     
     let buttonLabel = '';
-    let category = '';
+    let category = ''; // Must be a ServiceCategory enum value (e.g., INSPECTION, PLUMBING)
     let isUrgent = false;
 
     // 1. Actions related to scheduling professionals (Inspection, Review, Attention)
@@ -50,20 +49,22 @@ const renderContextualButton = (insight: any, propertyId: string) => {
         insight.status.includes('Review') || 
         insight.status.includes('Attention')) {
         
-        // Determine the category for provider search
-        if (insight.factor.includes('Age Factor')) {
-            category = 'General Inspector';
-        } else if (insight.factor.includes('Roof')) {
-            category = 'Roofing';
+        // --- FIXED LOGIC: Map to valid ENUMs for Provider Search ---
+        if (insight.factor.includes('Age Factor') || insight.factor.includes('Roof')) {
+            // These require comprehensive assessment/inspection, which is 'INSPECTION'
+            category = 'INSPECTION'; 
         } else if (insight.factor.includes('HVAC')) {
             category = 'HVAC';
         } else if (insight.factor.includes('Water Heater')) {
-            category = 'Plumbing';
-        } else if (insight.factor.includes('Exterior')) {
-            category = 'Handyman';
+            category = 'PLUMBING'; 
+        } else if (insight.factor.includes('Exterior') || insight.factor.includes('Drainage')) {
+            category = 'HANDYMAN'; 
         } else {
-            category = 'General Maintenance';
+            // Default to INSPECTION for any unmapped assessment/review status
+            category = 'INSPECTION';
         }
+        // --- END FIXED LOGIC ---
+
 
         // Determine the action label based on status
         if (insight.status.includes('Inspection')) {
