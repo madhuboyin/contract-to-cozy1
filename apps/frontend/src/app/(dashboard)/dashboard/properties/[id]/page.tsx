@@ -6,16 +6,137 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api/client";
-import { Property } from "@/types";
+import { Property } from "@/types"; // Base Property type
 import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading, PageHeaderDescription } from "@/components/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-// ADDED DollarSign ICON
-import { Edit, Zap, Shield, FileText, ArrowLeft, Home, Calendar, Ruler, DollarSign } from "lucide-react"; 
+// ADDED required icons for the new logic
+import { Edit, Zap, Shield, FileText, ArrowLeft, Home, Calendar, Ruler, DollarSign, Wrench, Settings, ShieldAlert, ArrowRight } from "lucide-react"; 
 import { toast } from "@/components/ui/use-toast";
+
+// --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
+
+interface HealthScoreResult {
+  totalScore: number;
+  baseScore: number;
+  unlockedScore: number;
+  maxPotentialScore: number;
+  maxBaseScore: number;
+  maxExtraScore: number;
+  insights: { factor: string; status: string; score: number }[];
+  ctaNeeded: boolean;
+}
+// Using an intersection type to define the expected structure of the fetched property
+type ScoredProperty = Property & { healthScore?: HealthScoreResult };
+
+
+const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data'];
+
+/**
+ * Helper function to render a button based on the insight factor/status
+ */
+const renderContextualButton = (insight: any, propertyId: string) => {
+    
+    // Actions related to scheduling professionals (Aging systems, structural issues)
+    if (insight.status.includes('Inspection') || 
+        insight.status.includes('Review') || 
+        insight.factor.includes('HVAC') ||
+        insight.factor.includes('Roof') ||
+        insight.factor.includes('Water Heater')) {
+        
+        // Use the insight factor to pre-filter the provider search
+        const category = insight.factor.includes('Age') ? 'General Maintenance' : insight.factor.replace(' Age', '');
+        
+        return (
+            <Button size="sm" variant="destructive" asChild className="w-full sm:w-auto">
+                <Link href={`/dashboard/providers?category=${category}`}>
+                    Find Professional <Wrench className="ml-2 h-4 w-4" />
+                </Link>
+            </Button>
+        );
+    }
+    
+    // Actions related to updating missing data (Safety, Appliances, Documents)
+    if (insight.factor.includes('Safety') || 
+        insight.factor.includes('Documents') || 
+        insight.status.includes('Missing Data')) {
+        
+        return (
+            <Button size="sm" variant="default" asChild className="w-full sm:w-auto">
+                <Link href={`/dashboard/properties/${propertyId}/edit`}>
+                    Update Profile Data <Settings className="ml-2 h-4 w-4" />
+                </Link>
+            </Button>
+        );
+    }
+
+    // Default action
+    return (
+        <Button size="sm" variant="outline" asChild className="w-full sm:w-auto">
+             <Link href={`/dashboard/checklist`}>
+                View Checklist <ArrowRight className="ml-2 h-4 w-4" />
+             </Link>
+        </Button>
+    );
+};
+
+
+/**
+ * Displays a filtered list of critical Health Score insights that require immediate action.
+ * Inlined from HealthInsightList.tsx
+ */
+function HealthInsightList({ property }: { property: ScoredProperty }) {
+    if (!property.healthScore) {
+        return null;
+    }
+
+    // Filter for insights that match the high-priority statuses
+    const criticalInsights = property.healthScore.insights.filter(i => 
+        HIGH_PRIORITY_STATUSES.includes(i.status)
+    );
+
+    if (criticalInsights.length === 0) {
+        return null;
+    }
+
+    return (
+        <Card className="border-2 border-red-500 bg-red-50 shadow-lg">
+            <CardContent className="p-4 sm:p-6">
+                <h2 className="text-xl font-extrabold text-red-800 mb-4 flex items-center">
+                    <ShieldAlert className="h-6 w-6 mr-2 flex-shrink-0 text-red-600" /> 
+                    IMMEDIATE ACTION REQUIRED ({criticalInsights.length} Items)
+                </h2>
+                <p className="text-sm text-red-700 mb-4">
+                    These issues are the **{criticalInsights.length} Required Maintenance Actions** flagged on your dashboard. Resolving them will directly increase your Health Score and reduce risk.
+                </p>
+                
+                <ul className="space-y-3">
+                    {criticalInsights.map((insight, index) => (
+                        <li key={index} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-white rounded-lg shadow-sm border border-red-100">
+                            <div className="flex-1 pr-4 mb-2 sm:mb-0">
+                                <p className="font-semibold text-gray-800">
+                                    {insight.factor}
+                                </p>
+                                <p className="text-sm text-red-600 font-medium mt-1">
+                                    Status: **{insight.status}**
+                                </p>
+                            </div>
+                            
+                            {/* Contextual Action Button */}
+                            {renderContextualButton(insight, property.id)}
+                        </li>
+                    ))}
+                </ul>
+            </CardContent>
+        </Card>
+    );
+}
+
+// --- END INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
+
 
 // UPDATED: PropertyOverview with Card structure and Phase 2 typography
 const PropertyOverview = ({ property }: { property: Property }) => (
@@ -219,31 +340,47 @@ const PropertyOverview = ({ property }: { property: Property }) => (
   </div>
 );
 
-// UPDATED: MaintenancePlanTab with Phase 2 typography and compact spacing
-const MaintenancePlanTab = ({ propertyId }: { propertyId: string }) => (
-  <Card>
-    <CardHeader className="p-4">
-      <CardTitle className="font-heading text-xl flex items-center gap-2">
-        <Zap className="h-5 w-5 text-red-600" />
-        Property Maintenance Plan
-      </CardTitle>
-      <CardDescription className="font-body text-sm">
-        View and manage all scheduled maintenance tasks for this property
-      </CardDescription>
-    </CardHeader>
-    <CardContent className="p-4 pt-0 space-y-3">
-      <p className="font-body text-base text-gray-700">
-        This tab will display the full, scheduled, and required maintenance tasks for this property.
-      </p>
-      <Link href={`/dashboard/maintenance?propertyId=${propertyId}`} passHref>
-        <Button variant="default">
-          <Zap className="mr-2 h-4 w-4" />
-          Manage Maintenance Tasks
-        </Button>
-      </Link>
-    </CardContent>
-  </Card>
-);
+// UPDATED: MaintenancePlanTab to accept ScoredProperty and render insights
+const MaintenancePlanTab = ({ property }: { property: ScoredProperty }) => {
+  // Read search params to check if view=insights is set
+  const searchParams = useSearchParams();
+  const viewContext = searchParams.get('view');
+  const showCriticalInsights = viewContext === 'insights';
+  
+  return (
+    <div className="space-y-6"> {/* Use div here to manage space between sections */}
+        
+        {/* [NEW] Conditional rendering of the critical insights component */}
+        {showCriticalInsights && property.healthScore && (
+            <HealthInsightList property={property} />
+        )}
+
+        {/* Standard Maintenance Card (Always displayed, possibly below the insights) */}
+        <Card>
+          <CardHeader className="p-4">
+            <CardTitle className="font-heading text-xl flex items-center gap-2">
+              <Zap className="h-5 w-5 text-red-600" />
+              {showCriticalInsights ? 'Proactive Maintenance Schedule' : 'Property Maintenance Plan'}
+            </CardTitle>
+            <CardDescription className="font-body text-sm">
+              View and manage all scheduled maintenance tasks for this property
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 space-y-3">
+            <p className="font-body text-base text-gray-700">
+              This section displays recurring tasks, future appointments, and your long-term maintenance calendar.
+            </p>
+            <Link href={`/dashboard/maintenance?propertyId=${property.id}`} passHref>
+              <Button variant="default">
+                <Zap className="mr-2 h-4 w-4" />
+                Manage Maintenance Tasks
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+    </div>
+  );
+};
 
 // UPDATED: RiskProtectionTab with Phase 2 typography and compact spacing
 const RiskProtectionTab = ({ propertyId }: { propertyId: string }) => (
@@ -340,12 +477,14 @@ export default function PropertyDetailPage() {
     : 'overview';
 
 
+  // [MODIFICATION] Assumed that the API returns ScoredProperty data for this endpoint.
   const { data: property, isLoading } = useQuery({
     queryKey: ["property", propertyId],
     queryFn: async () => {
       const response = await api.getProperty(propertyId);
       if (response.success) {
-        return response.data;
+        // Cast the result to ScoredProperty type for safety
+        return response.data as ScoredProperty; 
       }
       toast({
         title: "Error",
@@ -364,6 +503,10 @@ export default function PropertyDetailPage() {
       </DashboardShell>
     );
   }
+
+  // [MODIFICATION] Cast the result to ScoredProperty
+  const scoredProperty = property as ScoredProperty; 
+
 
   if (!property) {
     return (
@@ -426,7 +569,8 @@ export default function PropertyDetailPage() {
           </TabsContent>
           
           <TabsContent value="maintenance" className="mt-4">
-            <MaintenancePlanTab propertyId={property.id} />
+            {/* [MODIFICATION] Pass the full (scored) property object */}
+            <MaintenancePlanTab property={scoredProperty} /> 
           </TabsContent>
 
           <TabsContent value="risk-protection" className="mt-4">

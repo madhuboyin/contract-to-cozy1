@@ -121,10 +121,11 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
                     </p>
                 </div>
 
-                {/* *** VIEW FULL MAINTENANCE PLAN LINK (Retained) *** */}
+                {/* *** VIEW FULL MAINTENANCE PLAN LINK (MODIFIED) *** */}
                 <div className="mt-4">
                     <Link 
-                        href={`/dashboard/properties/${property.id}/?tab=maintenance`}
+                        // MODIFICATION: Appended &view=insights to the maintenance tab link
+                        href={`/dashboard/properties/${property.id}/?tab=maintenance&view=insights`}
                         className="inline-flex items-center text-sm font-semibold text-primary hover:text-primary/80 transition-colors no-underline"
                     >
                         View Full Maintenance Plan <ArrowRight className="h-4 w-4 ml-1" />
