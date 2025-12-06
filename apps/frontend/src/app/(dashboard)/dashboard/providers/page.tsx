@@ -195,13 +195,13 @@ const ProviderList = ({ providers }: { providers: Provider[] }) => {
 
 
 // --- Main Page Component ---
-export default function ProvidersPage({ searchParams }: { searchParams: { service?: string } }) {
+export default function ProvidersPage({ searchParams }: { searchParams: { service?: string; category?: string } }) {
   const { user, loading } = useAuth();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const defaultCategory = searchParams.service;
+  const defaultCategory = searchParams.category || searchParams.service;
 
   const isHomeBuyer = user?.segment === 'HOME_BUYER';
   const initialZipCode = ''; 
