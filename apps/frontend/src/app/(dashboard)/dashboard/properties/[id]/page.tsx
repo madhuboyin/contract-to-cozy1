@@ -37,29 +37,62 @@ const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspec
 
 /**
  * Helper function to render a button based on the insight factor/status
+ * MODIFIED: Refined logic to provide more explicit action labels for professionals.
  */
 const renderContextualButton = (insight: any, propertyId: string) => {
     
-    // Actions related to scheduling professionals (Aging systems, structural issues)
+    let buttonLabel = '';
+    let category = '';
+    let isUrgent = false;
+
+    // 1. Actions related to scheduling professionals (Inspection, Review, Attention)
     if (insight.status.includes('Inspection') || 
         insight.status.includes('Review') || 
-        insight.factor.includes('HVAC') ||
-        insight.factor.includes('Roof') ||
-        insight.factor.includes('Water Heater')) {
+        insight.status.includes('Attention')) {
         
-        // Use the insight factor to pre-filter the provider search
-        const category = insight.factor.includes('Age') ? 'General Maintenance' : insight.factor.replace(' Age', '');
-        
+        // Determine the category for provider search
+        if (insight.factor.includes('Age Factor')) {
+            category = 'General Inspector';
+        } else if (insight.factor.includes('Roof')) {
+            category = 'Roofing';
+        } else if (insight.factor.includes('HVAC')) {
+            category = 'HVAC';
+        } else if (insight.factor.includes('Water Heater')) {
+            category = 'Plumbing';
+        } else if (insight.factor.includes('Exterior')) {
+            category = 'Handyman';
+        } else {
+            category = 'General Maintenance';
+        }
+
+        // Determine the action label based on status
+        if (insight.status.includes('Inspection')) {
+            buttonLabel = "Schedule Inspection";
+            isUrgent = true;
+        } else if (insight.status.includes('Review')) {
+            buttonLabel = "Schedule Comprehensive Assessment";
+            isUrgent = false;
+        } else if (insight.status.includes('Attention')) {
+            buttonLabel = "Book Repair Service";
+            isUrgent = true;
+        }
+
         return (
-            <Button size="sm" variant="destructive" asChild className="w-full sm:w-auto">
+            <Button 
+                size="sm" 
+                // Use destructive variant only for high urgency (Inspection/Attention)
+                variant={isUrgent ? 'destructive' : 'default'} 
+                asChild 
+                className="w-full sm:w-auto"
+            >
                 <Link href={`/dashboard/providers?category=${category}`}>
-                    Find Professional <Wrench className="ml-2 h-4 w-4" />
+                    {buttonLabel} <Wrench className="ml-2 h-4 w-4" />
                 </Link>
             </Button>
         );
     }
     
-    // Actions related to updating missing data (Safety, Appliances, Documents)
+    // 2. Actions related to updating missing data (Safety, Appliances, Documents)
     if (insight.factor.includes('Safety') || 
         insight.factor.includes('Documents') || 
         insight.status.includes('Missing Data')) {
@@ -73,7 +106,7 @@ const renderContextualButton = (insight: any, propertyId: string) => {
         );
     }
 
-    // Default action
+    // 3. Default action (catch-all)
     return (
         <Button size="sm" variant="outline" asChild className="w-full sm:w-auto">
              <Link href={`/dashboard/checklist`}>
