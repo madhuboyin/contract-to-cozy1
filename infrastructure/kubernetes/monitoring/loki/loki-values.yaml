@@ -1,21 +1,24 @@
-deploymentMode: SimpleScalable
+deploymentMode: SingleBinary
 
 loki:
   auth_enabled: false
 
-  commonConfig:
-    replication_factor: 1
+  server:
+    http_listen_port: 3100
 
   storage:
     type: filesystem
+
+  storage_config:
     filesystem:
-      chunks_directory: /var/loki/chunks
-      rules_directory: /var/loki/rules
-      wal_directory: /var/loki/wal
+      directory: /var/loki/chunks
+    tsdb_shipper:
+      active_index_directory: /var/loki/index
+      shared_store: filesystem
 
   schema_config:
     configs:
-      - from: "2024-01-01"
+      - from: "2023-10-01"
         store: tsdb
         object_store: filesystem
         schema: v13
@@ -23,39 +26,44 @@ loki:
           prefix: loki_index_
           period: 24h
 
+  ruler:
+    enable_api: true
+    enable_alertmanager_v2: true
+    storage:
+      type: local
+      local:
+        directory: /var/loki/rules
+
   limits_config:
     retention_period: 7d
 
+  compactor:
+    retention_enabled: true
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true
+    size: 10Gi
+
+# Force ALL scalable components OFF 
 backend:
-  replicas: 1
-
+  replicas: 0
 read:
-  replicas: 1
-
+  replicas: 0
 write:
-  replicas: 1
-
+  replicas: 0
 ingester:
-  replicas: 1
+  replicas: 0
 distributor:
-  replicas: 1
+  replicas: 0
 querier:
-  replicas: 1
+  replicas: 0
 queryFrontend:
-  replicas: 1
-
+  replicas: 0
+configs:
+  replicas: 0
 gateway:
-  enabled: false
-
-# Persistent volumes for each component
-backend.persistence:
-  enabled: true
-  size: 5Gi
-
-write.persistence:
-  enabled: true
-  size: 5Gi
-
-read.persistence:
-  enabled: true
-  size: 5Gi
+  replicas: 0
+indexGateway:
+  replicas: 0
