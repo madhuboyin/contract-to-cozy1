@@ -195,12 +195,14 @@ const ProviderList = ({ providers }: { providers: Provider[] }) => {
 
 
 // --- Main Page Component ---
+// FIX 4: Updated type definition to include 'category'
 export default function ProvidersPage({ searchParams }: { searchParams: { service?: string; category?: string } }) {
   const { user, loading } = useAuth();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
+  // FIX 5: Fallback logic supports both the new 'category' param and the legacy 'service' param
   const defaultCategory = searchParams.category || searchParams.service;
 
   const isHomeBuyer = user?.segment === 'HOME_BUYER';
