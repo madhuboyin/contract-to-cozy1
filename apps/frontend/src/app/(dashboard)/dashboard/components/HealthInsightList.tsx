@@ -106,8 +106,7 @@ const renderContextualButton = (insight: any, propertyId: string) => {
             category = 'HANDYMAN'; 
         }
         
-        // FIX 4: Include the original 'insightFactor' and 'propertyId' in the URL 
-        // to provide the necessary context to the booking system.
+        // FIX 4: Construct the link with ALL required parameters.
         const encodedFactor = encodeURIComponent(insight.factor);
         
         return (
