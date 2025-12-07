@@ -111,6 +111,9 @@ export class BookingService {
         depositAmount: input.depositAmount || null,
         description: input.description,
         specialRequests: input.specialRequests || null,
+        // NEW: Capture health insight tracking fields
+        insightFactor: input.insightFactor || null,
+        insightContext: input.insightContext || null,
         timeline: {
           create: {
             status: 'PENDING',
@@ -672,6 +675,9 @@ export class BookingService {
       description: booking.description,
       specialRequests: booking.specialRequests,
       internalNotes: booking.internalNotes,
+      // NEW: Include health insight tracking fields
+      insightFactor: booking.insightFactor || null,
+      insightContext: booking.insightContext || null,
       cancelledAt: booking.cancelledAt,
       cancelledBy: booking.cancelledBy,
       cancellationReason: booking.cancellationReason,

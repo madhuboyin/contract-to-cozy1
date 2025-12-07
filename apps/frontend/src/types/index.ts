@@ -713,6 +713,9 @@ export interface CreateBookingInput {
   specialRequests?: string;
   estimatedPrice: number;
   depositAmount?: number;
+  // NEW: Health Insight Tracking
+  insightFactor?: string;     // e.g., "Age Factor", "Roof Age"
+  insightContext?: string;    // e.g., "Property age: 35 years"
 }
 
 /**

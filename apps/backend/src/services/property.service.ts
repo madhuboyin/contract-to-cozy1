@@ -173,14 +173,15 @@ async function syncHomeAssets(propertyId: string, incomingAssets: HomeAssetInput
 
 /**
  * Helper function to calculate and attach the score to a property object.
+ * UPDATED: Now fetches full booking objects to support insightFactor-based suppression
  */
 async function attachHealthScore(property: PropertyWithAssets): Promise<ScoredProperty> {
     const documentCount = await prisma.document.count({
         where: { propertyId: property.id }
     });
 
-    // --- PHASE 2 IMPLEMENTATION: Fetch Active Bookings (Existing Logic) ---
-    // Fetch bookings that are in progress or confirmed to detect if an issue is being resolved.
+    // UPDATED: Fetch full booking objects instead of just categories
+    // We need insightFactor field for precise suppression logic
     const activeBookings = await prisma.booking.findMany({
         where: {
             propertyId: property.id,
@@ -188,19 +189,24 @@ async function attachHealthScore(property: PropertyWithAssets): Promise<ScoredPr
             // COMPLETED/CANCELLED do not count as "active resolution in progress".
             status: { in: ['PENDING', 'CONFIRMED', 'IN_PROGRESS'] } 
         },
-        select: { category: true }
+        // Select all fields needed for insightFactor-based suppression
+        select: {
+            id: true,
+            category: true,
+            status: true,
+            insightFactor: true,    // NEW: Needed for precise suppression
+            insightContext: true,   // NEW: Optional context
+            propertyId: true,       // Needed for matching
+        }
     });
 
-    // Map to a simple string array of categories (e.g., ['ROOFING', 'INSPECTION'])
-    // We cast to string[] to ensure compatibility with the utility function
-    const activeCategories = activeBookings.map(b => b.category.toString());
-    // --- END Existing Logic ---
+    // Cast to Booking type for compatibility with calculateHealthScore
+    const bookingsForScore = activeBookings as any[];
 
-    // FIX 2: Add try/catch block for defensive coding against errors in scoring utility
     let healthScore: HealthScoreResult;
     try {
-        // UPDATED CALL: Pass activeCategories to the calculator. Property object now contains warranties.
-        healthScore = calculateHealthScore(property, documentCount, activeCategories);
+        // UPDATED CALL: Pass full booking objects instead of just category strings
+        healthScore = calculateHealthScore(property, documentCount, bookingsForScore);
     } catch (error) {
         console.error(`CRITICAL: Health score calculation failed for Property ID ${property.id}. Returning default score.`, error);
         // Fallback to a zero score and default insights to prevent server crash

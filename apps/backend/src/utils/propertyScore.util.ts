@@ -1,5 +1,5 @@
 // apps/backend/src/utils/propertyScore.util.ts
-import { Property, PropertyType, HeatingType, CoolingType, WaterHeaterType, RoofType, HomeAsset, Warranty } from '@prisma/client';
+import { Property, PropertyType, HeatingType, CoolingType, WaterHeaterType, RoofType, HomeAsset, Warranty, Booking } from '@prisma/client';
 
 export interface HealthScoreResult {
   totalScore: number;
@@ -37,20 +37,31 @@ const EXTRA_WEIGHTS = {
 // Interface extension reflecting how property.service.ts sends the data
 interface PropertyWithAssetsForScore extends Property {
     homeAssets: HomeAsset[];
-    // PHASE 2 FIX: Add warranties to the type for access here
     warranties: Warranty[];
 }
 
 /**
+ * Helper: Check if a specific insight is being addressed by an active booking
+ * UPDATED: Now uses insightFactor field for precise matching
+ */
+function isInsightBeingAddressed(insightName: string, activeBookings: Booking[]): boolean {
+  return activeBookings.some(
+    booking => booking.insightFactor === insightName
+  );
+}
+
+/**
  * Calculates the Property Health Score based on property attributes and related data.
+ * UPDATED: Now accepts full Booking objects to check insightFactor for precise suppression
+ * 
  * @param property The full Property object from Prisma.
  * @param documentCount The number of documents linked to the property.
- * @param activeBookingCategories A list of service categories (e.g. 'INSPECTION', 'ROOFING') that have open bookings.
+ * @param activeBookings Array of active bookings (PENDING, CONFIRMED, IN_PROGRESS) with insightFactor field
  */
 export function calculateHealthScore(
   property: Property, 
   documentCount: number,
-  activeBookingCategories: string[] = [] // Default to empty for backward compatibility
+  activeBookings: Booking[] = [] // CHANGED: Now accepts full Booking objects instead of category strings
 ): HealthScoreResult {
   const currentYear = new Date().getFullYear();
   let baseScore = 0;
@@ -63,15 +74,12 @@ export function calculateHealthScore(
 
   // --- BASE SCORE CALCULATION (MANDATORY FIELDS: MAX 55) ---
 
-  // 1. Age Factor (Max 15) - Remains dependent on a general 'INSPECTION'
+  // 1. Age Factor (Max 15)
   if (property.yearBuilt) {
     const age = currentYear - property.yearBuilt;
-    // 15 points max, drops to 0 after 60 years.
     const ageScore = Math.max(0, BASE_WEIGHTS.AGE * (1 - age / 60));
     baseScore += ageScore;
     
-    // FIX 1: Change generic Age Factor suppression from 'INSPECTION' to 'HANDYMAN' 
-    // to prevent collision with specific inspections like Roof Age.
     let status = 'Good';
     if (age < 15) {
         status = 'Excellent';
@@ -79,10 +87,11 @@ export function calculateHealthScore(
         status = 'Good';
     } else {
         // Age >= 30, triggers 'Needs Review'
-        if (activeBookingCategories.includes('HANDYMAN')) { // Changed to HANDYMAN
+        // UPDATED: Check insightFactor instead of category
+        if (isInsightBeingAddressed('Age Factor', activeBookings)) {
             status = 'Action Pending'; 
         } else {
-            status = 'Needs Review'; // High urgency
+            status = 'Needs Review';
         }
     }
 
@@ -172,13 +181,12 @@ export function calculateHealthScore(
     extraScore += hvacScore;
     
     let status = age < 8 ? 'Good' : 'Aging';
-    // Logic: If aging AND no active booking, then warn.
     if (age >= 15) {
-        // FIX: Check only for asset-specific category ('HVAC') to prevent cross-asset issue
-        if (activeBookingCategories.includes('HVAC')) { 
-            status = 'Action Pending'; // Downgrade urgency if booked
+        // UPDATED: Check insightFactor instead of category
+        if (isInsightBeingAddressed('HVAC Age', activeBookings)) {
+            status = 'Action Pending';
         } else {
-            status = 'Needs Inspection'; // High urgency
+            status = 'Needs Inspection';
         }
     }
     insights.push({ factor: 'HVAC Age', status, score: hvacScore });
@@ -194,8 +202,8 @@ export function calculateHealthScore(
     
     let status = age < 5 ? 'Good' : 'Aging';
     if (age >= 10) {
-        // FIX: Check only for asset-specific category ('PLUMBING')
-        if (activeBookingCategories.includes('PLUMBING')) {
+        // UPDATED: Check insightFactor instead of category
+        if (isInsightBeingAddressed('Water Heater Age', activeBookings)) {
             status = 'Action Pending';
         } else {
             status = 'Needs Review';
@@ -214,9 +222,8 @@ export function calculateHealthScore(
     
     let status = age < 15 ? 'Good' : 'Aging';
     if (age >= 20) {
-        // FIX 2: Check for 'INSPECTION' category (the closest DB enum for this)
-        // This is now decoupled from Age Factor by FIX 1.
-        if (activeBookingCategories.includes('INSPECTION')) { 
+        // UPDATED: Check insightFactor instead of category
+        if (isInsightBeingAddressed('Roof Age', activeBookings)) {
             status = 'Action Pending';
         } else {
             status = 'Needs Inspection';
@@ -255,10 +262,9 @@ export function calculateHealthScore(
       
       let status = 'Good';
       if (property.hasDrainageIssues === true) {
-          // FIX: Only HANDYMAN can suppress Exterior alerts.
-          // REMOVED PLUMBING check to prevent cross-talk with Water Heater Age.
-          // Exterior issues (drainage, siding, foundation) are unrelated to internal plumbing.
-          if (activeBookingCategories.includes('HANDYMAN')) {
+          // UPDATED: Check insightFactor instead of category
+          // This prevents cross-talk - only bookings specifically for Exterior will suppress it
+          if (isInsightBeingAddressed('Exterior', activeBookings)) {
               status = 'Action Pending';
           } else {
               status = 'Needs Attention';
@@ -347,7 +353,7 @@ export function calculateHealthScore(
         i.status === 'Needs Review' || 
         i.status === 'Needs Inspection' ||
         i.status === 'Needs Attention' ||
-        i.status === 'Needs Warranty' || // NEW STATUS: Must be included in the insights list
+        i.status === 'Needs Warranty' ||
         i.status === 'Action Pending' 
     ),
     ctaNeeded: maxUnlockableScore > 0,

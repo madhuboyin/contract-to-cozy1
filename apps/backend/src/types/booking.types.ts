@@ -24,6 +24,10 @@ export const createBookingSchema = z.object({
   // Pricing
   estimatedPrice: z.number().positive('Price must be positive'),
   depositAmount: z.number().nonnegative('Deposit cannot be negative').optional(),
+  
+  // NEW: Health Insight Tracking
+  insightFactor: z.string().max(100).optional(),     // e.g., "Age Factor", "Roof Age"
+  insightContext: z.string().max(500).optional(),    // e.g., "Property age: 35 years"
 });
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
@@ -143,6 +147,10 @@ export interface BookingResponse {
   description: string;
   specialRequests: string | null;
   internalNotes: string | null;
+  
+  // NEW: Health Insight Tracking
+  insightFactor: string | null;
+  insightContext: string | null;
   
   // Cancellation
   cancelledAt: Date | null;
