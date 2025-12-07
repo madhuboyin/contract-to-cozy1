@@ -10,8 +10,7 @@ import {
   RecurrenceFrequency,
 } from '@prisma/client';
 import { MaintenanceTaskConfig } from '../types/maintenance.types';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // --- START HELPER FUNCTIONS ---
 

@@ -12,7 +12,7 @@ import {
   PaginationQuery,
 } from '../types/provider.types';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 /**
  * Calculate distance between two coordinates using Haversine formula

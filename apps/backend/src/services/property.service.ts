@@ -8,7 +8,7 @@ import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.
 import JobQueueService from './JobQueue.service';
 import { PropertyIntelligenceJobType } from '../config/risk-job-types';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // --- NEW STRUCTURED INPUT INTERFACES ---
 

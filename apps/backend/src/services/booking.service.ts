@@ -16,7 +16,7 @@ import {
 // PHASE 3 IMPLEMENTATION: Import JobQueueService
 import JobQueueService from './JobQueue.service';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 export class BookingService {
   /**

@@ -21,7 +21,7 @@ import {
   RefreshTokenResponse,
 } from '../types/auth.types';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 export class AuthService {
   /**

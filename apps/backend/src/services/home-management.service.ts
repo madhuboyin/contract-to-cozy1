@@ -7,7 +7,7 @@ import {
   CreateExpenseDTO, UpdateExpenseDTO, Expense 
 } from '../types'; 
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // Helper interface for safe Decimal conversion (the object must have a toNumber method)
 interface DecimalLike {
