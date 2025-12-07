@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api/client';
 // NOTE: Assuming Provider and User are imported but are structurally incomplete
@@ -45,9 +45,15 @@ function formatServiceCategory(category: string | null): string {
 export default function ProviderDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const providerId = params.id as string;
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Extract context parameters from URL to forward to booking page
+  const propertyId = searchParams.get('propertyId');
+  const insightFactor = searchParams.get('insightFactor');
+  const category = searchParams.get('category');
 
   // FIX: Use CompleteProvider type for the state
   const [provider, setProvider] = useState<CompleteProvider | null>(null);
@@ -249,6 +255,17 @@ export default function ProviderDetailPage() {
     );
   }
 
+  // Build booking URL with all context parameters
+  const bookingUrl = (() => {
+    const queryParams = new URLSearchParams();
+    if (propertyId) queryParams.append('propertyId', propertyId);
+    if (insightFactor) queryParams.append('insightFactor', insightFactor);
+    if (category) queryParams.append('category', category);
+    
+    const baseUrl = `/dashboard/providers/${providerId}/book`;
+    return queryParams.toString() ? `${baseUrl}?${queryParams.toString()}` : baseUrl;
+  })();
+
   return (
     <div className="max-w-4xl mx-auto">
       <div className="flex items-start justify-between mb-8">
@@ -353,7 +370,7 @@ export default function ProviderDetailPage() {
 
             <Button asChild>
                 <Link 
-                    href={`/dashboard/providers/${providerId}/book`}
+                    href={bookingUrl}
                     className="w-full"
                 >
                     <Calendar className="h-4 w-4 mr-2" />
