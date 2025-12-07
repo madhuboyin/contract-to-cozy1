@@ -138,13 +138,23 @@ const ServiceFilter = React.memo(({ onFilterChange, defaultCategory, isHomeBuyer
 ServiceFilter.displayName = 'ServiceFilter';
 
 
-const ProviderList = ({ providers, targetPropertyId }: { providers: Provider[]; targetPropertyId?: string }) => {
+const ProviderList = ({ providers, targetPropertyId, insightContext, category }: { 
+  providers: Provider[]; 
+  targetPropertyId?: string;
+  insightContext?: string;
+  category?: string;
+}) => {
   return (
     <div className="grid gap-6 md:grid-cols-2">
       {providers.map((provider) => {
-        // Build profile link with optional propertyId parameter
-        const profileLink = targetPropertyId 
-          ? `/dashboard/providers/${provider.id}?propertyId=${targetPropertyId}`
+        // Build profile link with optional parameters (propertyId, insightFactor, category)
+        const queryParams = new URLSearchParams();
+        if (targetPropertyId) queryParams.append('propertyId', targetPropertyId);
+        if (insightContext) queryParams.append('insightFactor', insightContext);
+        if (category) queryParams.append('category', category);
+        
+        const profileLink = queryParams.toString() 
+          ? `/dashboard/providers/${provider.id}?${queryParams.toString()}`
           : `/dashboard/providers/${provider.id}`;
 
         return (
@@ -371,7 +381,12 @@ export default function ProvidersPage() {
           <p className="text-sm text-red-500 mt-1">Please refine your search criteria.</p>
         </div>
       ) : providers.length > 0 ? (
-        <ProviderList providers={providers} targetPropertyId={targetPropertyId} />
+        <ProviderList 
+          providers={providers} 
+          targetPropertyId={targetPropertyId}
+          insightContext={insightContext}
+          category={defaultCategory}
+        />
       ) : (
         <div className="text-center p-8 bg-gray-50 border rounded-lg">
           <p className="text-lg font-medium text-gray-700">No providers found matching your criteria.</p>
