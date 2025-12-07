@@ -1,13 +1,14 @@
 // apps/frontend/src/app/(dashboard)/dashboard/page.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
 import { Loader2 } from 'lucide-react';
-import { Booking, Property, User, ChecklistItem } from '@/types'; 
+import { Booking, Property, User, ChecklistItem, Warranty, InsurancePolicy } from '@/types'; 
 import { ScoredProperty } from './types'; 
+import { differenceInDays, isPast, parseISO } from 'date-fns'; // [NEW IMPORT]
 
 // NEW IMPORTS FOR SCORECARDS AND LAYOUT
 import { DashboardShell } from '@/components/DashboardShell';
@@ -31,13 +32,133 @@ import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
 // DEPRECATE: This local storage key is no longer used for forced redirect logic.
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
 
+// --- START PHASE 1: DATA CONSOLIDATION TYPES ---
+
+export interface UrgentActionItem {
+    id: string;
+    type: 'MAINTENANCE_OVERDUE' | 'MAINTENANCE_UNSCHEDULED' | 'RENEWAL_EXPIRED' | 'RENEWAL_UPCOMING' | 'HEALTH_INSIGHT';
+    title: string;
+    description: string;
+    dueDate?: Date;
+    daysUntilDue?: number;
+    propertyId: string;
+}
+
+// FIX 1: Add 'urgentActions' field to the DashboardData interface
 interface DashboardData {
     bookings: Booking[];
     properties: ScoredProperty[];
     checklist: { id: string, items: ChecklistItem[] } | null; 
+    urgentActions: UrgentActionItem[];
     isLoading: boolean;
     error: string | null;
 }
+
+// Helper to consolidate data into a single, actionable list
+const consolidateUrgentActions = (
+    properties: ScoredProperty[],
+    checklistItems: ChecklistItem[],
+    warranties: Warranty[],
+    insurancePolicies: InsurancePolicy[]
+): UrgentActionItem[] => {
+    const actions: UrgentActionItem[] = [];
+    const today = new Date();
+    const ninetyDays = 90;
+
+    // 1. Process Health Score Insights (Critical items only)
+    const CRITICAL_INSIGHT_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
+    
+    properties.forEach(p => {
+        p.healthScore?.insights
+            .filter(i => CRITICAL_INSIGHT_STATUSES.includes(i.status))
+            .forEach((i, index) => {
+                actions.push({
+                    id: `${p.id}-INSIGHT-${index}`,
+                    type: 'HEALTH_INSIGHT',
+                    title: i.factor,
+                    description: `Status: ${i.status}. Requires resolution.`,
+                    propertyId: p.id,
+                });
+            });
+    });
+    
+    // 2. Process Maintenance Checklist (Overdue/Unscheduled Tasks)
+    checklistItems.forEach(item => {
+        // Skip completed or cancelled items
+        if (item.status === 'COMPLETED' || item.status === 'NOT_NEEDED') return;
+        
+        // Check for Overdue
+        if (item.nextDueDate && isPast(parseISO(item.nextDueDate))) {
+            const dueDate = parseISO(item.nextDueDate);
+            actions.push({
+                id: item.id,
+                type: 'MAINTENANCE_OVERDUE',
+                title: `OVERDUE: ${item.title}`,
+                description: item.description || `Overdue by ${differenceInDays(today, dueDate)} days.`,
+                dueDate,
+                daysUntilDue: differenceInDays(dueDate, today),
+                propertyId: item.propertyId || 'N/A',
+            });
+        }
+        
+        // Check for Unscheduled Tasks (Tasks that are active, recurring, but have no due date)
+        if (item.isRecurring && !item.nextDueDate) {
+             actions.push({
+                id: item.id,
+                type: 'MAINTENANCE_UNSCHEDULED',
+                title: `UNSCHEDULED: ${item.title}`,
+                description: `Recurring task needs scheduling/due date set.`,
+                propertyId: item.propertyId || 'N/A',
+            });
+        }
+    });
+
+    // 3. Process Renewals (Expired/Upcoming Warranties and Insurance)
+    const renewals: (Warranty | InsurancePolicy)[] = [...warranties, ...insurancePolicies];
+    
+    renewals.forEach(item => {
+        if (!item.expiryDate) return;
+        
+        const dueDate = parseISO(item.expiryDate);
+        const days = differenceInDays(dueDate, today);
+        const itemType = ('providerName' in item) ? 'Warranty' : 'Insurance';
+        const title = `${itemType} Renewal: ${'providerName' in item ? item.providerName : item.carrierName}`;
+
+        if (isPast(dueDate)) {
+            // Expired (Critical)
+            actions.push({
+                id: item.id,
+                type: 'RENEWAL_EXPIRED',
+                title: `EXPIRED: ${title}`,
+                description: `Policy expired ${Math.abs(days)} days ago. Immediate action required.`,
+                dueDate,
+                daysUntilDue: days,
+                propertyId: item.propertyId || 'N/A',
+            });
+        } else if (days <= ninetyDays) {
+            // Upcoming (Warning)
+            actions.push({
+                id: item.id,
+                type: 'RENEWAL_UPCOMING',
+                title: `UPCOMING: ${title}`,
+                description: `Expires in ${days} days.`,
+                dueDate,
+                daysUntilDue: days,
+                propertyId: item.propertyId || 'N/A',
+            });
+        }
+    });
+
+    // Sort: Critical (Expired/Overdue) first, then by urgency (daysUntilDue)
+    return actions.sort((a, b) => {
+        if (a.daysUntilDue === undefined) return 1;
+        if (b.daysUntilDue === undefined) return -1;
+        return a.daysUntilDue - b.daysUntilDue;
+    });
+};
+
+// --- END PHASE 1: DATA CONSOLIDATION TYPES ---
+
 
 // Helper to format the address for display
 const formatAddress = (property: Property) => {
@@ -57,6 +178,7 @@ export default function DashboardPage() {
     bookings: [],
     properties: [],
     checklist: null,
+    urgentActions: [], // Initialize new field
     isLoading: true,
     error: null,
   });
@@ -132,7 +254,7 @@ export default function DashboardPage() {
   }, [user, userLoading, redirectChecked, router]);
 
   // Load dashboard data ONLY if not showing the welcome screen and redirect check completes
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     if (!user) {
       console.log('DEBUG: User not logged in, halting fetch.');
       setData(prev => ({ ...prev, isLoading: false, error: 'User not logged in.' }));
@@ -143,45 +265,49 @@ export default function DashboardPage() {
       console.log('📊 Loading dashboard data...');
       setData(prev => ({ ...prev, isLoading: true, error: null }));
       
-      const API_URL = process.env.NEXT_PUBLIC_API_URL;
-      const CHECKLIST_URL = `${API_URL}/api/checklist`;
-      
-      const checklistFetchPromise = fetch(CHECKLIST_URL, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-          }
-        }).then(async (res) => {
-            if (!res.ok) {
-                throw new Error(`Checklist API returned status ${res.status}.`);
-            }
-            return res.json();
-        });
-
-      const [bookingsRes, propertiesRes, checklistRes] = await Promise.all([
+      // FIX 2: Fetching Checklist, Warranties, and Insurance Policies via direct API client calls
+      const [
+        bookingsRes, 
+        propertiesRes, 
+        checklistRes,
+        warrantiesRes, 
+        insuranceRes
+      ] = await Promise.all([
         api.listBookings({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' }),
         api.getProperties(),
-        checklistFetchPromise,
+        api.getChecklist(), // Use cleaner API call
+        api.listWarranties(),
+        api.listInsurancePolicies(),
       ]);
       
-      const newProperties: ScoredProperty[] = propertiesRes.success ? (propertiesRes.data.properties as ScoredProperty[]) : [];
+      const properties = propertiesRes.success ? (propertiesRes.data.properties as ScoredProperty[]) : [];
+      const checklistItems = (checklistRes.success && checklistRes.data.items) || [];
+      const warranties = (warrantiesRes.success && warrantiesRes.data.warranties) || [];
+      const insurancePolicies = (insuranceRes.success && insuranceRes.data.policies) || [];
+      
+      // FIX 3: Consolidate data to generate the urgent action list
+      const urgentActions = consolidateUrgentActions(
+        properties, 
+        checklistItems, 
+        warranties, 
+        insurancePolicies
+      );
+
 
       let fetchedChecklist = null;
-      if (typeof checklistRes === 'object' && checklistRes !== null) {
-          if (checklistRes.success && checklistRes.data) {
-              fetchedChecklist = checklistRes.data;
-          } else if (Array.isArray(checklistRes.items)) {
-              fetchedChecklist = checklistRes;
-          }
+      if (checklistRes.success && checklistRes.data) {
+          fetchedChecklist = checklistRes.data;
       }
       
       console.log('✅ Dashboard data loaded');
 
-      const defaultPropId = newProperties.find(p => p.isPrimary)?.id || newProperties[0]?.id;
+      const defaultPropId = properties.find(p => p.isPrimary)?.id || properties[0]?.id;
       
       setData({
         bookings: bookingsRes.success ? bookingsRes.data.bookings : [],
-        properties: newProperties,
+        properties: properties,
         checklist: fetchedChecklist as DashboardData['checklist'], 
+        urgentActions: urgentActions, // Assign the new consolidated data
         isLoading: false,
         error: null,
       });
@@ -192,7 +318,7 @@ export default function DashboardPage() {
       console.error('❌ Failed to fetch dashboard data:', error);
       setData(prev => ({ ...prev, isLoading: false, error: error.message || 'An unexpected error occurred.' }));
     }
-  };
+  }, [user, setSelectedPropertyId]); // Added fetchDashboardData to useCallback
 
   useEffect(() => {
     // [MODIFICATION] Only fetch data if the user has properties (i.e., Welcome Screen is not showing)
@@ -200,7 +326,7 @@ export default function DashboardPage() {
       console.log('📊 Redirect check complete, fetching dashboard data...');
       fetchDashboardData();
     }
-  }, [user, userLoading, redirectChecked, showWelcomeScreen]); // Dependency update
+  }, [user, userLoading, redirectChecked, showWelcomeScreen, fetchDashboardData]); // Dependency update
 
 
   // --- CONDITIONAL RENDERING FOR LOADING AND MODAL ---

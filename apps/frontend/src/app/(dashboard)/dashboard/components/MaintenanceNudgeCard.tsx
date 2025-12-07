@@ -9,32 +9,32 @@ import { Badge } from '@/components/ui/badge';
 
 interface MaintenanceNudgeCardProps {
     property: ScoredProperty;
+    // FIX 1: New Prop to receive the consolidated action count (Health Insights + Checklist + Renewals)
+    consolidatedActionCount: number;
 }
 
-// Logic mirrored from PropertyHealthScoreCard.tsx to calculate high-priority actions
-//const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection'];
-const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data'];
+// NOTE: This constant is now largely redundant as the primary trigger count is derived 
+// from the consolidated list passed by the parent component (page.tsx).
+// It is updated here to ensure internal consistency if used elsewhere for filtering.
+const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty']; 
 
-export function MaintenanceNudgeCard({ property }: MaintenanceNudgeCardProps) {
+export function MaintenanceNudgeCard({ property, consolidatedActionCount }: MaintenanceNudgeCardProps) {
     // Ensure healthScore data exists before proceeding
     if (!property.healthScore) {
         return null;
     }
 
     const healthScore = property.healthScore.totalScore || 0;
-    const requiredActions = property.healthScore.insights.filter(i => 
-        HIGH_PRIORITY_STATUSES.includes(i.status)
-    ).length || 0;
     
-    // Determine if the card should be shown (low score OR high required actions).
-    // The cutoff is set at < 70 (FAIR/POOR) or any required actions exist.
-    const shouldShowNudge = requiredActions > 0 || healthScore < 70;
+    // FIX 2: Implement the new combined logic based on the user's proposal:
+    // Show card ONLY IF score is poor (< 70) AND there is any consolidated action (new logic).
+    const shouldShowNudge = healthScore < 70 && consolidatedActionCount > 0;
 
     if (!shouldShowNudge) {
         return null; 
     }
 
-    const urgencyLevel = requiredActions > 2 || healthScore < 50 ? 'high' : 'moderate';
+    const urgencyLevel = consolidatedActionCount > 2 || healthScore < 50 ? 'high' : 'moderate';
     const bgColor = urgencyLevel === 'high' ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200';
     const textColor = urgencyLevel === 'high' ? 'text-red-700' : 'text-orange-700';
     const iconColor = urgencyLevel === 'high' ? 'text-red-600' : 'text-orange-500';
@@ -43,8 +43,9 @@ export function MaintenanceNudgeCard({ property }: MaintenanceNudgeCardProps) {
         ? `Immediate Attention Required for ${property.name || 'Your Property'}`
         : `Proactive Maintenance Recommended for ${property.name || 'Your Property'}`;
 
-    const bodyText = requiredActions > 0 
-        ? `Our assessment shows ${requiredActions} high-priority actions impacting your health score of ${healthScore}/100. Automating maintenance is the best way to address these risks.`
+    // FIX 3: Update body text to reflect the full action scope
+    const bodyText = consolidatedActionCount > 0 
+        ? `Your Health Score of ${healthScore}/100 is poor, and our analysis shows ${consolidatedActionCount} outstanding maintenance and renewal actions required.`
         : `Your Health Score of ${healthScore}/100 indicates aging systems. Setting up a maintenance plan now will prevent future costly failures.`;
 
 
@@ -56,9 +57,9 @@ export function MaintenanceNudgeCard({ property }: MaintenanceNudgeCardProps) {
                     <div>
                         <h3 className={`text-lg font-bold ${textColor} mb-1 flex items-center`}>
                             {titleText}
-                            {requiredActions > 0 && (
+                            {consolidatedActionCount > 0 && (
                                 <Badge variant="destructive" className="ml-3 text-sm">
-                                    {requiredActions} ACTIONS PENDING
+                                    {consolidatedActionCount} ACTIONS PENDING
                                 </Badge>
                             )}
                         </h3>
@@ -67,8 +68,9 @@ export function MaintenanceNudgeCard({ property }: MaintenanceNudgeCardProps) {
                         </p>
                     </div>
                 </div>
+                {/* FIX 4: Change CTA to go to the insights view, as requested by the user */}
                 <Link 
-                    href={`/dashboard/maintenance-setup`}
+                    href={`/dashboard/properties/${property.id}/?tab=maintenance&view=insights`}
                     className="flex-shrink-0 ml-4"
                 >
                     <Button 
@@ -76,7 +78,7 @@ export function MaintenanceNudgeCard({ property }: MaintenanceNudgeCardProps) {
                         variant={urgencyLevel === 'high' ? 'destructive' : 'default'}
                         className="flex items-center whitespace-nowrap"
                     >
-                        Set Up Maintenance Plan <ArrowRight className="h-4 w-4 ml-2" />
+                        View Action Plan <ArrowRight className="h-4 w-4 ml-2" />
                     </Button>
                 </Link>
             </CardContent>
