@@ -1,5 +1,5 @@
 // apps/backend/src/utils/propertyScore.util.ts
-import { Property, PropertyType, HeatingType, CoolingType, WaterHeaterType, RoofType } from '@prisma/client';
+import { Property, PropertyType, HeatingType, CoolingType, WaterHeaterType, RoofType, HomeAsset } from '@prisma/client';
 
 export interface HealthScoreResult {
   totalScore: number;
@@ -34,6 +34,11 @@ const EXTRA_WEIGHTS = {
   APPLIANCES: 5,
 };
 
+// Interface extension reflecting how property.service.ts sends the data
+interface PropertyWithAssetsForScore extends Property {
+    homeAssets: HomeAsset[];
+}
+
 /**
  * Calculates the Property Health Score based on property attributes and related data.
  * @param property The full Property object from Prisma.
@@ -50,6 +55,9 @@ export function calculateHealthScore(
   let extraScore = 0;
   let maxUnlockableScore = 0;
   const insights: { factor: string; status: string; score: number }[] = [];
+  
+  // Cast the property to access the homeAssets relation
+  const propertyWithAssets = property as PropertyWithAssetsForScore;
 
   // --- BASE SCORE CALCULATION (MANDATORY FIELDS: MAX 55) ---
 
@@ -60,7 +68,7 @@ export function calculateHealthScore(
     const ageScore = Math.max(0, BASE_WEIGHTS.AGE * (1 - age / 60));
     baseScore += ageScore;
     
-    // START FIX: Apply conditional status based on active bookings for the general Age Factor
+    // FIX: Apply conditional status based on active bookings for the general Age Factor
     let status = 'Good';
     if (age < 15) {
         status = 'Excellent';
@@ -75,7 +83,6 @@ export function calculateHealthScore(
             status = 'Needs Review'; // High urgency
         }
     }
-    // END FIX
 
     insights.push({ factor: 'Age Factor', status, score: ageScore });
   } else {
@@ -248,7 +255,7 @@ export function calculateHealthScore(
               status = 'Needs Attention';
           }
       }
-      insights.push({ factor: 'Exterior', status, score: extraScore });
+      insights.push({ factor: 'Exterior', status, score: extScore });
   } else {
     maxUnlockableScore += EXTRA_WEIGHTS.EXTERIOR;
   }
@@ -262,10 +269,36 @@ export function calculateHealthScore(
     maxUnlockableScore += EXTRA_WEIGHTS.DOCUMENTS;
   }
   
-  // 7. Appliance Ages (Max 5)
-  // FIX: Appliance Ages field removed from Property model. Points reserved as missing data.
-  insights.push({ factor: 'Appliances', status: 'Missing Data', score: 0 });
-  maxUnlockableScore += EXTRA_WEIGHTS.APPLIANCES;
+  // 7. Appliance Ages (Max 5) - FIX IMPLEMENTATION
+  const assetCount = propertyWithAssets.homeAssets?.length || 0;
+  
+  if (assetCount > 0) {
+    // Reward points based on the number of assets found (Max 5 points for 3+ assets)
+    const maxScore = EXTRA_WEIGHTS.APPLIANCES;
+    let appScore = Math.min(maxScore, assetCount * (maxScore / 3)); 
+    
+    // Check for maintenance risk: Are any primary assets over 10 years old?
+    const currentYear = new Date().getFullYear();
+    const needsReview = propertyWithAssets.homeAssets.some(
+        (a: HomeAsset) => a.installationYear !== null && currentYear - a.installationYear > 10
+    );
+    
+    extraScore += appScore;
+    
+    let status = 'Complete';
+    if (needsReview) {
+        status = 'Needs Review';
+    } else if (assetCount < 3) {
+        status = 'Partial';
+    }
+
+    insights.push({ factor: 'Appliances', status: status, score: appScore });
+  } else {
+    // Original missing data scenario
+    insights.push({ factor: 'Appliances', status: 'Missing Data', score: 0 });
+    maxUnlockableScore += EXTRA_WEIGHTS.APPLIANCES;
+  }
+  // END FIX IMPLEMENTATION
 
 
   // --- FINAL RESULT ---
