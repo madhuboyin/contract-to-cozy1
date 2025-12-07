@@ -2,6 +2,7 @@
 import { Property, PropertyType, HeatingType, CoolingType, WaterHeaterType, RoofType, HomeAsset, Warranty } from '@prisma/client';
 
 export interface HealthScoreResult {
+// ... (interface remains the same)
   totalScore: number;
   baseScore: number;
   maxPotentialScore: number;
@@ -70,7 +71,8 @@ export function calculateHealthScore(
     const ageScore = Math.max(0, BASE_WEIGHTS.AGE * (1 - age / 60));
     baseScore += ageScore;
     
-    // FIX: Apply conditional status based on active bookings for the general Age Factor
+    // FIX 1: Change generic Age Factor suppression from 'INSPECTION' to 'HANDYMAN' 
+    // to prevent collision with specific inspections like Roof Age.
     let status = 'Good';
     if (age < 15) {
         status = 'Excellent';
@@ -78,8 +80,7 @@ export function calculateHealthScore(
         status = 'Good';
     } else {
         // Age >= 30, triggers 'Needs Review'
-        if (activeBookingCategories.includes('INSPECTION')) {
-            // Keep generic INSPECTION check for the generic Age Factor
+        if (activeBookingCategories.includes('HANDYMAN')) { // Changed to HANDYMAN
             status = 'Action Pending'; 
         } else {
             status = 'Needs Review'; // High urgency
@@ -214,8 +215,9 @@ export function calculateHealthScore(
     
     let status = age < 15 ? 'Good' : 'Aging';
     if (age >= 20) {
-        // FIX: Check only for asset-specific category ('ROOFING')
-        if (activeBookingCategories.includes('ROOFING')) {
+        // FIX 2: Check for 'INSPECTION' category (the closest DB enum for this)
+        // This is now decoupled from Age Factor by FIX 1.
+        if (activeBookingCategories.includes('INSPECTION')) { 
             status = 'Action Pending';
         } else {
             status = 'Needs Inspection';
@@ -254,7 +256,9 @@ export function calculateHealthScore(
       
       let status = 'Good';
       if (property.hasDrainageIssues === true) {
-          if (activeBookingCategories.includes('INSPECTION') || activeBookingCategories.includes('HANDYMAN') || activeBookingCategories.includes('PLUMBING')) {
+          // FIX 3: Remove 'INSPECTION' check to prevent cross-talk with Roof Age inspection.
+          // Only allow repair-focused actions (Handyman/Plumbing) to suppress the Exterior alert.
+          if (activeBookingCategories.includes('HANDYMAN') || activeBookingCategories.includes('PLUMBING')) {
               status = 'Action Pending';
           } else {
               status = 'Needs Attention';
