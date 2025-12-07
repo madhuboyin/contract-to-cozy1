@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
@@ -202,26 +203,29 @@ const ProviderList = ({ providers, targetPropertyId }: { providers: Provider[]; 
 
 
 // --- Main Page Component ---
-// FIX 4: Updated type definition to include 'category'
-export default function ProvidersPage({ 
-  searchParams 
-}: { 
-  searchParams: { 
-    service?: string; 
-    category?: string;
-    insightFactor?: string;  // ADDED
-    propertyId?: string;      // ADDED
-  } 
-}) {
+export default function ProvidersPage() {
   const { user, loading } = useAuth();
+  const searchParams = useSearchParams();
+  
+  // Extract parameters from URL using useSearchParams hook
+  const defaultCategory = searchParams.get('category') || searchParams.get('service');
+  const insightContext = searchParams.get('insightFactor');
+  const targetPropertyId = searchParams.get('propertyId');
+
+  // Debug: Log extracted parameters
+  console.log('🔍 URL Parameters Extracted:', {
+    category: searchParams.get('category'),
+    service: searchParams.get('service'),
+    insightFactor: searchParams.get('insightFactor'),
+    propertyId: searchParams.get('propertyId'),
+    defaultCategory,
+    insightContext,
+    targetPropertyId
+  });
+
   const [providers, setProviders] = useState<Provider[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  // Extract all parameters
-  const defaultCategory = searchParams.category || searchParams.service;
-  const insightContext = searchParams.insightFactor;    // ADDED
-  const targetPropertyId = searchParams.propertyId;      // ADDED
 
   const isHomeBuyer = user?.segment === 'HOME_BUYER';
   const initialZipCode = ''; 
@@ -252,9 +256,17 @@ export default function ProvidersPage({
         params.zipCode = currentFilters.zipCode;
       }
       
+      console.log('🚀 Calling API with params:', params);
+      
       const response = await api.searchProviders(params);
 
-      if (response.success) {
+      console.log('📥 API Response:', {
+        success: response.success,
+        providerCount: response.success ? response.data?.providers?.length || 0 : 0,
+        message: response.message
+      });
+
+      if (response.success && response.data) {
         setProviders(response.data.providers);
       } else {
         setError(response.message || 'Failed to search providers.');
@@ -280,6 +292,12 @@ export default function ProvidersPage({
 
   // Fetch providers on initial load or filter change
   useEffect(() => {
+    console.log('⚡ useEffect triggered:', {
+      initialCategory,
+      filters,
+      willFetch: !!initialCategory
+    });
+    
     if (initialCategory) {
       fetchProviders(filters);
     }
@@ -322,7 +340,7 @@ export default function ProvidersPage({
   
       <ServiceFilter 
         onFilterChange={handleFilterChange} 
-        defaultCategory={defaultCategory}
+        defaultCategory={defaultCategory || undefined}
         isHomeBuyer={isHomeBuyer}
       />
 
@@ -347,7 +365,7 @@ export default function ProvidersPage({
           <p className="text-sm text-red-500 mt-1">Please refine your search criteria.</p>
         </div>
       ) : providers.length > 0 ? (
-        <ProviderList providers={providers} targetPropertyId={targetPropertyId} />
+        <ProviderList providers={providers} targetPropertyId={targetPropertyId || undefined} />
       ) : (
         <div className="text-center p-8 bg-gray-50 border rounded-lg">
           <p className="text-lg font-medium text-gray-700">No providers found matching your criteria.</p>
