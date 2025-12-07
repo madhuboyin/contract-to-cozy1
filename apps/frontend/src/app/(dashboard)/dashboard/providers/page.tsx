@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/providers/page.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
@@ -230,6 +230,9 @@ export default function ProvidersPage() {
   const isHomeBuyer = user?.segment === 'HOME_BUYER';
   const initialZipCode = ''; 
   const initialCategory = defaultCategory || '';
+  
+  // Track if initial fetch has been done to prevent infinite loop
+  const hasInitialFetchedRef = useRef(false);
 
   const [filters, setFilters] = useState({
     zipCode: initialZipCode,
@@ -280,7 +283,7 @@ export default function ProvidersPage() {
     } finally {
       setDataLoading(false);
     }
-  }, [dataLoading, isHomeBuyer]);
+  }, [isHomeBuyer]); // REMOVED dataLoading from deps to prevent recreation
 
   const handleFilterChange = useCallback((newFilters: { zipCode: string; category: string | undefined }) => {
     const updatedFilters = {
@@ -291,18 +294,20 @@ export default function ProvidersPage() {
     fetchProviders(updatedFilters);
   }, [fetchProviders]);
 
-  // Fetch providers on initial load or filter change
+  // Fetch providers on initial load only (not on every filter change)
   useEffect(() => {
-    console.log('⚡ useEffect triggered:', {
-      initialCategory,
-      filters,
-      willFetch: !!initialCategory
-    });
-    
-    if (initialCategory) {
-      fetchProviders(filters);
+    // Only fetch once on mount if we have a category from URL
+    if (initialCategory && !hasInitialFetchedRef.current) {
+      console.log('⚡ Initial fetch triggered with category:', initialCategory);
+      
+      hasInitialFetchedRef.current = true;
+      fetchProviders({ 
+        zipCode: '', 
+        category: initialCategory 
+      });
     }
-  }, [fetchProviders, initialCategory]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Intentionally empty - initialCategory is captured, only run once on mount
 
 
   if (loading) {
