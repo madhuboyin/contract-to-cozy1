@@ -2,7 +2,6 @@
 import { Property, PropertyType, HeatingType, CoolingType, WaterHeaterType, RoofType, HomeAsset, Warranty } from '@prisma/client';
 
 export interface HealthScoreResult {
-// ... (interface remains the same)
   totalScore: number;
   baseScore: number;
   maxPotentialScore: number;
@@ -256,9 +255,10 @@ export function calculateHealthScore(
       
       let status = 'Good';
       if (property.hasDrainageIssues === true) {
-          // FIX 3: Remove 'INSPECTION' check to prevent cross-talk with Roof Age inspection.
-          // Only allow repair-focused actions (Handyman/Plumbing) to suppress the Exterior alert.
-          if (activeBookingCategories.includes('HANDYMAN') || activeBookingCategories.includes('PLUMBING')) {
+          // FIX: Only HANDYMAN can suppress Exterior alerts.
+          // REMOVED PLUMBING check to prevent cross-talk with Water Heater Age.
+          // Exterior issues (drainage, siding, foundation) are unrelated to internal plumbing.
+          if (activeBookingCategories.includes('HANDYMAN')) {
               status = 'Action Pending';
           } else {
               status = 'Needs Attention';
