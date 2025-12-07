@@ -456,6 +456,8 @@ export default function DashboardPage() {
         properties={data.properties}
         checklistItems={checklistItems}
         selectedPropertyId={selectedPropertyId} // Pass selected ID from context state
+        // FIX 4: Pass the consolidated action count to resolve compilation error
+        consolidatedActionCount={data.urgentActions.length}
       />
     </DashboardShell>
   );
