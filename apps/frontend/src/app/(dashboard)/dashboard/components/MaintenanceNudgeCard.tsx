@@ -12,7 +12,8 @@ interface MaintenanceNudgeCardProps {
 }
 
 // Logic mirrored from PropertyHealthScoreCard.tsx to calculate high-priority actions
-const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection'];
+//const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection'];
+const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data'];
 
 export function MaintenanceNudgeCard({ property }: MaintenanceNudgeCardProps) {
     // Ensure healthScore data exists before proceeding

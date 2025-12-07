@@ -30,7 +30,8 @@ interface PropertyHealthScoreCardProps {
     property: ScoredProperty;
 }
 
-const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection'];
+//const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection'];
+const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data'];
 
 // Circular Gauge configuration constants
 const RADIUS = 45; 
