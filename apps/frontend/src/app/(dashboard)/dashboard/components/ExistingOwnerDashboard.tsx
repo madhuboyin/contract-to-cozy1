@@ -20,6 +20,8 @@ interface ExistingOwnerDashboardProps {
   checklistItems: ChecklistItem[];
   userFirstName: string;
   selectedPropertyId: string | undefined; 
+  // FIX 1: Add the new required prop from the parent page
+  consolidatedActionCount: number;
 }
 
 // Helper to format the address for display - NOT NEEDED HERE ANYMORE
@@ -33,7 +35,9 @@ export const ExistingOwnerDashboard = ({
   checklistItems,
   // userFirstName is kept but not used, as greeting is in parent
   // selectedPropertyId is now the source of truth passed from the parent
-  selectedPropertyId
+  selectedPropertyId,
+  // FIX 2: Destructure the new prop
+  consolidatedActionCount
 }: ExistingOwnerDashboardProps) => {
   
   // Logic to determine the default property: Primary first, otherwise the first one
@@ -76,7 +80,11 @@ export const ExistingOwnerDashboard = ({
   const renderNudgeCard = selectedProperty ? (
     // Add margin top to separate it from the scorecards grid above it in page.tsx
     <div className="mt-4">
-      <MaintenanceNudgeCard property={selectedProperty} />
+      <MaintenanceNudgeCard 
+        property={selectedProperty} 
+        // FIX 3: Pass the new required prop to the MaintenanceNudgeCard
+        consolidatedActionCount={consolidatedActionCount} 
+      />
     </div>
   ) : null;
 
