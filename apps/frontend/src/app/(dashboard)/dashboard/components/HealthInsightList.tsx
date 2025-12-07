@@ -93,11 +93,10 @@ const renderContextualButton = (insight: any, propertyId: string) => {
         
         let category: string;
         
-        // FIX 3: Granular Category Mapping to fix filter and backend resolution.
+        // FIX 3: Granular Category Mapping 
         if (insight.factor.includes('HVAC')) {
             category = 'HVAC';
         } else if (insight.factor.includes('Roof')) {
-            // Roof inspections map to INSPECTION category in DB enums.
             category = 'INSPECTION'; 
         } else if (insight.factor.includes('Water Heater')) {
             category = 'PLUMBING'; 
@@ -106,15 +105,19 @@ const renderContextualButton = (insight: any, propertyId: string) => {
             category = 'HANDYMAN'; 
         }
         
-        // FIX 4: Construct the link using explicit parameters and encoding.
-        // This ensures all three critical parameters are passed correctly.
-        const encodedFactor = encodeURIComponent(insight.factor);
-        
-        const href = `/dashboard/providers?category=${category}&insightFactor=${encodedFactor}&propertyId=${propertyId}`;
+        // FIX 4: Use Next.js Link object structure for robust query parameter passing.
+        const hrefObject = {
+            pathname: '/dashboard/providers',
+            query: { 
+                category: category, 
+                insightFactor: insight.factor, 
+                propertyId: propertyId 
+            }
+        };
 
         return (
             <Button size="sm" variant="destructive" asChild className="w-full sm:w-auto">
-                <Link href={href}>
+                <Link href={hrefObject}>
                     Find Professional <Wrench className="ml-2 h-4 w-4" />
                 </Link>
             </Button>
