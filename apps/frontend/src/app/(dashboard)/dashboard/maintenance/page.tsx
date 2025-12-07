@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'; 
-import { useRouter } from 'next/navigation'; 
+import { useRouter, useSearchParams } from 'next/navigation'; 
 import { MaintenanceConfigModal } from '../maintenance-setup/MaintenanceConfigModal'; 
 import { 
   MaintenanceTaskConfig, 
@@ -97,6 +97,10 @@ export default function MaintenancePage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  // Extract propertyId from URL query parameters
+  const selectedPropertyId = searchParams.get('propertyId');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<DashboardChecklistItem | null>(null);
@@ -152,12 +156,17 @@ export default function MaintenancePage() {
   const maintenanceItems = useMemo(() => {
     let items = allChecklistItems;
     
-    // 1. Must be active (not COMPLETED or NOT_NEEDED)
+    // 1. Filter by property if propertyId is specified in URL
+    if (selectedPropertyId) {
+      items = items.filter(item => item.propertyId === selectedPropertyId);
+    }
+    
+    // 2. Must be active (not COMPLETED or NOT_NEEDED)
     items = items.filter(item => 
       item.status !== 'COMPLETED' && item.status !== 'NOT_NEEDED'
     );
 
-    // 2. Must NOT be a direct navigation task (Keeps FINANCE and ADMIN)
+    // 3. Must NOT be a direct navigation task (Keeps FINANCE and ADMIN)
     items = items.filter(item => {
         const isExcluded = isDirectNavigationTask(item.serviceCategory);
         return !isExcluded;
@@ -170,7 +179,7 @@ export default function MaintenancePage() {
         const dateB = b.nextDueDate ? parseISO(b.nextDueDate).getTime() : Infinity;
         return dateA - dateB;
       });
-  }, [allChecklistItems]); 
+  }, [allChecklistItems, selectedPropertyId]); 
 
   // --- Modal Handlers & Mutations ---
   
