@@ -788,6 +788,8 @@ model Booking {
   review            Review?
   timeline          BookingTimeline[]
   expenses          Expense[] // NEW: Expense link
+  insightFactor     String?  // "Age Factor", "Roof Age", etc.
+  insightContext    String?  // Optional additional context
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -798,6 +800,7 @@ model Booking {
   @@index([scheduledDate])
   @@index([category])
   @@map("bookings")
+  @@index([insightFactor])  // For fast lookups
 }
 
 model BookingTimeline {
