@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge'; 
-import { MapPin, Search, Star, Loader2, ListChecks } from 'lucide-react';
+import { MapPin, Search, Star, Loader2, ListChecks, Info } from 'lucide-react'; // Add Info icon
 import { Provider, ServiceCategory } from '@/types';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -137,58 +137,65 @@ const ServiceFilter = React.memo(({ onFilterChange, defaultCategory, isHomeBuyer
 ServiceFilter.displayName = 'ServiceFilter';
 
 
-const ProviderList = ({ providers }: { providers: Provider[] }) => {
+const ProviderList = ({ providers, targetPropertyId }: { providers: Provider[]; targetPropertyId?: string }) => {
   return (
     <div className="grid gap-6 md:grid-cols-2">
-      {providers.map((provider) => (
-        <Card 
-          key={provider.id} 
-          className="group relative hover:shadow-xl transition-shadow duration-300"
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xl font-bold truncate">
-              {provider.businessName}
-            </CardTitle>
-            <div className="flex items-center text-yellow-500 text-sm">
-              <Star className="h-4 w-4 fill-yellow-500 mr-1" />
-              {provider.averageRating.toFixed(1)}
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-3">
-              {provider.totalReviews} reviews • {provider.totalCompletedJobs} jobs completed
-            </p>
-            <div className="flex flex-wrap gap-2 mb-4">
-              {provider.serviceCategories.slice(0, 3).map(category => (
-                <Badge key={category} variant="secondary" className="text-xs">
-                  <ServiceCategoryIcon icon={category} className="h-3 w-3 mr-1" />
-                  {category}
-                </Badge>
-              ))}
-            </div>
+      {providers.map((provider) => {
+        // Build profile link with optional propertyId parameter
+        const profileLink = targetPropertyId 
+          ? `/dashboard/providers/${provider.id}?propertyId=${targetPropertyId}`
+          : `/dashboard/providers/${provider.id}`;
 
-            <div className="flex items-center text-sm text-gray-600">
-              <MapPin className="h-4 w-4 mr-2 text-red-500" />
-              Serves up to {provider.serviceRadius} miles
-            </div>
+        return (
+          <Card 
+            key={provider.id} 
+            className="group relative hover:shadow-xl transition-shadow duration-300"
+          >
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-xl font-bold truncate">
+                {provider.businessName}
+              </CardTitle>
+              <div className="flex items-center text-yellow-500 text-sm">
+                <Star className="h-4 w-4 fill-yellow-500 mr-1" />
+                {provider.averageRating.toFixed(1)}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-3">
+                {provider.totalReviews} reviews • {provider.totalCompletedJobs} jobs completed
+              </p>
+              <div className="flex flex-wrap gap-2 mb-4">
+                {provider.serviceCategories.slice(0, 3).map(category => (
+                  <Badge key={category} variant="secondary" className="text-xs">
+                    <ServiceCategoryIcon icon={category} className="h-3 w-3 mr-1" />
+                    {category}
+                  </Badge>
+                ))}
+              </div>
 
-            <Link href={`/dashboard/providers/${provider.id}`} className="absolute inset-0">
-              <span className="sr-only">View Provider Profile: {provider.businessName}</span>
-            </Link>
-            
-          </CardContent>
-          <div className="absolute bottom-4 right-4">
-              <Button 
-                asChild
-                variant="default" 
-                size="sm" 
-                className="group-hover:translate-x-0 translate-x-2 transition-transform duration-300"
-              >
-                <Link href={`/dashboard/providers/${provider.id}`}>View Profile</Link>
-              </Button>
-            </div>
-        </Card>
-      ))}
+              <div className="flex items-center text-sm text-gray-600">
+                <MapPin className="h-4 w-4 mr-2 text-red-500" />
+                Serves up to {provider.serviceRadius} miles
+              </div>
+
+              <Link href={profileLink} className="absolute inset-0">
+                <span className="sr-only">View Provider Profile: {provider.businessName}</span>
+              </Link>
+              
+            </CardContent>
+            <div className="absolute bottom-4 right-4">
+                <Button 
+                  asChild
+                  variant="default" 
+                  size="sm" 
+                  className="group-hover:translate-x-0 translate-x-2 transition-transform duration-300"
+                >
+                  <Link href={profileLink}>View Profile</Link>
+                </Button>
+              </div>
+          </Card>
+        );
+      })}
     </div>
   );
 };
@@ -196,14 +203,25 @@ const ProviderList = ({ providers }: { providers: Provider[] }) => {
 
 // --- Main Page Component ---
 // FIX 4: Updated type definition to include 'category'
-export default function ProvidersPage({ searchParams }: { searchParams: { service?: string; category?: string } }) {
+export default function ProvidersPage({ 
+  searchParams 
+}: { 
+  searchParams: { 
+    service?: string; 
+    category?: string;
+    insightFactor?: string;  // ADDED
+    propertyId?: string;      // ADDED
+  } 
+}) {
   const { user, loading } = useAuth();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // FIX 5: Fallback logic supports both the new 'category' param and the legacy 'service' param
+  // Extract all parameters
   const defaultCategory = searchParams.category || searchParams.service;
+  const insightContext = searchParams.insightFactor;    // ADDED
+  const targetPropertyId = searchParams.propertyId;      // ADDED
 
   const isHomeBuyer = user?.segment === 'HOME_BUYER';
   const initialZipCode = ''; 
@@ -280,7 +298,28 @@ export default function ProvidersPage({ searchParams }: { searchParams: { servic
   return (
     <div className="space-y-8">
       <h1 className="text-3xl font-bold tracking-tight">Provider Search</h1>
-
+  
+      {/* Context Banner - Show when arriving from Health Insights */}
+      {insightContext && (
+        <Card className="bg-blue-50 border-blue-200">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <Info className="h-5 w-5 text-blue-600 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-blue-900">
+                  Finding providers for: <span className="font-bold">{insightContext}</span>
+                </p>
+                {targetPropertyId && (
+                  <p className="text-xs text-blue-700 mt-1">
+                    Pre-filtered for your selected property
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+  
       <ServiceFilter 
         onFilterChange={handleFilterChange} 
         defaultCategory={defaultCategory}
@@ -308,7 +347,7 @@ export default function ProvidersPage({ searchParams }: { searchParams: { servic
           <p className="text-sm text-red-500 mt-1">Please refine your search criteria.</p>
         </div>
       ) : providers.length > 0 ? (
-        <ProviderList providers={providers} />
+        <ProviderList providers={providers} targetPropertyId={targetPropertyId} />
       ) : (
         <div className="text-center p-8 bg-gray-50 border rounded-lg">
           <p className="text-lg font-medium text-gray-700">No providers found matching your criteria.</p>

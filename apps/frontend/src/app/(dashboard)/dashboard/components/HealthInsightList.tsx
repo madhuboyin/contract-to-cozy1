@@ -90,10 +90,9 @@ const renderContextualButton = (insight: any, propertyId: string) => {
     const requiresAttention = insight.status === 'Needs Attention' && insight.factor === 'Exterior';
     
     if (requiresService || requiresAttention) {
-        
         let category: string;
         
-        // FIX 3: Granular Category Mapping to match DB enums.
+        // Granular Category Mapping to match DB enums.
         if (insight.factor.includes('HVAC')) {
             category = 'HVAC';
         } else if (insight.factor.includes('Roof')) {
@@ -101,18 +100,22 @@ const renderContextualButton = (insight: any, propertyId: string) => {
         } else if (insight.factor.includes('Water Heater')) {
             category = 'PLUMBING'; 
         } else {
-            // Default for 'Age Factor' or 'Exterior' repair actions.
             category = 'HANDYMAN'; 
         }
         
-        // FIX 4: Explicitly construct the full URL string outside of JSX.
-        const encodedFactor = encodeURIComponent(insight.factor);
-        
-        const fullHref = `/dashboard/providers?category=${category}&insightFactor=${encodedFactor}&propertyId=${propertyId}`;
-
+        // FIXED: Use Next.js object-based routing for reliable parameter passing
+        const providerSearchLink = {
+            pathname: '/dashboard/providers',
+            query: {
+                category: category,
+                insightFactor: insight.factor,
+                propertyId: propertyId
+            }
+        };
+    
         return (
             <Button size="sm" variant="destructive" asChild className="w-full sm:w-auto">
-                <Link href={fullHref}>
+                <Link href={providerSearchLink}>
                     Find Professional <Wrench className="ml-2 h-4 w-4" />
                 </Link>
             </Button>

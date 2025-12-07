@@ -31,12 +31,8 @@ interface HealthScoreResult {
 // Using an intersection type to define the expected structure of the fetched property
 type ScoredProperty = Property & { healthScore?: HealthScoreResult };
 
-// PHASE 4 VERIFICATION:
-// 'Action Pending' is intentionally excluded. This ensures that when the backend 
-// detects an active booking and switches status to 'Action Pending', the item
-// automatically disappears from this "Immediate Action" list.
-const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data'];
 
+const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
 /**
  * Helper function to render a button based on the insight factor/status
  * FIXED: Logic now maps all categories to the correct, uppercase Prisma ENUMs.
@@ -49,53 +45,57 @@ const renderContextualButton = (insight: any, propertyId: string) => {
 
     // 1. Actions related to scheduling professionals (Inspection, Review, Attention)
     if (insight.status.includes('Inspection') || 
-        insight.status.includes('Review') || 
-        insight.status.includes('Attention')) {
-        
-        // --- FIXED LOGIC: Map to valid ENUMs for Provider Search ---
-        if (insight.factor.includes('Age Factor') || insight.factor.includes('Roof')) {
-            // Assessments go to INSPECTION category
-            category = 'INSPECTION'; 
-        } else if (insight.factor.includes('HVAC')) {
-            category = 'HVAC';
-        } else if (insight.factor.includes('Water Heater')) {
-            category = 'PLUMBING'; 
-        } else if (insight.factor.includes('Exterior') || insight.factor.includes('Drainage')) {
-            category = 'HANDYMAN'; 
-        } else {
-            // Default to INSPECTION for unmapped assessments/reviews
-            category = 'INSPECTION';
-        }
-        // --- END FIXED LOGIC ---
-
-
-        // Determine the action label based on status
-        if (insight.status.includes('Inspection')) {
-            buttonLabel = "Schedule Inspection";
-            isUrgent = true;
-        } else if (insight.status.includes('Review')) {
-            buttonLabel = "Schedule Comprehensive Assessment";
-            isUrgent = false;
-        } else if (insight.status.includes('Attention')) {
-            buttonLabel = "Book Repair Service";
-            isUrgent = true;
-        }
-
-        return (
-            <Button 
-                size="sm" 
-                // Use destructive variant only for high urgency (Inspection/Attention)
-                variant={isUrgent ? 'destructive' : 'default'} 
-                asChild 
-                className="w-full sm:w-auto"
-            >
-                {/* Ensure the category query parameter uses the fixed ENUM string */}
-                <Link href={`/dashboard/providers?category=${category}`}>
-                    {buttonLabel} <Wrench className="ml-2 h-4 w-4" />
-                </Link>
-            </Button>
-        );
+    insight.status.includes('Review') || 
+    insight.status.includes('Attention')) {
+    
+    // Map to valid ENUMs for Provider Search
+    if (insight.factor.includes('Age Factor') || insight.factor.includes('Roof')) {
+        category = 'INSPECTION'; 
+    } else if (insight.factor.includes('HVAC')) {
+        category = 'HVAC';
+    } else if (insight.factor.includes('Water Heater')) {
+        category = 'PLUMBING'; 
+    } else if (insight.factor.includes('Exterior') || insight.factor.includes('Drainage')) {
+        category = 'HANDYMAN'; 
+    } else {
+        category = 'INSPECTION';
     }
+
+    // Determine the action label based on status
+    if (insight.status.includes('Inspection')) {
+        buttonLabel = "Schedule Inspection";
+        isUrgent = true;
+    } else if (insight.status.includes('Review')) {
+        buttonLabel = "Schedule Comprehensive Assessment";
+        isUrgent = false;
+    } else if (insight.status.includes('Attention')) {
+        buttonLabel = "Book Repair Service";
+        isUrgent = true;
+    }
+
+    // FIXED: Use Next.js object-based routing for reliable parameter passing
+    const providerSearchLink = {
+        pathname: '/dashboard/providers',
+        query: {
+            category: category,
+            insightFactor: insight.factor,
+            propertyId: propertyId
+        }
+    };
+
+    return (
+        <Button 
+            size="sm" 
+            variant={isUrgent ? 'destructive' : 'default'} 
+            asChild 
+            className="w-full sm:w-auto"
+        >
+            <Link href={providerSearchLink}>
+                {buttonLabel} <Wrench className="ml-2 h-4 w-4" />
+            </Link>
+        </Button>
+    );
+  }
     
     // 2. Actions related to updating missing data (Safety, Appliances, Documents)
     if (insight.factor.includes('Safety') || 

@@ -22,11 +22,12 @@ function formatServiceCategory(category: string | null): string {
 export default function BookProviderPage() {
   const params = useParams();
   const router = useRouter();
-  // FIX: Initialize the query client
   const queryClient = useQueryClient();
   
   const searchParams = useSearchParams();
   const serviceCategory = searchParams.get('service');
+  const preSelectedPropertyId = searchParams.get('propertyId');
+  //const preSelectedServiceId = searchParams.get('service');
   const providerId = params.id as string;
 
   const [provider, setProvider] = useState<Provider | null>(null);
@@ -38,7 +39,7 @@ export default function BookProviderPage() {
 
   // Form state
   const [selectedServiceId, setSelectedServiceId] = useState('');
-  const [selectedPropertyId, setSelectedPropertyId] = useState('');
+  const [selectedPropertyId, setSelectedPropertyId] = useState(preSelectedPropertyId || ''); // MODIFIED
   const [scheduledDate, setScheduledDate] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
