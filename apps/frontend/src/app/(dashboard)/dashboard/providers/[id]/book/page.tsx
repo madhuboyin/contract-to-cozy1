@@ -27,6 +27,9 @@ export default function BookProviderPage() {
   const searchParams = useSearchParams();
   const serviceCategory = searchParams.get('service');
   const preSelectedPropertyId = searchParams.get('propertyId');
+  // NEW: Extract health insight tracking from URL
+  const insightFactor = searchParams.get('insightFactor');
+  const insightContext = searchParams.get('insightContext');
   //const preSelectedServiceId = searchParams.get('service');
   const providerId = params.id as string;
 
@@ -158,6 +161,9 @@ export default function BookProviderPage() {
       description: description.trim(),
       specialRequests: specialRequests.trim() || undefined,
       estimatedPrice,
+      // NEW: Include health insight tracking fields
+      ...(insightFactor && { insightFactor }),
+      ...(insightContext && { insightContext }),
     };
 
     console.log('Submitting booking:', bookingData);
