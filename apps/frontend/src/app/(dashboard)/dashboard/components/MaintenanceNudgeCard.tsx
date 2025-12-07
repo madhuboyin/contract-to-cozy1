@@ -9,13 +9,11 @@ import { Badge } from '@/components/ui/badge';
 
 interface MaintenanceNudgeCardProps {
     property: ScoredProperty;
-    // FIX 1: New Prop to receive the consolidated action count (Health Insights + Checklist + Renewals)
+    // FIX 1: Prop to receive the consolidated action count (Health Insights + Checklist + Renewals)
     consolidatedActionCount: number;
 }
 
-// NOTE: This constant is now largely redundant as the primary trigger count is derived 
-// from the consolidated list passed by the parent component (page.tsx).
-// It is updated here to ensure internal consistency if used elsewhere for filtering.
+// NOTE: This constant is only for filtering *Health Score Insights* internally.
 const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty']; 
 
 export function MaintenanceNudgeCard({ property, consolidatedActionCount }: MaintenanceNudgeCardProps) {
@@ -27,7 +25,7 @@ export function MaintenanceNudgeCard({ property, consolidatedActionCount }: Main
     const healthScore = property.healthScore.totalScore || 0;
     
     // FIX 2: Implement the new combined logic based on the user's proposal:
-    // Show card ONLY IF score is poor (< 70) AND there is any consolidated action (new logic).
+    // Show card ONLY IF score is poor (< 70) AND there is any consolidated action.
     const shouldShowNudge = healthScore < 70 && consolidatedActionCount > 0;
 
     if (!shouldShowNudge) {
@@ -68,9 +66,10 @@ export function MaintenanceNudgeCard({ property, consolidatedActionCount }: Main
                         </p>
                     </div>
                 </div>
-                {/* FIX 4: Change CTA to go to the insights view, as requested by the user */}
                 <Link 
-                    href={`/dashboard/properties/${property.id}/?tab=maintenance&view=insights`}
+                    // FIX: Navigate to the central maintenance list page, filtered by property ID.
+                    // This page displays ALL Checklist items and Renewals.
+                    href={`/dashboard/maintenance?propertyId=${property.id}&priority=true`}
                     className="flex-shrink-0 ml-4"
                 >
                     <Button 
