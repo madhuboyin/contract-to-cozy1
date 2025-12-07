@@ -208,9 +208,9 @@ export default function ProvidersPage() {
   const searchParams = useSearchParams();
   
   // Extract parameters from URL using useSearchParams hook
-  const defaultCategory = searchParams.get('category') || searchParams.get('service');
-  const insightContext = searchParams.get('insightFactor');
-  const targetPropertyId = searchParams.get('propertyId');
+  const defaultCategory = searchParams.get('category') || searchParams.get('service') || undefined;
+  const insightContext = searchParams.get('insightFactor') || undefined;
+  const targetPropertyId = searchParams.get('propertyId') || undefined;
 
   // Debug: Log extracted parameters
   console.log('🔍 URL Parameters Extracted:', {
@@ -218,9 +218,9 @@ export default function ProvidersPage() {
     service: searchParams.get('service'),
     insightFactor: searchParams.get('insightFactor'),
     propertyId: searchParams.get('propertyId'),
-    defaultCategory,
-    insightContext,
-    targetPropertyId
+    defaultCategory: defaultCategory || 'none',
+    insightContext: insightContext || 'none',
+    targetPropertyId: targetPropertyId || 'none'
   });
 
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -263,13 +263,14 @@ export default function ProvidersPage() {
       console.log('📥 API Response:', {
         success: response.success,
         providerCount: response.success ? response.data?.providers?.length || 0 : 0,
-        message: response.message
+        message: 'message' in response ? response.message : undefined
       });
 
       if (response.success && response.data) {
         setProviders(response.data.providers);
       } else {
-        setError(response.message || 'Failed to search providers.');
+        const errorMessage = 'message' in response ? response.message : 'Failed to search providers.';
+        setError(errorMessage || 'Failed to search providers.');
         setProviders([]);
       }
     } catch (err) {
@@ -340,7 +341,7 @@ export default function ProvidersPage() {
   
       <ServiceFilter 
         onFilterChange={handleFilterChange} 
-        defaultCategory={defaultCategory || undefined}
+        defaultCategory={defaultCategory}
         isHomeBuyer={isHomeBuyer}
       />
 
@@ -365,7 +366,7 @@ export default function ProvidersPage() {
           <p className="text-sm text-red-500 mt-1">Please refine your search criteria.</p>
         </div>
       ) : providers.length > 0 ? (
-        <ProviderList providers={providers} targetPropertyId={targetPropertyId || undefined} />
+        <ProviderList providers={providers} targetPropertyId={targetPropertyId} />
       ) : (
         <div className="text-center p-8 bg-gray-50 border rounded-lg">
           <p className="text-lg font-medium text-gray-700">No providers found matching your criteria.</p>
