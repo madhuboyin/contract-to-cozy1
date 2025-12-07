@@ -63,7 +63,7 @@ export function calculateHealthScore(
 
   // --- BASE SCORE CALCULATION (MANDATORY FIELDS: MAX 55) ---
 
-  // 1. Age Factor (Max 15)
+  // 1. Age Factor (Max 15) - Remains dependent on a general 'INSPECTION'
   if (property.yearBuilt) {
     const age = currentYear - property.yearBuilt;
     // 15 points max, drops to 0 after 60 years.
@@ -79,7 +79,7 @@ export function calculateHealthScore(
     } else {
         // Age >= 30, triggers 'Needs Review'
         if (activeBookingCategories.includes('INSPECTION')) {
-            // FIX: Downgrade status if a general Home Inspection is booked
+            // Keep generic INSPECTION check for the generic Age Factor
             status = 'Action Pending'; 
         } else {
             status = 'Needs Review'; // High urgency
@@ -174,7 +174,8 @@ export function calculateHealthScore(
     let status = age < 8 ? 'Good' : 'Aging';
     // Logic: If aging AND no active booking, then warn.
     if (age >= 15) {
-        if (activeBookingCategories.includes('INSPECTION') || activeBookingCategories.includes('HVAC')) {
+        // FIX: Check only for asset-specific category ('HVAC') to prevent cross-asset issue
+        if (activeBookingCategories.includes('HVAC')) { 
             status = 'Action Pending'; // Downgrade urgency if booked
         } else {
             status = 'Needs Inspection'; // High urgency
@@ -193,7 +194,8 @@ export function calculateHealthScore(
     
     let status = age < 5 ? 'Good' : 'Aging';
     if (age >= 10) {
-        if (activeBookingCategories.includes('INSPECTION') || activeBookingCategories.includes('PLUMBING')) {
+        // FIX: Check only for asset-specific category ('PLUMBING')
+        if (activeBookingCategories.includes('PLUMBING')) {
             status = 'Action Pending';
         } else {
             status = 'Needs Review';
@@ -212,7 +214,8 @@ export function calculateHealthScore(
     
     let status = age < 15 ? 'Good' : 'Aging';
     if (age >= 20) {
-        if (activeBookingCategories.includes('INSPECTION') || activeBookingCategories.includes('ROOFING') || activeBookingCategories.includes('HANDYMAN')) {
+        // FIX: Check only for asset-specific category ('ROOFING')
+        if (activeBookingCategories.includes('ROOFING')) {
             status = 'Action Pending';
         } else {
             status = 'Needs Inspection';

@@ -87,9 +87,20 @@ const renderContextualButton = (insight: any, propertyId: string) => {
         insight.factor.includes('Roof') ||
         insight.factor.includes('Water Heater')) {
         
-        // Use the insight factor to pre-filter the provider search
-        const category = insight.factor.includes('Age') ? 'General Maintenance' : insight.factor.replace(' Age', '');
+        // FIX 3: Use asset-specific category to prevent a single action from resolving all age-related issues.
+        let category: string;
         
+        if (insight.factor.includes('HVAC')) {
+            category = 'HVAC';
+        } else if (insight.factor.includes('Roof')) {
+            category = 'Roofing'; // Use Roofing as the expected service category
+        } else if (insight.factor.includes('Water Heater')) {
+            category = 'Plumbing'; // Water heater issues are typically handled by Plumbers
+        } else {
+            // Default for the generic 'Age Factor' or other non-specific issues
+            category = 'General Maintenance';
+        }
+
         return (
             <Button size="sm" variant="destructive" asChild className="w-full sm:w-auto">
                 <Link href={`/dashboard/providers?category=${category}`}>
