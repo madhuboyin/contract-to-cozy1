@@ -8,7 +8,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScoredProperty } from "@/app/(dashboard)/dashboard/types";
 
-// FIX 1: Add 'Needs Warranty' to the critical status list
 const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
 
 interface HealthInsightListProps {
@@ -80,30 +79,39 @@ const renderContextualButton = (insight: any, propertyId: string) => {
         );
     }
     
-    // Actions related to scheduling professionals (Aging systems, structural issues)
-    if (insight.status.includes('Inspection') || 
-        insight.status.includes('Review') || 
-        insight.factor.includes('HVAC') ||
-        insight.factor.includes('Roof') ||
-        insight.factor.includes('Water Heater')) {
+    // Logic for Repair/Inspection/Review actions
+    const requiresService = insight.status.includes('Inspection') || 
+                            insight.status.includes('Review') || 
+                            insight.factor.includes('HVAC') ||
+                            insight.factor.includes('Roof') ||
+                            insight.factor.includes('Water Heater');
+
+    const requiresAttention = insight.status === 'Needs Attention' && insight.factor === 'Exterior';
+    
+    if (requiresService || requiresAttention) {
         
-        // FIX 3: Use asset-specific category to prevent a single action from resolving all age-related issues.
         let category: string;
         
+        // FIX 3: Granular Category Mapping to fix filter and backend resolution.
         if (insight.factor.includes('HVAC')) {
             category = 'HVAC';
         } else if (insight.factor.includes('Roof')) {
-            category = 'Roofing'; // Use Roofing as the expected service category
+            // Roof inspections/repairs map closest to the INSPECTION category in the DB enums.
+            category = 'INSPECTION'; 
         } else if (insight.factor.includes('Water Heater')) {
-            category = 'Plumbing'; // Water heater issues are typically handled by Plumbers
+            category = 'PLUMBING'; 
         } else {
-            // Default for the generic 'Age Factor' or other non-specific issues
-            category = 'General Maintenance';
+            // Default for 'Age Factor' or 'Exterior' repair actions.
+            category = 'HANDYMAN'; 
         }
-
+        
+        // FIX 4: Include the original 'insightFactor' and 'propertyId' in the URL 
+        // to provide the necessary context to the booking system.
+        const encodedFactor = encodeURIComponent(insight.factor);
+        
         return (
             <Button size="sm" variant="destructive" asChild className="w-full sm:w-auto">
-                <Link href={`/dashboard/providers?category=${category}`}>
+                <Link href={`/dashboard/providers?category=${category}&insightFactor=${encodedFactor}&propertyId=${propertyId}`}>
                     Find Professional <Wrench className="ml-2 h-4 w-4" />
                 </Link>
             </Button>
