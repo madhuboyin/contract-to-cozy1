@@ -1,5 +1,5 @@
 // apps/backend/src/utils/propertyScore.util.ts
-import { Property, PropertyType, HeatingType, CoolingType, WaterHeaterType, RoofType, HomeAsset } from '@prisma/client';
+import { Property, PropertyType, HeatingType, CoolingType, WaterHeaterType, RoofType, HomeAsset, Warranty } from '@prisma/client';
 
 export interface HealthScoreResult {
   totalScore: number;
@@ -37,6 +37,8 @@ const EXTRA_WEIGHTS = {
 // Interface extension reflecting how property.service.ts sends the data
 interface PropertyWithAssetsForScore extends Property {
     homeAssets: HomeAsset[];
+    // PHASE 2 FIX: Add warranties to the type for access here
+    warranties: Warranty[];
 }
 
 /**
@@ -56,7 +58,7 @@ export function calculateHealthScore(
   let maxUnlockableScore = 0;
   const insights: { factor: string; status: string; score: number }[] = [];
   
-  // Cast the property to access the homeAssets relation
+  // Cast the property to access the homeAssets and warranties relation
   const propertyWithAssets = property as PropertyWithAssetsForScore;
 
   // --- BASE SCORE CALCULATION (MANDATORY FIELDS: MAX 55) ---
@@ -269,36 +271,54 @@ export function calculateHealthScore(
     maxUnlockableScore += EXTRA_WEIGHTS.DOCUMENTS;
   }
   
-  // 7. Appliance Ages (Max 5) - FIX IMPLEMENTATION
+  // 7. Appliance Ages (Max 5) - FINAL IMPLEMENTATION
   const assetCount = propertyWithAssets.homeAssets?.length || 0;
+  const maxAssetsForScore = 3; // Define completeness threshold
   
+  // Check for active home warranty coverage for any appliance
+  const currentYearCheck = new Date().getFullYear();
+  const hasActiveHomeWarranty = propertyWithAssets.warranties.some(w => 
+      // Assuming any standard warranty covers appliances and is active (expiry date in current year or later)
+      w.expiryDate && new Date(w.expiryDate).getFullYear() >= currentYearCheck
+  );
+
   if (assetCount > 0) {
-    // Reward points based on the number of assets found (Max 5 points for 3+ assets)
     const maxScore = EXTRA_WEIGHTS.APPLIANCES;
-    let appScore = Math.min(maxScore, assetCount * (maxScore / 3)); 
+    // Score based on completion ratio (capped at maxScore)
+    let appScore = Math.min(maxScore, assetCount * (maxScore / maxAssetsForScore)); 
     
-    // Check for maintenance risk: Are any primary assets over 10 years old?
-    const currentYear = new Date().getFullYear();
-    const needsReview = propertyWithAssets.homeAssets.some(
-        (a: HomeAsset) => a.installationYear !== null && currentYear - a.installationYear > 10
-    );
+     // Determine Age Risk: Flag if any primary asset is over 15 years old.
+     const criticallyAging = propertyWithAssets.homeAssets.some(
+         (a: HomeAsset) => a.installationYear !== null && currentYear - a.installationYear > 15 
+     );
     
     extraScore += appScore;
     
+    // Determine Status:
     let status = 'Complete';
-    if (needsReview) {
-        status = 'Needs Review';
-    } else if (assetCount < 3) {
+    if (criticallyAging) {
+        if (hasActiveHomeWarranty) {
+            // If old BUT covered, suppress the alert by marking as Complete.
+            status = 'Complete'; 
+        } else {
+            // If old AND NOT covered, raise specific financial alert.
+            status = 'Needs Warranty'; 
+        }
+    } else if (assetCount < maxAssetsForScore) {
+        // If not critically aging, but data is incomplete.
         status = 'Partial';
+    } else {
+        // Data complete and not critically aging.
+        status = 'Complete';
     }
 
     insights.push({ factor: 'Appliances', status: status, score: appScore });
   } else {
-    // Original missing data scenario
+    // Missing data scenario
     insights.push({ factor: 'Appliances', status: 'Missing Data', score: 0 });
     maxUnlockableScore += EXTRA_WEIGHTS.APPLIANCES;
   }
-  // END FIX IMPLEMENTATION
+  // END FINAL IMPLEMENTATION
 
 
   // --- FINAL RESULT ---
@@ -320,7 +340,8 @@ export function calculateHealthScore(
         i.status === 'Needs Review' || 
         i.status === 'Needs Inspection' ||
         i.status === 'Needs Attention' ||
-        i.status === 'Action Pending' // Explicitly keep this so users see their progress
+        i.status === 'Needs Warranty' || // NEW STATUS: Must be included in the insights list
+        i.status === 'Action Pending' 
     ),
     ctaNeeded: maxUnlockableScore > 0,
   };

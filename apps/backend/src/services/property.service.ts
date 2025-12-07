@@ -1,6 +1,6 @@
 // apps/backend/src/services/property.service.ts
 
-import { PrismaClient, Property, PropertyType, OwnershipType, HeatingType, CoolingType, WaterHeaterType, RoofType, HomeAsset, Prisma, ChecklistItem } from '@prisma/client';
+import { PrismaClient, Property, PropertyType, OwnershipType, HeatingType, CoolingType, WaterHeaterType, RoofType, HomeAsset, Prisma, ChecklistItem, Warranty } from '@prisma/client';
 // IMPORT REQUIRED: Import the utility and interface
 import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.util'; 
 
@@ -64,8 +64,10 @@ interface UpdatePropertyData extends Partial<CreatePropertyData> {
 }
 
 // === INJECT MISSING INTERFACE DEFINITIONS ===
+// FIX 1: Add 'warranties: Warranty[]' to include the relation for scoring
 export interface PropertyWithAssets extends Property {
     homeAssets: HomeAsset[];
+    warranties: Warranty[];
 }
 
 export interface ScoredProperty extends PropertyWithAssets {
@@ -177,7 +179,7 @@ async function attachHealthScore(property: PropertyWithAssets): Promise<ScoredPr
         where: { propertyId: property.id }
     });
 
-    // --- PHASE 2 IMPLEMENTATION START: Fetch Active Bookings ---
+    // --- PHASE 2 IMPLEMENTATION: Fetch Active Bookings (Existing Logic) ---
     // Fetch bookings that are in progress or confirmed to detect if an issue is being resolved.
     const activeBookings = await prisma.booking.findMany({
         where: {
@@ -192,12 +194,12 @@ async function attachHealthScore(property: PropertyWithAssets): Promise<ScoredPr
     // Map to a simple string array of categories (e.g., ['ROOFING', 'INSPECTION'])
     // We cast to string[] to ensure compatibility with the utility function
     const activeCategories = activeBookings.map(b => b.category.toString());
-    // --- PHASE 2 IMPLEMENTATION END ---
+    // --- END Existing Logic ---
 
-    // FIX: Add try/catch block for defensive coding against errors in scoring utility
+    // FIX 2: Add try/catch block for defensive coding against errors in scoring utility
     let healthScore: HealthScoreResult;
     try {
-        // UPDATED CALL: Pass activeCategories to the calculator
+        // UPDATED CALL: Pass activeCategories to the calculator. Property object now contains warranties.
         healthScore = calculateHealthScore(property, documentCount, activeCategories);
     } catch (error) {
         console.error(`CRITICAL: Health score calculation failed for Property ID ${property.id}. Returning default score.`, error);
@@ -250,7 +252,9 @@ export async function getUserProperties(userId: string): Promise<ScoredProperty[
       { createdAt: 'desc' },
     ],
     include: {
-      homeAssets: true, // MUST INCLUDE new relation
+      homeAssets: true, 
+      // FIX 3: Include warranties in the fetch query
+      warranties: true, 
     }
   });
   
@@ -327,10 +331,14 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
   // This triggers both Risk and FES calculations
   await JobQueueService.enqueuePropertyIntelligenceJobs(property.id);
 
-  // FETCH FULL PROPERTY: Must include homeAssets for scoring/return
+  // FETCH FULL PROPERTY: Must include homeAssets and warranties for scoring/return
   const fullProperty = await prisma.property.findUnique({
       where: { id: property.id },
-      include: { homeAssets: true }
+      include: { 
+          homeAssets: true, 
+          // FIX 4: Include warranties
+          warranties: true,
+      }
   });
 
   // ATTACH SCORE: Calculate and attach score before returning
@@ -350,7 +358,9 @@ export async function getPropertyById(propertyId: string, userId: string): Promi
       homeownerProfileId,
     },
     include: {
-      homeAssets: true, // MUST INCLUDE new relation
+      homeAssets: true, 
+      // FIX 5: Include warranties in the fetch query
+      warranties: true, 
     }
   });
 
@@ -536,10 +546,14 @@ export async function updateProperty(
       await JobQueueService.enqueuePropertyIntelligenceJobs(propertyId);
   }
 
-  // FETCH FULL PROPERTY: Must include homeAssets for return/scoring
+  // FETCH FULL PROPERTY: Must include homeAssets and warranties for return/scoring
   const updatedProperty = await prisma.property.findUnique({
       where: { id: propertyId },
-      include: { homeAssets: true }
+      include: { 
+          homeAssets: true,
+          // FIX 6: Include warranties
+          warranties: true,
+      }
   });
 
   // ATTACH SCORE: Calculate and attach score before returning

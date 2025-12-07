@@ -2,16 +2,14 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ShieldAlert, ArrowRight, Settings, FileText, Wrench } from 'lucide-react';
+// Added ShieldAlert, Wrench, Settings, ArrowRight are already used
+import { ShieldAlert, ArrowRight, Settings, FileText, Wrench } from 'lucide-react'; 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScoredProperty } from "@/app/(dashboard)/dashboard/types";
 
-// High priority statuses mirrored from PropertyHealthScoreCard.tsx
-// NOTE: 'Action Pending' is intentionally EXCLUDED from this list.
-// Items with open bookings ('Action Pending') will be filtered out, 
-// correctly removing them from the "Immediate Action Required" list.
-const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data'];
+// FIX 1: Add 'Needs Warranty' to the critical status list
+const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
 
 interface HealthInsightListProps {
     property: ScoredProperty;
@@ -26,7 +24,6 @@ export function HealthInsightList({ property }: HealthInsightListProps) {
     }
 
     // Filter for insights that match the high-priority statuses
-    // This will now exclude items where status has been changed to 'Action Pending' by the backend
     const criticalInsights = property.healthScore.insights.filter(i => 
         HIGH_PRIORITY_STATUSES.includes(i.status)
     );
@@ -71,6 +68,17 @@ export function HealthInsightList({ property }: HealthInsightListProps) {
 
 // Helper function to render a button based on the insight factor/status
 const renderContextualButton = (insight: any, propertyId: string) => {
+    
+    // FIX 2: Check for the new 'Needs Warranty' status and provide the appropriate CTA.
+    if (insight.status === 'Needs Warranty') {
+        return (
+            <Button size="sm" variant="destructive" asChild className="w-full sm:w-auto">
+                <Link href="/dashboard/warranties/new">
+                    Buy Warranty Protection <ShieldAlert className="ml-2 h-4 w-4" />
+                </Link>
+            </Button>
+        );
+    }
     
     // Actions related to scheduling professionals (Aging systems, structural issues)
     if (insight.status.includes('Inspection') || 
