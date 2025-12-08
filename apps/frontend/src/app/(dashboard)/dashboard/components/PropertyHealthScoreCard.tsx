@@ -1,5 +1,5 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/PropertyHealthScoreCard.tsx
-// FIX: Added h-full flex flex-col to Card for equal height in grid
+// Reduced height version: smaller gauge, less padding, compact layout
 
 "use client";
 
@@ -30,12 +30,11 @@ interface PropertyHealthScoreCardProps {
     property: ScoredProperty;
 }
 
-//const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection'];
 const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data'];
 
-// Circular Gauge configuration constants
-const RADIUS = 45; 
-const STROKE_WIDTH = 10; 
+// UPDATED: Reduced gauge size
+const RADIUS = 36; 
+const STROKE_WIDTH = 8; 
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardProps) {
@@ -62,12 +61,11 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
                     </CardDescription>
                 </div>
             </CardHeader>
-            {/* Retained flex flex-col justify-between to manage content layout */}
             <CardContent className="flex-1 flex flex-col justify-between">
                 
-                {/* *** GAUGE ICON AND SCORE DISPLAY (Circular Gauge) *** */}
-                <div className="flex flex-col items-center justify-center pt-4 pb-6">
-                    <div className="relative w-32 h-32 flex items-center justify-center">
+                {/* GAUGE ICON AND SCORE DISPLAY - UPDATED: Reduced size and padding */}
+                <div className="flex flex-col items-center justify-center pt-2 pb-3">
+                    <div className="relative w-24 h-24 flex items-center justify-center">
                         <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                             {/* Background Circle (Track) */}
                             <circle
@@ -84,7 +82,7 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
                                 cy="50"
                                 r={RADIUS}
                                 fill="none"
-                                className={progressClass} // Dynamic color based on score
+                                className={progressClass}
                                 strokeWidth={STROKE_WIDTH}
                                 strokeLinecap="round"
                                 strokeDasharray={CIRCUMFERENCE}
@@ -92,10 +90,10 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
                                 style={{ transition: 'stroke-dashoffset 0.5s ease' }}
                             />
                         </svg>
-                        {/* Score Text in Center */}
+                        {/* Score Text in Center - UPDATED: Reduced font size */}
                         <div className="absolute flex flex-col items-center justify-center">
-                            <span className={`text-4xl font-extrabold ${color}`}>{healthScore}</span>
-                            <span className="text-xl font-semibold text-muted-foreground ml-1">/100</span>
+                            <span className={`text-3xl font-extrabold ${color}`}>{healthScore}</span>
+                            <span className="text-lg font-semibold text-muted-foreground ml-1">/100</span>
                         </div>
                     </div>
                     {/* Status Badge */}
@@ -104,28 +102,23 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
                     </p>
                 </div>
 
-                {/* *** REQUIRED MAINTENANCE ACTIONS (Font size reduced to text-xl) *** */}
-                <div className="mt-2 border-t pt-4"> 
+                {/* REQUIRED MAINTENANCE ACTIONS - UPDATED: Reduced padding and font size */}
+                <div className="mt-2 border-t pt-3"> 
                     <div className="flex items-center justify-between">
                          <p className="font-body text-base font-semibold flex items-center whitespace-nowrap">
                             <Zap className="h-4 w-4 mr-1 text-red-600" />
                             Required Maintenance Actions
                         </p>
-                        {/* REDUCED FONT SIZE HERE: from text-2xl to text-xl */}
-                        <p className="text-xl font-extrabold text-red-600">
+                        <p className="text-lg font-extrabold text-red-600">
                             {totalRequiredActions}
                         </p>
                     </div>
-
-                    <p className="font-body text-xs text-muted-foreground mt-1">
-                        High-priority tasks identified in the last assessment.
-                    </p>
+                    {/* REMOVED: Description text per user request */}
                 </div>
 
-                {/* *** VIEW FULL MAINTENANCE PLAN LINK (MODIFIED) *** */}
-                <div className="mt-4">
+                {/* VIEW FULL MAINTENANCE PLAN LINK - UPDATED: Reduced margin */}
+                <div className="mt-3">
                     <Link 
-                        // MODIFICATION: Appended &view=insights to the maintenance tab link
                         href={`/dashboard/properties/${property.id}/?tab=maintenance&view=insights`}
                         className="inline-flex items-center text-sm font-semibold text-primary hover:text-primary/80 transition-colors no-underline"
                     >
