@@ -1,14 +1,13 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/HealthInsightList.tsx
+// UPDATED: Softer "Proactive Maintenance" messaging to match dashboard
 
 import React from 'react';
 import Link from 'next/link';
-// Added ShieldAlert, Wrench, Settings, ArrowRight are already used
-import { ShieldAlert, ArrowRight, Settings, FileText, Wrench } from 'lucide-react'; 
+import { Shield, ArrowRight, Settings, Wrench } from 'lucide-react'; 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScoredProperty } from "@/app/(dashboard)/dashboard/types";
 
-// FIX 1: Add 'Needs Warranty' to the critical status list
 const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
 
 interface HealthInsightListProps {
@@ -16,7 +15,8 @@ interface HealthInsightListProps {
 }
 
 /**
- * Displays a filtered list of critical Health Score insights that require immediate action.
+ * Displays a filtered list of Health Score insights with proactive maintenance recommendations.
+ * UPDATED: Changed from urgent "IMMEDIATE ACTION" to softer "Proactive Maintenance" messaging
  */
 export function HealthInsightList({ property }: HealthInsightListProps) {
     if (!property.healthScore) {
@@ -29,29 +29,28 @@ export function HealthInsightList({ property }: HealthInsightListProps) {
     );
 
     if (criticalInsights.length === 0) {
-        // If the health score is high, this component doesn't need to render
         return null;
     }
 
     return (
-        <Card className="border-2 border-red-500 bg-red-50 shadow-lg">
+        <Card className="border-2 border-blue-500 bg-blue-50 shadow-lg">
             <CardContent className="p-4 sm:p-6">
-                <h2 className="text-xl font-extrabold text-red-800 mb-4 flex items-center">
-                    <ShieldAlert className="h-6 w-6 mr-2 flex-shrink-0 text-red-600" /> 
-                    IMMEDIATE ACTION REQUIRED ({criticalInsights.length} Items)
+                <h2 className="text-xl font-extrabold text-blue-800 mb-4 flex items-center">
+                    <Shield className="h-6 w-6 mr-2 flex-shrink-0 text-blue-600" /> 
+                    Proactive Maintenance Recommended ({criticalInsights.length} Items)
                 </h2>
-                <p className="text-sm text-red-700 mb-4">
-                    These issues are the **{criticalInsights.length} Required Maintenance Actions** flagged on your dashboard. Resolving them will directly increase your Health Score and reduce risk.
+                <p className="text-sm text-blue-700 mb-4">
+                    These maintenance actions will directly increase your Health Score and reduce risk.
                 </p>
                 
                 <ul className="space-y-3">
                     {criticalInsights.map((insight, index) => (
-                        <li key={index} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-white rounded-lg shadow-sm border border-red-100">
+                        <li key={index} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-white rounded-lg shadow-sm border border-blue-100">
                             <div className="flex-1 pr-4 mb-2 sm:mb-0">
                                 <p className="font-semibold text-gray-800">
                                     {insight.factor}
                                 </p>
-                                <p className="text-sm text-red-600 font-medium mt-1">
+                                <p className="text-sm text-blue-600 font-medium mt-1">
                                     Status: **{insight.status}**
                                 </p>
                             </div>
@@ -69,12 +68,12 @@ export function HealthInsightList({ property }: HealthInsightListProps) {
 // Helper function to render a button based on the insight factor/status
 const renderContextualButton = (insight: any, propertyId: string) => {
     
-    // FIX 2: Check for the new 'Needs Warranty' status and provide the appropriate CTA.
-    if (insight.status === 'Needs Warranty') {
+    // Appliance warranty actions - redirect to warranties page
+    if (insight.factor.includes('Appliances') && insight.status === 'Needs Warranty') {
         return (
-            <Button size="sm" variant="destructive" asChild className="w-full sm:w-auto">
-                <Link href="/dashboard/warranties/new">
-                    Buy Warranty Protection <ShieldAlert className="ml-2 h-4 w-4" />
+            <Button size="sm" variant="default" asChild className="w-full sm:w-auto">
+                <Link href={`/dashboard/warranties?propertyId=${propertyId}`}>
+                    Manage Appliance Warranties <Shield className="ml-2 h-4 w-4" />
                 </Link>
             </Button>
         );
@@ -92,7 +91,7 @@ const renderContextualButton = (insight: any, propertyId: string) => {
     if (requiresService || requiresAttention) {
         let category: string;
         
-        // Granular Category Mapping to match DB enums.
+        // Granular Category Mapping to match DB enums
         if (insight.factor.includes('HVAC')) {
             category = 'HVAC';
         } else if (insight.factor.includes('Roof')) {
@@ -103,7 +102,6 @@ const renderContextualButton = (insight: any, propertyId: string) => {
             category = 'HANDYMAN'; 
         }
         
-        // FIXED: Use Next.js object-based routing for reliable parameter passing
         const providerSearchLink = {
             pathname: '/dashboard/providers',
             query: {
@@ -114,7 +112,7 @@ const renderContextualButton = (insight: any, propertyId: string) => {
         };
     
         return (
-            <Button size="sm" variant="destructive" asChild className="w-full sm:w-auto">
+            <Button size="sm" variant="default" asChild className="w-full sm:w-auto">
                 <Link href={providerSearchLink}>
                     Find Professional <Wrench className="ml-2 h-4 w-4" />
                 </Link>
@@ -122,7 +120,7 @@ const renderContextualButton = (insight: any, propertyId: string) => {
         );
     }
     
-    // Actions related to updating missing data (Safety, Appliances, Documents)
+    // Actions related to updating missing data (Safety, Documents)
     if (insight.factor.includes('Safety') || 
         insight.factor.includes('Documents') || 
         insight.status.includes('Missing Data')) {
@@ -136,10 +134,10 @@ const renderContextualButton = (insight: any, propertyId: string) => {
         );
     }
 
-    // Default action for less specific issues
+    // Default action
     return (
         <Button size="sm" variant="outline" asChild className="w-full sm:w-auto">
-             <Link href={`/dashboard/maintenance`}>
+             <Link href={`/dashboard/maintenance?propertyId=${propertyId}`}>
                 View Maintenance <ArrowRight className="ml-2 h-4 w-4" />
              </Link>
         </Button>

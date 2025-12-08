@@ -134,54 +134,55 @@ const renderContextualButton = (insight: any, propertyId: string) => {
 
 
 /**
- * Displays a filtered list of critical Health Score insights that require immediate action.
- * Inlined from HealthInsightList.tsx
+ * Displays a filtered list of Health Score insights with proactive maintenance recommendations.
+ * UPDATED: Softer messaging to match dashboard MaintenanceNudgeCard
+ * Inlined component for properties/[id]/page.tsx
  */
 function HealthInsightList({ property }: { property: ScoredProperty }) {
-    if (!property.healthScore) {
-        return null;
-    }
+  if (!property.healthScore) {
+      return null;
+  }
 
-    // Filter for insights that match the high-priority statuses
-    const criticalInsights = property.healthScore.insights.filter(i => 
-        HIGH_PRIORITY_STATUSES.includes(i.status)
-    );
+  // Filter for insights that match the high-priority statuses
+  const criticalInsights = property.healthScore.insights.filter(i => 
+      HIGH_PRIORITY_STATUSES.includes(i.status)
+  );
 
-    if (criticalInsights.length === 0) {
-        return null;
-    }
+  if (criticalInsights.length === 0) {
+      return null;
+  }
 
-    return (
-        <Card className="border-2 border-red-500 bg-red-50 shadow-lg">
-            <CardContent className="p-4 sm:p-6">
-                <h2 className="text-xl font-extrabold text-red-800 mb-4 flex items-center">
-                    <ShieldAlert className="h-6 w-6 mr-2 flex-shrink-0 text-red-600" /> 
-                    IMMEDIATE ACTION REQUIRED ({criticalInsights.length} Items)
-                </h2>
-                <p className="text-sm text-red-700 mb-4">
-                    These issues are the **{criticalInsights.length} Required Maintenance Actions** flagged on your dashboard. Resolving them will directly increase your Health Score and reduce risk.
-                </p>
-                
-                <ul className="space-y-3">
-                    {criticalInsights.map((insight, index) => (
-                        <li key={index} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-white rounded-lg shadow-sm border border-red-100">
-                            <div className="flex-1 pr-4 mb-2 sm:mb-0">
-                                <p className="font-semibold text-gray-800">
-                                    {insight.factor}
-                                </p>
-                                <p className="text-sm text-red-600 font-medium mt-1">
-                                    Status: **{insight.status}**
-                                </p>
-                            </div>
-                            
-                            {/* Contextual Action Button */}
-                            {renderContextualButton(insight, property.id)}
-                        </li>
-                    ))}
-                </ul>
-            </CardContent>
-        </Card>
-    );
+  return (
+      <Card className="border-2 border-blue-500 bg-blue-50 shadow-lg">
+          <CardContent className="p-4 sm:p-6">
+              <h2 className="text-xl font-extrabold text-blue-800 mb-4 flex items-center">
+                  <Shield className="h-6 w-6 mr-2 flex-shrink-0 text-blue-600" /> 
+                  Proactive Maintenance Recommended ({criticalInsights.length} Items)
+              </h2>
+              <p className="text-sm text-blue-700 mb-4">
+                  These maintenance actions will directly increase your Health Score and reduce risk.
+              </p>
+              
+              <ul className="space-y-3">
+                  {criticalInsights.map((insight, index) => (
+                      <li key={index} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-white rounded-lg shadow-sm border border-blue-100">
+                          <div className="flex-1 pr-4 mb-2 sm:mb-0">
+                              <p className="font-semibold text-gray-800">
+                                  {insight.factor}
+                              </p>
+                              <p className="text-sm text-blue-600 font-medium mt-1">
+                                  Status: **{insight.status}**
+                              </p>
+                          </div>
+                          
+                          {/* Contextual Action Button */}
+                          {renderContextualButton(insight, property.id)}
+                      </li>
+                  ))}
+              </ul>
+          </CardContent>
+      </Card>
+  );
 }
 
 // --- END INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
