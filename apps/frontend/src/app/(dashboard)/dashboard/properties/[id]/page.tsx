@@ -12,7 +12,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-// ADDED required icons for the new logic
 import { Edit, Zap, Shield, FileText, ArrowLeft, Home, Calendar, Ruler, DollarSign, Wrench, Settings, ShieldAlert, ArrowRight } from "lucide-react"; 
 import { toast } from "@/components/ui/use-toast";
 
@@ -31,94 +30,105 @@ interface HealthScoreResult {
 // Using an intersection type to define the expected structure of the fetched property
 type ScoredProperty = Property & { healthScore?: HealthScoreResult };
 
-
 const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
+
 /**
  * Helper function to render a button based on the insight factor/status
- * FIXED: Logic now maps all categories to the correct, uppercase Prisma ENUMs.
+ * UPDATED: Added appliance warranty redirect logic (Fix 1)
  */
 const renderContextualButton = (insight: any, propertyId: string) => {
     
-    let buttonLabel = '';
-    let category = ''; // Must be a ServiceCategory enum value (e.g., INSPECTION, PLUMBING)
-    let isUrgent = false;
+  let buttonLabel = '';
+  let category = ''; // Must be a ServiceCategory enum value (e.g., INSPECTION, PLUMBING)
+  let isUrgent = false;
 
-    // 1. Actions related to scheduling professionals (Inspection, Review, Attention)
-    if (insight.status.includes('Inspection') || 
-    insight.status.includes('Review') || 
-    insight.status.includes('Attention')) {
-    
-    // Map to valid ENUMs for Provider Search
-    if (insight.factor.includes('Age Factor') || insight.factor.includes('Roof')) {
-        category = 'INSPECTION'; 
-    } else if (insight.factor.includes('HVAC')) {
-        category = 'HVAC';
-    } else if (insight.factor.includes('Water Heater')) {
-        category = 'PLUMBING'; 
-    } else if (insight.factor.includes('Exterior') || insight.factor.includes('Drainage')) {
-        category = 'HANDYMAN'; 
-    } else {
-        category = 'INSPECTION';
-    }
+  // 1. Actions related to scheduling professionals (Inspection, Review, Attention)
+  if (insight.status.includes('Inspection') || 
+  insight.status.includes('Review') || 
+  insight.status.includes('Attention')) {
+  
+      // Map to valid ENUMs for Provider Search
+      if (insight.factor.includes('Age Factor') || insight.factor.includes('Roof')) {
+          category = 'INSPECTION'; 
+      } else if (insight.factor.includes('HVAC')) {
+          category = 'HVAC';
+      } else if (insight.factor.includes('Water Heater')) {
+          category = 'PLUMBING'; 
+      } else if (insight.factor.includes('Exterior') || insight.factor.includes('Drainage')) {
+          category = 'HANDYMAN'; 
+      } else {
+          category = 'INSPECTION';
+      }
 
-    // Determine the action label based on status
-    if (insight.status.includes('Inspection')) {
-        buttonLabel = "Schedule Inspection";
-        isUrgent = true;
-    } else if (insight.status.includes('Review')) {
-        buttonLabel = "Schedule Comprehensive Assessment";
-        isUrgent = false;
-    } else if (insight.status.includes('Attention')) {
-        buttonLabel = "Book Repair Service";
-        isUrgent = true;
-    }
+      // Determine the action label based on status
+      if (insight.status.includes('Inspection')) {
+          buttonLabel = "Schedule Inspection";
+          isUrgent = true;
+      } else if (insight.status.includes('Review')) {
+          buttonLabel = "Schedule Comprehensive Assessment";
+          isUrgent = false;
+      } else if (insight.status.includes('Attention')) {
+          buttonLabel = "Book Repair Service";
+          isUrgent = true;
+      }
 
-    // FIXED: Use Next.js object-based routing for reliable parameter passing
-    const providerSearchLink = {
-        pathname: '/dashboard/providers',
-        query: {
-            category: category,
-            insightFactor: insight.factor,
-            propertyId: propertyId
-        }
-    };
+      // FIXED: Use Next.js object-based routing for reliable parameter passing
+      const providerSearchLink = {
+          pathname: '/dashboard/providers',
+          query: {
+              category: category,
+              insightFactor: insight.factor,
+              propertyId: propertyId
+          }
+      };
 
-    return (
-        <Button 
-            size="sm" 
-            variant={isUrgent ? 'destructive' : 'default'} 
-            asChild 
-            className="w-full sm:w-auto"
-        >
-            <Link href={providerSearchLink}>
-                {buttonLabel} <Wrench className="ml-2 h-4 w-4" />
-            </Link>
-        </Button>
-    );
+      return (
+          <Button 
+              size="sm" 
+              variant={isUrgent ? 'destructive' : 'default'} 
+              asChild 
+              className="w-full sm:w-auto"
+          >
+              <Link href={providerSearchLink}>
+                  {buttonLabel} <Wrench className="ml-2 h-4 w-4" />
+              </Link>
+          </Button>
+      );
   }
-    
-    // 2. Actions related to updating missing data (Safety, Appliances, Documents)
-    if (insight.factor.includes('Safety') || 
-        insight.factor.includes('Documents') || 
-        insight.status.includes('Missing Data')) {
-        
-        return (
-            <Button size="sm" variant="default" asChild className="w-full sm:w-auto">
-                <Link href={`/dashboard/properties/${propertyId}/edit`}>
-                    Update Profile Data <Settings className="ml-2 h-4 w-4" />
-                </Link>
-            </Button>
-        );
-    }
+  
+  // FIX 1: Appliance warranty actions - redirect to warranties page
+  if (insight.factor === 'Appliances' && insight.status.includes('Warranty')) {
+      return (
+          <Button size="sm" variant="default" asChild className="w-full sm:w-auto">
+              <Link href={`/dashboard/warranties?propertyId=${propertyId}`}>
+                  Manage Appliance Warranties <Shield className="ml-2 h-4 w-4" />
+              </Link>
+          </Button>
+      );
+  }
 
-    // 3. Default action (catch-all)
-    return (
-        <Button size="sm" variant="outline" asChild className="w-full sm:w-auto">
-             <Link href={`/dashboard/maintenance?propertyId=${propertyId}`}>
-                View Maintenance <ArrowRight className="ml-2 h-4 w-4" />
-             </Link>
-        </Button>
-    );
+  // 2. Actions related to updating missing data (Safety, Documents)
+  if (insight.factor.includes('Safety') || 
+      insight.factor.includes('Documents') || 
+      insight.status.includes('Missing Data')) {
+      
+      return (
+          <Button size="sm" variant="default" asChild className="w-full sm:w-auto">
+              <Link href={`/dashboard/properties/${propertyId}/edit`}>
+                  Update Profile Data <Settings className="ml-2 h-4 w-4" />
+              </Link>
+          </Button>
+      );
+  }
+
+  // 3. Default action (catch-all)
+  return (
+      <Button size="sm" variant="outline" asChild className="w-full sm:w-auto">
+           <Link href={`/dashboard/maintenance?propertyId=${propertyId}`}>
+              View Maintenance <ArrowRight className="ml-2 h-4 w-4" />
+           </Link>
+      </Button>
+  );
 };
 
 

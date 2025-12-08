@@ -284,14 +284,13 @@ export function calculateHealthScore(
     maxUnlockableScore += EXTRA_WEIGHTS.DOCUMENTS;
   }
   
-  // 7. Appliance Ages (Max 5) - FINAL IMPLEMENTATION
+  // 7. Appliance Ages (Max 5) - FIX 2: Enhanced insight detail
   const assetCount = propertyWithAssets.homeAssets?.length || 0;
   const maxAssetsForScore = 3; // Define completeness threshold
   
   // Check for active home warranty coverage for any appliance
   const currentYearCheck = new Date().getFullYear();
   const hasActiveHomeWarranty = propertyWithAssets.warranties.some(w => 
-      // Assuming any standard warranty covers appliances and is active (expiry date in current year or later)
       w.expiryDate && new Date(w.expiryDate).getFullYear() >= currentYearCheck
   );
 
@@ -300,28 +299,32 @@ export function calculateHealthScore(
     // Score based on completion ratio (capped at maxScore)
     let appScore = Math.min(maxScore, assetCount * (maxScore / maxAssetsForScore)); 
     
-     // Determine Age Risk: Flag if any primary asset is over 15 years old.
-     const criticallyAging = propertyWithAssets.homeAssets.some(
-         (a: HomeAsset) => a.installationYear !== null && currentYear - a.installationYear > 15 
-     );
+    // Determine Age Risk: Flag if any primary asset is over 15 years old.
+    const criticallyAging = propertyWithAssets.homeAssets.some(
+        (a: HomeAsset) => a.installationYear !== null && currentYear - a.installationYear > 15 
+    );
+    
+    // FIX 2: Count appliances needing warranty
+    const appliancesNeedingWarranty = propertyWithAssets.homeAssets.filter((a: HomeAsset) => {
+        const age = a.installationYear ? currentYear - a.installationYear : 0;
+        return age > 15; // Critically aging appliance
+    });
     
     extraScore += appScore;
     
-    // Determine Status:
+    // Determine Status with count detail
     let status = 'Complete';
     if (criticallyAging) {
         if (hasActiveHomeWarranty) {
-            // If old BUT covered, suppress the alert by marking as Complete.
             status = 'Complete'; 
         } else {
-            // If old AND NOT covered, raise specific financial alert.
-            status = 'Needs Warranty'; 
+            // FIX 2: Show count of appliances needing warranty
+            const count = appliancesNeedingWarranty.length;
+            status = `${count} Need${count > 1 ? '' : 's'} Warranty`;
         }
     } else if (assetCount < maxAssetsForScore) {
-        // If not critically aging, but data is incomplete.
         status = 'Partial';
     } else {
-        // Data complete and not critically aging.
         status = 'Complete';
     }
 
@@ -331,7 +334,7 @@ export function calculateHealthScore(
     insights.push({ factor: 'Appliances', status: 'Missing Data', score: 0 });
     maxUnlockableScore += EXTRA_WEIGHTS.APPLIANCES;
   }
-  // END FINAL IMPLEMENTATION
+  // END FIX 2
 
 
   // --- FINAL RESULT ---
@@ -346,14 +349,13 @@ export function calculateHealthScore(
     maxPotentialScore: Math.min(maxPotentialScore, MAX_SCORE),
     maxBaseScore: MAX_BASE_SCORE,
     maxExtraScore: MAX_EXTRA_SCORE,
-    // Filter out items that are perfect (unless you want to show "Action Pending" even if score is okay, which might be nice)
     insights: insights.filter(i => 
         i.score > 0 || 
         i.status === 'Missing Data' || 
         i.status === 'Needs Review' || 
         i.status === 'Needs Inspection' ||
         i.status === 'Needs Attention' ||
-        i.status === 'Needs Warranty' ||
+        i.status.includes('Warranty') || // FIX 2: Also catches "1 Needs Warranty", "2 Need Warranty", etc.
         i.status === 'Action Pending' 
     ),
     ctaNeeded: maxUnlockableScore > 0,
