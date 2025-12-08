@@ -174,10 +174,16 @@ export default function BookProviderPage() {
       console.log('Booking response:', response);
       
       if (response.success) {
-        // FIX: Invalidate the cache for all booking-related queries
-        // This forces the "Upcoming Bookings" card on the Dashboard to re-fetch its data.
-        await queryClient.invalidateQueries({ queryKey: ['bookings'] });
-
+        // Invalidate caches to force re-fetch of updated data
+        await Promise.all([
+          // Invalidate bookings cache (for Upcoming Bookings card)
+          queryClient.invalidateQueries({ queryKey: ['bookings'] }),
+          // Invalidate properties cache (for health scores and insights)
+          queryClient.invalidateQueries({ queryKey: ['properties'] }),
+          // Invalidate specific property if we know the ID
+          queryClient.invalidateQueries({ queryKey: ['property', selectedPropertyId] }),
+        ]);
+      
         alert('Booking created successfully!');
         router.push('/dashboard/bookings');
       } else {
