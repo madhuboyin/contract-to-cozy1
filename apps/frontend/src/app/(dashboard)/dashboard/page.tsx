@@ -449,16 +449,28 @@ export default function DashboardPage() {
         
       </div>
       
-      {/* ExistingOwnerDashboard renders the rest of the layout below the scorecards */}
-      <ExistingOwnerDashboard 
-        userFirstName={user.firstName}
-        bookings={data.bookings}
-        properties={data.properties}
-        checklistItems={checklistItems}
-        selectedPropertyId={selectedPropertyId} // Pass selected ID from context state
-        // FIX 4: Pass the consolidated action count to resolve compilation error
-        consolidatedActionCount={data.urgentActions.length}
-      />
+      {/* Filter data by selected property before passing to child components */}
+      {/* This ensures the red banner and other components show data for the currently selected property only */}
+      {(() => {
+        // Filter urgent actions to only those belonging to the selected property
+        const filteredUrgentActions = data.urgentActions.filter(
+          action => action.propertyId === selectedPropertyId
+        );
+        
+        // Filter properties to only the selected one (for consistency)
+        const filteredProperties = selectedProperty ? [selectedProperty] : [];
+        
+        return (
+          <ExistingOwnerDashboard 
+            userFirstName={user.firstName}
+            bookings={data.bookings}
+            properties={filteredProperties} // Pass only selected property
+            checklistItems={checklistItems}
+            selectedPropertyId={selectedPropertyId}
+            consolidatedActionCount={filteredUrgentActions.length} // Pass filtered count
+          />
+        );
+      })()}
     </DashboardShell>
   );
 }
