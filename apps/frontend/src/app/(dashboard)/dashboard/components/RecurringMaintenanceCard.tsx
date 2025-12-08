@@ -21,7 +21,8 @@ interface RecurringMaintenanceCardProps {
 }
 
 // NEW: Define statuses that count as active/upcoming for the dashboard card
-const ACTIVE_TASK_STATUSES = ['PENDING', 'SCHEDULED', 'IN_PROGRESS', 'NEEDS_REVIEW'];
+// ADDED 'OVERDUE' to ensure tasks explicitly marked with this status are included
+const ACTIVE_TASK_STATUSES = ['PENDING', 'SCHEDULED', 'IN_PROGRESS', 'NEEDS_REVIEW', 'OVERDUE'];
 
 // FIX: Use React.FC for proper prop recognition
 export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> = ({ 
@@ -31,7 +32,7 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
 }) => {
   
   // The 'maintenance' prop is already filtered by property ID by the parent component.
-  // MODIFIED: Filter now includes SCHEDULED, IN_PROGRESS, and NEEDS_REVIEW tasks for completeness
+  // MODIFIED: Filter now includes all ACTIVE_TASK_STATUSES
   const allPendingTasks = maintenance
     .filter(t => ACTIVE_TASK_STATUSES.includes(t.status)) 
     .sort((a, b) => {
