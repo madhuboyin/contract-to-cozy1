@@ -108,7 +108,8 @@ export const ExistingOwnerDashboard = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
         <RecurringMaintenanceCard 
           maintenance={upcomingMaintenance as any}
-          isPropertySelected={isPropertySelected} 
+          isPropertySelected={isPropertySelected}
+          selectedPropertyId={selectedPropertyId}
         />
         
         <UpcomingRenewalsCard propertyId={selectedPropertyId} /> 
