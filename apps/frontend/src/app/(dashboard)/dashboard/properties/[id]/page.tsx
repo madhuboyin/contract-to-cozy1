@@ -114,7 +114,7 @@ const renderContextualButton = (insight: any, propertyId: string) => {
     // 3. Default action (catch-all)
     return (
         <Button size="sm" variant="outline" asChild className="w-full sm:w-auto">
-             <Link href={`/dashboard/maintenance`}>
+             <Link href={`/dashboard/maintenance?propertyId=${propertyId}`}>
                 View Maintenance <ArrowRight className="ml-2 h-4 w-4" />
              </Link>
         </Button>
