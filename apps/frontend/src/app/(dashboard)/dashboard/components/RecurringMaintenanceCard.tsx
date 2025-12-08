@@ -15,11 +15,17 @@ interface RecurringMaintenanceCardProps {
   // FIX: Using canonical ChecklistItem array
   maintenance: ChecklistItem[]; 
   // FIX: Add explicit property selection status flag
-  isPropertySelected: boolean; 
+  isPropertySelected: boolean;
+  // ADD: Selected property ID for link context
+  selectedPropertyId?: string;
 }
 
 // FIX: Use React.FC for proper prop recognition
-export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> = ({ maintenance, isPropertySelected }) => {
+export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> = ({ 
+  maintenance, 
+  isPropertySelected,
+  selectedPropertyId 
+}) => {
   
   // The 'maintenance' prop is already filtered by property ID by the parent component.
   const allPendingTasks = maintenance
@@ -50,7 +56,9 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
   };
   
   const setupLink = "/dashboard/maintenance-setup";
-  const primaryLink = "/dashboard/maintenance";
+  const primaryLink = selectedPropertyId 
+    ? `/dashboard/maintenance?propertyId=${selectedPropertyId}` 
+    : "/dashboard/maintenance";
   const primaryText = totalItems > 3 ? `View All (${totalItems})` : "View Full List";
 
   // Use the new explicit prop to determine the message
@@ -84,7 +92,10 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
           <div className="space-y-3">
             {displayTasks.map((task, index) => (
               <React.Fragment key={task.id}>
-                <Link href={`/dashboard/maintenance?taskId=${task.id}`} className="block">
+                <Link 
+                  href={`/dashboard/maintenance?${selectedPropertyId ? `propertyId=${selectedPropertyId}&` : ''}taskId=${task.id}`} 
+                  className="block"
+                >
                   <div className="flex items-center justify-between p-2 -m-2 rounded hover:bg-gray-50 transition-colors">
                     <span className="font-body text-sm truncate pr-2 font-medium">{task.title}</span>
                     <span className="font-body flex-shrink-0 text-xs whitespace-nowrap">

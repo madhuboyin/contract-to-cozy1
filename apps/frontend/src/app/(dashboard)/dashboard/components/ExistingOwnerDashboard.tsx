@@ -121,7 +121,7 @@ export const ExistingOwnerDashboard = ({
       
       <div className="pt-4">
         <Link 
-          href="/dashboard/maintenance" 
+          href={`/dashboard/maintenance${selectedPropertyId ? `?propertyId=${selectedPropertyId}` : ''}`}
           className="text-lg font-semibold text-blue-600 hover:text-blue-700 transition-colors flex items-center"
         >
           View Full Home Management Checklist <ArrowRight className="h-4 w-4 ml-1" />
