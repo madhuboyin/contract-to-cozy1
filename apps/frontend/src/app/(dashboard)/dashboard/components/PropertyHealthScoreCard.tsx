@@ -32,8 +32,8 @@ interface PropertyHealthScoreCardProps {
 
 const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data'];
 
-// UPDATED: Reduced gauge size
-const RADIUS = 36; 
+// UPDATED: Optimized gauge size - slightly bigger than before
+const RADIUS = 40; 
 const STROKE_WIDTH = 8; 
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
@@ -63,9 +63,9 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
             </CardHeader>
             <CardContent className="flex-1 flex flex-col justify-between">
                 
-                {/* GAUGE ICON AND SCORE DISPLAY - UPDATED: Reduced size and padding */}
-                <div className="flex flex-col items-center justify-center pt-2 pb-3">
-                    <div className="relative w-24 h-24 flex items-center justify-center">
+                {/* GAUGE ICON AND SCORE DISPLAY - UPDATED: Optimized size and reduced font */}
+                <div className="flex flex-col items-center justify-center pt-2 pb-2">
+                    <div className="relative w-28 h-28 flex items-center justify-center">
                         <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                             {/* Background Circle (Track) */}
                             <circle
@@ -90,20 +90,20 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
                                 style={{ transition: 'stroke-dashoffset 0.5s ease' }}
                             />
                         </svg>
-                        {/* Score Text in Center - UPDATED: Reduced font size */}
+                        {/* Score Text in Center - UPDATED: Reduced font size further */}
                         <div className="absolute flex flex-col items-center justify-center">
-                            <span className={`text-3xl font-extrabold ${color}`}>{healthScore}</span>
-                            <span className="text-lg font-semibold text-muted-foreground ml-1">/100</span>
+                            <span className={`text-2xl font-extrabold ${color}`}>{healthScore}</span>
+                            <span className="text-base font-semibold text-muted-foreground ml-1">/100</span>
                         </div>
                     </div>
                     {/* Status Badge */}
-                    <p className="font-body text-sm text-muted-foreground mt-2">
+                    <p className="font-body text-sm text-muted-foreground mt-1">
                         Overall Status: <Badge variant={badgeVariant} className="text-xs">{level}</Badge>
                     </p>
                 </div>
 
-                {/* REQUIRED MAINTENANCE ACTIONS - UPDATED: Reduced padding and font size */}
-                <div className="mt-2 border-t pt-3"> 
+                {/* REQUIRED MAINTENANCE ACTIONS - UPDATED: Reduced gap to separator */}
+                <div className="border-t pt-3"> 
                     <div className="flex items-center justify-between">
                          <p className="font-body text-base font-semibold flex items-center whitespace-nowrap">
                             <Zap className="h-4 w-4 mr-1 text-red-600" />
