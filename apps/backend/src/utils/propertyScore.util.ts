@@ -284,7 +284,7 @@ export function calculateHealthScore(
     maxUnlockableScore += EXTRA_WEIGHTS.DOCUMENTS;
   }
   
-  // 7. Appliance Ages (Max 5) - FIX 2: Enhanced insight detail
+  // 7. Appliance Ages (Max 5) - UPDATED: Show count in factor name, keep status simple
   const assetCount = propertyWithAssets.homeAssets?.length || 0;
   const maxAssetsForScore = 3; // Define completeness threshold
   
@@ -304,7 +304,7 @@ export function calculateHealthScore(
         (a: HomeAsset) => a.installationYear !== null && currentYear - a.installationYear > 15 
     );
     
-    // FIX 2: Count appliances needing warranty
+    // Count appliances needing warranty
     const appliancesNeedingWarranty = propertyWithAssets.homeAssets.filter((a: HomeAsset) => {
         const age = a.installationYear ? currentYear - a.installationYear : 0;
         return age > 15; // Critically aging appliance
@@ -312,15 +312,18 @@ export function calculateHealthScore(
     
     extraScore += appScore;
     
-    // Determine Status with count detail
+    // Determine Status and Factor Name
     let status = 'Complete';
+    let factorName = 'Appliances';
+    
     if (criticallyAging) {
         if (hasActiveHomeWarranty) {
             status = 'Complete'; 
         } else {
-            // FIX 2: Show count of appliances needing warranty
+            // UPDATED: Add count to factor name, keep status simple
             const count = appliancesNeedingWarranty.length;
-            status = `${count} Need${count > 1 ? '' : 's'} Warranty`;
+            factorName = `Appliances (${count} aging)`;
+            status = 'Needs Warranty';
         }
     } else if (assetCount < maxAssetsForScore) {
         status = 'Partial';
@@ -328,13 +331,13 @@ export function calculateHealthScore(
         status = 'Complete';
     }
 
-    insights.push({ factor: 'Appliances', status: status, score: appScore });
+    insights.push({ factor: factorName, status: status, score: appScore });
   } else {
     // Missing data scenario
     insights.push({ factor: 'Appliances', status: 'Missing Data', score: 0 });
     maxUnlockableScore += EXTRA_WEIGHTS.APPLIANCES;
   }
-  // END FIX 2
+  // END APPLIANCES CALCULATION
 
 
   // --- FINAL RESULT ---
@@ -355,7 +358,7 @@ export function calculateHealthScore(
         i.status === 'Needs Review' || 
         i.status === 'Needs Inspection' ||
         i.status === 'Needs Attention' ||
-        i.status.includes('Warranty') || // FIX 2: Also catches "1 Needs Warranty", "2 Need Warranty", etc.
+        i.status === 'Needs Warranty' || // Simple check - no count in status anymore
         i.status === 'Action Pending' 
     ),
     ctaNeeded: maxUnlockableScore > 0,

@@ -97,7 +97,8 @@ const renderContextualButton = (insight: any, propertyId: string) => {
   }
   
   // FIX 1: Appliance warranty actions - redirect to warranties page
-  if (insight.factor === 'Appliances' && insight.status.includes('Warranty')) {
+  // Check factor name since count is in factor, not status
+  if (insight.factor.includes('Appliances') && insight.status === 'Needs Warranty') {
       return (
           <Button size="sm" variant="default" asChild className="w-full sm:w-auto">
               <Link href={`/dashboard/warranties?propertyId=${propertyId}`}>
