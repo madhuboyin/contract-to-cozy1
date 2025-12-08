@@ -55,7 +55,9 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
   
-  const setupLink = "/dashboard/maintenance-setup";
+  const setupLink = selectedPropertyId 
+    ? `/dashboard/maintenance-setup?propertyId=${selectedPropertyId}` 
+    : "/dashboard/maintenance-setup";
   const primaryLink = selectedPropertyId 
     ? `/dashboard/maintenance?propertyId=${selectedPropertyId}` 
     : "/dashboard/maintenance";
