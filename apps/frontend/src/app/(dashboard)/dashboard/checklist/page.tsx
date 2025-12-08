@@ -80,7 +80,13 @@ export default function ChecklistPage() {
   useEffect(() => {
     if (user && user.segment === 'EXISTING_OWNER') {
       console.log('Redirecting EXISTING_OWNER to maintenance page');
-      router.replace('/dashboard/maintenance');
+      // Preserve query parameters during redirect (e.g., propertyId)
+      const searchParams = new URLSearchParams(window.location.search);
+      const queryString = searchParams.toString();
+      const redirectUrl = queryString 
+        ? `/dashboard/maintenance?${queryString}`
+        : '/dashboard/maintenance';
+      router.replace(redirectUrl);
     }
   }, [user, router]);
 
