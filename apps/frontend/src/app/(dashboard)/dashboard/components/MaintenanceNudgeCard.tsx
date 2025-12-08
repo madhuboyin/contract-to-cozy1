@@ -69,7 +69,7 @@ export function MaintenanceNudgeCard({ property, consolidatedActionCount }: Main
                 <Link 
                     // FIX: Navigate to the central maintenance list page, filtered by property ID.
                     // This page displays ALL Checklist items and Renewals.
-                    href={`/dashboard/properties/${property.id}/?tab=maintenance&priority=true`}
+                    href={`/dashboard/maintenance?propertyId=${property.id}&priority=true`}
                     className="flex-shrink-0 ml-4"
                 >
                     <Button 

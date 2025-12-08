@@ -116,13 +116,13 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
                     {/* REMOVED: Description text per user request */}
                 </div>
 
-                {/* VIEW HEALTH SCORE ACTION PLAN LINK - UPDATED: Reduced margin and fixed text */}
+                {/* VIEW FULL MAINTENANCE PLAN LINK - UPDATED: Reduced margin */}
                 <div className="mt-3">
                     <Link 
                         href={`/dashboard/properties/${property.id}/?tab=maintenance&view=insights`}
                         className="inline-flex items-center text-sm font-semibold text-primary hover:text-primary/80 transition-colors no-underline"
                     >
-                        View Health Score Action Plan <ArrowRight className="h-4 w-4 ml-1" />
+                        View Full Maintenance Plan <ArrowRight className="h-4 w-4 ml-1" />
                     </Link>
                 </div>
             </CardContent>
