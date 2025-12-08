@@ -460,12 +460,17 @@ export default function DashboardPage() {
         // Filter properties to only the selected one (for consistency)
         const filteredProperties = selectedProperty ? [selectedProperty] : [];
         
+        // FIX: Filter checklist items by selected property ID
+        const filteredChecklistItems = selectedPropertyId
+            ? checklistItems.filter(item => item.propertyId === selectedPropertyId)
+            : []; 
+
         return (
           <ExistingOwnerDashboard 
             userFirstName={user.firstName}
             bookings={data.bookings}
             properties={filteredProperties} // Pass only selected property
-            checklistItems={checklistItems}
+            checklistItems={filteredChecklistItems} // Pass the newly filtered list
             selectedPropertyId={selectedPropertyId}
             consolidatedActionCount={filteredUrgentActions.length} // Pass filtered count
           />
