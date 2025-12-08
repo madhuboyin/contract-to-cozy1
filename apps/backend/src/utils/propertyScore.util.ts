@@ -8,7 +8,12 @@ export interface HealthScoreResult {
   unlockedScore: number;
   maxBaseScore: number;
   maxExtraScore: number;
-  insights: { factor: string; status: string; score: number }[];
+  insights: { 
+    factor: string; 
+    status: string; 
+    score: number;
+    details?: string[]; // Optional: specific items for this insight (e.g., appliance names)
+  }[];
   ctaNeeded: boolean;
 }
 
@@ -284,7 +289,7 @@ export function calculateHealthScore(
     maxUnlockableScore += EXTRA_WEIGHTS.DOCUMENTS;
   }
   
-  // 7. Appliance Ages (Max 5) - UPDATED: Show count in factor name, keep status simple
+  // 7. Appliance Ages (Max 5) - FIX 3: Add detailed appliance list
   const assetCount = propertyWithAssets.homeAssets?.length || 0;
   const maxAssetsForScore = 3; // Define completeness threshold
   
@@ -312,18 +317,28 @@ export function calculateHealthScore(
     
     extraScore += appScore;
     
-    // Determine Status and Factor Name
+    // Determine Status, Factor Name, and Details
     let status = 'Complete';
     let factorName = 'Appliances';
+    let details: string[] | undefined = undefined;
     
     if (criticallyAging) {
         if (hasActiveHomeWarranty) {
             status = 'Complete'; 
         } else {
-            // UPDATED: Add count to factor name, keep status simple
+            // FIX 3: Add appliance list to details array
             const count = appliancesNeedingWarranty.length;
             factorName = `Appliances (${count} aging)`;
             status = 'Needs Warranty';
+            
+            // Create detailed list of appliances with age
+            details = appliancesNeedingWarranty.map((a: HomeAsset) => {
+                const age = a.installationYear ? currentYear - a.installationYear : 0;
+                const assetName = a.assetType.split('_').map(w => 
+                    w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+                ).join(' ');
+                return `${assetName} (${age} years old)`;
+            });
         }
     } else if (assetCount < maxAssetsForScore) {
         status = 'Partial';
@@ -331,7 +346,12 @@ export function calculateHealthScore(
         status = 'Complete';
     }
 
-    insights.push({ factor: factorName, status: status, score: appScore });
+    insights.push({ 
+        factor: factorName, 
+        status: status, 
+        score: appScore,
+        ...(details && { details }) // Only include if details exist
+    });
   } else {
     // Missing data scenario
     insights.push({ factor: 'Appliances', status: 'Missing Data', score: 0 });

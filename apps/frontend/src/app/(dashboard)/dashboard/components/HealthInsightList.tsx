@@ -53,6 +53,15 @@ export function HealthInsightList({ property }: HealthInsightListProps) {
                                 <p className="text-sm text-blue-600 font-medium mt-1">
                                     Status: **{insight.status}**
                                 </p>
+                                
+                                {/* FIX 3: Display appliance details if available */}
+                                {insight.details && insight.details.length > 0 && (
+                                    <ul className="text-xs text-gray-600 mt-2 ml-4 list-disc space-y-1">
+                                        {insight.details.map((detail, idx) => (
+                                            <li key={idx}>{detail}</li>
+                                        ))}
+                                    </ul>
+                                )}
                             </div>
                             
                             {/* Contextual Action Button */}

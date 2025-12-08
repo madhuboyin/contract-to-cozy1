@@ -56,7 +56,12 @@ export interface HealthScoreResult {
   maxPotentialScore: number;
   maxBaseScore: number;
   maxExtraScore: number;
-  insights: { factor: string; status: string; score: number }[];
+  insights: { 
+    factor: string; 
+    status: string; 
+    score: number;
+    details?: string[];  // ADD THIS
+  }[];
   ctaNeeded: boolean;
 }
 
