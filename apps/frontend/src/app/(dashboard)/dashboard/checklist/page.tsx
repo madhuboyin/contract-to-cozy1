@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth/AuthContext'; // ADD: Import useAuth
 import {
   Card,
   CardContent,
@@ -67,9 +68,21 @@ function formatServiceCategory(category: string | null): string {
 
 // --- Main Page Component ---
 export default function ChecklistPage() {
+  const router = useRouter();
+  const { user } = useAuth(); // Get current user
+  
   const [checklist, setChecklist] = useState<ChecklistType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Redirect EXISTING_OWNER users to maintenance page
+  // This checklist page is for HOME_BUYER segment only
+  useEffect(() => {
+    if (user && user.segment === 'EXISTING_OWNER') {
+      console.log('Redirecting EXISTING_OWNER to maintenance page');
+      router.replace('/dashboard/maintenance');
+    }
+  }, [user, router]);
 
   useEffect(() => {
     const fetchChecklist = async () => {
