@@ -42,6 +42,16 @@ export type ServiceCategory =
   | 'WARRANTY'
   | 'ADMIN';
 
+  export type WarrantyCategory = 
+  | 'APPLIANCE'
+  | 'HVAC'
+  | 'ROOFING'
+  | 'PLUMBING'
+  | 'ELECTRICAL'
+  | 'STRUCTURAL'
+  | 'HOME_WARRANTY_PLAN'
+  | 'OTHER';
+
 /**
  * Recurrence Frequency Enum
  */
@@ -772,6 +782,7 @@ export interface UpdateExpenseInput extends Partial<CreateExpenseInput> {}
 export interface CreateWarrantyInput {
   propertyId?: string;
   homeAssetId?: string;
+  category: WarrantyCategory;
   providerName: string;
   policyNumber?: string;
   coverageDetails?: string;

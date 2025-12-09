@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 // UPDATED IMPORT: Added HomeAsset
-import { Warranty, CreateWarrantyInput, UpdateWarrantyInput, Property, APIResponse, APIError, Document, DocumentUploadInput, DocumentType, HomeAsset } from '@/types';
+import { Property, APIResponse, APIError, Document, DocumentUploadInput, DocumentType, HomeAsset } from '@/types'; // Removed Warranty, Create/UpdateWarrantyInput to redefine locally
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
@@ -26,6 +26,63 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+
+// ============================================================================
+// LOCAL TYPE DEFINITIONS AND ENUMS (TO RESOLVE COMPILE ERRORS)
+// NOTE: These should ideally be moved to your shared '@/types' file.
+// ============================================================================
+
+const WARRANTY_CATEGORIES = {
+    APPLIANCE: 'Appliance',
+    HVAC: 'HVAC',
+    ROOFING: 'Roofing',
+    PLUMBING: 'Plumbing',
+    ELECTRICAL: 'Electrical',
+    STRUCTURAL: 'Structural',
+    HOME_WARRANTY_PLAN: 'Home Warranty Plan',
+    OTHER: 'Other',
+} as const;
+type WarrantyCategory = keyof typeof WARRANTY_CATEGORIES;
+
+const WARRANTY_CATEGORY_OPTIONS = Object.entries(WARRANTY_CATEGORIES).map(([key, display]) => ({
+    key: key as WarrantyCategory,
+    display,
+}));
+
+// Augmented interfaces to include the new required fields
+interface Warranty {
+    id: string;
+    homeownerProfileId: string;
+    propertyId: string | null;
+    homeAssetId: string | null;
+    category: WarrantyCategory; // NEW
+    providerName: string;
+    policyNumber: string | null;
+    coverageDetails: string | null;
+    cost: number | null;
+    startDate: string; // ISO Date String
+    expiryDate: string; // ISO Date String
+    createdAt: string;
+    updatedAt: string;
+    documents?: Document[];
+}
+
+interface CreateWarrantyInput {
+    propertyId?: string; 
+    homeAssetId?: string;
+    category: WarrantyCategory; // NEW
+    providerName: string;
+    policyNumber?: string;
+    coverageDetails?: string;
+    cost?: number;
+    startDate: string; // YYYY-MM-DD
+    expiryDate: string; // YYYY-MM-DD
+}
+
+interface UpdateWarrantyInput extends Partial<CreateWarrantyInput> {
+    // Allows updating subsets of the fields
+}
+// ============================================================================
 
 
 // Placeholder for "None" option, necessary to avoid Radix UI error on value=""
@@ -186,7 +243,10 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
     startDate: initialData?.startDate ? format(parseISO(initialData.startDate), 'yyyy-MM-dd') : '',
     expiryDate: initialData?.expiryDate ? format(parseISO(initialData.expiryDate), 'yyyy-MM-dd') : '',
     propertyId: initialData?.propertyId || undefined,
-    homeAssetId: initialData?.homeAssetId || undefined, // NEW FIELD
+    homeAssetId: initialData?.homeAssetId || undefined, 
+    
+    // *** NEW FIELD: CATEGORY (Required) ***
+    category: initialData?.category || ('' as WarrantyCategory),
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -197,12 +257,13 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
     }));
   };
   
-  // UPDATED: Handle change for both propertyId and homeAssetId with synchronization
-  const handleSelectChange = (id: 'propertyId' | 'homeAssetId', value: string) => {
+  // UPDATED: Handle change for propertyId, homeAssetId, AND category with synchronization
+  const handleSelectChange = (id: 'propertyId' | 'homeAssetId' | 'category', value: string) => {
       let nextValue: string | undefined = value === SELECT_NONE_VALUE ? undefined : value;
       
       setFormData(prev => {
-          const newState = { ...prev, [id]: nextValue };
+          const newState: CreateWarrantyInput | UpdateWarrantyInput = { ...prev };
+          (newState as any)[id] = nextValue; // Update the generic field
 
           // Logic to synchronize property and asset selection
           if (id === 'propertyId') {
@@ -222,7 +283,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
                   newState.propertyId = asset.propertyId;
               }
           }
-
+          
           return newState;
       });
   };
@@ -235,6 +296,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
   const title = initialData ? `Edit Warranty: ${initialData.providerName}` : 'Add New Warranty';
   const selectedPropertyId = formData.propertyId || SELECT_NONE_VALUE;
   const selectedHomeAssetId = formData.homeAssetId || SELECT_NONE_VALUE;
+  const selectedCategory = formData.category || SELECT_NONE_VALUE;
 
   // Filter assets based on the currently selected property
   const filteredHomeAssets = useMemo(() => {
@@ -259,6 +321,27 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
       <div className="grid gap-2">
         <Label htmlFor="providerName">Provider Name *</Label>
         <Input id="providerName" value={formData.providerName} onChange={handleChange} required />
+      </div>
+
+      {/* NEW: CATEGORY SELECTION (Fulfills Request 1 - replaces "General" with specific categories) */}
+      <div className="grid gap-2">
+        <Label htmlFor="category">Warranty Category *</Label>
+        <Select 
+            value={selectedCategory} 
+            onValueChange={(v) => handleSelectChange('category', v)}
+            required={!initialData} // Always required on creation
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select the covered category (Required)" />
+          </SelectTrigger>
+          <SelectContent>
+            {WARRANTY_CATEGORY_OPTIONS.map(opt => (
+              <SelectItem key={opt.key} value={opt.key}>
+                {opt.display}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="grid sm:grid-cols-2 gap-4">
@@ -296,7 +379,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={SELECT_NONE_VALUE}>
-                  None (General Warranty)
+                  None (Not linked to a specific property)
                 </SelectItem> 
                 {properties.map(p => (
                   <SelectItem key={p.id} value={p.id}>
@@ -312,22 +395,24 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
             <Select 
               value={selectedHomeAssetId} 
               onValueChange={(v) => handleSelectChange('homeAssetId', v)}
-              // FIX: Only disable if NO property is selected AND we are not editing an existing asset.
-              // This is the critical change to unblock the form submission when property has no assets.
-              disabled={!formData.propertyId && !initialData?.homeAssetId} 
+              // Logic: Disable if a property is selected but has no assets, OR if no property is selected
+              disabled={!formData.propertyId || filteredHomeAssets.length === 0} 
             >
               <SelectTrigger>
                 <SelectValue 
                     placeholder={
-                       (formData.propertyId && filteredHomeAssets.length === 0)
-                           ? 'No Assets found for this property' 
-                           : 'Select an Asset (Optional)'
+                       (!formData.propertyId) 
+                           ? 'Select Property First'
+                           : (filteredHomeAssets.length === 0)
+                               ? 'No Assets found for this property' 
+                               : 'Select an Asset (Optional)'
                     }
                 />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={SELECT_NONE_VALUE}>
-                  None (Whole Property or General)
+                {/* Updated the generic "None" option text */}
+                <SelectItem value={SELECT_NONE_VALUE}> 
+                  None (Covers entire category, e.g., All Plumbing)
                 </SelectItem> 
                 {filteredHomeAssets.map(asset => (
                   <SelectItem key={asset.id} value={asset.id}>
@@ -355,7 +440,11 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
         <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
           <X className="w-4 h-4 mr-2" /> Cancel
         </Button>
-        <Button type="submit" disabled={isSubmitting}>
+        <Button 
+          type="submit" 
+          // Disable submit if category is not selected on a new form
+          disabled={isSubmitting || (!initialData && !formData.category)} 
+        >
           {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />} 
           {initialData ? 'Save Changes' : 'Create Warranty'}
         </Button>
@@ -370,6 +459,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
 
 // --- Main Page Component ---
 export default function WarrantiesPage() {
+  // Use local Warranty interface
   const [warranties, setWarranties] = useState<Warranty[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   // NEW STATE: to hold all home assets
@@ -379,6 +469,7 @@ export default function WarrantiesPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [isAddEditModalOpen, setIsAddEditModalOpen] = useState(false); 
+  // Use local Warranty interface
   const [editingWarranty, setEditingWarranty] = useState<Warranty | undefined>(undefined);
   
   // NEW STATE for Document Upload Modal
@@ -401,7 +492,7 @@ export default function WarrantiesPage() {
     ]);
 
     if (warrantiesRes.success) {
-      setWarranties(warrantiesRes.data.warranties);
+      setWarranties(warrantiesRes.data.warranties as Warranty[]);
     } else {
       toast({
         title: "Error fetching warranties",
@@ -440,11 +531,11 @@ export default function WarrantiesPage() {
         }
     }
 
-  }, [fetchDependencies]);
+  }, [fetchDependencies, searchParams]);
 
+  // Use local Create/UpdateWarrantyInput interface
   const handleSave = async (data: CreateWarrantyInput | UpdateWarrantyInput) => {
     setIsSubmitting(true);
-    let res: APIResponse<Warranty>;
     
     // Create a copy to manipulate
     let dataToSend = {...data};
@@ -458,11 +549,9 @@ export default function WarrantiesPage() {
         }
     }
 
-    if (editingWarranty) {
-      res = await api.updateWarranty(editingWarranty.id, dataToSend as UpdateWarrantyInput);
-    } else {
-      res = await api.createWarranty(dataToSend as CreateWarrantyInput);
-    }
+    const res = editingWarranty
+      ? await api.updateWarranty(editingWarranty.id, dataToSend as UpdateWarrantyInput)
+      : await api.createWarranty(dataToSend as CreateWarrantyInput);
 
     if (res.success) {
       toast({
@@ -559,7 +648,7 @@ export default function WarrantiesPage() {
            }
       }
 
-      if (!propertyId) return 'General';
+      if (!propertyId) return 'N/A (Unlinked)';
       
       const property = properties.find(p => p.id === propertyId);
       return property ? property.name || property.address : 'N/A';
@@ -625,11 +714,11 @@ export default function WarrantiesPage() {
               <TableRow>
                 <TableHead className="w-[150px]">Provider</TableHead>
                 <TableHead className="w-[150px]">Policy #</TableHead>
+                {/* NEW TABLE HEADER: CATEGORY */}
+                <TableHead className="w-[120px]">Category</TableHead>
                 <TableHead className="hidden lg:table-cell">Coverage Details</TableHead>
-                {/* NEW TABLE HEADER */}
                 <TableHead className="w-[120px]">Property</TableHead>
                 <TableHead className="w-[150px]">Asset</TableHead>
-                {/* ------------------ */}
                 <TableHead className="w-[120px] text-center">Expires</TableHead>
                 <TableHead className="w-[100px] text-center">Status</TableHead>
                 <TableHead className="w-[120px] text-center">Actions</TableHead>
@@ -651,10 +740,14 @@ export default function WarrantiesPage() {
                     <TableCell className="text-muted-foreground">
                         {warranty.policyNumber || 'N/A'}
                     </TableCell>
+                    {/* NEW TABLE CELL: CATEGORY */}
+                    <TableCell className="font-semibold text-xs">
+                        {WARRANTY_CATEGORIES[warranty.category] || warranty.category}
+                    </TableCell>
                     <TableCell className="hidden lg:table-cell text-sm text-gray-600 max-w-[250px] truncate">
                       {warranty.coverageDetails || 'No details provided.'}
                     </TableCell>
-                    {/* NEW TABLE CELLS */}
+                    {/* UPDATED TABLE CELLS */}
                     <TableCell className="text-sm">
                         {getPropertyInfo(warranty)}
                     </TableCell>
