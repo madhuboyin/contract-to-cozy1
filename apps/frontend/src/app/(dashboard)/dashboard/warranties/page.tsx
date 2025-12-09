@@ -678,7 +678,9 @@ export default function WarrantiesPage() {
           <Button onClick={() => openAddEditModal(undefined)}>
             <Plus className="w-4 h-4 mr-2" /> Add Warranty
           </Button>
-          <DialogContent className="sm:max-w-[500px]">
+          {/* FIX: Increased max-width from sm:max-w-[500px] to sm:max-w-[700px] 
+             to accommodate the new dual-column dropdowns without overlap/overflow. */}
+          <DialogContent className="sm:max-w-[700px]"> 
             <WarrantyForm 
               initialData={editingWarranty}
               properties={properties}
