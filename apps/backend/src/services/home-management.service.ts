@@ -1,6 +1,6 @@
 // apps/backend/src/services/home-management.service.ts
 
-import { PrismaClient, Prisma, Document, DocumentType } from '@prisma/client';
+import { PrismaClient, Prisma, Document, DocumentType, HomeAsset } from '@prisma/client'; // ADDED HomeAsset
 import { 
   CreateWarrantyDTO, UpdateWarrantyDTO, Warranty, 
   CreateInsurancePolicyDTO, UpdateInsurancePolicyDTO, InsurancePolicy,
@@ -87,6 +87,8 @@ const mapRawWarrantyToWarranty = (rawWarranty: any): Warranty => {
         id: rawWarranty.id,
         homeownerProfileId: rawWarranty.homeownerProfileId,
         propertyId: rawWarranty.propertyId,
+        homeAssetId: rawWarranty.homeAssetId, // ADDED for asset linking
+        category: rawWarranty.category,       // ADDED for specific categorization
         providerName: rawWarranty.providerName,
         policyNumber: rawWarranty.policyNumber,
         coverageDetails: rawWarranty.coverageDetails,
@@ -217,6 +219,11 @@ export async function createWarranty(
         homeownerProfile: { connect: { id: homeownerProfileId } },
         property: data.propertyId && data.propertyId !== "" ? { connect: { id: data.propertyId } } : undefined,
         
+        // --- ADDED NEW REQUIRED FIELDS ---
+        category: data.category, 
+        homeAsset: data.homeAssetId && data.homeAssetId !== "" ? { connect: { id: data.homeAssetId } } : undefined,
+        // --- END ADDED FIELDS ---
+
         providerName: data.providerName,
         policyNumber: data.policyNumber,
         coverageDetails: data.coverageDetails,
@@ -254,6 +261,7 @@ export async function updateWarranty(
     where: { id: warrantyId, homeownerProfileId },
     data: {
       ...data,
+      // Data spread includes category and homeAssetId if present in DTO
       ...(data.startDate && { startDate: new Date(data.startDate) }),
       ...(data.expiryDate && { expiryDate: new Date(data.expiryDate) }),
     } as Prisma.WarrantyUpdateInput,
@@ -272,6 +280,34 @@ export async function deleteWarranty(
   });
 
   return mapRawWarrantyToWarranty(rawDeletedWarranty);
+}
+
+/**
+ * Lists all HomeAssets linked to a specific Property ID.
+ * This function enforces the business rule to only allow users to select 
+ * assets that are verifiably linked to the current property.
+ */
+export async function listLinkedHomeAssets(
+  homeownerProfileId: string,
+  propertyId: string
+): Promise<HomeAsset[]> { 
+  // 1. Verify the property belongs to the homeowner (critical security check)
+  const property = await prisma.property.findFirst({
+      where: { id: propertyId, homeownerProfileId },
+  });
+
+  if (!property) {
+      // Throwing a dedicated error for the controller to handle as 404/403
+      throw new Error("Property not found or does not belong to homeowner.");
+  }
+
+  // 2. Fetch all HomeAssets strictly filtered by that propertyId
+  const rawAssets = await prisma.homeAsset.findMany({
+      where: { propertyId },
+      orderBy: { assetType: 'asc' } // Sort for better user experience in the dropdown
+  });
+
+  return rawAssets as HomeAsset[];
 }
 
 // --- INSURANCE POLICY SERVICE LOGIC (USING MAPPED HELPERS) ---

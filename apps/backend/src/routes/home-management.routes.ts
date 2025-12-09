@@ -38,6 +38,9 @@ router.route('/warranties/:warrantyId')
   .patch(HomeManagementController.patchWarranty)
   .delete(HomeManagementController.deleteWarranty);
 
+// --- HOME ASSET ROUTES (NEW: For linking to warranties) ---
+router.route('/home-assets')
+  .get(HomeManagementController.getLinkedAssets);
 
 // --- INSURANCE POLICIES ROUTES ---
 router.route('/insurance-policies')

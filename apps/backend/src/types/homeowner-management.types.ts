@@ -3,6 +3,7 @@
 // Assuming @prisma/client is available in the backend environment.
 // FIX 1: Import all relevant enums/types from @prisma/client to resolve potential import resolution issues.
 import * as PrismaEnums from '@prisma/client'; 
+import { WarrantyCategory } from '@prisma/client';
 
 /**
  * Expense Category Enum (Synced with Prisma)
@@ -106,12 +107,14 @@ export interface UpdateExpenseDTO extends Partial<CreateExpenseDTO> {}
 
 export interface CreateWarrantyDTO {
   propertyId?: string;
+  homeAssetId?: string;
   providerName: string;
   policyNumber?: string;
   coverageDetails?: string;
   cost?: number;
   startDate: Date;
   expiryDate: Date;
+  category: WarrantyCategory;
 }
 
 export interface UpdateWarrantyDTO extends Partial<CreateWarrantyDTO> {}

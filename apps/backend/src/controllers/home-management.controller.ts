@@ -171,6 +171,37 @@ export const deleteWarranty = async (req: AuthRequest, res: Response, next: Next
   }
 };
 
+// --- NEW ASSET CONTROLLERS (For populating linked asset drop-down) ---
+
+/**
+ * Gets a list of HomeAssets linked to a specific property for populating the drop-down.
+ * This enforces the rule to only show assets linked to the property.
+ */
+export const getLinkedAssets = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const homeownerProfileId = getHomeownerId(req);
+    const { propertyId } = req.query; 
+
+    if (!propertyId || typeof propertyId !== 'string') {
+        return res.status(400).json({ success: false, error: { message: 'A valid propertyId query parameter is required.', code: 'MISSING_PROPERTY_ID' } });
+    }
+    
+    // Call the new service function implemented in home-management.service.ts
+    const assets = await HomeManagementService.listLinkedHomeAssets(
+      homeownerProfileId, 
+      propertyId
+    );
+
+    res.status(200).json({ success: true, data: { assets } });
+  } catch (error) {
+    // Handle the custom error from the service (e.g., "Property not found or does not belong to homeowner.")
+    if (error instanceof Error && error.message.includes("not found")) {
+        return res.status(404).json({ success: false, error: { message: error.message, code: 'RESOURCE_NOT_FOUND' } });
+    }
+    next(error);
+  }
+};
+
 
 // --- INSURANCE POLICY CONTROLLERS (Similar CRUD structure) ---
 
