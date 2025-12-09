@@ -31,8 +31,18 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
   selectedPropertyId 
 }) => {
   
+  // 🔍 DEBUG: Check what the card receives
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('🎴 RecurringMaintenanceCard DEBUG');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('📥 Received maintenance prop:', maintenance);
+  console.log('📊 Count:', maintenance.length);
+  console.log('🏠 isPropertySelected:', isPropertySelected);
+  console.log('🆔 selectedPropertyId:', selectedPropertyId);
+  console.log('📋 Items:', maintenance.map(t => ({ title: t.title, status: t.status, category: t.serviceCategory, nextDueDate: t.nextDueDate })));
+  
   // The 'maintenance' prop is already filtered by property ID by the parent component.
-  // MODIFIED: Filter now includes all ACTIVE_TASK_STATUSES
+  // No additional status filter needed - parent already filtered
   const allPendingTasks = maintenance
     .sort((a, b) => {
         const dateA = a.nextDueDate ? new Date(a.nextDueDate).getTime() : Infinity;
@@ -40,10 +50,16 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
         return dateA - dateB;
     });
 
+  console.log('✅ After sorting:', allPendingTasks.length);
+
   // Limit display items to 3
   const displayTasks = allPendingTasks.slice(0, 3);
   const totalItems = allPendingTasks.length;
   const overflowCount = totalItems - displayTasks.length;
+
+  console.log('🎯 displayTasks length:', displayTasks.length);
+  console.log('🎯 totalItems:', totalItems);
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
   const formatDue = (dateStr: string | null) => {
     if (!dateStr) return 'No date';

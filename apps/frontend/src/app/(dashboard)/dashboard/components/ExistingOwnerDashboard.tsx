@@ -53,6 +53,15 @@ export const ExistingOwnerDashboard = ({
   // Filter Logic: Now depends purely on the received selectedPropertyId
   const RENEWAL_CATEGORIES = ['INSURANCE', 'WARRANTY', 'FINANCE', 'ADMIN', 'ATTORNEY'];
   
+  // 🔍 DEBUG: Log initial data
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('🏠 ExistingOwnerDashboard DEBUG START');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('📊 Total checklistItems received:', checklistItems.length);
+  console.log('🏠 Selected PropertyId:', selectedPropertyId);
+  console.log('🏘️ isMultiProperty:', isMultiProperty);
+  console.log('📋 All items:', checklistItems.map(i => ({ id: i.id, title: i.title, propertyId: i.propertyId, status: i.status, category: i.serviceCategory })));
+  
   // 1. Filter checklist items by selected property
   const propertyChecklistItems = selectedPropertyId
     ? checklistItems.filter((item: ChecklistItem) => {
@@ -66,16 +75,37 @@ export const ExistingOwnerDashboard = ({
     })
     : [];
   
+  console.log('✅ Step 1 - After property filter:', propertyChecklistItems.length);
+  console.log('   Items:', propertyChecklistItems.map(i => ({ title: i.title, propertyId: i.propertyId, status: i.status, category: i.serviceCategory })));
+  
   // AFTER - Use the same statuses as RecurringMaintenanceCard:
   const ACTIVE_TASK_STATUSES = ['PENDING', 'SCHEDULED', 'IN_PROGRESS', 'NEEDS_REVIEW', 'OVERDUE'];
   const activeChecklistItems = propertyChecklistItems.filter((item: ChecklistItem) => 
     ACTIVE_TASK_STATUSES.includes(item.status)
   );
   
+  console.log('✅ Step 2 - After status filter:', activeChecklistItems.length);
+  console.log('   Status breakdown:', propertyChecklistItems.reduce((acc: any, item: ChecklistItem) => {
+    acc[item.status] = (acc[item.status] || 0) + 1;
+    return acc;
+  }, {}));
+  console.log('   Items:', activeChecklistItems.map(i => ({ title: i.title, status: i.status, category: i.serviceCategory })));
+  
   // 3. Separate Maintenance from Renewals
   const upcomingMaintenance = activeChecklistItems.filter((item: ChecklistItem) => 
     !item.serviceCategory || !RENEWAL_CATEGORIES.includes(item.serviceCategory as string)
-  ); 
+  );
+  
+  console.log('✅ Step 3 - After category filter (upcomingMaintenance):', upcomingMaintenance.length);
+  console.log('   Category breakdown:', activeChecklistItems.reduce((acc: any, item: ChecklistItem) => {
+    const cat = item.serviceCategory || 'NO_CATEGORY';
+    acc[cat] = (acc[cat] || 0) + 1;
+    return acc;
+  }, {}));
+  console.log('   Final items to pass to card:', upcomingMaintenance.map(i => ({ title: i.title, status: i.status, category: i.serviceCategory, nextDueDate: i.nextDueDate })));
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('🏠 ExistingOwnerDashboard DEBUG END');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
   // [NEW LOGIC] Renders the high-contrast nudge card if action is required.
   const renderNudgeCard = selectedProperty ? (
