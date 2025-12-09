@@ -281,7 +281,18 @@ export default function DashboardPage() {
       ]);
       
       const properties = propertiesRes.success ? (propertiesRes.data.properties as ScoredProperty[]) : [];
-      const checklistItems = (checklistRes.success && checklistRes.data.items) || [];
+      
+      // FIX: Checklist API returns raw object {id, items}, not wrapped in { success, data }
+      // Handle both formats for backwards compatibility
+      const checklistItems = ('items' in (checklistRes || {}) && Array.isArray((checklistRes as any).items))
+        ? (checklistRes as any).items 
+        : (checklistRes?.success && checklistRes?.data?.items) || [];
+      
+      console.log('🔍 Checklist extraction debug:');
+      console.log('  checklistRes:', checklistRes);
+      console.log('  checklistRes.items exists?', 'items' in (checklistRes || {}) && Array.isArray((checklistRes as any)?.items));
+      console.log('  Extracted checklistItems count:', checklistItems.length);
+      
       const warranties = (warrantiesRes.success && warrantiesRes.data.warranties) || [];
       const insurancePolicies = (insuranceRes.success && insuranceRes.data.policies) || [];
       
@@ -293,13 +304,19 @@ export default function DashboardPage() {
         insurancePolicies
       );
 
-
+      // FIX: Handle both raw checklist format and wrapped format
       let fetchedChecklist = null;
-      if (checklistRes.success && checklistRes.data) {
+      if ('items' in (checklistRes || {})) {
+          // Raw format: {id, items}
+          fetchedChecklist = checklistRes as any;
+      } else if (checklistRes?.success && checklistRes?.data) {
+          // Wrapped format: {success, data: {id, items}}
           fetchedChecklist = checklistRes.data;
       }
       
       console.log('✅ Dashboard data loaded');
+      console.log('  Final checklist:', fetchedChecklist);
+      console.log('  Final checklistItems count:', checklistItems.length);
 
       const defaultPropId = properties.find(p => p.isPrimary)?.id || properties[0]?.id;
       
