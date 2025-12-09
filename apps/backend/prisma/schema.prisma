@@ -978,7 +978,7 @@ model MaintenanceTaskTemplate {
 model Warranty {
   id                 String    @id @default(uuid())
   homeownerProfileId String
-  category           WarrantyCategory
+  category           WarrantyCategory @default(HOME_WARRANTY_PLAN)
   propertyId         String? // Link to a specific property (e.g., HVAC unit warranty is for the main home)
   homeAssetId        String?
   // Policy Details
