@@ -297,6 +297,7 @@ export interface Warranty {
   id: string;
   homeownerProfileId: string;
   propertyId: string | null;
+  homeAssetId: string | null;
   providerName: string;
   policyNumber: string | null;
   coverageDetails: string | null;
@@ -508,6 +509,7 @@ export interface HomeAsset {
   serialNumber: string | null;
   lastServiced: string | null;
   efficiencyRating: string | null;
+  warranties?: Warranty[];
 }
 
 /**
@@ -769,6 +771,7 @@ export interface UpdateExpenseInput extends Partial<CreateExpenseInput> {}
 
 export interface CreateWarrantyInput {
   propertyId?: string;
+  homeAssetId?: string;
   providerName: string;
   policyNumber?: string;
   coverageDetails?: string;

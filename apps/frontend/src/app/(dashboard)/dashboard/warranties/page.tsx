@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Warranty, CreateWarrantyInput, UpdateWarrantyInput, Property, APIResponse, APIError, Document, DocumentUploadInput, DocumentType } from '@/types';
+// UPDATED IMPORT: Added HomeAsset
+import { Warranty, CreateWarrantyInput, UpdateWarrantyInput, Property, APIResponse, APIError, Document, DocumentUploadInput, DocumentType, HomeAsset } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
@@ -167,16 +168,16 @@ const DocumentUploadModal = ({ parentEntityId, parentEntityType, onUploadSuccess
 
 
 // --- Warranty Form Component ---
-// (omitted for brevity, content remains the same)
 interface WarrantyFormProps {
   initialData?: Warranty;
   properties: Property[];
+  homeAssets: HomeAsset[]; // NEW PROP
   onSave: (data: CreateWarrantyInput | UpdateWarrantyInput) => Promise<void>;
   onClose: () => void;
   isSubmitting: boolean;
 }
 
-const WarrantyForm = ({ initialData, properties, onSave, onClose, isSubmitting }: WarrantyFormProps) => {
+const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, isSubmitting }: WarrantyFormProps) => {
   const [formData, setFormData] = useState<CreateWarrantyInput | UpdateWarrantyInput>({
     providerName: initialData?.providerName || '',
     policyNumber: initialData?.policyNumber || '',
@@ -185,6 +186,7 @@ const WarrantyForm = ({ initialData, properties, onSave, onClose, isSubmitting }
     startDate: initialData?.startDate ? format(parseISO(initialData.startDate), 'yyyy-MM-dd') : '',
     expiryDate: initialData?.expiryDate ? format(parseISO(initialData.expiryDate), 'yyyy-MM-dd') : '',
     propertyId: initialData?.propertyId || undefined,
+    homeAssetId: initialData?.homeAssetId || undefined, // NEW FIELD
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -195,8 +197,34 @@ const WarrantyForm = ({ initialData, properties, onSave, onClose, isSubmitting }
     }));
   };
   
-  const handleSelectChange = (value: string) => {
-    setFormData(prev => ({ ...prev, propertyId: value === SELECT_NONE_VALUE ? undefined : value }));
+  // UPDATED: Handle change for both propertyId and homeAssetId with synchronization
+  const handleSelectChange = (id: 'propertyId' | 'homeAssetId', value: string) => {
+      let nextValue: string | undefined = value === SELECT_NONE_VALUE ? undefined : value;
+      
+      setFormData(prev => {
+          const newState = { ...prev, [id]: nextValue };
+
+          // Logic to synchronize property and asset selection
+          if (id === 'propertyId') {
+              const currentAssetId = prev.homeAssetId;
+              if (currentAssetId) {
+                  const asset = homeAssets.find(a => a.id === currentAssetId);
+                  // Clear asset if the newly selected property doesn't match the asset's property
+                  if (asset && asset.propertyId !== nextValue) {
+                      newState.homeAssetId = undefined; 
+                  }
+              }
+          }
+          else if (id === 'homeAssetId' && nextValue) {
+              const asset = homeAssets.find(a => a.id === nextValue);
+              // If an asset is selected, automatically select its property
+              if (asset && asset.propertyId !== prev.propertyId) {
+                  newState.propertyId = asset.propertyId;
+              }
+          }
+
+          return newState;
+      });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -206,6 +234,20 @@ const WarrantyForm = ({ initialData, properties, onSave, onClose, isSubmitting }
 
   const title = initialData ? `Edit Warranty: ${initialData.providerName}` : 'Add New Warranty';
   const selectedPropertyId = formData.propertyId || SELECT_NONE_VALUE;
+  const selectedHomeAssetId = formData.homeAssetId || SELECT_NONE_VALUE;
+
+  // Filter assets based on the currently selected property
+  const filteredHomeAssets = useMemo(() => {
+    if (!formData.propertyId) {
+       // If editing a warranty not linked to a property but linked to an asset, show only that asset
+       if (initialData?.homeAssetId && !initialData.propertyId) {
+          const asset = homeAssets.find(a => a.id === initialData.homeAssetId);
+          return asset ? [asset] : [];
+       }
+       return [];
+    }
+    return homeAssets.filter(asset => asset.propertyId === formData.propertyId);
+  }, [formData.propertyId, homeAssets, initialData]);
 
 
   return (
@@ -241,27 +283,61 @@ const WarrantyForm = ({ initialData, properties, onSave, onClose, isSubmitting }
         </div>
       </div>
 
-      <div className="grid gap-2">
-        <Label htmlFor="propertyId">Associated Property</Label>
-        <Select 
-          value={selectedPropertyId} 
-          onValueChange={handleSelectChange}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select a property (Optional)" />
-          </SelectTrigger>
-          <SelectContent>
-             <SelectItem value={SELECT_NONE_VALUE}>
-                None (General Warranty)
-              </SelectItem> 
-            {properties.map(p => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.name} ({p.zipCode})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      {/* UPDATED: Property and Asset Selection in one row */}
+      <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="propertyId">Associated Property</Label>
+            <Select 
+              value={selectedPropertyId} 
+              onValueChange={(v) => handleSelectChange('propertyId', v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a property (Optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SELECT_NONE_VALUE}>
+                  None (General Warranty)
+                </SelectItem> 
+                {properties.map(p => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name} ({p.zipCode})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="grid gap-2">
+            <Label htmlFor="homeAssetId">Linked Home System/Appliance</Label>
+            <Select 
+              value={selectedHomeAssetId} 
+              onValueChange={(v) => handleSelectChange('homeAssetId', v)}
+              // Disable if no property is selected AND no assets are filtered/present
+              disabled={!formData.propertyId && filteredHomeAssets.length === 0 && selectedHomeAssetId === SELECT_NONE_VALUE}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select an Asset (Optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SELECT_NONE_VALUE}>
+                  None (Whole Property or General)
+                </SelectItem> 
+                {filteredHomeAssets.map(asset => (
+                  <SelectItem key={asset.id} value={asset.id}>
+                    {asset.assetType.replace(/_/g, ' ')} {asset.modelNumber ? `(${asset.modelNumber})` : ''}
+                  </SelectItem>
+                ))}
+                
+                {formData.propertyId && filteredHomeAssets.length === 0 && (
+                    <div className="p-2 text-sm text-muted-foreground italic">
+                        No assets found for this property.
+                    </div>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
       </div>
+
 
       <div className="grid gap-2">
         <Label htmlFor="coverageDetails">Coverage Details</Label>
@@ -289,6 +365,9 @@ const WarrantyForm = ({ initialData, properties, onSave, onClose, isSubmitting }
 export default function WarrantiesPage() {
   const [warranties, setWarranties] = useState<Warranty[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
+  // NEW STATE: to hold all home assets
+  const [homeAssets, setHomeAssets] = useState<HomeAsset[]>([]); 
+  
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -310,6 +389,7 @@ export default function WarrantiesPage() {
     setIsLoading(true);
     const [warrantiesRes, propertiesRes] = await Promise.all([
       api.listWarranties(),
+      // Assuming api.getProperties() now fetches nested homeAssets
       api.getProperties(),
     ]);
 
@@ -326,6 +406,13 @@ export default function WarrantiesPage() {
 
     if (propertiesRes.success) {
       setProperties(propertiesRes.data.properties);
+      
+      // NEW LOGIC: Flatten assets from all properties for easy lookup
+      const allAssets: HomeAsset[] = propertiesRes.data.properties
+          .flatMap((p: Property) => p.homeAssets || [])
+          .filter((asset): asset is HomeAsset => !!asset.id); 
+
+      setHomeAssets(allAssets);
     }
     setIsLoading(false);
   }, [toast]); 
@@ -352,10 +439,22 @@ export default function WarrantiesPage() {
     setIsSubmitting(true);
     let res: APIResponse<Warranty>;
     
+    // Create a copy to manipulate
+    let dataToSend = {...data};
+
+    // Client-side guard: If an asset is linked but the top-level property isn't, 
+    // infer the propertyId from the asset's propertyId.
+    if (!dataToSend.propertyId && dataToSend.homeAssetId) {
+        const asset = homeAssets.find(a => a.id === dataToSend.homeAssetId);
+        if (asset) {
+            dataToSend.propertyId = asset.propertyId;
+        }
+    }
+    
     if (editingWarranty) {
-      res = await api.updateWarranty(editingWarranty.id, data as UpdateWarrantyInput);
+      res = await api.updateWarranty(editingWarranty.id, dataToSend as UpdateWarrantyInput);
     } else {
-      res = await api.createWarranty(data as CreateWarrantyInput);
+      res = await api.createWarranty(dataToSend as CreateWarrantyInput);
     }
 
     if (res.success) {
@@ -440,11 +539,36 @@ export default function WarrantiesPage() {
     });
   }, [warranties]);
   
-  const getPropertyInfo = useCallback((propertyId: string | null) => {
+  // UPDATED: Get Property Info to handle asset-based linkage
+  const getPropertyInfo = useCallback((warranty: Warranty): string => {
+      // Prioritize the propertyId directly on the warranty object
+      let propertyId = warranty.propertyId;
+      
+      // If propertyId is null but there is an assetId, try to find the propertyId through the asset
+      if (!propertyId && warranty.homeAssetId) {
+           const asset = homeAssets.find(a => a.id === warranty.homeAssetId);
+           if (asset) {
+               propertyId = asset.propertyId;
+           }
+      }
+
       if (!propertyId) return 'General';
+      
       const property = properties.find(p => p.id === propertyId);
       return property ? property.name || property.address : 'N/A';
-  }, [properties]);
+  }, [properties, homeAssets]);
+  
+  // NEW: Helper to get Asset Info
+  const getAssetInfo = useCallback((assetId: string | null): string => {
+      if (!assetId) return 'N/A';
+      const asset = homeAssets.find(a => a.id === assetId);
+      if (asset) {
+        // Format the assetType from SNAKE_CASE to "Title Case"
+        const assetName = asset.assetType.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+        return asset.modelNumber ? `${assetName} (${asset.modelNumber})` : assetName;
+      }
+      return 'N/A';
+  }, [homeAssets]);
 
 
   return (
@@ -462,6 +586,7 @@ export default function WarrantiesPage() {
             <WarrantyForm 
               initialData={editingWarranty}
               properties={properties}
+              homeAssets={homeAssets} // PASSED NEW PROP
               onSave={handleSave}
               onClose={closeAddEditModal}
               isSubmitting={isSubmitting}
@@ -494,7 +619,10 @@ export default function WarrantiesPage() {
                 <TableHead className="w-[150px]">Provider</TableHead>
                 <TableHead className="w-[150px]">Policy #</TableHead>
                 <TableHead className="hidden lg:table-cell">Coverage Details</TableHead>
-                <TableHead className="w-[100px]">Property</TableHead>
+                {/* NEW TABLE HEADER */}
+                <TableHead className="w-[120px]">Property</TableHead>
+                <TableHead className="w-[150px]">Asset</TableHead>
+                {/* ------------------ */}
                 <TableHead className="w-[120px] text-center">Expires</TableHead>
                 <TableHead className="w-[100px] text-center">Status</TableHead>
                 <TableHead className="w-[120px] text-center">Actions</TableHead>
@@ -519,9 +647,14 @@ export default function WarrantiesPage() {
                     <TableCell className="hidden lg:table-cell text-sm text-gray-600 max-w-[250px] truncate">
                       {warranty.coverageDetails || 'No details provided.'}
                     </TableCell>
+                    {/* NEW TABLE CELLS */}
                     <TableCell className="text-sm">
-                        {getPropertyInfo(warranty.propertyId)}
+                        {getPropertyInfo(warranty)}
                     </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                        {getAssetInfo(warranty.homeAssetId)}
+                    </TableCell>
+                    {/* ---------------- */}
                     <TableCell className="text-center">
                       <div className={statusClass}>
                           {format(parseISO(warranty.expiryDate), 'MMM dd, yyyy')}
