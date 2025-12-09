@@ -964,7 +964,7 @@ model Warranty {
   id                 String    @id @default(uuid())
   homeownerProfileId String
   propertyId         String? // Link to a specific property (e.g., HVAC unit warranty is for the main home)
-  
+  homeAssetId        String?
   // Policy Details
   providerName       String
   policyNumber       String?
@@ -979,12 +979,14 @@ model Warranty {
   homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
   property           Property? @relation(fields: [propertyId], references: [id])
   documents          Document[]
+  homeAsset          HomeAsset? @relation(fields: [homeAssetId], references: [id])
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
   @@index([homeownerProfileId])
   @@index([expiryDate])
+  @@index([homeAssetId])
   @@map("warranties")
 }
 
@@ -1061,6 +1063,7 @@ model HomeAsset {
   // Optional fields for Maintenance Readiness/Energy:
   lastServiced DateTime? 
   efficiencyRating String?
+  warranties  Warranty[]
   @@index([propertyId])
   @@unique([propertyId, assetType]) // Usually only one furnace per house
 }
