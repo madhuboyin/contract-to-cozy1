@@ -66,9 +66,10 @@ export const ExistingOwnerDashboard = ({
     })
     : [];
   
-  // 2. Filter for active (PENDING) tasks for the selected property
+  // AFTER - Use the same statuses as RecurringMaintenanceCard:
+  const ACTIVE_TASK_STATUSES = ['PENDING', 'SCHEDULED', 'IN_PROGRESS', 'NEEDS_REVIEW', 'OVERDUE'];
   const activeChecklistItems = propertyChecklistItems.filter((item: ChecklistItem) => 
-    item.status === 'PENDING' 
+    ACTIVE_TASK_STATUSES.includes(item.status)
   );
   
   // 3. Separate Maintenance from Renewals

@@ -34,7 +34,6 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
   // The 'maintenance' prop is already filtered by property ID by the parent component.
   // MODIFIED: Filter now includes all ACTIVE_TASK_STATUSES
   const allPendingTasks = maintenance
-    .filter(t => ACTIVE_TASK_STATUSES.includes(t.status)) 
     .sort((a, b) => {
         const dateA = a.nextDueDate ? new Date(a.nextDueDate).getTime() : Infinity;
         const dateB = b.nextDueDate ? new Date(b.nextDueDate).getTime() : Infinity;
