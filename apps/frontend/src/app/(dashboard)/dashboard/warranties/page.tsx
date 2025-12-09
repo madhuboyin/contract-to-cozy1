@@ -171,7 +171,7 @@ const DocumentUploadModal = ({ parentEntityId, parentEntityType, onUploadSuccess
 interface WarrantyFormProps {
   initialData?: Warranty;
   properties: Property[];
-  homeAssets: HomeAsset[]; // NEW PROP
+  homeAssets: HomeAsset[];
   onSave: (data: CreateWarrantyInput | UpdateWarrantyInput) => Promise<void>;
   onClose: () => void;
   isSubmitting: boolean;
@@ -312,11 +312,18 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
             <Select 
               value={selectedHomeAssetId} 
               onValueChange={(v) => handleSelectChange('homeAssetId', v)}
-              // Disable if no property is selected AND no assets are filtered/present
-              disabled={!formData.propertyId && filteredHomeAssets.length === 0 && selectedHomeAssetId === SELECT_NONE_VALUE}
+              // FIX: Only disable if NO property is selected AND we are not editing an existing asset.
+              // This is the critical change to unblock the form submission when property has no assets.
+              disabled={!formData.propertyId && !initialData?.homeAssetId} 
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select an Asset (Optional)" />
+                <SelectValue 
+                    placeholder={
+                       (formData.propertyId && filteredHomeAssets.length === 0)
+                           ? 'No Assets found for this property' 
+                           : 'Select an Asset (Optional)'
+                    }
+                />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={SELECT_NONE_VALUE}>
@@ -330,7 +337,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
                 
                 {formData.propertyId && filteredHomeAssets.length === 0 && (
                     <div className="p-2 text-sm text-muted-foreground italic">
-                        No assets found for this property.
+                        No assets defined for this property.
                     </div>
                 )}
               </SelectContent>
@@ -375,7 +382,7 @@ export default function WarrantiesPage() {
   const [editingWarranty, setEditingWarranty] = useState<Warranty | undefined>(undefined);
   
   // NEW STATE for Document Upload Modal
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isUploadModalOpen, setIsUploadModal] = useState(false);
   const [uploadingToWarrantyId, setUploadingToWarrantyId] = useState<string | null>(null);
 
   const { toast } = useToast();
@@ -450,7 +457,7 @@ export default function WarrantiesPage() {
             dataToSend.propertyId = asset.propertyId;
         }
     }
-    
+
     if (editingWarranty) {
       res = await api.updateWarranty(editingWarranty.id, dataToSend as UpdateWarrantyInput);
     } else {
@@ -522,11 +529,11 @@ export default function WarrantiesPage() {
   // NEW Handlers for Document Upload Modal
   const openUploadModal = (warrantyId: string) => {
     setUploadingToWarrantyId(warrantyId);
-    setIsUploadModalOpen(true);
+    setIsUploadModal(true);
   };
   
   const closeUploadModal = () => {
-    setIsUploadModalOpen(false);
+    setIsUploadModal(false);
     setUploadingToWarrantyId(null);
   };
 
