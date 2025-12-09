@@ -29,7 +29,6 @@ import {
 
 // ============================================================================
 // LOCAL TYPE DEFINITIONS AND ENUMS (TO RESOLVE COMPILE ERRORS)
-// NOTE: These should ideally be moved to your shared '@/types' file.
 // ============================================================================
 
 const WARRANTY_CATEGORIES = {
@@ -84,6 +83,23 @@ interface UpdateWarrantyInput extends Partial<CreateWarrantyInput> {
 }
 // ============================================================================
 
+// ============================================================================
+// NEW: CATEGORY-TO-ASSET MAPPING (Fulfills Request)
+// Maps a WarrantyCategory to an array of compatible HomeAsset.assetType strings.
+// Note: assetType is the internal string value (e.g., HVAC_FURNACE, REFRIGERATOR)
+// ============================================================================
+const CATEGORY_ASSET_MAP: Record<WarrantyCategory, string[]> = {
+    APPLIANCE: ['REFRIGERATOR', 'OVEN', 'DISHWASHER', 'WASHER', 'DRYER', 'MICROWAVE', 'GARBAGE_DISPOSAL'],
+    HVAC: ['HVAC_FURNACE', 'HEAT_PUMP', 'CENTRAL_AC'],
+    PLUMBING: ['WATER_HEATER', 'SUMP_PUMP', 'SEPTIC_SYSTEM'],
+    ELECTRICAL: ['ELECTRICAL_PANEL', 'GENERATOR'],
+    ROOFING: ['ROOF'], // Can be linked if roof is added as an asset type
+    STRUCTURAL: ['FOUNDATION', 'SIDING', 'GARAGE_DOOR'], // If these become asset types
+    // These categories can cover multiple, non-specific or undefined assets
+    HOME_WARRANTY_PLAN: [], 
+    OTHER: [],
+};
+
 
 // Placeholder for "None" option, necessary to avoid Radix UI error on value=""
 const SELECT_NONE_VALUE = '__NONE__';
@@ -102,8 +118,7 @@ const DOCUMENT_TYPES: DocumentType[] = [
     'OTHER',
 ];
 
-// --- Document Upload Modal Component (NEW) ---
-// (omitted for brevity, content remains the same)
+// --- Document Upload Modal Component (omitted for brevity, content remains the same) ---
 interface DocumentUploadModalProps {
   parentEntityId: string; 
   parentEntityType: 'property' | 'warranty' | 'policy';
@@ -265,6 +280,12 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
           const newState: CreateWarrantyInput | UpdateWarrantyInput = { ...prev };
           (newState as any)[id] = nextValue; // Update the generic field
 
+          // --- LOGIC FOR CATEGORY CHANGE ---
+          if (id === 'category') {
+             // If category changes, invalidate asset selection to force re-filter
+             newState.homeAssetId = undefined;
+          }
+          
           // Logic to synchronize property and asset selection
           if (id === 'propertyId') {
               const currentAssetId = prev.homeAssetId;
@@ -278,9 +299,20 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
           }
           else if (id === 'homeAssetId' && nextValue) {
               const asset = homeAssets.find(a => a.id === nextValue);
-              // If an asset is selected, automatically select its property
-              if (asset && asset.propertyId !== prev.propertyId) {
-                  newState.propertyId = asset.propertyId;
+              // If an asset is selected, automatically select its property and category
+              if (asset) {
+                  if (asset.propertyId !== prev.propertyId) {
+                      newState.propertyId = asset.propertyId;
+                  }
+                  
+                  // Infer category from asset type to ensure consistency
+                  const inferredCategory = Object.entries(CATEGORY_ASSET_MAP).find(
+                      ([cat, types]) => types.includes(asset.assetType)
+                  )?.[0];
+
+                  if (inferredCategory && inferredCategory !== prev.category) {
+                       newState.category = inferredCategory as WarrantyCategory;
+                  }
               }
           }
           
@@ -298,18 +330,29 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
   const selectedHomeAssetId = formData.homeAssetId || SELECT_NONE_VALUE;
   const selectedCategory = formData.category || SELECT_NONE_VALUE;
 
-  // Filter assets based on the currently selected property
+  // NEW: Get allowed asset types based on selected category
+  const allowedAssetTypes: string[] = formData.category ? CATEGORY_ASSET_MAP[formData.category as WarrantyCategory] : [];
+  const isSystemOrApplianceCategory = allowedAssetTypes.length > 0;
+
+  // Filter assets based on the currently selected property AND the selected category (Fulfills Request)
   const filteredHomeAssets = useMemo(() => {
-    if (!formData.propertyId) {
-       // If editing a warranty not linked to a property but linked to an asset, show only that asset
-       if (initialData?.homeAssetId && !initialData.propertyId) {
-          const asset = homeAssets.find(a => a.id === initialData.homeAssetId);
-          return asset ? [asset] : [];
-       }
+    if (!formData.propertyId || !formData.category) {
        return [];
     }
+    
+    // Only filter by category if it's a specific system/appliance category
+    if (isSystemOrApplianceCategory) {
+        return homeAssets.filter(asset => 
+            asset.propertyId === formData.propertyId && 
+            allowedAssetTypes.includes(asset.assetType)
+        );
+    }
+    
+    // If category is General/Structural/Other, show all assets for the property, 
+    // though linking is optional/discouraged for these types.
     return homeAssets.filter(asset => asset.propertyId === formData.propertyId);
-  }, [formData.propertyId, homeAssets, initialData]);
+    
+  }, [formData.propertyId, formData.category, homeAssets, allowedAssetTypes, isSystemOrApplianceCategory]);
 
 
   return (
@@ -395,16 +438,18 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
             <Select 
               value={selectedHomeAssetId} 
               onValueChange={(v) => handleSelectChange('homeAssetId', v)}
-              // Logic: Disable if a property is selected but has no assets, OR if no property is selected
-              disabled={!formData.propertyId || filteredHomeAssets.length === 0} 
+              // Logic: Disable if NO Category OR NO Property is selected, OR if the filtered list is empty.
+              disabled={!formData.category || !formData.propertyId || (filteredHomeAssets.length === 0 && !isSubmitting)} 
             >
               <SelectTrigger>
                 <SelectValue 
                     placeholder={
-                       (!formData.propertyId) 
+                       !formData.category
+                           ? 'Select Category First'
+                           : !formData.propertyId
                            ? 'Select Property First'
-                           : (filteredHomeAssets.length === 0)
-                               ? 'No Assets found for this property' 
+                           : filteredHomeAssets.length === 0
+                               ? `No ${formData.category} Assets found for this property` 
                                : 'Select an Asset (Optional)'
                     }
                 />
@@ -412,7 +457,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
               <SelectContent>
                 {/* Updated the generic "None" option text */}
                 <SelectItem value={SELECT_NONE_VALUE}> 
-                  None (Covers entire category, e.g., All Plumbing)
+                  None (Covers entire category, e.g., All Plumbing Lines)
                 </SelectItem> 
                 {filteredHomeAssets.map(asset => (
                   <SelectItem key={asset.id} value={asset.id}>
@@ -420,9 +465,9 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
                   </SelectItem>
                 ))}
                 
-                {formData.propertyId && filteredHomeAssets.length === 0 && (
+                {filteredHomeAssets.length === 0 && formData.category && formData.propertyId && (
                     <div className="p-2 text-sm text-muted-foreground italic">
-                        No assets defined for this property.
+                        No compatible assets found.
                     </div>
                 )}
               </SelectContent>
@@ -452,10 +497,6 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
     </form>
   );
 };
-
-// --- Documents View Component ---
-// (omitted for brevity, content remains the same, but it's not strictly needed for the table view)
-
 
 // --- Main Page Component ---
 export default function WarrantiesPage() {
