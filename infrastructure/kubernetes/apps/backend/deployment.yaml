@@ -68,6 +68,13 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: GEMINI_API_KEY
+            - name: NODE_ENV
+              value: "production"
+            - name: SWAGGER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: api-docs-auth
+                  key: SWAGGER_PASSWORD
           resources:
             requests:
               cpu: "500m"
