@@ -98,7 +98,7 @@ const CATEGORY_ASSET_MAP: Record<WarrantyCategory, string[]> = {
     OTHER: [],
 };
 
-// NEW: Categories that should DISABLE the asset linking dropdown
+// NEW: Categories that should DISABLE ONLY the asset linking dropdown
 const DISABLE_ASSET_LINKING_CATEGORIES: WarrantyCategory[] = [
     'HVAC', 
     'ROOFING', 
@@ -187,16 +187,15 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
 
           // --- LOGIC FOR CATEGORY CHANGE ---
           if (id === 'category') {
+             const newCategory = nextValue as WarrantyCategory;
+             
              // If category changes, clear any old asset selection
              newState.homeAssetId = undefined;
              
-             const newCategory = nextValue as WarrantyCategory;
-             
-             // If the new category disables linking (e.g., HVAC), clear the property link as well.
-             // This ensures system-wide policies are not tied to a single property component.
-             if (DISABLE_ASSET_LINKING_CATEGORIES.includes(newCategory)) {
-                 newState.propertyId = undefined;
-             }
+             // *** REMOVED BLOCK ***: Property ID is NEVER cleared/disabled by category now
+             // if (DISABLE_ASSET_LINKING_CATEGORIES.includes(newCategory)) {
+             //     newState.propertyId = undefined;
+             // }
           }
           
           // Logic to synchronize property and asset selection
@@ -214,6 +213,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
               const asset = homeAssets.find(a => a.id === nextValue);
               // If an asset is selected, automatically select its property and category
               if (asset) {
+                  // Property association is now always allowed, so we set it if an asset is chosen
                   if (asset.propertyId !== prev.propertyId) {
                       newState.propertyId = asset.propertyId;
                   }
@@ -263,9 +263,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
         );
     }
     
-    // If category is Home Warranty Plan/Other, technically they can link to any asset, 
-    // but we enforce the explicit rule (Disable for Structural/System, Enable only for Appliance/Other/Home Warranty Plan)
-    // The explicit disable list handles the opposite side of this logic.
+    // For Home Warranty Plan/Other/Appliance, filter by property, but not asset type 
     return homeAssets.filter(asset => asset.propertyId === formData.propertyId);
     
   }, [formData.propertyId, formData.category, homeAssets, allowedAssetTypes, isSystemOrApplianceCategory, isAssetLinkingExplicitlyDisabled]);
@@ -332,9 +330,8 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
             <Select 
               value={selectedPropertyId} 
               onValueChange={(v) => handleSelectChange('propertyId', v)}
-              // Disable property selection if category explicitly disables asset linking, 
-              // as the link is assumed to be general or structural.
-              disabled={isAssetLinkingExplicitlyDisabled && !initialData} 
+              // *** FIX: PROPERTY IS NEVER DISABLED (Requirement fulfilled) ***
+              disabled={false} 
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select a property (Optional)" />
@@ -357,8 +354,8 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
             <Select 
               value={selectedHomeAssetId} 
               onValueChange={(v) => handleSelectChange('homeAssetId', v)}
-              // NEW DISABLING LOGIC: Disabled if category explicitly forbids linking, OR 
-              // if no property is selected, OR if the filtered list is empty.
+              // Disabling Logic: Disabled if category explicitly forbids linking (HVAC, Plumbing, etc.) 
+              // OR if no property is selected (since property is now always enabled).
               disabled={
                   isAssetLinkingExplicitlyDisabled || 
                   !formData.propertyId || 
@@ -369,7 +366,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
                 <SelectValue 
                     placeholder={
                        isAssetLinkingExplicitlyDisabled 
-                           ? `System/Structural Coverage (${WARRANTY_CATEGORIES[formData.category as WarrantyCategory]})` // Custom message
+                           ? `System/Structural Coverage (${WARRANTY_CATEGORIES[formData.category as WarrantyCategory]})` // Custom message when disabled
                            : !formData.category
                            ? 'Select Category First'
                            : !formData.propertyId
