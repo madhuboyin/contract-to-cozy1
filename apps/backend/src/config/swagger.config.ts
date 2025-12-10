@@ -30,6 +30,89 @@ const options: swaggerJsdoc.Options = {
           description: 'Enter your JWT token',
         },
       },
+      schemas: {
+        // Add these schemas:
+        User: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            email: { type: 'string', format: 'email' },
+            firstName: { type: 'string' },
+            lastName: { type: 'string' },
+            role: { type: 'string', enum: ['HOMEOWNER', 'PROVIDER', 'ADMIN'] },
+            createdAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        RegisterRequest: {
+          type: 'object',
+          required: ['email', 'password', 'firstName', 'lastName', 'role'],
+          properties: {
+            email: { type: 'string', format: 'email' },
+            password: { type: 'string', minLength: 8 },
+            firstName: { type: 'string' },
+            lastName: { type: 'string' },
+            role: { type: 'string', enum: ['HOMEOWNER', 'PROVIDER'] },
+          },
+        },
+        LoginRequest: {
+          type: 'object',
+          required: ['email', 'password'],
+          properties: {
+            email: { type: 'string', format: 'email' },
+            password: { type: 'string' },
+          },
+        },
+        LoginResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                accessToken: { type: 'string' },
+                refreshToken: { type: 'string' },
+                user: { $ref: '#/components/schemas/User' },
+              },
+            },
+          },
+        },
+        Property: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            address: { type: 'string' },
+            city: { type: 'string' },
+            state: { type: 'string' },
+            zipCode: { type: 'string' },
+            propertyType: { type: 'string' },
+            squareFootage: { type: 'number' },
+            yearBuilt: { type: 'integer' },
+          },
+        },
+        Booking: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            status: { type: 'string', enum: ['PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] },
+            scheduledDate: { type: 'string', format: 'date-time' },
+            estimatedPrice: { type: 'number' },
+          },
+        },
+        SuccessResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            message: { type: 'string' },
+          },
+        },
+        ErrorResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            message: { type: 'string' },
+          },
+        },
+      },
       responses: {
         UnauthorizedError: {
           description: 'Access token is missing or invalid',

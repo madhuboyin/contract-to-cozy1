@@ -46,7 +46,8 @@ app.use(cors({
   origin: [
     'http://localhost:3000',
     'https://contracttocozy.com',
-    'https://www.contracttocozy.com'
+    'https://www.contracttocozy.com',
+    'https://docs.contracttocozy.com'
   ],
   credentials: true,
 }));
