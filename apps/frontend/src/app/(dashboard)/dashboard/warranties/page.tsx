@@ -192,10 +192,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
              // If category changes, clear any old asset selection
              newState.homeAssetId = undefined;
              
-             // *** REMOVED BLOCK ***: Property ID is NEVER cleared/disabled by category now
-             // if (DISABLE_ASSET_LINKING_CATEGORIES.includes(newCategory)) {
-             //     newState.propertyId = undefined;
-             // }
+             // If the new category disables linking (e.g., HVAC), ensure property ID is NOT cleared.
           }
           
           // Logic to synchronize property and asset selection
@@ -330,7 +327,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
             <Select 
               value={selectedPropertyId} 
               onValueChange={(v) => handleSelectChange('propertyId', v)}
-              // *** FIX: PROPERTY IS NEVER DISABLED (Requirement fulfilled) ***
+              // PROPERTY IS NEVER DISABLED (Requirement fulfilled)
               disabled={false} 
             >
               <SelectTrigger>
@@ -355,11 +352,11 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
               value={selectedHomeAssetId} 
               onValueChange={(v) => handleSelectChange('homeAssetId', v)}
               // Disabling Logic: Disabled if category explicitly forbids linking (HVAC, Plumbing, etc.) 
-              // OR if no property is selected (since property is now always enabled).
+              // OR if no property is selected OR if the filtered list is empty.
               disabled={
                   isAssetLinkingExplicitlyDisabled || 
                   !formData.propertyId || 
-                  (filteredHomeAssets.length === 0 && !isSubmitting)
+                  (filteredHomeAssets.length === 0 && !isSubmitting && !isAssetLinkingExplicitlyDisabled)
               } 
             >
               <SelectTrigger>
@@ -378,10 +375,15 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
                 />
               </SelectTrigger>
               <SelectContent>
-                {/* Updated the generic "None" option text */}
-                <SelectItem value={SELECT_NONE_VALUE}> 
-                  None (Covers entire category, e.g., All Plumbing Lines)
-                </SelectItem> 
+                {/* FIX: Only render the "None" SelectItem if linking is NOT explicitly disabled. 
+                   This prevents the component from prioritizing the selected value's text 
+                   over the desired placeholder when the dropdown is disabled. */}
+                {!isAssetLinkingExplicitlyDisabled && (
+                    <SelectItem value={SELECT_NONE_VALUE}> 
+                        None (Covers entire category, e.g., All Plumbing Lines)
+                    </SelectItem> 
+                )}
+                
                 {filteredHomeAssets.map(asset => (
                   <SelectItem key={asset.id} value={asset.id}>
                     {asset.assetType.replace(/_/g, ' ')} {asset.modelNumber ? `(${asset.modelNumber})` : ''}
