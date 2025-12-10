@@ -111,7 +111,7 @@ const DISABLE_ASSET_LINKING_CATEGORIES: WarrantyCategory[] = [
 // Placeholder for "None" option, necessary to avoid Radix UI error on value=""
 const SELECT_NONE_VALUE = '__NONE__';
 
-// --- Document Type Constants for UI (NEW) ---
+// --- Document Type Constants for UI (omitted for brevity) ---
 const DOCUMENT_TYPES: DocumentType[] = [
     'INSPECTION_REPORT',
     'ESTIMATE',
@@ -252,8 +252,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
 
   // NEW: Get allowed asset types based on selected category
   const allowedAssetTypes: string[] = formData.category ? CATEGORY_ASSET_MAP[formData.category as WarrantyCategory] : [];
-  const isSystemOrApplianceCategory = allowedAssetTypes.length > 0;
-
+  
   // Filter assets based on the currently selected property AND the selected category (Fulfills Request)
   const filteredHomeAssets = useMemo(() => {
     // If linking is explicitly disabled (e.g., HVAC), return empty array.
@@ -261,18 +260,24 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
        return [];
     }
     
-    // Only filter by category if it's a specific system/appliance category
-    if (isSystemOrApplianceCategory) {
-        return homeAssets.filter(asset => 
-            asset.propertyId === formData.propertyId && 
-            allowedAssetTypes.includes(asset.assetType)
-        );
+    const currentCategory = formData.category as WarrantyCategory;
+
+    // 1. Base Filter: Filter only by Property ID
+    let assets = homeAssets.filter(asset => asset.propertyId === formData.propertyId);
+    
+    // 2. Conditional Asset Type Filter
+    // FIX: Only apply type-specific filtering for APPLIANCE.
+    // This allows HOME_WARRANTY_PLAN and OTHER to skip this block and return all property assets.
+    if (currentCategory === 'APPLIANCE') {
+        // Filter the property's assets down to only those that are explicitly listed as 'APPLIANCE' types.
+        // This is the domain logic for appliance warranties.
+        return assets.filter(asset => allowedAssetTypes.includes(asset.assetType));
     }
     
-    // For Home Warranty Plan/Other/Appliance, filter by property, but not asset type 
-    return homeAssets.filter(asset => asset.propertyId === formData.propertyId);
+    // 3. Default Filter: Applies to HOME_WARRANTY_PLAN and OTHER (returns all assets for the property)
+    return assets;
     
-  }, [formData.propertyId, formData.category, homeAssets, allowedAssetTypes, isSystemOrApplianceCategory, isAssetLinkingExplicitlyDisabled]);
+  }, [formData.propertyId, formData.category, homeAssets, isAssetLinkingExplicitlyDisabled]);
 
 
   return (
@@ -384,8 +389,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
                 />
               </SelectTrigger>
               <SelectContent>
-                {/* FIX: Only render the "None" SelectItem if linking is NOT explicitly disabled. 
-                   This ensures the custom placeholder displays correctly when disabled. */}
+                {/* FIX: Only render the "None" SelectItem if linking is NOT explicitly disabled. */}
                 {!isAssetLinkingExplicitlyDisabled && (
                     <SelectItem value={SELECT_NONE_VALUE}> 
                         {/* FIX 2: Shortened text */}
