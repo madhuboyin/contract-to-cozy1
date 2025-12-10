@@ -26,6 +26,7 @@ loki:
       directory: /var/loki/chunks
 
   limits_config:
+    # Retained at 7 days as requested.
     retention_period: 7d
 
   compactor:
@@ -38,3 +39,12 @@ singleBinary:
   persistence:
     enabled: true
     size: 10Gi
+  
+  # RECOMMENDED ADDITION: Resource constraints for stability on k3s/Pi cluster
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1536Mi
+    limits:
+      cpu: 1000m
+      memory: 2048Mi
