@@ -87,6 +87,8 @@ interface UpdateWarrantyInput extends Partial<CreateWarrantyInput> {
 // NEW: CATEGORY-TO-ASSET MAPPING (For validation of component type)
 // ============================================================================
 const CATEGORY_ASSET_MAP: Record<WarrantyCategory, string[]> = {
+    // NOTE: If you are seeing an incorrect filter, check that the assetType strings here
+    // exactly match the strings coming from your HomeAsset database records (e.g., 'OVEN' vs 'RANGE_OVEN')
     APPLIANCE: ['REFRIGERATOR', 'OVEN', 'DISHWASHER', 'WASHER', 'DRYER', 'MICROWAVE', 'GARBAGE_DISPOSAL'],
     HVAC: ['HVAC_FURNACE', 'HEAT_PUMP', 'CENTRAL_AC'],
     PLUMBING: ['WATER_HEATER', 'SUMP_PUMP', 'SEPTIC_SYSTEM'],
@@ -265,19 +267,29 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
     // 1. Base Filter: Filter only by Property ID
     let assets = homeAssets.filter(asset => asset.propertyId === formData.propertyId);
     
-    // 2. Conditional Asset Type Filter
-    // FIX: Only apply type-specific filtering for APPLIANCE.
-    // This allows HOME_WARRANTY_PLAN and OTHER to skip this block and return all property assets.
+    // *** FIX 3: Consolidated Conditional Asset Type Filter ***
+    // This block runs ONLY for APPLIANCE, ensuring HOME_WARRANTY_PLAN and OTHER return the full list.
     if (currentCategory === 'APPLIANCE') {
-        // Filter the property's assets down to only those that are explicitly listed as 'APPLIANCE' types.
-        // This is the domain logic for appliance warranties.
-        return assets.filter(asset => allowedAssetTypes.includes(asset.assetType));
+        const result = assets.filter(asset => allowedAssetTypes.includes(asset.assetType));
+        
+        // --- DIAGNOSTIC LOG START ---
+        console.log(`[DEBUG: APPLIANCE FILTER] Total Assets in Property: ${assets.length}`);
+        console.log(`[DEBUG: APPLIANCE FILTER] Allowed Types:`, allowedAssetTypes);
+        console.log(`[DEBUG: APPLIANCE FILTER] Filtered Assets Count: ${result.length}`);
+        if (result.length < assets.length) {
+            const excludedAssets = assets.filter(asset => !allowedAssetTypes.includes(asset.assetType));
+            console.log(`[DEBUG: APPLIANCE FILTER] Excluded Asset Types (Potential Mismatch):`, excludedAssets.map(a => a.assetType));
+            console.log(`[DEBUG: APPLIANCE FILTER] Full Home Asset List (Check for Duplicates/Filtering Issue in Fetch):`, homeAssets);
+        }
+        // --- DIAGNOSTIC LOG END ---
+
+        return result;
     }
     
-    // 3. Default Filter: Applies to HOME_WARRANTY_PLAN and OTHER (returns all assets for the property)
+    // 2. Default Filter: Applies to HOME_WARRANTY_PLAN and OTHER (returns all assets for the property)
     return assets;
     
-  }, [formData.propertyId, formData.category, homeAssets, isAssetLinkingExplicitlyDisabled]);
+  }, [formData.propertyId, formData.category, homeAssets, isAssetLinkingExplicitlyDisabled, allowedAssetTypes]);
 
 
   return (
