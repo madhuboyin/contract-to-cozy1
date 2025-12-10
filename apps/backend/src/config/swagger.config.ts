@@ -1,6 +1,7 @@
 // apps/backend/src/config/swagger.config.ts
 
 import swaggerJsdoc from 'swagger-jsdoc';
+import path from 'path';
 
 const options: swaggerJsdoc.Options = {
   definition: {
@@ -97,14 +98,23 @@ const options: swaggerJsdoc.Options = {
       { name: 'Risk Assessment', description: 'Property risk analysis' },
       { name: 'Financial Efficiency', description: 'Financial efficiency scores' },
       { name: 'AI Chat', description: 'Gemini AI assistant' },
+      { name: 'Maintenance', description: 'Maintenance templates' },
+      { name: 'Service Categories', description: 'Service categories' },
       { name: 'Health', description: 'Health check endpoints' },
     ],
   },
-  // Scan route files for JSDoc annotations
+  // Use absolute paths from this file's location
   apis: [
-    './src/routes/*.ts',
-    './src/index.ts',
+    path.join(__dirname, '../routes/**/*.ts'),
+    path.join(__dirname, '../routes/**/*.js'),
+    path.join(__dirname, '../index.ts'),
+    path.join(__dirname, '../index.js'),
   ],
 };
 
 export const swaggerSpec = swaggerJsdoc(options);
+
+// Debug output
+console.log('📚 Swagger config loaded from:', __dirname);
+console.log('📚 Scanning paths:', options.apis);
+console.log('📚 Found endpoints:', Object.keys((swaggerSpec as any).paths || {}).length);
