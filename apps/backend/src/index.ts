@@ -64,17 +64,31 @@ if (process.env.NODE_ENV === 'development') {
 // SWAGGER/OPENAPI DOCUMENTATION
 // =============================================================================
 
-// Swagger UI
-app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  customCss: '.swagger-ui .topbar { display: none }',
-  customSiteTitle: 'Contract to Cozy API Docs',
-}));
-
-// OpenAPI JSON spec endpoint
+// OpenAPI JSON spec endpoint (MUST come BEFORE Swagger UI)
 app.get('/api/docs/swagger.json', (req: Request, res: Response) => {
   res.setHeader('Content-Type', 'application/json');
   res.send(swaggerSpec);
 });
+
+// Protect Swagger UI in production (optional)
+if (process.env.NODE_ENV === 'production' && process.env.SWAGGER_PASSWORD) {
+  app.use('/api/docs', basicAuth({
+    users: { 
+      'admin': process.env.SWAGGER_PASSWORD 
+    },
+    challenge: true,
+    realm: 'Contract to Cozy API Documentation'
+  }));
+}
+
+// Mount Swagger UI
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Contract to Cozy API Documentation',
+  swaggerOptions: {
+    persistAuthorization: true, // Remember token after refresh
+  }
+}));
 
 // =============================================================================
 // HEALTH CHECK ROUTES
@@ -275,20 +289,3 @@ app.listen(PORT, () => {
 });
 
 export default app;
-
-// Protect Swagger UI in production
-if (process.env.NODE_ENV === 'production' && process.env.SWAGGER_PASSWORD) {
-  app.use('/api/docs', basicAuth({
-    users: { 
-      'admin': process.env.SWAGGER_PASSWORD 
-    },
-    challenge: true,
-    realm: 'Contract to Cozy API Documentation'
-  }));
-}
-
-// Mount Swagger UI
-app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  customCss: '.swagger-ui .topbar { display: none }',
-  customSiteTitle: 'Contract to Cozy API Documentation'
-}));
