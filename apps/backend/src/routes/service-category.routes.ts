@@ -14,9 +14,45 @@ const prisma = new PrismaClient({
 const router = Router();
 
 /**
- * @route GET /api/service-categories
- * @desc Get available service categories for the current user's segment
- * @access Private
+ * @swagger
+ * /api/service-categories:
+ *   get:
+ *     summary: Get available service categories for the current user's segment
+ *     description: Returns categories available for HOME_BUYER or EXISTING_OWNER segment
+ *     tags: [Service Categories]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of available service categories
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     segment:
+ *                       type: string
+ *                       enum: [HOME_BUYER, EXISTING_OWNER]
+ *                     categories:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           category:
+ *                             type: string
+ *                           displayName:
+ *                             type: string
+ *                           description:
+ *                             type: string
+ *                           icon:
+ *                             type: string
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.get(
   '/',
@@ -92,9 +128,33 @@ router.get(
 );
 
 /**
- * @route GET /api/service-categories/all
- * @desc Get ALL service categories (admin/debugging)
- * @access Private
+ * @swagger
+ * /api/service-categories/all:
+ *   get:
+ *     summary: Get ALL service categories (admin/debugging)
+ *     description: Returns all active service categories regardless of user segment
+ *     tags: [Service Categories]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of all service categories
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     categories:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.get(
   '/all',

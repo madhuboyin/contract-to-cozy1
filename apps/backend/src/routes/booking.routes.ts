@@ -14,152 +14,421 @@ const router = express.Router();
  */
 
 /**
- * @route   POST /api/bookings
- * @desc    Create a new booking
- * @access  Private (Homeowner only)
- * @body    {
- *   providerId: string,
- *   serviceId: string,
- *   propertyId: string,
- *   requestedDate?: string (ISO),
- *   scheduledDate?: string (ISO),
- *   startTime?: string (ISO),
- *   endTime?: string (ISO),
- *   description: string (10-1000 chars),
- *   specialRequests?: string (max 500 chars),
- *   estimatedPrice: number,
- *   depositAmount?: number
- * }
- * 
- * @example
- * POST /api/bookings
- * {
- *   "providerId": "provider-uuid",
- *   "serviceId": "service-uuid",
- *   "propertyId": "property-uuid",
- *   "scheduledDate": "2025-03-15T10:00:00Z",
- *   "description": "Need full home inspection for property purchase",
- *   "estimatedPrice": 450.00
- * }
+ * @swagger
+ * /api/bookings:
+ *   post:
+ *     summary: Create a new booking
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - providerId
+ *               - serviceId
+ *               - propertyId
+ *               - description
+ *               - estimatedPrice
+ *             properties:
+ *               providerId:
+ *                 type: string
+ *                 format: uuid
+ *               serviceId:
+ *                 type: string
+ *                 format: uuid
+ *               propertyId:
+ *                 type: string
+ *                 format: uuid
+ *               requestedDate:
+ *                 type: string
+ *                 format: date-time
+ *               scheduledDate:
+ *                 type: string
+ *                 format: date-time
+ *               startTime:
+ *                 type: string
+ *                 format: date-time
+ *               endTime:
+ *                 type: string
+ *                 format: date-time
+ *               description:
+ *                 type: string
+ *                 minLength: 10
+ *                 maxLength: 1000
+ *               specialRequests:
+ *                 type: string
+ *                 maxLength: 500
+ *               estimatedPrice:
+ *                 type: number
+ *               depositAmount:
+ *                 type: number
+ *           example:
+ *             providerId: provider-uuid
+ *             serviceId: service-uuid
+ *             propertyId: property-uuid
+ *             scheduledDate: "2025-03-15T10:00:00Z"
+ *             description: "Need full home inspection for property purchase"
+ *             estimatedPrice: 450.00
+ *     responses:
+ *       201:
+ *         description: Booking created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Booking'
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         description: Homeowner only
  */
 router.post('/', authenticate, BookingController.createBooking);
 
 /**
- * @route   GET /api/bookings
- * @desc    List bookings (filtered by user role)
- * @access  Private
- * @query   {
- *   status?: BookingStatus,
- *   category?: ServiceCategory,
- *   fromDate?: string (ISO),
- *   toDate?: string (ISO),
- *   page?: number (default: 1),
- *   limit?: number (default: 10, max: 50),
- *   sortBy?: 'createdAt' | 'scheduledDate' | 'status' (default: 'createdAt'),
- *   sortOrder?: 'asc' | 'desc' (default: 'desc')
- * }
- * 
- * @example
- * GET /api/bookings?status=CONFIRMED&page=1&limit=10
- * GET /api/bookings?fromDate=2025-03-01&toDate=2025-03-31
+ * @swagger
+ * /api/bookings:
+ *   get:
+ *     summary: List bookings (filtered by user role)
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [PENDING, CONFIRMED, IN_PROGRESS, COMPLETED, CANCELLED]
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: fromDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: toDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *           maximum: 50
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           enum: [createdAt, scheduledDate, status]
+ *           default: createdAt
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: desc
+ *     responses:
+ *       200:
+ *         description: List of bookings
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Booking'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.get('/', authenticate, BookingController.listBookings);
 
 /**
- * @route   GET /api/bookings/:id
- * @desc    Get booking details by ID
- * @access  Private (Homeowner, Provider, or Admin)
- * @param   {string} id - Booking ID
- * 
- * @example
- * GET /api/bookings/booking-uuid-here
+ * @swagger
+ * /api/bookings/{id}:
+ *   get:
+ *     summary: Get booking details by ID
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Booking ID
+ *     responses:
+ *       200:
+ *         description: Booking details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/Booking'
+ *       404:
+ *         description: Booking not found
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         description: Access denied
  */
 router.get('/:id', authenticate, BookingController.getBookingById);
 
 /**
- * @route   PUT /api/bookings/:id
- * @desc    Update booking details
- * @access  Private (Homeowner, Provider, or Admin)
- * @param   {string} id - Booking ID
- * @body    {
- *   scheduledDate?: string (ISO),
- *   startTime?: string (ISO),
- *   endTime?: string (ISO),
- *   description?: string (10-1000 chars),
- *   specialRequests?: string (max 500 chars),
- *   estimatedPrice?: number,
- *   finalPrice?: number,
- *   internalNotes?: string (max 1000 chars, provider only)
- * }
- * 
- * @example
- * PUT /api/bookings/booking-uuid-here
- * {
- *   "scheduledDate": "2025-03-16T14:00:00Z",
- *   "description": "Updated: Need to inspect basement as well"
- * }
+ * @swagger
+ * /api/bookings/{id}:
+ *   put:
+ *     summary: Update booking details
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Booking ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               scheduledDate:
+ *                 type: string
+ *                 format: date-time
+ *               startTime:
+ *                 type: string
+ *                 format: date-time
+ *               endTime:
+ *                 type: string
+ *                 format: date-time
+ *               description:
+ *                 type: string
+ *                 minLength: 10
+ *                 maxLength: 1000
+ *               specialRequests:
+ *                 type: string
+ *                 maxLength: 500
+ *               estimatedPrice:
+ *                 type: number
+ *               finalPrice:
+ *                 type: number
+ *               internalNotes:
+ *                 type: string
+ *                 maxLength: 1000
+ *                 description: Provider only
+ *           example:
+ *             scheduledDate: "2025-03-16T14:00:00Z"
+ *             description: "Updated: Need to inspect basement as well"
+ *     responses:
+ *       200:
+ *         description: Booking updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Booking'
+ *       404:
+ *         description: Booking not found
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         description: Access denied
  */
 router.put('/:id', authenticate, BookingController.updateBooking);
 
 /**
- * @route   POST /api/bookings/:id/confirm
- * @desc    Confirm booking (Provider only)
- * @access  Private (Provider only)
- * @param   {string} id - Booking ID
- * 
- * @example
- * POST /api/bookings/booking-uuid-here/confirm
+ * @swagger
+ * /api/bookings/{id}/confirm:
+ *   post:
+ *     summary: Confirm booking (Provider only)
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Booking ID
+ *     responses:
+ *       200:
+ *         description: Booking confirmed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Booking'
+ *       404:
+ *         description: Booking not found
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         description: Provider only
  */
 router.post('/:id/confirm', authenticate, BookingController.confirmBooking);
 
 /**
- * @route   POST /api/bookings/:id/start
- * @desc    Start booking / mark as in progress (Provider only)
- * @access  Private (Provider only)
- * @param   {string} id - Booking ID
- * 
- * @example
- * POST /api/bookings/booking-uuid-here/start
+ * @swagger
+ * /api/bookings/{id}/start:
+ *   post:
+ *     summary: Start booking / mark as in progress (Provider only)
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Booking ID
+ *     responses:
+ *       200:
+ *         description: Booking started successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Booking'
+ *       404:
+ *         description: Booking not found
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         description: Provider only
  */
 router.post('/:id/start', authenticate, BookingController.startBooking);
 
 /**
- * @route   POST /api/bookings/:id/complete
- * @desc    Complete booking (Provider only)
- * @access  Private (Provider only)
- * @param   {string} id - Booking ID
- * @body    {
- *   actualStartTime: string (ISO),
- *   actualEndTime: string (ISO),
- *   finalPrice: number,
- *   internalNotes?: string (max 1000 chars)
- * }
- * 
- * @example
- * POST /api/bookings/booking-uuid-here/complete
- * {
- *   "actualStartTime": "2025-03-15T10:00:00Z",
- *   "actualEndTime": "2025-03-15T13:30:00Z",
- *   "finalPrice": 475.00,
- *   "internalNotes": "Found additional issues with foundation"
- * }
+ * @swagger
+ * /api/bookings/{id}/complete:
+ *   post:
+ *     summary: Complete booking (Provider only)
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Booking ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - actualStartTime
+ *               - actualEndTime
+ *               - finalPrice
+ *             properties:
+ *               actualStartTime:
+ *                 type: string
+ *                 format: date-time
+ *               actualEndTime:
+ *                 type: string
+ *                 format: date-time
+ *               finalPrice:
+ *                 type: number
+ *               internalNotes:
+ *                 type: string
+ *                 maxLength: 1000
+ *           example:
+ *             actualStartTime: "2025-03-15T10:00:00Z"
+ *             actualEndTime: "2025-03-15T13:30:00Z"
+ *             finalPrice: 475.00
+ *             internalNotes: "Found additional issues with foundation"
+ *     responses:
+ *       200:
+ *         description: Booking completed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Booking'
+ *       404:
+ *         description: Booking not found
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         description: Provider only
  */
 router.post('/:id/complete', authenticate, BookingController.completeBooking);
 
 /**
- * @route   POST /api/bookings/:id/cancel
- * @desc    Cancel booking
- * @access  Private (Homeowner, Provider, or Admin)
- * @param   {string} id - Booking ID
- * @body    {
- *   reason: string (10-500 chars)
- * }
- * 
- * @example
- * POST /api/bookings/booking-uuid-here/cancel
- * {
- *   "reason": "Homeowner decided to postpone property purchase"
- * }
+ * @swagger
+ * /api/bookings/{id}/cancel:
+ *   post:
+ *     summary: Cancel booking
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Booking ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - reason
+ *             properties:
+ *               reason:
+ *                 type: string
+ *                 minLength: 10
+ *                 maxLength: 500
+ *           example:
+ *             reason: "Homeowner decided to postpone property purchase"
+ *     responses:
+ *       200:
+ *         description: Booking cancelled successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Booking'
+ *       404:
+ *         description: Booking not found
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ *       403:
+ *         description: Access denied
  */
 router.post('/:id/cancel', authenticate, BookingController.cancelBooking);
 

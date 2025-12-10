@@ -4,6 +4,10 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import swaggerUi from 'swagger-ui-express';
+
+// Import swagger config
+import { swaggerSpec } from './config/swagger.config';
 
 // Import routes
 import authRoutes from './routes/auth.routes';
@@ -34,7 +38,9 @@ const PORT = process.env.PORT || 8080;
 // MIDDLEWARE
 // =============================================================================
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false, // Allow Swagger UI inline scripts
+}));
 app.use(cors({
   origin: [
     'http://localhost:3000',
@@ -54,9 +60,50 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // =============================================================================
+// SWAGGER/OPENAPI DOCUMENTATION
+// =============================================================================
+
+// Swagger UI
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Contract to Cozy API Docs',
+}));
+
+// OpenAPI JSON spec endpoint
+app.get('/api/docs/swagger.json', (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
+});
+
+// =============================================================================
 // HEALTH CHECK ROUTES
 // =============================================================================
 
+/**
+ * @swagger
+ * /api/health:
+ *   get:
+ *     summary: Health check endpoint
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Service is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: healthy
+ *                 service:
+ *                   type: string
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ *                 environment:
+ *                   type: string
+ */
 app.get('/api/health', (req: Request, res: Response) => {
   res.status(200).json({
     status: 'healthy',
@@ -66,6 +113,28 @@ app.get('/api/health', (req: Request, res: Response) => {
   });
 });
 
+/**
+ * @swagger
+ * /api/ready:
+ *   get:
+ *     summary: Readiness check endpoint
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Service is ready
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                 service:
+ *                   type: string
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ */
 app.get('/api/ready', (req: Request, res: Response) => {
   res.status(200).json({
     status: 'ready',
@@ -78,11 +147,37 @@ app.get('/api/ready', (req: Request, res: Response) => {
 // ROOT ENDPOINT
 // =============================================================================
 
+/**
+ * @swagger
+ * /:
+ *   get:
+ *     summary: API root endpoint
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: API information
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 service:
+ *                   type: string
+ *                 version:
+ *                   type: string
+ *                 status:
+ *                   type: string
+ *                 documentation:
+ *                   type: string
+ *                 endpoints:
+ *                   type: object
+ */
 app.get('/', (req: Request, res: Response) => {
   res.json({
     service: 'Contract to Cozy API',
     version: '1.3.0',
     status: 'running',
+    documentation: '/api/docs',
     endpoints: {
       health: '/api/health',
       ready: '/api/ready',
@@ -159,6 +254,7 @@ app.listen(PORT, () => {
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 API URL: http://localhost:${PORT}`);
   console.log(`✅ Health check: http://localhost:${PORT}/api/health`);
+  console.log(`📚 API Docs: http://localhost:${PORT}/api/docs`);
   console.log(`\n📋 Available routes:`);
   console.log(`   - POST /api/auth/register`);
   console.log(`   - POST /api/auth/login`);
