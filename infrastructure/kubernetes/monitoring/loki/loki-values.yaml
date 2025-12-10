@@ -26,11 +26,9 @@ loki:
       directory: /var/loki/chunks
 
   limits_config:
-    # Retention kept at 7 days as requested.
     retention_period: 7d
 
   compactor:
-    # This enables log cleanup inside the SingleBinary instance
     retention_enabled: true 
 
 deploymentMode: SingleBinary
@@ -41,7 +39,6 @@ singleBinary:
     enabled: true
     size: 10Gi
   resources:
-    # Recommended resource constraints for stability on k3s/Pi cluster
     requests:
       cpu: 500m
       memory: 1536Mi
@@ -49,7 +46,8 @@ singleBinary:
       cpu: 1000m
       memory: 2048Mi
 
-# --- CRITICAL FIX: Explicitly disable all conflicting scalable microservices ---
+# --- CRITICAL FIX: Disable ALL conflicting deployment modes and targets ---
+# This is the most comprehensive set of overrides required for a SingleBinary deployment.
 ingester:
   replicas: 0
 querier:
@@ -62,6 +60,14 @@ ruler:
   enabled: false
 compactor:
   enabled: false
-# 💥 NEW FIX: Disabling the Gateway deployment resolves the most common remaining conflict.
 gateway:
   enabled: false
+
+# 💥 NEW FIXES: Explicitly setting the SSD deployment targets to zero 💥
+# This is typically the final required step to satisfy the validation.yaml logic.
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
