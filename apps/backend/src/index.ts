@@ -82,12 +82,13 @@ if (process.env.NODE_ENV === 'production' && process.env.SWAGGER_PASSWORD) {
 }
 
 // Mount Swagger UI
-app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(null, {
+  swaggerOptions: {
+    url: '/api/docs/swagger.json',  // Fetch spec from this URL
+    persistAuthorization: true,
+  },
   customCss: '.swagger-ui .topbar { display: none }',
   customSiteTitle: 'Contract to Cozy API Documentation',
-  swaggerOptions: {
-    persistAuthorization: true, // Remember token after refresh
-  }
 }));
 
 // =============================================================================
