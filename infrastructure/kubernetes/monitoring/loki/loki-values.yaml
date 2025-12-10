@@ -7,7 +7,8 @@ loki:
   storage:
     type: filesystem
 
-  schema_config:
+  # 💥 FIX: Renamed 'schema_config' to 'schemaConfig' to satisfy Helm chart validation
+  schemaConfig: 
     configs:
       - from: "2024-01-01"
         store: tsdb
@@ -46,8 +47,7 @@ singleBinary:
       cpu: 1000m
       memory: 2048Mi
 
-# --- CRITICAL FIX: Disable ALL conflicting deployment modes and targets ---
-# This is the most comprehensive set of overrides required for a SingleBinary deployment.
+# --- CRITICAL FIXES for SingleBinary mode (resolves previous errors) ---
 ingester:
   replicas: 0
 querier:
@@ -62,9 +62,7 @@ compactor:
   enabled: false
 gateway:
   enabled: false
-
-# 💥 NEW FIXES: Explicitly setting the SSD deployment targets to zero 💥
-# This is typically the final required step to satisfy the validation.yaml logic.
+# Explicitly disabling SSD targets
 read:
   replicas: 0
 write:
