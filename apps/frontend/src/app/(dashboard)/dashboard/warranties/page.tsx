@@ -192,7 +192,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
              // If category changes, clear any old asset selection
              newState.homeAssetId = undefined;
              
-             // If the new category disables linking (e.g., HVAC), ensure property ID is NOT cleared.
+             // Property ID is NOT cleared/disabled by category now (as per requirement)
           }
           
           // Logic to synchronize property and asset selection
@@ -238,8 +238,17 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
 
   const title = initialData ? `Edit Warranty: ${initialData.providerName}` : 'Add New Warranty';
   const selectedPropertyId = formData.propertyId || SELECT_NONE_VALUE;
-  const selectedHomeAssetId = formData.homeAssetId || SELECT_NONE_VALUE;
   const selectedCategory = formData.category || SELECT_NONE_VALUE;
+
+  // *** FIX 1: Blank Placeholder Bug Fix ***
+  // When linking is disabled, force the value to undefined so the placeholder shows.
+  const selectedHomeAssetId = useMemo(() => {
+      if (isAssetLinkingExplicitlyDisabled) {
+          return undefined;
+      }
+      return formData.homeAssetId || SELECT_NONE_VALUE;
+  }, [formData.homeAssetId, isAssetLinkingExplicitlyDisabled]);
+
 
   // NEW: Get allowed asset types based on selected category
   const allowedAssetTypes: string[] = formData.category ? CATEGORY_ASSET_MAP[formData.category as WarrantyCategory] : [];
@@ -247,7 +256,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
 
   // Filter assets based on the currently selected property AND the selected category (Fulfills Request)
   const filteredHomeAssets = useMemo(() => {
-    // If linking is explicitly disabled (e.g., HVAC), show no assets.
+    // If linking is explicitly disabled (e.g., HVAC), return empty array.
     if (isAssetLinkingExplicitlyDisabled || !formData.propertyId || !formData.category) {
        return [];
     }
@@ -376,11 +385,11 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
               </SelectTrigger>
               <SelectContent>
                 {/* FIX: Only render the "None" SelectItem if linking is NOT explicitly disabled. 
-                   This prevents the component from prioritizing the selected value's text 
-                   over the desired placeholder when the dropdown is disabled. */}
+                   This ensures the custom placeholder displays correctly when disabled. */}
                 {!isAssetLinkingExplicitlyDisabled && (
                     <SelectItem value={SELECT_NONE_VALUE}> 
-                        None (Covers entire category, e.g., All Plumbing Lines)
+                        {/* FIX 2: Shortened text */}
+                        None (Covers entire category)
                     </SelectItem> 
                 )}
                 
