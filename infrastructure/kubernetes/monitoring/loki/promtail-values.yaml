@@ -13,14 +13,17 @@ config:
         kubernetes_sd_configs:
           - role: pod
         relabel_configs:
-          # 💥 CRITICAL FIX: Expanded regex to drop all reported infrastructure namespaces 💥
+          # 💥 CRITICAL FIX: THIS MUST BE THE FIRST RULE 💥
+          # Drop logs from infrastructure and system namespaces:
           - source_labels: [__meta_kubernetes_namespace]
             regex: kube-system|kube-public|kube-node-lease|monitoring|admin-tools|cattle-fleet-system|cattle-system|argocd
             action: drop
             
-          # Existing rules for labeling the application logs:
+          # 2. Standard rule to create the 'namespace' label (Must come AFTER the drop rule)
           - source_labels: [__meta_kubernetes_namespace]
             target_label: namespace
+            
+          # 3. All other labeling rules follow below:
           - source_labels: [__meta_kubernetes_pod_name]
             target_label: pod
           - source_labels: [__meta_kubernetes_pod_uid]
