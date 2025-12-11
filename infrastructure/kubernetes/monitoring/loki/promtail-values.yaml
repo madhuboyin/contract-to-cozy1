@@ -8,6 +8,12 @@ config:
         kubernetes_sd_configs:
           - role: pod
         relabel_configs:
+          # 💥 ADDED: Filter to drop logs from known infrastructure namespaces.
+          - source_labels: [__meta_kubernetes_namespace]
+            regex: kube-system|kube-public|kube-node-lease|monitoring
+            action: drop
+            
+          # Existing configuration to add labels is retained below:
           - source_labels: [__meta_kubernetes_namespace]
             target_label: namespace
           - source_labels: [__meta_kubernetes_pod_name]
@@ -20,5 +26,6 @@ config:
             replacement: "/var/log/pods/*$1/*.log"
             source_labels: [__meta_kubernetes_pod_uid]
             target_label: __path__
+
 clients:
   - url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
