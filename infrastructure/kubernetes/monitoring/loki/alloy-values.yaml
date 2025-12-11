@@ -1,18 +1,55 @@
-# alloy-values.yaml
-
-controller:
-  # DaemonSet = one Alloy pod per node
-  type: daemonset
-
 alloy:
-  # Mount host /var/log so kube node log paths work if needed later
-  mounts:
-    varlog: true
-    dockercontainers: false
-    extra: []
+  configMap:
+    content: |
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
 
-  # Environment variables from your Loki basic-auth secret
-  env:
+      // ====================================
+      // 2. READ LOG FILES FROM CONTAINERD
+      // ====================================
+      loki.source.kubernetes "pods" {
+        targets = discovery.kubernetes.pods.targets
+
+        pipeline_stages = [
+          {
+            cri = {}
+          }
+        ]
+
+        forward_to = [loki.process.filter.receiver]
+      }
+
+      // ===============================
+      // 3. FILTER TO ONLY "production"
+      // ===============================
+      loki.process "filter" {
+        forward_to = [loki.write.loki.receiver]
+
+        stage.match {
+          selector = "{namespace!=\"production\"}"
+          action   = "drop"
+        }
+      }
+
+      // ===============================
+      // 4. WRITE TO LOKI VIA GATEWAY
+      // ===============================
+      loki.write "loki" {
+        endpoint {
+          url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
+
+          basic_auth {
+            username = env("LOKI_USER")
+            password = env("LOKI_PASS")
+          }
+        }
+      }
+
+  daemonSet:
+    enabled: true
+
+  extraEnv:
     - name: LOKI_USER
       valueFrom:
         secretKeyRef:
@@ -24,56 +61,13 @@ alloy:
           name: loki-basic-auth
           key: password
 
-  configMap:
-    content: |
-      logging {
-        level  = "info"
-        format = "logfmt"
-      }
-
-      // Discover Pod targets
-      discovery.kubernetes "pods" {
-        role = "pod"
-
-        // Limit to pods running on the same node as this Alloy pod
-        selectors {
-          role  = "pod"
-          field = "spec.nodeName=" + coalesce(sys.env("HOSTNAME"), constants.hostname)
-        }
-
-        // **Keep only production namespace**
-        namespaces {
-          names = ["production"]
-        }
-      }
-
-      // Read pod logs via Kubernetes API
-      loki.source.kubernetes "pods" {
-        targets    = discovery.kubernetes.pods.targets
-        forward_to = [loki.process.pods.receiver]
-      }
-
-      // Optional: add useful static labels
-      loki.process "pods" {
-        stage.static_labels {
-          values = {
-            cluster = "home-k3s",
-            job     = "kubernetes-pods",
-          }
-        }
-
-        forward_to = [loki.write.loki.receiver]
-      }
-
-      // Send logs to Loki via gateway with basic auth
-      loki.write "loki" {
-        endpoint {
-          url       = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
-          tenant_id = "local"
-
-          basic_auth {
-            username = env("LOKI_USER")
-            password = env("LOKI_PASS")
-          }
-        }
-      }
+  mounts:
+    varlog:
+      enabled: true
+      hostPath: /var/log
+    varlibdockercontainers:
+      enabled: true
+      hostPath: /var/lib/docker/containers
+    varlogpods:
+      enabled: true
+      hostPath: /var/log/pods
