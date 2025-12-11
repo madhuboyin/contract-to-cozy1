@@ -20,16 +20,19 @@ loki:
   storage_config:
     tsdb_shipper:
       active_index_directory: /var/loki/index
-      # 💥 CRITICAL FIX: The 'shared_store' line must be removed here.
 
     filesystem:
       directory: /var/loki/chunks
+      # 💥 NEW FIX 1: Required directory for deletion requests when retention is enabled
+      delete_request_store_directory: /var/loki/delete-request-store 
 
   limits_config:
     retention_period: 7d
 
   compactor:
     retention_enabled: true 
+    # 💥 NEW FIX 2: Required config for compactor store type
+    delete_request_store: filesystem 
 
 deploymentMode: SingleBinary
 
@@ -67,6 +70,5 @@ write:
   replicas: 0
 backend:
   replicas: 0
-# FIX: Explicitly disable caching components which were causing PENDING status
 memcached:
   enabled: false
