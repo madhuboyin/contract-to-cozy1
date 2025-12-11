@@ -23,16 +23,14 @@ loki:
 
     filesystem:
       directory: /var/loki/chunks
-      # 💥 NEW FIX 1: Required directory for deletion requests when retention is enabled
-      delete_request_store_directory: /var/loki/delete-request-store 
+      # 💥 CRITICAL FIX: Removed 'delete_request_store_directory' here. Loki will default the path.
 
   limits_config:
     retention_period: 7d
 
   compactor:
     retention_enabled: true 
-    # 💥 NEW FIX 2: Required config for compactor store type
-    delete_request_store: filesystem 
+    delete_request_store: filesystem # Required to enable retention functionality
 
 deploymentMode: SingleBinary
 
@@ -71,4 +69,7 @@ write:
 backend:
   replicas: 0
 memcached:
+  enabled: false
+# 💥 NEW FIX: Explicitly disable the canary deployment that is still running
+canary:
   enabled: false
