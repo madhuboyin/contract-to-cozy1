@@ -2,8 +2,8 @@ config:
   clients:
     - url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
       basic_auth:
-        username: ${LOKI_USERNAME}
-        password: ${LOKI_PASSWORD}
+        username: ${LOKI_USER}
+        password: ${LOKI_PASS}
       # 2. Add the required X-Scope-OrgID header
       headers:
         X-Scope-OrgID: fake
@@ -50,12 +50,12 @@ extraArgs:
   - -config.expand-env=true
 
 extraEnv:
-- name: LOKI_USERNAME
+- name: LOKI_USER
   valueFrom:
     secretKeyRef:
       name: loki-basic-auth
       key: username # Must exist in your secret
-- name: LOKI_PASSWORD
+- name: LOKI_PASS
   valueFrom:
     secretKeyRef:
       name: loki-basic-auth
