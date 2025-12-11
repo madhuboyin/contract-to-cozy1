@@ -47,7 +47,6 @@ singleBinary:
       cpu: 1000m
       memory: 2048Mi
 
-# --- Overrides to guarantee SingleBinary mode and clean up unnecessary pods ---
 ingester:
   replicas: 0
 querier:
@@ -70,6 +69,9 @@ backend:
   replicas: 0
 memcached:
   enabled: false
-# 💥 NEW FIX: Explicitly disable the canary deployment that is still running
-canary:
+
+# 💥 THE FINAL FIX: Use the correct key to disable Canary and the test suite
+lokiCanary:
+  enabled: false
+test:
   enabled: false
