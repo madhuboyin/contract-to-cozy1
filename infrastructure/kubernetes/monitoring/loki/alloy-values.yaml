@@ -1,76 +1,46 @@
 alloy:
   configMap:
     content: |
-      // ===============================
-      // 1. DISCOVER POD LOGS (Kubernetes)
-      // ===============================
-      discovery.kubernetes "pods" {
-        role = "pod"
-      }
-
-      // ====================================
-      // 2. READ LOG FILES FROM CONTAINERD
-      // ====================================
-      loki.source.kubernetes "pods" {
-        targets = discovery.kubernetes.pods.targets
-
-        pipeline_stages = [
-          {
-            cri = {}
-          }
-        ]
-
-        forward_to = [loki.process.filter.receiver]
-      }
-
-      // ===============================
-      // 3. FILTER TO ONLY "production"
-      // ===============================
-      loki.process "filter" {
-        forward_to = [loki.write.loki.receiver]
-
-        stage.match {
-          selector = "{namespace!=\"production\"}"
-          action   = "drop"
-        }
-      }
-
-      // ===============================
-      // 4. WRITE TO LOKI VIA GATEWAY
-      // ===============================
       loki.write "loki" {
         endpoint {
           url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
-
           basic_auth {
-            username = env("LOKI_USER")
-            password = env("LOKI_PASS")
+            username = env("LOKI_USERNAME")
+            password = env("LOKI_PASSWORD")
           }
         }
       }
 
-  daemonSet:
-    enabled: true
+      loki.source.kubernetes "pods" {
+        forward_to = [loki.process.production.receiver]
+      }
 
-  extraEnv:
-    - name: LOKI_USER
-      valueFrom:
-        secretKeyRef:
-          name: loki-basic-auth
-          key: username
-    - name: LOKI_PASS
-      valueFrom:
-        secretKeyRef:
-          name: loki-basic-auth
-          key: password
+      loki.process "production" {
+        forward_to = [loki.write.loki.receiver]
+
+        stage {
+          match {
+            selector = "{namespace!=\"production\"}"
+            action = "drop"
+          }
+        }
+      }
 
   mounts:
     varlog:
       enabled: true
-      hostPath: /var/log
-    varlibdockercontainers:
+    containerd:
       enabled: true
-      hostPath: /var/lib/docker/containers
-    varlogpods:
-      enabled: true
-      hostPath: /var/log/pods
+
+extraEnv:
+  - name: LOKI_USERNAME
+    valueFrom:
+      secretKeyRef:
+        name: loki-basic-auth
+        key: username
+
+  - name: LOKI_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: loki-basic-auth
+        key: password
