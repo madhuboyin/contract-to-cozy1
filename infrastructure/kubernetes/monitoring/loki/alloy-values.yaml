@@ -1,6 +1,9 @@
 alloy:
   configMap:
     content: |
+      // ===============================
+      // 1. DISCOVER POD LOGS (Kubernetes)
+      // ===============================
       discovery.kubernetes "pods" {
         role = "pod"
       }
