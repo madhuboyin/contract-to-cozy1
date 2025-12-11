@@ -1,69 +1,65 @@
 # infrastructure/kubernetes/monitoring/loki/alloy-values.yaml
 
-# 1. Enable the configuration of Alloy components
 agent:
   configMap:
     content: |
-      # ----------------------------------------------------
-      # 1. Component to retrieve credentials from the K8s Secret
-      # ----------------------------------------------------
+      # ===============================================
+      # 1. Read Basic Auth credentials from Secret
+      # ===============================================
       secret "loki_auth" {
-        user = env("LOKI_USER")
+        user     = env("LOKI_USER")
         password = env("LOKI_PASS")
       }
 
-      # ----------------------------------------------------
-      # 2. Component for the Loki client configuration
-      # ----------------------------------------------------
-      loki.write "local" {
+      # ===============================================
+      # 2. Discover Kubernetes logs
+      # ===============================================
+      loki.source.kubernetes "logs" {
+        forward_to = [loki.process.filter.receiver]
+      }
+
+      # ===============================================
+      # 3. Process logs (Filter → Keep only production)
+      # ===============================================
+      loki.process "filter" {
+        forward_to = [loki.write.default.receiver]
+
+        # DROP everything NOT in production
+        stage {
+          match {
+            selector = "{__meta_kubernetes_namespace!=\"production\"}"
+            action   = "drop"
+          }
+        }
+
+        # Optional cleanup of noisy metadata labels
+        stage {
+          label_drop = [
+            "__meta_kubernetes_pod_label_*",
+            "__meta_kubernetes_node_name",
+            "__meta_kubernetes_pod_uid",
+            "__meta_kubernetes_pod_annotation_*",
+          ]
+        }
+      }
+
+      # ===============================================
+      # 4. Write logs to Loki with Basic Auth
+      # ===============================================
+      loki.write "default" {
         endpoint {
           url = "http://loki-gateway.monitoring.svc.cluster.local:80/loki/api/v1/push"
-          tenant_id = "fake"
+          tenant_id = "production"
           basic_auth {
             username = secret.loki_auth.user
             password = secret.loki_auth.password
           }
         }
-        forward_to = [loki.process.filter.receiver]
       }
 
-      # ----------------------------------------------------
-      # 3. Component to Discover logs using Kubernetes Service Discovery
-      # ----------------------------------------------------
-      loki.source.kubernetes "logs" {
-        targets = loki.source.kubernetes.logs.targets
-        forward_to = [loki.process.filter.receiver]
-        # Logs are automatically discovered and sent to the filter component
-      }
-
-      # ----------------------------------------------------
-      # 4. Component to Process (Filter) the logs
-      # ----------------------------------------------------
-      loki.process "filter" {
-        forward_to = [loki.write.local.receiver]
-
-        # Stage 1: Filtering (Equivalent to your 'action: drop')
-        stage {
-          match {
-            selector = "{__meta_kubernetes_namespace=~\"kube-system|kube-public|kube-node-lease|monitoring|admin-tools|cattle-fleet-system|cattle-system|argocd\"}"
-            action = "drop"
-          }
-        }
-        
-        # Stage 2: Labeling (Equivalent to your 'action: replace' for namespace, pod, etc.)
-        stage {
-          label_drop = [
-            # Drop unnecessary metadata labels before sending to Loki
-            "__meta_kubernetes_pod_label_app_kubernetes_io_instance",
-            "__meta_kubernetes_namespace", 
-            # ... and other unwanted __meta labels
-          ]
-        }
-      }
-  # 3. Set host path mounts (same as the final working Promtail setup)
   hostPath:
     pods: /var/log/pods
-    containers: /var/lib/docker/containers # Or /var/log/containers if needed
+    containers: /var/log/containers
 
 # 2. Inject environment variables for the Secret
 extraEnv:
