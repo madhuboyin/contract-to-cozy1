@@ -60,3 +60,6 @@ extraEnv:
     secretKeyRef:
       name: loki-basic-auth
       key: password # Must exist in your secret
+
+extraAnnotations:
+  config-revision: "1"
