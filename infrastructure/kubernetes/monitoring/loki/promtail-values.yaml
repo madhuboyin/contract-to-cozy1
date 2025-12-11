@@ -51,9 +51,9 @@ extraEnv:
   valueFrom:
     secretKeyRef:
       name: loki-basic-auth
-      key: username
+      key: username # Must exist in your secret
 - name: LOKI_PASSWORD
   valueFrom:
     secretKeyRef:
       name: loki-basic-auth
-      key: password
+      key: password # Must exist in your secret

@@ -66,8 +66,6 @@ gateway:
     enabled: true
     # 💥 CHANGE: Use 'existingSecret' instead of literal username/password
     existingSecret: loki-basic-auth
-    usernameKey: username
-    passwordKey: password
 read:
   replicas: 0
 write:
