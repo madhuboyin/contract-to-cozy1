@@ -1,5 +1,5 @@
 loki:
-  auth_enabled: false
+  auth_enabled: true
 
   commonConfig:
     replication_factor: 1
@@ -60,7 +60,14 @@ ruler:
 compactor:
   enabled: false
 gateway:
-  enabled: false
+  enabled: true
+  
+  basicAuth:
+    enabled: true
+    # 💥 CHANGE: Use 'existingSecret' instead of literal username/password
+    existingSecret: loki-basic-auth
+    usernameKey: username
+    passwordKey: password
 read:
   replicas: 0
 write:

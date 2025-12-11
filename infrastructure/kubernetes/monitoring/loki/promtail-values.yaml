@@ -1,7 +1,12 @@
 config:
   clients:
     - url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
-
+      basic_auth:
+        username: ${LOKI_USERNAME}
+        password: ${LOKI_PASSWORD}
+      # 2. Add the required X-Scope-OrgID header
+      headers:
+        X-Scope-OrgID: fake
   snippets:
     scrape_configs:
       - job_name: kubernetes-pods
@@ -29,3 +34,26 @@ config:
 
 clients:
   - url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
+    basic_auth:
+      username: ${LOKI_USERNAME}
+      password: ${LOKI_PASSWORD}
+    # 2. Add the required X-Scope-OrgID header
+    headers:
+      X-Scope-OrgID: fake
+
+# 💥 ADDITIONS: Inject Secret into Promtail Pods 💥
+extraArgs:
+  # Enable environment variable expansion in Promtail config
+  - -config.expand-env=true
+
+extraEnv:
+- name: LOKI_USERNAME
+  valueFrom:
+    secretKeyRef:
+      name: loki-basic-auth
+      key: username
+- name: LOKI_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: loki-basic-auth
+      key: password
