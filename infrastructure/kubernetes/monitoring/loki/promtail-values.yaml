@@ -1,65 +1,60 @@
+# In infrastructure/kubernetes/monitoring/loki/promtail-values.yaml
+
+# 💥 The entire configuration is now under the top-level 'config:' key 💥
 config:
+  server:
+    log_level: info
+    http_listen_port: 3101
+
   clients:
-    - url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
-      basic_auth:
-        username: ${LOKI_USER}
+    - basic_auth:
         password: ${LOKI_PASS}
-      # 2. Add the required X-Scope-OrgID header
+        username: ${LOKI_USER}
       headers:
         X-Scope-OrgID: fake
-  snippets:
-    scrape_configs:
-      - job_name: kubernetes-pods
-        kubernetes_sd_configs:
-          - role: pod
-        relabel_configs:
-          # 💥 CRITICAL FIX: THIS MUST BE THE FIRST RULE 💥
-          # Drop logs from infrastructure and system namespaces:
-          - source_labels: [__meta_kubernetes_namespace]
-            regex: kube-system|kube-public|kube-node-lease|monitoring|admin-tools|cattle-fleet-system|cattle-system|argocd
-            action: drop
-            
-          # 2. Standard rule to create the 'namespace' label (Must come AFTER the drop rule)
-          - source_labels: [__meta_kubernetes_namespace]
-            target_label: namespace
-            
-          # 3. All other labeling rules follow below:
-          - source_labels: [__meta_kubernetes_pod_name]
-            target_label: pod
-          - source_labels: [__meta_kubernetes_pod_uid]
-            target_label: pod_uid
-          - source_labels: [__meta_kubernetes_container_name]
-            target_label: container
-          - action: replace
-            replacement: "/var/log/pods/*$1/*.log"
-            source_labels: [__meta_kubernetes_pod_uid]
-            target_label: __path__
+      url: http://loki-gateway.monitoring.svc.cluster.local:80/loki/api/v1/push  # Use the Gateway URL!
 
-clients:
-  - url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
-    basic_auth:
-      username: ${LOKI_USER}
-      password: ${LOKI_PASS}
-    # 2. Add the required X-Scope-OrgID header
-    headers:
-      X-Scope-OrgID: fake
+  positions:
+    filename: /run/promtail/positions.yaml
 
-# 💥 ADDITIONS: Inject Secret into Promtail Pods 💥
-extraArgs:
-  # Enable environment variable expansion in Promtail config
-  - -config.expand-env=true
+  # --- SCRAPE CONFIGS START HERE ---
+  scrape_configs:
+    - job_name: kubernetes-pods
+      kubernetes_sd_configs:
+        - role: pod
+      relabel_configs:
+        # 1. CRITICAL: THE DROP RULE IS FIRST
+        - source_labels: [__meta_kubernetes_namespace]
+          regex: kube-system|kube-public|kube-node-lease|monitoring|admin-tools|cattle-fleet-system|cattle-system|argocd
+          action: drop
 
+        # 2. STANDARD LABELS FOLLOW (Must be after drop rule)
+        - source_labels: [__meta_kubernetes_namespace]
+          target_label: namespace
+        - source_labels: [__meta_kubernetes_pod_name]
+          target_label: pod
+        - source_labels: [__meta_kubernetes_pod_uid]
+          target_label: pod_uid
+        - source_labels: [__meta_kubernetes_container_name]
+          target_label: container
+        - action: replace
+          replacement: "/var/log/pods/*$1/*.log"
+          source_labels: [__meta_kubernetes_pod_uid]
+          target_label: __path__
+
+# --- Environment variables for the Secret are still required for the container ---
 extraEnv:
-- name: LOKI_USER
+- name: LOKI_USERNAME
   valueFrom:
     secretKeyRef:
       name: loki-basic-auth
-      key: username # Must exist in your secret
-- name: LOKI_PASS
+      key: username
+- name: LOKI_PASSWORD
   valueFrom:
     secretKeyRef:
       name: loki-basic-auth
-      key: password # Must exist in your secret
+      key: password
 
-extraAnnotations:
-  config-revision: "1"
+# And the config expansion argument
+extraArgs:
+  - -config.expand-env=true
