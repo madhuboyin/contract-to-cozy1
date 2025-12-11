@@ -1,46 +1,32 @@
-alloy:
-  configMap:
-    content: |
-      loki.write "loki" {
-        endpoint {
-          url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
-          basic_auth {
-            username = env("LOKI_USERNAME")
-            password = env("LOKI_PASSWORD")
-          }
-        }
-      }
+// ----------------------------------------------------
+// Discover ONLY production namespace pods
+// ----------------------------------------------------
+discovery.kubernetes "pods" {
+  role = "pod"
 
-      loki.source.kubernetes "pods" {
-        forward_to = [loki.process.production.receiver]
-      }
+  namespaces {
+    names = ["production"]
+  }
+}
 
-      loki.process "production" {
-        forward_to = [loki.write.loki.receiver]
+// ----------------------------------------------------
+// Read container logs from nodes
+// ----------------------------------------------------
+loki.source.kubernetes "pods" {
+  targets    = discovery.kubernetes.pods.targets
+  forward_to = [loki.write.loki.receiver]
+}
 
-        stage {
-          match {
-            selector = "{namespace!=\"production\"}"
-            action = "drop"
-          }
-        }
-      }
+// ----------------------------------------------------
+// Send logs to Loki via gateway (basic auth)
+// ----------------------------------------------------
+loki.write "loki" {
+  endpoint {
+    url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
 
-  mounts:
-    varlog:
-      enabled: true
-    containerd:
-      enabled: true
-
-extraEnv:
-  - name: LOKI_USERNAME
-    valueFrom:
-      secretKeyRef:
-        name: loki-basic-auth
-        key: username
-
-  - name: LOKI_PASSWORD
-    valueFrom:
-      secretKeyRef:
-        name: loki-basic-auth
-        key: password
+    basic_auth {
+      username = env("LOKI_USER")
+      password = env("LOKI_PASS")
+    }
+  }
+}
