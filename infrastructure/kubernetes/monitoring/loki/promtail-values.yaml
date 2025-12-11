@@ -1,16 +1,31 @@
-# infrastructure/kubernetes/monitoring/loki/promtail-values.yaml
+# In infrastructure/kubernetes/monitoring/loki/promtail-values.yaml
 
-# 1. Provide the basic client configuration
 config:
   clients:
-    - url: http://loki-gateway.monitoring.svc.cluster.local:80/loki/api/v1/push
+    # This section is needed for Prometheus service discovery to work correctly
+    - url: http://loki-gateway.monitoring.svc.cluster.local:80/loki/api/v1/push 
       basic_auth:
         username: ${LOKI_USER}
         password: ${LOKI_PASS}
       headers:
         X-Scope-OrgID: fake
 
-# 2. Inject environment variables for the Secret (still required)
+  snippets:
+    # 💥 This injects the relabel_configs into the default scrape config 💥
+    relabel_configs:
+      # 1. CRITICAL: THE DROP RULE IS FIRST
+      # Use un-anchored regex for maximum compatibility with K3s
+      - source_labels: [__meta_kubernetes_namespace]
+        regex: kube-system|kube-public|kube-node-lease|monitoring|admin-tools|cattle-fleet-system|cattle-system|argocd
+        action: drop
+
+      # 2. STANDARD LABELS FOLLOW (The chart will append its defaults below this)
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      
+      # NOTE: Do NOT include the full list of labeling rules here. The chart handles that.
+
+# --- Inject Secret and Args (As before) ---
 extraEnv:
 - name: LOKI_USER
   valueFrom:
@@ -23,6 +38,5 @@ extraEnv:
       name: loki-basic-auth
       key: password
 
-# 3. Enable environment variable expansion
 extraArgs:
   - -config.expand-env=true
