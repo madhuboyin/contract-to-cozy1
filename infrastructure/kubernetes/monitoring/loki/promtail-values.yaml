@@ -25,7 +25,7 @@ config:
       relabel_configs:
         # 1. CRITICAL: THE DROP RULE IS FIRST
         - source_labels: [__meta_kubernetes_namespace]
-          regex: kube-system|kube-public|kube-node-lease|monitoring|admin-tools|cattle-fleet-system|cattle-system|argocd
+          regex: ^(kube-system|kube-public|kube-node-lease|monitoring|admin-tools|cattle-fleet-system|cattle-system|argocd)$
           action: drop
 
         # 2. STANDARD LABELS FOLLOW (Must be after drop rule)
