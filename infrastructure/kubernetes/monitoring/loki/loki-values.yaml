@@ -7,8 +7,7 @@ loki:
   storage:
     type: filesystem
 
-  # 💥 FIX: Renamed 'schema_config' to 'schemaConfig' to satisfy Helm chart validation
-  schemaConfig: 
+  schemaConfig:
     configs:
       - from: "2024-01-01"
         store: tsdb
@@ -21,7 +20,7 @@ loki:
   storage_config:
     tsdb_shipper:
       active_index_directory: /var/loki/index
-      shared_store: filesystem
+      # 💥 CRITICAL FIX: The 'shared_store' line must be removed here.
 
     filesystem:
       directory: /var/loki/chunks
@@ -47,7 +46,7 @@ singleBinary:
       cpu: 1000m
       memory: 2048Mi
 
-# --- CRITICAL FIXES for SingleBinary mode (resolves previous errors) ---
+# --- Overrides to guarantee SingleBinary mode and clean up unnecessary pods ---
 ingester:
   replicas: 0
 querier:
@@ -62,10 +61,12 @@ compactor:
   enabled: false
 gateway:
   enabled: false
-# Explicitly disabling SSD targets
 read:
   replicas: 0
 write:
   replicas: 0
 backend:
   replicas: 0
+# FIX: Explicitly disable caching components which were causing PENDING status
+memcached:
+  enabled: false
