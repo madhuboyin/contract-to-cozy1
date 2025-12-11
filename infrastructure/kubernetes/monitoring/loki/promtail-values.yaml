@@ -23,12 +23,12 @@ config:
       kubernetes_sd_configs:
         - role: pod
       relabel_configs:
-        # 1. CRITICAL: THE DROP RULE IS FIRST
+        # 1. CRITICAL: USE THE UN-ANCHORED REGEX. NO ^ OR $
         - source_labels: [__meta_kubernetes_namespace]
-          regex: ^(kube-system|kube-public|kube-node-lease|monitoring|admin-tools|cattle-fleet-system|cattle-system|argocd)$
+          regex: kube-system|kube-public|kube-node-lease|monitoring|admin-tools|cattle-fleet-system|cattle-system|argocd
           action: drop
 
-        # 2. STANDARD LABELS FOLLOW (Must be after drop rule)
+        # 2. STANDARD LABELS FOLLOW (This assigns the namespace label for valid logs)
         - source_labels: [__meta_kubernetes_namespace]
           target_label: namespace
         - source_labels: [__meta_kubernetes_pod_name]
