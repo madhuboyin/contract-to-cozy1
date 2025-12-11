@@ -38,8 +38,8 @@ config:
 clients:
   - url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
     basic_auth:
-      username: ${LOKI_USERNAME}
-      password: ${LOKI_PASSWORD}
+      username: ${LOKI_USER}
+      password: ${LOKI_PASS}
     # 2. Add the required X-Scope-OrgID header
     headers:
       X-Scope-OrgID: fake
