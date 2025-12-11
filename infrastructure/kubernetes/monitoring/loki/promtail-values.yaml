@@ -1,60 +1,28 @@
-# In infrastructure/kubernetes/monitoring/loki/promtail-values.yaml
+# infrastructure/kubernetes/monitoring/loki/promtail-values.yaml
 
-# 💥 The entire configuration is now under the top-level 'config:' key 💥
+# 1. Provide the basic client configuration
 config:
-  server:
-    log_level: info
-    http_listen_port: 3101
-
   clients:
-    - basic_auth:
-        password: ${LOKI_PASS}
+    - url: http://loki-gateway.monitoring.svc.cluster.local:80/loki/api/v1/push
+      basic_auth:
         username: ${LOKI_USER}
+        password: ${LOKI_PASS}
       headers:
         X-Scope-OrgID: fake
-      url: http://loki-gateway.monitoring.svc.cluster.local:80/loki/api/v1/push  # Use the Gateway URL!
 
-  positions:
-    filename: /run/promtail/positions.yaml
-
-  # --- SCRAPE CONFIGS START HERE ---
-  scrape_configs:
-    - job_name: kubernetes-pods
-      kubernetes_sd_configs:
-        - role: pod
-      relabel_configs:
-        # 1. CRITICAL: USE THE UN-ANCHORED REGEX. NO ^ OR $
-        - source_labels: [__meta_kubernetes_namespace]
-          regex: kube-system|kube-public|kube-node-lease|monitoring|admin-tools|cattle-fleet-system|cattle-system|argocd
-          action: drop
-
-        # 2. STANDARD LABELS FOLLOW (This assigns the namespace label for valid logs)
-        - source_labels: [__meta_kubernetes_namespace]
-          target_label: namespace
-        - source_labels: [__meta_kubernetes_pod_name]
-          target_label: pod
-        - source_labels: [__meta_kubernetes_pod_uid]
-          target_label: pod_uid
-        - source_labels: [__meta_kubernetes_container_name]
-          target_label: container
-        - action: replace
-          replacement: "/var/log/pods/*$1/*.log"
-          source_labels: [__meta_kubernetes_pod_uid]
-          target_label: __path__
-
-# --- Environment variables for the Secret are still required for the container ---
+# 2. Inject environment variables for the Secret (still required)
 extraEnv:
-- name: LOKI_USERNAME
+- name: LOKI_USER
   valueFrom:
     secretKeyRef:
       name: loki-basic-auth
       key: username
-- name: LOKI_PASSWORD
+- name: LOKI_PASS
   valueFrom:
     secretKeyRef:
       name: loki-basic-auth
       key: password
 
-# And the config expansion argument
+# 3. Enable environment variable expansion
 extraArgs:
   - -config.expand-env=true
