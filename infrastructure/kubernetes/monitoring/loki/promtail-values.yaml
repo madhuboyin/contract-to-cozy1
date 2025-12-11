@@ -8,12 +8,12 @@ config:
         kubernetes_sd_configs:
           - role: pod
         relabel_configs:
-          # 💥 ADDED: Filter to drop logs from known infrastructure namespaces.
+          # 💥 CRITICAL FIX: Expanded regex to drop all reported infrastructure namespaces 💥
           - source_labels: [__meta_kubernetes_namespace]
-            regex: kube-system|kube-public|kube-node-lease|monitoring
+            regex: kube-system|kube-public|kube-node-lease|monitoring|admin-tools|cattle-fleet-system|cattle-system|argocd
             action: drop
             
-          # Existing configuration to add labels is retained below:
+          # Existing rules for labeling the application logs:
           - source_labels: [__meta_kubernetes_namespace]
             target_label: namespace
           - source_labels: [__meta_kubernetes_pod_name]
