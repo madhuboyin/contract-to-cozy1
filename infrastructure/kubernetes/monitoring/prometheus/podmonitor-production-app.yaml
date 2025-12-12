@@ -18,9 +18,9 @@ spec:
   
   # Define endpoints for each unique port found in the selected Pods
   podMetricsEndpoints:
-  - port: 8080          # Scrape the Backend API port
+  - port: "8080"          # Scrape the Backend API port
     path: /metrics      # Assuming metrics are exposed at /metrics
     interval: 15s
-  - port: 3000          # Scrape the Frontend port
+  - port: "3000"          # Scrape the Frontend port
     path: /metrics      # Assuming metrics are exposed at /metrics
     interval: 15s
