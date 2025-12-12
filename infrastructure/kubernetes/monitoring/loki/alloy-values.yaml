@@ -1,41 +1,31 @@
 alloy:
+  mode: daemonset
+
+  mounts:
+    varlog: true
+
+  extraEnv:
+    - name: LOKI_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: loki-basic-auth
+          key: username
+    - name: LOKI_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: loki-basic-auth
+          key: password
+
   configMap:
     content: |
-      discovery.kubernetes "pods" {
-        role = "pod"
-      }
-
-      loki.source.kubernetes "production" {
-        targets    = discovery.kubernetes.pods.targets
-        forward_to = [loki.process.production.receiver]
-
-        relabel {
-          action        = "keep"
-          source_labels = ["__meta_kubernetes_namespace"]
-          regex         = "production"
-        }
-      }
-
-      loki.process "production" {
-        forward_to = [loki.write.loki.receiver]
-
-        stage.json {}
-
-        stage.labels {
-          values = {
-            namespace = "__meta_kubernetes_namespace",
-            pod       = "__meta_kubernetes_pod_name",
-            container = "__meta_kubernetes_container_name",
-            node      = "__meta_kubernetes_node_name",
-          }
-        }
-      }
-
+      // --------------------------------------------------
+      // Loki write client (Basic Auth + OrgID)
+      // --------------------------------------------------
       loki.write "loki" {
         endpoint {
           url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
 
-          tenant_id = "production"
+          tenant_id = "production" // maps to X-Scope-OrgID
 
           basic_auth {
             username = env("LOKI_USERNAME")
@@ -44,15 +34,16 @@ alloy:
         }
       }
 
-extraEnv:
-  - name: LOKI_USERNAME
-    valueFrom:
-      secretKeyRef:
-        name: loki-basic-auth
-        key: username
+      // --------------------------------------------------
+      // Kubernetes pod discovery (REQUIRED role)
+      // --------------------------------------------------
+      loki.source.kubernetes "production" {
+        role = "pod"
 
-  - name: LOKI_PASSWORD
-    valueFrom:
-      secretKeyRef:
-        name: loki-basic-auth
-        key: password
+        // ONLY keep production namespace
+        expressions = [
+          "namespace == \"production\"",
+        ]
+
+        forward_to = [loki.write.loki.receiver]
+      }
