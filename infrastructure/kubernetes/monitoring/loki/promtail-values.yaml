@@ -1,8 +1,8 @@
 # In infrastructure/kubernetes/monitoring/loki/promtail-values.yaml
 
 config:
+  # This clients section is needed for Promtail to know where to send the logs
   clients:
-    # This section is needed for Prometheus service discovery to work correctly
     - url: http://loki-gateway.monitoring.svc.cluster.local:80/loki/api/v1/push 
       basic_auth:
         username: ${LOKI_USER}
@@ -11,21 +11,20 @@ config:
         X-Scope-OrgID: fake
 
   snippets:
-    # 💥 CRITICAL FIX: This section is changed to implement a strict "keep: production" filter 💥
-    relabel_configs:
+    # 💥 FIX: Inject the filter into the default relabeling chain using 'extraRelabelConfigs'
+    extraRelabelConfigs:
       # 1. NEW STRICT FILTER: Keep ONLY targets where namespace is 'production'
-      # All other namespaces (including monitoring, kube-system, etc.) are dropped here.
+      # This rule runs first. If the namespace is not 'production', the scrape target is dropped.
       - source_labels: [__meta_kubernetes_namespace]
         regex: production
         action: keep
-
-      # 2. STANDARD LABELS FOLLOW (The chart will append its defaults below this)
+      
+      # 2. Add the rule to promote the namespace meta label to a permanent label.
+      # This rule is critical and often included in the default chart config, but it's safest to keep it.
       - source_labels: [__meta_kubernetes_namespace]
         target_label: namespace
-      
-      # NOTE: Do NOT include the full list of labeling rules here. The chart handles that.
 
-# --- Inject Secret and Args (As before) ---
+# The remaining sections (extraEnv, extraArgs) must remain the same
 extraEnv:
 - name: LOKI_USER
   valueFrom:
