@@ -1,29 +1,11 @@
 alloy:
-  controller:
-    kind: DaemonSet
-
-  mounts:
-    varlog: true
-
-  extraEnv:
-    - name: LOKI_USERNAME
-      valueFrom:
-        secretKeyRef:
-          name: loki-basic-auth
-          key: username
-    - name: LOKI_PASSWORD
-      valueFrom:
-        secretKeyRef:
-          name: loki-basic-auth
-          key: password
-
   configMap:
     content: |
       loki.write "loki" {
         endpoint {
           url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
 
-          tenant_id = "production"  # <<< THIS FIXES THE 401 "no org id"
+          tenant_id = "production"  # <-- THIS FIXES "no org id"
 
           basic_auth {
             username = env("LOKI_USERNAME")
@@ -44,11 +26,28 @@ alloy:
         stage {
           labels {
             values = {
-              namespace = "kubernetes.namespace",
-              pod       = "kubernetes.pod.name",
-              container = "kubernetes.container.name",
-              node      = "kubernetes.node.name",
+              namespace = "namespace",
+              pod       = "pod",
+              container = "container",
+              node      = "node"
             }
           }
         }
       }
+
+  mounts:
+    varlog: true
+    containers: true
+
+extraEnv:
+  - name: LOKI_USERNAME
+    valueFrom:
+      secretKeyRef:
+        name: loki-basic-auth
+        key: username
+
+  - name: LOKI_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: loki-basic-auth
+        key: password
