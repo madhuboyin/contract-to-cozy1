@@ -1,29 +1,40 @@
 alloy:
-  enabled: true
-
-  controller:
-    type: daemonset
-
-  mounts:
-    varlog: true
-
-  extraEnv:
-    - name: LOKI_USERNAME
-      valueFrom:
-        secretKeyRef:
-          name: loki-basic-auth
-          key: username
-    - name: LOKI_PASSWORD
-      valueFrom:
-        secretKeyRef:
-          name: loki-basic-auth
-          key: password
-
   configMap:
     content: |
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      loki.source.kubernetes "production" {
+        targets    = discovery.kubernetes.pods.targets
+        forward_to = [loki.process.production.receiver]
+
+        relabel {
+          action        = "keep"
+          source_labels = ["__meta_kubernetes_namespace"]
+          regex         = "production"
+        }
+      }
+
+      loki.process "production" {
+        forward_to = [loki.write.loki.receiver]
+
+        stage.json {}
+
+        stage.labels {
+          values = {
+            namespace = "__meta_kubernetes_namespace",
+            pod       = "__meta_kubernetes_pod_name",
+            container = "__meta_kubernetes_container_name",
+            node      = "__meta_kubernetes_node_name",
+          }
+        }
+      }
+
       loki.write "loki" {
         endpoint {
-          url       = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
+          url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
+
           tenant_id = "production"
 
           basic_auth {
@@ -33,29 +44,15 @@ alloy:
         }
       }
 
-      discovery.kubernetes "pods" {
-        role = "pod"
-      }
+extraEnv:
+  - name: LOKI_USERNAME
+    valueFrom:
+      secretKeyRef:
+        name: loki-basic-auth
+        key: username
 
-      loki.source.kubernetes "pods" {
-        targets    = discovery.kubernetes.pods.targets
-        forward_to = [loki.process.production.receiver]
-      }
-
-      loki.process "production" {
-
-        stage.match {
-          selector = "{namespace!=\"production\"}"
-          action   = "drop"
-        }
-
-        stage.labels {
-          values = {
-            namespace = "namespace",
-            pod       = "pod",
-            container = "container",
-          }
-        }
-
-        forward_to = [loki.write.loki.receiver]
-      }
+  - name: LOKI_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: loki-basic-auth
+        key: password
