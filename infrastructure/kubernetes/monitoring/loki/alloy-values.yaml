@@ -1,13 +1,29 @@
 alloy:
+  controller:
+    kind: DaemonSet
+
+  mounts:
+    varlog: true
+
+  extraEnv:
+    - name: LOKI_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: loki-basic-auth
+          key: username
+    - name: LOKI_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: loki-basic-auth
+          key: password
+
   configMap:
     content: |
-      ############################################
-      # Loki writer (WITH auth + tenant)
-      ############################################
       loki.write "loki" {
         endpoint {
-          url       = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
-          tenant_id = "production"
+          url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
+
+          tenant_id = "production"  # <<< THIS FIXES THE 401 "no org id"
 
           basic_auth {
             username = env("LOKI_USERNAME")
@@ -16,62 +32,23 @@ alloy:
         }
       }
 
-      ############################################
-      # Discover Kubernetes pods
-      ############################################
-      discovery.kubernetes "pods" {
-        role = "pod"
-      }
-
-      ############################################
-      # Read container logs from node filesystem
-      ############################################
       loki.source.kubernetes "pods" {
-        targets    = discovery.kubernetes.pods.targets
+        namespaces = ["production"]
+
         forward_to = [loki.process.production.receiver]
       }
 
-      ############################################
-      # Process logs (KEEP ONLY production)
-      ############################################
       loki.process "production" {
         forward_to = [loki.write.loki.receiver]
 
-        # Drop everything except production namespace
-        stage.match {
-          selector = "{namespace!=\"production\"}"
-          action   = "drop"
-        }
-
-        # Clean labels
-        stage.label_drop {
-          values = [
-            "__meta_kubernetes_pod_uid",
-            "__meta_kubernetes_node_name",
-            "__meta_kubernetes_pod_annotation_*",
-          ]
+        stage {
+          labels {
+            values = {
+              namespace = "kubernetes.namespace",
+              pod       = "kubernetes.pod.name",
+              container = "kubernetes.container.name",
+              node      = "kubernetes.node.name",
+            }
+          }
         }
       }
-
-  ############################################
-  # Mount node log paths
-  ############################################
-  mounts:
-    varlog: true
-    dockercontainers: false
-
-############################################
-# Credentials (from Secret)
-############################################
-extraEnv:
-  - name: LOKI_USERNAME
-    valueFrom:
-      secretKeyRef:
-        name: loki-basic-auth
-        key: username
-
-  - name: LOKI_PASSWORD
-    valueFrom:
-      secretKeyRef:
-        name: loki-basic-auth
-        key: password
