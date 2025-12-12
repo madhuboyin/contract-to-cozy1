@@ -1,15 +1,13 @@
 alloy:
-  controller:
-    type: daemonset
-
-  mounts:
-    varlog: true
-
   configMap:
     content: |
+      ############################################
+      # Loki writer (WITH auth + tenant)
+      ############################################
       loki.write "loki" {
         endpoint {
-          url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
+          url       = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
+          tenant_id = "production"
 
           basic_auth {
             username = env("LOKI_USERNAME")
@@ -18,19 +16,53 @@ alloy:
         }
       }
 
-      loki.source.kubernetes.pods "pods" {
+      ############################################
+      # Discover Kubernetes pods
+      ############################################
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      ############################################
+      # Read container logs from node filesystem
+      ############################################
+      loki.source.kubernetes "pods" {
+        targets    = discovery.kubernetes.pods.targets
         forward_to = [loki.process.production.receiver]
       }
 
+      ############################################
+      # Process logs (KEEP ONLY production)
+      ############################################
       loki.process "production" {
         forward_to = [loki.write.loki.receiver]
 
+        # Drop everything except production namespace
         stage.match {
           selector = "{namespace!=\"production\"}"
           action   = "drop"
         }
+
+        # Clean labels
+        stage.label_drop {
+          values = [
+            "__meta_kubernetes_pod_uid",
+            "__meta_kubernetes_node_name",
+            "__meta_kubernetes_pod_annotation_*",
+          ]
+        }
       }
 
+  ############################################
+  # Mount node log paths
+  ############################################
+  mounts:
+    varlog: true
+    dockercontainers: false
+
+############################################
+# Credentials (from Secret)
+############################################
 extraEnv:
   - name: LOKI_USERNAME
     valueFrom:
