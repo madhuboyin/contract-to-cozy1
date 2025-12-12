@@ -1,0 +1,26 @@
+# production-monitor.yaml - Single resource to monitor both applications
+
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: production-app-monitor
+  namespace: production
+  labels:
+    # CRITICAL: This label must match your Prometheus Helm release name
+    release: prometheus 
+spec:
+  # 💥 Use matchExpressions for OR condition 💥
+  selector:
+    matchExpressions:
+    - key: app
+      operator: In
+      values: ['api', 'frontend'] # Selects Pods where app is 'api' OR 'frontend'
+  
+  # Define endpoints for each unique port found in the selected Pods
+  podMetricsEndpoints:
+  - port: 8080          # Scrape the Backend API port
+    path: /metrics      # Assuming metrics are exposed at /metrics
+    interval: 15s
+  - port: 3000          # Scrape the Frontend port
+    path: /metrics      # Assuming metrics are exposed at /metrics
+    interval: 15s
