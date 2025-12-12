@@ -1,11 +1,53 @@
 alloy:
+  mode: daemonset
+
+  mounts:
+    varlog: true
+    containerd: true
+
+  extraEnv:
+    - name: LOKI_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: loki-basic-auth
+          key: username
+    - name: LOKI_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: loki-basic-auth
+          key: password
+
   configMap:
     content: |
+      discovery.kubernetes "pods" {}
+
+      loki.source.kubernetes "pods" {
+        targets    = discovery.kubernetes.pods.targets
+        forward_to = [loki.process.production.receiver]
+      }
+
+      loki.process "production" {
+        stage.match {
+          selector = "{namespace!=\"production\"}"
+          action   = "drop"
+        }
+
+        stage.labels {
+          values = {
+            namespace = "namespace",
+            pod       = "pod",
+            container = "container",
+            node      = "node",
+          }
+        }
+
+        forward_to = [loki.write.loki.receiver]
+      }
+
       loki.write "loki" {
         endpoint {
-          url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
-
-          tenant_id = "production"  # <-- THIS FIXES "no org id"
+          url       = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
+          tenant_id = "production"
 
           basic_auth {
             username = env("LOKI_USERNAME")
@@ -13,41 +55,3 @@ alloy:
           }
         }
       }
-
-      loki.source.kubernetes "pods" {
-        namespaces = ["production"]
-
-        forward_to = [loki.process.production.receiver]
-      }
-
-      loki.process "production" {
-        forward_to = [loki.write.loki.receiver]
-
-        stage {
-          labels {
-            values = {
-              namespace = "namespace",
-              pod       = "pod",
-              container = "container",
-              node      = "node"
-            }
-          }
-        }
-      }
-
-  mounts:
-    varlog: true
-    containers: true
-
-extraEnv:
-  - name: LOKI_USERNAME
-    valueFrom:
-      secretKeyRef:
-        name: loki-basic-auth
-        key: username
-
-  - name: LOKI_PASSWORD
-    valueFrom:
-      secretKeyRef:
-        name: loki-basic-auth
-        key: password
