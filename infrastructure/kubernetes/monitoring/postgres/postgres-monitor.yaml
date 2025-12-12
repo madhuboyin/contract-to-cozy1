@@ -1,0 +1,17 @@
+# postgres-monitor.yaml
+
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: postgres-exporter-monitor
+  namespace: production
+  labels:
+    release: prometheus # Must match your Prometheus Helm release name
+spec:
+  selector:
+    matchLabels:
+      app: postgres-exporter # Targets the Deployment created above
+  podMetricsEndpoints:
+  - port: http-metrics       # Matches the port name in the Service/Deployment
+    path: /metrics
+    interval: 30s
