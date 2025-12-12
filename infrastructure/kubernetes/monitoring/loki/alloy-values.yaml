@@ -18,46 +18,43 @@ alloy:
 
   configMap:
     content: |
-      // --------------------------------------------------
-      // 1. Kubernetes Pod Discovery
-      // --------------------------------------------------
+      // ----------------------------
+      // 1. Discover Kubernetes Pods
+      // ----------------------------
       discovery.kubernetes "pods" {
         role = "pod"
       }
 
-      // --------------------------------------------------
-      // 2. Relabel: KEEP ONLY production namespace
-      // --------------------------------------------------
-      discovery.relabel "production_only" {
-        targets = discovery.kubernetes.pods.targets
+      // ----------------------------
+      // 2. Read container logs
+      // ----------------------------
+      loki.source.kubernetes "pods" {
+        targets    = discovery.kubernetes.pods.targets
+        forward_to = [loki.process.production.receiver]
+      }
 
-        rule {
-          source_labels = ["__meta_kubernetes_namespace"]
-          regex         = "production"
-          action        = "keep"
+      // ----------------------------
+      // 3. KEEP ONLY production namespace
+      // ----------------------------
+      loki.process "production" {
+        forward_to = [loki.write.loki.receiver]
+
+        stage.drop {
+          expression = "namespace != \"production\""
+        }
+
+        stage.labels {
+          values = {
+            namespace = "namespace",
+            pod       = "pod",
+            container = "container",
+          }
         }
       }
 
-      // --------------------------------------------------
-      // 3. Read container logs
-      // --------------------------------------------------
-      loki.source.kubernetes "pods" {
-        targets    = discovery.relabel.production_only.output
-        forward_to = [loki.process.k8s.receiver]
-      }
-
-      // --------------------------------------------------
-      // 4. Add Kubernetes labels
-      // --------------------------------------------------
-      loki.process "k8s" {
-        stage.kubernetes_labels {}
-
-        forward_to = [loki.write.loki.receiver]
-      }
-
-      // --------------------------------------------------
-      // 5. Write to Loki (via gateway + basic auth)
-      // --------------------------------------------------
+      // ----------------------------
+      // 4. Send logs to Loki Gateway
+      // ----------------------------
       loki.write "loki" {
         endpoint {
           url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
