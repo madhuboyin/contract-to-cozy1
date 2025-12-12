@@ -1,0 +1,109 @@
+server:
+  log_level: info
+  log_format: logfmt
+  http_listen_port: 3101
+
+clients:
+  - basic_auth:
+      password: ${LOKI_PASS}
+      username: ${LOKI_USER}
+    headers:
+      X-Scope-OrgID: fake
+    url: http://loki-gateway.monitoring.svc.cluster.local:80/loki/api/v1/push
+
+positions:
+  filename: /run/promtail/positions.yaml
+
+scrape_configs:
+  # ----------------------------------------------------
+  # 1. NEW JOB: API BACKEND (production/api-logs)
+  # Targets pods with app=api in the production namespace.
+  # ----------------------------------------------------
+  - job_name: production/api-logs
+    pipeline_stages:
+      - cri: {}
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      # CRITICAL: Keep ONLY pods in 'production' namespace AND labeled 'app: api'
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_pod_label_app]
+        regex: production;api
+        action: keep
+
+      # Standard Labeling: Attach clean labels for searching
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        target_label: app
+        action: replace
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+        action: replace
+      - source_labels: [__meta_kubernetes_pod_container_name]
+        target_label: container
+        action: replace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+        action: replace
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        target_label: node_name
+        action: replace
+      - action: replace
+        replacement: $1
+        separator: /
+        source_labels: [namespace, app]
+        target_label: job
+
+  # ----------------------------------------------------
+  # 2. NEW JOB: FRONTEND (production/frontend-logs)
+  # Targets pods with app=frontend in the production namespace.
+  # ----------------------------------------------------
+  - job_name: production/frontend-logs
+    pipeline_stages:
+      - cri: {}
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      # CRITICAL: Keep ONLY pods in 'production' namespace AND labeled 'app: frontend'
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_pod_label_app]
+        regex: production;frontend
+        action: keep
+
+      # Standard Labeling: Attach clean labels for searching
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        target_label: app
+        action: replace
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+        action: replace
+      - source_labels: [__meta_kubernetes_pod_container_name]
+        target_label: container
+        action: replace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+        action: replace
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        target_label: node_name
+        action: replace
+      - action: replace
+        replacement: $1
+        separator: /
+        source_labels: [namespace, app]
+        target_label: job
+
+  # ----------------------------------------------------
+  # 3. EXISTING JOB: SYSTEM/DEFAULT (kubernetes-pods)
+  # Keep existing job, but ADD a rule to DROP logs from the apps we now handle above.
+  # ----------------------------------------------------
+  - job_name: kubernetes-pods
+    pipeline_stages:
+      - cri: {}
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      # CRITICAL ADDITION: DROP the logs from the applications we are now handling
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        regex: api|frontend|postgres-exporter # We'll add postgres in phase 3
+        action: drop
+      # ... (The rest of your existing relabel_configs go here) ...
+      # NOTE: The rest of the relabel_configs in your original output are lengthy, 
+      # so they are represented by an ellipsis here but must be preserved in the final YAML.
+      # You must ensure the original relabel_configs from the provided output are still present below the DROP action.
