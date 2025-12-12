@@ -2,16 +2,32 @@ alloy:
   mode: daemonset
 
   mounts:
-    varlog:
-      enabled: true
-      path: /var/log
+    varlog: true
+
+  extraEnv:
+    - name: LOKI_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: loki-basic-auth
+          key: username
+    - name: LOKI_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: loki-basic-auth
+          key: password
 
   configMap:
     content: |
+      // --------------------------------------------------
+      // 1. Kubernetes Pod Discovery
+      // --------------------------------------------------
       discovery.kubernetes "pods" {
         role = "pod"
       }
 
+      // --------------------------------------------------
+      // 2. Relabel: KEEP ONLY production namespace
+      // --------------------------------------------------
       discovery.relabel "production_only" {
         targets = discovery.kubernetes.pods.targets
 
@@ -22,31 +38,33 @@ alloy:
         }
       }
 
+      // --------------------------------------------------
+      // 3. Read container logs
+      // --------------------------------------------------
       loki.source.kubernetes "pods" {
         targets    = discovery.relabel.production_only.output
+        forward_to = [loki.process.k8s.receiver]
+      }
+
+      // --------------------------------------------------
+      // 4. Add Kubernetes labels
+      // --------------------------------------------------
+      loki.process "k8s" {
+        stage.kubernetes_labels {}
+
         forward_to = [loki.write.loki.receiver]
       }
 
+      // --------------------------------------------------
+      // 5. Write to Loki (via gateway + basic auth)
+      // --------------------------------------------------
       loki.write "loki" {
         endpoint {
           url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
 
           basic_auth {
-            username = env("LOKI_USER")
-            password = env("LOKI_PASS")
+            username = env("LOKI_USERNAME")
+            password = env("LOKI_PASSWORD")
           }
         }
       }
-
-extraEnv:
-  - name: LOKI_USER
-    valueFrom:
-      secretKeyRef:
-        name: loki-basic-auth
-        key: username
-
-  - name: LOKI_PASS
-    valueFrom:
-      secretKeyRef:
-        name: loki-basic-auth
-        key: password
