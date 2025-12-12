@@ -1,32 +1,52 @@
-// ----------------------------------------------------
-// Discover ONLY production namespace pods
-// ----------------------------------------------------
-discovery.kubernetes "pods" {
-  role = "pod"
+alloy:
+  mode: daemonset
 
-  namespaces {
-    names = ["production"]
-  }
-}
+  mounts:
+    varlog:
+      enabled: true
+      path: /var/log
 
-// ----------------------------------------------------
-// Read container logs from nodes
-// ----------------------------------------------------
-loki.source.kubernetes "pods" {
-  targets    = discovery.kubernetes.pods.targets
-  forward_to = [loki.write.loki.receiver]
-}
+  configMap:
+    content: |
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
 
-// ----------------------------------------------------
-// Send logs to Loki via gateway (basic auth)
-// ----------------------------------------------------
-loki.write "loki" {
-  endpoint {
-    url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
+      discovery.relabel "production_only" {
+        targets = discovery.kubernetes.pods.targets
 
-    basic_auth {
-      username = env("LOKI_USER")
-      password = env("LOKI_PASS")
-    }
-  }
-}
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          regex         = "production"
+          action        = "keep"
+        }
+      }
+
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.production_only.output
+        forward_to = [loki.write.loki.receiver]
+      }
+
+      loki.write "loki" {
+        endpoint {
+          url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
+
+          basic_auth {
+            username = env("LOKI_USER")
+            password = env("LOKI_PASS")
+          }
+        }
+      }
+
+extraEnv:
+  - name: LOKI_USER
+    valueFrom:
+      secretKeyRef:
+        name: loki-basic-auth
+        key: username
+
+  - name: LOKI_PASS
+    valueFrom:
+      secretKeyRef:
+        name: loki-basic-auth
+        key: password
