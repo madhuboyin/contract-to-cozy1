@@ -22,21 +22,13 @@ spec:
           image: quay.io/prometheuscommunity/postgres-exporter:latest
           ports:
             - containerPort: 9187
-              name: http-metrics # Exporter metrics endpoint
+              name: http-metrics
           env:
-            - name: DATA_SOURCE_NAME
-              # Connects to the 'postgres' Service in the 'production' namespace
-              value: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/postgres?sslmode=disable"
-            - name: POSTGRES_USER
+            - name: DATA_SOURCE_NAME # <-- Exporter's required variable
               valueFrom:
                 secretKeyRef:
                   name: postgres-credentials
-                  key: POSTGRES_USER
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: postgres-credentials
-                  key: POSTGRES_PASSWORD
+                  key: DATABASE_URL # <-- Mapped directly to your existing Secret key
           # Define resource limits appropriate for a dedicated exporter
           resources:
             requests:
@@ -45,6 +37,7 @@ spec:
             limits:
               cpu: 100m
               memory: 128Mi
+# --- (Service definition follows) ---
 ---
 apiVersion: v1
 kind: Service
