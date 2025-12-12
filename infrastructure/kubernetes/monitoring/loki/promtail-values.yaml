@@ -11,13 +11,13 @@ config:
         X-Scope-OrgID: fake
 
   snippets:
-    # 💥 This injects the relabel_configs into the default scrape config 💥
+    # 💥 CRITICAL FIX: This section is changed to implement a strict "keep: production" filter 💥
     relabel_configs:
-      # 1. CRITICAL: THE DROP RULE IS FIRST
-      # Use un-anchored regex for maximum compatibility with K3s
+      # 1. NEW STRICT FILTER: Keep ONLY targets where namespace is 'production'
+      # All other namespaces (including monitoring, kube-system, etc.) are dropped here.
       - source_labels: [__meta_kubernetes_namespace]
-        regex: kube-system|kube-public|kube-node-lease|monitoring|admin-tools|cattle-fleet-system|cattle-system|argocd
-        action: drop
+        regex: production
+        action: keep
 
       # 2. STANDARD LABELS FOLLOW (The chart will append its defaults below this)
       - source_labels: [__meta_kubernetes_namespace]
