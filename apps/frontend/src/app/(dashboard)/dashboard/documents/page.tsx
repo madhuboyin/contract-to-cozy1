@@ -121,6 +121,11 @@ const AISmartUpload = ({ properties, onUploadSuccess, onClose }: AISmartUploadPr
       default: return 'text-gray-700 bg-gray-100';
     }
   };
+  
+  // [NEW HANDLER] Explicitly trigger click on the hidden input
+  const handleSelectDocumentClick = () => {
+    document.getElementById('ai-doc-upload')?.click();
+  };
 
   return (
     <div className="space-y-4">
@@ -153,6 +158,7 @@ const AISmartUpload = ({ properties, onUploadSuccess, onClose }: AISmartUploadPr
       {!file && (
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-purple-400 transition-colors">
           <Upload className="mx-auto h-12 w-12 text-gray-400" />
+          {/* Hidden input - accessible via ID */}
           <input
             type="file"
             accept="image/*,.pdf"
@@ -160,11 +166,17 @@ const AISmartUpload = ({ properties, onUploadSuccess, onClose }: AISmartUploadPr
             className="hidden"
             id="ai-doc-upload"
           />
-          <label htmlFor="ai-doc-upload" className="cursor-pointer">
-            <Button variant="outline" className="mt-4" type="button">
-              Select Document
-            </Button>
-          </label>
+          {/* [FIXED] Removed the <label> wrapper which caused the conflict.
+            Button now explicitly calls handleSelectDocumentClick which triggers the hidden input.
+          */}
+          <Button 
+            variant="outline" 
+            className="mt-4" 
+            type="button"
+            onClick={handleSelectDocumentClick} // <-- FIX: Added explicit onClick handler
+          >
+            Select Document
+          </Button>
           <p className="text-sm text-gray-500 mt-2">
             Upload receipts, warranties, manuals, or inspection reports
           </p>
@@ -283,7 +295,6 @@ const DocumentUploadModal = ({ properties, warranties, policies, onUploadSuccess
   const { toast } = useToast();
   
   const parentOptions = useMemo(() => {
-    // Ensuring the arrays are present (though guaranteed by parent's state initialization, this is defensive)
     const safeProperties = properties || [];
     const safeWarranties = warranties || [];
     const safePolicies = policies || [];
