@@ -33,6 +33,7 @@ import { Cloud } from 'lucide-react';
 import { Home } from 'lucide-react';
 import { TrendingUp } from 'lucide-react';
 
+
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
 
 // --- START PHASE 1: DATA CONSOLIDATION TYPES ---
@@ -519,6 +520,24 @@ export default function DashboardPage() {
               </h3>
               <p className="text-green-700 text-sm">
                 Track value & market trends
+              </p>
+            </div>
+          </Link>
+
+          {/* Energy Auditor */}
+          <Link href="/dashboard/energy">
+            <div className="relative bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-xl p-5 hover:shadow-xl transition-all">
+              <div className="absolute top-3 right-3">
+                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+              </div>
+              <div className="p-3 bg-yellow-100 rounded-lg w-fit mb-3">
+                <Zap className="h-7 w-7 text-yellow-600" />
+              </div>
+              <h3 className="text-lg font-bold text-yellow-900 mb-1">
+                Energy Auditor
+              </h3>
+              <p className="text-yellow-700 text-sm">
+                AI energy-saving recommendations
               </p>
             </div>
           </Link>

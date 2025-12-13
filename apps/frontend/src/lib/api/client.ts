@@ -1397,6 +1397,15 @@ class APIClient {
       body: JSON.stringify({ purchasePrice, purchaseDate }),
     });
   }
+  async getEnergyAudit(formData: FormData): Promise<APIResponse<any>> {
+    return this.request('/api/energy/audit', {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Authorization': `Bearer ${this.getToken()}`,
+      },
+    });
+  }
 }
 
 // Export singleton instance

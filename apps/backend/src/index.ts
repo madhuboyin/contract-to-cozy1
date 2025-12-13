@@ -30,6 +30,7 @@ import budgetRoutes from './routes/budgetForecaster.routes';
 import climateRoutes from './routes/climateRisk.routes';
 import modificationRoutes from './routes/homeModification.routes';
 import appreciationRoutes from './routes/propertyAppreciation.routes';
+import energyRoutes from './routes/energyAuditor.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
@@ -245,6 +246,7 @@ app.use('/api/budget', budgetRoutes);
 app.use('/api/climate', climateRoutes);
 app.use('/api/modifications', modificationRoutes);
 app.use('/api/appreciation', appreciationRoutes);
+app.use('/api/energy', energyRoutes);
 
 
 app.use((req: Request, res: Response) => {
