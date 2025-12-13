@@ -12,20 +12,20 @@ const router = Router();
 /**
  * @swagger
  * /api/budget/forecast/{propertyId}:
- * get:
- * summary: Generate 12-month maintenance budget forecast
- * tags: [Budget Forecaster]
- * security:
- * - bearerAuth: []
- * parameters:
- * - in: path
- * name: propertyId
- * required: true
- * schema:
- * type: string
- * responses:
- * 200:
- * description: Budget forecast generated
+ *   get:
+ *     summary: Generate 12-month maintenance budget forecast
+ *     tags: [Budget Forecaster]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: propertyId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Budget forecast generated
  */
 router.get(
   '/forecast/:propertyId', 

@@ -12,20 +12,20 @@ const router = Router();
 /**
  * @swagger
  * /api/oracle/predict/{propertyId}:
- * get:
- * summary: Generate AI-powered appliance replacement predictions
- * tags: [Appliance Oracle]
- * security:
- * - bearerAuth: []
- * parameters:
- * - in: path
- * name: propertyId
- * required: true
- * schema:
- * type: string
- * responses:
- * 200:
- * description: Oracle report generated successfully
+ *   get:
+ *     summary: Generate AI-powered appliance replacement predictions
+ *     tags: [Appliance Oracle]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: propertyId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Oracle report generated successfully
  */
 router.get(
   '/predict/:propertyId', 
@@ -60,14 +60,14 @@ router.get(
 /**
  * @swagger
  * /api/oracle/summary:
- * get:
- * summary: Get summary of critical appliances across all properties
- * tags: [Appliance Oracle]
- * security:
- * - bearerAuth: []
- * responses:
- * 200:
- * description: Summary retrieved successfully
+ *   get:
+ *     summary: Get summary of critical appliances across all properties
+ *     tags: [Appliance Oracle]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Summary retrieved successfully
  */
 router.get('/summary', authenticate, async (req: CustomRequest, res: Response) => { // <-- UPDATED TYPE: Use CustomRequest
   try {
