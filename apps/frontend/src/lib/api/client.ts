@@ -1382,6 +1382,10 @@ class APIClient {
     return this.request<BudgetForecast>(`/api/budget/forecast/${propertyId}`);
   }
 
+  async getClimateRisk(propertyId: string): Promise<APIResponse<any>> {
+    return this.request(`/api/climate/analyze/${propertyId}`);
+  }
+
 }
 
 // Export singleton instance

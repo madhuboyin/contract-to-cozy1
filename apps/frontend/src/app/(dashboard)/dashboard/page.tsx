@@ -29,6 +29,7 @@ import { AlertTriangle } from 'lucide-react';
 import { FileText } from 'lucide-react';
 import { Sparkles } from 'lucide-react';
 import { Zap } from 'lucide-react'; // Reverted: Removed CloudRain import
+import { Cloud } from 'lucide-react';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
 
@@ -462,6 +463,22 @@ export default function DashboardPage() {
               </h3>
               <p className="text-blue-700 text-sm">
                 12-month maintenance predictions
+              </p>
+            </div>
+          </Link>
+          <Link href="/dashboard/climate">
+            <div className="relative bg-gradient-to-br from-sky-50 to-blue-50 border-2 border-sky-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group">
+              <div className="absolute top-3 right-3">
+                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+              </div>
+              <div className="p-3 bg-sky-100 rounded-lg w-fit mb-3 group-hover:scale-110 transition-transform">
+                <Cloud className="h-7 w-7 text-sky-600" />
+              </div>
+              <h3 className="text-lg font-bold text-sky-900 mb-1">
+                Climate Risk
+              </h3>
+              <p className="text-sky-700 text-sm">
+                AI climate risk analysis
               </p>
             </div>
           </Link>
