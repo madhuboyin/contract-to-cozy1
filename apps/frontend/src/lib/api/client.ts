@@ -1391,7 +1391,12 @@ class APIClient {
       body: JSON.stringify({ propertyId, userNeeds }),
     });
   }
-
+  async getPropertyAppreciation(propertyId: string, purchasePrice?: number, purchaseDate?: string): Promise<APIResponse<any>> {
+    return this.request(`/api/appreciation/analyze/${propertyId}`, {
+      method: 'POST',
+      body: JSON.stringify({ purchasePrice, purchaseDate }),
+    });
+  }
 }
 
 // Export singleton instance

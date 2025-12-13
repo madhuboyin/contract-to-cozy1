@@ -31,6 +31,7 @@ import { Sparkles } from 'lucide-react';
 import { Zap } from 'lucide-react'; // Reverted: Removed CloudRain import
 import { Cloud } from 'lucide-react';
 import { Home } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
 
@@ -500,6 +501,24 @@ export default function DashboardPage() {
               </h3>
               <p className="text-indigo-700 text-sm">
                 AI improvement recommendations
+              </p>
+            </div>
+          </Link>
+
+          {/* Property Appreciation */}
+          <Link href="/dashboard/appreciation">
+            <div className="relative bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-5 hover:shadow-xl transition-all">
+              <div className="absolute top-3 right-3">
+                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+              </div>
+              <div className="p-3 bg-green-100 rounded-lg w-fit mb-3">
+                <TrendingUp className="h-7 w-7 text-green-600" />
+              </div>
+              <h3 className="text-lg font-bold text-green-900 mb-1">
+                Property Appreciation
+              </h3>
+              <p className="text-green-700 text-sm">
+                Track value & market trends
               </p>
             </div>
           </Link>
