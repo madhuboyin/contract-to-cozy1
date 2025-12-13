@@ -28,9 +28,7 @@ import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
 import { AlertTriangle } from 'lucide-react';
 import { FileText } from 'lucide-react';
 import { Sparkles } from 'lucide-react';
-import { Zap, CloudRain } from 'lucide-react'; // Added CloudRain icon
-
-// Note: AIClimateRiskCard component import is removed as it is now a static Link card.
+import { Zap } from 'lucide-react'; // Reverted: Removed CloudRain import
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
 
@@ -382,10 +380,10 @@ export default function DashboardPage() {
           </span>
         </div>
 
-        {/* AI Cards Grid - MODIFIED to 5 columns (lg:grid-cols-5) to fit all AI features in one row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* AI Cards Grid - Reverted to 4 columns */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           
-          {/* 1. Emergency Troubleshooter */}
+          {/* Emergency Troubleshooter */}
           <Link href="/dashboard/emergency">
             <div className="relative bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
               {/* Sparkle indicator */}
@@ -408,7 +406,7 @@ export default function DashboardPage() {
             </div>
           </Link>
 
-          {/* 2. Document Intelligence */}
+          {/* Document Intelligence */}
           <Link href="/dashboard/documents">
             <div className="relative bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
               <div className="absolute top-3 right-3">
@@ -428,7 +426,7 @@ export default function DashboardPage() {
             </div>
           </Link>
           
-          {/* 3. Appliance Oracle */}
+          {/* Appliance Oracle */}
           <Link href="/dashboard/oracle">
             <div className="relative bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
               <div className="absolute top-3 right-3">
@@ -448,7 +446,7 @@ export default function DashboardPage() {
             </div>
           </Link>
 
-          {/* 4. Budget Forecaster */}
+          {/* Budget Forecaster */}
           <Link href="/dashboard/budget">
             <div className="relative bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
               <div className="absolute top-3 right-3">
@@ -467,29 +465,6 @@ export default function DashboardPage() {
               </p>
             </div>
           </Link>
-
-          {/* 5. AI CLIMATE RISK PREDICTOR (New Static Link Card) */}
-          {/* Uses the common styling pattern and links to the full risk detail page */}
-          {selectedPropertyId && (
-            <Link href={`/dashboard/properties/${selectedPropertyId}/risk-assessment`}>
-                <div className="relative bg-gradient-to-br from-green-50 to-teal-50 border-2 border-green-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
-                    <div className="absolute top-3 right-3">
-                        <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
-                    </div>
-                    
-                    <div className="p-3 bg-green-100 rounded-lg w-fit mb-3 group-hover:scale-110 transition-transform">
-                        <CloudRain className="h-7 w-7 text-green-600" />
-                    </div>
-                    
-                    <h3 className="text-lg font-bold text-green-900 mb-1">
-                        Climate Risk Predictor
-                    </h3>
-                    <p className="text-green-700 text-sm">
-                        10-year impact & mitigation plan
-                    </p>
-                </div>
-            </Link>
-          )}
 
         </div>
       </section>
