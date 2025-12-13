@@ -1,8 +1,8 @@
 // apps/backend/src/controllers/riskAssessment.controller.ts
 
 import { Response, NextFunction } from 'express';
-// Note: RiskSummaryDto is still used as the final response DTO structure
-import RiskAssessmentService, { RiskSummaryDto } from '../services/RiskAssessment.service';
+// UPDATED IMPORT: Include the new DTO type
+import RiskAssessmentService, { RiskSummaryDto, ClimateRiskSummaryDto } from '../services/RiskAssessment.service'; 
 import { Property, Prisma, RiskAssessmentReport } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../types/auth.types';
@@ -158,6 +158,40 @@ class RiskAssessmentController {
       next(error);
     }
   }
+
+  // [NEW CONTROLLER METHOD for Phase 2: AI Climate Risk Card]
+  /**
+   * GET /api/risk/:propertyId/ai/climate-risk
+   * Fetches the dedicated AI-generated climate risk summary.
+   */
+  async getClimateRiskSummary(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+        const auth = this.checkAuthAndProfile(req, res);
+        if (!auth) return;
+        const { homeownerProfileId } = auth;
+        
+        const { propertyId } = req.params;
+
+        // Authorization check: ensure property belongs to the homeowner
+        const property: Property | null = await prisma.property.findUnique({
+            where: { id: propertyId, homeownerProfileId: homeownerProfileId },
+        });
+
+        if (!property) {
+            return res.status(404).json({ message: 'Property not found or access denied.' });
+        }
+        
+        // The service method performs the core logic (fetch or queue) and returns the dedicated DTO.
+        const summary: ClimateRiskSummaryDto = await RiskAssessmentService.getClimateRiskSummary(propertyId);
+
+        // Return the dedicated summary structure
+        res.status(200).json({ success: true, data: summary });
+
+    } catch (error) {
+        next(error);
+    }
+  }
+
 
   /**
    * GET /api/risk/report/:propertyId/pdf - Generates and downloads PDF (Phase 3.4)

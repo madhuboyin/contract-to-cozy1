@@ -1084,6 +1084,13 @@ class APIClient {
   }
   
   /**
+   * Get AI-generated climate risk insights for a property
+   */
+  async getClimateRiskSummary(propertyId: string): Promise<APIResponse<any>> {
+    return this.request(`/api/risk/${propertyId}/ai/climate-risk`);
+  }
+
+  /**
    * [ORIGINAL METHOD] Fetch the lightweight risk summary for the primary property
    */
   async getPrimaryRiskSummary(): Promise<PrimaryRiskSummary | null> {

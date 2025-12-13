@@ -4,6 +4,8 @@ import { Prisma, Property, RiskAssessmentReport, Warranty, InsurancePolicy } fro
 import { prisma } from '../lib/prisma'; 
 import { calculateAssetRisk, calculateTotalRiskScore, filterRelevantAssets, AssetRiskDetail } from '../utils/riskCalculator.util';
 import { RISK_ASSET_CONFIG } from '../config/risk-constants';
+// NEW IMPORT: Climate Risk Utility (Assumed existence for Phase 2 implementation)
+import { analyzeClimateRisk, mapClimateToAssetRisk, ClimateRiskInsight } from '../utils/ClimateRiskAnalyzer.util'; 
 // Import the singleton instance (the value) AND the named constant
 import JobQueueService, { propertyIntelligenceQueue } from './JobQueue.service'; 
 import { PropertyIntelligenceJobType, PropertyIntelligenceJobPayload } from '../config/risk-job-types'; // UPDATED IMPORT
@@ -23,6 +25,14 @@ export type RiskSummaryDto = {
   financialExposureTotal: Prisma.Decimal;
   lastCalculatedAt: Date;
   status: 'CALCULATED' | 'QUEUED' | 'MISSING_DATA' | 'NO_PROPERTY';
+};
+
+// [NEW TYPE] Dedicated return type for the Climate Risk Card (Phase 2 Addition)
+export type ClimateRiskSummaryDto = {
+    propertyId: string;
+    insights: ClimateRiskInsight[]; // Array of the new structured insights
+    status: 'CALCULATED' | 'QUEUED' | 'MISSING_DATA' | 'NO_PROPERTY';
+    lastCalculatedAt: Date;
 };
 
 class RiskAssessmentService {
@@ -59,6 +69,82 @@ class RiskAssessmentService {
     // 3. Return the stale report (if available) or the 'QUEUED' status for frontend handling
     return property.riskReport || 'QUEUED'; 
   }
+
+  // [NEW METHOD - PHASE 2 ADDITION] Fetch the structured climate risk summary for the dedicated AI Card
+  async getClimateRiskSummary(propertyId: string): Promise<ClimateRiskSummaryDto> {
+    const property = await this.fetchPropertyDetails(propertyId);
+    
+    if (!property) {
+      return {
+          propertyId,
+          insights: [],
+          status: 'NO_PROPERTY',
+          lastCalculatedAt: new Date(0),
+      };
+    }
+    
+    // Check if the report is missing or stale (same logic as getOrCreateRiskReport)
+    const report = property.riskReport;
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+    
+    // Check for missing/stale report and queue job if necessary
+    const isReportStaleOrMissing = !report || report.lastCalculatedAt.getTime() < thirtyMinutesAgo.getTime();
+
+    if (isReportStaleOrMissing) {
+         // Queue calculation if missing/stale
+         if (!report) {
+            await this.jobQueueService.addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, { propertyId, jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT });
+         }
+         
+         // Check if job is currently active/queued to return 'QUEUED' status
+         const jobName = PropertyIntelligenceJobType.CALCULATE_RISK_REPORT;
+         const jobId = `${propertyId}-${jobName}`;
+         const jobStatus = await propertyIntelligenceQueue.getJob(jobId);
+         
+         if (jobStatus) {
+            const state = await jobStatus.getState();
+            if (['waiting', 'active', 'delayed', 'prioritized'].includes(state)) {
+                return { propertyId, insights: [], status: 'QUEUED', lastCalculatedAt: report?.lastCalculatedAt || new Date(0) };
+            }
+         }
+         
+         // If stale/missing and no job is active, return the existing report data, or MISSING_DATA if non-existent
+         if (!report) {
+             return { propertyId, insights: [], status: 'MISSING_DATA', lastCalculatedAt: new Date(0) };
+         }
+    }
+
+    // --- Extract the Climate Risk details from the JSON blob ---
+    // Safely retrieve the array of AssetRiskDetail objects from the report
+    const details = report?.details as unknown as AssetRiskDetail[] | null;
+    
+    // Filter the details array to only include the new climate risks (identified by their assetName prefix)
+    const climateDetails: AssetRiskDetail[] = (details || []).filter(d => 
+        // We identify climate risks by the prefix "Climate Risk:" as defined in the utility mock
+        d.assetName?.startsWith('Climate Risk:') 
+    );
+    
+    // Map the generic AssetRiskDetail back to the specific ClimateRiskInsight structure for the frontend card
+    const insights: ClimateRiskInsight[] = climateDetails.map(d => ({
+        riskType: d.assetName.replace('Climate Risk: ', '') as any,
+        // The probability field stores the normalized risk increase (0.0 to 1.0)
+        riskScoreIncrease: Math.round(d.probability * 100), 
+        // The outOfPocketCost field stores the calculated financial exposure
+        financialExposureIncrease: new Prisma.Decimal(d.outOfPocketCost),
+        predictionYear: new Date().getFullYear() + 10, // Assuming 10 years for presentation
+        // FIX 1: Use nullish coalescing to ensure actionCta is a string, resolving type error
+        actionCta: (d.actionCta as string) ?? '', 
+        systemType: d.systemType,
+    }));
+    
+    return {
+        propertyId,
+        insights,
+        status: 'CALCULATED',
+        lastCalculatedAt: report?.lastCalculatedAt || new Date(),
+    };
+  }
+
 
   // [NEW METHOD] Lightweight summary for the dashboard
   async getPrimaryPropertyRiskSummary(userId: string): Promise<RiskSummaryDto | null> {
@@ -219,9 +305,9 @@ class RiskAssessmentService {
         } else {
             // --- STEP 2: Execute Complex Calculation (Will run if basic data exists) ---
             const currentYear = new Date().getFullYear();
-            const assetRisks: AssetRiskDetail[] = [];
+            let assetRisks: AssetRiskDetail[] = []; // Changed to 'let' to allow appending risks
 
-            // === FIX: Filter assets to only those that exist on the property ===
+            // === CORE ASSET RISKS ===
             console.log(`[RISK-SERVICE] Filtering assets for property ${propertyId}...`);
             const relevantConfigs = filterRelevantAssets(property as PropertyWithRelations, RISK_ASSET_CONFIG);
             console.log(`[RISK-SERVICE] Filtered from ${RISK_ASSET_CONFIG.length} to ${relevantConfigs.length} relevant assets`);
@@ -237,8 +323,19 @@ class RiskAssessmentService {
                 assetRisks.push(assetRisk);
               }
             }
+            
+            // === NEW: CLIMATE RISK INTEGRATION (Phase 2 Addition) ===
+            console.log(`[RISK-SERVICE] Calculating future climate risk for property ${propertyId}...`);
+            // The property object contains address and basic metadata needed for climate modeling
+            const climateInsights = analyzeClimateRisk(property);
+            const climateAssetRisks = mapClimateToAssetRisk(climateInsights);
+            
+            // Merge all risks (core assets + climate risks)
+            // FIX 2: Use spread operator with explicit assertion to resolve type compatibility error (ts(2322))
+            assetRisks = [...assetRisks, ...climateAssetRisks] as AssetRiskDetail[];
+            
+            console.log(`[RISK-SERVICE] Calculated risk for total ${assetRisks.length} assets (Core + Climate)`);
 
-            console.log(`[RISK-SERVICE] Calculated risk for ${assetRisks.length} assets`);
 
             const calculatedResult = calculateTotalRiskScore(property as PropertyWithRelations, assetRisks);
             

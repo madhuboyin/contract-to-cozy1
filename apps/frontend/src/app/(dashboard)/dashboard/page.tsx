@@ -28,7 +28,9 @@ import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
 import { AlertTriangle } from 'lucide-react';
 import { FileText } from 'lucide-react';
 import { Sparkles } from 'lucide-react';
-import { Zap } from 'lucide-react'; // Added for Appliance Oracle
+import { Zap } from 'lucide-react'; 
+// FIX: Update import path for AIClimateRiskCard to the shared components directory
+import { AIClimateRiskCard } from '@/components/AIClimateRiskCard';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
 
@@ -380,8 +382,8 @@ export default function DashboardPage() {
           </span>
         </div>
 
-        {/* AI Cards Grid - 4 columns */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* AI Cards Grid - MODIFIED to 5 columns (lg:grid-cols-5) to fit all AI features in one row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           
           {/* Emergency Troubleshooter */}
           <Link href="/dashboard/emergency">
@@ -425,7 +427,7 @@ export default function DashboardPage() {
               </p>
             </div>
           </Link>
-
+          
           {/* Appliance Oracle */}
           <Link href="/dashboard/oracle">
             <div className="relative bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
@@ -466,13 +468,18 @@ export default function DashboardPage() {
             </div>
           </Link>
 
+          {/* AI CLIMATE RISK PREDICTOR (Live Scorecard) - Now in the AI Grid */}
+          {selectedPropertyId && (
+            <AIClimateRiskCard className="h-full" />
+          )}
+
         </div>
       </section>
       {/* ========================================= */}
       {/* END AI FEATURES SECTION */}
       {/* ========================================= */}
 
-      {/* Scorecards Grid */}
+      {/* Scorecards Grid (Existing Non-AI Scores) */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
         
         {/* 1. Property Health Score: Uses selectedPropertyId */}
