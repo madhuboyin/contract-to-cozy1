@@ -8,7 +8,7 @@ import { api } from '@/lib/api/client';
 import { Loader2, DollarSign } from 'lucide-react';
 import { Booking, Property, User, ChecklistItem, Warranty, InsurancePolicy } from '@/types'; 
 import { ScoredProperty } from './types'; 
-import { differenceInDays, isPast, parseISO } from 'date-fns'; // [NEW IMPORT]
+import { differenceInDays, isPast, parseISO } from 'date-fns'; 
 
 // NEW IMPORTS FOR SCORECARDS AND LAYOUT
 import { DashboardShell } from '@/components/DashboardShell';
@@ -20,19 +20,16 @@ import { MyPropertiesCard } from './components/MyPropertiesCard';
 // NEW IMPORTS FOR PROPERTY SELECTION
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from 'next/link';
-// [NEW IMPORT]
 import { usePropertyContext } from '@/lib/property/PropertyContext';
-// [NEW IMPORT]
-import { WelcomeModal } from './components/WelcomeModal'; // <-- NEW IMPORT
-// END NEW IMPORTS
+import { WelcomeModal } from './components/WelcomeModal';
 
 import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
 import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
 import { AlertTriangle } from 'lucide-react';
 import { FileText } from 'lucide-react';
 import { Sparkles } from 'lucide-react';
+import { Zap } from 'lucide-react'; // Added for Appliance Oracle
 
-// DEPRECATE: This local storage key is no longer used for forced redirect logic.
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
 
 // --- START PHASE 1: DATA CONSOLIDATION TYPES ---
@@ -162,8 +159,6 @@ const consolidateUrgentActions = (
 
 // --- END PHASE 1: DATA CONSOLIDATION TYPES ---
 
-
-// Helper to format the address for display
 const formatAddress = (property: Property) => {
     return `${property.address}, ${property.city}, ${property.state}`;
 }
@@ -172,197 +167,127 @@ export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: userLoading } = useAuth();
   const [redirectChecked, setRedirectChecked] = useState(false);
-  // [MODIFICATION] Removed unused shouldRedirect state
-  // const [shouldRedirect, setShouldRedirect] = useState(false); 
-  // [NEW STATE] To control the soft redirect overlay
   const [showWelcomeScreen, setShowWelcomeScreen] = useState(false);
   
   const [data, setData] = useState<DashboardData>({
     bookings: [],
     properties: [],
     checklist: null,
-    urgentActions: [], // Initialize new field
+    urgentActions: [], 
     isLoading: true,
     error: null,
   });
   
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
 
-
-  // HIGHEST PRIORITY: Check initial state and determine if soft redirect is needed
-  useEffect(() => {
-    const checkRedirect = async () => {
-      console.log('╔════════════════════════════════════════════════════════╗');
-      console.log('║           ONBOARDING CHECK - Soft Redirect             ║');
-      console.log('╚════════════════════════════════════════════════════════╝');
-      
-      if (userLoading) {
-        console.log('⏸️ User still loading, waiting...');
-        return;
-      }
-
-      if (!user) {
-        console.log('❌ No user, skipping check');
-        setRedirectChecked(true);
-        return;
-      }
-
-      if (redirectChecked) {
-        console.log('✅ Already checked initial state');
-        return;
-      }
-
-      console.log('👤 User:', user.firstName);
-      console.log('👤 User segment:', user.segment);
-
-      // Only EXISTING_OWNER needs this check
-      if (user.segment !== 'EXISTING_OWNER') {
-        console.log('✋ Not EXISTING_OWNER, no soft redirect needed');
-        setRedirectChecked(true);
-        return;
-      }
-
-      // [MODIFICATION] REMOVE CHECK FOR PROPERTY_SETUP_SKIPPED_KEY
-      // The flow is now intentionally blocked until setup starts.
-      // We still rely on the banner for existing users who might have skipped before.
-
-      // User has NOT skipped - check properties
-      console.log('🔍 Checking property count...');
-      try {
-        const propertiesRes = await api.getProperties();
-        const propertyCount = propertiesRes.success ? propertiesRes.data.properties.length : 0;
-        
-        console.log('🏠 Property count:', propertyCount);
-
-        if (propertyCount === 0) {
-          console.log('');
-          console.log('🚀 SOFT REDIRECT TRIGGERED: Show WelcomeModal!');
-          
-          // [MODIFICATION] Set new state to display the Welcome Modal/Overlay
-          setShowWelcomeScreen(true);
-          setRedirectChecked(true); // Treat this as the end of the redirect check
-          setData(prev => ({ ...prev, isLoading: false })); // Stop loading spinner in main render
-        } else {
-          console.log('✋ User has', propertyCount, 'properties, proceed to load dashboard data');
-          setRedirectChecked(true);
-        }
-      } catch (error) {
-        console.error('❌ Error checking properties:', error);
-        setRedirectChecked(true);
-        setData(prev => ({ ...prev, error: 'Failed to check property status.', isLoading: false }));
-      }
-    };
-
-    checkRedirect();
-  }, [user, userLoading, redirectChecked, router]);
-
-  // Load dashboard data ONLY if not showing the welcome screen and redirect check completes
+  // --- DATA FETCHING LOGIC (unchanged) ---
   const fetchDashboardData = useCallback(async () => {
-    if (!user) {
-      console.log('DEBUG: User not logged in, halting fetch.');
-      setData(prev => ({ ...prev, isLoading: false, error: 'User not logged in.' }));
-      return;
-    }
-
+    if (!user) return;
+    
+    setData(prev => ({ ...prev, isLoading: true }));
+    
     try {
-      console.log('📊 Loading dashboard data...');
-      setData(prev => ({ ...prev, isLoading: true, error: null }));
-      
-      // FIX 2: Fetching Checklist, Warranties, and Insurance Policies via direct API client calls
-      const [
-        bookingsRes, 
-        propertiesRes, 
-        checklistRes,
-        warrantiesRes, 
-        insuranceRes
-      ] = await Promise.all([
+      const [bookingsRes, propertiesRes, checklistRes, warrantiesRes, policiesRes] = await Promise.all([
         api.listBookings({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' }),
         api.getProperties(),
-        api.getChecklist(), // Use cleaner API call
+        api.getChecklist(),
         api.listWarranties(),
         api.listInsurancePolicies(),
       ]);
-      
-      const properties = propertiesRes.success ? (propertiesRes.data.properties as ScoredProperty[]) : [];
-      
-      // FIX: Checklist API returns raw object {id, items}, not wrapped in { success, data }
-      // Handle both formats for backwards compatibility
-      const checklistItems = ('items' in (checklistRes || {}) && Array.isArray((checklistRes as any).items))
-        ? (checklistRes as any).items 
-        : (checklistRes?.success && checklistRes?.data?.items) || [];
-      
-      console.log('🔍 Checklist extraction debug:');
-      console.log('  checklistRes:', checklistRes);
-      console.log('  checklistRes.items exists?', 'items' in (checklistRes || {}) && Array.isArray((checklistRes as any)?.items));
-      console.log('  Extracted checklistItems count:', checklistItems.length);
-      
-      const warranties = (warrantiesRes.success && warrantiesRes.data.warranties) || [];
-      const insurancePolicies = (insuranceRes.success && insuranceRes.data.policies) || [];
-      
-      // FIX 3: Consolidate data to generate the urgent action list
+
+      const bookings = bookingsRes.success ? bookingsRes.data.bookings : [];
+      const properties = propertiesRes.success ? propertiesRes.data.properties : [];
+      const checklist = checklistRes.success ? checklistRes.data : null;
+      const warranties = warrantiesRes.success ? warrantiesRes.data.warranties : [];
+      const policies = policiesRes.success ? policiesRes.data.policies : [];
+
+      const scoredProperties = properties.map(p => ({
+        ...p,
+        healthScore: (p as any).healthScore || { 
+          totalScore: 0, 
+          baseScore: 0, 
+          unlockedScore: 0, 
+          maxPotentialScore: 100, 
+          maxBaseScore: 70, 
+          maxExtraScore: 30, 
+          insights: [], 
+          ctaNeeded: false 
+        },
+      })) as ScoredProperty[];
+
       const urgentActions = consolidateUrgentActions(
-        properties, 
-        checklistItems, 
-        warranties, 
-        insurancePolicies
+        scoredProperties,
+        checklist?.items || [],
+        warranties,
+        policies
       );
 
-      // FIX: Handle both raw checklist format and wrapped format
-      let fetchedChecklist = null;
-      if ('items' in (checklistRes || {})) {
-          // Raw format: {id, items}
-          fetchedChecklist = checklistRes as any;
-      } else if (checklistRes?.success && checklistRes?.data) {
-          // Wrapped format: {success, data: {id, items}}
-          fetchedChecklist = checklistRes.data;
-      }
-      
-      console.log('✅ Dashboard data loaded');
-      console.log('  Final checklist:', fetchedChecklist);
-      console.log('  Final checklistItems count:', checklistItems.length);
-
-      const defaultPropId = properties.find(p => p.isPrimary)?.id || properties[0]?.id;
-      
       setData({
-        bookings: bookingsRes.success ? bookingsRes.data.bookings : [],
-        properties: properties,
-        checklist: fetchedChecklist as DashboardData['checklist'], 
-        urgentActions: urgentActions, // Assign the new consolidated data
+        bookings,
+        properties: scoredProperties,
+        checklist,
+        urgentActions,
         isLoading: false,
         error: null,
       });
-      
-      setSelectedPropertyId(defaultPropId);
 
-    } catch (error: any) {
-      console.error('❌ Failed to fetch dashboard data:', error);
-      setData(prev => ({ ...prev, isLoading: false, error: error.message || 'An unexpected error occurred.' }));
+      if (scoredProperties.length > 0 && !selectedPropertyId) {
+        setSelectedPropertyId(scoredProperties[0].id);
+      }
+
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      setData(prev => ({
+        ...prev,
+        isLoading: false,
+        error: 'Failed to load dashboard data',
+      }));
     }
-  }, [user, setSelectedPropertyId]); // Added fetchDashboardData to useCallback
+  }, [user, selectedPropertyId, setSelectedPropertyId]);
 
   useEffect(() => {
-    // [MODIFICATION] Only fetch data if the user has properties (i.e., Welcome Screen is not showing)
-    if (user && !userLoading && redirectChecked && !showWelcomeScreen) {
-      console.log('📊 Redirect check complete, fetching dashboard data...');
+    if (!userLoading && user) {
       fetchDashboardData();
     }
-  }, [user, userLoading, redirectChecked, showWelcomeScreen, fetchDashboardData]); // Dependency update
+  }, [userLoading, user, fetchDashboardData]);
 
+  useEffect(() => {
+    if (!userLoading && user && !redirectChecked) {
+      const checkRedirect = async () => {
+        try {
+          const propertiesRes = await api.getProperties();
+          const hasProperties = propertiesRes.success && propertiesRes.data.properties.length > 0;
 
-  // --- CONDITIONAL RENDERING FOR LOADING AND MODAL ---
-  
-  if (userLoading || !redirectChecked || data.isLoading) {
-    // [MODIFICATION] Added a check to show a dedicated loading message while property count is being checked.
-    const loadingMessage = showWelcomeScreen ? 'Preparing welcome screen...' : 'Loading your personalized dashboard...';
+          if (!hasProperties) {
+            const skipped = localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY);
+            if (!skipped) {
+              setShowWelcomeScreen(true);
+            }
+          }
+        } catch (error) {
+          console.error('Error checking properties:', error);
+        } finally {
+          setRedirectChecked(true);
+        }
+      };
+      checkRedirect();
+    }
+  }, [userLoading, user, redirectChecked]);
+
+  // --- CONDITIONAL RENDERING ---
+  const loadingMessage = !redirectChecked
+    ? 'Checking your account...'
+    : 'Loading your dashboard...';
+
+  if (userLoading || data.isLoading || !redirectChecked) {
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
         <p className="ml-3 text-lg text-gray-600">{loadingMessage}</p>
       </div>
     );
   }
 
-  // [NEW RENDER CHECK] Display the Welcome Modal if triggered
   if (showWelcomeScreen && user) {
     return <WelcomeModal userFirstName={user.firstName} />;
   }
@@ -376,7 +301,6 @@ export default function DashboardPage() {
     );
   }
   // --- END CONDITIONAL RENDERING ---
-
 
   const userSegment = user.segment;
   const checklistItems = (data.checklist?.items || []) as ChecklistItem[];
@@ -404,15 +328,15 @@ export default function DashboardPage() {
   return (
     <DashboardShell>
       <PageHeader className="pt-2 pb-2 gap-1">
-        {/* FIX 1: Welcome message moved to the top and personalized */}
+        {/* Welcome message */}
         <PageHeaderHeading>Welcome, {user.firstName}! Property Intelligence Dashboard</PageHeaderHeading>
       </PageHeader>
       
       {/* --- Property Selection Row --- */}
       {selectedProperty && (
-          <div className="flex items-center space-x-3 mb-4"> 
+          <div className="flex items-center space-x-3 mb-6"> 
               {!isMultiProperty ? (
-                  // Scenario 1: Single Property - Show simplified address as standard paragraph text
+                  // Scenario 1: Single Property
                   <p className="text-lg font-medium text-gray-700">
                       {selectedProperty.name || 'Your Home'}: {formatAddress(selectedProperty)}
                   </p>
@@ -439,55 +363,114 @@ export default function DashboardPage() {
               <Link href="/dashboard/properties" className="text-sm text-blue-500 hover:underline">
                   {isMultiProperty ? 'Manage Properties' : 'View Details'}
               </Link>
-              <Link href="/dashboard/emergency" className="block">
-                <div className="bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-400 rounded-lg p-6 hover:shadow-lg transition-shadow cursor-pointer">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-red-100 rounded-full">
-                      <AlertTriangle className="h-8 w-8 text-red-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-red-900">Emergency Help</h3>
-                      <p className="text-red-700">Get instant AI troubleshooting</p>
-                    </div>
-                  </div>
-                </div>
-              </Link>
-              <Link href="/dashboard/documents" className="block">
-                <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-lg p-6 hover:shadow-lg transition-shadow">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-purple-100 rounded-full">
-                      <FileText className="h-8 w-8 text-purple-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-purple-900">Document Vault</h3>
-                      <p className="text-purple-700">AI-powered document analysis</p>
-                    </div>
-                  </div>
-                </div>
-              </Link>
-              <Link href="/dashboard/oracle" className="block">
-                <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-300 rounded-lg p-6 hover:shadow-lg transition-shadow">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-purple-100 rounded-full">
-                      <Sparkles className="h-8 w-8 text-purple-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-purple-900">Appliance Oracle</h3>
-                      <p className="text-purple-700">AI failure predictions & recommendations</p>
-                    </div>
-                  </div>
-                </div>
-              </Link>
-              <Link href="/dashboard/budget">
-                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-300 rounded-lg p-6">
-                  <DollarSign className="h-8 w-8 text-blue-600" />
-                  <h3 className="text-xl font-bold text-blue-900">Budget Forecaster</h3>
-                  <p className="text-blue-700">12-month maintenance predictions</p>
-                </div>
-              </Link>
           </div>
       )}
       {/* --- END Property Selection Row --- */}
+
+      {/* ========================================= */}
+      {/* AI FEATURES SECTION */}
+      {/* ========================================= */}
+      <section className="mb-8">
+        {/* Section Header */}
+        <div className="flex items-center gap-2 mb-4 pb-3 border-b-2 border-purple-200">
+          <Sparkles className="w-6 h-6 text-purple-600" />
+          <h2 className="text-2xl font-bold text-gray-900">AI-Powered Features</h2>
+          <span className="ml-auto text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-semibold">
+            NEW
+          </span>
+        </div>
+
+        {/* AI Cards Grid - 4 columns */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          
+          {/* Emergency Troubleshooter */}
+          <Link href="/dashboard/emergency">
+            <div className="relative bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
+              {/* Sparkle indicator */}
+              <div className="absolute top-3 right-3">
+                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+              </div>
+              
+              {/* Icon */}
+              <div className="p-3 bg-red-100 rounded-lg w-fit mb-3 group-hover:scale-110 transition-transform">
+                <AlertTriangle className="h-7 w-7 text-red-600" />
+              </div>
+              
+              {/* Content */}
+              <h3 className="text-lg font-bold text-red-900 mb-1">
+                Emergency Troubleshooter
+              </h3>
+              <p className="text-red-700 text-sm">
+                AI guidance for home emergencies
+              </p>
+            </div>
+          </Link>
+
+          {/* Document Intelligence */}
+          <Link href="/dashboard/documents">
+            <div className="relative bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
+              <div className="absolute top-3 right-3">
+                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+              </div>
+              
+              <div className="p-3 bg-purple-100 rounded-lg w-fit mb-3 group-hover:scale-110 transition-transform">
+                <FileText className="h-7 w-7 text-purple-600" />
+              </div>
+              
+              <h3 className="text-lg font-bold text-purple-900 mb-1">
+                Document Vault
+              </h3>
+              <p className="text-purple-700 text-sm">
+                Smart document analysis & extraction
+              </p>
+            </div>
+          </Link>
+
+          {/* Appliance Oracle */}
+          <Link href="/dashboard/oracle">
+            <div className="relative bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
+              <div className="absolute top-3 right-3">
+                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+              </div>
+              
+              <div className="p-3 bg-purple-100 rounded-lg w-fit mb-3 group-hover:scale-110 transition-transform">
+                <Zap className="h-7 w-7 text-purple-600" />
+              </div>
+              
+              <h3 className="text-lg font-bold text-purple-900 mb-1">
+                Appliance Oracle
+              </h3>
+              <p className="text-purple-700 text-sm">
+                Predict failures & replacements
+              </p>
+            </div>
+          </Link>
+
+          {/* Budget Forecaster */}
+          <Link href="/dashboard/budget">
+            <div className="relative bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
+              <div className="absolute top-3 right-3">
+                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+              </div>
+              
+              <div className="p-3 bg-blue-100 rounded-lg w-fit mb-3 group-hover:scale-110 transition-transform">
+                <DollarSign className="h-7 w-7 text-blue-600" />
+              </div>
+              
+              <h3 className="text-lg font-bold text-blue-900 mb-1">
+                Budget Forecaster
+              </h3>
+              <p className="text-blue-700 text-sm">
+                12-month maintenance predictions
+              </p>
+            </div>
+          </Link>
+
+        </div>
+      </section>
+      {/* ========================================= */}
+      {/* END AI FEATURES SECTION */}
+      {/* ========================================= */}
 
       {/* Scorecards Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
