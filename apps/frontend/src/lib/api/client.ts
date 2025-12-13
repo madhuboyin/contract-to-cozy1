@@ -1347,6 +1347,25 @@ class APIClient {
       method: 'DELETE',
     });
   }
+
+  // ==========================================================================
+  // APPLIANCE ORACLE ENDPOINTS
+  // ==========================================================================
+
+  /**
+   * Get AI-powered appliance replacement predictions
+   */
+  async getApplianceOracle(propertyId: string): Promise<APIResponse<any>> {
+    return this.request(`/api/oracle/predict/${propertyId}`);
+  }
+
+  /**
+   * Get summary of critical appliances across all properties
+   */
+  async getOracleSummary(): Promise<APIResponse<any>> {
+    return this.request('/api/oracle/summary');
+  }
+
 }
 
 // Export singleton instance

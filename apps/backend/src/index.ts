@@ -25,6 +25,7 @@ import financialRoutes from './routes/financialEfficiency.routes';
 import geminiRoutes from './routes/gemini.routes';
 import emergencyRoutes from './routes/emergency.routes';
 import documentRoutes from './routes/document.routes';
+import oracleRoutes from './routes/applianceOracle.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
@@ -235,6 +236,7 @@ app.use('/api/v1/properties', financialRoutes);
 app.use('/api/gemini', geminiRoutes);
 app.use('/api/emergency', emergencyRoutes);
 app.use('/api/documents', documentRoutes);
+app.use('/api/oracle', oracleRoutes);
 
 app.use((req: Request, res: Response) => {
   res.status(404).json({
@@ -256,6 +258,8 @@ app.use((req: Request, res: Response) => {
       'PUT /api/checklist/items/:itemId',
       'GET /api/service-categories',
       'GET /api/service-categories/all',
+      'GET /api/oracle/predict/:propertyId',
+      'GET /api/oracle/summary',
     ],
   });
 });
