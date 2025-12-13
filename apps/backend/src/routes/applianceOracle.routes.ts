@@ -3,8 +3,8 @@
 import { Router, Response } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware'; // <-- NEW IMPORT: Property Authorization Middleware
+import { aiOracleRateLimiter } from '../middleware/rateLimiter.middleware'; // <-- NEW IMPORT
 import { CustomRequest } from '../types'; // <-- MODIFIED IMPORT: Use extended CustomRequest type
-
 import { applianceOracleService } from '../services/applianceOracle.service';
 
 const router = Router();
@@ -30,6 +30,7 @@ const router = Router();
 router.get(
   '/predict/:propertyId', 
   authenticate,
+  aiOracleRateLimiter,
   propertyAuthMiddleware, // <-- ADDED: Enforce property ownership check (IDOR Prevention)
   async (req: CustomRequest, res: Response) => { // <-- UPDATED TYPE: Use CustomRequest
     try {

@@ -51,3 +51,17 @@ export const apiRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+export const aiOracleRateLimiter = rateLimit({ // <-- NEW EXPORT
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5, // Max 5 requests per hour per IP for high-cost calls
+  message: {
+    success: false,
+    error: {
+      message: 'Too many high-cost AI requests. Limit is 5 per hour.',
+      code: 'AI_RATE_LIMIT_EXCEEDED',
+    },
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});

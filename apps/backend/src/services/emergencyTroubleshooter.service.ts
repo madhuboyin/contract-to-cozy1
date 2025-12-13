@@ -44,7 +44,7 @@ export class EmergencyTroubleshooterService {
     const contextPrompt = propertyContext 
       ? `Property: ${propertyContext}\n\nIssue: ${issue}`
       : `Issue: ${issue}`;
-
+      console.log(`[EMERGENCY-START] Session: ${sessionId} | Issue: "${issue.substring(0, 50)}..." | Property Context: ${!!propertyContext}`); // <-- ADDED LOGGING
     try {
       const response = await this.ai.models.generateContent({
         model: "gemini-2.0-flash-exp",
@@ -61,6 +61,7 @@ export class EmergencyTroubleshooterService {
 
       const text = response.text;
       if (!text) {
+        console.error(`[EMERGENCY-ERROR] Session: ${sessionId} | Gemini returned empty response.`); // <-- ENHANCED LOGGING
         throw new Error('AI service returned an empty response');
       }
       
@@ -83,7 +84,7 @@ export class EmergencyTroubleshooterService {
         steps
       };
     } catch (error) {
-      console.error('Gemini API Error:', error);
+      console.error(`[EMERGENCY-FATAL] Session: ${sessionId} | Failed to call Gemini API.`, { error, issue, propertyContext }); // <-- ENHANCED LOGGING
       throw new Error('Failed to get emergency response');
     }
   }
@@ -94,6 +95,7 @@ export class EmergencyTroubleshooterService {
   ): Promise<EmergencyResponse> {
     const session = this.sessions.get(sessionId);
     if (!session) {
+      console.error(`[EMERGENCY-ERROR] Session: ${sessionId} | Session not found.`); // <-- ENHANCED LOGGING
       throw new Error('Session not found');
     }
 
@@ -116,6 +118,7 @@ export class EmergencyTroubleshooterService {
 
       const text = response.text;
       if (!text) {
+        console.error(`[EMERGENCY-ERROR] Session: ${sessionId} | Gemini returned empty response.`); // <-- ENHANCED LOGGING
         throw new Error('AI service returned an empty response');
       }
       session.history.push({ role: 'assistant', content: text });
@@ -130,7 +133,7 @@ export class EmergencyTroubleshooterService {
         steps
       };
     } catch (error) {
-      console.error('Gemini API Error:', error);
+      console.error(`[EMERGENCY-FATAL] Session: ${sessionId} | Failed to continue emergency session.`, { error, userMessage }); // <-- ENHANCED LOGGING
       throw new Error('Failed to continue emergency session');
     }
   }

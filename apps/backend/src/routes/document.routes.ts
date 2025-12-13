@@ -8,6 +8,7 @@ import { CustomRequest } from '../types';
 import { prisma } from '../lib/prisma';
 import { documentIntelligenceService } from '../services/documentIntelligence.service';
 import { DocumentType } from '@prisma/client';
+import { validateDocumentUpload } from '../utils/documentValidator.util'; // <-- NEW IMPORT
 
 const router = Router();
 
@@ -77,7 +78,7 @@ const upload = multer({
  * 200:
  * description: Document analysis complete
  */
-router.post('/analyze', authenticate, upload.single('file'), async (req: CustomRequest, res: Response) => {
+router.post('/analyze', authenticate, upload.single('file'),validateDocumentUpload, async (req: CustomRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
     const file = req.file;

@@ -4,7 +4,7 @@ import { Router, Response } from 'express'; // Keep Router and Response from 'ex
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware'; // <-- NEW IMPORT: Property Authorization
 import { CustomRequest } from '../types'; // <-- MODIFIED IMPORT: Use CustomRequest which is the extended type
-
+import { aiOracleRateLimiter } from '../middleware/rateLimiter.middleware'; // <-- NEW IMPORT
 import { budgetForecasterService } from '../services/budgetForecaster.service';
 
 const router = Router();
@@ -30,6 +30,7 @@ const router = Router();
 router.get(
   '/forecast/:propertyId', 
   authenticate, 
+  aiOracleRateLimiter,
   propertyAuthMiddleware, // <-- ADDED: Enforce property ownership check
   async (req: CustomRequest, res: Response) => { // <-- UPDATED TYPE: Use CustomRequest
     try {

@@ -38,8 +38,10 @@ router.post('/start', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { issue, propertyId } = req.body;
     const userId = req.user!.userId;
+    console.log(`[REQUEST] /api/emergency/start by user: ${userId} for property: ${propertyId || 'N/A'}`);
     
     if (!issue || typeof issue !== 'string' || issue.trim().length === 0) {
+      console.error(`[REQUEST-ERROR] /api/emergency/start | Invalid issue: ${issue}`);
       return res.status(400).json({
         success: false,
         message: 'Issue description is required'
@@ -62,7 +64,7 @@ router.post('/start', authenticate, async (req: AuthRequest, res: Response) => {
       issue.trim(), 
       propertyContext
     );
-    
+    console.log(`[RESPONSE] /api/emergency/start successful. Session: ${sessionId} | Severity: ${result.severity}`);
     res.json({
       success: true,
       data: {
@@ -71,7 +73,8 @@ router.post('/start', authenticate, async (req: AuthRequest, res: Response) => {
       }
     });
   } catch (error: any) {
-    console.error('Emergency start error:', error);
+    const userId = (req as AuthRequest).user?.userId || 'N/A';
+    console.error(`[ERROR] /api/emergency/start failed for user: ${userId}.`, error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to start emergency session'
@@ -108,8 +111,10 @@ router.post('/start', authenticate, async (req: AuthRequest, res: Response) => {
 router.post('/continue', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { sessionId, message } = req.body;
-    
+    const userId = req.user!.userId;
+    console.log(`[REQUEST] /api/emergency/continue by user: ${userId} for session: ${sessionId}`);
     if (!sessionId || !message) {
+      console.error(`[REQUEST-ERROR] /api/emergency/continue | Missing required fields. Session: ${sessionId} | Message: ${message}`);
       return res.status(400).json({
         success: false,
         message: 'Session ID and message are required'
@@ -117,13 +122,14 @@ router.post('/continue', authenticate, async (req: AuthRequest, res: Response) =
     }
     
     const result = await emergencyService.continueSession(sessionId, message.trim());
-    
+    console.log(`[RESPONSE] /api/emergency/continue successful. Session: ${sessionId} | Resolution: ${result.resolution}`);    
     res.json({
       success: true,
       data: result
     });
   } catch (error: any) {
-    console.error('Emergency continue error:', error);
+    const userId = (req as AuthRequest).user?.userId || 'N/A';
+    console.error(`[ERROR] /api/emergency/continue failed for user: ${userId} and session: ${req.body.sessionId}.`, error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to continue session'
