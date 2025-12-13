@@ -1,3 +1,4 @@
+// apps/frontend/src/components/EnergyAuditor.tsx
 'use client';
 
 import { useState } from 'react';

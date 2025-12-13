@@ -1,3 +1,4 @@
+// apps/frontend/src/components/PropertyAppreciationTracker.tsx
 'use client';
 
 import { useState, useEffect } from 'react';

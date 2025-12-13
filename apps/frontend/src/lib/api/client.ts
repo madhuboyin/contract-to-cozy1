@@ -1406,6 +1406,15 @@ class APIClient {
       },
     });
   }
+  async analyzePropertyImages(formData: FormData): Promise<APIResponse<any>> {
+    return this.request('/api/visual-inspector/analyze', {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Authorization': `Bearer ${this.getToken()}`,
+      },
+    });
+  }
 }
 
 // Export singleton instance

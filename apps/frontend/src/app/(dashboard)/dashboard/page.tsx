@@ -32,6 +32,7 @@ import { Zap } from 'lucide-react'; // Reverted: Removed CloudRain import
 import { Cloud } from 'lucide-react';
 import { Home } from 'lucide-react';
 import { TrendingUp } from 'lucide-react';
+import { Camera } from 'lucide-react';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -538,6 +539,24 @@ export default function DashboardPage() {
               </h3>
               <p className="text-yellow-700 text-sm">
                 AI energy-saving recommendations
+              </p>
+            </div>
+          </Link>
+
+          {/* Visual Inspector */}
+          <Link href="/dashboard/visual-inspector">
+            <div className="relative bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl p-5 hover:shadow-xl transition-all">
+              <div className="absolute top-3 right-3">
+                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+              </div>
+              <div className="p-3 bg-purple-100 rounded-lg w-fit mb-3">
+                <Camera className="h-7 w-7 text-purple-600" />
+              </div>
+              <h3 className="text-lg font-bold text-purple-900 mb-1">
+                Visual Inspector
+              </h3>
+              <p className="text-purple-700 text-sm">
+                AI image analysis & inspection
               </p>
             </div>
           </Link>
