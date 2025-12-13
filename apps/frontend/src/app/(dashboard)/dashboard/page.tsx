@@ -28,6 +28,7 @@ import { WelcomeModal } from './components/WelcomeModal'; // <-- NEW IMPORT
 
 import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
 import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
+import { AlertTriangle } from 'lucide-react';
 
 // DEPRECATE: This local storage key is no longer used for forced redirect logic.
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -435,6 +436,19 @@ export default function DashboardPage() {
               )}
               <Link href="/dashboard/properties" className="text-sm text-blue-500 hover:underline">
                   {isMultiProperty ? 'Manage Properties' : 'View Details'}
+              </Link>
+              <Link href="/dashboard/emergency" className="block">
+                <div className="bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-400 rounded-lg p-6 hover:shadow-lg transition-shadow cursor-pointer">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-red-100 rounded-full">
+                      <AlertTriangle className="h-8 w-8 text-red-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-red-900">Emergency Help</h3>
+                      <p className="text-red-700">Get instant AI troubleshooting</p>
+                    </div>
+                  </div>
+                </div>
               </Link>
           </div>
       )}

@@ -23,6 +23,7 @@ import homeownerManagementRoutes from './routes/home-management.routes';
 import riskRoutes from './routes/risk.routes';
 import financialRoutes from './routes/financialEfficiency.routes';
 import geminiRoutes from './routes/gemini.routes';
+import emergencyRoutes from './routes/emergency.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
@@ -255,7 +256,7 @@ app.use((req: Request, res: Response) => {
     ],
   });
 });
-
+app.use('/api/emergency', emergencyRoutes);
 // =============================================================================
 // ERROR HANDLER (MUST BE LAST)
 // =============================================================================

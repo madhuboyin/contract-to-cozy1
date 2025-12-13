@@ -1262,6 +1262,37 @@ class APIClient {
     return response.blob();
   }
 
+// Find the APIClient class and add these methods
+
+  // ==========================================================================
+  // EMERGENCY TROUBLESHOOTER ENDPOINTS
+  // ==========================================================================
+
+  async startEmergency(issue: string, propertyId?: string): Promise<APIResponse<{
+    sessionId: string;
+    severity: string;
+    message: string;
+    resolution?: string;
+    steps?: string[];
+  }>> {
+    return this.request('/api/emergency/start', {
+      method: 'POST',
+      body: JSON.stringify({ issue, propertyId }),
+    });
+  }
+
+  async continueEmergency(sessionId: string, message: string): Promise<APIResponse<{
+    severity: string;
+    message: string;
+    resolution?: string;
+    steps?: string[];
+  }>> {
+    return this.request('/api/emergency/continue', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId, message }),
+    });
+  }
+
 }
 
 // Export singleton instance
