@@ -421,7 +421,7 @@ export default function DashboardPage() {
                 Document Vault
               </h3>
               <p className="text-purple-700 text-sm">
-                Smart document analysis & extraction
+                Smart document analysis
               </p>
             </div>
           </Link>
