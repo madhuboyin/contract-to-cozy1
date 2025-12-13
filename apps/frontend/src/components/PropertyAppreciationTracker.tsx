@@ -55,7 +55,11 @@ export default function PropertyAppreciationTracker({ propertyId }: PropertyAppr
   const [purchaseDate, setPurchaseDate] = useState('');
 
   useEffect(() => {
-    loadReport();
+    setReport(null);
+    setError('');
+    setShowInputForm(false);
+    setPurchasePrice('');
+    setPurchaseDate('');
   }, [propertyId]);
 
   const loadReport = async (customPrice?: number, customDate?: string) => {
@@ -122,8 +126,8 @@ export default function PropertyAppreciationTracker({ propertyId }: PropertyAppr
       <Card className="border-red-200 bg-red-50">
         <CardContent className="p-6">
           <p className="text-red-800">{error}</p>
-          <Button onClick={() => loadReport()} variant="outline" className="mt-4">
-            Retry
+          <Button onClick={() => setShowInputForm(true)} variant="outline" className="mt-4">
+            Try Again
           </Button>
         </CardContent>
       </Card>
