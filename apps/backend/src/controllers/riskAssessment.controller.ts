@@ -1,8 +1,8 @@
 // apps/backend/src/controllers/riskAssessment.controller.ts
 
 import { Response, NextFunction } from 'express';
-// UPDATED IMPORT: Include the new DTO type
-import RiskAssessmentService, { RiskSummaryDto, ClimateRiskSummaryDto } from '../services/RiskAssessment.service'; 
+// Note: RiskSummaryDto is still used as the final response DTO structure
+import RiskAssessmentService, { RiskSummaryDto } from '../services/RiskAssessment.service';
 import { Property, Prisma, RiskAssessmentReport } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../types/auth.types';
@@ -101,36 +101,56 @@ class RiskAssessmentController {
   }
 
   /**
-   * GET /api/risk/summary/primary
-   * FIX: Revert to the original design: call the service method which performs primary property lookup.
+   * GET /api/risk/summary/primary?propertyId={id}
+   * FIX: Consolidates logic to use the specific property ID and the fresh report data.
    */
   async getPrimaryPropertyRiskSummary(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const auth = this.checkAuthAndProfile(req, res);
       if (!auth) return;
-      // Get the userId from the authenticated request
-      const userId = auth.userId;
       
-      // The service method handles finding the primary property, getting the report, 
-      // handling QUEUED/MISSING status, and constructing the RiskSummaryDto.
-      const summary: RiskSummaryDto | null = await RiskAssessmentService.getPrimaryPropertyRiskSummary(userId);
+      // FIX 1: Get propertyId from query params (which the frontend passes as propertyId)
+      const propertyId = req.query.propertyId as string;
+      
+      if (!propertyId) {
+           return res.status(200).json({ success: true, data: { status: 'NO_PROPERTY' } });
+      }
+      
+      // Authorization check (Ensure the selected property belongs to the user)
+      const property: Property | null = await prisma.property.findUnique({
+        where: { id: propertyId, homeownerProfileId: auth.homeownerProfileId },
+      });
 
-      // Always return a structure, even if no property is found (handled by service returning null or 'NO_PROPERTY' status)
-      const responseData = summary || {
-        propertyId: null,
-        propertyName: null,
-        riskScore: 0,
-        financialExposureTotal: new Prisma.Decimal(0),
-        lastCalculatedAt: new Date(0),
-        status: 'NO_PROPERTY',
+      if (!property) {
+        return res.status(404).json({ message: 'Property not found or access denied.' });
+      }
+
+      // FIX 2: Use the robust report retrieval logic (getOrCreateRiskReport)
+      // This method queues a job if needed and returns the freshest data (or 'QUEUED')
+      const reportOrStatus = await RiskAssessmentService.getOrCreateRiskReport(propertyId);
+      
+      if (reportOrStatus === 'QUEUED') {
+          // If QUEUED, return minimal status so frontend shows the loading spinner
+          return res.status(200).json({ success: true, data: { status: 'QUEUED', propertyId, propertyName: property.name } });
+      }
+      
+      // FIX 3: Convert the full RiskAssessmentReport into the lightweight RiskSummaryDto structure
+      const report = reportOrStatus as RiskAssessmentReport;
+      
+      const responseData: RiskSummaryDto = {
+          propertyId: report.propertyId,
+          propertyName: property.name,
+          riskScore: report.riskScore,
+          financialExposureTotal: report.financialExposureTotal,
+          lastCalculatedAt: report.lastCalculatedAt,
+          status: 'CALCULATED',
       };
       
-      // Convert Prisma Decimal to number for JSON response before sending
-      const responseDto = {
+      // FIX 4: Convert Prisma Decimal to number for JSON response
+      const responseDto: Omit<RiskSummaryDto, 'financialExposureTotal'> & { financialExposureTotal: number } = {
           ...responseData,
           financialExposureTotal: (responseData.financialExposureTotal as unknown as Prisma.Decimal).toNumber(),
-          lastCalculatedAt: responseData.lastCalculatedAt.toISOString(), // Ensure ISO string format
-      };
+      } as Omit<RiskSummaryDto, 'financialExposureTotal'> & { financialExposureTotal: number };
 
       res.status(200).json({ success: true, data: responseDto });
 
@@ -138,40 +158,6 @@ class RiskAssessmentController {
       next(error);
     }
   }
-
-  // [NEW CONTROLLER METHOD for Phase 2: AI Climate Risk Card]
-  /**
-   * GET /api/risk/:propertyId/ai/climate-risk
-   * Fetches the dedicated AI-generated climate risk summary.
-   */
-  async getClimateRiskSummary(req: AuthRequest, res: Response, next: NextFunction) {
-    try {
-        const auth = this.checkAuthAndProfile(req, res);
-        if (!auth) return;
-        const { homeownerProfileId } = auth;
-        
-        const { propertyId } = req.params;
-
-        // Authorization check: ensure property belongs to the homeowner
-        const property: Property | null = await prisma.property.findUnique({
-            where: { id: propertyId, homeownerProfileId: homeownerProfileId },
-        });
-
-        if (!property) {
-            return res.status(404).json({ message: 'Property not found or access denied.' });
-        }
-        
-        // The service method performs the core logic (fetch or queue) and returns the dedicated DTO.
-        const summary: ClimateRiskSummaryDto = await RiskAssessmentService.getClimateRiskSummary(propertyId);
-
-        // Return the dedicated summary structure
-        res.status(200).json({ success: true, data: summary });
-
-    } catch (error) {
-        next(error);
-    }
-  }
-
 
   /**
    * GET /api/risk/report/:propertyId/pdf - Generates and downloads PDF (Phase 3.4)
