@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { FileText, Plus, Loader2, Trash2, ExternalLink, Filter, X, Save, Upload } from 'lucide-react';
+import { FileText, Plus, Loader2, Trash2, ExternalLink, Filter, X, Save, Upload, Sparkles, FileCheck } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { api } from '@/lib/api/client';
 import { Card, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { Document, DocumentType, Property, Warranty, InsurancePolicy, DocumentUploadInput } from '@/types';
 
@@ -21,8 +22,249 @@ const DOCUMENT_TYPES: DocumentType[] = [
     'PHOTO', 'VIDEO', 'INSURANCE_CERTIFICATE', 'LICENSE', 'OTHER',
 ];
 
-// --- Document Upload Modal Component (Re-implemented for self-containment/general upload) ---
-// NOTE: For a real application, this component should be shared across the three pages.
+const SELECT_NONE_VALUE = '__NONE__';
+
+// --- AI Smart Upload Component ---
+interface AISmartUploadProps {
+  properties: Property[];
+  onUploadSuccess: () => void;
+  onClose: () => void;
+}
+
+const AISmartUpload = ({ properties, onUploadSuccess, onClose }: AISmartUploadProps) => {
+  const [file, setFile] = useState<File | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [insights, setInsights] = useState<any>(null);
+  const [warranty, setWarranty] = useState<any>(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>('');
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (properties.length > 0 && !selectedPropertyId) {
+      setSelectedPropertyId(properties[0].id);
+    }
+  }, [properties, selectedPropertyId]);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
+    if (!allowedTypes.includes(selectedFile.type)) {
+      setError('Invalid file type. Please upload JPEG, PNG, WEBP, or PDF files only.');
+      return;
+    }
+
+    if (selectedFile.size > 10 * 1024 * 1024) {
+      setError('File size exceeds 10MB limit.');
+      return;
+    }
+
+    setFile(selectedFile);
+    setError('');
+    setInsights(null);
+    setWarranty(null);
+    setSuccess(false);
+
+    if (selectedFile.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onloadend = () => setPreview(reader.result as string);
+      reader.readAsDataURL(selectedFile);
+    } else {
+      setPreview(null);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file || !selectedPropertyId) return;
+
+    setAnalyzing(true);
+    setError('');
+
+    try {
+      const response = await api.analyzeDocument(file, selectedPropertyId, true);
+
+      if (response.success && response.data) {
+        setInsights(response.data.insights);
+        setWarranty(response.data.warranty);
+        setSuccess(true);
+
+        toast({ 
+          title: 'Document Analyzed Successfully', 
+          description: `${response.data.insights.documentType} detected with ${Math.round(response.data.insights.confidence * 100)}% confidence` 
+        });
+
+        setTimeout(() => {
+          onUploadSuccess();
+          onClose();
+        }, 2000);
+      } else {
+        setError(response.message || 'Upload failed');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Upload failed. Please try again.');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const getDocTypeColor = (type: string) => {
+    switch (type) {
+      case 'WARRANTY': return 'text-green-700 bg-green-100';
+      case 'RECEIPT': return 'text-blue-700 bg-blue-100';
+      case 'INVOICE': return 'text-purple-700 bg-purple-100';
+      case 'MANUAL': return 'text-gray-700 bg-gray-100';
+      case 'INSPECTION': return 'text-orange-700 bg-orange-100';
+      default: return 'text-gray-700 bg-gray-100';
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-purple-600" />
+          AI Smart Upload
+        </DialogTitle>
+        <CardDescription>Upload documents and let AI extract information automatically</CardDescription>
+      </DialogHeader>
+
+      {/* Property Selector */}
+      <div className="grid gap-2">
+        <Label>Select Property *</Label>
+        <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select property" />
+          </SelectTrigger>
+          <SelectContent>
+            {properties.map(p => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.name || p.address}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* File Upload */}
+      {!file && (
+        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-purple-400 transition-colors">
+          <Upload className="mx-auto h-12 w-12 text-gray-400" />
+          <input
+            type="file"
+            accept="image/*,.pdf"
+            onChange={handleFileSelect}
+            className="hidden"
+            id="ai-doc-upload"
+          />
+          <label htmlFor="ai-doc-upload" className="cursor-pointer">
+            <Button variant="outline" className="mt-4" type="button">
+              Select Document
+            </Button>
+          </label>
+          <p className="text-sm text-gray-500 mt-2">
+            Upload receipts, warranties, manuals, or inspection reports
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            Supported: JPEG, PNG, WEBP, PDF (max 10MB)
+          </p>
+        </div>
+      )}
+
+      {/* File Preview */}
+      {file && !success && (
+        <div className="border-2 border-gray-300 rounded-lg p-4">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <FileText className="h-8 w-8 text-blue-600" />
+              <div>
+                <p className="font-medium text-gray-900">{file.name}</p>
+                <p className="text-sm text-gray-500">{(file.size / 1024).toFixed(1)} KB</p>
+              </div>
+            </div>
+            <button onClick={() => setFile(null)} className="text-gray-400 hover:text-gray-600">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {preview && (
+            <div className="mb-4">
+              <img src={preview} alt="Preview" className="max-h-48 mx-auto rounded border" />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+          {error}
+        </div>
+      )}
+
+      {/* Success with Insights */}
+      {success && insights && (
+        <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <FileCheck className="h-5 w-5 text-green-600" />
+            <p className="font-semibold text-green-900">Document Analyzed!</p>
+          </div>
+
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Type:</span>
+              <span className={`px-2 py-0.5 rounded text-xs font-medium ${getDocTypeColor(insights.documentType)}`}>
+                {insights.documentType}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Confidence:</span>
+              <span className="font-medium">{Math.round(insights.confidence * 100)}%</span>
+            </div>
+            {insights.extractedData.productName && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Product:</span>
+                <span className="font-medium">{insights.extractedData.productName}</span>
+              </div>
+            )}
+            {warranty && (
+              <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                <p className="text-xs font-semibold text-blue-900">✓ Warranty Auto-Created</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Action Buttons */}
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onClose} disabled={analyzing}>
+          Cancel
+        </Button>
+        {!success && (
+          <Button onClick={handleUpload} disabled={analyzing || !file}>
+            {analyzing ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                AI Analyzing...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 mr-2" />
+                Analyze & Upload
+              </>
+            )}
+          </Button>
+        )}
+      </DialogFooter>
+    </div>
+  );
+};
+
+// --- Standard Upload Modal (Existing) ---
 interface DocumentUploadModalProps {
     properties: Property[];
     warranties: Warranty[];
@@ -31,15 +273,12 @@ interface DocumentUploadModalProps {
     onClose: () => void;
 }
 
-// Temporary placeholder for "None" to prevent type errors in Select
-const SELECT_NONE_VALUE = '__NONE__';
-
 const DocumentUploadModal = ({ properties, warranties, policies, onUploadSuccess, onClose }: DocumentUploadModalProps) => {
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState('');
   const [type, setType] = useState<DocumentType>('OTHER');
   const [description, setDescription] = useState('');
-  const [selectedParent, setSelectedParent] = useState<string>(SELECT_NONE_VALUE); // Format: ENTITY_ID|ENTITY_TYPE
+  const [selectedParent, setSelectedParent] = useState<string>(SELECT_NONE_VALUE);
   const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
   
@@ -65,7 +304,6 @@ const DocumentUploadModal = ({ properties, warranties, policies, onUploadSuccess
 
   }, [properties, warranties, policies]);
 
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file || !name) {
@@ -83,15 +321,13 @@ const DocumentUploadModal = ({ properties, warranties, policies, onUploadSuccess
         description: description || undefined,
     };
     
-    // Dynamically assign the correct parent ID
     if (parentEntityType === 'warranty') {
         inputData.warrantyId = parentEntityId;
     } else if (parentEntityType === 'policy') {
         inputData.policyId = parentEntityId;
     } else if (parentEntityType === 'property') {
         inputData.propertyId = parentEntityId;
-    } 
-    // If SELECT_NONE_VALUE, no ID is assigned, and the document is "Unattached"
+    }
     
     const res = await api.uploadDocument(file, inputData);
 
@@ -111,8 +347,8 @@ const DocumentUploadModal = ({ properties, warranties, policies, onUploadSuccess
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <DialogHeader>
-        <DialogTitle>Upload New Document</DialogTitle>
-        <CardDescription>Upload a file and optionally link it to a specific property, warranty, or insurance policy.</CardDescription>
+        <DialogTitle>Standard Upload</DialogTitle>
+        <CardDescription>Upload a file with manual metadata entry</CardDescription>
       </DialogHeader>
       
       <div className="grid gap-2">
@@ -176,7 +412,6 @@ const DocumentUploadModal = ({ properties, warranties, policies, onUploadSuccess
         </Select>
       </div>
 
-
       <div className="grid gap-2">
         <Label htmlFor="description">Description (Optional)</Label>
         <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} disabled={isUploading} />
@@ -194,8 +429,6 @@ const DocumentUploadModal = ({ properties, warranties, policies, onUploadSuccess
     </form>
   );
 };
-// --- End Document Upload Modal Component ---
-
 
 // --- Main Page Component ---
 export default function DocumentsPage() {
@@ -203,34 +436,30 @@ export default function DocumentsPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [warranties, setWarranties] = useState<Warranty[]>([]);
   const [policies, setPolicies] = useState<InsurancePolicy[]>([]);
-  
   const [isLoading, setIsLoading] = useState(true);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  
-  // Filter States
-  const [filterType, setFilterType] = useState<string>('ALL');
-  const [filterParentType, setFilterParentType] = useState<string>('ALL');
-  
+  const [uploadMode, setUploadMode] = useState<'ai' | 'standard'>('ai');
+  const [filterType, setFilterType] = useState<string | 'ALL'>('ALL');
+  const [filterParentType, setFilterParentType] = useState<string | 'ALL'>('ALL');
   const { toast } = useToast();
 
   const fetchDependencies = useCallback(async () => {
     setIsLoading(true);
     
-    // Fetch all documents and supporting lists concurrently
-    const [docsRes, propertiesRes, warrantiesRes, policiesRes] = await Promise.all([
-      api.listDocuments(),
-      api.getProperties(),
-      api.listWarranties(),
-      api.listInsurancePolicies(),
+    // FIXED: Use correct API method names
+    const [documentsRes, propertiesRes, warrantiesRes, policiesRes] = await Promise.all([
+        api.listDocuments(),
+        api.getProperties(),
+        api.listWarranties(),
+        api.listInsurancePolicies(),
     ]);
 
-    if (docsRes.success) {
-      setDocuments(docsRes.data.documents);
+    if (documentsRes.success) {
+        setDocuments(documentsRes.data.documents);
     } else {
-      toast({ title: "Error", description: docsRes.message, variant: "destructive" });
+        toast({ title: 'Error', description: 'Failed to load documents.', variant: 'destructive' });
     }
     
-    // Always update supporting lists even on partial failure
     if (propertiesRes.success) setProperties(propertiesRes.data.properties);
     if (warrantiesRes.success) setWarranties(warrantiesRes.data.warranties);
     if (policiesRes.success) setPolicies(policiesRes.data.policies);
@@ -243,25 +472,29 @@ export default function DocumentsPage() {
   }, [fetchDependencies]);
 
   const handleDelete = async (documentId: string) => {
-    if (!window.confirm("Are you sure you want to delete this document? This cannot be undone.")) {
-      return;
+    if (!window.confirm("Are you sure you want to delete this document?")) return;
+    
+    try {
+      await api.deleteDocument(documentId);
+      toast({ title: 'Document Deleted', description: 'Document removed successfully.' });
+      fetchDependencies();
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to delete document.', variant: 'destructive' });
     }
-    // NOTE: Requires a deleteDocument API method. This is a mock action.
-    toast({ title: 'Delete Action Mocked', description: 'Document delete functionality pending API completion.', variant: 'default' });
   };
   
   const getParentEntityDisplay = useCallback((doc: Document) => {
     if (doc.warrantyId) {
       const warranty = warranties.find(w => w.id === doc.warrantyId);
-      return `Warranty: ${warranty?.providerName || 'ID:' + doc.warrantyId.substring(0, 4) + '...'}`;
+      return `Warranty: ${warranty?.providerName || 'Unknown'}`;
     }
     if (doc.policyId) {
       const policy = policies.find(p => p.id === doc.policyId);
-      return `Policy: ${policy?.carrierName || 'ID:' + doc.policyId.substring(0, 4) + '...'}`;
+      return `Policy: ${policy?.carrierName || 'Unknown'}`;
     }
     if (doc.propertyId) {
       const property = properties.find(p => p.id === doc.propertyId);
-      return `Property: ${property?.name || property?.address || 'ID:' + doc.propertyId.substring(0, 4) + '...'}`;
+      return `Property: ${property?.name || property?.address || 'Unknown'}`;
     }
     return 'Unattached';
   }, [warranties, policies, properties]);
@@ -294,14 +527,16 @@ export default function DocumentsPage() {
   return (
     <div className="space-y-6 pb-8">
       <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <FileText className="w-7 h-7 text-purple-600" /> Document Vault
-        </h2>
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+            <FileText className="w-7 h-7 text-purple-600" /> Document Vault
+          </h2>
+          <p className="text-muted-foreground mt-1">Centralized repository with AI-powered analysis</p>
+        </div>
         <Button onClick={() => setIsUploadModalOpen(true)}>
           <Plus className="w-4 h-4 mr-2" /> Upload New Document
         </Button>
       </div>
-      <p className="text-muted-foreground">A centralized repository for all your home-related files, reports, and receipts.</p>
 
       <Card>
         <CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -339,7 +574,6 @@ export default function DocumentsPage() {
         </CardContent>
       </Card>
 
-
       {isLoading && (
         <div className="text-center py-10">
           <Loader2 className="w-8 h-8 animate-spin text-purple-600 mx-auto" />
@@ -363,6 +597,7 @@ export default function DocumentsPage() {
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">AI Analysis</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Associated With</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uploaded</th>
                   <th className="relative px-6 py-3"></th>
@@ -374,6 +609,16 @@ export default function DocumentsPage() {
                     <td className="px-6 py-4 text-sm font-medium text-gray-900 truncate max-w-xs">{doc.name}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                       {doc.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    </td>
+                    <td className="px-6 py-4 text-sm hidden md:table-cell">
+                      {(doc as any).confidence ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium">
+                          <Sparkles className="w-3 h-3" />
+                          {Math.round((doc as any).confidence * 100)}%
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">Manual</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500 hidden sm:table-cell">
                         {getParentEntityDisplay(doc)}
@@ -404,16 +649,39 @@ export default function DocumentsPage() {
         </Card>
       )}
 
-      {/* Central Upload Dialog */}
+      {/* Upload Dialog with Tabs */}
       <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DocumentUploadModal 
-              properties={properties}
-              warranties={warranties}
-              policies={policies}
-              onUploadSuccess={handleUploadSuccess}
-              onClose={() => setIsUploadModalOpen(false)}
-          />
+        <DialogContent className="sm:max-w-[600px]">
+          <Tabs value={uploadMode} onValueChange={(v) => setUploadMode(v as 'ai' | 'standard')}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="ai" className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4" />
+                AI Smart Upload
+              </TabsTrigger>
+              <TabsTrigger value="standard" className="flex items-center gap-2">
+                <Upload className="w-4 h-4" />
+                Standard Upload
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="ai" className="mt-4">
+              <AISmartUpload
+                properties={properties}
+                onUploadSuccess={handleUploadSuccess}
+                onClose={() => setIsUploadModalOpen(false)}
+              />
+            </TabsContent>
+            
+            <TabsContent value="standard" className="mt-4">
+              <DocumentUploadModal 
+                properties={properties}
+                warranties={warranties}
+                policies={policies}
+                onUploadSuccess={handleUploadSuccess}
+                onClose={() => setIsUploadModalOpen(false)}
+              />
+            </TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
     </div>

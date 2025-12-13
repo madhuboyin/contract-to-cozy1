@@ -1006,12 +1006,6 @@ class APIClient {
       return this.formDataRequest<Document>('/api/home-management/documents/upload', formData);
   }
 
-    /**
-     * Lists all documents uploaded by the homeowner. (NEW)
-     */
-    async listDocuments(): Promise<APIResponse<{ documents: Document[] }>> {
-      return this.request<{ documents: Document[] }>('/api/home-management/documents');
-  }
 
   // ==========================================================================
   // RISK ASSESSMENT ENDPOINTS 
@@ -1293,6 +1287,66 @@ class APIClient {
     });
   }
 
+  // ==========================================================================
+  // DOCUMENT INTELLIGENCE ENDPOINTS
+  // ==========================================================================
+
+  /**
+   * Upload and analyze document with AI
+   */
+  async analyzeDocument(
+    file: File,
+    propertyId: string,
+    autoCreateWarranty: boolean = true
+  ): Promise<APIResponse<{
+    document: any;
+    insights: any;
+    warranty: any | null;
+  }>> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('propertyId', propertyId);
+    formData.append('autoCreateWarranty', autoCreateWarranty.toString());
+
+    const token = this.getToken();
+    if (!token) {
+      throw new APIError('Authentication required', 401);
+    }
+
+    const response = await fetch(`${this.baseURL}/api/documents/analyze`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new APIError(error.message || 'Upload failed', response.status);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * List all documents
+   */
+  async listDocuments(propertyId?: string): Promise<APIResponse<{
+    documents: Document[];
+  }>> {
+    const queryParams = propertyId ? `?propertyId=${propertyId}` : '';
+    return this.request<{ documents: Document[] }>(`/api/documents${queryParams}`);
+  }
+
+  /**
+   * Delete a document
+   */
+  async deleteDocument(documentId: string): Promise<APIResponse<void>> {
+    return this.request(`/api/documents/${documentId}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 // Export singleton instance

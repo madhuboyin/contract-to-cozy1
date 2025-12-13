@@ -29,6 +29,7 @@ import { WelcomeModal } from './components/WelcomeModal'; // <-- NEW IMPORT
 import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
 import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
 import { AlertTriangle } from 'lucide-react';
+import { FileText } from 'lucide-react';
 
 // DEPRECATE: This local storage key is no longer used for forced redirect logic.
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -446,6 +447,19 @@ export default function DashboardPage() {
                     <div>
                       <h3 className="text-xl font-bold text-red-900">Emergency Help</h3>
                       <p className="text-red-700">Get instant AI troubleshooting</p>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+              <Link href="/dashboard/documents" className="block">
+                <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-lg p-6 hover:shadow-lg transition-shadow">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-purple-100 rounded-full">
+                      <FileText className="h-8 w-8 text-purple-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-purple-900">Document Vault</h3>
+                      <p className="text-purple-700">AI-powered document analysis</p>
                     </div>
                   </div>
                 </div>
