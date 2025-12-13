@@ -5,7 +5,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
-import { Loader2 } from 'lucide-react';
+import { Loader2, DollarSign } from 'lucide-react';
 import { Booking, Property, User, ChecklistItem, Warranty, InsurancePolicy } from '@/types'; 
 import { ScoredProperty } from './types'; 
 import { differenceInDays, isPast, parseISO } from 'date-fns'; // [NEW IMPORT]
@@ -476,6 +476,13 @@ export default function DashboardPage() {
                       <p className="text-purple-700">AI failure predictions & recommendations</p>
                     </div>
                   </div>
+                </div>
+              </Link>
+              <Link href="/dashboard/budget">
+                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-300 rounded-lg p-6">
+                  <DollarSign className="h-8 w-8 text-blue-600" />
+                  <h3 className="text-xl font-bold text-blue-900">Budget Forecaster</h3>
+                  <p className="text-blue-700">12-month maintenance predictions</p>
                 </div>
               </Link>
           </div>

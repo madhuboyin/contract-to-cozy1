@@ -26,6 +26,7 @@ import geminiRoutes from './routes/gemini.routes';
 import emergencyRoutes from './routes/emergency.routes';
 import documentRoutes from './routes/document.routes';
 import oracleRoutes from './routes/applianceOracle.routes';
+import budgetRoutes from './routes/budgetForecaster.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
@@ -237,6 +238,7 @@ app.use('/api/gemini', geminiRoutes);
 app.use('/api/emergency', emergencyRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/oracle', oracleRoutes);
+app.use('/api/budget', budgetRoutes);
 
 app.use((req: Request, res: Response) => {
   res.status(404).json({

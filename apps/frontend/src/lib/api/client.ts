@@ -1365,6 +1365,12 @@ class APIClient {
   async getOracleSummary(): Promise<APIResponse<any>> {
     return this.request('/api/oracle/summary');
   }
+  /**
+   * Get 12-month maintenance budget forecast
+   */
+  async getBudgetForecast(propertyId: string): Promise<APIResponse<any>> {
+    return this.request(`/api/budget/forecast/${propertyId}`);
+  }
 
 }
 
