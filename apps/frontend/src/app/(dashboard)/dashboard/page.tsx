@@ -30,6 +30,7 @@ import { FileText } from 'lucide-react';
 import { Sparkles } from 'lucide-react';
 import { Zap } from 'lucide-react'; // Reverted: Removed CloudRain import
 import { Cloud } from 'lucide-react';
+import { Home } from 'lucide-react';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
 
@@ -466,6 +467,8 @@ export default function DashboardPage() {
               </p>
             </div>
           </Link>
+
+          {/* Climate Risk */}
           <Link href="/dashboard/climate">
             <div className="relative bg-gradient-to-br from-sky-50 to-blue-50 border-2 border-sky-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group">
               <div className="absolute top-3 right-3">
@@ -482,7 +485,24 @@ export default function DashboardPage() {
               </p>
             </div>
           </Link>
-
+          
+          {/* Home Modifications */}
+          <Link href="/dashboard/modifications">
+            <div className="relative bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-xl p-5 hover:shadow-xl transition-all">
+              <div className="absolute top-3 right-3">
+                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+              </div>
+              <div className="p-3 bg-indigo-100 rounded-lg w-fit mb-3">
+                <Home className="h-7 w-7 text-indigo-600" />
+              </div>
+              <h3 className="text-lg font-bold text-indigo-900 mb-1">
+                Home Modifications
+              </h3>
+              <p className="text-indigo-700 text-sm">
+                AI improvement recommendations
+              </p>
+            </div>
+          </Link>
         </div>
       </section>
       {/* ========================================= */}

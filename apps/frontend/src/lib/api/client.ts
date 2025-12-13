@@ -1385,6 +1385,12 @@ class APIClient {
   async getClimateRisk(propertyId: string): Promise<APIResponse<any>> {
     return this.request(`/api/climate/analyze/${propertyId}`);
   }
+  async getHomeModifications(propertyId: string, userNeeds: string[]): Promise<APIResponse<any>> {
+    return this.request('/api/modifications/recommend', {
+      method: 'POST',
+      body: JSON.stringify({ propertyId, userNeeds }),
+    });
+  }
 
 }
 
