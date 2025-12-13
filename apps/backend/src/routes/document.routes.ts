@@ -1,4 +1,4 @@
-// apps/backend/src/routes/document.routes.ts
+// apps/backend/src/routes/document.routes.ts (MODIFIED)
 
 import { Router, Response } from 'express';
 import multer from 'multer'; 
@@ -8,7 +8,7 @@ import { CustomRequest } from '../types';
 import { prisma } from '../lib/prisma';
 import { documentIntelligenceService } from '../services/documentIntelligence.service';
 import { DocumentType } from '@prisma/client';
-import { validateDocumentUpload } from '../utils/documentValidator.util'; // <-- NEW IMPORT
+import { validateDocumentUpload } from '../utils/documentValidator.util'; // Assuming this was added in the previous step
 
 const router = Router();
 
@@ -78,7 +78,7 @@ const upload = multer({
  * 200:
  * description: Document analysis complete
  */
-router.post('/analyze', authenticate, upload.single('file'),validateDocumentUpload, async (req: CustomRequest, res: Response) => {
+router.post('/analyze', authenticate, upload.single('file'), validateDocumentUpload, async (req: CustomRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
     const file = req.file;
