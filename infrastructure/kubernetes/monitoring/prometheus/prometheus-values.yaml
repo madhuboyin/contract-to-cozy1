@@ -1,4 +1,4 @@
-# prometheus-values.yaml
+# In infrastructure/kubernetes/monitoring/prometheus/prometheus-values.yaml
 # Used to customize the prometheus-community/kube-prometheus-stack Helm chart
 
 prometheus:

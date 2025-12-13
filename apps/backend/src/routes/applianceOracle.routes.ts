@@ -1,9 +1,10 @@
 // apps/backend/src/routes/applianceOracle.routes.ts
 
-import { Router } from 'express';
-import { Response } from 'express';
+import { Router, Response } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
-import { AuthRequest } from '../types/auth.types';
+import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware'; // <-- NEW IMPORT: Property Authorization Middleware
+import { CustomRequest } from '../types'; // <-- MODIFIED IMPORT: Use extended CustomRequest type
+
 import { applianceOracleService } from '../services/applianceOracle.service';
 
 const router = Router();
@@ -11,57 +12,63 @@ const router = Router();
 /**
  * @swagger
  * /api/oracle/predict/{propertyId}:
- *   get:
- *     summary: Generate AI-powered appliance replacement predictions
- *     tags: [Appliance Oracle]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: propertyId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Oracle report generated successfully
+ * get:
+ * summary: Generate AI-powered appliance replacement predictions
+ * tags: [Appliance Oracle]
+ * security:
+ * - bearerAuth: []
+ * parameters:
+ * - in: path
+ * name: propertyId
+ * required: true
+ * schema:
+ * type: string
+ * responses:
+ * 200:
+ * description: Oracle report generated successfully
  */
-router.get('/predict/:propertyId', authenticate, async (req: AuthRequest, res: Response) => {
-  try {
-    const userId = req.user!.userId;
-    const { propertyId } = req.params;
+router.get(
+  '/predict/:propertyId', 
+  authenticate,
+  propertyAuthMiddleware, // <-- ADDED: Enforce property ownership check (IDOR Prevention)
+  async (req: CustomRequest, res: Response) => { // <-- UPDATED TYPE: Use CustomRequest
+    try {
+      // propertyAuthMiddleware ensures the propertyId is valid for the authenticated user
+      const userId = req.user!.userId;
+      const { propertyId } = req.params;
 
-    console.log('[ORACLE] Generating prediction report for property:', propertyId);
+      console.log('[ORACLE] Generating prediction report for property:', propertyId);
 
-    const report = await applianceOracleService.generateOracleReport(propertyId, userId);
+      const report = await applianceOracleService.generateOracleReport(propertyId, userId);
 
-    res.json({
-      success: true,
-      data: report
-    });
+      res.json({
+        success: true,
+        data: report
+      });
 
-  } catch (error: any) {
-    console.error('[ORACLE] Error generating report:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to generate oracle report'
-    });
+    } catch (error: any) {
+      console.error('[ORACLE] Error generating report:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to generate oracle report'
+      });
+    }
   }
-});
+);
 
 /**
  * @swagger
  * /api/oracle/summary:
- *   get:
- *     summary: Get summary of critical appliances across all properties
- *     tags: [Appliance Oracle]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Summary retrieved successfully
+ * get:
+ * summary: Get summary of critical appliances across all properties
+ * tags: [Appliance Oracle]
+ * security:
+ * - bearerAuth: []
+ * responses:
+ * 200:
+ * description: Summary retrieved successfully
  */
-router.get('/summary', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/summary', authenticate, async (req: CustomRequest, res: Response) => { // <-- UPDATED TYPE: Use CustomRequest
   try {
     const userId = req.user!.userId;
 

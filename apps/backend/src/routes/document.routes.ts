@@ -1,10 +1,10 @@
 // apps/backend/src/routes/document.routes.ts
 
-import { Router } from 'express';
-import { Response } from 'express';
-import multer from 'multer';
+import { Router, Response } from 'express';
+import multer from 'multer'; 
 import { authenticate } from '../middleware/auth.middleware';
-import { AuthRequest } from '../types/auth.types';
+// Use the unified, extended request type
+import { CustomRequest } from '../types'; 
 import { prisma } from '../lib/prisma';
 import { documentIntelligenceService } from '../services/documentIntelligence.service';
 import { DocumentType } from '@prisma/client';
@@ -38,13 +38,14 @@ const upload = multer({
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit
   },
-  fileFilter: (req, file, cb) => {
+  fileFilter: (req, file, cb) => { 
     // Accept images and PDFs
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only JPEG, PNG, WEBP, and PDF are allowed.'));
+      const error = new Error('Invalid file type. Only JPEG, PNG, WEBP, and PDF documents are allowed.');
+      (cb as (error: Error, acceptFile: boolean) => void)(error, false);
     }
   }
 });
@@ -52,56 +53,66 @@ const upload = multer({
 /**
  * @swagger
  * /api/documents/analyze:
- *   post:
- *     summary: Upload and analyze document with AI
- *     tags: [Documents]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             required:
- *               - file
- *               - propertyId
- *             properties:
- *               file:
- *                 type: string
- *                 format: binary
- *               propertyId:
- *                 type: string
- *               name:
- *                 type: string
- *               description:
- *                 type: string
- *               autoCreateWarranty:
- *                 type: boolean
- *                 default: true
- *     responses:
- *       200:
- *         description: Document analyzed successfully
+ * post:
+ * summary: Upload and analyze a document with AI
+ * tags: [Documents]
+ * security:
+ * - bearerAuth: []
+ * requestBody:
+ * required: true
+ * content:
+ * multipart/form-data:
+ * schema:
+ * type: object
+ * properties:
+ * file:
+ * type: string
+ * format: binary
+ * propertyId:
+ * type: string
+ * description: Optional ID of the property the document belongs to.
+ * autoCreateWarranty:
+ * type: boolean
+ * responses:
+ * 200:
+ * description: Document analysis complete
  */
-router.post('/analyze', authenticate, upload.single('file'), async (req: AuthRequest, res: Response) => {
+router.post('/analyze', authenticate, upload.single('file'), async (req: CustomRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
     const file = req.file;
-    const { propertyId, name, description, autoCreateWarranty = 'true' } = req.body;
+    const { propertyId, autoCreateWarranty } = req.body;
+
+    if (propertyId) {
+      // Basic check: Ensure the propertyId belongs to the authenticated user
+      const isPropertyOwned = await prisma.property.findFirst({
+        where: {
+          id: propertyId,
+          homeownerProfile: {
+            userId: userId,
+          },
+        },
+      });
+
+      if (!isPropertyOwned) {
+        return res.status(404).json({
+          success: false,
+          message: 'Property not found or access denied.'
+        });
+      }
+    }
 
     if (!file) {
-      return res.status(400).json({
-        success: false,
-        message: 'No file uploaded'
-      });
+      return res.status(400).json({ success: false, message: 'File is required for analysis' });
     }
 
-    if (!propertyId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Property ID is required'
-      });
-    }
+    console.log('[DOCUMENT-AI] Analyzing file:', file.originalname);
+
+    // Analyze the document
+    const insights = await documentIntelligenceService.analyzeDocument(
+      file.buffer,
+      file.mimetype
+    );
 
     // Get homeowner profile
     const homeownerProfile = await prisma.homeownerProfile.findUnique({
@@ -116,94 +127,42 @@ router.post('/analyze', authenticate, upload.single('file'), async (req: AuthReq
       });
     }
 
-    // Verify property belongs to user
-    const property = await prisma.property.findFirst({
-      where: {
-        id: propertyId,
-        homeownerProfileId: homeownerProfile.id
-      }
-    });
-
-    if (!property) {
-      return res.status(404).json({
-        success: false,
-        message: 'Property not found or access denied'
-      });
-    }
-
-    console.log('[DOCUMENT-UPLOAD] Analyzing document with AI...');
-
-    // Analyze document with AI
-    const insights = await documentIntelligenceService.analyzeDocument(
-      file.buffer,
-      file.mimetype
-    );
-
-    console.log('[DOCUMENT-UPLOAD] AI Analysis complete:', {
-      type: insights.documentType,
-      confidence: insights.confidence,
-      hasData: Object.keys(insights.extractedData).length
-    });
-
-    // For this implementation, we'll store the file as base64 in the database
-    // In production, you'd upload to S3/GCS and store the URL
-    const fileUrl = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
-
     // Create document record
     const document = await prisma.document.create({
       data: {
         uploadedBy: homeownerProfile.id,
+        propertyId: propertyId || null,
         type: mapDocumentType(insights.documentType),
-        name: name || insights.extractedData.productName || file.originalname,
-        fileUrl,
+        name: file.originalname,
+        fileUrl: `data:${file.mimetype};base64,${file.buffer.toString('base64')}`,
         fileSize: file.size,
         mimeType: file.mimetype,
-        description: description || null,
-        propertyId,
-        metadata: {
-          aiInsights: insights,
-          confidence: insights.confidence,
-        } as any,
+        metadata: insights as any
       }
     });
 
-    console.log('[DOCUMENT-UPLOAD] Document saved:', document.id);
-
-    // Auto-create warranty if applicable
+    // Optionally auto-create warranty if requested
     let warranty = null;
-    if (autoCreateWarranty === 'true' && insights.documentType === 'WARRANTY') {
+    if (autoCreateWarranty === 'true' && propertyId && insights.documentType === 'WARRANTY') {
       warranty = await documentIntelligenceService.autoCreateWarranty(
         homeownerProfile.id,
         propertyId,
         insights,
         document.id
       );
-
-      if (warranty) {
-        console.log('[DOCUMENT-UPLOAD] Auto-created warranty:', warranty.id);
-      }
     }
 
     res.json({
       success: true,
       data: {
-        document: {
-          id: document.id,
-          name: document.name,
-          type: document.type,
-          createdAt: document.createdAt
-        },
+        document,
         insights,
-        warranty: warranty ? {
-          id: warranty.id,
-          providerName: warranty.providerName,
-          expiryDate: warranty.expiryDate
-        } : null
+        warranty
       }
     });
 
   } catch (error: any) {
-    console.error('[DOCUMENT-UPLOAD] Error:', error);
+    console.error('[DOCUMENT-AI] Error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to analyze document'
@@ -214,25 +173,19 @@ router.post('/analyze', authenticate, upload.single('file'), async (req: AuthReq
 /**
  * @swagger
  * /api/documents:
- *   get:
- *     summary: List all documents for user
- *     tags: [Documents]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: propertyId
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: List of documents
+ * get:
+ * summary: Get all documents for the current homeowner
+ * tags: [Documents]
+ * security:
+ * - bearerAuth: []
+ * responses:
+ * 200:
+ * description: List of documents
  */
-router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/', authenticate, async (req: CustomRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
-    const { propertyId } = req.query;
-
+    // ... Existing logic ...
     const homeownerProfile = await prisma.homeownerProfile.findUnique({
       where: { userId },
       select: { id: true }
@@ -245,49 +198,23 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const where: any = {
-      uploadedBy: homeownerProfile.id
-    };
-
-    if (propertyId) {
-      where.propertyId = propertyId as string;
-    }
-
     const documents = await prisma.document.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        fileSize: true,
-        mimeType: true,
-        metadata: true,
-        propertyId: true,
-        createdAt: true,
-        property: {
-          select: {
-            name: true,
-            address: true
-          }
-        }
+      where: {
+        uploadedBy: homeownerProfile.id
       },
-      orderBy: {
-        createdAt: 'desc'
-      }
+      orderBy: { createdAt: 'desc' }
     });
 
     res.json({
       success: true,
-      data: {
-        documents
-      }
+      data: documents
     });
 
   } catch (error: any) {
-    console.error('[DOCUMENTS-LIST] Error:', error);
+    console.error('[DOCUMENTS] Error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch documents'
+      message: error.message || 'Failed to retrieve documents'
     });
   }
 });
@@ -295,22 +222,22 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 /**
  * @swagger
  * /api/documents/{id}:
- *   delete:
- *     summary: Delete a document
- *     tags: [Documents]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Document deleted
+ * delete:
+ * summary: Delete a document
+ * tags: [Documents]
+ * security:
+ * - bearerAuth: []
+ * parameters:
+ * - in: path
+ * name: id
+ * required: true
+ * schema:
+ * type: string
+ * responses:
+ * 200:
+ * description: Document deleted
  */
-router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
+router.delete('/:id', authenticate, async (req: CustomRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
     const { id } = req.params;
@@ -352,10 +279,10 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     });
 
   } catch (error: any) {
-    console.error('[DOCUMENT-DELETE] Error:', error);
+    console.error('[DOCUMENTS] Error deleting document:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to delete document'
+      message: error.message || 'Failed to delete document'
     });
   }
 });
