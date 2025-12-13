@@ -283,15 +283,20 @@ const DocumentUploadModal = ({ properties, warranties, policies, onUploadSuccess
   const { toast } = useToast();
   
   const parentOptions = useMemo(() => {
-    const propertyOptions = properties.map(p => ({
+    // Ensuring the arrays are present (though guaranteed by parent's state initialization, this is defensive)
+    const safeProperties = properties || [];
+    const safeWarranties = warranties || [];
+    const safePolicies = policies || [];
+      
+    const propertyOptions = safeProperties.map(p => ({
         value: `${p.id}|property`,
         label: `Property: ${p.name || p.address}`,
     }));
-    const warrantyOptions = warranties.map(w => ({
+    const warrantyOptions = safeWarranties.map(w => ({
         value: `${w.id}|warranty`,
         label: `Warranty: ${w.providerName} (${w.policyNumber || 'N/A'})`,
     }));
-    const policyOptions = policies.map(p => ({
+    const policyOptions = safePolicies.map(p => ({
         value: `${p.id}|policy`,
         label: `Policy: ${p.carrierName} (${p.policyNumber})`,
     }));
@@ -455,14 +460,16 @@ export default function DocumentsPage() {
     ]);
 
     if (documentsRes.success) {
-        setDocuments(documentsRes.data.documents);
+        // FIX: Ensure setDocuments is called with an array fallback
+        setDocuments(documentsRes.data.documents || []);
     } else {
         toast({ title: 'Error', description: 'Failed to load documents.', variant: 'destructive' });
     }
     
-    if (propertiesRes.success) setProperties(propertiesRes.data.properties);
-    if (warrantiesRes.success) setWarranties(warrantiesRes.data.warranties);
-    if (policiesRes.success) setPolicies(policiesRes.data.policies);
+    // FIX: Apply defensive checks to all successful state updates
+    if (propertiesRes.success) setProperties(propertiesRes.data.properties || []);
+    if (warrantiesRes.success) setWarranties(warrantiesRes.data.warranties || []);
+    if (policiesRes.success) setPolicies(policiesRes.data.policies || []);
 
     setIsLoading(false);
   }, [toast]);
@@ -500,7 +507,8 @@ export default function DocumentsPage() {
   }, [warranties, policies, properties]);
 
   const filteredDocuments = useMemo(() => {
-    let list = documents;
+    // FIX: Ensure 'documents' is an array before attempting to read 'sort'
+    let list = documents || [];
 
     if (filterType !== 'ALL') {
       list = list.filter(doc => doc.type === filterType);
