@@ -803,3 +803,76 @@ export interface CreateInsurancePolicyInput {
   expiryDate: string; // ISO date string
 }
 export interface UpdateInsurancePolicyInput extends Partial<CreateInsurancePolicyInput> {}
+
+// ============================================================================
+// NEW APPLIANCE ORACLE TYPES (PHASE 3)
+// ============================================================================
+
+export interface ApplianceRecommendation {
+  brand: string;
+  model: string;
+  features: string[];
+  estimatedCost: number;
+  energyRating: string;
+  warranty: string;
+  reasoning: string;
+}
+
+export interface ApplianceFailurePrediction {
+  applianceName: string;
+  category: string;
+  currentAge: number;
+  expectedLife: number;
+  remainingLife: number;
+  failureRisk: number; // 0-100%
+  urgency: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  estimatedFailureDate: Date; // ISO Date string in transit, Date object on backend service. Use string here for API response clarity.
+  replacementCost: number;
+  recommendations: ApplianceRecommendation[];
+  maintenanceImpact: string;
+}
+
+export interface OracleReport {
+  propertyId: string;
+  propertyAddress: string;
+  totalAppliances: number;
+  criticalCount: number;
+  highRiskCount: number;
+  estimatedTotalCost: number;
+  predictions: ApplianceFailurePrediction[];
+  generatedAt: string; // ISO Date string
+}
+
+
+// ============================================================================
+// NEW BUDGET FORECASTER TYPES (PHASE 3)
+// ============================================================================
+
+export interface MonthlyForecast {
+  month: string;
+  routine: number;
+  preventive: number;
+  unexpected: number;
+  total: number;
+  tasks: string[];
+}
+
+export interface CategoryBreakdown {
+  category: string;
+  annualCost: number;
+  percentage: number;
+  items: string[];
+}
+
+export interface BudgetForecast {
+  propertyId: string;
+  propertyAddress: string;
+  propertyAge: number;
+  totalAnnualCost: number;
+  monthlyAverage: number;
+  confidenceLevel: number;
+  monthlyForecasts: MonthlyForecast[];
+  categoryBreakdowns: CategoryBreakdown[];
+  recommendations: string[];
+  generatedAt: string; // ISO Date string
+}

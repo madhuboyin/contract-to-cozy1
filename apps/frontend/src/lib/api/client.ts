@@ -40,6 +40,9 @@ import {
   // NEW FINANCIAL EFFICIENCY TYPES
   FinancialEfficiencyReport, // [NEW IMPORT]
   FinancialReportSummary, // [NEW IMPORT]
+  // [NEW IMPORTS] for AI Report Typing
+  OracleReport, 
+  BudgetForecast,
 } from '@/types';
 
 // REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
@@ -1356,7 +1359,7 @@ class APIClient {
    * Get AI-powered appliance replacement predictions
    */
   async getApplianceOracle(propertyId: string): Promise<APIResponse<any>> {
-    return this.request(`/api/oracle/predict/${propertyId}`);
+    return this.request<OracleReport>(`/api/oracle/predict/${propertyId}`);
   }
 
   /**
@@ -1369,7 +1372,7 @@ class APIClient {
    * Get 12-month maintenance budget forecast
    */
   async getBudgetForecast(propertyId: string): Promise<APIResponse<any>> {
-    return this.request(`/api/budget/forecast/${propertyId}`);
+    return this.request<BudgetForecast>(`/api/budget/forecast/${propertyId}`);
   }
 
 }

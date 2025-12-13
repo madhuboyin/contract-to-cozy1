@@ -2,6 +2,11 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../lib/prisma';
+// [NEW IMPORT] Import AI constants
+import { 
+  LLM_MODEL_CONFIG, 
+  ORACLE_RECOMMENDATION_PROMPT_TEMPLATE 
+} from '../config/ai-constants';
 
 interface ApplianceFailurePrediction {
   applianceName: string;
@@ -287,37 +292,21 @@ export class ApplianceOracleService {
     }
 
     try {
-      const prompt = `You are a home appliance expert. Recommend 3 specific replacement options for a ${applianceName}.
-
-Property details:
-- Location: ${property.city}, ${property.state}
-- Property type: ${property.propertyType || 'Residential'}
-- Budget range: $${Math.round(budget * 0.8)} - $${Math.round(budget * 1.2)}
-
-Provide recommendations in this EXACT JSON format (no markdown, no code blocks):
-[
-  {
-    "brand": "Brand Name",
-    "model": "Specific Model Number",
-    "features": ["Feature 1", "Feature 2", "Feature 3"],
-    "estimatedCost": 0000,
-    "energyRating": "Energy Star rating or efficiency",
-    "warranty": "X year warranty",
-    "reasoning": "Why this is recommended (1 sentence)"
-  }
-]
-
-Focus on reliable brands, energy efficiency, and value. Include budget, mid-range, and premium options.`;
+      // [REFACTORED] Use imported template function
+      const prompt = ORACLE_RECOMMENDATION_PROMPT_TEMPLATE(applianceName, budget, property);
 
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash-exp",
+        // [REFACTORED] Use constant for model
+        model: LLM_MODEL_CONFIG.ADVANCED_MODEL,
         contents: [{
           role: "user",
           parts: [{ text: prompt }]
         }],
         config: {
-          maxOutputTokens: 1000,
-          temperature: 0.7,
+          // [REFACTORED] Use constant for maxOutputTokens
+          maxOutputTokens: LLM_MODEL_CONFIG.ORACLE_MAX_TOKENS,
+          // [REFACTORED] Use constant for temperature
+          temperature: LLM_MODEL_CONFIG.RECOMMENDATION_TEMPERATURE,
         }
       });
 

@@ -2,6 +2,14 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../lib/prisma';
+// [NEW IMPORT] Import AI and business logic constants
+import { 
+  LLM_MODEL_CONFIG, 
+  BUDGET_RECOMMENDATION_PROMPT_TEMPLATE,
+  MONTHLY_BASE_COSTS, 
+  SEASONAL_TASKS, 
+  MAINTENANCE_CATEGORY_BREAKDOWN 
+} from '../config/ai-constants';
 
 interface MonthlyForecast {
   month: string;
@@ -32,27 +40,7 @@ interface BudgetForecast {
   generatedAt: Date;
 }
 
-const MONTHLY_BASE_COSTS = {
-  'SINGLE_FAMILY': 170,
-  'CONDO': 100,
-  'TOWNHOUSE': 130,
-  'MULTI_FAMILY': 250,
-};
-
-const SEASONAL_TASKS = {
-  'January': ['HVAC filter', 'Check heating system', 'Inspect insulation'],
-  'February': ['Water heater maintenance', 'Check pipes for freezing'],
-  'March': ['Gutter cleaning', 'Roof inspection', 'AC prep'],
-  'April': ['Lawn care starts', 'Exterior paint check', 'Window cleaning'],
-  'May': ['AC servicing', 'Sprinkler system check'],
-  'June': ['Deck/patio maintenance', 'Tree trimming'],
-  'July': ['Pool maintenance', 'Pest control'],
-  'August': ['Gutter cleaning', 'Exterior cleaning'],
-  'September': ['HVAC maintenance', 'Heating system prep'],
-  'October': ['Chimney cleaning', 'Winterization'],
-  'November': ['Furnace servicing', 'Weather stripping'],
-  'December': ['Holiday prep', 'Emergency fund check'],
-};
+// [REMOVED HARDCODED CONSTANTS: MONTHLY_BASE_COSTS and SEASONAL_TASKS]
 
 export class BudgetForecasterService {
   private ai: GoogleGenAI;
@@ -87,6 +75,7 @@ export class BudgetForecasterService {
       : 10;
 
     // Get base monthly cost
+    // [REFACTORED] Use imported constant
     const baseMonthlyCost = MONTHLY_BASE_COSTS[property.propertyType as keyof typeof MONTHLY_BASE_COSTS] || 150;
 
     // Age multiplier (older homes cost more)
@@ -141,6 +130,7 @@ export class BudgetForecasterService {
 
     for (let i = 0; i < 12; i++) {
       const month = months[i];
+      // [REFACTORED] Use imported constant
       const seasonalTasks = SEASONAL_TASKS[month as keyof typeof SEASONAL_TASKS] || [];
 
       // Seasonal variation
@@ -169,43 +159,8 @@ export class BudgetForecasterService {
   private generateCategoryBreakdowns(property: any, totalAnnual: number): CategoryBreakdown[] {
     const homeAssets = property.homeAssets || [];
     
-    const categories = [
-      { 
-        category: 'HVAC', 
-        percentage: 25, 
-        items: ['Seasonal maintenance', 'Filter replacements', 'System checks']
-      },
-      { 
-        category: 'Plumbing', 
-        percentage: 15, 
-        items: ['Drain cleaning', 'Leak repairs', 'Water heater maintenance']
-      },
-      { 
-        category: 'Electrical', 
-        percentage: 10, 
-        items: ['Outlet repairs', 'Safety inspections', 'Lighting']
-      },
-      { 
-        category: 'Exterior', 
-        percentage: 20, 
-        items: ['Gutter cleaning', 'Power washing', 'Paint touch-ups']
-      },
-      { 
-        category: 'Lawn & Garden', 
-        percentage: 15, 
-        items: ['Mowing', 'Trimming', 'Seasonal plantings']
-      },
-      { 
-        category: 'Appliances', 
-        percentage: 10, 
-        items: ['Repairs', 'Servicing', 'Replacements']
-      },
-      { 
-        category: 'Emergency Fund', 
-        percentage: 5, 
-        items: ['Unexpected repairs', 'Emergency calls']
-      },
-    ];
+    // [REFACTORED] Use imported constant
+    const categories = MAINTENANCE_CATEGORY_BREAKDOWN;
 
     // Adjust percentages based on property specifics
     if (homeAssets.length > 0) {
@@ -230,28 +185,19 @@ export class BudgetForecasterService {
     }
 
     try {
-      const prompt = `Analyze this property's maintenance budget and provide 5 actionable recommendations:
-
-Property Details:
-- Type: ${property.propertyType}
-- Age: ${propertyAge} years
-- Location: ${property.city}, ${property.state}
-- Annual Budget: $${totalAnnual}
-
-Provide recommendations in this EXACT format (no markdown, no code blocks):
-["Recommendation 1", "Recommendation 2", "Recommendation 3", "Recommendation 4", "Recommendation 5"]
-
-Focus on:
-1. Budget optimization tips
-2. Preventive maintenance priorities
-3. Seasonal preparation advice
-4. Cost-saving strategies
-5. Long-term planning`;
+      // [REFACTORED] Use imported template function
+      const prompt = BUDGET_RECOMMENDATION_PROMPT_TEMPLATE(property, totalAnnual, propertyAge);
 
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash-exp",
+        // [REFACTORED] Use constant for model
+        model: LLM_MODEL_CONFIG.ADVANCED_MODEL,
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: { maxOutputTokens: 500, temperature: 0.7 }
+        config: { 
+          // [REFACTORED] Use constant for maxOutputTokens
+          maxOutputTokens: LLM_MODEL_CONFIG.BUDGET_MAX_TOKENS, 
+          // [REFACTORED] Use constant for temperature
+          temperature: LLM_MODEL_CONFIG.RECOMMENDATION_TEMPERATURE 
+        }
       });
 
       const text = response.text;

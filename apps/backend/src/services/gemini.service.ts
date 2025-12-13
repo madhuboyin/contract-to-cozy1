@@ -5,7 +5,12 @@ import * as dotenv from 'dotenv';
 
 // [FIXED IMPORT] Import the necessary function and interface (PropertyAIGuidance) directly
 import { getPropertyContextForAI, PropertyAIGuidance } from './property.service'; 
-
+// [NEW IMPORT] Import AI constants
+import { 
+  LLM_MODEL_CONFIG, 
+  GEMINI_BASE_INSTRUCTION, 
+  GEMINI_CONTEXT_INSTRUCTION_TEMPLATE 
+} from '../config/ai-constants';
 // Load environment variables
 dotenv.config();
 
@@ -16,7 +21,7 @@ const chatSessions = new Map<string, Chat>();
 
 class GeminiService {
   private ai: GoogleGenAI;
-  private model: string = "gemini-2.5-flash"; 
+  private model: string = LLM_MODEL_CONFIG.DEFAULT_MODEL;
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -128,12 +133,13 @@ class GeminiService {
     }
 
     // CRITICAL FIX: Explicitly define the inverse scoring mechanism.
-    let instruction = "You are a helpful AI assistant for a home management platform. Your purpose is to answer homeowner and property-related questions, and help plan maintenance. Be concise, friendly, and professional. **IMPORTANT: The Risk Score in this system is INVERSE: 100 means BEST (minimum risk), and 0 means WORST (maximum risk).**";
-
+    //let instruction = "You are a helpful AI assistant for a home management platform. Your purpose is to answer homeowner and property-related questions, and help plan maintenance. Be concise, friendly, and professional. **IMPORTANT: The Risk Score in this system is INVERSE: 100 means BEST (minimum risk), and 0 means WORST (maximum risk).**";
+    let instruction = GEMINI_BASE_INSTRUCTION;
     // Augment system instruction if context is provided
     if (propertyContext) {
         // Updated instruction to guide AI on using the now-present risk data
-        instruction = `You are an expert AI assistant providing advice for the user's specific property. The following are key facts about the property: [${propertyContext}]. Use this context to personalize your advice, especially on property risk and maintenance. **REMINDER: The Risk Score is inverse (100=BEST, 0=WORST).** If a specific detail is missing from the facts, state that you do not have that specific detail for the property.`;
+        instruction = GEMINI_CONTEXT_INSTRUCTION_TEMPLATE(propertyContext);
+        //instruction = `You are an expert AI assistant providing advice for the user's specific property. The following are key facts about the property: [${propertyContext}]. Use this context to personalize your advice, especially on property risk and maintenance. **REMINDER: The Risk Score is inverse (100=BEST, 0=WORST).** If a specific detail is missing from the facts, state that you do not have that specific detail for the property.`;
     }
 
     const chat = this.ai.chats.create({
