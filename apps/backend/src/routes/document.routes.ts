@@ -54,29 +54,29 @@ const upload = multer({
 /**
  * @swagger
  * /api/documents/analyze:
- * post:
- * summary: Upload and analyze a document with AI
- * tags: [Documents]
- * security:
- * - bearerAuth: []
- * requestBody:
- * required: true
- * content:
- * multipart/form-data:
- * schema:
- * type: object
- * properties:
- * file:
- * type: string
- * format: binary
- * propertyId:
- * type: string
- * description: Optional ID of the property the document belongs to.
- * autoCreateWarranty:
- * type: boolean
- * responses:
- * 200:
- * description: Document analysis complete
+ *   post:
+ *     summary: Upload and analyze a document with AI
+ *     tags: [Documents]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *               propertyId:
+ *                 type: string
+ *                 description: Optional ID of the property the document belongs to.
+ *               autoCreateWarranty:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Document analysis complete
  */
 router.post('/analyze', authenticate, upload.single('file'), validateDocumentUpload, async (req: CustomRequest, res: Response) => {
   try {
@@ -174,14 +174,14 @@ router.post('/analyze', authenticate, upload.single('file'), validateDocumentUpl
 /**
  * @swagger
  * /api/documents:
- * get:
- * summary: Get all documents for the current homeowner
- * tags: [Documents]
- * security:
- * - bearerAuth: []
- * responses:
- * 200:
- * description: List of documents
+ *   get:
+ *     summary: Get all documents for the current homeowner
+ *     tags: [Documents]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of documents
  */
 router.get('/', authenticate, async (req: CustomRequest, res: Response) => {
   try {
@@ -223,20 +223,20 @@ router.get('/', authenticate, async (req: CustomRequest, res: Response) => {
 /**
  * @swagger
  * /api/documents/{id}:
- * delete:
- * summary: Delete a document
- * tags: [Documents]
- * security:
- * - bearerAuth: []
- * parameters:
- * - in: path
- * name: id
- * required: true
- * schema:
- * type: string
- * responses:
- * 200:
- * description: Document deleted
+ *   delete:
+ *     summary: Delete a document
+ *     tags: [Documents]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Document deleted
  */
 router.delete('/:id', authenticate, async (req: CustomRequest, res: Response) => {
   try {
