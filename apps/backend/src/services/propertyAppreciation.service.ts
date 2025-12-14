@@ -112,9 +112,10 @@ export class PropertyAppreciationService {
     let localMarketContext = '';
     
     try {
-        // Step 1: Perform targeted Google Search for recent local appreciation data
-        // The query is updated to focus on Median Home Value for better grounding data
-        const searchQuery = `median home value ${property.city}, ${property.state} zip code ${property.zipCode} Zillow Redfin`;
+        // Step 1: Perform targeted Google Search for median home value (best proxy for comps)
+        // Using property.zipCode provides the most relevant local data
+        const zipCode = property.zipCode || property.state; // Fallback to state if zip not available
+        const searchQuery = `median home value ${property.city}, ${property.state} zip code ${zipCode} Zillow Redfin`;
         
         const searchResults = await google.search({ 
             queries: [searchQuery] 
@@ -202,12 +203,12 @@ export class PropertyAppreciationService {
     }
 
     try {
-      // === START FIX: Removing hardcoded 450000 placeholder ===
+      // === START FIX: Strict Output Enforcement in Prompt ===
       const prompt = `You are an expert, data-driven real estate valuation algorithm (like Zillow's Zestimate or Redfin's Estimate). Your goal is to determine the highest probable *current market selling price* that is consistent with local market data, NOT simply applying the baseline regional growth rate.
 
 Purchase Price: $${purchasePrice.toLocaleString()}
 Purchase Date: ${yearsOwned.toFixed(1)} years ago
-Location: ${property.city}, ${property.state}
+Location: ${property.city}, ${property.state} ${property.zipCode || ''}
 Property Type: ${property.propertyType}
 Square Footage: ${property.squareFootage || 'Unknown'}
 Year Built: ${property.yearBuilt || 'Unknown'}
@@ -219,12 +220,14 @@ ${localMarketContext || 'No specific local data was found. Use only the provided
 ---
 
 Consider:
-1. **Location Market Dynamics:** Prioritize the "CRITICAL LOCAL MARKET DATA" as the most recent and localized indicator of value over the baseline rate. This is essential for matching competitive estimates like Zillow/Redfin.
+1. **Location Market Dynamics:** Prioritize the "CRITICAL LOCAL MARKET DATA" (which includes current median home values) as the most recent and localized indicator of value over the baseline rate. This is essential for matching competitive estimates like Zillow/Redfin.
 2. **Property Characteristics:** Adjust the appreciation rate based on the age, size, and type of the specific property.
-3. **Goal:** The valuation must be realistic for a competitive market and should align with values reported by leading real estate estimate platforms.
+3. **Goal:** The valuation must be realistic for a competitive market.
 
-Return ONLY a number (no formatting, no text). Do not include any dollar signs, commas, or text description of the number. The number should be a direct, single float or integer value representing the price:
-`; // Removed the hardcoded '450000' example value.
+**OUTPUT INSTRUCTION: Return ONLY a single integer value representing the estimated price. Do not include any dollar signs, commas, periods, or text description of the number.**
+
+Estimated Price:
+`; // The final colon and newline enforces the AI to place the number directly next.
       // === END FIX ===
 
       const response = await this.ai.models.generateContent({
@@ -237,10 +240,12 @@ Return ONLY a number (no formatting, no text). Do not include any dollar signs, 
         throw new Error('AI service returned an empty response');
       }
 
+      // Robust parsing to handle any non-numeric output the model might still produce
       const estimatedValue = parseFloat(response.text.replace(/[^0-9.]/g, ''));
       
       if (isNaN(estimatedValue) || estimatedValue < purchasePrice * 0.5 || estimatedValue > purchasePrice * 3) {
-        // Fallback if AI gives unreasonable value
+        // Fallback if AI gives unreasonable value or is unparsable (i.e., NaN)
+        console.warn(`[APPRECIATION] AI estimate unparsable or out of bounds (${estimatedValue}). Falling back to regional rate.`);
         return purchasePrice * Math.pow(1 + regionalRate / 100, yearsOwned);
       }
 
