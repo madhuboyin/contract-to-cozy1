@@ -246,20 +246,21 @@ Example Output:
       
       let estimatedValue: number = NaN;
       try {
-          // Layer 1: Aggressively find and extract the JSON object itself, stripping preambles and markdown
+          // Layer 1: Aggressively find and extract the JSON object, stripping preambles
           const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
           if (jsonMatch && jsonMatch[0]) {
               let jsonString = jsonMatch[0].replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
               
               const result = JSON.parse(jsonString);
               // Assume the key is "price" based on the Example Output
-              estimatedValue = Math.round(result.price);
+              estimatedValue = Math.round(result.price); 
           } else {
               throw new Error("No JSON object found.");
           }
 
       } catch (e) {
           // Layer 2: If JSON parsing fails (or is not found), fall back to aggressive number extraction
+          // Look for any large number (5+ digits), ignoring commas and decimals initially
           const match = rawResponse.match(/(\d{5,})/); 
           
           if (match && match[0]) {
