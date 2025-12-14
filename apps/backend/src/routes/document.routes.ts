@@ -208,7 +208,9 @@ router.get('/', authenticate, async (req: CustomRequest, res: Response) => {
 
     res.json({
       success: true,
-      data: documents
+      data: {
+        documents: documents
+      }
     });
 
   } catch (error: any) {
