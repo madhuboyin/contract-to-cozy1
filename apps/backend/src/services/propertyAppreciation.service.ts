@@ -113,7 +113,6 @@ export class PropertyAppreciationService {
     
     try {
         // Step 1: Perform targeted Google Search for median home value (best proxy for comps)
-        // Using property.zipCode provides the most relevant local data
         const zipCode = property.zipCode || property.state; // Fallback to state if zip not available
         const searchQuery = `median home value ${property.city}, ${property.state} zip code ${zipCode} Zillow Redfin`;
         
@@ -122,6 +121,7 @@ export class PropertyAppreciationService {
         });
         
         localMarketContext = searchResults.result;
+        console.log('[DEBUG] Local Market Context Retrieved (100 chars):', localMarketContext.substring(0, 100) + '...');
     } catch (error) {
         console.error('[APPRECIATION] Google Search error:', error);
         // Fail gracefully: if search fails, localMarketContext remains empty string, and AI uses fallback logic.
@@ -197,9 +197,11 @@ export class PropertyAppreciationService {
     regionalRate: number,
     localMarketContext: string 
   ): Promise<number> {
+    const fallbackValue = purchasePrice * Math.pow(1 + regionalRate / 100, yearsOwned);
+
     if (!this.ai) {
       // Simple compound growth if no AI
-      return purchasePrice * Math.pow(1 + regionalRate / 100, yearsOwned);
+      return fallbackValue;
     }
 
     try {
@@ -227,6 +229,8 @@ Consider:
 **FINAL OUTPUT INSTRUCTION: The estimated price is required to be a single, clean integer number. Output nothing else. Do not include any text, dollar signs, commas, periods, or leading/trailing whitespace. THE OUTPUT MUST BE ONLY THE RAW NUMBER.**
 
 `; 
+      console.log('[DEBUG] AI Prompt Sent (Partial):\n', prompt.substring(0, 1000) + '...');
+
 
       const response = await this.ai.models.generateContent({
         model: "gemini-2.0-flash-exp",
@@ -235,6 +239,7 @@ Consider:
       });
 
       if (!response.text) {
+        console.warn('[DEBUG] AI service returned an empty response.');
         throw new Error('AI service returned an empty response');
       }
 
@@ -244,17 +249,22 @@ Consider:
       const estimatedValue = parseFloat(cleanResponse.replace(/[^0-9.]/g, ''));
       // === END CRITICAL FIX ===
 
+      console.log(`[DEBUG] AI Raw Response: "${response.text}"`);
+      console.log(`[DEBUG] Cleaned Response (Trimmed): "${cleanResponse}"`);
+      console.log(`[DEBUG] Parsed Estimated Value: ${estimatedValue}`);
+      
       if (isNaN(estimatedValue) || estimatedValue < purchasePrice * 0.5 || estimatedValue > purchasePrice * 3) {
         // Fallback if AI gives unreasonable value or is unparsable (i.e., NaN)
-        console.warn(`[APPRECIATION] AI estimate unparsable or out of bounds (${estimatedValue}). Falling back to regional rate.`);
-        return purchasePrice * Math.pow(1 + regionalRate / 100, yearsOwned);
+        console.warn(`[APPRECIATION] AI estimate unparsable (NaN) or out of bounds. Estimated: ${estimatedValue}. Range: ${purchasePrice * 0.5} to ${purchasePrice * 3}. Falling back to regional rate (${Math.round(fallbackValue)}).`);
+        return fallbackValue;
       }
-
+      
+      console.log('[DEBUG] Successfully used AI estimate.');
       return estimatedValue;
 
     } catch (error) {
-      console.error('[APPRECIATION] AI estimation error:', error);
-      return purchasePrice * Math.pow(1 + regionalRate / 100, yearsOwned);
+      console.error('[APPRECIATION] AI estimation error, forcing fallback:', error);
+      return fallbackValue;
     }
   }
 
