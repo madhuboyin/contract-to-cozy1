@@ -204,8 +204,8 @@ export class PropertyAppreciationService {
     }
 
     try {
-      // Step 3: Prompt updated for JSON output enforcement
-      const prompt = `You are an expert, data-driven real estate valuation algorithm (like Zillow's Zestimate or Redfin's Estimate). Your goal is to determine the highest probable *current market selling price* that is consistent with local market data, NOT simply applying the baseline regional growth rate.
+      // Step 3: Prompt updated for simplest possible output
+      const prompt = `You are an expert, data-driven real estate valuation algorithm (like Zillow's Zestimate or Redfin's Estimate). Your goal is to determine the highest probable *current market selling price* that is consistent with local market data.
 
 Purchase Price: $${purchasePrice.toLocaleString()}
 Purchase Date: ${yearsOwned.toFixed(1)} years ago
@@ -221,14 +221,11 @@ ${localMarketContext || 'No specific local data was found. Use only the provided
 ---
 
 Consider:
-1. **Location Market Dynamics:** Prioritize the "CRITICAL LOCAL MARKET DATA" (which includes current median home values) as the most recent and localized indicator of value over the baseline rate. This is essential for matching competitive estimates like Zillow/Redfin.
-2. **Property Characteristics:** Adjust the appreciation rate based on the age, size, and type of the specific property.
+1. **Location Market Dynamics:** Prioritize the "CRITICAL LOCAL MARKET DATA" (which includes current median home values) as the most recent and localized indicator of value over the baseline rate.
+2. **Property Characteristics:** Adjust the estimate based on the property details.
 3. **Goal:** The valuation must be realistic for a competitive market.
 
-**FINAL OUTPUT INSTRUCTION: You MUST return ONLY a single, valid JSON object containing the estimated price. Do not include any text, markdown code blocks (e.g., \`\`\`json), or preamble.**
-
-Example Output:
-{"price": 700000}
+**FINAL OUTPUT INSTRUCTION: Output ONLY the raw estimated price as an integer. Output nothing else. No text, no markdown, no symbols, just the number.**
 `; 
 
       const response = await this.ai.models.generateContent({
@@ -241,32 +238,16 @@ Example Output:
         throw new Error('AI service returned an empty response');
       }
 
-      // === CRITICAL FIX: Ultra-Robust Parsing Logic (JSON primary, regex fallback) ===
+      // === CRITICAL FIX: Aggressively extract the number ===
       const rawResponse = response.text.trim();
       
       let estimatedValue: number = NaN;
-      try {
-          // Layer 1: Aggressively find and extract the JSON object, stripping preambles
-          const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
-          if (jsonMatch && jsonMatch[0]) {
-              let jsonString = jsonMatch[0].replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-              
-              const result = JSON.parse(jsonString);
-              // Assume the key is "price" based on the Example Output
-              estimatedValue = Math.round(result.price); 
-          } else {
-              throw new Error("No JSON object found.");
-          }
-
-      } catch (e) {
-          // Layer 2: If JSON parsing fails (or is not found), fall back to aggressive number extraction
-          // Look for any large number (5+ digits), ignoring commas and decimals initially
-          const match = rawResponse.match(/(\d{5,})/); 
-          
-          if (match && match[0]) {
-              const cleanNumberString = match[0].replace(/,/g, ''); 
-              estimatedValue = Math.round(parseFloat(cleanNumberString));
-          }
+      // Aggressively find the first sequence of 5 or more continuous digits
+      const match = rawResponse.match(/\d{5,}/); 
+      
+      if (match && match[0]) {
+          // Convert the extracted string to an integer
+          estimatedValue = parseInt(match[0], 10);
       }
       // === END CRITICAL FIX ===
       
