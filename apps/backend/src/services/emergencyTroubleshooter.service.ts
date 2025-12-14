@@ -1,6 +1,11 @@
 // apps/backend/src/services/emergencyTroubleshooter.service.ts
 import { GoogleGenAI } from "@google/genai";
 
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 interface EmergencyResponse {
   severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   message: string;
@@ -26,7 +31,6 @@ Be concise, clear, and prioritize safety above all else.`;
 
 export class EmergencyTroubleshooterService {
   private ai: GoogleGenAI;
-  private sessions = new Map<string, any>();
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -36,79 +40,39 @@ export class EmergencyTroubleshooterService {
     this.ai = new GoogleGenAI({ apiKey });
   }
 
-  async startEmergency(
-    sessionId: string, 
-    issue: string, 
+  /**
+   * Stateless chat - accepts full conversation history
+   */
+  async chat(
+    messages: Message[],
     propertyContext?: string
   ): Promise<EmergencyResponse> {
-    const contextPrompt = propertyContext 
-      ? `Property: ${propertyContext}\n\nIssue: ${issue}`
-      : `Issue: ${issue}`;
-      console.log(`[EMERGENCY-START] Session: ${sessionId} | Issue: "${issue.substring(0, 50)}..." | Property Context: ${!!propertyContext}`); // <-- ADDED LOGGING
-    try {
-      const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash-exp",
-        contents: [{
-          role: "user",
-          parts: [{ text: contextPrompt }]
-        }],
-        config: {
-          systemInstruction: EMERGENCY_SYSTEM_PROMPT,
-          maxOutputTokens: 500, // Keep responses concise
-          temperature: 0.3, // More deterministic for safety
-        }
-      });
+    console.log(`[EMERGENCY-CHAT] Processing ${messages.length} messages | Property Context: ${!!propertyContext}`);
+    
+    if (!messages || messages.length === 0) {
+      throw new Error('At least one message is required');
+    }
 
-      const text = response.text;
-      if (!text) {
-        console.error(`[EMERGENCY-ERROR] Session: ${sessionId} | Gemini returned empty response.`); // <-- ENHANCED LOGGING
-        throw new Error('AI service returned an empty response');
-      }
+    // Add property context to first user message if provided
+    const conversationHistory = messages.map((msg, index) => {
+      const geminiRole = msg.role === 'assistant' ? 'model' : 'user';
       
-      // Parse severity
-      const severity = this.extractSeverity(text);
-      const resolution = this.extractResolution(text);
-      const steps = resolution === 'DIY' ? this.extractSteps(text) : undefined;
-
-      // Store session for multi-turn if needed
-      this.sessions.set(sessionId, {
-        issue,
-        severity,
-        history: [{ role: 'user', content: issue }, { role: 'assistant', content: text }]
-      });
-
+      if (index === 0 && msg.role === 'user' && propertyContext) {
+        return {
+          role: geminiRole,
+          parts: [{ text: `Property: ${propertyContext}\n\nIssue: ${msg.content}` }]
+        };
+      }
       return {
-        severity,
-        message: text,
-        resolution,
-        steps
+        role: geminiRole,
+        parts: [{ text: msg.content }]
       };
-    } catch (error) {
-      console.error(`[EMERGENCY-FATAL] Session: ${sessionId} | Failed to call Gemini API.`, { error, issue, propertyContext }); // <-- ENHANCED LOGGING
-      throw new Error('Failed to get emergency response');
-    }
-  }
-
-  async continueSession(
-    sessionId: string, 
-    userMessage: string
-  ): Promise<EmergencyResponse> {
-    const session = this.sessions.get(sessionId);
-    if (!session) {
-      console.error(`[EMERGENCY-ERROR] Session: ${sessionId} | Session not found.`); // <-- ENHANCED LOGGING
-      throw new Error('Session not found');
-    }
-
-    // Add user message to history
-    session.history.push({ role: 'user', content: userMessage });
+    });
 
     try {
       const response = await this.ai.models.generateContent({
         model: "gemini-2.0-flash-exp",
-        contents: session.history.map((msg: any) => ({
-          role: msg.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: msg.content }]
-        })),
+        contents: conversationHistory,
         config: {
           systemInstruction: EMERGENCY_SYSTEM_PROMPT,
           maxOutputTokens: 500,
@@ -118,23 +82,25 @@ export class EmergencyTroubleshooterService {
 
       const text = response.text;
       if (!text) {
-        console.error(`[EMERGENCY-ERROR] Session: ${sessionId} | Gemini returned empty response.`); // <-- ENHANCED LOGGING
+        console.error(`[EMERGENCY-ERROR] Gemini returned empty response`);
         throw new Error('AI service returned an empty response');
       }
-      session.history.push({ role: 'assistant', content: text });
-
+      
+      const severity = this.extractSeverity(text);
       const resolution = this.extractResolution(text);
       const steps = resolution === 'DIY' ? this.extractSteps(text) : undefined;
 
+      console.log(`[EMERGENCY-RESPONSE] Severity: ${severity} | Resolution: ${resolution || 'N/A'}`);
+
       return {
-        severity: session.severity,
+        severity,
         message: text,
         resolution,
         steps
       };
     } catch (error) {
-      console.error(`[EMERGENCY-FATAL] Session: ${sessionId} | Failed to continue emergency session.`, { error, userMessage }); // <-- ENHANCED LOGGING
-      throw new Error('Failed to continue emergency session');
+      console.error(`[EMERGENCY-FATAL] Failed to call Gemini API`, error);
+      throw new Error('Failed to get emergency response');
     }
   }
 
@@ -183,16 +149,6 @@ export class EmergencyTroubleshooterService {
     }
     
     return steps.length > 0 ? steps : [];
-  }
-
-  // Clear old sessions (call periodically)
-  clearOldSessions(maxAgeMs: number = 3600000) { // 1 hour default
-    const now = Date.now();
-    for (const [sessionId, session] of this.sessions.entries()) {
-      if (now - session.createdAt > maxAgeMs) {
-        this.sessions.delete(sessionId);
-      }
-    }
   }
 }
 

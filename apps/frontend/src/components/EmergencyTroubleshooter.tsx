@@ -1,8 +1,8 @@
 // apps/frontend/src/components/EmergencyTroubleshooter.tsx
 'use client';
 
-import { useState } from 'react';
-import { AlertTriangle, CheckCircle, Phone, Wrench, Loader2, XCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api/client';
 
@@ -12,75 +12,55 @@ interface Message {
 }
 
 interface EmergencyTroubleshooterProps {
-  propertyId?: string;
+  propertyId: string;
 }
 
 export default function EmergencyTroubleshooter({ propertyId }: EmergencyTroubleshooterProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [severity, setSeverity] = useState<string | null>(null);
   const [resolution, setResolution] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const startEmergency = async () => {
+  const sendMessage = async () => {
     if (!input.trim()) return;
     
     setLoading(true);
     setError('');
-    setMessages([{ role: 'user', content: input }]);
+    
+    // Add user message to conversation
+    const newMessages: Message[] = [...messages, { role: 'user', content: input }];
+    setMessages(newMessages);
+    setInput('');
     
     try {
-      const response = await api.startEmergency(input, propertyId);
+      const response = await api.emergencyChat(newMessages, propertyId);
       
       if (response.success && response.data) {
-        setSessionId(response.data.sessionId);
+        // Update severity/resolution from response
         setSeverity(response.data.severity);
         setResolution(response.data.resolution || null);
         
-        setMessages(prev => [...prev, {
+        // Add assistant response to conversation
+        setMessages([...newMessages, {
           role: 'assistant',
-          content: response.data!.message
+          content: response.data.message
         }]);
       } else {
-        setError('Failed to start emergency session');
+        setError('Failed to get emergency response');
       }
     } catch (err: any) {
       setError(err.message || 'Failed to connect to emergency service');
     } finally {
       setLoading(false);
-      setInput('');
     }
   };
 
-  const continueSession = async () => {
-    if (!input.trim() || !sessionId) return;
-    
-    setLoading(true);
-    setError('');
-    setMessages(prev => [...prev, { role: 'user', content: input }]);
-    
-    try {
-      const response = await api.continueEmergency(sessionId, input);
-      
-      if (response.success && response.data) {
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: response.data!.message
-        }]);
-        
-        if (response.data.resolution) {
-          setResolution(response.data.resolution);
-        }
-      } else {
-        setError('Failed to continue session');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to get response');
-    } finally {
-      setLoading(false);
-      setInput('');
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
     }
   };
 
@@ -93,76 +73,54 @@ export default function EmergencyTroubleshooter({ propertyId }: EmergencyTrouble
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sessionId ? continueSession() : startEmergency();
-    }
+  const getResolutionBadge = () => {
+    if (!resolution) return null;
+    
+    const badges = {
+      'DIY': { color: 'bg-green-100 text-green-800 border-green-300', text: '✓ You Can Fix This' },
+      'CALL_PRO': { color: 'bg-orange-100 text-orange-800 border-orange-300', text: '☎ Call Professional' },
+      'IMMEDIATE_DANGER': { color: 'bg-red-100 text-red-800 border-red-300', text: '⚠ IMMEDIATE ACTION REQUIRED' }
+    };
+    
+    const badge = badges[resolution as keyof typeof badges];
+    if (!badge) return null;
+    
+    return (
+      <div className={`inline-block px-3 py-1 rounded-full border-2 text-sm font-semibold ${badge.color}`}>
+        {badge.text}
+      </div>
+    );
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-6">
+    <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 bg-red-100 rounded-lg">
-          <AlertTriangle className="h-8 w-8 text-red-600" />
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-6 w-6 text-red-600" />
+            <h3 className="text-xl font-semibold">Emergency Troubleshooter</h3>
+          </div>
+          {getResolutionBadge()}
         </div>
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Emergency Troubleshooter</h1>
-          <p className="text-gray-600">Get instant AI-powered help for home emergencies</p>
-        </div>
+        
+        {severity && (
+          <div className={`inline-block px-3 py-1 rounded-full border-2 text-sm font-semibold ${getSeverityColor()}`}>
+            Severity: {severity}
+          </div>
+        )}
       </div>
-
-      {/* Severity Badge */}
-      {severity && (
-        <div className={`mb-4 px-4 py-3 rounded-lg border-2 ${getSeverityColor()}`}>
-          <p className="font-semibold text-lg">Severity: {severity}</p>
-        </div>
-      )}
-
-      {/* Critical Danger Warning */}
-      {resolution === 'IMMEDIATE_DANGER' && (
-        <div className="mb-4 bg-red-600 text-white p-6 rounded-lg border-4 border-red-800 animate-pulse">
-          <div className="flex items-center gap-3 mb-2">
-            <XCircle className="h-8 w-8" />
-            <p className="font-bold text-2xl">⚠️ IMMEDIATE DANGER</p>
-          </div>
-          <p className="text-lg font-semibold">EVACUATE NOW</p>
-          <p className="mt-2">Call emergency services: <span className="font-mono text-xl">911</span></p>
-        </div>
-      )}
-
-      {/* Call Professional Banner */}
-      {resolution === 'CALL_PRO' && (
-        <div className="mb-4 bg-orange-100 border-2 border-orange-500 p-4 rounded-lg">
-          <div className="flex items-center gap-2">
-            <Phone className="h-5 w-5 text-orange-700" />
-            <p className="font-semibold text-orange-900">Professional Help Recommended</p>
-          </div>
-          <p className="text-sm text-orange-800 mt-1">This issue requires a licensed professional</p>
-        </div>
-      )}
-
-      {/* DIY Success Banner */}
-      {resolution === 'DIY' && (
-        <div className="mb-4 bg-green-100 border-2 border-green-500 p-4 rounded-lg">
-          <div className="flex items-center gap-2">
-            <Wrench className="h-5 w-5 text-green-700" />
-            <p className="font-semibold text-green-900">You Can Fix This Yourself</p>
-          </div>
-          <p className="text-sm text-green-800 mt-1">Follow the steps below carefully</p>
-        </div>
-      )}
 
       {/* Error Message */}
       {error && (
-        <div className="mb-4 bg-red-50 border-2 border-red-300 p-4 rounded-lg">
-          <p className="text-red-800">{error}</p>
+        <div className="mb-4 p-3 bg-red-50 border-2 border-red-300 rounded-lg text-red-800">
+          <p className="font-semibold">Error</p>
+          <p className="text-sm">{error}</p>
         </div>
       )}
 
-      {/* Messages */}
-      <div className="space-y-4 mb-6 max-h-[500px] overflow-y-auto bg-gray-50 rounded-lg p-4">
+      {/* Messages Area */}
+      <div className="flex-1 overflow-y-auto space-y-3 mb-4 min-h-[300px] max-h-[500px]">
         {messages.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-gray-400" />
@@ -205,12 +163,12 @@ export default function EmergencyTroubleshooter({ propertyId }: EmergencyTrouble
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder={sessionId ? "Answer the question or provide more details..." : "Describe your emergency (e.g., 'toilet overflowing')"}
+            placeholder={messages.length === 0 ? "Describe your emergency (e.g., 'toilet overflowing')" : "Answer the question or provide more details..."}
             className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 text-lg"
             disabled={loading}
           />
           <Button
-            onClick={sessionId ? continueSession : startEmergency}
+            onClick={sendMessage}
             disabled={loading || !input.trim()}
             size="lg"
             className="px-6"

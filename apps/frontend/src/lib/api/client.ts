@@ -1216,28 +1216,18 @@ class APIClient {
   // EMERGENCY TROUBLESHOOTER ENDPOINTS
   // ==========================================================================
 
-  async startEmergency(issue: string, propertyId?: string): Promise<APIResponse<{
-    sessionId: string;
+  async emergencyChat(
+    messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+    propertyId: string
+  ): Promise<APIResponse<{
     severity: string;
     message: string;
     resolution?: string;
     steps?: string[];
   }>> {
-    return this.request('/api/emergency/start', {
+    return this.request('/api/emergency/chat', {
       method: 'POST',
-      body: JSON.stringify({ issue, propertyId }),
-    });
-  }
-
-  async continueEmergency(sessionId: string, message: string): Promise<APIResponse<{
-    severity: string;
-    message: string;
-    resolution?: string;
-    steps?: string[];
-  }>> {
-    return this.request('/api/emergency/continue', {
-      method: 'POST',
-      body: JSON.stringify({ sessionId, message }),
+      body: JSON.stringify({ messages, propertyId }),
     });
   }
 

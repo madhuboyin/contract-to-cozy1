@@ -10,9 +10,9 @@ const router = Router();
 
 /**
  * @swagger
- * /api/emergency/start:
+ * /api/emergency/chat:
  *   post:
- *     summary: Start emergency troubleshooting session
+ *     summary: Chat with emergency troubleshooter (stateless)
  *     tags: [Emergency]
  *     security:
  *       - bearerAuth: []
@@ -23,32 +23,64 @@ const router = Router();
  *           schema:
  *             type: object
  *             required:
- *               - issue
+ *               - messages
  *             properties:
- *               issue:
- *                 type: string
- *                 example: "My toilet won't stop running"
+ *               messages:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     role:
+ *                       type: string
+ *                       enum: [user, assistant]
+ *                     content:
+ *                       type: string
+ *                 example:
+ *                   - role: user
+ *                     content: "My toilet won't stop running"
+ *                   - role: assistant
+ *                     content: "This is likely a flapper valve issue..."
+ *                   - role: user
+ *                     content: "How do I fix it?"
  *               propertyId:
  *                 type: string
  *     responses:
  *       200:
  *         description: Emergency response
  */
-router.post('/start', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/chat', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const { issue, propertyId } = req.body;
+    const { messages, propertyId } = req.body;
     const userId = req.user!.userId;
-    console.log(`[REQUEST] /api/emergency/start by user: ${userId} for property: ${propertyId || 'N/A'}`);
     
-    if (!issue || typeof issue !== 'string' || issue.trim().length === 0) {
-      console.error(`[REQUEST-ERROR] /api/emergency/start | Invalid issue: ${issue}`);
+    console.log(`[REQUEST] /api/emergency/chat by user: ${userId} | Messages: ${messages?.length || 0} | Property: ${propertyId || 'N/A'}`);
+    
+    // Validate messages
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      console.error(`[REQUEST-ERROR] /api/emergency/chat | Invalid messages array`);
       return res.status(400).json({
         success: false,
-        message: 'Issue description is required'
+        message: 'Messages array is required and must not be empty'
       });
     }
 
-    const sessionId = `emergency-${userId}-${Date.now()}`;
+    // Validate message format
+    for (const msg of messages) {
+      if (!msg.role || !msg.content || typeof msg.content !== 'string') {
+        console.error(`[REQUEST-ERROR] /api/emergency/chat | Invalid message format`);
+        return res.status(400).json({
+          success: false,
+          message: 'Each message must have role and content'
+        });
+      }
+      if (msg.role !== 'user' && msg.role !== 'assistant') {
+        console.error(`[REQUEST-ERROR] /api/emergency/chat | Invalid role: ${msg.role}`);
+        return res.status(400).json({
+          success: false,
+          message: 'Message role must be either "user" or "assistant"'
+        });
+      }
+    }
     
     // Get property context if propertyId provided
     let propertyContext: string | undefined;
@@ -59,80 +91,20 @@ router.post('/start', authenticate, async (req: AuthRequest, res: Response) => {
       }
     }
     
-    const result = await emergencyService.startEmergency(
-      sessionId, 
-      issue.trim(), 
-      propertyContext
-    );
-    console.log(`[RESPONSE] /api/emergency/start successful. Session: ${sessionId} | Severity: ${result.severity}`);
-    res.json({
-      success: true,
-      data: {
-        sessionId,
-        ...result
-      }
-    });
-  } catch (error: any) {
-    const userId = (req as AuthRequest).user?.userId || 'N/A';
-    console.error(`[ERROR] /api/emergency/start failed for user: ${userId}.`, error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to start emergency session'
-    });
-  }
-});
-
-/**
- * @swagger
- * /api/emergency/continue:
- *   post:
- *     summary: Continue emergency troubleshooting session
- *     tags: [Emergency]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - sessionId
- *               - message
- *             properties:
- *               sessionId:
- *                 type: string
- *               message:
- *                 type: string
- *     responses:
- *       200:
- *         description: Emergency response
- */
-router.post('/continue', authenticate, async (req: AuthRequest, res: Response) => {
-  try {
-    const { sessionId, message } = req.body;
-    const userId = req.user!.userId;
-    console.log(`[REQUEST] /api/emergency/continue by user: ${userId} for session: ${sessionId}`);
-    if (!sessionId || !message) {
-      console.error(`[REQUEST-ERROR] /api/emergency/continue | Missing required fields. Session: ${sessionId} | Message: ${message}`);
-      return res.status(400).json({
-        success: false,
-        message: 'Session ID and message are required'
-      });
-    }
+    const result = await emergencyService.chat(messages, propertyContext);
     
-    const result = await emergencyService.continueSession(sessionId, message.trim());
-    console.log(`[RESPONSE] /api/emergency/continue successful. Session: ${sessionId} | Resolution: ${result.resolution}`);    
+    console.log(`[RESPONSE] /api/emergency/chat successful | Severity: ${result.severity} | Resolution: ${result.resolution || 'N/A'}`);
+    
     res.json({
       success: true,
       data: result
     });
   } catch (error: any) {
     const userId = (req as AuthRequest).user?.userId || 'N/A';
-    console.error(`[ERROR] /api/emergency/continue failed for user: ${userId} and session: ${req.body.sessionId}.`, error);
+    console.error(`[ERROR] /api/emergency/chat failed for user: ${userId}`, error);
     res.status(500).json({
       success: false,
-      message: error.message || 'Failed to continue session'
+      message: error.message || 'Failed to process emergency chat'
     });
   }
 });
