@@ -560,6 +560,7 @@ model Property {
   hasFireExtinguisher Boolean?
   // Appliances
   homeAssets          HomeAsset[]
+  movingPlans         MovingPlan[]  // Add this line
 
   // ============================================================================
   // END NEW PROPERTY DETAILS
@@ -1082,6 +1083,21 @@ model HomeAsset {
   warranties  Warranty[]
   @@index([propertyId])
   @@unique([propertyId, assetType]) // Usually only one furnace per house
+}
+
+model MovingPlan {
+  id              String   @id @default(uuid())
+  propertyId      String
+  closingDate     DateTime
+  planData        Json     // Full moving plan (timeline, costs, utilities, etc.)
+  completedTasks  String[] // Array of completed task IDs
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  @@index([propertyId])
+  @@map("moving_plans")
 }
 
 // ============================================================================
