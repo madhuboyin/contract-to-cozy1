@@ -1,6 +1,8 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/HomeBuyerDashboard.tsx
 
 import React from 'react';
+import Link from 'next/link';
+import { Truck, Sparkles } from 'lucide-react';
 import { Booking, Property } from '@/types';
 import { UpcomingBookingsCard } from './UpcomingBookingsCard';
 import { HomeBuyerChecklistCard } from './HomeBuyerChecklistCard';
@@ -67,6 +69,55 @@ export const HomeBuyerDashboard = ({
 
       {/* Secondary Row for Checklist and Favorites - use a 2-column grid for the rest */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* AI Moving Concierge - Featured for Home Buyers */}
+        <div className="lg:col-span-2">
+          <Link href="/dashboard/moving-concierge">
+            <div className="relative bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-6 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
+              {/* Sparkle indicator */}
+              <div className="absolute top-4 right-4">
+                <Sparkles className="w-6 h-6 text-purple-500 animate-pulse" />
+              </div>
+              
+              {/* NEW badge */}
+              <div className="absolute top-4 right-16">
+                <span className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">
+                  NEW FOR HOME BUYERS
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-6">
+                {/* Icon */}
+                <div className="p-4 bg-green-100 rounded-xl group-hover:scale-110 transition-transform">
+                  <Truck className="h-10 w-10 text-green-600" />
+                </div>
+                
+                {/* Content */}
+                <div className="flex-1">
+                  <h3 className="text-2xl font-bold text-green-900 mb-2">
+                    AI Moving Concierge
+                  </h3>
+                  <p className="text-green-700 mb-3">
+                    Get a personalized moving timeline, task checklist, cost estimates, and AI recommendations for your move
+                  </p>
+                  <div className="flex gap-3 text-sm text-green-800">
+                    <span>✓ Timeline Planning</span>
+                    <span>✓ Task Tracking</span>
+                    <span>✓ Cost Estimates</span>
+                    <span>✓ Utility Setup</span>
+                  </div>
+                </div>
+                
+                {/* Arrow indicator */}
+                <div className="text-green-600 group-hover:translate-x-2 transition-transform">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </Link>
+        </div>
 
         {/* Slot 1: Checklist Card (Spans both columns) */}
         <div className="lg:col-span-2">
