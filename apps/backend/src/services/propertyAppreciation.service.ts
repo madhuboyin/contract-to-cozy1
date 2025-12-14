@@ -204,7 +204,7 @@ export class PropertyAppreciationService {
     }
 
     try {
-      // Step 3: Prompt updated for maximum output strictness
+      // Step 3: Prompt updated for JSON output enforcement
       const prompt = `You are an expert, data-driven real estate valuation algorithm (like Zillow's Zestimate or Redfin's Estimate). Your goal is to determine the highest probable *current market selling price* that is consistent with local market data, NOT simply applying the baseline regional growth rate.
 
 Purchase Price: $${purchasePrice.toLocaleString()}
@@ -225,8 +225,10 @@ Consider:
 2. **Property Characteristics:** Adjust the appreciation rate based on the age, size, and type of the specific property.
 3. **Goal:** The valuation must be realistic for a competitive market.
 
-**FINAL OUTPUT INSTRUCTION: The estimated price is required to be a single, clean integer number. Output nothing else. Do not include any text, dollar signs, commas, periods, or leading/trailing whitespace. THE OUTPUT MUST BE ONLY THE RAW NUMBER.**
+**FINAL OUTPUT INSTRUCTION: You MUST return ONLY a single, valid JSON object containing the estimated price. Do not include any text, markdown code blocks (e.g., \`\`\`json), or preamble.**
 
+Example Output:
+{"price": 700000}
 `; 
 
       const response = await this.ai.models.generateContent({
@@ -239,19 +241,24 @@ Consider:
         throw new Error('AI service returned an empty response');
       }
 
-      // === CRITICAL FIX: Ultra-Robust Parsing Logic ===
+      // === CRITICAL FIX: Ultra-Robust JSON Parsing Logic ===
       const rawResponse = response.text.trim();
       
-      // 1. Find the first continuous sequence of digits (with optional commas/decimals)
-      const match = rawResponse.match(/(\d[\d,.]*)/); 
-      
       let estimatedValue: number = NaN;
-      if (match && match[0]) {
-          // 2. Remove commas (if the AI used them) and then parse
-          const cleanNumberString = match[0].replace(/,/g, ''); 
-          estimatedValue = parseFloat(cleanNumberString);
-          // For property values, we typically want an integer (rounded)
-          estimatedValue = Math.round(estimatedValue); 
+      try {
+          // Attempt to clean up common LLM errors (e.g., surrounding the JSON with markdown)
+          let jsonString = rawResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          
+          const result = JSON.parse(jsonString);
+          estimatedValue = Math.round(result.price); 
+
+      } catch (e) {
+          // If JSON parsing fails, fall back to the most aggressive number extraction
+          const match = rawResponse.match(/(\d[\d,.]*)/); 
+          if (match && match[0]) {
+              const cleanNumberString = match[0].replace(/,/g, ''); 
+              estimatedValue = Math.round(parseFloat(cleanNumberString));
+          }
       }
       // === END CRITICAL FIX ===
       
