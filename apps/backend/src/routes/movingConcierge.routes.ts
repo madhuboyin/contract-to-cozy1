@@ -119,4 +119,142 @@ router.post('/generate-plan', authenticate, async (req: AuthRequest, res: Respon
   }
 });
 
+/**
+ * @swagger
+ * /api/moving-concierge/save-plan:
+ *   post:
+ *     summary: Save moving plan
+ *     tags: [Moving Concierge]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post('/save-plan', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { propertyId, planData } = req.body;
+
+    if (!propertyId || !planData) {
+      return res.status(400).json({
+        success: false,
+        message: 'propertyId and planData are required'
+      });
+    }
+
+    await movingConciergeService.saveMovingPlan(propertyId, userId, planData);
+
+    res.json({
+      success: true,
+      message: 'Moving plan saved successfully'
+    });
+
+  } catch (error: any) {
+    console.error('[MOVING-CONCIERGE] Save error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to save moving plan'
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/moving-concierge/get-plan/{propertyId}:
+ *   get:
+ *     summary: Get saved moving plan
+ *     tags: [Moving Concierge]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get('/get-plan/:propertyId', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { propertyId } = req.params;
+
+    const plan = await movingConciergeService.getMovingPlan(propertyId, userId);
+
+    res.json({
+      success: true,
+      data: plan
+    });
+
+  } catch (error: any) {
+    console.error('[MOVING-CONCIERGE] Get plan error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get moving plan'
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/moving-concierge/update-tasks:
+ *   post:
+ *     summary: Update completed tasks
+ *     tags: [Moving Concierge]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post('/update-tasks', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { propertyId, completedTaskIds } = req.body;
+
+    if (!propertyId || !Array.isArray(completedTaskIds)) {
+      return res.status(400).json({
+        success: false,
+        message: 'propertyId and completedTaskIds array are required'
+      });
+    }
+
+    await movingConciergeService.updateCompletedTasks(
+      propertyId,
+      userId,
+      completedTaskIds
+    );
+
+    res.json({
+      success: true,
+      message: 'Completed tasks updated successfully'
+    });
+
+  } catch (error: any) {
+    console.error('[MOVING-CONCIERGE] Update tasks error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to update completed tasks'
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/moving-concierge/delete-plan/{propertyId}:
+ *   delete:
+ *     summary: Delete moving plan
+ *     tags: [Moving Concierge]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.delete('/delete-plan/:propertyId', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { propertyId } = req.params;
+
+    await movingConciergeService.deleteMovingPlan(propertyId, userId);
+
+    res.json({
+      success: true,
+      message: 'Moving plan deleted successfully'
+    });
+
+  } catch (error: any) {
+    console.error('[MOVING-CONCIERGE] Delete error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to delete moving plan'
+    });
+  }
+});
+
 export default router;

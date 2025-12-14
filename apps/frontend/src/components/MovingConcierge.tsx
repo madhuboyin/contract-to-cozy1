@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Truck, 
   CheckCircle2,
@@ -14,7 +14,9 @@ import {
   AlertCircle,
   Lightbulb,
   Phone,
-  Globe
+  Globe,
+  Save,
+  Check
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -70,7 +72,9 @@ interface MovingConciergeProps {
 export default function MovingConcierge({ propertyId, propertyAddress, squareFootage }: MovingConciergeProps) {
   const [plan, setPlan] = useState<MovingPlan | null>(null);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState('');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   // Form fields
   const [closingDate, setClosingDate] = useState('');
@@ -84,6 +88,47 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
   const [specialRequirements, setSpecialRequirements] = useState('');
 
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
+
+  // Load saved plan on mount
+  useEffect(() => {
+    const loadSavedPlan = async () => {
+      try {
+        const response = await api.getMovingPlan(propertyId);
+        if (response.success && response.data) {
+          setPlan(response.data);
+          // Restore completed tasks from saved plan
+          if (response.data.completedTasks && Array.isArray(response.data.completedTasks)) {
+            setCompletedTasks(new Set(response.data.completedTasks));
+          }
+        }
+      } catch (err) {
+        console.log('No saved plan found or error loading:', err);
+      } finally {
+        setInitialLoading(false);
+      }
+    };
+
+    loadSavedPlan();
+  }, [propertyId]);
+
+  // Auto-save completed tasks (debounced)
+  useEffect(() => {
+    if (!plan || saveStatus === 'saving') return;
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        setSaveStatus('saving');
+        await api.updateCompletedTasks(propertyId, Array.from(completedTasks));
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+      } catch (err) {
+        console.error('Failed to save task completion:', err);
+        setSaveStatus('idle');
+      }
+    }, 1000); // Debounce 1 second
+
+    return () => clearTimeout(timeoutId);
+  }, [completedTasks, propertyId, plan]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,7 +151,19 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
       });
 
       if (response.success && response.data) {
-        setPlan(response.data as MovingPlan);
+        const newPlan = response.data as MovingPlan;
+        setPlan(newPlan);
+        
+        // Auto-save to database
+        try {
+          setSaveStatus('saving');
+          await api.saveMovingPlan(propertyId, newPlan);
+          setSaveStatus('saved');
+          setTimeout(() => setSaveStatus('idle'), 2000);
+        } catch (saveErr) {
+          console.error('Failed to auto-save plan:', saveErr);
+          setSaveStatus('idle');
+        }
       } else {
         setError(response.message || 'Failed to generate moving plan');
       }
@@ -125,6 +182,21 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
       newCompleted.add(taskId);
     }
     setCompletedTasks(newCompleted);
+  };
+
+  const handleManualSave = async () => {
+    if (!plan) return;
+    
+    try {
+      setSaveStatus('saving');
+      await api.saveMovingPlan(propertyId, plan);
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (err) {
+      console.error('Failed to save plan:', err);
+      setError('Failed to save plan');
+      setSaveStatus('idle');
+    }
   };
 
   const getPriorityColor = (priority: string) => {
@@ -235,6 +307,18 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
     );
   };
 
+  // Show loading state while checking for saved plan
+  if (initialLoading) {
+    return (
+      <Card>
+        <CardContent className="p-12 flex flex-col items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-green-600 mb-4" />
+          <p className="text-gray-600">Loading your moving plan...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (plan) {
     const totalTasks = Object.values(plan.timeline).flat().length;
     const completedCount = completedTasks.size;
@@ -242,7 +326,7 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
 
     return (
       <div className="space-y-6">
-        {/* Header */}
+        {/* Header with Save Status */}
         <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -267,6 +351,22 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
                 className="bg-green-600 h-3 rounded-full transition-all"
                 style={{ width: `${overallProgress}%` }}
               />
+            </div>
+
+            {/* Save Status Indicator */}
+            <div className="mt-3 flex items-center justify-end gap-2">
+              {saveStatus === 'saving' && (
+                <div className="flex items-center gap-2 text-sm text-blue-600">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Saving...</span>
+                </div>
+              )}
+              {saveStatus === 'saved' && (
+                <div className="flex items-center gap-2 text-sm text-green-600">
+                  <Check className="w-4 h-4" />
+                  <span>Saved</span>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -463,15 +563,40 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
           </CardContent>
         </Card>
 
-        {/* Footer */}
+        {/* Footer with Actions */}
         <Card className="bg-gray-50">
           <CardContent className="p-4 flex justify-between items-center">
             <p className="text-xs text-gray-600">
               Plan generated on {new Date(plan.generatedAt).toLocaleString()}
             </p>
-            <Button variant="outline" onClick={() => setPlan(null)}>
-              Create New Plan
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={handleManualSave}
+                disabled={saveStatus === 'saving'}
+                className="flex items-center gap-2"
+              >
+                {saveStatus === 'saving' ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : saveStatus === 'saved' ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Saved
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    Save Plan
+                  </>
+                )}
+              </Button>
+              <Button variant="outline" onClick={() => setPlan(null)}>
+                Create New Plan
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -704,6 +704,143 @@ Focus on: timing, cost-saving tips, stress reduction, family-specific advice.`;
 
     return recs.slice(0, 6);
   }
+  async saveMovingPlan(
+    propertyId: string,
+    userId: string,
+    planData: MovingPlan
+  ): Promise<void> {
+    // Verify property belongs to user
+    const property = await prisma.property.findFirst({
+      where: {
+        id: propertyId,
+        homeownerProfile: { userId }
+      }
+    });
+  
+    if (!property) {
+      throw new Error('Property not found');
+    }
+  
+    // Save or update plan
+    const existingPlan = await prisma.movingPlan.findFirst({
+      where: { propertyId }
+    });
+
+    if (existingPlan) {
+      await prisma.movingPlan.update({
+        where: { id: existingPlan.id },
+        data: {
+          closingDate: new Date(planData.closingDate),
+          planData: planData as any,
+          updatedAt: new Date(),
+        },
+      });
+    } else {
+      await prisma.movingPlan.create({
+        data: {
+          propertyId: propertyId,
+          closingDate: new Date(planData.closingDate),
+          planData: planData as any,
+          completedTasks: [],
+        },
+      });
+    }
+  }
+  
+  async getMovingPlan(
+    propertyId: string,
+    userId: string
+  ): Promise<MovingPlan | null> {
+    // Verify property belongs to user
+    const property = await prisma.property.findFirst({
+      where: {
+        id: propertyId,
+        homeownerProfile: { userId }
+      }
+    });
+  
+    if (!property) {
+      throw new Error('Property not found');
+    }
+  
+    const savedPlan = await prisma.movingPlan.findFirst({
+      where: { propertyId }
+    });
+  
+    if (!savedPlan) {
+      return null;
+    }
+  
+    return {
+      ...(savedPlan.planData as any),
+      completedTasks: savedPlan.completedTasks || [],
+    };
+  }
+  
+  async updateCompletedTasks(
+    propertyId: string,
+    userId: string,
+    completedTaskIds: string[]
+  ): Promise<void> {
+    // Verify property belongs to user
+    const property = await prisma.property.findFirst({
+      where: {
+        id: propertyId,
+        homeownerProfile: { userId }
+      }
+    });
+  
+    if (!property) {
+      throw new Error('Property not found');
+    }
+  
+    const existingPlan = await prisma.movingPlan.findFirst({
+      where: { propertyId }
+    });
+
+    if (!existingPlan) {
+      throw new Error('Moving plan not found');
+    }
+
+    await prisma.movingPlan.update({
+      where: { id: existingPlan.id },
+      data: {
+        completedTasks: completedTaskIds,
+        updatedAt: new Date(),
+      },
+    });
+  }
+  
+  async deleteMovingPlan(
+    propertyId: string,
+    userId: string
+  ): Promise<void> {
+    // Verify property belongs to user
+    const property = await prisma.property.findFirst({
+      where: {
+        id: propertyId,
+        homeownerProfile: { userId }
+      }
+    });
+  
+    if (!property) {
+      throw new Error('Property not found');
+    }
+  
+    // Find the moving plan first, then delete by id
+    const existingPlan = await prisma.movingPlan.findFirst({
+      where: { propertyId }
+    });
+
+    if (existingPlan) {
+      await prisma.movingPlan.delete({
+        where: { id: existingPlan.id }
+      });
+    }
+  }
+
 }
+
+
 
 export const movingConciergeService = new MovingConciergeService();

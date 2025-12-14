@@ -1390,6 +1390,31 @@ class APIClient {
       body: JSON.stringify(data),
     });
   }
+  async saveMovingPlan(propertyId: string, planData: any): Promise<APIResponse<any>> {
+    return this.request('/api/moving-concierge/save-plan', {
+      method: 'POST',
+      body: JSON.stringify({ propertyId, planData }),
+    });
+  }
+  
+  async getMovingPlan(propertyId: string): Promise<APIResponse<any>> {
+    return this.request(`/api/moving-concierge/get-plan/${propertyId}`, {
+      method: 'GET',
+    });
+  }
+  
+  async updateCompletedTasks(propertyId: string, completedTaskIds: string[]): Promise<APIResponse<any>> {
+    return this.request('/api/moving-concierge/update-tasks', {
+      method: 'POST',
+      body: JSON.stringify({ propertyId, completedTaskIds }),
+    });
+  }
+  
+  async deleteMovingPlan(propertyId: string): Promise<APIResponse<any>> {
+    return this.request(`/api/moving-concierge/delete-plan/${propertyId}`, {
+      method: 'DELETE',
+    });
+  }
 
 }
 
