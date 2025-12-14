@@ -1336,28 +1336,13 @@ class APIClient {
     });
   }
   async getEnergyAudit(formData: FormData): Promise<APIResponse<any>> {
-    return this.request('/api/energy/audit', {
-      method: 'POST',
-      body: formData,
-      headers: {
-        'Authorization': `Bearer ${this.getToken()}`,
-      },
-    });
+    return this.formDataRequest('/api/energy/audit', formData);
   }
   async analyzePropertyImages(formData: FormData): Promise<APIResponse<any>> {
-    return this.request('/api/visual-inspector/analyze', {
-      method: 'POST',
-      body: formData,
-      headers: {
-        'Authorization': `Bearer ${this.getToken()}`,
-      },
-    });
+    return this.formDataRequest('/api/visual-inspector/analyze', formData);
   }
   async extractTaxBill(formData: FormData) {
-    return this.request('/api/tax-appeal/extract-bill', {
-      method: 'POST',
-      body: formData,
-    });
+    return this.formDataRequest('/api/tax-appeal/extract-bill', formData);
   }
   
   async analyzeTaxAppeal(data: {
