@@ -25,9 +25,6 @@ const DOCUMENT_TYPES: DocumentType[] = [
 
 const SELECT_NONE_VALUE = '__NONE__';
 
-const searchParams = useSearchParams();
-const propertyIdFromUrl = searchParams.get('propertyId');
-
 // --- AI Smart Upload Component ---
 interface AISmartUploadProps {
   properties: Property[];
@@ -500,6 +497,10 @@ export default function DocumentsPage() {
   const [filterType, setFilterType] = useState<string | 'ALL'>('ALL');
   const [filterParentType, setFilterParentType] = useState<string | 'ALL'>('ALL');
   const { toast } = useToast();
+
+  // Get propertyId from URL parameters
+  const searchParams = useSearchParams();
+  const propertyIdFromUrl = searchParams.get('propertyId');
 
   const fetchDependencies = useCallback(async () => {
     setIsLoading(true);
