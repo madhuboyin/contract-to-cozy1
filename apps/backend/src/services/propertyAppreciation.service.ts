@@ -1,5 +1,9 @@
 // apps/backend/src/services/propertyAppreciation.service.ts
 
+declare const google: {
+  search: (params: { queries: string[] }) => Promise<{ result: string }>;
+};
+
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../config/database';
 
@@ -101,13 +105,35 @@ export class PropertyAppreciationService {
     const today = new Date();
     const yearsOwned = (today.getTime() - purchaseDateObj.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
 
-    // Estimate current value using compound growth
+    // === START ENHANCEMENT (OPTION 1) ===
+
+    let localMarketContext = '';
+    
+    try {
+        // Step 1: Perform targeted Google Search for recent local appreciation data
+        const searchQuery = `${property.city}, ${property.state} recent annual home price appreciation rate Zillow Redfin`;
+        
+        const searchResults = await google.search({ 
+            queries: [searchQuery] 
+        });
+        
+        localMarketContext = searchResults.result;
+    } catch (error) {
+        console.error('[APPRECIATION] Google Search error:', error);
+        // Fail gracefully: if search fails, localMarketContext remains empty string, and AI uses fallback logic.
+    }
+
+    // Step 2: Estimate current value using compound growth, now with augmented context
     const currentEstimatedValue = await this.estimateCurrentValue(
       property,
       finalPurchasePrice,
       yearsOwned,
-      regionalRate
+      regionalRate,
+      localMarketContext // <--- NEW ARGUMENT PASSED
     );
+
+    // === END ENHANCEMENT (OPTION 1) ===
+
 
     const totalAppreciation = currentEstimatedValue - finalPurchasePrice;
     const totalAppreciationPercent = (totalAppreciation / finalPurchasePrice) * 100;
@@ -164,7 +190,8 @@ export class PropertyAppreciationService {
     property: any,
     purchasePrice: number,
     yearsOwned: number,
-    regionalRate: number
+    regionalRate: number,
+    localMarketContext: string // <--- NEW PARAMETER
   ): Promise<number> {
     if (!this.ai) {
       // Simple compound growth if no AI
@@ -172,7 +199,8 @@ export class PropertyAppreciationService {
     }
 
     try {
-      const prompt = `Estimate the current market value of this property:
+      // Step 3: Enhanced prompt to instruct Gemini to prioritize the live search context
+      const prompt = `You are an expert, data-driven real estate valuation algorithm (like Zillow's Zestimate or Redfin's Estimate). Your goal is to determine the highest probable *current market selling price* that is consistent with local market data, NOT simply applying the baseline regional growth rate.
 
 Purchase Price: $${purchasePrice.toLocaleString()}
 Purchase Date: ${yearsOwned.toFixed(1)} years ago
@@ -180,13 +208,17 @@ Location: ${property.city}, ${property.state}
 Property Type: ${property.propertyType}
 Square Footage: ${property.squareFootage || 'Unknown'}
 Year Built: ${property.yearBuilt || 'Unknown'}
-Regional Appreciation Rate: ${regionalRate}% annually
+FHFA Baseline Regional Appreciation Rate: ${regionalRate}% annually
+
+---
+CRITICAL LOCAL MARKET DATA (From Current Web Search for ${property.city}, ${property.state}):
+${localMarketContext || 'No specific local data was found. Use only the provided FHFA baseline and general market knowledge.'}
+---
 
 Consider:
-- Location market dynamics
-- Property characteristics
-- Market trends
-- Economic conditions
+1. **Location Market Dynamics:** Prioritize the "CRITICAL LOCAL MARKET DATA" as the most recent and localized indicator of value over the baseline rate. This is essential for matching competitive estimates like Zillow/Redfin.
+2. **Property Characteristics:** Adjust the appreciation rate based on the age, size, and type of the specific property.
+3. **Goal:** The valuation must be realistic for a competitive market and should align with values reported by leading real estate estimate platforms.
 
 Return ONLY a number (no formatting, no text):
 450000`;
