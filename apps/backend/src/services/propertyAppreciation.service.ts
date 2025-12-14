@@ -244,19 +244,17 @@ Consider:
         throw new Error('AI service returned an empty response');
       }
 
-      // === CRITICAL FIX: Robust regex-based number extraction ===
+      // === CRITICAL FIX: Robust parsing with aggressive cleanup and trim ===
       const rawResponse = response.text.trim();
       console.log(`[DEBUG] AI Raw Response: "${rawResponse}"`);
 
-      // Aggressively find and extract the first continuous sequence of digits
-      const match = rawResponse.match(/\d{5,}/); // Look for 5 or more continuous digits (to ensure it's a price, not a date or small number)
-      
-      let estimatedValue: number = NaN;
-      if (match) {
-          estimatedValue = parseInt(match[0], 10);
-      }
+      // 1. Aggressively clean the response string of non-numeric, non-decimal characters (except leading sign)
+      const cleanResponse = rawResponse.replace(/[^0-9.]/g, ''); 
+      // 2. Parse the result
+      const estimatedValue = parseFloat(cleanResponse); 
       // === END CRITICAL FIX ===
 
+      console.log(`[DEBUG] Cleaned String for Parse: "${cleanResponse}"`);
       console.log(`[DEBUG] Parsed Estimated Value: ${estimatedValue}`);
       
       if (isNaN(estimatedValue) || estimatedValue < purchasePrice * 0.5 || estimatedValue > purchasePrice * 3) {
