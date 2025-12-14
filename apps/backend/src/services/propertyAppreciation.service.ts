@@ -1,10 +1,10 @@
 // apps/backend/src/services/propertyAppreciation.service.ts
 
-// --- START FIX: TypeScript declaration for the 'google' tool ---
+// --- FIX: TypeScript declaration for the 'google' tool ---
 declare const google: {
   search: (params: { queries: string[] }) => Promise<{ result: string }>;
 };
-// --- END FIX: This resolves the "Cannot find name 'google'" compile error ---
+// --- END FIX ---
 
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../config/database';
@@ -195,7 +195,7 @@ export class PropertyAppreciationService {
     purchasePrice: number,
     yearsOwned: number,
     regionalRate: number,
-    localMarketContext: string // <--- NEW PARAMETER
+    localMarketContext: string 
   ): Promise<number> {
     if (!this.ai) {
       // Simple compound growth if no AI
@@ -203,7 +203,7 @@ export class PropertyAppreciationService {
     }
 
     try {
-      // === START FIX: Strict Output Enforcement in Prompt ===
+      // Step 3: Prompt updated for maximum output strictness
       const prompt = `You are an expert, data-driven real estate valuation algorithm (like Zillow's Zestimate or Redfin's Estimate). Your goal is to determine the highest probable *current market selling price* that is consistent with local market data, NOT simply applying the baseline regional growth rate.
 
 Purchase Price: $${purchasePrice.toLocaleString()}
@@ -224,11 +224,9 @@ Consider:
 2. **Property Characteristics:** Adjust the appreciation rate based on the age, size, and type of the specific property.
 3. **Goal:** The valuation must be realistic for a competitive market.
 
-**OUTPUT INSTRUCTION: Return ONLY a single integer value representing the estimated price. Do not include any dollar signs, commas, periods, or text description of the number.**
+**FINAL OUTPUT INSTRUCTION: The estimated price is required to be a single, clean integer number. Output nothing else. Do not include any text, dollar signs, commas, periods, or leading/trailing whitespace. THE OUTPUT MUST BE ONLY THE RAW NUMBER.**
 
-Estimated Price:
-`; // The final colon and newline enforces the AI to place the number directly next.
-      // === END FIX ===
+`; 
 
       const response = await this.ai.models.generateContent({
         model: "gemini-2.0-flash-exp",
@@ -240,9 +238,12 @@ Estimated Price:
         throw new Error('AI service returned an empty response');
       }
 
-      // Robust parsing to handle any non-numeric output the model might still produce
-      const estimatedValue = parseFloat(response.text.replace(/[^0-9.]/g, ''));
-      
+      // === CRITICAL FIX: Robust parsing using .trim() ===
+      const cleanResponse = response.text.trim(); 
+      // This removes all non-numeric and non-period characters, then parses the number
+      const estimatedValue = parseFloat(cleanResponse.replace(/[^0-9.]/g, ''));
+      // === END CRITICAL FIX ===
+
       if (isNaN(estimatedValue) || estimatedValue < purchasePrice * 0.5 || estimatedValue > purchasePrice * 3) {
         // Fallback if AI gives unreasonable value or is unparsable (i.e., NaN)
         console.warn(`[APPRECIATION] AI estimate unparsable or out of bounds (${estimatedValue}). Falling back to regional rate.`);
