@@ -1218,7 +1218,7 @@ class APIClient {
 
   async emergencyChat(
     messages: Array<{ role: 'user' | 'assistant'; content: string }>,
-    propertyId: string
+    propertyId?: string
   ): Promise<APIResponse<{
     severity: string;
     message: string;
@@ -1227,7 +1227,7 @@ class APIClient {
   }>> {
     return this.request('/api/emergency/chat', {
       method: 'POST',
-      body: JSON.stringify({ messages, propertyId }),
+      body: JSON.stringify({ messages, propertyId: propertyId || undefined }),
     });
   }
 

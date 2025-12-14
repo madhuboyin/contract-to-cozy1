@@ -12,7 +12,7 @@ interface Message {
 }
 
 interface EmergencyTroubleshooterProps {
-  propertyId: string;
+  propertyId?: string;
 }
 
 export default function EmergencyTroubleshooter({ propertyId }: EmergencyTroubleshooterProps) {
