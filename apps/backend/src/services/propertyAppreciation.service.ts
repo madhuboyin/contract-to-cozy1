@@ -241,21 +241,24 @@ Example Output:
         throw new Error('AI service returned an empty response');
       }
 
-      // === CRITICAL FIX: Ultra-Robust JSON Parsing Logic ===
+      // === CRITICAL FIX: Ultra-Robust Parsing Logic (JSON primary, regex fallback) ===
       const rawResponse = response.text.trim();
       
       let estimatedValue: number = NaN;
       try {
-          // Attempt to clean up common LLM errors (e.g., surrounding the JSON with markdown)
+          // Layer 1: Attempt JSON parsing (most accurate if successful)
           let jsonString = rawResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
           
           const result = JSON.parse(jsonString);
           estimatedValue = Math.round(result.price); 
 
       } catch (e) {
-          // If JSON parsing fails, fall back to the most aggressive number extraction
-          const match = rawResponse.match(/(\d[\d,.]*)/); 
+          // Layer 2: If JSON parsing fails, fall back to aggressive number extraction
+          // Look for any large number, ignoring commas and decimals initially
+          const match = rawResponse.match(/(\d{5,})/); 
+          
           if (match && match[0]) {
+              // Extract the number, parse it, and round it to an integer
               const cleanNumberString = match[0].replace(/,/g, ''); 
               estimatedValue = Math.round(parseFloat(cleanNumberString));
           }
