@@ -121,7 +121,6 @@ export class PropertyAppreciationService {
         });
         
         localMarketContext = searchResults.result;
-        console.log('[DEBUG] Local Market Context Retrieved (100 chars):', localMarketContext.substring(0, 100) + '...');
     } catch (error) {
         console.error('[APPRECIATION] Google Search error:', error);
         // Fail gracefully: if search fails, localMarketContext remains empty string, and AI uses fallback logic.
@@ -198,6 +197,7 @@ export class PropertyAppreciationService {
     localMarketContext: string 
   ): Promise<number> {
     const fallbackValue = purchasePrice * Math.pow(1 + regionalRate / 100, yearsOwned);
+    // FIX: Define roundedFallback in function scope
     const roundedFallback = Math.round(fallbackValue);
 
     if (!this.ai) {
@@ -230,8 +230,6 @@ Consider:
 **FINAL OUTPUT INSTRUCTION: The estimated price is required to be a single, clean integer number. Output nothing else. Do not include any text, dollar signs, commas, periods, or leading/trailing whitespace. THE OUTPUT MUST BE ONLY THE RAW NUMBER.**
 
 `; 
-      console.log('[DEBUG] AI Prompt Sent (Partial):\n', prompt.substring(0, 1000) + '...');
-
 
       const response = await this.ai.models.generateContent({
         model: "gemini-2.0-flash-exp",
@@ -240,30 +238,31 @@ Consider:
       });
 
       if (!response.text) {
-        console.warn('[DEBUG] AI service returned an empty response. Falling back.');
         throw new Error('AI service returned an empty response');
       }
 
-      // === CRITICAL FIX: Robust parsing with aggressive cleanup and trim ===
+      // === CRITICAL FIX: Ultra-Robust Parsing Logic ===
       const rawResponse = response.text.trim();
-      console.log(`[DEBUG] AI Raw Response: "${rawResponse}"`);
-
-      // 1. Aggressively clean the response string of non-numeric, non-decimal characters (except leading sign)
-      const cleanResponse = rawResponse.replace(/[^0-9.]/g, ''); 
-      // 2. Parse the result
-      const estimatedValue = parseFloat(cleanResponse); 
+      
+      // 1. Find the first continuous sequence of digits (with optional commas/decimals)
+      const match = rawResponse.match(/(\d[\d,.]*)/); 
+      
+      let estimatedValue: number = NaN;
+      if (match && match[0]) {
+          // 2. Remove commas (if the AI used them) and then parse
+          const cleanNumberString = match[0].replace(/,/g, ''); 
+          estimatedValue = parseFloat(cleanNumberString);
+          // For property values, we typically want an integer (rounded)
+          estimatedValue = Math.round(estimatedValue); 
+      }
       // === END CRITICAL FIX ===
-
-      console.log(`[DEBUG] Cleaned String for Parse: "${cleanResponse}"`);
-      console.log(`[DEBUG] Parsed Estimated Value: ${estimatedValue}`);
       
       if (isNaN(estimatedValue) || estimatedValue < purchasePrice * 0.5 || estimatedValue > purchasePrice * 3) {
         // Fallback if AI gives unreasonable value or is unparsable (i.e., NaN)
-        console.warn(`[APPRECIATION] AI estimate unparsable (NaN) or out of bounds. Estimated: ${estimatedValue}. Range: ${purchasePrice * 0.5} to ${purchasePrice * 3}. Falling back to regional rate (${roundedFallback}).`);
+        console.warn(`[APPRECIATION] AI estimate unparsable (NaN) or out of bounds. Estimated: ${estimatedValue}. Falling back to regional rate (${roundedFallback}).`);
         return fallbackValue;
       }
       
-      console.log('[DEBUG] Successfully used AI estimate.');
       return estimatedValue;
 
     } catch (error) {
