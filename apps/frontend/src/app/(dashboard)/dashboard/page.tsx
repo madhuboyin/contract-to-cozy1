@@ -244,8 +244,22 @@ export default function DashboardPage() {
       // Extract user type from first property (all properties have same user type)
       if (scoredProperties.length > 0) {
         const firstProperty = scoredProperties[0] as any;
+        console.log('🔍 First Property:', firstProperty);
+        console.log('🔍 Homeowner Profile:', firstProperty.homeownerProfile);
+        
+        // Try multiple paths to find userType
+        let detectedUserType = null;
+        
         if (firstProperty.homeownerProfile?.userType) {
-          setUserType(firstProperty.homeownerProfile.userType);
+          detectedUserType = firstProperty.homeownerProfile.userType;
+        } else if (firstProperty.user?.homeownerProfile?.userType) {
+          detectedUserType = firstProperty.user.homeownerProfile.userType;
+        }
+        
+        console.log('🎯 Detected User Type:', detectedUserType);
+        
+        if (detectedUserType) {
+          setUserType(detectedUserType);
         }
       }
 
@@ -393,6 +407,11 @@ export default function DashboardPage() {
         <div className="flex items-center gap-2 mb-4 pb-3 border-b-2 border-purple-200">
           <Sparkles className="w-6 h-6 text-purple-600" />
           <h2 className="text-2xl font-bold text-gray-900">AI-Powered Features</h2>
+          {/* Debug indicator - Remove after testing */}
+          <div className="ml-4 px-3 py-1 bg-yellow-100 border border-yellow-300 rounded text-xs">
+            <span className="font-semibold">User Type: </span>
+            <span className="font-mono">{userType || 'null'}</span>
+          </div>
           <span className="ml-auto text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-semibold">
             NEW
           </span>
