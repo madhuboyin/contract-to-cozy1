@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { Document, DocumentType, Property, Warranty, InsurancePolicy, DocumentUploadInput } from '@/types';
+import { useSearchParams } from 'next/navigation';
 
 // --- Document Type Constants for UI ---
 const DOCUMENT_TYPES: DocumentType[] = [
@@ -23,6 +24,9 @@ const DOCUMENT_TYPES: DocumentType[] = [
 ];
 
 const SELECT_NONE_VALUE = '__NONE__';
+
+const searchParams = useSearchParams();
+const propertyIdFromUrl = searchParams.get('propertyId');
 
 // --- AI Smart Upload Component ---
 interface AISmartUploadProps {
@@ -96,11 +100,6 @@ const AISmartUpload = ({ properties, onUploadSuccess, onClose }: AISmartUploadPr
           title: 'Document Analyzed Successfully', 
           description: `${response.data.insights.documentType} detected with ${Math.round(response.data.insights.confidence * 100)}% confidence` 
         });
-
-        setTimeout(() => {
-          onUploadSuccess();
-          onClose();
-        }, 2000);
       } else {
         setError(response.message || 'Upload failed');
       }
@@ -222,7 +221,7 @@ const AISmartUpload = ({ properties, onUploadSuccess, onClose }: AISmartUploadPr
         <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 space-y-3">
           <div className="flex items-center gap-2">
             <FileCheck className="h-5 w-5 text-green-600" />
-            <p className="font-semibold text-green-900">Document Analyzed!</p>
+            <p className="font-semibold text-green-900">Document Analyzed Successfully!</p>
           </div>
 
           <div className="space-y-2 text-sm">
@@ -242,11 +241,54 @@ const AISmartUpload = ({ properties, onUploadSuccess, onClose }: AISmartUploadPr
                 <span className="font-medium">{insights.extractedData.productName}</span>
               </div>
             )}
-            {warranty && (
-              <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
-                <p className="text-xs font-semibold text-blue-900">✓ Warranty Auto-Created</p>
+            {insights.extractedData.modelNumber && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Model:</span>
+                <span className="font-medium">{insights.extractedData.modelNumber}</span>
               </div>
             )}
+            {insights.extractedData.warrantyExpiration && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Warranty Expires:</span>
+                <span className="font-medium">
+                  {new Date(insights.extractedData.warrantyExpiration).toLocaleDateString()}
+                </span>
+              </div>
+            )}
+            {warranty && (
+              <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                <p className="text-xs font-semibold text-blue-900 mb-1">✓ Warranty Auto-Created</p>
+                <p className="text-xs text-blue-700">
+                  {warranty.providerName} - Expires {new Date(warranty.expiryDate).toLocaleDateString()}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Manual Close Buttons */}
+          <div className="pt-3 border-t border-green-300 flex gap-2">
+            <Button 
+              onClick={() => {
+                onUploadSuccess();
+                onClose();
+              }}
+              className="flex-1"
+            >
+              Done - View Documents
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={() => {
+                setFile(null);
+                setPreview(null);
+                setSuccess(false);
+                setInsights(null);
+                setWarranty(null);
+                setError('');
+              }}
+            >
+              Upload Another
+            </Button>
           </div>
         </div>
       )}
@@ -464,7 +506,7 @@ export default function DocumentsPage() {
     
     // FIXED: Use correct API method names
     const [documentsRes, propertiesRes, warrantiesRes, policiesRes] = await Promise.all([
-        api.listDocuments(),
+        api.listDocuments(propertyIdFromUrl || undefined),
         api.getProperties(),
         api.listWarranties(),
         api.listInsurancePolicies(),
@@ -483,7 +525,7 @@ export default function DocumentsPage() {
     if (policiesRes.success) setPolicies(policiesRes.data.policies || []);
 
     setIsLoading(false);
-  }, [toast]);
+  }, [toast,propertyIdFromUrl]);
 
   useEffect(() => {
     fetchDependencies();
