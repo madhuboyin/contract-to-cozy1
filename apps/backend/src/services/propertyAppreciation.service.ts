@@ -246,19 +246,23 @@ Example Output:
       
       let estimatedValue: number = NaN;
       try {
-          // Layer 1: Attempt JSON parsing (most accurate if successful)
-          let jsonString = rawResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-          
-          const result = JSON.parse(jsonString);
-          estimatedValue = Math.round(result.price); 
+          // Layer 1: Aggressively find and extract the JSON object itself, stripping preambles and markdown
+          const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+          if (jsonMatch && jsonMatch[0]) {
+              let jsonString = jsonMatch[0].replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+              
+              const result = JSON.parse(jsonString);
+              // Assume the key is "price" based on the Example Output
+              estimatedValue = Math.round(result.price);
+          } else {
+              throw new Error("No JSON object found.");
+          }
 
       } catch (e) {
-          // Layer 2: If JSON parsing fails, fall back to aggressive number extraction
-          // Look for any large number, ignoring commas and decimals initially
+          // Layer 2: If JSON parsing fails (or is not found), fall back to aggressive number extraction
           const match = rawResponse.match(/(\d{5,})/); 
           
           if (match && match[0]) {
-              // Extract the number, parse it, and round it to an integer
               const cleanNumberString = match[0].replace(/,/g, ''); 
               estimatedValue = Math.round(parseFloat(cleanNumberString));
           }
