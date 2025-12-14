@@ -258,6 +258,7 @@ export async function getUserProperties(userId: string): Promise<ScoredProperty[
       { createdAt: 'desc' },
     ],
     include: {
+      homeownerProfile: true,
       homeAssets: true, 
       // FIX 3: Include warranties in the fetch query
       warranties: true, 
