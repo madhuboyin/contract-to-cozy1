@@ -1372,6 +1372,24 @@ class APIClient {
       body: JSON.stringify(data),
     });
   }
+  async generateMovingPlan(data: {
+    propertyId: string;
+    closingDate: string;
+    currentAddress: string;
+    newAddress: string;
+    homeSize: number;
+    numberOfRooms: number;
+    familySize: number;
+    hasPets: boolean;
+    hasValuableItems: boolean;
+    movingDistance: string;
+    specialRequirements?: string;
+  }): Promise<APIResponse<any>> {
+    return this.request('/api/moving-concierge/generate-plan', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
 
 }
 

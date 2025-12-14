@@ -34,6 +34,7 @@ import { Home } from 'lucide-react';
 import { TrendingUp } from 'lucide-react';
 import { Camera } from 'lucide-react';
 import { Scale } from 'lucide-react';
+import { Truck } from 'lucide-react';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -184,6 +185,9 @@ export default function DashboardPage() {
     error: null,
   });
   
+  // Track user type for conditional feature display (HOME_BUYER vs EXISTING_OWNER)
+  const [userType, setUserType] = useState<string | null>(null);
+  
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
 
   // --- DATA FETCHING LOGIC (unchanged) ---
@@ -236,6 +240,14 @@ export default function DashboardPage() {
         isLoading: false,
         error: null,
       });
+
+      // Extract user type from first property (all properties have same user type)
+      if (scoredProperties.length > 0) {
+        const firstProperty = scoredProperties[0] as any;
+        if (firstProperty.homeownerProfile?.userType) {
+          setUserType(firstProperty.homeownerProfile.userType);
+        }
+      }
 
       if (scoredProperties.length > 0 && !selectedPropertyId) {
         setSelectedPropertyId(scoredProperties[0].id);
@@ -579,6 +591,32 @@ export default function DashboardPage() {
               </p>
             </div>
           </Link>
+
+          {/* Moving Concierge - HOME_BUYER ONLY */}
+          {userType === 'HOME_BUYER' && (
+            <Link href="/dashboard/moving-concierge">
+              <div className="relative bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
+                <div className="absolute top-3 right-3">
+                  <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+                </div>
+                
+                <div className="p-3 bg-green-100 rounded-lg w-fit mb-3 group-hover:scale-110 transition-transform">
+                  <Truck className="h-7 w-7 text-green-600" />
+                </div>
+                
+                <h3 className="text-lg font-bold text-green-900 mb-1">
+                  Moving Concierge
+                </h3>
+                <p className="text-green-700 text-sm mb-2">
+                  AI moving timeline & checklist
+                </p>
+                
+                <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded">
+                  NEW HOME BUYERS
+                </span>
+              </div>
+            </Link>
+          )}
         </div>
       </section>
       {/* ========================================= */}
@@ -610,6 +648,8 @@ export default function DashboardPage() {
         </div>
         
       </div>
+      
+
       
       {/* Filter data by selected property before passing to child components */}
       {/* This ensures the red banner and other components show data for the currently selected property only */}
