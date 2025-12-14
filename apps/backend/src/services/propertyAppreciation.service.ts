@@ -1,8 +1,10 @@
 // apps/backend/src/services/propertyAppreciation.service.ts
 
+// --- START FIX: TypeScript declaration for the 'google' tool ---
 declare const google: {
   search: (params: { queries: string[] }) => Promise<{ result: string }>;
 };
+// --- END FIX: This resolves the "Cannot find name 'google'" compile error ---
 
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../config/database';
@@ -111,7 +113,8 @@ export class PropertyAppreciationService {
     
     try {
         // Step 1: Perform targeted Google Search for recent local appreciation data
-        const searchQuery = `${property.city}, ${property.state} recent annual home price appreciation rate Zillow Redfin`;
+        // The query is updated to focus on Median Home Value for better grounding data
+        const searchQuery = `median home value ${property.city}, ${property.state} zip code ${property.zipCode} Zillow Redfin`;
         
         const searchResults = await google.search({ 
             queries: [searchQuery] 
@@ -199,7 +202,7 @@ export class PropertyAppreciationService {
     }
 
     try {
-      // Step 3: Enhanced prompt to instruct Gemini to prioritize the live search context
+      // === START FIX: Removing hardcoded 450000 placeholder ===
       const prompt = `You are an expert, data-driven real estate valuation algorithm (like Zillow's Zestimate or Redfin's Estimate). Your goal is to determine the highest probable *current market selling price* that is consistent with local market data, NOT simply applying the baseline regional growth rate.
 
 Purchase Price: $${purchasePrice.toLocaleString()}
@@ -220,8 +223,9 @@ Consider:
 2. **Property Characteristics:** Adjust the appreciation rate based on the age, size, and type of the specific property.
 3. **Goal:** The valuation must be realistic for a competitive market and should align with values reported by leading real estate estimate platforms.
 
-Return ONLY a number (no formatting, no text):
-450000`;
+Return ONLY a number (no formatting, no text). Do not include any dollar signs, commas, or text description of the number. The number should be a direct, single float or integer value representing the price:
+`; // Removed the hardcoded '450000' example value.
+      // === END FIX ===
 
       const response = await this.ai.models.generateContent({
         model: "gemini-2.0-flash-exp",
