@@ -407,11 +407,6 @@ export default function DashboardPage() {
         <div className="flex items-center gap-2 mb-4 pb-3 border-b-2 border-purple-200">
           <Sparkles className="w-6 h-6 text-purple-600" />
           <h2 className="text-2xl font-bold text-gray-900">AI-Powered Features</h2>
-          {/* Debug indicator - Remove after testing */}
-          <div className="ml-4 px-3 py-1 bg-yellow-100 border border-yellow-300 rounded text-xs">
-            <span className="font-semibold">User Type: </span>
-            <span className="font-mono">{userType || 'null'}</span>
-          </div>
           <span className="ml-auto text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-semibold">
             NEW
           </span>
