@@ -197,8 +197,6 @@ export class PropertyAppreciationService {
     localMarketContext: string 
   ): Promise<number> {
     const fallbackValue = purchasePrice * Math.pow(1 + regionalRate / 100, yearsOwned);
-    // FIX: Define roundedFallback in function scope
-    const roundedFallback = Math.round(fallbackValue);
 
     if (!this.ai) {
       // Simple compound growth if no AI
@@ -259,7 +257,7 @@ Consider:
       
       if (isNaN(estimatedValue) || estimatedValue < purchasePrice * 0.5 || estimatedValue > purchasePrice * 3) {
         // Fallback if AI gives unreasonable value or is unparsable (i.e., NaN)
-        console.warn(`[APPRECIATION] AI estimate unparsable (NaN) or out of bounds. Estimated: ${estimatedValue}. Falling back to regional rate (${roundedFallback}).`);
+        console.warn(`[APPRECIATION] AI estimate unparsable (NaN) or out of bounds. Estimated: ${estimatedValue}. Falling back to regional rate (${Math.round(fallbackValue)}).`);
         return fallbackValue;
       }
       
