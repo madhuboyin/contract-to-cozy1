@@ -33,6 +33,7 @@ import { Cloud } from 'lucide-react';
 import { Home } from 'lucide-react';
 import { TrendingUp } from 'lucide-react';
 import { Camera } from 'lucide-react';
+import { Scale } from 'lucide-react';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -557,6 +558,24 @@ export default function DashboardPage() {
               </h3>
               <p className="text-purple-700 text-sm">
                 AI image analysis & inspection
+              </p>
+            </div>
+          </Link>
+ 
+          {/* Tax Appeal Assistant */}
+          <Link href="/dashboard/tax-appeal">
+            <div className="relative bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl p-5 hover:shadow-xl transition-all">
+              <div className="absolute top-3 right-3">
+                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+              </div>
+              <div className="p-3 bg-blue-100 rounded-lg w-fit mb-3">
+                <Scale className="h-7 w-7 text-blue-600" />
+              </div>
+              <h3 className="text-lg font-bold text-blue-900 mb-1">
+                Tax Appeal Assistant
+              </h3>
+              <p className="text-blue-700 text-sm">
+                AI-powered tax appeal analysis
               </p>
             </div>
           </Link>

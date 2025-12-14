@@ -32,6 +32,7 @@ import modificationRoutes from './routes/homeModification.routes';
 import appreciationRoutes from './routes/propertyAppreciation.routes';
 import energyRoutes from './routes/energyAuditor.routes';
 import visualInspectorRoutes from './routes/visualInspector.routes';
+import taxAppealRoutes from './routes/taxAppeal.routes';
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
 
@@ -248,6 +249,7 @@ app.use('/api/modifications', modificationRoutes);
 app.use('/api/appreciation', appreciationRoutes);
 app.use('/api/energy', energyRoutes);
 app.use('/api/visual-inspector', visualInspectorRoutes);
+app.use('/api/tax-appeal', taxAppealRoutes);
 
 app.use((req: Request, res: Response) => {
   res.status(404).json({

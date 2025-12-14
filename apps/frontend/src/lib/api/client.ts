@@ -258,7 +258,6 @@ class APIClient {
       }
       // --- END: FIX FOR 204 AND BODY STREAM READ ERROR ---
       
-      // FIX 3: Critical Error Handling Logic (Replaced previous logic)
 
       // 3a. Check for generic non-OK response (e.g., 400, 404, 500)
       if (!response.ok) {
@@ -274,9 +273,6 @@ class APIClient {
         }
         
         const errorMessage = typeof rawError === 'string' ? rawError : `HTTP Error: ${response.status}`;
-        // [MODIFICATION END]
-        
-        // CRITICAL FIX: THROW an error instead of returning a success: false object
         throw new APIError(errorMessage, response.status);
       }
 
@@ -292,14 +288,8 @@ class APIClient {
           }
 
           const errorMessage = typeof rawError === 'string' ? rawError : 'Request failed due to business logic error.';
-          // [MODIFICATION END]
-          
-          // CRITICAL FIX: THROW an error for business logic failure
           throw new APIError(errorMessage, response.status); 
       }
-      // --- END: FIX 3 ---
-
-      // --- DEBUG LOG 3: Log Final Data ---
       console.log('API DEBUG: Final Response Data:', data);
       // -----------------------------------
 
@@ -321,9 +311,6 @@ class APIClient {
     }
   }
 
-  /**
-   * Make HTTP request specifically for multipart/form-data (NEW HELPER)
-   */
   private async formDataRequest<T>(
     endpoint: string,
     formData: FormData
@@ -337,7 +324,6 @@ class APIClient {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    // --- DEBUG LOG 4: Log Form Data Request Details ---
     console.log('API DEBUG: Sending FormData Request:', {
         endpoint: `${this.baseURL}${endpoint}`,
         method: 'POST',
@@ -354,15 +340,9 @@ class APIClient {
             body: formData,
         });
 
-        // --- DEBUG LOG 5: Log Raw Form Data Response Status ---
         console.log('API DEBUG: Received Form Data Response Status:', response.status, 'for endpoint:', endpoint);
-        // --------------------------------------------------------
-
         const data = await response.json();
-
-        // --- DEBUG LOG 6: Log Final Form Data ---
         console.log('API DEBUG: Final Form Data Response Data:', data);
-        // ------------------------------------------
 
         if (!response.ok || data.success === false) {
           const errorMessage = (data && data.error) || (data && data.message) || `HTTP Error: ${response.status}`;
@@ -435,8 +415,7 @@ class APIClient {
    */
   async getCurrentUser(tokenOverride?: string): Promise<APIResponse<User>> {
     const options: RequestInit = {};
-    
-    // If a token is provided in the call, inject it directly into the headers
+
     if (tokenOverride) {
       options.headers = { 'Authorization': `Bearer ${tokenOverride}` };
     }
@@ -518,15 +497,10 @@ class APIClient {
       method: 'DELETE',
     });
   }
-
-
   // ==========================================================================
   // NEW GEMINI/AI CHAT ENDPOINTS 
   // ==========================================================================
 
-  /**
-   * Sends a message to the secure backend Gemini proxy.
-   */
   async sendMessageToChat(payload: SendMessageToChatPayload): Promise<APIResponse<ChatResponse>> {
     return this.request<ChatResponse>('/api/gemini/chat', {
       method: 'POST',
@@ -596,10 +570,6 @@ class APIClient {
   // ==========================================================================
   // BOOKING ENDPOINTS 
   // ==========================================================================
-
-  /**
-   * Create booking
-   */
   async createBooking(input: CreateBookingInput): Promise<APIResponse<Booking>> {
     return this.request<Booking>('/api/bookings', {
       method: 'POST',
@@ -707,10 +677,6 @@ class APIClient {
   // ==========================================================================
   // PROPERTY ENDPOINTS 
   // ==========================================================================
-
-  /**
-   * Get all user properties
-   */
   async getProperties(): Promise<APIResponse<{ properties: Property[] }>> {
     return this.request('/api/properties');
   }
@@ -968,10 +934,6 @@ class APIClient {
     return this.request<InsurancePolicy>('/api/home-management/insurance-policies', { method: 'POST', body: data as unknown as BodyInit });
   }
 
-  /**
-   * List insurance policies
-   * FIX: Added propertyId to the function signature
-   */
   async listInsurancePolicies(propertyId?: string): Promise<APIResponse<{ policies: InsurancePolicy[] }>> {
     const query = propertyId ? `?propertyId=${propertyId}` : '';
     return this.request<{ policies: InsurancePolicy[] }>('/api/home-management/insurance-policies' + query);
@@ -989,9 +951,6 @@ class APIClient {
   // NEW DOCUMENT ENDPOINT (ADDED)
   // ==========================================================================
 
-  /**
-   * Uploads a document and associates it with a parent entity.
-   */
   async uploadDocument(file: File, data: DocumentUploadInput): Promise<APIResponse<Document>> {
       const formData = new FormData();
       
@@ -1090,9 +1049,6 @@ class APIClient {
     return this.request(`/api/risk/${propertyId}/ai/climate-risk`);
   }
 
-  /**
-   * [ORIGINAL METHOD] Fetch the lightweight risk summary for the primary property
-   */
   async getPrimaryRiskSummary(): Promise<PrimaryRiskSummary | null> {
     // Uses the request helper since the new endpoint returns the standard { success: true, data: ... } wrapper
     const response = await this.request<PrimaryRiskSummary>('/api/risk/summary/primary');
@@ -1116,10 +1072,6 @@ class APIClient {
   // [NEW IMPLEMENTATION] FINANCIAL EFFICIENCY ENDPOINTS (PHASE 2.5)
   // ==========================================================================
 
-  /**
-   * Fetches the lightweight financial efficiency summary for the dashboard card.
-   * Calls GET /api/v1/financial-efficiency/summary?propertyId=... 
-   */
   async getFinancialReportSummary(propertyId: string): Promise<FinancialReportSummary | null> {
     // The summary endpoint returns the data directly, not wrapped in success/data
     const response = await this.request<FinancialReportSummary>(`/api/v1/financial-efficiency/summary?propertyId=${propertyId}`);
@@ -1194,10 +1146,6 @@ class APIClient {
   // ==========================================================================
   // NEW FAVORITES ENDPOINTS (PHASE 1)
   // ==========================================================================
-
-  /**
-   * Lists the authenticated homeowner's favorite providers.
-   */
   async listFavorites(): Promise<APIResponse<{ favorites: ProviderProfile[] }>> {
     // NOTE: Backend returns ProviderProfile with embedded user and services
     return this.request<{ favorites: ProviderProfile[] }>('/api/users/favorites');
@@ -1230,10 +1178,6 @@ class APIClient {
   // NEW RISK ASSESSMENT ENDPOINTS (PDF - PHASE 3.4)
   // ==========================================================================
 
-  /**
-   * Generates and downloads the Risk Assessment Report as a PDF.
-   * This is typically a premium feature.
-   */
   async downloadRiskReportPdf(propertyId: string): Promise<Blob> {
     const token = this.getToken();
     
@@ -1301,9 +1245,6 @@ class APIClient {
   // DOCUMENT INTELLIGENCE ENDPOINTS
   // ==========================================================================
 
-  /**
-   * Upload and analyze document with AI
-   */
   async analyzeDocument(
     file: File,
     propertyId: string,
@@ -1362,9 +1303,6 @@ class APIClient {
   // APPLIANCE ORACLE ENDPOINTS
   // ==========================================================================
 
-  /**
-   * Get AI-powered appliance replacement predictions
-   */
   async getApplianceOracle(propertyId: string): Promise<APIResponse<any>> {
     return this.request<OracleReport>(`/api/oracle/predict/${propertyId}`);
   }
@@ -1415,6 +1353,26 @@ class APIClient {
       },
     });
   }
+  async extractTaxBill(formData: FormData) {
+    return this.request('/api/tax-appeal/extract-bill', {
+      method: 'POST',
+      body: formData,
+    });
+  }
+  
+  async analyzeTaxAppeal(data: {
+    propertyId: string;
+    taxBillData: any;
+    userMarketEstimate?: number;
+    comparableSales?: any[];
+    propertyConditionNotes?: string;
+  }): Promise<APIResponse<any>> {
+    return this.request('/api/tax-appeal/analyze', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
 }
 
 // Export singleton instance
