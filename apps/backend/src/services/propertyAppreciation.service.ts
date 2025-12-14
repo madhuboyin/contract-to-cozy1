@@ -204,7 +204,7 @@ export class PropertyAppreciationService {
     }
 
     try {
-      // Step 3: Prompt updated for simplest possible output
+      // Step 3: Prompt simplified to demand only a raw number
       const prompt = `You are an expert, data-driven real estate valuation algorithm (like Zillow's Zestimate or Redfin's Estimate). Your goal is to determine the highest probable *current market selling price* that is consistent with local market data.
 
 Purchase Price: $${purchasePrice.toLocaleString()}
@@ -242,7 +242,7 @@ Consider:
       const rawResponse = response.text.trim();
       
       let estimatedValue: number = NaN;
-      // Aggressively find the first sequence of 5 or more continuous digits
+      // Aggressively find the first sequence of 5 or more continuous digits (to find the price)
       const match = rawResponse.match(/\d{5,}/); 
       
       if (match && match[0]) {
