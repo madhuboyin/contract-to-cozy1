@@ -156,7 +156,7 @@ export default function EmergencyTroubleshooter({ propertyId }: EmergencyTrouble
       </div>
 
       {/* Input Area */}
-      <div className="space-y-3">
+      <div className="space-y-3 max-w-3xl mx-auto">
         <div className="flex gap-2">
           <input
             type="text"
