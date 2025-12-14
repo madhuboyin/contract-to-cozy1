@@ -421,7 +421,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           
           {/* Emergency Troubleshooter */}
-          <Link href="/dashboard/emergency?propertyId=${selectedPropertyId}">
+          <Link href={`/dashboard/emergency?propertyId=${selectedPropertyId}`}>
             <div className="relative bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
               {/* Sparkle indicator */}
               <div className="absolute top-3 right-3">
@@ -444,7 +444,7 @@ export default function DashboardPage() {
           </Link>
 
           {/* Document Intelligence */}
-          <Link href="/dashboard/documents?propertyId=${selectedPropertyId}">
+          <Link href={`/dashboard/documents?propertyId=${selectedPropertyId}`}>
             <div className="relative bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
@@ -464,7 +464,7 @@ export default function DashboardPage() {
           </Link>
           
           {/* Appliance Oracle */}
-          <Link href="/dashboard/oracle?propertyId=${selectedPropertyId}">
+          <Link href={`/dashboard/oracle?propertyId=${selectedPropertyId}`}>
             <div className="relative bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
@@ -484,7 +484,7 @@ export default function DashboardPage() {
           </Link>
 
           {/* Budget Forecaster */}
-          <Link href="/dashboard/budget?propertyId=${selectedPropertyId}">
+          <Link href={`/dashboard/budget?propertyId=${selectedPropertyId}`}>
             <div className="relative bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
@@ -504,7 +504,7 @@ export default function DashboardPage() {
           </Link>
 
           {/* Climate Risk */}
-          <Link href="/dashboard/climate?propertyId=${selectedPropertyId}">
+          <Link href={`/dashboard/climate?propertyId=${selectedPropertyId}`}>
             <div className="relative bg-gradient-to-br from-sky-50 to-blue-50 border-2 border-sky-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
@@ -522,7 +522,7 @@ export default function DashboardPage() {
           </Link>
           
           {/* Home Modifications */}
-          <Link href="/dashboard/modifications?propertyId=${selectedPropertyId}">
+          <Link href={`/dashboard/modifications?propertyId=${selectedPropertyId}`}>
             <div className="relative bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-xl p-5 hover:shadow-xl transition-all">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
@@ -540,7 +540,7 @@ export default function DashboardPage() {
           </Link>
 
           {/* Property Appreciation */}
-          <Link href="/dashboard/appreciation?propertyId=${selectedPropertyId}">
+          <Link href={`/dashboard/appreciation?propertyId=${selectedPropertyId}`}>
             <div className="relative bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-5 hover:shadow-xl transition-all">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
@@ -558,7 +558,7 @@ export default function DashboardPage() {
           </Link>
 
           {/* Energy Auditor */}
-          <Link href="/dashboard/energy?propertyId=${selectedPropertyId}">
+          <Link href={`/dashboard/energy?propertyId=${selectedPropertyId}`}>
             <div className="relative bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-xl p-5 hover:shadow-xl transition-all">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
@@ -576,7 +576,7 @@ export default function DashboardPage() {
           </Link>
 
           {/* Visual Inspector */}
-          <Link href="/dashboard/visual-inspector?propertyId=${selectedPropertyId}">
+          <Link href={`/dashboard/visual-inspector?propertyId=${selectedPropertyId}`}>
             <div className="relative bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl p-5 hover:shadow-xl transition-all">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
@@ -594,7 +594,7 @@ export default function DashboardPage() {
           </Link>
  
           {/* Tax Appeal Assistant */}
-          <Link href="/dashboard/tax-appeal?propertyId=${selectedPropertyId}">
+          <Link href={`/dashboard/tax-appeal?propertyId=${selectedPropertyId}`}>
             <div className="relative bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl p-5 hover:shadow-xl transition-all">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
