@@ -198,6 +198,7 @@ export class PropertyAppreciationService {
     localMarketContext: string 
   ): Promise<number> {
     const fallbackValue = purchasePrice * Math.pow(1 + regionalRate / 100, yearsOwned);
+    const roundedFallback = Math.round(fallbackValue);
 
     if (!this.ai) {
       // Simple compound growth if no AI
@@ -239,23 +240,28 @@ Consider:
       });
 
       if (!response.text) {
-        console.warn('[DEBUG] AI service returned an empty response.');
+        console.warn('[DEBUG] AI service returned an empty response. Falling back.');
         throw new Error('AI service returned an empty response');
       }
 
-      // === CRITICAL FIX: Robust parsing using .trim() ===
-      const cleanResponse = response.text.trim(); 
-      // This removes all non-numeric and non-period characters, then parses the number
-      const estimatedValue = parseFloat(cleanResponse.replace(/[^0-9.]/g, ''));
+      // === CRITICAL FIX: Robust regex-based number extraction ===
+      const rawResponse = response.text.trim();
+      console.log(`[DEBUG] AI Raw Response: "${rawResponse}"`);
+
+      // Aggressively find and extract the first continuous sequence of digits
+      const match = rawResponse.match(/\d{5,}/); // Look for 5 or more continuous digits (to ensure it's a price, not a date or small number)
+      
+      let estimatedValue: number = NaN;
+      if (match) {
+          estimatedValue = parseInt(match[0], 10);
+      }
       // === END CRITICAL FIX ===
 
-      console.log(`[DEBUG] AI Raw Response: "${response.text}"`);
-      console.log(`[DEBUG] Cleaned Response (Trimmed): "${cleanResponse}"`);
       console.log(`[DEBUG] Parsed Estimated Value: ${estimatedValue}`);
       
       if (isNaN(estimatedValue) || estimatedValue < purchasePrice * 0.5 || estimatedValue > purchasePrice * 3) {
         // Fallback if AI gives unreasonable value or is unparsable (i.e., NaN)
-        console.warn(`[APPRECIATION] AI estimate unparsable (NaN) or out of bounds. Estimated: ${estimatedValue}. Range: ${purchasePrice * 0.5} to ${purchasePrice * 3}. Falling back to regional rate (${Math.round(fallbackValue)}).`);
+        console.warn(`[APPRECIATION] AI estimate unparsable (NaN) or out of bounds. Estimated: ${estimatedValue}. Range: ${purchasePrice * 0.5} to ${purchasePrice * 3}. Falling back to regional rate (${roundedFallback}).`);
         return fallbackValue;
       }
       
