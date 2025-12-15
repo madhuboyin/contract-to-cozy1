@@ -22,6 +22,11 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: NODE_ENV
+            - name: EVENTBRITE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: EVENTBRITE_TOKEN
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
