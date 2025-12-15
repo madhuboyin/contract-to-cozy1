@@ -75,6 +75,26 @@ spec:
                 secretKeyRef:
                   name: api-docs-auth
                   key: SWAGGER_PASSWORD
+            - name: TICKETMASTER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: TICKETMASTER_API_KEY
+            - name: TICKETMASTER_MAX_PAGES
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: TICKETMASTER_MAX_PAGES
+            - name: EVENTS_RADIUS_MILES
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: EVENTS_RADIUS_MILES
+            - name: EVENTS_STALE_DAYS
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: EVENTS_STALE_DAYS 
           resources:
             requests:
               cpu: "500m"

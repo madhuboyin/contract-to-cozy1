@@ -1419,6 +1419,52 @@ class APIClient {
     });
   }
 
+  /**
+   * Fetch community alerts for a property
+   * Uses on-the-fly endpoint that accepts propertyId
+   */
+  async getCommunityAlerts(
+    propertyId: string,
+    params?: {
+      limit?: number;
+    }
+  ): Promise<APIResponse<any>> {
+    const queryParams = new URLSearchParams();
+    queryParams.append('propertyId', propertyId);
+
+    if (params?.limit) {
+      queryParams.append('limit', params.limit.toString());
+    }
+
+    const url = `/api/community/alerts?${queryParams.toString()}`;
+    return this.request(url, {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Fetch community trash/recycling info for a property
+   * Uses on-the-fly endpoint that accepts propertyId
+   */
+  async getCommunityTrash(
+    propertyId: string,
+    params?: {
+      limit?: number;
+    }
+  ): Promise<APIResponse<any>> {
+    const queryParams = new URLSearchParams();
+    queryParams.append('propertyId', propertyId);
+
+    if (params?.limit) {
+      queryParams.append('limit', params.limit.toString());
+    }
+
+    const url = `/api/community/trash?${queryParams.toString()}`;
+    return this.request(url, {
+      method: 'GET',
+    });
+  }
+
 }
 
 // Export singleton instance

@@ -1,139 +1,252 @@
 // apps/frontend/src/app/(dashboard)/dashboard/community-events/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Calendar, Loader2 } from 'lucide-react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Calendar, Trash2, AlertTriangle } from 'lucide-react';
 
 import { api } from '@/lib/api/client';
-import { CommunityEvent, Property, APIError } from '@/types';
-import { CommunityEventsList } from '@/components/CommunityEventsList';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { usePropertyContext } from '@/lib/property/PropertyContext';
+import { Button } from '@/components/ui/button';
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Card, CardContent } from '@/components/ui/card';
-import { useToast } from '@/components/ui/use-toast';
+/* ----------------------------- helpers ----------------------------- */
 
-const SELECT_NONE_VALUE = '__NONE__';
-
-export default function CommunityEventsPage() {
-  const { toast } = useToast();
-
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(
-    null
-  );
-
-  /* ---------------- Fetch Properties ---------------- */
-  const {
-    isLoading: isLoadingProperties,
-  } = useQuery({
-    queryKey: ['properties'],
-    queryFn: async () => {
-      const res = await api.getProperties();
-      if (!res.success) {
-        throw new Error((res as APIError).message);
-      }
-      setProperties(res.data.properties);
-      return res.data.properties;
-    },
-  });
-
-  /* ---------------- Fetch Community Events ---------------- */
-  const {
-    data,
-    isLoading: isLoadingEvents,
-    isError,
-  } = useQuery({
-    queryKey: ['community-events', selectedPropertyId],
-    queryFn: () =>
-      api.getCommunityEvents(selectedPropertyId!, { limit: 50 }),
-    enabled: !!selectedPropertyId,
-  });
-
-  const events: CommunityEvent[] =
-    data?.success && data.data?.events ? data.data.events : [];
-
-  /* ---------------- Error Handling ---------------- */
-  useEffect(() => {
-    if (isError) {
-      toast({
-        title: 'Failed to load events',
-        description:
-          'Unable to fetch community events for the selected property.',
-        variant: 'destructive',
-      });
-    }
-  }, [isError, toast]);
-
-  /* ---------------- UI ---------------- */
+function EmptyState({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
   return (
-    <div className="space-y-6 pb-8 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Calendar className="h-6 w-6 text-blue-600" />
-        <h1 className="text-2xl font-semibold">Community Events</h1>
-      </div>
+    <div className="text-center py-12">
+      <p className="font-medium text-gray-800">{title}</p>
+      <p className="text-sm text-muted-foreground mt-2">{description}</p>
+    </div>
+  );
+}
 
-      {/* Property Selector */}
+/* ----------------------------- page ----------------------------- */
+
+export default function CommunityPage() {
+  const { selectedPropertyId } = usePropertyContext();
+  const propertyId = selectedPropertyId;
+
+  const [tab, setTab] = useState<'events' | 'trash' | 'alerts'>('events');
+
+  // Fetch property to get city and state for trash/alerts
+  const { data: property } = useQuery({
+    queryKey: ['property', propertyId],
+    queryFn: async () => {
+      if (!propertyId) return null;
+      const response = await api.getProperty(propertyId);
+      return response.success ? response.data : null;
+    },
+    enabled: !!propertyId,
+  });
+
+  const city = property?.city;
+  const state = property?.state;
+
+  /* ---------------- Events ---------------- */
+
+  const eventsQuery = useQuery({
+    queryKey: ['community-events', propertyId],
+    queryFn: () => api.getCommunityEvents(propertyId!, { limit: 20 }),
+    enabled: !!propertyId && tab === 'events',
+  });
+
+  /* ---------------- Trash ---------------- */
+
+  const trashQuery = useQuery({
+    queryKey: ['community-trash', propertyId],
+    queryFn: () => api.getCommunityTrash(propertyId!),
+    enabled: !!propertyId && tab === 'trash',
+  });
+
+  /* ---------------- Alerts ---------------- */
+
+  const alertsQuery = useQuery({
+    queryKey: ['community-alerts', propertyId],
+    queryFn: () => api.getCommunityAlerts(propertyId!),
+    enabled: !!propertyId && tab === 'alerts',
+  });
+
+  /* ---------------- guards ---------------- */
+
+  if (!propertyId) {
+    return (
       <Card>
-        <CardContent className="pt-6">
-          {isLoadingProperties ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading properties…
-            </div>
-          ) : (
-            <div className="max-w-sm">
-              <Select
-                value={selectedPropertyId ?? SELECT_NONE_VALUE}
-                onValueChange={(v) =>
-                  setSelectedPropertyId(
-                    v === SELECT_NONE_VALUE ? null : v
-                  )
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a property" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={SELECT_NONE_VALUE}>
-                    Select a property
-                  </SelectItem>
-                  {properties.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name || p.address}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+        <CardHeader>
+          <CardTitle>Community</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <EmptyState
+            title="Select a property"
+            description="Choose a property to view community events, trash schedules, and alerts."
+          />
         </CardContent>
       </Card>
+    );
+  }
 
-      {/* Events Section */}
-      {!selectedPropertyId ? (
+  /* ---------------- UI ---------------- */
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold">Community</h1>
         <p className="text-sm text-muted-foreground">
-          Select a property to view community events near your home.
+          Local events, city services, and municipal alerts
         </p>
-      ) : isLoadingEvents ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading events…
-        </div>
-      ) : events.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No upcoming events found for this area.
-        </p>
-      ) : (
-        <CommunityEventsList events={events} />
-      )}
+      </div>
+
+      <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
+        <TabsList>
+          <TabsTrigger value="events">
+            <Calendar className="w-4 h-4 mr-2" />
+            Events
+          </TabsTrigger>
+          <TabsTrigger value="trash">
+            <Trash2 className="w-4 h-4 mr-2" />
+            Trash
+          </TabsTrigger>
+          <TabsTrigger value="alerts">
+            <AlertTriangle className="w-4 h-4 mr-2" />
+            Alerts
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ================= EVENTS ================= */}
+
+        <TabsContent value="events">
+          <Card>
+            <CardContent className="pt-6">
+              {eventsQuery.isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading events…</p>
+              ) : eventsQuery.isError ? (
+                <EmptyState
+                  title="Unable to load events"
+                  description="Please try again later."
+                />
+              ) : !eventsQuery.data?.success || (eventsQuery.data.data?.events?.length ?? 0) === 0 ? (
+                <EmptyState
+                  title="No upcoming events"
+                  description="There are no upcoming events near this property."
+                />
+              ) : (
+                <div className="space-y-4">
+                  {eventsQuery.data.data.events.map((ev: any) => (
+                    <div
+                      key={ev.externalId}
+                      className="flex justify-between items-start border-b pb-3"
+                    >
+                      <div>
+                        <p className="font-medium">{ev.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(ev.startTime).toLocaleString()}
+                        </p>
+                      </div>
+                      <Button size="sm" variant="link" asChild>
+                        <a
+                          href={ev.externalUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          View
+                        </a>
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ================= TRASH ================= */}
+
+        <TabsContent value="trash">
+          <Card>
+            <CardContent className="pt-6">
+              {trashQuery.isLoading ? (
+                <p className="text-sm text-muted-foreground">
+                  Loading trash & recycling info…
+                </p>
+              ) : !trashQuery.data?.success || (trashQuery.data.data?.items?.length ?? 0) === 0 ? (
+                <EmptyState
+                  title="Trash schedule not available yet"
+                  description="This city does not provide a public trash or recycling feed yet."
+                />
+              ) : (
+                <div className="space-y-4">
+                  {trashQuery.data.data.items.map((item: any, idx: number) => (
+                    <div key={idx}>
+                      <p className="font-medium">{item.title}</p>
+                      {item.description && (
+                        <p className="text-sm text-muted-foreground">
+                          {item.description}
+                        </p>
+                      )}
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        className="text-sm text-blue-600"
+                      >
+                        View source →
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ================= ALERTS ================= */}
+
+        <TabsContent value="alerts">
+          <Card>
+            <CardContent className="pt-6">
+              {alertsQuery.isLoading ? (
+                <p className="text-sm text-muted-foreground">
+                  Loading city alerts…
+                </p>
+              ) : !alertsQuery.data?.success || (alertsQuery.data.data?.items?.length ?? 0) === 0 ? (
+                <EmptyState
+                  title="No active alerts"
+                  description="There are no current municipal alerts for this area."
+                />
+              ) : (
+                <div className="space-y-4">
+                  {alertsQuery.data.data.items.map((item: any, idx: number) => (
+                    <div
+                      key={idx}
+                      className="border-l-4 border-yellow-400 pl-3"
+                    >
+                      <p className="font-medium">{item.title}</p>
+                      {item.description && (
+                        <p className="text-sm text-muted-foreground">
+                          {item.description}
+                        </p>
+                      )}
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        className="text-sm text-blue-600"
+                      >
+                        Official notice →
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

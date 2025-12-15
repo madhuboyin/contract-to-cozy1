@@ -36,7 +36,6 @@ import taxAppealRoutes from './routes/taxAppeal.routes';
 import movingConciergeRoutes from './routes/movingConcierge.routes';
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
-import communityEventsRoutes from './routes/communityEvents.routes';
 
 dotenv.config();
 
@@ -238,9 +237,13 @@ app.use('/api/risk', riskRoutes);
 app.use('/api/v1/financial-efficiency', financialRoutes); 
 // Handles: /api/v1/properties/:propertyId/financial-efficiency/*
 app.use('/api/v1/properties', financialRoutes);
-// =============================================================================
-// 404 HANDLER
-// =============================================================================
+// ✅ Community (NEW, on-the-fly)
+import { PrismaClient } from '@prisma/client';
+import { communityRoutes } from './community/community.routes';
+
+const prisma = new PrismaClient();
+app.use(communityRoutes(prisma));
+
 app.use('/api/gemini', geminiRoutes);
 app.use('/api/emergency', emergencyRoutes);
 app.use('/api/documents', documentRoutes);
@@ -253,8 +256,6 @@ app.use('/api/energy', energyRoutes);
 app.use('/api/visual-inspector', visualInspectorRoutes);
 app.use('/api/tax-appeal', taxAppealRoutes);
 app.use('/api/moving-concierge', movingConciergeRoutes);
-app.use('/api/v1', communityEventsRoutes);
-
 
 app.use((req: Request, res: Response) => {
   res.status(404).json({
