@@ -115,10 +115,15 @@ export class PropertyAppreciationService {
         // Step 1: Perform targeted Google Search for median home value (best proxy for comps)
         const zipCode = property.zipCode || property.state; // Fallback to state if zip not available
         const searchQuery = `median home value ${property.city}, ${property.state} zip code ${zipCode} Zillow Redfin`;
-        
+        console.log('[APPRECIATION-SEARCH] Attempting Google search...');
+        console.log('[APPRECIATION-SEARCH] Query:', searchQuery);
+
         const searchResults = await google.search({ 
             queries: [searchQuery] 
         });
+        console.log('[APPRECIATION-SEARCH] Search successful!');
+        console.log('[APPRECIATION-SEARCH] Results length:', searchResults.result?.length || 0);
+        console.log('[APPRECIATION-SEARCH] First 200 chars:', searchResults.result?.substring(0, 200));
         
         localMarketContext = searchResults.result;
     } catch (error) {
