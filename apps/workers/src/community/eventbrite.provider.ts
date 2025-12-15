@@ -1,10 +1,12 @@
 import { ExternalCommunityEvent } from './communityEvents.types';
 
-const EVENTBRITE_BASE = 'https://www.eventbriteapi.com/v3/events/search/';
+const EVENTBRITE_BASE_URL = 'https://www.eventbriteapi.com/v3';
 
 function requireEnv(name: string): string {
   const v = process.env[name];
-  if (!v || v.trim() === '') throw new Error(`Missing env var: ${name}`);
+  if (!v || v.trim() === '') {
+    throw new Error(`Missing env var: ${name}`);
+  }
   return v;
 }
 
@@ -20,22 +22,27 @@ export async function fetchEventbriteEvents(
 ): Promise<ExternalCommunityEvent[]> {
   const token = requireEnv('EVENTBRITE_TOKEN');
 
-  const out: ExternalCommunityEvent[] = [];
+  const results: ExternalCommunityEvent[] = [];
   let page = 1;
 
   while (page <= maxPages) {
-    const url = new URL(EVENTBRITE_BASE);
+    const url = new URL(`${EVENTBRITE_BASE_URL}/events/search`);
     url.searchParams.set('location.address', `${city}, ${state}`);
     url.searchParams.set('location.within', `${radiusMiles}mi`);
     url.searchParams.set('sort_by', 'date');
+    url.searchParams.set('expand', 'venue'); // important
     url.searchParams.set('page', String(page));
 
     const resp = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
     });
 
+    // Rate-limit handling
     if (resp.status === 429) {
-      // Basic backoff (avoid hammering)
+      console.warn('[COMMUNITY] Eventbrite rate limited, backing off...');
       await sleep(1500);
       continue;
     }
@@ -53,18 +60,17 @@ export async function fetchEventbriteEvents(
       const title = e?.name?.text;
       const url = e?.url;
       const startUtc = e?.start?.utc;
-      const endUtc = e?.end?.utc;
 
       if (!id || !title || !url || !startUtc) continue;
 
-      out.push({
+      results.push({
         externalId: String(id),
         title: String(title),
         description: e?.description?.text ?? null,
         startTime: new Date(startUtc),
-        endTime: endUtc ? new Date(endUtc) : null,
-        venueName: null,
-        externalUrl: String(url)
+        endTime: e?.end?.utc ? new Date(e.end.utc) : null,
+        venueName: e?.venue?.name ?? null,
+        externalUrl: String(url),
       });
     }
 
@@ -72,8 +78,8 @@ export async function fetchEventbriteEvents(
     if (page >= pageCount) break;
 
     page += 1;
-    await sleep(350);
+    await sleep(300); // gentle pacing
   }
 
-  return out;
+  return results;
 }
