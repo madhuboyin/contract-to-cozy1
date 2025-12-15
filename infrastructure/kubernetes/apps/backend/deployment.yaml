@@ -34,10 +34,7 @@ spec:
             - containerPort: 8080
           env:
             - name: NODE_ENV
-              valueFrom:
-                configMapKeyRef:
-                  name: app-config
-                  key: NODE_ENV
+              value: "production"
             - name: PORT
               valueFrom:
                 configMapKeyRef:
@@ -68,8 +65,6 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: GEMINI_API_KEY
-            - name: NODE_ENV
-              value: "production"
             - name: SWAGGER_PASSWORD
               valueFrom:
                 secretKeyRef:
