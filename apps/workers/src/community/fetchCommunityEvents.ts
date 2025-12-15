@@ -1,14 +1,14 @@
 import { PrismaClient } from '@prisma/client';
-import { fetchEventbriteEvents } from './eventbrite.provider';
+import { fetchTicketmasterEvents } from './ticketmaster.provider';
 
 const prisma = new PrismaClient();
 
 /**
  * Cron-safe ingestion:
  * - Reads enabled cities from CityFeatureFlag
- * - Fetches external events
+ * - Fetches external events (Ticketmaster)
  * - Upserts into CommunityEvent
- * - Marks stale events inactive (optional cleanup)
+ * - Marks stale events inactive
  */
 export async function fetchCommunityEventsCron() {
   console.log(`[${new Date().toISOString()}] [COMMUNITY] Ingestion started`);
@@ -24,18 +24,24 @@ export async function fetchCommunityEventsCron() {
     }
 
     let totalUpserted = 0;
+    const radius = Number(process.env.EVENTS_RADIUS_MILES ?? 15);
 
     for (const c of enabledCities) {
-      const radius = Number(process.env.EVENTS_RADIUS_MILES ?? 15);
+      console.log(
+        `[COMMUNITY] Fetching Ticketmaster events for ${c.city}, ${c.state} radius=${radius}mi`
+      );
 
-      console.log(`[COMMUNITY] Fetching events for ${c.city}, ${c.state} radius=${radius}mi`);
-      const external = await fetchEventbriteEvents(c.city, c.state, radius);
+      const externalEvents = await fetchTicketmasterEvents(
+        c.city,
+        c.state,
+        radius
+      );
 
-      for (const ev of external) {
+      for (const ev of externalEvents) {
         await prisma.communityEvent.upsert({
           where: {
             source_externalEventId: {
-              source: 'eventbrite',
+              source: 'ticketmaster',
               externalEventId: ev.externalId
             }
           },
@@ -52,7 +58,7 @@ export async function fetchCommunityEventsCron() {
             lastFetchedAt: new Date()
           },
           create: {
-            source: 'eventbrite',
+            source: 'ticketmaster',
             externalEventId: ev.externalId,
             title: ev.title,
             description: ev.description ?? null,
@@ -71,19 +77,23 @@ export async function fetchCommunityEventsCron() {
       }
     }
 
-    // Optional cleanup: mark events inactive if not fetched recently
+    // Mark stale Ticketmaster events inactive
     const staleDays = Number(process.env.EVENTS_STALE_DAYS ?? 2);
-    const cutoff = new Date(Date.now() - staleDays * 24 * 60 * 60 * 1000);
+    const cutoff = new Date(
+      Date.now() - staleDays * 24 * 60 * 60 * 1000
+    );
 
     const stale = await prisma.communityEvent.updateMany({
       where: {
-        source: 'eventbrite',
+        source: 'ticketmaster',
         lastFetchedAt: { lt: cutoff }
       },
       data: { isActive: false }
     });
 
-    console.log(`[COMMUNITY] ✅ Ingestion completed. upserted=${totalUpserted} stale_inactivated=${stale.count}`);
+    console.log(
+      `[COMMUNITY] ✅ Ingestion completed. upserted=${totalUpserted} stale_inactivated=${stale.count}`
+    );
   } catch (err) {
     console.error('[COMMUNITY] ❌ Ingestion failed:', err);
   }

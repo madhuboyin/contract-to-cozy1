@@ -22,21 +22,21 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: NODE_ENV
-            - name: EVENTBRITE_TOKEN
+            - name: TICKETMASTER_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
-                  key: EVENTBRITE_TOKEN
+                  key: TICKETMASTER_API_KEY
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: DATABASE_URL
-            - name: EVENTBRITE_MAX_PAGES
+            - name: TICKETMASTER_MAX_PAGES
               valueFrom:
                 configMapKeyRef:
                   name: app-config
-                  key: EVENTBRITE_MAX_PAGES
+                  key: TICKETMASTER_MAX_PAGES
             - name: EVENTS_RADIUS_MILES
               valueFrom:
                 configMapKeyRef:
