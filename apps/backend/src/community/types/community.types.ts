@@ -51,13 +51,7 @@ export interface OnTheFlyParams {
 export interface CityOpenDataResponse {
   city: string;
   state: string;
-  items: {
-    category: string;
-    title: string;
-    description?: string;
-    url: string;
-    sourceName: string;
-  }[];
+  items: CityLinkItem[];
 }
 
 export interface GetCommunityEventsParams {
@@ -70,4 +64,12 @@ export interface GetCommunityEventsParams {
 export interface GetCityOpenDataParams {
   city: string;
   state: string;
+}
+
+export interface CityLinkItem {
+  category: 'TRASH_RECYCLING' | 'SNOW_EMERGENCY' | 'ANNOUNCEMENTS';
+  title: string;
+  description?: string;
+  url: string;
+  sourceName: string;
 }
