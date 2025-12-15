@@ -371,11 +371,12 @@ function startWorker() {
   });
 
   // Community Events ingestion cron (daily)
-  cron.schedule(
-    '0 3 * * *',
-    fetchCommunityEventsCron,
-    { timezone: 'America/New_York' }
-  );
+  cron.schedule('0 */3 * * *', async () => {
+    console.log('[CRON] Running Community Events fetch');
+    await fetchCommunityEventsCron();
+    console.log('[CRON] Community Events fetch completed');
+  }, { timezone: 'America/New_York' });
+  
   // =============================================================================
   // FIX: Initialize BullMQ Worker with correct queue name and job handlers
   // =============================================================================
