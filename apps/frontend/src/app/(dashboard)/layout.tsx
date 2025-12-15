@@ -27,6 +27,7 @@ import {
   Wrench,
   DollarSign,
   FileText,
+  Globe,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { User } from '@/types';
@@ -233,6 +234,7 @@ function DesktopNav({ user }: { user: User | null }) {
     { name: 'Insurance', href: '/dashboard/insurance', icon: Shield },
     { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign },
     { name: 'Documents', href: '/dashboard/documents', icon: FileText },
+    { name: 'Community Events', href: '/dashboard/community-events', icon: Globe },
   ];
 
   const visibleLinks = allLinks.filter(link => {
@@ -284,6 +286,7 @@ function SidebarNav({ user }: { user: User | null }) {
     { name: 'Insurance', href: '/dashboard/insurance', icon: Shield },
     { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign },
     { name: 'Documents', href: '/dashboard/documents', icon: FileText },
+    { name: 'Community Events', href: '/dashboard/community-events', icon: Globe },
   ];
 
   const visibleLinks = allLinks.filter(link => {
