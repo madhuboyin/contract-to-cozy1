@@ -372,6 +372,11 @@ function startWorker() {
 
   // Community Events ingestion cron (daily)
   console.log('🟡 Registering Community Events cron');
+  console.log('🟢 Manually running Community Events fetch on startup');
+  fetchCommunityEventsCron().catch((err: Error) =>
+    console.error('❌ Community Events startup run failed', err)
+  );
+
   cron.schedule('0 */3 * * *', async () => {
     console.log('[CRON] Running Community Events fetch');
     await fetchCommunityEventsCron();
