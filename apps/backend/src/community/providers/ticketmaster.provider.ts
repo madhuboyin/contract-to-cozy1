@@ -14,6 +14,27 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function normalizeTitle(title: string): string {
+  return title
+    .replace(/\s*\(.*?\)\s*/g, '') // remove "(Ages 12+ ...)"
+    .trim()
+    .toLowerCase();
+}
+
+export function buildEventKey(ev: {
+  title: string;
+  startTime: string;
+  venueName?: string | null;
+  city?: string;
+}) {
+  return [
+    normalizeTitle(ev.title),
+    ev.startTime,
+    ev.venueName?.toLowerCase() ?? '',
+    ev.city?.toLowerCase() ?? '',
+  ].join('|');
+}
+
 export async function fetchTicketmasterEvents(params: {
   city: string;
   state: string;

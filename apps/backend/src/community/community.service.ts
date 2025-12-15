@@ -11,7 +11,7 @@ import {
   OnTheFlyCategory,
 } from './types/community.types';
 
-import { fetchTicketmasterEvents } from './providers/ticketmaster.provider';
+import { fetchTicketmasterEvents, buildEventKey } from './providers/ticketmaster.provider';
 import { getCityOpenDataSources } from './providers/citySources.provider';
 
 // ✅ NEW providers
@@ -43,25 +43,6 @@ export class CommunityService {
 
   private setCache<T>(key: string, value: T, ttlMs: number) {
     this.cache.set(key, { value, expiresAt: Date.now() + ttlMs });
-  }
-
-  async getCommunityEventsByCity(params: GetCommunityEventsParams): Promise<CommunityEvent[]> {
-    const radiusMiles = params.radiusMiles ?? Number(process.env.EVENTS_RADIUS_MILES ?? 20);
-    const limit = params.limit ?? 50;
-
-    const cacheKey = `events|${params.city}|${params.state}|${radiusMiles}|${limit}`;
-    const cached = this.getCache<CommunityEvent[]>(cacheKey);
-    if (cached) return cached;
-
-    const events = await fetchTicketmasterEvents({
-      city: params.city,
-      state: params.state,
-      radiusMiles,
-      limit,
-    });
-
-    this.setCache(cacheKey, events, 5 * 60 * 1000); // 5 min
-    return events;
   }
 
   async getCommunityEventsByProperty(propertyId: string, limit = 50): Promise<CommunityEvent[]> {
@@ -242,4 +223,42 @@ export class CommunityService {
     };
   }  
 
+  async getCommunityEventsByCity(
+    params: GetCommunityEventsParams
+  ): Promise<CommunityEvent[]> {
+    const radiusMiles = params.radiusMiles ?? 20;
+    const limit = params.limit ?? 50;
+  
+    const cacheKey = `events|${params.city}|${params.state}|${radiusMiles}|${limit}`;
+    const cached = this.getCache<CommunityEvent[]>(cacheKey);
+    if (cached) return cached;
+  
+    const rawEvents = await fetchTicketmasterEvents({
+      city: params.city,
+      state: params.state,
+      radiusMiles,
+      limit: limit * 2, // fetch more to allow dedupe
+    });
+  
+    const seen = new Set<string>();
+    const deduped: CommunityEvent[] = [];
+  
+    for (const ev of rawEvents) {
+      const key = buildEventKey(ev);
+      if (seen.has(key)) continue;
+  
+      seen.add(key);
+  
+      deduped.push({
+        ...ev,
+        title: ev.title.replace(/\s*\(.*?\)\s*/g, '').trim(),
+      });
+  
+      if (deduped.length >= limit) break;
+    }
+  
+    this.setCache(cacheKey, deduped, 5 * 60 * 1000);
+    return deduped;
+  }
+  
 }
