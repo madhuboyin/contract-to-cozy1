@@ -240,17 +240,26 @@ Consider:
 
       // === CRITICAL FIX: Aggressively extract the number ===
       const rawResponse = response.text.trim();
+      console.log('[APPRECIATION-DEBUG] Raw AI response:', rawResponse);
       
       let estimatedValue: number = NaN;
       
       // 1. Strip ALL non-digit characters from the response, leaving a single string of digits.
       // This is the ultimate brute-force method to get the number.
       const digitsOnly = rawResponse.replace(/[^0-9]/g, '');
+      console.log('[APPRECIATION-DEBUG] Digits only:', digitsOnly);
       
       // 2. Ensure the remaining string is a valid price (e.g., has 5+ digits) and then parse it.
       if (digitsOnly.length >= 5) {
-          estimatedValue = parseInt(digitsOnly, 10);
-      }
+        estimatedValue = parseInt(digitsOnly, 10);
+        console.log('[APPRECIATION-DEBUG] Parsed value:', estimatedValue);
+        console.log('[APPRECIATION-DEBUG] Bounds check:', {
+            value: estimatedValue,
+            min: purchasePrice * 0.5,
+            max: purchasePrice * 3,
+            passes: !(estimatedValue < purchasePrice * 0.5 || estimatedValue > purchasePrice * 3)
+        });
+    }
       // === END CRITICAL FIX ===
       
       if (isNaN(estimatedValue) || estimatedValue < purchasePrice * 0.5 || estimatedValue > purchasePrice * 3) {
