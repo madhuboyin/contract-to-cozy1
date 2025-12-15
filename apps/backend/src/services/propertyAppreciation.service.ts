@@ -242,12 +242,14 @@ Consider:
       const rawResponse = response.text.trim();
       
       let estimatedValue: number = NaN;
-      // Aggressively find the first sequence of 5 or more continuous digits (to find the price)
-      const match = rawResponse.match(/\d{5,}/); 
       
-      if (match && match[0]) {
-          // Convert the extracted string to an integer
-          estimatedValue = parseInt(match[0], 10);
+      // 1. Strip ALL non-digit characters from the response, leaving a single string of digits.
+      // This is the ultimate brute-force method to get the number.
+      const digitsOnly = rawResponse.replace(/[^0-9]/g, '');
+      
+      // 2. Ensure the remaining string is a valid price (e.g., has 5+ digits) and then parse it.
+      if (digitsOnly.length >= 5) {
+          estimatedValue = parseInt(digitsOnly, 10);
       }
       // === END CRITICAL FIX ===
       
