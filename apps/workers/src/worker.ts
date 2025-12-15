@@ -14,8 +14,6 @@ import { Worker } from 'bullmq';
 import { calculateAssetRisk, calculateTotalRiskScore, filterRelevantAssets, AssetRiskDetail } from '../../backend/src/utils/riskCalculator.util';
 import { RISK_ASSET_CONFIG } from '../../backend/src/config/risk-constants';
 import { calculateFinancialEfficiency } from '../../backend/src/utils/FinancialCalculator.util';
-import { fetchCommunityEventsCron } from './community/fetchCommunityEvents';
-
 
 const prisma = new PrismaClient();
 
@@ -369,19 +367,6 @@ function startWorker() {
   cron.schedule('0 9 * * *', sendMaintenanceReminders, {
     timezone: 'America/New_York',
   });
-
-  // Community Events ingestion cron (daily)
-  console.log('🟡 Registering Community Events cron');
-  console.log('🟢 Manually running Community Events fetch on startup');
-  fetchCommunityEventsCron().catch((err: Error) =>
-    console.error('❌ Community Events startup run failed', err)
-  );
-
-  cron.schedule('0 */3 * * *', async () => {
-    console.log('[CRON] Running Community Events fetch');
-    await fetchCommunityEventsCron();
-    console.log('[CRON] Community Events fetch completed');
-  }, { timezone: 'America/New_York' });
   
   // =============================================================================
   // FIX: Initialize BullMQ Worker with correct queue name and job handlers
