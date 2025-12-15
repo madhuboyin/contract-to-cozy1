@@ -111,11 +111,11 @@ export default function CommunityPage() {
           </TabsTrigger>
           <TabsTrigger value="trash">
             <Trash2 className="w-4 h-4 mr-2" />
-            Trash
+            Trash & Recycling
           </TabsTrigger>
           <TabsTrigger value="alerts">
             <AlertTriangle className="w-4 h-4 mr-2" />
-            Alerts
+            Alerts & Notifications
           </TabsTrigger>
         </TabsList>
 
