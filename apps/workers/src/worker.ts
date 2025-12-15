@@ -371,6 +371,7 @@ function startWorker() {
   });
 
   // Community Events ingestion cron (daily)
+  console.log('🟡 Registering Community Events cron');
   cron.schedule('0 */3 * * *', async () => {
     console.log('[CRON] Running Community Events fetch');
     await fetchCommunityEventsCron();
