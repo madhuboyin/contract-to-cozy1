@@ -1,3 +1,4 @@
+// apps/frontend/src/components/CommunityEventsCard.tsx
 'use client';
 
 import Link from 'next/link';
@@ -22,7 +23,11 @@ interface Props {
 }
 
 export default function CommunityEventsCard({ propertyId }: Props) {
-  const { data, isLoading, isError } = useQuery({
+  const {
+    data,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ['community-events', propertyId],
     queryFn: () => api.getCommunityEvents(propertyId!, { limit: 3 }),
     enabled: !!propertyId,
@@ -39,35 +44,37 @@ export default function CommunityEventsCard({ propertyId }: Props) {
           Community Events
         </CardTitle>
         <CardDescription>
-          Local events and meetings near your home
+          Local events happening near your property
         </CardDescription>
       </CardHeader>
 
       <CardContent className="flex-1">
         {!propertyId ? (
-          <p className="text-sm text-gray-500">
-            Select a property to view events.
+          <p className="text-sm text-muted-foreground">
+            Select a property to view nearby events.
           </p>
         ) : isLoading ? (
-          <p className="text-sm text-gray-500">Loading events...</p>
+          <p className="text-sm text-muted-foreground">
+            Loading community events…
+          </p>
         ) : isError ? (
           <p className="text-sm text-red-500">
-            Unable to load community events.
+            Failed to load community events.
           </p>
         ) : events.length === 0 ? (
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             No upcoming events found.
           </p>
         ) : (
           <div className="space-y-3">
             {events.map((event, idx) => (
               <div key={event.id}>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-sm font-medium">
+                <div className="flex justify-between items-start gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">
                       {event.title}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       {new Date(event.startTime).toLocaleString()}
                     </p>
                   </div>
@@ -77,14 +84,16 @@ export default function CommunityEventsCard({ propertyId }: Props) {
                       href={event.externalUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+                      className="shrink-0 text-sm font-semibold text-blue-600 hover:text-blue-700"
                     >
                       View <ExternalLink className="inline h-3 w-3" />
                     </a>
                   )}
                 </div>
 
-                {idx < events.length - 1 && <Separator className="mt-3" />}
+                {idx < events.length - 1 && (
+                  <Separator className="mt-3" />
+                )}
               </div>
             ))}
           </div>
@@ -94,10 +103,10 @@ export default function CommunityEventsCard({ propertyId }: Props) {
       <CardFooter>
         {propertyId && events.length > 0 && (
           <Link
-            href={`/dashboard/properties/${propertyId}/community`}
+            href={`/dashboard/community-events?propertyId=${propertyId}`}
             className="text-sm font-semibold text-blue-600 hover:text-blue-700"
           >
-            View All →
+            View all events →
           </Link>
         )}
       </CardFooter>
