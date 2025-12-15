@@ -43,6 +43,8 @@ import {
   // [NEW IMPORTS] for AI Report Typing
   OracleReport, 
   BudgetForecast,
+  CommunityEvent,
+  CommunityEventsResponse,
 } from '@/types';
 
 // REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
@@ -1388,6 +1390,32 @@ class APIClient {
   async deleteMovingPlan(propertyId: string): Promise<APIResponse<any>> {
     return this.request(`/api/moving-concierge/delete-plan/${propertyId}`, {
       method: 'DELETE',
+    });
+  }
+
+  /**
+   * Fetch community events for a property
+   * Read-only, cache-friendly endpoint
+   */
+  async getCommunityEvents(
+    propertyId: string,
+    params?: {
+      limit?: number;
+    }
+  ): Promise<APIResponse<CommunityEventsResponse>> {
+    const queryParams = new URLSearchParams();
+
+    if (params?.limit) {
+      queryParams.append('limit', params.limit.toString());
+    }
+
+    const query = queryParams.toString();
+    const url = query
+      ? `/api/v1/properties/${propertyId}/community/events?${query}`
+      : `/api/v1/properties/${propertyId}/community/events`;
+
+    return this.request<CommunityEventsResponse>(url, {
+      method: 'GET',
     });
   }
 

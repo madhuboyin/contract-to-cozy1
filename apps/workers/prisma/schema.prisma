@@ -847,3 +847,44 @@ model SystemSetting {
   
   @@map("system_settings")
 }
+
+// ============================================================================
+// COMMUNITY EVENTS
+// ============================================================================
+
+model CityFeatureFlag {
+  id               String  @id @default(uuid())
+  city             String
+  state            String
+  eventsEnabled    Boolean @default(false)
+  servicesEnabled  Boolean @default(false)
+  alertsEnabled    Boolean @default(false)
+  
+  @@unique([city, state])
+  @@index([city, state])
+  @@map("city_feature_flags")
+}
+
+model CommunityEvent {
+  id              String   @id @default(uuid())
+  source          String
+  externalEventId String
+  title           String
+  description     String?
+  startTime       DateTime
+  endTime         DateTime?
+  venueName       String?
+  city            String
+  state           String
+  latitude        Float?
+  longitude       Float?
+  externalUrl     String
+  isActive        Boolean  @default(true)
+  lastFetchedAt   DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  @@unique([source, externalEventId])
+  @@index([city, state, startTime])
+  @@index([isActive, startTime])
+  @@map("community_events")
+}

@@ -1,3 +1,4 @@
+// apps/frontend/src/components/ClimateRiskPredictor.tsx
 'use client';
 
 import { useState, useEffect } from 'react';

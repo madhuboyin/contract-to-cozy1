@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "nodemon src/worker.ts",
     "build": "tsc",
-    "start": "node dist/worker.js"
+    "start": "node dist/worker.js",
+    "postinstall": "npx prisma generate && cp -r ../backend/node_modules/@prisma/client node_modules/ && mkdir -p node_modules/.prisma && cp -r ../backend/node_modules/.prisma/client node_modules/.prisma/ || true"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

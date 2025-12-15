@@ -27,6 +27,21 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: DATABASE_URL
+            - name: EVENTBRITE_MAX_PAGES
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: EVENTBRITE_MAX_PAGES
+            - name: EVENTS_RADIUS_MILES
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: EVENTS_RADIUS_MILES
+            - name: EVENTS_STALE_DAYS
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: EVENTS_STALE_DAYS
           resources:
             requests:
               cpu: "250m"

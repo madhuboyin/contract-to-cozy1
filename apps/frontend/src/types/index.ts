@@ -217,6 +217,35 @@ export interface FinancialReportSummary {
   message?: string;
 }
 
+// ============================================================================
+// COMMUNITY EVENTS TYPES (PHASE 6)
+// ============================================================================
+
+/**
+ * Community Event Category
+ */
+export type CommunityEventCategory =
+  | 'FARMERS_MARKET'
+  | 'FESTIVAL'
+  | 'HOA_MEETING'
+  | 'TRASH_PICKUP'
+  | 'RECYCLING'
+  | 'STREET_PARKING'
+  | 'SNOW_EMERGENCY'
+  | 'COMMUNITY_ALERT'
+  | 'SERVICE_PROVIDER'
+  | 'OTHER';
+
+/**
+ * Source of the community event
+ */
+export type CommunityEventSource =
+  | 'CITY'
+  | 'HOA'
+  | 'COUNTY'
+  | 'THIRD_PARTY'
+  | 'INTERNAL';
+
 
 // ============================================================================
 // NEW DOCUMENT UPLOAD TYPES (ADDED)
@@ -650,6 +679,41 @@ export interface Booking {
   updatedAt: string;
 }
 
+/**
+ * Community Event
+ * Represents a single local event or alert associated with a property location
+ */
+export interface CommunityEvent {
+  id: string;
+
+  // Location context
+  city: string;
+  state: string;
+  zipCode?: string | null;
+
+  // Classification
+  category: CommunityEventCategory;
+  source: CommunityEventSource;
+
+  // Display
+  title: string;
+  description?: string | null;
+
+  // Timing
+  startTime: string; // ISO date string
+  endTime?: string | null;
+
+  // Metadata
+  externalUrl?: string | null;
+  isAllDay?: boolean;
+  isActive: boolean;
+
+  // Audit
+  createdAt: string;
+  updatedAt: string;
+}
+
+
 // --- ADD CHAT TYPES ---
 export type ChatMessageRole = 'user' | 'model';
 
@@ -875,4 +939,22 @@ export interface BudgetForecast {
   categoryBreakdowns: CategoryBreakdown[];
   recommendations: string[];
   generatedAt: string; // ISO Date string
+}
+
+/**
+ * Community Events API payload
+ */
+export interface CommunityEventsResponse {
+  events: CommunityEvent[];
+}
+
+/**
+ * Lightweight community event summary for dashboard cards
+ */
+export interface CommunityEventSummary {
+  id: string;
+  title: string;
+  category: CommunityEventCategory;
+  startTime: string;
+  externalUrl?: string | null;
 }

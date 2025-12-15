@@ -14,6 +14,8 @@ import { Worker } from 'bullmq';
 import { calculateAssetRisk, calculateTotalRiskScore, filterRelevantAssets, AssetRiskDetail } from '../../backend/src/utils/riskCalculator.util';
 import { RISK_ASSET_CONFIG } from '../../backend/src/config/risk-constants';
 import { calculateFinancialEfficiency } from '../../backend/src/utils/FinancialCalculator.util';
+import { fetchCommunityEventsCron } from './community/fetchCommunityEvents';
+
 
 const prisma = new PrismaClient();
 
@@ -89,19 +91,8 @@ interface PropertyWithRelations extends Property {
   warranties: Warranty[];
   insurancePolicies: InsurancePolicy[];
   riskReport: RiskAssessmentReport | null;
-  // Add property type fields for filtering
-  heatingType?: string | null;
-  waterHeaterType?: string | null;
-  roofType?: string | null;
-  electricalPanelAge?: number | null;
-  foundationType?: string | null;
-  hasSmokeDetectors?: boolean | null;
-  hasCoDetectors?: boolean | null;
-  hasDrainageIssues?: boolean | null;
-  hvacInstallYear?: number | null;
-  waterHeaterInstallYear?: number | null;
-  roofReplacementYear?: number | null;
-  yearBuilt?: number | null;
+  // Note: All property fields (heatingType, waterHeaterType, roofType, yearBuilt, etc.)
+  // are already included from the base Property type from Prisma
 }
 
 /**
@@ -379,6 +370,12 @@ function startWorker() {
     timezone: 'America/New_York',
   });
 
+  // Community Events ingestion cron (daily)
+  cron.schedule(
+    '0 3 * * *',
+    fetchCommunityEventsCron,
+    { timezone: 'America/New_York' }
+  );
   // =============================================================================
   // FIX: Initialize BullMQ Worker with correct queue name and job handlers
   // =============================================================================
