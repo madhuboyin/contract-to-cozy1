@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
 import basicAuth from 'express-basic-auth';
+import { PrismaClient } from '@prisma/client';
 
 // Import swagger config
 import { swaggerSpec } from './config/swagger.config';
@@ -16,7 +17,7 @@ import providerRoutes from './routes/provider.routes';
 import bookingRoutes from './routes/booking.routes';
 import propertyRoutes from './routes/property.routes';
 import userRoutes from './routes/user.routes';
-import checklistRoutes from './routes/checklist.routes'; // <-- FIX 1: Default import
+import checklistRoutes from './routes/checklist.routes';
 import serviceCategoryRoutes from './routes/service-category.routes';
 import maintenanceRoutes from './routes/maintenance.routes';
 import homeownerManagementRoutes from './routes/home-management.routes';
@@ -34,10 +35,15 @@ import energyRoutes from './routes/energyAuditor.routes';
 import visualInspectorRoutes from './routes/visualInspector.routes';
 import taxAppealRoutes from './routes/taxAppeal.routes';
 import movingConciergeRoutes from './routes/movingConcierge.routes';
+import { communityRoutes } from './community/community.routes';
+
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
 
 dotenv.config();
+
+// Initialize Prisma Client
+const prisma = new PrismaClient();
 
 const app = express();
 
@@ -215,6 +221,7 @@ app.get('/', (req: Request, res: Response) => {
       users: '/api/users',
       checklist: '/api/checklist',
       serviceCategories: '/api/service-categories',
+      community: '/api/community',
     },
   });
 });
@@ -228,22 +235,20 @@ app.use('/api/providers', providerRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/properties', propertyRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/checklist', checklistRoutes); // <-- FIX 2: Mount point
+app.use('/api/checklist', checklistRoutes);
 app.use('/api/service-categories', serviceCategoryRoutes);
 app.use('/api/maintenance-templates', maintenanceRoutes);
-app.use('/api/home-management', homeownerManagementRoutes); // NEW LINE
+app.use('/api/home-management', homeownerManagementRoutes);
 app.use('/api/risk', riskRoutes);
-// Handles: /api/v1/financial-efficiency/summary
-app.use('/api/v1/financial-efficiency', financialRoutes); 
-// Handles: /api/v1/properties/:propertyId/financial-efficiency/*
-app.use('/api/v1/properties', financialRoutes);
-// ✅ Community (NEW, on-the-fly)
-import { PrismaClient } from '@prisma/client';
-import { communityRoutes } from './community/community.routes';
 
-const prisma = new PrismaClient();
+// Financial efficiency routes
+app.use('/api/v1/financial-efficiency', financialRoutes); 
+app.use('/api/v1/properties', financialRoutes);
+
+// Community routes (NEW)
 app.use(communityRoutes(prisma));
 
+// Other feature routes
 app.use('/api/gemini', geminiRoutes);
 app.use('/api/emergency', emergencyRoutes);
 app.use('/api/documents', documentRoutes);
@@ -257,6 +262,7 @@ app.use('/api/visual-inspector', visualInspectorRoutes);
 app.use('/api/tax-appeal', taxAppealRoutes);
 app.use('/api/moving-concierge', movingConciergeRoutes);
 
+// 404 handler
 app.use((req: Request, res: Response) => {
   res.status(404).json({
     error: 'Not Found',
@@ -279,6 +285,9 @@ app.use((req: Request, res: Response) => {
       'GET /api/service-categories/all',
       'GET /api/oracle/predict/:propertyId',
       'GET /api/oracle/summary',
+      'GET /api/community/alerts',
+      'GET /api/community/trash',
+      'GET /api/v1/community/events',
     ],
   });
 });
@@ -308,13 +317,16 @@ app.listen(PORT, () => {
   console.log(`   - GET  /api/bookings`);
   console.log(`   - GET  /api/properties`);
   console.log(`   - GET  /api/users/profile`);
-  console.log(`   - PUT  /api/users/profile`); // <-- FIX 3: Corrected typo
+  console.log(`   - PUT  /api/users/profile`);
   console.log(`   - GET  /api/checklist`);
   console.log(`   - PUT  /api/checklist/items/:itemId`);
   console.log(`   - GET  /api/service-categories`);
   console.log(`   - GET  /api/service-categories/all`);
   console.log(`   - GET  /api/risk/property/:propertyId/report`);
   console.log(`   - POST /api/risk/calculate/:propertyId`);
+  console.log(`   - GET  /api/community/alerts`);
+  console.log(`   - GET  /api/community/trash`);
+  console.log(`   - GET  /api/v1/community/events`);
 });
 
 export default app;
