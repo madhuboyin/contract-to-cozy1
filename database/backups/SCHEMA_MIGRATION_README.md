@@ -47,52 +47,48 @@ model HomeownerProfile {
 ### 2. Create ConfigMap with Schema
 This makes your schema available inside the cluster:
 
-```bash
+cd ~/git/contract-to-cozy1/apps/backend
 kubectl create configmap prisma-schema -n production \
   --from-file=schema.prisma=prisma/schema.prisma \
   --dry-run=client -o yaml | kubectl apply -f -
-```
 
 **What this does:** Creates/updates a ConfigMap named `prisma-schema` containing your schema file.
 
 ---
 
 ### 3. Get Database Password
-```bash
-PASSWORD=$(kubectl get secret postgres-credentials -n production \
-  -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d)
 
-# Verify (shows first 3 characters only)
-echo "Password: ${PASSWORD:0:3}***"
-```
+export PASSWORD=$(kubectl get secret postgres-credentials -n production \
+  -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d)
 
 ---
 
 ### 4. Create Migration Job
 This job runs inside your cluster with direct access to PostgreSQL:
 
-```bash
-cat > /tmp/migrate.yaml << JOBEOF
+cat <<EOF | kubectl apply -f -
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: prisma-migrate-$(date +%s)
+  name: migrate-enum-$(date +%s)
   namespace: production
 spec:
-  ttlSecondsAfterFinished: 300  # Auto-delete after 5 minutes
+  ttlSecondsAfterFinished: 600
   template:
     spec:
       restartPolicy: Never
       containers:
       - name: migrate
         image: node:20-alpine
-        command: ["/bin/sh", "-c"]
-        args:
+        command:
+          - sh
+          - -c
           - |
-            npm install -g prisma@latest && 
-            mkdir -p /app/prisma && 
-            cp /config/schema.prisma /app/prisma/ && 
-            cd /app && 
+            apk add --no-cache openssl openssl-dev
+            npm install -g prisma@5.22.0
+            mkdir -p /app/prisma
+            cp /config/schema.prisma /app/prisma/schema.prisma
+            cd /app
             npx prisma db push --accept-data-loss --skip-generate
         env:
         - name: DATABASE_URL
@@ -104,8 +100,20 @@ spec:
       - name: schema
         configMap:
           name: prisma-schema
-JOBEOF
-```
+EOF
+
+Step 4: Watch Logs
+
+JOB=$(kubectl get jobs -n production --sort-by=.metadata.creationTimestamp -o name | tail -1 | cut -d/ -f2)
+kubectl logs -f -n production job/$JOB
+
+Step 6: Generate Types
+
+cd ~/git/contract-to-cozy1/apps/backend
+npx prisma generate
+
+Step 7: Cleanup
+kubectl delete job -n production migrate-enum-*
 
 **Job breakdown:**
 - `ttlSecondsAfterFinished: 300` - Auto-cleanup after 5 minutes
@@ -138,70 +146,7 @@ Datasource "db": PostgreSQL database "contracttocozy", schema "public" at "postg
 
 ---
 
-### 6. Verify Migration
-Check that your changes were applied:
 
-```bash
-# Get postgres pod
-POD=$(kubectl get pod -n production -l app=postgres -o jsonpath='{.items[0].metadata.name}')
-
-# Check enum was created
-kubectl exec -it -n production $POD -- \
-  psql -U postgres -d contracttocozy -c "\dT+ HomeownerSegment"
-
-# Check column was added
-kubectl exec -it -n production $POD -- \
-  psql -U postgres -d contracttocozy -c "
-  SELECT column_name, data_type, column_default 
-  FROM information_schema.columns 
-  WHERE table_name = 'homeowner_profiles' AND column_name = 'segment';
-  "
-```
-
-**Expected output:**
-```
- column_name |  data_type   |            column_default
--------------+--------------+--------------------------------------
- segment     | USER-DEFINED | 'EXISTING_OWNER'::"HomeownerSegment"
-(1 row)
-```
-
----
-
-### 7. Cleanup Resources
-```bash
-# Delete the migration job
-kubectl delete job -n production prisma-migrate-*
-
-# Delete ConfigMap (or keep for future reference)
-kubectl delete configmap -n production prisma-schema
-```
-
----
-
-### 8. Generate TypeScript Types Locally
-Update your local Prisma Client with new types:
-
-```bash
-cd ~/git/contract-to-cozy1/apps/backend
-npx prisma generate
-```
-
-**Verify types were generated:**
-```bash
-grep -A 5 "HomeownerSegment" node_modules/.prisma/client/index.d.ts
-```
-
-**Expected output:**
-```typescript
-export const HomeownerSegment: {
-  HOME_BUYER: 'HOME_BUYER',
-  EXISTING_OWNER: 'EXISTING_OWNER'
-};
-export type HomeownerSegment = (typeof HomeownerSegment)[keyof typeof HomeownerSegment]
-```
-
----
 
 ## Using Prisma Studio (Optional)
 
