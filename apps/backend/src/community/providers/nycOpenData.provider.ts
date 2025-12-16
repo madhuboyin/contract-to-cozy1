@@ -19,12 +19,12 @@ export async function fetchNycEmergencyNotifications(opts: {
     
     const url = new URL(BASE);
     url.searchParams.set('$limit', String(Math.min(opts.limit, 50)));
-    url.searchParams.set('$order', 'created_date DESC');
+    // ✅ FIX: Use date_and_time instead of created_date
+    url.searchParams.set('$order', 'date_and_time DESC');
 
     const headers: Record<string, string> = {};
     if (opts.appToken) headers['X-App-Token'] = opts.appToken;
 
-    // Increase timeout to 30 seconds
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
@@ -40,6 +40,8 @@ export async function fetchNycEmergencyNotifications(opts: {
     console.log('✅ NYC API response status:', resp.status);
 
     if (!resp.ok) {
+      const errorText = await resp.text();
+      console.error('❌ NYC API error response:', errorText);
       throw new Error(`NYC API returned ${resp.status}`);
     }
 
@@ -47,10 +49,11 @@ export async function fetchNycEmergencyNotifications(opts: {
     console.log(`📊 Received ${data.length} alerts from NYC API`);
 
     const mapped = data.map((row) => ({
-      title: row?.title ?? row?.notification_title ?? row?.message ?? 'NYC Emergency Notification',
-      description: row?.body ?? row?.description ?? row?.message ?? null,
+      // ✅ FIX: Use date_and_time field
+      title: row?.notification_title ?? row?.title ?? row?.message ?? 'NYC Emergency Notification',
+      description: row?.email_body ?? row?.body ?? row?.description ?? row?.message ?? null,
       url: row?.url ?? row?.link ?? null,
-      publishedAt: row?.created_date ? new Date(row.created_date).toISOString() : null,
+      publishedAt: row?.date_and_time ? new Date(row.date_and_time).toISOString() : null,
     }));
 
     console.log(`✅ Returning ${mapped.length} mapped alerts`);
@@ -59,7 +62,6 @@ export async function fetchNycEmergencyNotifications(opts: {
   } catch (error) {
     console.error('❌ NYC Open Data API failed:', error);
     console.error('Error details:', error instanceof Error ? error.message : error);
-    // Return empty array to prevent 502
     return [];
   }
 }
