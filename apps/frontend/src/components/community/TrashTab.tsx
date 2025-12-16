@@ -28,20 +28,10 @@ const SCHEDULE_TYPE_LABELS: Record<string, { label: string; icon: string; color:
 };
 
 export function TrashTab({ propertyId }: Props) {
-  // Fetch AI-powered schedule
+  // ✅ FIX: Use API client method instead of direct fetch
   const scheduleQuery = useQuery({
     queryKey: ['trash-schedule', propertyId],
-    queryFn: async () => {
-      if (!propertyId) return null;
-      const response = await fetch(`/api/community/trash-schedule?propertyId=${propertyId}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      if (!response.ok) throw new Error('Failed to fetch schedule');
-      const data = await response.json();
-      return data.success ? data.data : null;
-    },
+    queryFn: () => api.getTrashSchedule(propertyId!),
     enabled: !!propertyId,
     staleTime: 24 * 60 * 60 * 1000, // 24 hours
   });
@@ -50,7 +40,7 @@ export function TrashTab({ propertyId }: Props) {
   const feedsQuery = useQuery({
     queryKey: ['community-trash', propertyId],
     queryFn: () => api.getCommunityTrash(propertyId!),
-    enabled: !!propertyId && (!scheduleQuery.data || scheduleQuery.data.schedules?.length === 0),
+    enabled: !!propertyId && (!scheduleQuery.data?.success || scheduleQuery.data?.data?.schedules?.length === 0),
   });
 
   if (!propertyId) {
@@ -67,7 +57,8 @@ export function TrashTab({ propertyId }: Props) {
     return <p className="text-muted-foreground text-center py-12">Loading schedule…</p>;
   }
 
-  const schedule = scheduleQuery.data;
+  // ✅ FIX: Access data correctly through API response wrapper
+  const schedule = scheduleQuery.data?.success ? scheduleQuery.data.data : null;
   const hasSchedule = schedule && schedule.schedules && schedule.schedules.length > 0;
 
   // Show AI-powered schedule if available
@@ -156,11 +147,13 @@ export function TrashTab({ propertyId }: Props) {
       <EmptyState
         icon={<Trash2 className="h-16 w-16" />}
         title="Schedule not available yet"
-        description={`We're working on adding trash collection schedules for ${schedule?.city || 'this city'}. Check back soon!`}
-        action={{
-          label: 'View city website',
-          href: schedule?.source || '#',
-        }}
+        description={`This city does not provide a public trash or recycling feed yet.`}
+        action={
+          schedule?.source ? {
+            label: 'View city website',
+            href: schedule.source,
+          } : undefined
+        }
       />
     );
   }
