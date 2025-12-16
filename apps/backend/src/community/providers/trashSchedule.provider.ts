@@ -2,10 +2,9 @@
 
 import { TrashScheduleResponse, TrashSchedule } from '../types/community.types';
 import { getCityOpenDataSources } from './citySources.provider';
+import { GoogleGenerativeAI } from '@google/generative-ai'; // ✅ FIXED: Changed from require to import
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 /**
  * Use AI to parse trash schedule information from city websites
