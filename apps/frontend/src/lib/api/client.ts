@@ -1392,36 +1392,35 @@ class APIClient {
       method: 'DELETE',
     });
   }
-
-  /**
-   * Fetch community events for a property
-   * Read-only, cache-friendly endpoint
-   */
   async getCommunityEvents(
     propertyId: string,
     params?: {
       limit?: number;
+      category?: string;
     }
   ): Promise<APIResponse<CommunityEventsResponse>> {
     const queryParams = new URLSearchParams();
-
+    
     if (params?.limit) {
       queryParams.append('limit', params.limit.toString());
     }
-
+    
+    if (params?.category) {
+      queryParams.append('category', params.category);
+    }
+  
     const query = queryParams.toString();
     const url = query
       ? `/api/v1/properties/${propertyId}/community/events?${query}`
       : `/api/v1/properties/${propertyId}/community/events`;
-
+  
     return this.request<CommunityEventsResponse>(url, {
       method: 'GET',
     });
   }
-
+  
   /**
    * Fetch community alerts for a property
-   * Uses on-the-fly endpoint that accepts propertyId
    */
   async getCommunityAlerts(
     propertyId: string,
@@ -1431,20 +1430,19 @@ class APIClient {
   ): Promise<APIResponse<any>> {
     const queryParams = new URLSearchParams();
     queryParams.append('propertyId', propertyId);
-
+  
     if (params?.limit) {
       queryParams.append('limit', params.limit.toString());
     }
-
+  
     const url = `/api/community/alerts?${queryParams.toString()}`;
     return this.request(url, {
       method: 'GET',
     });
   }
-
+  
   /**
    * Fetch community trash/recycling info for a property
-   * Uses on-the-fly endpoint that accepts propertyId
    */
   async getCommunityTrash(
     propertyId: string,
@@ -1454,17 +1452,29 @@ class APIClient {
   ): Promise<APIResponse<any>> {
     const queryParams = new URLSearchParams();
     queryParams.append('propertyId', propertyId);
-
+  
     if (params?.limit) {
       queryParams.append('limit', params.limit.toString());
     }
-
+  
     const url = `/api/community/trash?${queryParams.toString()}`;
     return this.request(url, {
       method: 'GET',
     });
   }
-
+  
+  /**
+   * Fetch AI-powered trash schedule for a property
+   */
+  async getTrashSchedule(
+    propertyId: string
+  ): Promise<APIResponse<any>> {
+    const url = `/api/community/trash-schedule?propertyId=${propertyId}`;
+    return this.request(url, {
+      method: 'GET',
+    });
+  }
+ 
 }
 
 // Export singleton instance

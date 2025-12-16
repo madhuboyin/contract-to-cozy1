@@ -9,12 +9,11 @@ import {
   OnTheFlyParams,
   OnTheFlyResponse,
   OnTheFlyCategory,
+  TrashScheduleResponse,
 } from './types/community.types';
 
 import { fetchTicketmasterEvents, buildEventKey } from './providers/ticketmaster.provider';
 import { getCityOpenDataSources } from './providers/citySources.provider';
-
-// ✅ NEW providers
 import { fetchRssItems } from './providers/rss.provider';
 import { fetchNycEmergencyNotifications } from './providers/nycOpenData.provider';
 import {
@@ -22,8 +21,8 @@ import {
   getAlertsSourcesForCity,
   getTrashSourcesForCity,
 } from './providers/citySources.onTheFly';
+import { parseTrashScheduleWithAI } from './providers/trashSchedule.provider';
 
-// Simple in-memory TTL cache
 type CacheEntry<T> = { expiresAt: number; value: T };
 
 export class CommunityService {
@@ -45,7 +44,7 @@ export class CommunityService {
     this.cache.set(key, { value, expiresAt: Date.now() + ttlMs });
   }
 
-  async getCommunityEventsByProperty(propertyId: string, limit = 50): Promise<CommunityEvent[]> {
+  async getCommunityEventsByProperty(propertyId: string, limit = 50, category?: string): Promise<CommunityEvent[]> {
     const property = await this.prisma.property.findUnique({
       where: { id: propertyId },
       select: { city: true, state: true },
@@ -57,7 +56,12 @@ export class CommunityService {
       throw err;
     }
 
-    return this.getCommunityEventsByCity({ city: property.city, state: property.state, limit });
+    return this.getCommunityEventsByCity({ 
+      city: property.city, 
+      state: property.state, 
+      limit,
+      category: category as any,
+    });
   }
 
   async getCityOpenData(params: GetCityOpenDataParams): Promise<CityOpenDataResponse> {
@@ -66,11 +70,10 @@ export class CommunityService {
     if (cached) return cached;
 
     const data = getCityOpenDataSources(params.city, params.state);
-    this.setCache(cacheKey, data, 60 * 60 * 1000); // 1 hour
+    this.setCache(cacheKey, data, 60 * 60 * 1000);
     return data;
   }
 
-  // ✅ NEW: on-the-fly TRASH
   async getTrashOnTheFly(params: OnTheFlyParams): Promise<OnTheFlyResponse> {
     const { city, state } = await this.resolveCityState(params);
 
@@ -82,7 +85,6 @@ export class CommunityService {
     const cityKey = resolveCityKey(city, state);
     const sources = getTrashSourcesForCity(cityKey);
 
-    // For MVP, trash sources are RSS-based (where available)
     const items = (
       await Promise.all(
         sources.map(async (s) => {
@@ -113,7 +115,6 @@ export class CommunityService {
     return resp;
   }
 
-  // ✅ NEW: on-the-fly ALERTS
   async getAlertsOnTheFly(params: OnTheFlyParams): Promise<OnTheFlyResponse> {
     const { city, state } = await this.resolveCityState(params);
 
@@ -168,8 +169,22 @@ export class CommunityService {
       sources: sources.map((s) => ({ sourceName: s.sourceName, url: s.url, kind: s.kind })),
     };
 
-    this.setCache(cacheKey, resp, 60 * 1000); // alerts can update frequently → 1 min cache
+    this.setCache(cacheKey, resp, 60 * 1000);
     return resp;
+  }
+
+  // ✅ NEW: Get parsed trash schedules using AI
+  async getTrashSchedule(params: OnTheFlyParams): Promise<TrashScheduleResponse> {
+    const { city, state } = await this.resolveCityState(params);
+
+    const cacheKey = `trash_schedule|${city}|${state}`;
+    const cached = this.getCache<TrashScheduleResponse>(cacheKey);
+    if (cached) return cached;
+
+    const schedule = await parseTrashScheduleWithAI(city, state);
+    this.setCache(cacheKey, schedule, 24 * 60 * 60 * 1000); // 24 hour cache
+    
+    return schedule;
   }
 
   private async resolveCityState(params: OnTheFlyParams): Promise<{ city: string; state: string }> {
@@ -228,8 +243,9 @@ export class CommunityService {
   ): Promise<CommunityEvent[]> {
     const radiusMiles = params.radiusMiles ?? 20;
     const limit = params.limit ?? 50;
+    const category = params.category;
   
-    const cacheKey = `events|${params.city}|${params.state}|${radiusMiles}|${limit}`;
+    const cacheKey = `events|${params.city}|${params.state}|${radiusMiles}|${limit}|${category ?? 'all'}`;
     const cached = this.getCache<CommunityEvent[]>(cacheKey);
     if (cached) return cached;
   
@@ -237,22 +253,23 @@ export class CommunityService {
       city: params.city,
       state: params.state,
       radiusMiles,
-      limit: limit * 2, // fetch more to allow dedupe
+      limit: limit * 2,
     });
   
     const seen = new Set<string>();
     const deduped: CommunityEvent[] = [];
   
     for (const ev of rawEvents) {
+      // Apply category filter if specified
+      if (category && ev.category !== category) {
+        continue;
+      }
+
       const key = buildEventKey(ev);
       if (seen.has(key)) continue;
   
       seen.add(key);
-  
-      deduped.push({
-        ...ev,
-        title: ev.title.replace(/\s*\(.*?\)\s*/g, '').trim(),
-      });
+      deduped.push(ev);
   
       if (deduped.length >= limit) break;
     }
@@ -260,5 +277,4 @@ export class CommunityService {
     this.setCache(cacheKey, deduped, 5 * 60 * 1000);
     return deduped;
   }
-  
 }

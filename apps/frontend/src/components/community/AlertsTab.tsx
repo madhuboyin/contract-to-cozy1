@@ -1,12 +1,23 @@
+// apps/frontend/src/components/community/AlertsTab.tsx
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, AlertTriangle } from 'lucide-react';
+import { ExternalLink, AlertTriangle, CheckCircle } from 'lucide-react';
 import { api } from '@/lib/api/client';
-import { OnTheFlyItem } from './types';
+import { EmptyState } from './EmptyState';
+import { Badge } from '@/components/ui/badge';
 
 interface Props {
   propertyId?: string;
+}
+
+interface OnTheFlyItem {
+  title: string;
+  description?: string | null;
+  url?: string | null;
+  publishedAt?: string | null;
+  category: string;
+  sourceName: string;
 }
 
 export function AlertsTab({ propertyId }: Props) {
@@ -17,24 +28,42 @@ export function AlertsTab({ propertyId }: Props) {
   });
 
   if (!propertyId) {
-    return <p className="text-muted-foreground">Select a property to view city alerts.</p>;
+    return (
+      <EmptyState
+        icon={<AlertTriangle className="h-16 w-16" />}
+        title="Select a property"
+        description="Choose a property to view city alerts and notifications."
+      />
+    );
   }
 
   if (isLoading) {
-    return <p className="text-muted-foreground">Loading city alerts…</p>;
+    return <p className="text-muted-foreground text-center py-12">Loading city alerts…</p>;
   }
 
   if (isError || !data?.success) {
-    return <p className="text-red-500">Unable to load city alerts.</p>;
+    return (
+      <EmptyState
+        icon={<AlertTriangle className="h-16 w-16" />}
+        title="Unable to load alerts"
+        description="We couldn't fetch city alerts at this time. Please try again later."
+        action={{
+          label: 'Retry',
+          onClick: () => window.location.reload(),
+        }}
+      />
+    );
   }
 
   const items: OnTheFlyItem[] = data.data?.items ?? [];
 
   if (items.length === 0) {
     return (
-      <p className="text-muted-foreground">
-        No active city alerts available at this time.
-      </p>
+      <EmptyState
+        icon={<CheckCircle className="h-16 w-16 text-green-500" />}
+        title="No active alerts"
+        description="Great news! There are no current alerts or emergency notifications for your area."
+      />
     );
   }
 
@@ -48,20 +77,42 @@ export function AlertsTab({ propertyId }: Props) {
           rel="noopener noreferrer"
           className="block border-l-4 border-orange-500 bg-orange-50 p-4 rounded-md hover:bg-orange-100 transition"
         >
-          <div className="flex items-center gap-2 font-semibold">
-            <AlertTriangle className="h-4 w-4" />
-            {item.title}
-          </div>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 font-semibold mb-1">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                {item.title}
+              </div>
 
-          {item.description && (
-            <p className="text-sm mt-1">
-              {item.description}
-            </p>
-          )}
+              {item.description && (
+                <p className="text-sm mt-2 text-gray-700">
+                  {item.description}
+                </p>
+              )}
 
-          <div className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
-            <ExternalLink className="h-3 w-3" />
-            {item.sourceName}
+              <div className="flex items-center gap-3 mt-3 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <ExternalLink className="h-3 w-3" />
+                  {item.sourceName}
+                </span>
+                {item.publishedAt && (
+                  <>
+                    <span>•</span>
+                    <span>
+                      {new Date(item.publishedAt).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <Badge variant="destructive" className="flex-shrink-0">
+              Alert
+            </Badge>
           </div>
         </a>
       ))}

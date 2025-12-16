@@ -2,10 +2,19 @@
 
 export type CommunityEventSource = 'ticketmaster';
 
+export type EventCategory = 
+  | 'FARMERS_MARKET' 
+  | 'FOOD_FESTIVAL' 
+  | 'COMMUNITY' 
+  | 'LIBRARY' 
+  | 'HOLIDAY'
+  | 'OTHER';
+
 export interface CommunityEvent {
   source: CommunityEventSource;
   externalId: string;
   title: string;
+  category?: EventCategory;
   startTime: string; // ISO
   endTime?: string | null;
   externalUrl: string;
@@ -31,7 +40,7 @@ export interface OnTheFlyItem {
 export interface OnTheFlySource {
   sourceName: string;
   url: string;
-  kind: 'rss' | 'nyc_open_data_emergency';
+  kind: 'rss' | 'nyc_open_data_emergency' | 'ai_schedule';
 }
 
 export interface OnTheFlyResponse {
@@ -46,6 +55,7 @@ export interface OnTheFlyParams {
   state?: string;
   propertyId?: string;
   limit?: number;
+  category?: EventCategory;
 }
 
 export interface CityOpenDataResponse {
@@ -59,6 +69,7 @@ export interface GetCommunityEventsParams {
   state: string;
   radiusMiles?: number;
   limit?: number;
+  category?: EventCategory;
 }
 
 export interface GetCityOpenDataParams {
@@ -72,4 +83,20 @@ export interface CityLinkItem {
   description?: string;
   url: string;
   sourceName: string;
+}
+
+// ✅ NEW: Trash schedule types
+export interface TrashSchedule {
+  type: 'trash' | 'recycling' | 'yard_waste' | 'bulk';
+  nextPickup?: string; // ISO date
+  frequency: string; // e.g., "Weekly on Mondays", "Every other Tuesday"
+  notes?: string;
+}
+
+export interface TrashScheduleResponse {
+  city: string;
+  state: string;
+  schedules: TrashSchedule[];
+  lastUpdated: string;
+  source: string;
 }
