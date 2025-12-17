@@ -13,9 +13,41 @@ import {
   PageHeaderDescription,
 } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, TrendingUp } from "lucide-react";
+import { ArrowLeft, TrendingUp, AlertCircle } from "lucide-react";
 
 import SellerPrepOverview from "@/components/seller-prep/SellerPrepOverview";
+
+// Proper TypeScript types
+interface SellerPrepItem {
+  id: string;
+  title: string;
+  priority: string;
+  roiRange: string;
+  costBucket: string;
+  status: string;
+}
+
+interface SellerPrepOverviewData {
+  items: SellerPrepItem[];
+  completionPercent: number;
+}
+
+interface ComparableHome {
+  address: string;
+  soldPrice: number | null;
+  soldDate: string | null;
+  sqft?: number;
+  beds?: number;
+  baths?: number;
+  similarityReason: string;
+}
+
+interface ReadinessReport {
+  summary: string;
+  highlights?: string[];
+  risks?: string[];
+  disclaimers?: string[];
+}
 
 export default function SellerPrepPage() {
   const params = useParams();
@@ -26,48 +58,47 @@ export default function SellerPrepPage() {
     queryFn: async () => {
       if (!propertyId) throw new Error("Property ID missing");
 
-      const [overview, comparables, report] = await Promise.all([
+      const [overviewRes, comparablesRes, reportRes] = await Promise.all([
         api.getSellerPrepOverview(propertyId),
         api.getSellerPrepComparables(propertyId),
         api.getSellerPrepReport(propertyId),
       ]);
 
-      // Check all responses for success before accessing data
-      if (!overview.success || !comparables.success || !report.success) {
-        const errorMessage = 
-          !overview.success ? overview.message :
-          !comparables.success ? comparables.message :
-          report.message;
-        throw new Error(errorMessage || 'Failed to load seller prep data');
+      // Comprehensive response validation
+      if (!overviewRes.success) {
+        throw new Error(overviewRes.message || 'Failed to load overview');
+      }
+      if (!comparablesRes.success) {
+        throw new Error(comparablesRes.message || 'Failed to load comparables');
+      }
+      if (!reportRes.success) {
+        throw new Error(reportRes.message || 'Failed to load report');
       }
 
+      // Type-safe data extraction
+      const overview = overviewRes.data as SellerPrepOverviewData;
+      const comparables = comparablesRes.data as ComparableHome[];
+      const report = reportRes.data as ReadinessReport;
+
       return {
-        overview: overview.data as {
-          items: Array<{
-            id: string;
-            title: string;
-            priority: string;
-            roiRange: string;
-            costBucket: string;
-            status: string;
-          }>;
-          completionPercent: number;
-        },
-        comparables: comparables.data as any[],
-        report: report.data as {
-          summary: string;
-          highlights?: string[];
-          risks?: string[];
-        },
+        overview,
+        comparables,
+        report,
       };
     },
     enabled: !!propertyId,
+    retry: 1,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   if (isLoading) {
     return (
       <DashboardShell>
-        <div className="h-64 rounded-lg bg-gray-100 animate-pulse" />
+        <div className="space-y-4">
+          <div className="h-16 rounded-lg bg-gray-100 animate-pulse" />
+          <div className="h-64 rounded-lg bg-gray-100 animate-pulse" />
+          <div className="h-64 rounded-lg bg-gray-100 animate-pulse" />
+        </div>
       </DashboardShell>
     );
   }
@@ -76,9 +107,23 @@ export default function SellerPrepPage() {
     return (
       <DashboardShell>
         <Card className="p-6">
-          <p className="text-sm text-red-600">
-            Failed to load Seller Preparation insights.
-          </p>
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+            <div>
+              <p className="font-medium text-red-600">
+                Failed to load Seller Preparation insights
+              </p>
+              <p className="text-sm text-gray-600 mt-1">
+                {error instanceof Error ? error.message : 'An unexpected error occurred'}
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="text-sm text-blue-600 hover:text-blue-700 mt-2"
+              >
+                Try again
+              </button>
+            </div>
+          </div>
         </Card>
       </DashboardShell>
     );
