@@ -36,6 +36,7 @@ import visualInspectorRoutes from './routes/visualInspector.routes';
 import taxAppealRoutes from './routes/taxAppeal.routes';
 import movingConciergeRoutes from './routes/movingConcierge.routes';
 import { communityRoutes } from './community/community.routes';
+import sellerPrepRoutes from './sellerPrep/sellerPrep.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
@@ -261,6 +262,8 @@ app.use('/api/energy', energyRoutes);
 app.use('/api/visual-inspector', visualInspectorRoutes);
 app.use('/api/tax-appeal', taxAppealRoutes);
 app.use('/api/moving-concierge', movingConciergeRoutes);
+app.use('/api/seller-prep', sellerPrepRoutes);
+
 
 // 404 handler
 app.use((req: Request, res: Response) => {
