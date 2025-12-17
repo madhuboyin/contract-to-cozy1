@@ -1138,12 +1138,13 @@ model CityFeatureFlag {
 }
 
 model SellerPrepPlan {
-  id         String   @id @default(uuid())
-  userId     String
-  propertyId String
-  createdAt  DateTime @default(now())
+  id          String   @id @default(uuid())
+  userId      String
+  propertyId  String
+  preferences Json?    // ADD THIS LINE
+  createdAt   DateTime @default(now())
 
-  items      SellerPrepPlanItem[]
+  items       SellerPrepPlanItem[]
 
   @@index([userId, propertyId])
 }
@@ -1168,7 +1169,14 @@ model SellerPrepLead {
   userId      String
   propertyId  String
   leadType    String   // AGENT | CONTRACTOR | STAGER
-  context     String   // INTERIOR_PAINT, CURB_APPEAL, etc.
+  context     String   // JSON string with task details
+  
+  // NEW FIELDS for contact info
+  fullName    String?
+  email       String?
+  phone       String?
+  contactMethod String? // email | phone | either
+  
   createdAt   DateTime @default(now())
 
   @@index([propertyId, leadType])
