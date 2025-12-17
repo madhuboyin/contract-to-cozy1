@@ -1163,6 +1163,17 @@ model SellerPrepPlanItem {
   @@index([planId])
 }
 
+model SellerPrepLead {
+  id          String   @id @default(uuid())
+  userId      String
+  propertyId  String
+  leadType    String   // AGENT | CONTRACTOR | STAGER
+  context     String   // INTERIOR_PAINT, CURB_APPEAL, etc.
+  createdAt   DateTime @default(now())
+
+  @@index([propertyId, leadType])
+}
+
 
 // ============================================================================
 // REVIEWS & RATINGS
