@@ -1502,8 +1502,33 @@ class APIClient {
       body: { status } as unknown as BodyInit,
     });
   }
- 
-}
+
+// =======================
+// SELLER PREP ENDPOINTS
+// =======================
+
+  async getSellerPrepROI(propertyId: string) {
+    return this.request(`/api/seller-prep/roi/${propertyId}`);
+  }
+
+  async getSellerPrepComparables(propertyId: string) {
+    return this.request(`/api/seller-prep/comparables/${propertyId}`);
+  }
+
+  async getSellerPrepCurbAppeal(propertyId: string) {
+    return this.request(`/api/seller-prep/curb-appeal/${propertyId}`);
+  }
+
+  async getSellerPrepStaging(propertyId: string) {
+    return this.request(`/api/seller-prep/staging/${propertyId}`);
+  }
+
+  async getSellerPrepAgentGuide() {
+    return this.request(`/api/seller-prep/agent-guide`);
+  }
+    
+
+  }
 
 // Export singleton instance
 export const api = new APIClient(API_BASE_URL);

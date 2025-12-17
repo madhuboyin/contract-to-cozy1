@@ -1,166 +1,226 @@
 // apps/frontend/src/components/seller-prep/SellerPrepOverview.tsx
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import { api } from '@/lib/api/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { Separator } from '@/components/ui/separator';
-import { useToast } from '@/components/ui/use-toast';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  TrendingUp,
+  Hammer,
+  Home,
+  Camera,
+  Users,
+  CheckCircle,
+} from "lucide-react";
 
-type Status = 'PLANNED' | 'DONE' | 'SKIPPED';
-type Priority = 'HIGH' | 'MEDIUM' | 'LOW';
+/* ------------------------------------------------------------------ */
+/* Types (kept local on purpose – no global coupling in Phase 2)       */
+/* ------------------------------------------------------------------ */
 
-type SellerPrepItem = {
-  id: string;
-  code: string;
-  title: string;
-  priority: Priority;
-  roiRange: string;
-  costBucket: '$' | '$$' | '$$$';
-  status: Status;
-};
+interface ROIFix {
+  item: string;
+  roiPercent: number;
+  estimatedCost?: number;
+}
 
-type SellerPrepOverviewResponse = {
-  propertyId: string;
-  completionPercent: number;
-  items: SellerPrepItem[];
-};
+interface ComparableSale {
+  address: string;
+  soldPrice: number;
+  soldDate: string;
+  distanceMiles?: number;
+}
+
+interface CurbAppealResult {
+  score: number;
+  summary: string;
+  recommendations: string[];
+}
+
+interface StagingTip {
+  room: string;
+  suggestion: string;
+}
+
+interface AgentQuestion {
+  category: string;
+  questions: string[];
+}
+
+interface SellerPrepOverviewProps {
+  roi: ROIFix[];
+  comparables: ComparableSale[];
+  curbAppeal: CurbAppealResult;
+  staging: StagingTip[];
+  agentGuide: AgentQuestion[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Component                                                          */
+/* ------------------------------------------------------------------ */
 
 export default function SellerPrepOverview({
-  propertyId,
-}: {
-  propertyId: string;
-}) {
-  const { toast } = useToast();
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<SellerPrepOverviewResponse | null>(null);
-  const [savingId, setSavingId] = useState<string | null>(null);
-
-  const fetchOverview = async () => {
-    setLoading(true);
-    try {
-      const res = await api.getSellerPrepOverview(propertyId);
-      if (res.success && res.data) {
-        setData(res.data);
-      } else {
-        const errorMessage = 'error' in res && res.error ? res.error.message : 'Unknown error';
-        toast({
-          title: 'Failed to load Seller Prep',
-          description: errorMessage,
-          variant: 'destructive',
-        });
-      }
-    } catch (err: any) {
-      toast({
-        title: 'Failed to load Seller Prep',
-        description: err.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchOverview();
-  }, [propertyId]);
-
-  const sortedItems = useMemo(() => {
-    if (!data) return [];
-    const order = { HIGH: 0, MEDIUM: 1, LOW: 2 };
-    return [...data.items].sort(
-      (a, b) => order[a.priority] - order[b.priority]
-    );
-  }, [data]);
-
-  const nextStatus = (status: Status): Status => {
-    if (status === 'PLANNED') return 'DONE';
-    if (status === 'DONE') return 'SKIPPED';
-    return 'PLANNED';
-  };
-
-  const updateStatus = async (item: SellerPrepItem) => {
-    const newStatus = nextStatus(item.status);
-    setSavingId(item.id);
-
-    try {
-      await api.updateSellerPrepItem(item.id, newStatus);
-
-      toast({
-        title: 'Updated',
-        description: `${item.title} → ${newStatus}`,
-      });
-
-      await fetchOverview();
-    } catch (err: any) {
-      toast({
-        title: 'Update failed',
-        description: err.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setSavingId(null);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="p-6">
-        <Card>
-          <CardContent className="p-6 text-muted-foreground">
-            Loading Seller Prep…
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (!data) return null;
-
+  roi,
+  comparables,
+  curbAppeal,
+  staging,
+  agentGuide,
+}: SellerPrepOverviewProps) {
   return (
-    <div className="p-6 space-y-4">
+    <div className="space-y-6">
+
+      {/* ROI Repairs */}
       <Card>
         <CardHeader>
-          <CardTitle>Prepare Your Home for Sale</CardTitle>
-          <div className="space-y-2 pt-2">
-            <div className="flex justify-between text-sm">
-              <span>Progress</span>
-              <span>{data.completionPercent}%</span>
-            </div>
-            <Progress value={data.completionPercent} />
-          </div>
+          <CardTitle className="flex items-center gap-2">
+            <Hammer className="h-5 w-5 text-green-600" />
+            ROI-Driven Repair Recommendations
+          </CardTitle>
+          <CardDescription>
+            Focus on improvements that historically increase sale price
+          </CardDescription>
         </CardHeader>
-
         <CardContent className="space-y-3">
-          {sortedItems.map((item, idx) => (
-            <div key={item.id}>
-              {idx > 0 && <Separator className="my-3" />}
-
-              <div className="flex justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="font-medium">{item.title}</div>
-                  <div className="flex flex-wrap gap-2 text-xs">
-                    <Badge>{item.priority}</Badge>
-                    <Badge variant="outline">ROI {item.roiRange}</Badge>
-                    <Badge variant="outline">Cost {item.costBucket}</Badge>
-                    <Badge variant="secondary">{item.status}</Badge>
-                  </div>
-                </div>
-
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={savingId === item.id}
-                  onClick={() => updateStatus(item)}
-                >
-                  {savingId === item.id ? 'Saving…' : 'Update'}
-                </Button>
+          {roi.map((fix, idx) => (
+            <div
+              key={idx}
+              className="flex items-center justify-between p-3 border rounded-md"
+            >
+              <div>
+                <p className="font-medium">{fix.item}</p>
+                {fix.estimatedCost && (
+                  <p className="text-xs text-muted-foreground">
+                    Est. Cost: ${fix.estimatedCost.toLocaleString()}
+                  </p>
+                )}
               </div>
+              <Badge variant={fix.roiPercent >= 80 ? "default" : "secondary"}>
+                {fix.roiPercent}% ROI
+              </Badge>
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      {/* Curb Appeal */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Camera className="h-5 w-5 text-blue-600" />
+            Curb Appeal Score
+          </CardTitle>
+          <CardDescription>
+            Exterior attractiveness as seen by buyers
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-3">
+            <Badge variant="outline" className="text-lg">
+              {curbAppeal.score} / 100
+            </Badge>
+            <p className="text-sm text-muted-foreground">
+              {curbAppeal.summary}
+            </p>
+          </div>
+
+          <ul className="list-disc ml-5 text-sm space-y-1">
+            {curbAppeal.recommendations.map((rec, i) => (
+              <li key={i}>{rec}</li>
+            ))}
+          </ul>
+        </CardContent>
+      </Card>
+
+      {/* Comparable Sales */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-purple-600" />
+            Comparable Home Sales
+          </CardTitle>
+          <CardDescription>
+            Recently sold homes influencing buyer expectations
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {comparables.map((comp, idx) => (
+            <div
+              key={idx}
+              className="flex justify-between items-center border-b pb-2 last:border-none"
+            >
+              <div>
+                <p className="font-medium">{comp.address}</p>
+                <p className="text-xs text-muted-foreground">
+                  Sold {new Date(comp.soldDate).toLocaleDateString()}
+                </p>
+              </div>
+              <p className="font-semibold">
+                ${comp.soldPrice.toLocaleString()}
+              </p>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Staging */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Home className="h-5 w-5 text-orange-600" />
+            Staging Recommendations
+          </CardTitle>
+          <CardDescription>
+            Presentation tips that improve buyer perception
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {staging.map((tip, idx) => (
+            <div key={idx} className="text-sm">
+              <span className="font-medium">{tip.room}:</span>{" "}
+              {tip.suggestion}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Agent Interview Guide */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-teal-600" />
+            Agent Interview Guide
+          </CardTitle>
+          <CardDescription>
+            Questions to help you select the right listing agent
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {agentGuide.map((section, idx) => (
+            <div key={idx}>
+              <p className="font-medium mb-1">{section.category}</p>
+              <ul className="list-disc ml-5 text-sm space-y-1">
+                {section.questions.map((q, qIdx) => (
+                  <li key={qIdx}>{q}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Soft Completion State */}
+      <Card className="bg-green-50 border-green-200">
+        <CardContent className="p-4 flex items-center gap-3">
+          <CheckCircle className="h-6 w-6 text-green-600" />
+          <p className="text-sm text-green-800">
+            Completing high-ROI prep steps increases buyer confidence and
+            reduces time-on-market.
+          </p>
         </CardContent>
       </Card>
     </div>
