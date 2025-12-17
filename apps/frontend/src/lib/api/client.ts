@@ -1526,7 +1526,17 @@ class APIClient {
   async getSellerPrepAgentGuide() {
     return this.request(`/api/seller-prep/agent-guide`);
   }
-    
+
+  /**
+   * Get seller prep readiness report for a property
+   */
+  async getSellerPrepReport(
+    propertyId: string
+  ): Promise<APIResponse<any>> {
+    return this.request(`/api/seller-prep/report/${propertyId}`, {
+      method: 'GET',
+    });
+  }
 
   }
 

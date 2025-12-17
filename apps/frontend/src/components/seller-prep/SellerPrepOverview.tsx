@@ -1,4 +1,3 @@
-// apps/frontend/src/components/seller-prep/SellerPrepOverview.tsx
 "use client";
 
 import {
@@ -9,220 +8,116 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  TrendingUp,
-  Hammer,
-  Home,
-  Camera,
-  Users,
-  CheckCircle,
-} from "lucide-react";
-
-/* ------------------------------------------------------------------ */
-/* Types (kept local on purpose – no global coupling in Phase 2)       */
-/* ------------------------------------------------------------------ */
-
-interface ROIFix {
-  item: string;
-  roiPercent: number;
-  estimatedCost?: number;
-}
-
-interface ComparableSale {
-  address: string;
-  soldPrice: number;
-  soldDate: string;
-  distanceMiles?: number;
-}
-
-interface CurbAppealResult {
-  score: number;
-  summary: string;
-  recommendations: string[];
-}
-
-interface StagingTip {
-  room: string;
-  suggestion: string;
-}
-
-interface AgentQuestion {
-  category: string;
-  questions: string[];
-}
+import { CheckCircle, Hammer, TrendingUp, FileText } from "lucide-react";
 
 interface SellerPrepOverviewProps {
-  roi: ROIFix[];
-  comparables: ComparableSale[];
-  curbAppeal: CurbAppealResult;
-  staging: StagingTip[];
-  agentGuide: AgentQuestion[];
+  overview: {
+    items: Array<{
+      id: string;
+      title: string;
+      priority: string;
+      roiRange: string;
+      costBucket: string;
+      status: string;
+    }>;
+    completionPercent: number;
+  };
+  comparables: any[];
+  report: {
+    summary: string;
+    highlights?: string[];
+    risks?: string[];
+  };
 }
 
-/* ------------------------------------------------------------------ */
-/* Component                                                          */
-/* ------------------------------------------------------------------ */
-
 export default function SellerPrepOverview({
-  roi,
+  overview,
   comparables,
-  curbAppeal,
-  staging,
-  agentGuide,
+  report,
 }: SellerPrepOverviewProps) {
   return (
     <div className="space-y-6">
 
-      {/* ROI Repairs */}
+      {/* Completion */}
+      <Card className="bg-green-50 border-green-200">
+        <CardContent className="p-4 flex items-center gap-3">
+          <CheckCircle className="h-6 w-6 text-green-600" />
+          <p className="text-sm text-green-800">
+            Seller prep completion: <strong>{overview.completionPercent}%</strong>
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* ROI Checklist */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Hammer className="h-5 w-5 text-green-600" />
-            ROI-Driven Repair Recommendations
+            ROI-Based Prep Checklist
           </CardTitle>
           <CardDescription>
-            Focus on improvements that historically increase sale price
+            Prioritized improvements based on resale impact
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {roi.map((fix, idx) => (
+        <CardContent className="space-y-2">
+          {overview.items.map((item) => (
             <div
-              key={idx}
-              className="flex items-center justify-between p-3 border rounded-md"
+              key={item.id}
+              className="flex justify-between items-center border rounded-md p-3"
             >
               <div>
-                <p className="font-medium">{fix.item}</p>
-                {fix.estimatedCost && (
-                  <p className="text-xs text-muted-foreground">
-                    Est. Cost: ${fix.estimatedCost.toLocaleString()}
-                  </p>
-                )}
+                <p className="font-medium">{item.title}</p>
+                <p className="text-xs text-muted-foreground">
+                  ROI: {item.roiRange} • Cost: {item.costBucket}
+                </p>
               </div>
-              <Badge variant={fix.roiPercent >= 80 ? "default" : "secondary"}>
-                {fix.roiPercent}% ROI
+              <Badge variant={item.status === "DONE" ? "default" : "secondary"}>
+                {item.status}
               </Badge>
             </div>
           ))}
         </CardContent>
       </Card>
 
-      {/* Curb Appeal */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Camera className="h-5 w-5 text-blue-600" />
-            Curb Appeal Score
-          </CardTitle>
-          <CardDescription>
-            Exterior attractiveness as seen by buyers
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-center gap-3">
-            <Badge variant="outline" className="text-lg">
-              {curbAppeal.score} / 100
-            </Badge>
-            <p className="text-sm text-muted-foreground">
-              {curbAppeal.summary}
-            </p>
-          </div>
-
-          <ul className="list-disc ml-5 text-sm space-y-1">
-            {curbAppeal.recommendations.map((rec, i) => (
-              <li key={i}>{rec}</li>
-            ))}
-          </ul>
-        </CardContent>
-      </Card>
-
-      {/* Comparable Sales */}
+      {/* Comparables */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-purple-600" />
-            Comparable Home Sales
+            Comparable Sales
           </CardTitle>
-          <CardDescription>
-            Recently sold homes influencing buyer expectations
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {comparables.map((comp, idx) => (
-            <div
-              key={idx}
-              className="flex justify-between items-center border-b pb-2 last:border-none"
-            >
-              <div>
-                <p className="font-medium">{comp.address}</p>
-                <p className="text-xs text-muted-foreground">
-                  Sold {new Date(comp.soldDate).toLocaleDateString()}
-                </p>
-              </div>
-              <p className="font-semibold">
-                ${comp.soldPrice.toLocaleString()}
-              </p>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      {/* Staging */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Home className="h-5 w-5 text-orange-600" />
-            Staging Recommendations
-          </CardTitle>
-          <CardDescription>
-            Presentation tips that improve buyer perception
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {staging.map((tip, idx) => (
-            <div key={idx} className="text-sm">
-              <span className="font-medium">{tip.room}:</span>{" "}
-              {tip.suggestion}
+          {comparables.map((c: any, i: number) => (
+            <div key={i} className="flex justify-between text-sm">
+              <span>{c.address}</span>
+              <strong>${Number(c.soldPrice).toLocaleString()}</strong>
             </div>
           ))}
         </CardContent>
       </Card>
 
-      {/* Agent Interview Guide */}
+      {/* Readiness Report */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-teal-600" />
-            Agent Interview Guide
+            <FileText className="h-5 w-5 text-blue-600" />
+            Seller Readiness Summary
           </CardTitle>
-          <CardDescription>
-            Questions to help you select the right listing agent
-          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {agentGuide.map((section, idx) => (
-            <div key={idx}>
-              <p className="font-medium mb-1">{section.category}</p>
-              <ul className="list-disc ml-5 text-sm space-y-1">
-                {section.questions.map((q, qIdx) => (
-                  <li key={qIdx}>{q}</li>
-                ))}
-              </ul>
-            </div>
-          ))}
+        <CardContent className="space-y-2">
+          <p className="text-sm">{report.summary}</p>
+
+          {report.highlights && (
+            <ul className="list-disc ml-5 text-sm">
+              {report.highlights.map((h, i) => (
+                <li key={i}>{h}</li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
 
-      {/* Soft Completion State */}
-      <Card className="bg-green-50 border-green-200">
-        <CardContent className="p-4 flex items-center gap-3">
-          <CheckCircle className="h-6 w-6 text-green-600" />
-          <p className="text-sm text-green-800">
-            Completing high-ROI prep steps increases buyer confidence and
-            reduces time-on-market.
-          </p>
-        </CardContent>
-      </Card>
     </div>
   );
 }

@@ -12,41 +12,10 @@ import {
   PageHeaderHeading,
   PageHeaderDescription,
 } from "@/components/page-header";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, TrendingUp } from "lucide-react";
 
 import SellerPrepOverview from "@/components/seller-prep/SellerPrepOverview";
-
-// Types matching SellerPrepOverview component
-interface ROIFix {
-  item: string;
-  roiPercent: number;
-  estimatedCost?: number;
-}
-
-interface ComparableSale {
-  address: string;
-  soldPrice: number;
-  soldDate: string;
-  distanceMiles?: number;
-}
-
-interface CurbAppealResult {
-  score: number;
-  summary: string;
-  recommendations: string[];
-}
-
-interface StagingTip {
-  room: string;
-  suggestion: string;
-}
-
-interface AgentQuestion {
-  category: string;
-  questions: string[];
-}
 
 export default function SellerPrepPage() {
   const params = useParams();
@@ -57,37 +26,39 @@ export default function SellerPrepPage() {
     queryFn: async () => {
       if (!propertyId) throw new Error("Property ID missing");
 
-      const [
-        roi,
-        comparables,
-        curbAppeal,
-        staging,
-        agentGuide,
-      ] = await Promise.all([
-        api.getSellerPrepROI(propertyId),
+      const [overview, comparables, report] = await Promise.all([
+        api.getSellerPrepOverview(propertyId),
         api.getSellerPrepComparables(propertyId),
-        api.getSellerPrepCurbAppeal(propertyId),
-        api.getSellerPrepStaging(propertyId),
-        api.getSellerPrepAgentGuide(),
+        api.getSellerPrepReport(propertyId),
       ]);
 
       // Check all responses for success before accessing data
-      if (!roi.success || !comparables.success || !curbAppeal.success || !staging.success || !agentGuide.success) {
+      if (!overview.success || !comparables.success || !report.success) {
         const errorMessage = 
-          !roi.success ? roi.message :
+          !overview.success ? overview.message :
           !comparables.success ? comparables.message :
-          !curbAppeal.success ? curbAppeal.message :
-          !staging.success ? staging.message :
-          agentGuide.message;
+          report.message;
         throw new Error(errorMessage || 'Failed to load seller prep data');
       }
 
       return {
-        roi: roi.data as ROIFix[],
-        comparables: comparables.data as ComparableSale[],
-        curbAppeal: curbAppeal.data as CurbAppealResult,
-        staging: staging.data as StagingTip[],
-        agentGuide: agentGuide.data as AgentQuestion[],
+        overview: overview.data as {
+          items: Array<{
+            id: string;
+            title: string;
+            priority: string;
+            roiRange: string;
+            costBucket: string;
+            status: string;
+          }>;
+          completionPercent: number;
+        },
+        comparables: comparables.data as any[],
+        report: report.data as {
+          summary: string;
+          highlights?: string[];
+          risks?: string[];
+        },
       };
     },
     enabled: !!propertyId,
@@ -115,16 +86,14 @@ export default function SellerPrepPage() {
 
   return (
     <DashboardShell className="gap-3">
-      {/* Back Navigation */}
-      <div>
-        <Link
-          href={`/dashboard/properties/${propertyId}`}
-          className="text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center"
-        >
-          <ArrowLeft className="h-4 w-4 mr-1.5" />
-          Back to Property
-        </Link>
-      </div>
+      {/* Back */}
+      <Link
+        href={`/dashboard/properties/${propertyId}`}
+        className="text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center"
+      >
+        <ArrowLeft className="h-4 w-4 mr-1.5" />
+        Back to Property
+      </Link>
 
       {/* Header */}
       <PageHeader className="pt-2 pb-3">
@@ -133,25 +102,16 @@ export default function SellerPrepPage() {
           Home Sale Preparation
         </PageHeaderHeading>
         <PageHeaderDescription>
-          Smart, ROI-driven recommendations to maximize your home’s sale price.
+          ROI-focused checklist and readiness insights to maximize sale value
         </PageHeaderDescription>
       </PageHeader>
 
-      {/* Main Content */}
+      {/* Content */}
       <SellerPrepOverview
-        roi={data.roi}
+        overview={data.overview}
         comparables={data.comparables}
-        curbAppeal={data.curbAppeal}
-        staging={data.staging}
-        agentGuide={data.agentGuide}
+        report={data.report}
       />
-
-      {/* Footer CTA (intentional soft CTA) */}
-      <div className="flex justify-end pt-4">
-        <Button variant="outline" disabled>
-          Seller Report PDF (Coming Soon)
-        </Button>
-      </div>
     </DashboardShell>
   );
 }
