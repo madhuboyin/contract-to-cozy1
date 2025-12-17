@@ -82,37 +82,51 @@ export class CommunityService {
     const cached = this.getCache<OnTheFlyResponse>(cacheKey);
     if (cached) return cached;
 
-    const cityKey = resolveCityKey(city, state);
-    const sources = getTrashSourcesForCity(cityKey);
+    // ✅ WRAP IN TRY-CATCH: Handle unsupported cities gracefully
+    try {
+      const cityKey = resolveCityKey(city, state);
+      const sources = getTrashSourcesForCity(cityKey);
 
-    const items = (
-      await Promise.all(
-        sources.map(async (s) => {
-          if (s.kind === 'rss') {
-            const rssItems = await fetchRssItems(s.url, limit);
-            return rssItems.map((it) => ({
-              title: it.title,
-              description: it.description ?? null,
-              url: it.link,
-              publishedAt: it.publishedAt ?? null,
-              category: 'TRASH' as OnTheFlyCategory,
-              sourceName: s.sourceName,
-            }));
-          }
-          return [];
-        })
-      )
-    ).flat();
+      const items = (
+        await Promise.all(
+          sources.map(async (s) => {
+            if (s.kind === 'rss') {
+              const rssItems = await fetchRssItems(s.url, limit);
+              return rssItems.map((it) => ({
+                title: it.title,
+                description: it.description ?? null,
+                url: it.link,
+                publishedAt: it.publishedAt ?? null,
+                category: 'TRASH' as OnTheFlyCategory,
+                sourceName: s.sourceName,
+              }));
+            }
+            return [];
+          })
+        )
+      ).flat();
 
-    const resp: OnTheFlyResponse = {
-      city,
-      state,
-      items: items.slice(0, limit),
-      sources: sources.map((s) => ({ sourceName: s.sourceName, url: s.url, kind: s.kind })),
-    };
+      const resp: OnTheFlyResponse = {
+        city,
+        state,
+        items: items.slice(0, limit),
+        sources: sources.map((s) => ({ sourceName: s.sourceName, url: s.url, kind: s.kind })),
+      };
 
-    this.setCache(cacheKey, resp, 5 * 60 * 1000);
-    return resp;
+      this.setCache(cacheKey, resp, 5 * 60 * 1000);
+      return resp;
+    } catch (error) {
+      // ✅ Return empty data for unsupported cities instead of crashing
+      console.log(`Trash feeds not available for ${city}, ${state}`);
+      const emptyResp: OnTheFlyResponse = {
+        city,
+        state,
+        items: [],
+        sources: [],
+      };
+      this.setCache(cacheKey, emptyResp, 5 * 60 * 1000);
+      return emptyResp;
+    }
   }
 
   async getAlertsOnTheFly(params: OnTheFlyParams): Promise<OnTheFlyResponse> {
@@ -123,54 +137,68 @@ export class CommunityService {
     const cached = this.getCache<OnTheFlyResponse>(cacheKey);
     if (cached) return cached;
 
-    const cityKey = resolveCityKey(city, state);
-    const sources = getAlertsSourcesForCity(cityKey);
+    // ✅ WRAP IN TRY-CATCH: Handle unsupported cities gracefully
+    try {
+      const cityKey = resolveCityKey(city, state);
+      const sources = getAlertsSourcesForCity(cityKey);
 
-    const items = (
-      await Promise.all(
-        sources.map(async (s) => {
-          if (s.kind === 'rss') {
-            const rssItems = await fetchRssItems(s.url, limit);
-            return rssItems.map((it) => ({
-              title: it.title,
-              description: it.description ?? null,
-              url: it.link,
-              publishedAt: it.publishedAt ?? null,
-              category: 'ALERT' as OnTheFlyCategory,
-              sourceName: s.sourceName,
-            }));
-          }
+      const items = (
+        await Promise.all(
+          sources.map(async (s) => {
+            if (s.kind === 'rss') {
+              const rssItems = await fetchRssItems(s.url, limit);
+              return rssItems.map((it) => ({
+                title: it.title,
+                description: it.description ?? null,
+                url: it.link,
+                publishedAt: it.publishedAt ?? null,
+                category: 'ALERT' as OnTheFlyCategory,
+                sourceName: s.sourceName,
+              }));
+            }
 
-          if (s.kind === 'nyc_open_data_emergency') {
-            const alerts = await fetchNycEmergencyNotifications({
-              limit,
-              appToken: process.env.NYC_OPEN_DATA_APP_TOKEN,
-            });
+            if (s.kind === 'nyc_open_data_emergency') {
+              const alerts = await fetchNycEmergencyNotifications({
+                limit,
+                appToken: process.env.NYC_OPEN_DATA_APP_TOKEN,
+              });
 
-            return alerts.map((a) => ({
-              title: a.title,
-              description: a.description ?? null,
-              url: a.url ?? null,
-              publishedAt: a.publishedAt ?? null,
-              category: 'ALERT' as OnTheFlyCategory,
-              sourceName: s.sourceName,
-            }));
-          }
+              return alerts.map((a) => ({
+                title: a.title,
+                description: a.description ?? null,
+                url: a.url ?? null,
+                publishedAt: a.publishedAt ?? null,
+                category: 'ALERT' as OnTheFlyCategory,
+                sourceName: s.sourceName,
+              }));
+            }
 
-          return [];
-        })
-      )
-    ).flat();
+            return [];
+          })
+        )
+      ).flat();
 
-    const resp: OnTheFlyResponse = {
-      city,
-      state,
-      items: items.slice(0, limit),
-      sources: sources.map((s) => ({ sourceName: s.sourceName, url: s.url, kind: s.kind })),
-    };
+      const resp: OnTheFlyResponse = {
+        city,
+        state,
+        items: items.slice(0, limit),
+        sources: sources.map((s) => ({ sourceName: s.sourceName, url: s.url, kind: s.kind })),
+      };
 
-    this.setCache(cacheKey, resp, 60 * 1000);
-    return resp;
+      this.setCache(cacheKey, resp, 60 * 1000);
+      return resp;
+    } catch (error) {
+      // ✅ Return empty data for unsupported cities instead of crashing
+      console.log(`Alerts not available for ${city}, ${state}`);
+      const emptyResp: OnTheFlyResponse = {
+        city,
+        state,
+        items: [],
+        sources: [],
+      };
+      this.setCache(cacheKey, emptyResp, 60 * 1000);
+      return emptyResp;
+    }
   }
 
   // ✅ NEW: Get parsed trash schedules using AI
