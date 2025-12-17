@@ -1474,6 +1474,34 @@ class APIClient {
       method: 'GET',
     });
   }
+
+  // ==========================================================================
+  // SELLER PREP ENDPOINTS
+  // ==========================================================================
+
+  /**
+   * Get seller prep overview for a property
+   */
+  async getSellerPrepOverview(
+    propertyId: string
+  ): Promise<APIResponse<any>> {
+    return this.request(`/api/seller-prep/overview/${propertyId}`, {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Update seller prep item status
+   */
+  async updateSellerPrepItem(
+    itemId: string,
+    status: string
+  ): Promise<APIResponse<void>> {
+    return this.request(`/api/seller-prep/item/${itemId}`, {
+      method: 'PATCH',
+      body: { status } as unknown as BodyInit,
+    });
+  }
  
 }
 

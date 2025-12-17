@@ -15,6 +15,7 @@ import Link from "next/link";
 import { Edit, Zap, Shield, FileText, ArrowLeft, Home, Calendar, Ruler, DollarSign, Wrench, Settings, ShieldAlert, ArrowRight } from "lucide-react"; 
 import { toast } from "@/components/ui/use-toast";
 
+
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
 
 interface HealthScoreResult {
@@ -396,6 +397,12 @@ const PropertyOverview = ({ property }: { property: Property }) => (
         <Button variant="default">
           <Edit className="mr-2 h-4 w-4" />
           Edit Property Details
+        </Button>
+      </Link>
+      <Link href={`/dashboard/properties/${property.id}/seller-prep`} passHref>
+        <Button variant="outline">
+          Prepare Home for Selling
+          <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
       </Link>
     </div>
