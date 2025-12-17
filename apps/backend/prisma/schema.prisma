@@ -1137,6 +1137,32 @@ model CityFeatureFlag {
   @@unique([city, state])
 }
 
+model SellerPrepPlan {
+  id         String   @id @default(uuid())
+  userId     String
+  propertyId String
+  createdAt  DateTime @default(now())
+
+  items      SellerPrepPlanItem[]
+
+  @@index([userId, propertyId])
+}
+
+model SellerPrepPlanItem {
+  id         String   @id @default(uuid())
+  planId     String
+  code       String
+  title      String
+  priority   String
+  roiRange   String
+  costBucket String
+  status     String
+
+  plan       SellerPrepPlan @relation(fields: [planId], references: [id])
+
+  @@index([planId])
+}
+
 
 // ============================================================================
 // REVIEWS & RATINGS
