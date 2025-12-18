@@ -1150,18 +1150,25 @@ model SellerPrepPlan {
 }
 
 model SellerPrepPlanItem {
-  id         String   @id @default(uuid())
-  planId     String
-  code       String
-  title      String
-  priority   String
-  roiRange   String
-  costBucket String
-  status     String
+  id          String   @id @default(uuid())
+  planId      String
+  code        String
+  title       String
+  priority    String
+  roiRange    String
+  costBucket  String
+  status      String   @default("PLANNED")
+  
+  completedAt DateTime?
+  skippedAt   DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  plan       SellerPrepPlan @relation(fields: [planId], references: [id])
+  plan        SellerPrepPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
   @@index([planId])
+  @@index([status])
 }
 
 model SellerPrepLead {
