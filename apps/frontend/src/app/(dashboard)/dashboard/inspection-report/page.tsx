@@ -34,6 +34,7 @@ function InspectionReportContent() {
     try {
       // Load user profile to check segment
       const profileResponse = await api.getUserProfile();
+      console.log('🔍 Profile Response:', profileResponse); // ADD
       if (profileResponse.success && profileResponse.data) {
         setUserSegment(profileResponse.data.homeownerProfile?.segment || null);
         
@@ -47,16 +48,21 @@ function InspectionReportContent() {
 
       // Load properties
       const response = await api.getProperties();
+      console.log('🔍 Properties Response:', response); // ADD
       if (response.success && response.data) {
         const props = response.data.properties || response.data;
+        console.log('🔍 Parsed Properties:', props); // ADD
         setProperties(props);
-        
-        if (!selectedPropertyId && props.length > 0) {
-          setSelectedPropertyId(props[0].id);
+        console.log('🔍 Properties set:', properties); // ADD
+        if (!selectedPropertyId && properties.length > 0) {
+          console.log('🔍 Setting propertyId to:', properties[0].id); // ADD
+          setSelectedPropertyId(properties[0].id);
         }
+      } else {
+        console.error('Failed to load properties:', response.message || 'Unknown error'); // ADD
       }
     } catch (error) {
-      console.error('Failed to load data:', error);
+      console.error('Failed to load data:', error); // ADD
       setError('Failed to load properties');
     } finally {
       setLoading(false);

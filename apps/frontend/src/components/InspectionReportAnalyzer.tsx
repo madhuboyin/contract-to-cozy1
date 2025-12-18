@@ -91,13 +91,19 @@ export default function InspectionReportAnalyzer({ propertyId }: Props) {
 
   const handleUpload = async () => {
     if (!file) return;
-
+    console.log('🔍 propertyId received:', propertyId); // ADD
+    console.log('🔍 file:', file); // ADD
     setUploading(true);
     setError(null);
 
     const formData = new FormData();
     formData.append('file', file);
     formData.append('propertyId', propertyId);
+    
+    console.log('🔍 FormData contents:'); // ADD
+    for (const pair of formData.entries()) { // ADD
+      console.log(pair[0], ':', pair[1]); // ADD
+    } // ADD
 
     try {
       const response = await api.uploadInspectionReport(formData);
