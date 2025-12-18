@@ -32,6 +32,7 @@ import { FEATURE_FLAGS } from "@/lib/featureFlags";
 import { BudgetTrackerCard } from "./BudgetTrackerCard";
 import { ValueEstimatorCard } from "./ValueEstimatorCard";
 import { ProgressTimeline } from "./ProgressTimeline";
+import { AgentInterviewGuide } from "./AgentInterviewGuide";
 
 interface SellerPrepItem {
   id: string;
@@ -240,6 +241,10 @@ export default function SellerPrepOverview({
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+          {/* TAB 4: Agent Interview Guide */}
+          <TabsContent value="agents" className="outline-none">
+            <AgentInterviewGuide />
           </TabsContent>
         </Tabs>
       </div>
