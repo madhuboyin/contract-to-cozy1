@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Truck, Sparkles } from 'lucide-react';
+import { Truck, Sparkles, FileText } from 'lucide-react';
 import { Booking, Property } from '@/types';
 import { UpcomingBookingsCard } from './UpcomingBookingsCard';
 import { HomeBuyerChecklistCard } from './HomeBuyerChecklistCard';
@@ -110,6 +110,55 @@ export const HomeBuyerDashboard = ({
                 
                 {/* Arrow indicator */}
                 <div className="text-green-600 group-hover:translate-x-2 transition-transform">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </Link>
+        </div>
+
+        {/* Inspection Report Intelligence - Featured for Home Buyers */}
+        <div className="lg:col-span-2">
+          <Link href={`/dashboard/inspection-report?propertyId=${primaryPropertyId}`}>
+            <div className="relative bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-xl p-6 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
+              {/* Sparkle indicator */}
+              <div className="absolute top-4 right-4">
+                <Sparkles className="w-6 h-6 text-purple-500 animate-pulse" />
+              </div>
+              
+              {/* NEW badge */}
+              <div className="absolute top-4 right-16">
+                <span className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">
+                  NEW FOR HOME BUYERS
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-6">
+                {/* Icon */}
+                <div className="p-4 bg-indigo-100 rounded-xl group-hover:scale-110 transition-transform">
+                  <FileText className="h-10 w-10 text-indigo-600" />
+                </div>
+                
+                {/* Content */}
+                <div className="flex-1">
+                  <h3 className="text-2xl font-bold text-indigo-900 mb-2">
+                    Inspection Report Intelligence
+                  </h3>
+                  <p className="text-indigo-700 mb-3">
+                    Upload your inspection report and get AI-powered analysis with severity scoring, cost estimates, and negotiation guidance
+                  </p>
+                  <div className="flex gap-3 text-sm text-indigo-800">
+                    <span>✓ Issue Extraction</span>
+                    <span>✓ Cost Estimates</span>
+                    <span>✓ Negotiation Script</span>
+                    <span>✓ Maintenance Calendar</span>
+                  </div>
+                </div>
+                
+                {/* Arrow indicator */}
+                <div className="text-indigo-600 group-hover:translate-x-2 transition-transform">
                   <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
