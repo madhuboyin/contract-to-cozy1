@@ -43,6 +43,26 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: NEXT_PUBLIC_API_URL
+            - name: NEXT_PUBLIC_FEATURE_BUDGET_TRACKER
+              valueFrom:
+                configMapKeyRef:
+                  name: frontend-feature-flags
+                  key: NEXT_PUBLIC_FEATURE_BUDGET_TRACKER
+            - name: NEXT_PUBLIC_FEATURE_VALUE_ESTIMATOR
+              valueFrom:
+                configMapKeyRef:
+                  name: frontend-feature-flags
+                  key: NEXT_PUBLIC_FEATURE_VALUE_ESTIMATOR
+            - name: NEXT_PUBLIC_FEATURE_FEEDBACK_WIDGET
+              valueFrom:
+                configMapKeyRef:
+                  name: frontend-feature-flags
+                  key: NEXT_PUBLIC_FEATURE_FEEDBACK_WIDGET
+            - name: NEXT_PUBLIC_FEATURE_MILESTONE_CELEBRATIONS
+              valueFrom:
+                configMapKeyRef:
+                  name: frontend-feature-flags
+                  key: NEXT_PUBLIC_FEATURE_MILESTONE_CELEBRATIONS
           resources:
             requests:
               cpu: "300m"

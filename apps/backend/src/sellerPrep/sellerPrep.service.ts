@@ -3,10 +3,22 @@ import { prisma } from '../lib/prisma';
 import { generateRoiChecklist } from './engines/roiRules.engine';
 import { resolveCompsProvider } from './providers/compsResolver';
 import { buildSellerReadinessReport } from './reports/sellerReadiness.builder';
+import { calculateBudgetAndValue } from './engines/valueCalculator.engine';
+import { personalizeChecklist, generatePersonalizedSummary, ChecklistItem, UserPreferences } from './engines/personalization.engine';
 
 export class SellerPrepService {
-  static async getOverview(userId: string, propertyId: string) {
-    // Read-only access to existing property
+  static async getOverview(
+    userId: string,
+    propertyId: string
+  ): Promise<{
+    propertyId: string;
+    items: ChecklistItem[];
+    completionPercent: number;
+    preferences: UserPreferences | null;
+    personalizedSummary: string | null;
+    budget: any;
+    value: any;
+  }> {
     const property = await prisma.property.findFirst({
       where: {
         id: propertyId,
@@ -14,23 +26,23 @@ export class SellerPrepService {
       },
       select: { id: true, state: true, yearBuilt: true, propertyType: true },
     });
-
+  
     if (!property) {
       throw new Error('Property not found or unauthorized');
     }
-
+  
     let plan = await prisma.sellerPrepPlan.findFirst({
       where: { userId, propertyId },
       include: { items: true },
     });
-
+  
     if (!plan) {
       const baseItems = generateRoiChecklist({
         propertyType: property.propertyType ? String(property.propertyType) : undefined,
         yearBuilt: property.yearBuilt ?? undefined,
         state: property.state,
       });
-
+  
       plan = await prisma.sellerPrepPlan.create({
         data: {
           userId,
@@ -49,14 +61,36 @@ export class SellerPrepService {
         include: { items: true },
       });
     }
-
+  
     const total = plan.items.length;
     const done = plan.items.filter((i: any) => i.status === 'DONE').length;
-
+    const completionPercent = total ? Math.round((done / total) * 100) : 0;
+  
+    // Apply personalization if preferences exist
+    const preferences = plan.preferences as any;
+    const personalizedItems: ChecklistItem[] = preferences
+      ? personalizeChecklist(plan.items as ChecklistItem[], preferences)
+      : (plan.items as ChecklistItem[]);
+  
+    // Generate personalized summary
+    const personalizedSummary = preferences
+      ? generatePersonalizedSummary(preferences, completionPercent)
+      : null;
+  
+    // NEW: Calculate budget and value estimates
+    const budgetAndValue = calculateBudgetAndValue(
+      plan.items as any[],
+      preferences?.budget
+    );
+  
     return {
       propertyId,
-      items: plan.items,
-      completionPercent: total ? Math.round((done / total) * 100) : 0,
+      items: personalizedItems,
+      completionPercent,
+      preferences,
+      personalizedSummary,
+      budget: budgetAndValue.budget, // NEW
+      value: budgetAndValue.value,   // NEW
     };
   }
 

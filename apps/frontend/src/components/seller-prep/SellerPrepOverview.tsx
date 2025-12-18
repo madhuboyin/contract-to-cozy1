@@ -16,6 +16,9 @@ import { CheckCircle, Hammer, TrendingUp, FileText, AlertCircle, Loader2, Undo2 
 import { api } from "@/lib/api/client";
 import { useToast } from "@/components/ui/use-toast";
 import { LeadCaptureModal } from "@/components/seller-prep/LeadCaptureModal";
+import { FEATURE_FLAGS } from "@/lib/featureFlags";
+import { BudgetTrackerCard } from "./BudgetTrackerCard";
+import { ValueEstimatorCard } from "./ValueEstimatorCard";
 
 interface SellerPrepItem {
   id: string;
@@ -49,6 +52,36 @@ interface SellerPrepOverviewProps {
     completionPercent: number;
     preferences?: any;
     personalizedSummary?: string;
+    // ADD THESE TWO FIELDS:
+    budget?: {
+      totalBudget: number;
+      spentAmount: number;
+      remainingTasks: Array<{
+        title: string;
+        estimatedCost: number;
+      }>;
+    };
+    value?: {
+      completedImprovements: Array<{
+        title: string;
+        roiRange: string;
+        estimatedCost: number;
+      }>;
+      remainingImprovements: Array<{
+        title: string;
+        roiRange: string;
+        estimatedCost: number;
+        priority: string;
+      }>;
+      completedValueIncrease: {
+        minValue: number;
+        maxValue: number;
+      };
+      potentialValueIncrease: {
+        minValue: number;
+        maxValue: number;
+      };
+    };
   };
   comparables: ComparableHome[];
   report: ReadinessReport;
@@ -173,6 +206,25 @@ export default function SellerPrepOverview({
           </div>
         </CardContent>
       </Card>
+      
+      {/* NEW: Value Estimator */}
+      {FEATURE_FLAGS.VALUE_ESTIMATOR && overview.value && (
+        <ValueEstimatorCard
+          completedImprovements={overview.value.completedImprovements}
+          remainingImprovements={overview.value.remainingImprovements}
+          completedValueIncrease={overview.value.completedValueIncrease}
+          potentialValueIncrease={overview.value.potentialValueIncrease}
+        />
+      )}
+
+      {/* NEW: Budget Tracker */}
+      {FEATURE_FLAGS.BUDGET_TRACKER && overview.budget && (
+        <BudgetTrackerCard
+          totalBudget={overview.budget.totalBudget}
+          spentAmount={overview.budget.spentAmount}
+          remainingTasks={overview.budget.remainingTasks}
+        />
+      )}
 
       {/* ROI Checklist */}
       <Card>

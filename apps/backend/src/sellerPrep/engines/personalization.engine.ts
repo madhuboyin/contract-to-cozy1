@@ -1,6 +1,6 @@
 // apps/backend/src/sellerPrep/engines/personalization.engine.ts
 
-interface UserPreferences {
+export interface UserPreferences {
     timeline: string;
     budget: string;
     propertyType: string;
@@ -8,13 +8,14 @@ interface UserPreferences {
     condition: string;
   }
   
-  interface ChecklistItem {
+  export interface ChecklistItem {
+    id?: string;
     code: string;
     title: string;
-    priority: 'HIGH' | 'MEDIUM' | 'LOW';
+    priority: 'HIGH' | 'MEDIUM' | 'LOW' | string;
     roiRange: string;
     costBucket: string;
-    reason: string;
+    reason?: string;
     status?: string;
     personalizedPriority?: number; // Calculated priority score
   }
