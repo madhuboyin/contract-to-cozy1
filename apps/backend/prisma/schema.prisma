@@ -1159,11 +1159,12 @@ model SellerPrepPlanItem {
   costBucket  String
   status      String   @default("PLANNED")
   
+  // Timeline tracking
   completedAt DateTime?
   skippedAt   DateTime?
   
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime @default(now()) @updatedAt  // ADD DEFAULT
 
   plan        SellerPrepPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
