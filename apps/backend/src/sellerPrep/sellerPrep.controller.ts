@@ -261,5 +261,39 @@ export class SellerPrepController {
       });
     }
   }
-
+  static async submitFeedback(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user!.userId;
+      const { propertyId, rating, comment, page } = req.body;
+  
+      if (!propertyId || !rating) {
+        return res.status(400).json({
+          success: false,
+          message: 'Property ID and rating are required'
+        });
+      }
+  
+      const feedback = await prisma.sellerPrepFeedback.create({
+        data: {
+          userId,
+          propertyId,
+          rating,
+          comment: comment || null,
+          page: page || 'seller-prep',
+        },
+      });
+  
+      res.json({
+        success: true,
+        data: feedback,
+        message: 'Feedback submitted successfully'
+      });
+    } catch (error) {
+      console.error('[SellerPrepController] submitFeedback error:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to submit feedback'
+      });
+    }
+  }
 }

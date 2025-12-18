@@ -20,6 +20,9 @@ import { ArrowLeft, TrendingUp, AlertCircle, Settings } from "lucide-react";
 import SellerPrepOverview from "@/components/seller-prep/SellerPrepOverview";
 import { SellerPrepIntakeForm } from "@/components/seller-prep/SellerPrepIntakeForm";
 import { SellerPrepDisclaimer } from "@/components/seller-prep/SellerPrepDisclaimer";
+import { useMilestones } from "@/hooks/useMilestones";
+import { FeedbackWidget } from "@/components/seller-prep/FeedbackWidget";
+import { AgentInterviewGuide } from "@/components/seller-prep/AgentInterviewGuide";
 
 interface SellerPrepItem {
   id: string;
@@ -95,7 +98,7 @@ export default function SellerPrepPage() {
     retry: 1,
     staleTime: 5 * 60 * 1000,
   });
-
+  useMilestones(data?.overview?.completionPercent || 0);
   // Check for preferences ONCE after initial data load
   useEffect(() => {
     if (data && !hasCheckedPreferences) {
@@ -213,6 +216,8 @@ export default function SellerPrepPage() {
         report={data.report}
         propertyId={propertyId as string}
       />
+      <AgentInterviewGuide />
+      {propertyId && <FeedbackWidget propertyId={propertyId} />}
     </DashboardShell>
   );
 }

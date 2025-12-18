@@ -1587,6 +1587,26 @@ class APIClient {
     });
   }
 
+  /**
+   * Submit seller prep feedback
+   */
+  async submitSellerPrepFeedback(
+    propertyId: string,
+    rating: 'helpful' | 'not-helpful',
+    comment?: string,
+    page?: string
+  ): Promise<APIResponse<any>> {
+    return this.request('/api/seller-prep/feedback', {
+      method: 'POST',
+      body: {
+        propertyId,
+        rating,
+        comment,
+        page: page || 'seller-prep',
+      } as unknown as BodyInit,
+    });
+  }
+
   }
 
 // Export singleton instance

@@ -53,4 +53,10 @@ router.get(
   SellerPrepController.getPreferences
 );
 
+router.post(
+  '/feedback',
+  authenticate,
+  SellerPrepController.submitFeedback
+);
+
 export default router;
