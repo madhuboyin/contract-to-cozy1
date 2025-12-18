@@ -37,13 +37,13 @@ export function SellerPrepIntakeForm({
   onComplete,
   onSkip,
 }: SellerPrepIntakeFormProps) {
-  const [formData, setFormData] = useState<IntakeFormData>({
+  const [formData, setFormData] = useState<IntakeFormData>(({
     timeline: "",
     budget: "",
     propertyType: "",
     priority: "",
     condition: "",
-  });
+  }));
 
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 5;
@@ -307,7 +307,8 @@ export function SellerPrepIntakeForm({
   };
 
   return (
-    <Dialog open={open} onOpenChange={() => {}}>
+    // FIX: Updated onOpenChange to call onSkip when the dialog is requested to close
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onSkip(); }}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Tell us about your sale</DialogTitle>
