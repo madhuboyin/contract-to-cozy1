@@ -107,6 +107,55 @@ export class SellerPrepService {
     propertyId: string
   ) {
     return buildSellerReadinessReport(userId, propertyId);
-  }
+  }  
 }
 
+export class SellerPrepLeadService {
+  static async createLead(input: {
+    userId: string;
+    propertyId: string;
+    leadType: string;
+    context: string;
+    fullName?: string;
+    email?: string;
+    phone?: string;
+    contactMethod?: string;
+  }) {
+    return prisma.sellerPrepLead.create({
+      data: {
+        userId: input.userId,
+        propertyId: input.propertyId,
+        leadType: input.leadType,
+        context: input.context,
+        fullName: input.fullName,
+        email: input.email,
+        phone: input.phone,
+        contactMethod: input.contactMethod,
+      },
+    });
+  }
+
+  // Optional: Add method to retrieve leads for admin dashboard
+  static async getLeadsByProperty(propertyId: string) {
+    return prisma.sellerPrepLead.findMany({
+      where: { propertyId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  static async getAllLeads(filters?: {
+    leadType?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }) {
+    return prisma.sellerPrepLead.findMany({
+      where: {
+        ...(filters?.leadType && { leadType: filters.leadType }),
+        ...(filters?.startDate && {
+          createdAt: { gte: filters.startDate },
+        }),
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+}

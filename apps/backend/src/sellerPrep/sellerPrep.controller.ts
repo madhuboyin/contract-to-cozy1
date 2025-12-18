@@ -2,6 +2,8 @@
 import { Response } from 'express';
 import { AuthRequest } from '../types/auth.types';
 import { SellerPrepService } from './sellerPrep.service';
+import { prisma } from '../lib/prisma';
+import { generateRoiChecklist } from './engines/roiRules.engine';
 
 export class SellerPrepController {
   static async getOverview(req: AuthRequest, res: Response) {
@@ -130,4 +132,134 @@ export class SellerPrepController {
       });
     }
   }
+  static async savePreferences(req: AuthRequest, res: Response) {
+    try {
+      const { propertyId } = req.params;
+      const userId = req.user!.userId;
+      const { timeline, budget, propertyType, priority, condition } = req.body;
+
+      // Validate required fields
+      if (!timeline || !budget || !propertyType || !priority || !condition) {
+        return res.status(400).json({
+          success: false,
+          message: 'All preference fields are required'
+        });
+      }
+
+      // Find or create seller prep plan
+      let plan = await prisma.sellerPrepPlan.findFirst({
+        where: { userId, propertyId }
+      });
+
+      if (plan) {
+        // Update existing plan with preferences
+        plan = await prisma.sellerPrepPlan.update({
+          where: { id: plan.id },
+          data: {
+            preferences: {
+              timeline,
+              budget,
+              propertyType,
+              priority,
+              condition,
+              updatedAt: new Date().toISOString()
+            }
+          }
+        });
+      } else {
+        // Create new plan with preferences
+        const property = await prisma.property.findFirst({
+          where: {
+            id: propertyId,
+            homeownerProfile: { userId },
+          },
+          select: { id: true, state: true, yearBuilt: true, propertyType: true },
+        });
+
+        if (!property) {
+          return res.status(404).json({
+            success: false,
+            message: 'Property not found'
+          });
+        }
+
+        const baseItems = generateRoiChecklist({
+          propertyType: property.propertyType ? String(property.propertyType) : undefined,
+          yearBuilt: property.yearBuilt ?? undefined,
+          state: property.state,
+        });
+
+        plan = await prisma.sellerPrepPlan.create({
+          data: {
+            userId,
+            propertyId,
+            preferences: {
+              timeline,
+              budget,
+              propertyType,
+              priority,
+              condition,
+              updatedAt: new Date().toISOString()
+            },
+            items: {
+              create: baseItems.map((i) => ({
+                code: i.code,
+                title: i.title,
+                priority: i.priority,
+                roiRange: i.roiRange,
+                costBucket: i.costBucket,
+                status: 'PLANNED',
+              })),
+            },
+          },
+          include: { items: true },
+        });
+      }
+
+      res.json({
+        success: true,
+        data: plan,
+        message: 'Preferences saved successfully'
+      });
+    } catch (error) {
+      console.error('[SellerPrepController] savePreferences error:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to save preferences'
+      });
+    }
+  }
+
+  static async getPreferences(req: AuthRequest, res: Response) {
+    try {
+      const { propertyId } = req.params;
+      const userId = req.user!.userId;
+
+      const plan = await prisma.sellerPrepPlan.findFirst({
+        where: { userId, propertyId },
+        select: { preferences: true }
+      });
+
+      if (!plan || !plan.preferences) {
+        return res.json({
+          success: true,
+          data: null,
+          message: 'No preferences found'
+        });
+      }
+
+      res.json({
+        success: true,
+        data: plan.preferences,
+        message: 'Preferences retrieved successfully'
+      });
+    } catch (error) {
+      console.error('[SellerPrepController] getPreferences error:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to retrieve preferences'
+      });
+    }
+  }
+
 }

@@ -39,4 +39,18 @@ router.post(
   SellerPrepLeadController.create
 );
 
+router.post(
+  '/preferences/:propertyId',
+  authenticate,
+  propertyAuthMiddleware,
+  SellerPrepController.savePreferences
+);
+
+router.get(
+  '/preferences/:propertyId',
+  authenticate,
+  propertyAuthMiddleware,
+  SellerPrepController.getPreferences
+);
+
 export default router;

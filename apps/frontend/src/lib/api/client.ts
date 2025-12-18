@@ -1538,6 +1538,55 @@ class APIClient {
     });
   }
 
+  /**
+   * Create a seller prep lead (for contractor/agent/stager connections)
+   */
+  async createSellerPrepLead(
+    propertyId: string,
+    leadType: 'CONTRACTOR' | 'AGENT' | 'STAGER',
+    context: {
+      tasks?: string[];
+      otherTask?: string;
+      timeline?: string;
+      notes?: string;
+    },
+    contactInfo: {
+      email?: string;
+      phone?: string;
+      contactMethod?: string;
+      fullName?: string;
+    }
+  ): Promise<APIResponse<any>> {
+    return this.request('/api/seller-prep/lead', {
+      method: 'POST',
+      body: {
+        propertyId,
+        leadType,
+        context: JSON.stringify(context),
+        ...contactInfo,
+      } as unknown as BodyInit,
+    });
+  }
+
+  /**
+   * Save seller prep preferences for a property
+   */
+  async saveSellerPrepPreferences(
+    propertyId: string,
+    preferences: {
+      timeline: string;
+      budget: string;
+      propertyType: string;
+      priority: string;
+      condition: string;
+    }
+  ): Promise<APIResponse<any>> {
+    return this.request(`/api/seller-prep/preferences/${propertyId}`, {
+      method: 'POST',
+      body: preferences as unknown as BodyInit,
+    });
+  }
+
   }
 
 // Export singleton instance

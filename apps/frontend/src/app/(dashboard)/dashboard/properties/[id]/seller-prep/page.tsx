@@ -1,6 +1,7 @@
-// apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/seller-prep/page.tsx
+// apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/seller-prep/page.tsx (UPDATED)
 "use client";
 
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
@@ -13,11 +14,13 @@ import {
   PageHeaderDescription,
 } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, TrendingUp, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft, TrendingUp, AlertCircle, Settings } from "lucide-react";
 
 import SellerPrepOverview from "@/components/seller-prep/SellerPrepOverview";
+import { SellerPrepIntakeForm } from "@/components/seller-prep/SellerPrepIntakeForm";
+import { SellerPrepDisclaimer } from "@/components/seller-prep/SellerPrepDisclaimer";
 
-// Proper TypeScript types
 interface SellerPrepItem {
   id: string;
   title: string;
@@ -30,6 +33,8 @@ interface SellerPrepItem {
 interface SellerPrepOverviewData {
   items: SellerPrepItem[];
   completionPercent: number;
+  preferences?: any;
+  personalizedSummary?: string;
 }
 
 interface ComparableHome {
@@ -52,8 +57,9 @@ interface ReadinessReport {
 export default function SellerPrepPage() {
   const params = useParams();
   const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const [showIntakeForm, setShowIntakeForm] = useState(false);
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["seller-prep", propertyId],
     queryFn: async () => {
       if (!propertyId) throw new Error("Property ID missing");
@@ -64,7 +70,6 @@ export default function SellerPrepPage() {
         api.getSellerPrepReport(propertyId),
       ]);
 
-      // Comprehensive response validation
       if (!overviewRes.success) {
         throw new Error(overviewRes.message || 'Failed to load overview');
       }
@@ -75,10 +80,14 @@ export default function SellerPrepPage() {
         throw new Error(reportRes.message || 'Failed to load report');
       }
 
-      // Type-safe data extraction
       const overview = overviewRes.data as SellerPrepOverviewData;
       const comparables = comparablesRes.data as ComparableHome[];
       const report = reportRes.data as ReadinessReport;
+
+      // Show intake form if no preferences
+      if (!overview.preferences) {
+        setShowIntakeForm(true);
+      }
 
       return {
         overview,
@@ -88,8 +97,17 @@ export default function SellerPrepPage() {
     },
     enabled: !!propertyId,
     retry: 1,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
   });
+
+  const handleIntakeComplete = () => {
+    setShowIntakeForm(false);
+    refetch();
+  };
+
+  const handleIntakeSkip = () => {
+    setShowIntakeForm(false);
+  };
 
   if (isLoading) {
     return (
@@ -131,6 +149,16 @@ export default function SellerPrepPage() {
 
   return (
     <DashboardShell className="gap-3">
+      {/* Intake Form Modal */}
+      {propertyId && (
+        <SellerPrepIntakeForm
+          propertyId={propertyId}
+          open={showIntakeForm}
+          onComplete={handleIntakeComplete}
+          onSkip={handleIntakeSkip}
+        />
+      )}
+
       {/* Back */}
       <Link
         href={`/dashboard/properties/${propertyId}`}
@@ -142,20 +170,38 @@ export default function SellerPrepPage() {
 
       {/* Header */}
       <PageHeader className="pt-2 pb-3">
-        <PageHeaderHeading className="flex items-center gap-2">
-          <TrendingUp className="h-6 w-6 text-green-600" />
-          Home Sale Preparation
-        </PageHeaderHeading>
-        <PageHeaderDescription>
-          ROI-focused checklist and readiness insights to maximize sale value
-        </PageHeaderDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <PageHeaderHeading className="flex items-center gap-2">
+              <TrendingUp className="h-6 w-6 text-green-600" />
+              Home Sale Preparation
+            </PageHeaderHeading>
+            <PageHeaderDescription>
+              ROI-focused checklist and readiness insights to maximize sale value
+            </PageHeaderDescription>
+          </div>
+          {data.overview.preferences && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowIntakeForm(true)}
+            >
+              <Settings className="h-4 w-4 mr-2" />
+              Edit Preferences
+            </Button>
+          )}
+        </div>
       </PageHeader>
+
+      {/* Legal Disclaimer */}
+      <SellerPrepDisclaimer />
 
       {/* Content */}
       <SellerPrepOverview
         overview={data.overview}
         comparables={data.comparables}
         report={data.report}
+        propertyId={propertyId as string}
       />
     </DashboardShell>
   );
