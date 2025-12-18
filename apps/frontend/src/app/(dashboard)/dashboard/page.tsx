@@ -606,6 +606,26 @@ export default function DashboardPage() {
             </div>
           </Link>
 
+          {/* Inspection Report Intelligence - HOME_BUYER ONLY */}
+          {userType === 'HOME_BUYER' && (
+            <Link href={`/dashboard/inspection-report?propertyId=${selectedPropertyId}`}>
+              <div className="relative bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-xl p-5 hover:shadow-xl transition-all">
+                <div className="absolute top-3 right-3">
+                  <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+                </div>
+                <div className="p-3 bg-indigo-100 rounded-lg w-fit mb-3">
+                  <FileText className="h-7 w-7 text-indigo-600" />
+                </div>
+                <h3 className="text-lg font-bold text-indigo-900 mb-1">
+                  Inspection Report Intelligence
+                </h3>
+                <p className="text-indigo-700 text-sm">
+                  AI analysis, costs & negotiation
+                </p>
+              </div>
+            </Link>
+          )}
+          
           {/* Moving Concierge - HOME_BUYER ONLY */}
           {userType === 'HOME_BUYER' && (
             <Link href="/dashboard/moving-concierge">

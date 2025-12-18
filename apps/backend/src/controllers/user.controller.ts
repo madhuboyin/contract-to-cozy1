@@ -24,7 +24,15 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      include: { address: true },
+      include: { 
+        address: true,
+        homeownerProfile: {
+          select: {
+            id: true,
+            segment: true,
+          },
+        },
+      },
     });
 
     if (!user) {
@@ -45,6 +53,7 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
         zipCode: user.address?.zipCode || '',
         role: user.role,
         createdAt: user.createdAt,
+        homeownerProfile: user.homeownerProfile,
       }
     });
   } catch (error) {

@@ -1581,8 +1581,56 @@ class APIClient {
       method: 'DELETE',
     });
   }
-
+  /**
+   * Upload and analyze inspection report PDF
+   */
+  async uploadInspectionReport(formData: FormData): Promise<APIResponse<any>> {
+    return this.request('/api/inspection-reports/upload', {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Authorization': `Bearer ${this.getToken()}`,
+      },
+    });
   }
+
+  /**
+   * Get inspection report by ID
+   */
+  async getInspectionReport(reportId: string): Promise<APIResponse<any>> {
+    return this.request(`/api/inspection-reports/${reportId}`, {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Get all inspection reports for a property
+   */
+  async getPropertyInspectionReports(propertyId: string): Promise<APIResponse<any>> {
+    return this.request(`/api/inspection-reports/property/${propertyId}`, {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Get maintenance calendar from inspection report
+   */
+  async getInspectionMaintenanceCalendar(reportId: string): Promise<APIResponse<any>> {
+    return this.request(`/api/inspection-reports/${reportId}/maintenance-calendar`, {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Get user profile with homeowner profile information
+   */
+  async getUserProfile(): Promise<APIResponse<User & { homeownerProfile?: { id: string; segment: string } | null }>> {
+    return this.request('/api/users/profile', {
+      method: 'GET',
+    });
+  }
+
+}
 
 // Export singleton instance
 export const api = new APIClient(API_BASE_URL);
