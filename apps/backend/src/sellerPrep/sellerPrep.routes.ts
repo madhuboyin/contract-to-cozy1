@@ -59,4 +59,10 @@ router.post(
   SellerPrepController.submitFeedback
 );
 
+router.delete(
+  '/agent-interview/:interviewId',
+  authenticate,
+  SellerPrepController.deleteAgentInterview
+);
+
 export default router;

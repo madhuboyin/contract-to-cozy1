@@ -357,4 +357,24 @@ export class SellerPrepController {
     }
   }
 
+  static async deleteAgentInterview(req: AuthRequest, res: Response) {
+    try {
+      const { interviewId } = req.params;
+      const userId = req.user!.userId;
+
+      await SellerPrepService.deleteAgentInterview(userId, interviewId);
+
+      res.json({
+        success: true,
+        message: 'Agent interview deleted successfully'
+      });
+    } catch (error) {
+      console.error('[SellerPrepController] deleteAgentInterview error:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to delete agent interview'
+      });
+    }
+  }
+
 }

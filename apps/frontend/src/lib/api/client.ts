@@ -1607,6 +1607,15 @@ class APIClient {
     });
   }
 
+  /**
+   * Delete an agent interview
+   */
+  async deleteAgentInterview(interviewId: string): Promise<APIResponse<void>> {
+    return this.request(`/api/seller-prep/agent-interview/${interviewId}`, {
+      method: 'DELETE',
+    });
+  }
+
   }
 
 // Export singleton instance
