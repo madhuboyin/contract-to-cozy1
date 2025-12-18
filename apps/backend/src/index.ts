@@ -37,6 +37,7 @@ import taxAppealRoutes from './routes/taxAppeal.routes';
 import movingConciergeRoutes from './routes/movingConcierge.routes';
 import { communityRoutes } from './community/community.routes';
 import sellerPrepRoutes from './sellerPrep/sellerPrep.routes';
+import inspectionReportRoutes from './routes/inspectionReport.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
@@ -263,6 +264,7 @@ app.use('/api/visual-inspector', visualInspectorRoutes);
 app.use('/api/tax-appeal', taxAppealRoutes);
 app.use('/api/moving-concierge', movingConciergeRoutes);
 app.use('/api/seller-prep', sellerPrepRoutes);
+app.use('/api/inspection-reports', inspectionReportRoutes);
 
 
 // 404 handler
