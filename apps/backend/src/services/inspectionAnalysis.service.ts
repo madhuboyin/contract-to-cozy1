@@ -168,10 +168,14 @@ export class InspectionAnalysisService {
    */
   private async extractTextFromPDF(buffer: Buffer): Promise<string> {
     try {
+      if (!buffer || buffer.length === 0) {
+        throw new Error('PDF buffer is empty');
+      }
+      console.log(`[DEBUG] Attempting to parse buffer of size: ${buffer.length}`);
       const data = await pdfParse(buffer);
       return data.text;
     } catch (error) {
-      console.error('[INSPECTION] PDF parsing error:', error);
+      console.error('[INSPECTION] PDF parsing error details:', error);
       throw new Error('Failed to parse PDF file');
     }
   }
