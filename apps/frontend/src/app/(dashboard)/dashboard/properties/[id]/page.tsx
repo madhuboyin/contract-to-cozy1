@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-import { Edit, Zap, Shield, FileText, ArrowLeft, Home, Calendar, Ruler, DollarSign, Wrench, Settings, ShieldAlert, ArrowRight } from "lucide-react"; 
+import { Edit, Zap, Shield, FileText, ArrowLeft, Home, Calendar, Ruler, DollarSign, Wrench, Settings, ShieldAlert, ArrowRight, TrendingUp, Sparkles } from "lucide-react"; 
 import { toast } from "@/components/ui/use-toast";
 
 
@@ -199,6 +199,67 @@ function HealthInsightList({ property }: { property: ScoredProperty }) {
 }
 
 // --- END INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
+
+// NEW: Selling Strategy Card Component
+const SellingStrategyCard = ({ propertyId }: { propertyId: string }) => (
+  <Card className="border-2 border-green-500 bg-gradient-to-br from-green-50 to-blue-50 shadow-lg">
+    <CardHeader className="p-6">
+      <div className="flex items-start justify-between">
+        <div className="space-y-2 flex-1">
+          <CardTitle className="font-heading text-2xl flex items-center gap-2">
+            <TrendingUp className="h-6 w-6 text-green-600" />
+            Ready to Maximize Your Home's Value?
+          </CardTitle>
+          <CardDescription className="font-body text-base text-gray-700">
+            Get a personalized action plan with AI-powered insights to prepare your home for sale
+          </CardDescription>
+        </div>
+        <Sparkles className="h-8 w-8 text-green-600 flex-shrink-0 ml-4" />
+      </div>
+    </CardHeader>
+    <CardContent className="p-6 pt-0 space-y-4">
+      <div className="space-y-3">
+        <div className="flex items-start gap-3">
+          <div className="h-6 w-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <span className="text-green-700 font-bold text-sm">1</span>
+          </div>
+          <p className="font-body text-sm text-gray-700">
+            <strong>Personalized Timeline:</strong> Get a custom preparation schedule based on your property's condition
+          </p>
+        </div>
+        <div className="flex items-start gap-3">
+          <div className="h-6 w-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <span className="text-green-700 font-bold text-sm">2</span>
+          </div>
+          <p className="font-body text-sm text-gray-700">
+            <strong>Value Impact Analysis:</strong> Understand which improvements will add the most value
+          </p>
+        </div>
+        <div className="flex items-start gap-3">
+          <div className="h-6 w-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <span className="text-green-700 font-bold text-sm">3</span>
+          </div>
+          <p className="font-body text-sm text-gray-700">
+            <strong>Market Comparables:</strong> See how your home stacks up against recent sales in your area
+          </p>
+        </div>
+      </div>
+      
+      <div className="pt-4">
+        <Link href={`/dashboard/properties/${propertyId}/seller-prep`} passHref>
+          <Button size="lg" className="w-full text-base font-semibold">
+            Start Your Selling Journey
+            <ArrowRight className="ml-2 h-5 w-5" />
+          </Button>
+        </Link>
+      </div>
+      
+      <p className="font-body text-xs text-gray-600 text-center pt-2">
+        Takes 3-5 minutes • AI-powered recommendations • Free with your account
+      </p>
+    </CardContent>
+  </Card>
+);
 
 
 // UPDATED: PropertyOverview with Card structure and Phase 2 typography
@@ -391,21 +452,8 @@ const PropertyOverview = ({ property }: { property: Property }) => (
       </Card>
     )}
 
-    {/* Action Button */}
-    <div className="flex justify-start">
-      <Link href={`/dashboard/properties/${property.id}/edit`} passHref>
-        <Button variant="default">
-          <Edit className="mr-2 h-4 w-4" />
-          Edit Property Details
-        </Button>
-      </Link>
-      <Link href={`/dashboard/properties/${property.id}/seller-prep`} passHref>
-        <Button variant="outline">
-          Prepare Home for Selling
-          <ArrowRight className="ml-2 h-4 w-4" />
-        </Button>
-      </Link>
-    </div>
+    {/* NEW: Selling Strategy Card - Prominent placement */}
+    <SellingStrategyCard propertyId={property.id} />
   </div>
 );
 
@@ -603,19 +651,31 @@ export default function PropertyDetailPage() {
         </Link>
       </div>
       
-      {/* UPDATED: Minimal PageHeader spacing for tight layout */}
-      <PageHeader className="pt-2 pb-2 gap-1">
-        <PageHeaderHeading>{property.name || "My Property"}</PageHeaderHeading>
-        <PageHeaderDescription>
-          {property.address}, {property.city}
-        </PageHeaderDescription>
-      </PageHeader>
+      {/* UPDATED: PageHeader with Edit button in top-right */}
+      <div className="flex items-start justify-between gap-4 mb-2">
+        <PageHeader className="pt-2 pb-2 gap-1 flex-1">
+          <PageHeaderHeading>{property.name || "My Property"}</PageHeaderHeading>
+          <PageHeaderDescription>
+            {property.address}, {property.city}
+          </PageHeaderDescription>
+        </PageHeader>
+        
+        {/* NEW: Edit button in header */}
+        <div className="flex-shrink-0 pt-2">
+          <Link href={`/dashboard/properties/${property.id}/edit`} passHref>
+            <Button variant="outline" size="sm" className="gap-2">
+              <Edit className="h-4 w-4" />
+              Edit Details
+            </Button>
+          </Link>
+        </div>
+      </div>
 
       {/* UPDATED: Removed space-y-4 wrapper - no container spacing needed */}
       <Tabs defaultValue={defaultTab} className="w-full">
           <TabsList>
             <TabsTrigger value="overview" className="flex items-center gap-2">
-              <Edit className="h-4 w-4" /> Overview & Details
+              <Home className="h-4 w-4" /> Overview
             </TabsTrigger>
             <TabsTrigger value="maintenance" className="flex items-center gap-2">
               <Zap className="h-4 w-4" /> Maintenance Plan
