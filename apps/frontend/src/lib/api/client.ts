@@ -1585,37 +1585,8 @@ class APIClient {
    * Upload and analyze inspection report PDF
    */
   async uploadInspectionReport(formData: FormData): Promise<APIResponse<any>> {
-    const token = this.getToken();
-    
-    // Use fetch directly for FormData - don't use this.request()
-    // because it stringifies body and sets Content-Type to JSON
-    const headers: Record<string, string> = {};
-    
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    // DO NOT set Content-Type - browser will set it as multipart/form-data with boundary
-    
-    try {
-      const response = await fetch(`${this.baseURL}/api/inspection-reports/upload`, {
-        method: 'POST',
-        body: formData,
-        headers,
-      });
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new APIError(data.message || 'Upload failed', response.status);
-      }
-      
-      return data;
-    } catch (error: any) {
-      console.error('API Request Error (uploadInspectionReport):', error);
-      throw error;
-    }
+    return this.formDataRequest<any>('/api/inspection-reports/upload', formData);
   }
-
   /**
    * Get inspection report by ID
    */
