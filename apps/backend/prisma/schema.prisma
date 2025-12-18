@@ -1145,6 +1145,7 @@ model SellerPrepPlan {
   createdAt   DateTime @default(now())
 
   items       SellerPrepPlanItem[]
+  interviews  AgentInterview[]
 
   @@index([userId, propertyId])
 }
@@ -1202,6 +1203,29 @@ model SellerPrepFeedback {
   @@index([propertyId])
   @@index([rating])
   @@index([createdAt])
+}
+
+// NEW MODEL: Stores data for the Agent Interview Guide
+model AgentInterview {
+  id          String   @id @default(uuid())
+  planId      String
+  
+  agentName   String
+  isFavorite  Boolean  @default(false)
+  
+  // Structured Notes (Stored as JSON to handle dynamic interview questions)
+  // Format: { "Experience": "...", "Marketing": "...", "Pricing": "...", etc. }
+  notes       Json?
+  
+  totalScore  Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  plan        SellerPrepPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
+  @@map("agent_interviews")
 }
 
 // ============================================================================
