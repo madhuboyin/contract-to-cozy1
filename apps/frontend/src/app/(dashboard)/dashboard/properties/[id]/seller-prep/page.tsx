@@ -1,7 +1,7 @@
-// apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/seller-prep/page.tsx (UPDATED)
+// apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/seller-prep/page.tsx (FIXED)
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
@@ -58,6 +58,7 @@ export default function SellerPrepPage() {
   const params = useParams();
   const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [showIntakeForm, setShowIntakeForm] = useState(false);
+  const [hasCheckedPreferences, setHasCheckedPreferences] = useState(false);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["seller-prep", propertyId],
@@ -84,11 +85,6 @@ export default function SellerPrepPage() {
       const comparables = comparablesRes.data as ComparableHome[];
       const report = reportRes.data as ReadinessReport;
 
-      // Show intake form if no preferences
-      if (!overview.preferences) {
-        setShowIntakeForm(true);
-      }
-
       return {
         overview,
         comparables,
@@ -100,6 +96,16 @@ export default function SellerPrepPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Check for preferences ONCE after initial data load
+  useEffect(() => {
+    if (data && !hasCheckedPreferences) {
+      if (!data.overview.preferences) {
+        setShowIntakeForm(true);
+      }
+      setHasCheckedPreferences(true);
+    }
+  }, [data, hasCheckedPreferences]);
+
   const handleIntakeComplete = () => {
     setShowIntakeForm(false);
     refetch();
@@ -107,6 +113,10 @@ export default function SellerPrepPage() {
 
   const handleIntakeSkip = () => {
     setShowIntakeForm(false);
+  };
+
+  const handleEditPreferences = () => {
+    setShowIntakeForm(true);
   };
 
   if (isLoading) {
@@ -184,7 +194,7 @@ export default function SellerPrepPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setShowIntakeForm(true)}
+              onClick={handleEditPreferences}
             >
               <Settings className="h-4 w-4 mr-2" />
               Edit Preferences

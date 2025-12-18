@@ -248,6 +248,7 @@ export default function SellerPrepOverview({
                     {!isDone && !isSkipped && (
                       <>
                         <Button
+                          type="button"
                           size="sm"
                           onClick={() => handleStatusUpdate(item.id, 'DONE')}
                           disabled={isUpdating}
@@ -260,6 +261,7 @@ export default function SellerPrepOverview({
                           )}
                         </Button>
                         <Button
+                          type="button"
                           size="sm"
                           variant="outline"
                           onClick={() => handleStatusUpdate(item.id, 'SKIPPED')}
@@ -272,6 +274,7 @@ export default function SellerPrepOverview({
                     
                     {(isDone || isSkipped) && (
                       <Button
+                        type="button"
                         size="sm"
                         variant="ghost"
                         onClick={() => handleStatusUpdate(item.id, 'PLANNED')}
@@ -409,6 +412,7 @@ export default function SellerPrepOverview({
             </div>
 
             <Button
+              type="button"
               onClick={() => setShowLeadModal(true)}
               className="bg-blue-600 hover:bg-blue-700"
             >
