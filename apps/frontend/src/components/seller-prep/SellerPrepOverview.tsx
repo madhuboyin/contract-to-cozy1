@@ -164,6 +164,9 @@ export default function SellerPrepOverview({
             <TabsTrigger value="market" className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4" /> Market Insights
             </TabsTrigger>
+            <TabsTrigger value="agents" className="flex items-center gap-2">
+              <Users className="h-4 w-4" /> Agent Guide
+            </TabsTrigger>
           </TabsList>
 
           {/* TAB 1: Action Plan & History */}
