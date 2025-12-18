@@ -1182,6 +1182,19 @@ model SellerPrepLead {
   @@index([propertyId, leadType])
 }
 
+model SellerPrepFeedback {
+  id          String   @id @default(uuid())
+  userId      String
+  propertyId  String
+  rating      String   // "helpful" or "not-helpful"
+  comment     String?
+  page        String   @default("seller-prep")
+  createdAt   DateTime @default(now())
+
+  @@index([propertyId])
+  @@index([rating])
+  @@index([createdAt])
+}
 
 // ============================================================================
 // REVIEWS & RATINGS
