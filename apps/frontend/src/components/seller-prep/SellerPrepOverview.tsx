@@ -66,7 +66,7 @@ interface SellerPrepOverviewProps {
     completionPercent: number;
     preferences?: any;
     personalizedSummary?: string;
-    interviews?: any[]; // Re-added interviews from the backend
+    interviews?: any[];
     budget?: {
       totalBudget: number;
       spentAmount: number;
@@ -112,7 +112,7 @@ export default function SellerPrepOverview({
   const queryClient = useQueryClient();
   const [showLeadModal, setShowLeadModal] = useState(false);
   
-  // Persistence state for agent interviews (max 3)
+  // State for agent interviews persistence (max 3)
   const [interviews, setInterviews] = useState(overview.interviews || []);
 
   const updateStatusMutation = useMutation({
@@ -154,22 +154,22 @@ export default function SellerPrepOverview({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      {/* LEFT COLUMN: Main Content Area (Tabs) */}
+      {/* LEFT COLUMN: Main Interaction Area */}
       <div className="lg:col-span-8 space-y-6">
         <Tabs defaultValue="checklist" className="w-full">
-          {/* Layout Fix: grid-cols-4 ensures all tabs stay on a single row */}
-          <TabsList className="grid w-full grid-cols-4 mb-6">
-            <TabsTrigger value="checklist" className="flex items-center gap-2 text-xs sm:text-sm">
-              <Hammer className="h-4 w-4" /> <span className="hidden md:inline">Action Plan</span>
+          {/* Layout Fix: Single row grid-cols-4 */}
+          <TabsList className="grid w-full grid-cols-4 mb-6 h-auto p-1 bg-muted/50">
+            <TabsTrigger value="checklist" className="flex items-center gap-2 text-[11px] sm:text-xs md:text-sm py-2 px-1">
+              <Hammer className="h-4 w-4 hidden sm:inline" /> <span>Tasks</span>
             </TabsTrigger>
-            <TabsTrigger value="financials" className="flex items-center gap-2 text-xs sm:text-sm">
-              <DollarSign className="h-4 w-4" /> <span className="hidden md:inline">Financials</span>
+            <TabsTrigger value="financials" className="flex items-center gap-2 text-[11px] sm:text-xs md:text-sm py-2 px-1">
+              <DollarSign className="h-4 w-4 hidden sm:inline" /> <span>Finance</span>
             </TabsTrigger>
-            <TabsTrigger value="market" className="flex items-center gap-2 text-xs sm:text-sm">
-              <TrendingUp className="h-4 w-4" /> <span className="hidden md:inline">Market</span>
+            <TabsTrigger value="market" className="flex items-center gap-2 text-[11px] sm:text-xs md:text-sm py-2 px-1">
+              <TrendingUp className="h-4 w-4 hidden sm:inline" /> <span>Market</span>
             </TabsTrigger>
-            <TabsTrigger value="agents" className="flex items-center gap-2 text-xs sm:text-sm">
-              <Users className="h-4 w-4" /> <span className="hidden md:inline">Agent Guide</span>
+            <TabsTrigger value="agents" className="flex items-center gap-2 text-[11px] sm:text-xs md:text-sm py-2 px-1">
+              <Users className="h-4 w-4 hidden sm:inline" /> <span>Agents</span>
             </TabsTrigger>
           </TabsList>
 
@@ -250,7 +250,7 @@ export default function SellerPrepOverview({
             </Card>
           </TabsContent>
 
-          {/* TAB 4: Agent Interview Guide (Interactive) */}
+          {/* TAB 4: Agent Interview Guide (Interactive Comparison Matrix) */}
           <TabsContent value="agents" className="outline-none">
             <AgentInterviewGuide 
               propertyId={propertyId} 
@@ -261,7 +261,7 @@ export default function SellerPrepOverview({
         </Tabs>
       </div>
 
-      {/* RIGHT COLUMN: Sidebar (Sticky on Desktop) */}
+      {/* RIGHT COLUMN: Persistent Sidebar Stats */}
       <div className="lg:col-span-4 space-y-6">
         <Card className="sticky top-6">
           <CardHeader className="pb-3">
@@ -313,8 +313,7 @@ export default function SellerPrepOverview({
   );
 }
 
-
-// Sub-components for cleaner main render
+// Sub-components
 function TaskItem({ item, onUpdate, isUpdating }: any) {
   const isDone = item.status === 'DONE';
   const isSkipped = item.status === 'SKIPPED';
