@@ -296,4 +296,65 @@ export class SellerPrepController {
       });
     }
   }
+  static async updateItemStatus(req: AuthRequest, res: Response) {
+    try {
+      const { itemId } = req.params;
+      const { status } = req.body;
+      const userId = req.user!.userId;
+  
+      if (!['PLANNED', 'DONE', 'SKIPPED'].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid status. Must be PLANNED, DONE, or SKIPPED'
+        });
+      }
+  
+      // Verify user owns this item
+      const item = await prisma.sellerPrepPlanItem.findFirst({
+        where: {
+          id: itemId,
+          plan: { userId }
+        }
+      });
+  
+      if (!item) {
+        return res.status(404).json({
+          success: false,
+          message: 'Item not found or unauthorized'
+        });
+      }
+  
+      // UPDATE: Set timestamps based on status
+      const updateData: any = { status };
+      
+      if (status === 'DONE') {
+        updateData.completedAt = new Date();
+        updateData.skippedAt = null;
+      } else if (status === 'SKIPPED') {
+        updateData.skippedAt = new Date();
+        updateData.completedAt = null;
+      } else if (status === 'PLANNED') {
+        updateData.completedAt = null;
+        updateData.skippedAt = null;
+      }
+  
+      const updated = await prisma.sellerPrepPlanItem.update({
+        where: { id: itemId },
+        data: updateData
+      });
+  
+      res.json({
+        success: true,
+        data: updated,
+        message: 'Item status updated successfully'
+      });
+    } catch (error) {
+      console.error('[SellerPrepController] updateItemStatus error:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to update item'
+      });
+    }
+  }
+
 }

@@ -18,6 +18,9 @@ export interface UserPreferences {
     reason?: string;
     status?: string;
     personalizedPriority?: number; // Calculated priority score
+    completedAt?: Date | string | null;
+    skippedAt?: Date | string | null;
+    createdAt?: Date | string;
   }
   
   /**

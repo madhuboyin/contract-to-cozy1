@@ -18,6 +18,7 @@ export class SellerPrepService {
     personalizedSummary: string | null;
     budget: any;
     value: any;
+    startDate: string; // ADDED for timeline
   }> {
     const property = await prisma.property.findFirst({
       where: {
@@ -66,18 +67,32 @@ export class SellerPrepService {
     const done = plan.items.filter((i: any) => i.status === 'DONE').length;
     const completionPercent = total ? Math.round((done / total) * 100) : 0;
   
+    // UPDATED: Map items to include timeline fields
+    const itemsWithTimestamps = plan.items.map((item: any) => ({
+      id: item.id,
+      code: item.code,
+      title: item.title,
+      priority: item.priority,
+      roiRange: item.roiRange,
+      costBucket: item.costBucket,
+      status: item.status,
+      completedAt: item.completedAt,  // ADDED
+      skippedAt: item.skippedAt,      // ADDED
+      createdAt: item.createdAt,      // ADDED
+    }));
+
     // Apply personalization if preferences exist
     const preferences = plan.preferences as any;
     const personalizedItems: ChecklistItem[] = preferences
-      ? personalizeChecklist(plan.items as ChecklistItem[], preferences)
-      : (plan.items as ChecklistItem[]);
+      ? personalizeChecklist(itemsWithTimestamps as ChecklistItem[], preferences)
+      : (itemsWithTimestamps as ChecklistItem[]);
   
     // Generate personalized summary
     const personalizedSummary = preferences
       ? generatePersonalizedSummary(preferences, completionPercent)
       : null;
   
-    // NEW: Calculate budget and value estimates
+    // Calculate budget and value estimates
     const budgetAndValue = calculateBudgetAndValue(
       plan.items as any[],
       preferences?.budget
@@ -89,8 +104,9 @@ export class SellerPrepService {
       completionPercent,
       preferences,
       personalizedSummary,
-      budget: budgetAndValue.budget, // NEW
-      value: budgetAndValue.value,   // NEW
+      budget: budgetAndValue.budget,
+      value: budgetAndValue.value,
+      startDate: plan.createdAt.toISOString(), // ADDED for timeline
     };
   }
 
@@ -99,11 +115,26 @@ export class SellerPrepService {
     itemId: string,
     status: 'PLANNED' | 'DONE' | 'SKIPPED'
   ) {
+    // UPDATED: Set timestamps based on status
+    const updateData: any = { status };
+    
+    if (status === 'DONE') {
+      updateData.completedAt = new Date();
+      updateData.skippedAt = null;
+    } else if (status === 'SKIPPED') {
+      updateData.skippedAt = new Date();
+      updateData.completedAt = null;
+    } else if (status === 'PLANNED') {
+      updateData.completedAt = null;
+      updateData.skippedAt = null;
+    }
+
     return prisma.sellerPrepPlanItem.update({
       where: { id: itemId },
-      data: { status },
+      data: updateData,
     });
   }
+
   static async getComparables(userId: string, propertyId: string) {
     const property = await prisma.property.findFirst({
       where: {
@@ -136,6 +167,7 @@ export class SellerPrepService {
       propertyType: property.propertyType ? String(property.propertyType) : undefined,
     });
   } 
+
   static async getSellerReadinessReport(
     userId: string,
     propertyId: string
