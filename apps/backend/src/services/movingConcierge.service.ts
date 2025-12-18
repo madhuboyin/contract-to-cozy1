@@ -238,40 +238,71 @@ export class MovingConciergeService {
     }
 
     try {
-      const prompt = `Generate a comprehensive moving timeline for a home buyer.
+      const availablePeriods = this.getAvailablePeriods(daysUntilMove);
+      const timeConstraint = daysUntilMove < 28 ? 'URGENT - Less than 4 weeks!' : 'Standard timeline';
+      
+      const prompt = `Generate a COMPRESSED moving timeline adapted for limited time.
 
 Moving Details:
 - Days until closing: ${daysUntilMove}
+- TIME CONSTRAINT: ${timeConstraint}
 - Home size: ${input.homeSize} sqft, ${input.numberOfRooms} rooms
 - Family size: ${input.familySize} people
 - Pets: ${input.hasPets ? 'Yes' : 'No'}
 - Moving distance: ${input.movingDistance}
 - Special requirements: ${input.specialRequirements || 'None'}
 
-Generate tasks for each timeline period. Return ONLY valid JSON:
+${daysUntilMove < 28 ? `
+CRITICAL INSTRUCTIONS - USER HAS LIMITED TIME:
+- Compress early tasks (research movers, budgeting) into earliest available period
+- Prioritize CRITICAL tasks that must be done immediately
+- Combine similar tasks to save time
+- Focus on MUST-DO items only
+- Mark urgent tasks with "⚠️ URGENT:" in description
+` : ''}
+
+Generate tasks ONLY for these periods: ${availablePeriods.join(', ')}
+
+Return ONLY valid JSON with this exact structure:
 {
-  "weeks8Before": [
+  ${availablePeriods.filter(p => !['movingDay', 'week1After'].includes(p)).map(period => `
+  "${period}": [
     {
-      "title": "Research moving companies",
-      "description": "Get 3-5 quotes from reputable movers",
+      "title": "Task title",
+      "description": "${daysUntilMove < 28 ? '⚠️ URGENT: ' : ''}Task description",
+      "category": "MOVING|PACKING|UTILITIES|ADMIN|CLEANING|SETUP|KIDS_PETS",
+      "priority": "CRITICAL|HIGH|MEDIUM|LOW",
+      "estimatedTime": "time estimate",
+      "tips": ["tip1", "tip2"]
+    }
+  ]`).join(',')}
+  ,
+  "movingDay": [
+    {
+      "title": "Moving day task",
+      "description": "Description",
       "category": "MOVING",
-      "priority": "HIGH",
-      "estimatedTime": "2 hours",
-      "tips": ["Check reviews", "Verify insurance"]
+      "priority": "CRITICAL",
+      "estimatedTime": "time",
+      "tips": ["tip"]
     }
   ],
-  "weeks6Before": [...],
-  "weeks4Before": [...],
-  "weeks2Before": [...],
-  "week1Before": [...],
-  "movingDay": [...],
-  "week1After": [...]
+  "week1After": [
+    {
+      "title": "After move task",
+      "description": "Description",
+      "category": "SETUP",
+      "priority": "HIGH",
+      "estimatedTime": "time",
+      "tips": ["tip"]
+    }
+  ]
 }
 
 Categories: UTILITIES, MOVING, PACKING, ADMIN, CLEANING, SETUP, KIDS_PETS
 Priorities: CRITICAL, HIGH, MEDIUM, LOW
 
-Focus on practical, actionable tasks. Include 5-8 tasks per period.`;
+Include 5-8 tasks per period. Focus on practical, actionable items.`;
 
       const response = await this.ai.models.generateContent({
         model: "gemini-2.0-flash-exp",
@@ -286,7 +317,7 @@ Focus on practical, actionable tasks. Include 5-8 tasks per period.`;
       const text = response.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       const aiTimeline = JSON.parse(text);
 
-      // Add IDs and completed status
+      // Add IDs, completed status, and due dates
       const processedTimeline: any = {};
       for (const [key, tasks] of Object.entries(aiTimeline)) {
         processedTimeline[key] = (tasks as any[]).map((task, index) => ({
@@ -307,7 +338,33 @@ Focus on practical, actionable tasks. Include 5-8 tasks per period.`;
 
   private getBasicTimeline(input: MovingPlanInput, daysUntilMove: number): MovingPlan['timeline'] {
     const closingDate = input.closingDate;
+    
+    // Get all standard tasks
+    const allTasks = this.getAllStandardTasks(closingDate);
+    
+    // Determine which periods are actually available
+    const availablePeriods = this.getAvailablePeriods(daysUntilMove);
+    
+    // Redistribute tasks based on available time
+    return this.redistributeTasks(allTasks, availablePeriods, daysUntilMove, closingDate);
+  }
 
+  private getAvailablePeriods(daysUntilMove: number): string[] {
+    const periods: string[] = [];
+    
+    if (daysUntilMove >= 56) periods.push('weeks8Before');
+    if (daysUntilMove >= 42) periods.push('weeks6Before');
+    if (daysUntilMove >= 28) periods.push('weeks4Before');
+    if (daysUntilMove >= 14) periods.push('weeks2Before');
+    if (daysUntilMove >= 7) periods.push('week1Before');
+    
+    // Always include these
+    periods.push('movingDay', 'week1After');
+    
+    return periods;
+  }
+
+  private getAllStandardTasks(closingDate: string): Record<string, MovingTask[]> {
     return {
       weeks8Before: [
         {
@@ -316,7 +373,7 @@ Focus on practical, actionable tasks. Include 5-8 tasks per period.`;
           description: 'Get quotes from 3-5 reputable moving companies',
           category: 'MOVING',
           dueDate: this.calculateDueDate('weeks8Before', closingDate),
-          priority: 'HIGH',
+          priority: 'CRITICAL',
           estimatedTime: '2 hours',
           completed: false,
           tips: ['Check online reviews', 'Verify insurance and licensing', 'Compare prices'],
@@ -327,10 +384,21 @@ Focus on practical, actionable tasks. Include 5-8 tasks per period.`;
           description: 'Estimate all moving-related costs',
           category: 'ADMIN',
           dueDate: this.calculateDueDate('weeks8Before', closingDate),
-          priority: 'MEDIUM',
+          priority: 'HIGH',
           estimatedTime: '1 hour',
           completed: false,
           tips: ['Include unexpected costs buffer', 'Track all expenses'],
+        },
+        {
+          id: '8w_3',
+          title: 'Start researching new area',
+          description: 'Learn about neighborhoods, schools, amenities',
+          category: 'ADMIN',
+          dueDate: this.calculateDueDate('weeks8Before', closingDate),
+          priority: 'MEDIUM',
+          estimatedTime: '3 hours',
+          completed: false,
+          tips: ['Visit local community forums', 'Check crime statistics', 'Map out commutes'],
         },
       ],
       weeks6Before: [
@@ -351,10 +419,21 @@ Focus on practical, actionable tasks. Include 5-8 tasks per period.`;
           description: 'Begin sorting items to donate, sell, or discard',
           category: 'PACKING',
           dueDate: this.calculateDueDate('weeks6Before', closingDate),
-          priority: 'MEDIUM',
+          priority: 'HIGH',
           estimatedTime: 'Ongoing',
           completed: false,
           tips: ['One room at a time', 'Sell valuable items online'],
+        },
+        {
+          id: '6w_3',
+          title: 'Notify landlord',
+          description: 'Give proper notice if renting current home',
+          category: 'ADMIN',
+          dueDate: this.calculateDueDate('weeks6Before', closingDate),
+          priority: 'CRITICAL',
+          estimatedTime: '30 min',
+          completed: false,
+          tips: ['Check lease for notice period', 'Get move-out checklist'],
         },
       ],
       weeks4Before: [
@@ -380,6 +459,17 @@ Focus on practical, actionable tasks. Include 5-8 tasks per period.`;
           completed: false,
           tips: ['Set turn-on dates for closing day', 'Compare provider rates'],
         },
+        {
+          id: '4w_3',
+          title: 'Transfer medical records',
+          description: 'Contact doctors, dentists, vets for record transfers',
+          category: 'ADMIN',
+          dueDate: this.calculateDueDate('weeks4Before', closingDate),
+          priority: 'MEDIUM',
+          estimatedTime: '1 hour',
+          completed: false,
+          tips: ['Find new providers in advance', 'Get prescriptions refilled'],
+        },
       ],
       weeks2Before: [
         {
@@ -403,6 +493,17 @@ Focus on practical, actionable tasks. Include 5-8 tasks per period.`;
           estimatedTime: 'Ongoing',
           completed: false,
           tips: ['Label all boxes clearly', 'Create inventory list'],
+        },
+        {
+          id: '2w_3',
+          title: 'Arrange for kids/pets on moving day',
+          description: 'Plan care for children and pets during move',
+          category: 'KIDS_PETS',
+          dueDate: this.calculateDueDate('weeks2Before', closingDate),
+          priority: 'HIGH',
+          estimatedTime: '1 hour',
+          completed: false,
+          tips: ['Ask friends/family to help', 'Book pet boarding if needed'],
         },
       ],
       week1Before: [
@@ -428,6 +529,17 @@ Focus on practical, actionable tasks. Include 5-8 tasks per period.`;
           completed: false,
           tips: ['Toiletries, clothes, medications', 'Phone chargers, important docs'],
         },
+        {
+          id: '1w_3',
+          title: 'Clean current home',
+          description: 'Deep clean or arrange cleaning service',
+          category: 'CLEANING',
+          dueDate: this.calculateDueDate('week1Before', closingDate),
+          priority: 'MEDIUM',
+          estimatedTime: '4 hours',
+          completed: false,
+          tips: ['May be required by lease', 'Consider professional cleaners'],
+        },
       ],
       movingDay: [
         {
@@ -435,7 +547,7 @@ Focus on practical, actionable tasks. Include 5-8 tasks per period.`;
           title: 'Final walkthrough of old home',
           description: 'Check all rooms, closets, garage, attic',
           category: 'MOVING',
-          dueDate: input.closingDate,
+          dueDate: closingDate,
           priority: 'CRITICAL',
           estimatedTime: '30 min',
           completed: false,
@@ -446,11 +558,22 @@ Focus on practical, actionable tasks. Include 5-8 tasks per period.`;
           title: 'Oversee movers',
           description: 'Be present during loading and unloading',
           category: 'MOVING',
-          dueDate: input.closingDate,
+          dueDate: closingDate,
           priority: 'CRITICAL',
           estimatedTime: 'All day',
           completed: false,
           tips: ['Check inventory list', 'Note any damages immediately'],
+        },
+        {
+          id: 'md_3',
+          title: 'Take meter readings',
+          description: 'Record final utility readings at old home',
+          category: 'UTILITIES',
+          dueDate: closingDate,
+          priority: 'MEDIUM',
+          estimatedTime: '15 min',
+          completed: false,
+          tips: ['Take photos as proof', 'Submit to utility companies'],
         },
       ],
       week1After: [
@@ -476,8 +599,112 @@ Focus on practical, actionable tasks. Include 5-8 tasks per period.`;
           completed: false,
           tips: ['Check state-specific deadlines', 'Bring proof of residency'],
         },
+        {
+          id: '1a_3',
+          title: 'Meet neighbors',
+          description: 'Introduce yourself to neighbors',
+          category: 'SETUP',
+          dueDate: this.calculateDueDate('week1After', closingDate),
+          priority: 'LOW',
+          estimatedTime: '1 hour',
+          completed: false,
+          tips: ['Bring small gift or treats', 'Exchange contact info'],
+        },
       ],
     };
+  }
+
+  private redistributeTasks(
+    allTasks: Record<string, MovingTask[]>,
+    availablePeriods: string[],
+    daysUntilMove: number,
+    closingDate: string
+  ): MovingPlan['timeline'] {
+    // Initialize with all periods as empty arrays to satisfy TypeScript
+    const redistributed: MovingPlan['timeline'] = {
+      weeks8Before: [],
+      weeks6Before: [],
+      weeks4Before: [],
+      weeks2Before: [],
+      week1Before: [],
+      movingDay: [],
+      week1After: [],
+    };
+    
+    // Define period hierarchy (earlier to later)
+    const periodHierarchy = ['weeks8Before', 'weeks6Before', 'weeks4Before', 'weeks2Before', 'week1Before', 'movingDay', 'week1After'];
+    
+    // Collect tasks from unavailable periods
+    const missedTasks: MovingTask[] = [];
+    
+    for (const period of periodHierarchy) {
+      if (!availablePeriods.includes(period) && allTasks[period]) {
+        // This period is in the past - collect its tasks
+        missedTasks.push(...allTasks[period]);
+      }
+    }
+    
+    // Separate missed tasks by priority
+    const criticalMissed = missedTasks.filter(t => t.priority === 'CRITICAL');
+    const highMissed = missedTasks.filter(t => t.priority === 'HIGH');
+    const otherMissed = missedTasks.filter(t => ['MEDIUM', 'LOW'].includes(t.priority || 'LOW'));
+    
+    // Get first available period (excluding movingDay and week1After)
+    const firstWorkingPeriod = availablePeriods.find(p => !['movingDay', 'week1After'].includes(p));
+    
+    // Build redistributed timeline
+    for (const period of availablePeriods) {
+      if (period === firstWorkingPeriod && missedTasks.length > 0) {
+        // This is the earliest available period - add compressed tasks
+        const compressedTasks: MovingTask[] = [];
+        
+        // Add CRITICAL missed tasks first with urgency markers
+        criticalMissed.forEach((task, index) => {
+          compressedTasks.push({
+            ...task,
+            id: `${period}_compressed_critical_${index}`,
+            description: `⚠️ URGENT - Start immediately: ${task.description}`,
+            dueDate: this.calculateDueDate(period, closingDate),
+            priority: 'CRITICAL',
+          });
+        });
+        
+        // Add HIGH priority missed tasks
+        highMissed.forEach((task, index) => {
+          compressedTasks.push({
+            ...task,
+            id: `${period}_compressed_high_${index}`,
+            description: `⚠️ URGENT: ${task.description}`,
+            dueDate: this.calculateDueDate(period, closingDate),
+            priority: 'HIGH',
+          });
+        });
+        
+        // Add only the most important MEDIUM/LOW tasks if time is very tight
+        if (daysUntilMove >= 14) {
+          // If we have at least 2 weeks, include some medium priority tasks
+          otherMissed.slice(0, 3).forEach((task, index) => {
+            compressedTasks.push({
+              ...task,
+              id: `${period}_compressed_other_${index}`,
+              description: `Soon: ${task.description}`,
+              dueDate: this.calculateDueDate(period, closingDate),
+            });
+          });
+        }
+        
+        // Combine compressed tasks with original period tasks
+        const originalTasks = allTasks[period] || [];
+        redistributed[period as keyof MovingPlan['timeline']] = [...compressedTasks, ...originalTasks];
+        
+      } else if (allTasks[period]) {
+        // Regular period - just use original tasks
+        redistributed[period as keyof MovingPlan['timeline']] = [...allTasks[period]];
+      }
+      // If period not available, it stays as empty array (already initialized)
+    }
+    
+    return redistributed;
   }
 
   private calculateDueDate(period: string, closingDate: string): string {
@@ -652,6 +879,10 @@ Details:
 - Pets: ${input.hasPets}
 - Special requirements: ${input.specialRequirements || 'None'}
 
+${daysUntilMove < 28 ? `
+URGENT CONTEXT: User has less than 4 weeks to move! Prioritize time-critical recommendations.
+` : ''}
+
 Return ONLY a JSON array of specific, actionable recommendations:
 ["Recommendation 1", "Recommendation 2", ...]
 
@@ -680,9 +911,9 @@ Focus on: timing, cost-saving tips, stress reduction, family-specific advice.`;
     const recs: string[] = [];
 
     if (daysUntilMove < 14) {
-      recs.push('Move date approaching fast! Focus on critical tasks like utility setup and booking movers immediately.');
+      recs.push('⚠️ URGENT: You have less than 2 weeks! Focus on booking movers and utilities immediately.');
     } else if (daysUntilMove < 28) {
-      recs.push('Start packing non-essential rooms now to avoid last-minute rush.');
+      recs.push('⚠️ Time is tight! Prioritize critical tasks like booking movers and scheduling utilities.');
     } else {
       recs.push('You have plenty of time. Use this period to research and compare moving companies thoroughly.');
     }

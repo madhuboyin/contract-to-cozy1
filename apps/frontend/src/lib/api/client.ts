@@ -73,10 +73,7 @@ interface SendMessageToChatPayload {
 interface ChatResponse {
   text: string; // The backend returns the model's text in the 'text' field
 }
-// -----------------------------
 
-
-// NOTE: Changed to API_BASE_URL to match common convention
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 /**
@@ -172,13 +169,6 @@ class APIClient {
     
     // --- DEBUG LOG 1: Log Request Details ---
     const bodyPreview = typeof body === 'string' ? body.substring(0, 200) : null;
-    console.log('API DEBUG: Sending Request:', {
-        endpoint: `${this.baseURL}${endpoint}`,
-        method: options.method || 'GET',
-        headers: headers,
-        bodyPreview: bodyPreview, 
-    });
-    // ----------------------------------------
 
     try {
       let response = await fetch(`${this.baseURL}${endpoint}`, {
@@ -186,10 +176,6 @@ class APIClient {
         body, // Use the prepared JSON body
         headers,
       });
-
-      // --- DEBUG LOG 2: Log Raw Response Status ---
-      console.log('API DEBUG: Received Response Status:', response.status, 'for endpoint:', endpoint);
-      // --------------------------------------------
 
       // --- START: MODIFIED LOGIC (Token Refresh) ---
 
@@ -292,9 +278,6 @@ class APIClient {
           const errorMessage = typeof rawError === 'string' ? rawError : 'Request failed due to business logic error.';
           throw new APIError(errorMessage, response.status); 
       }
-      console.log('API DEBUG: Final Response Data:', data);
-      // -----------------------------------
-
       // If status was 204/205 (No Content), return explicit success with empty data
       if (response.status === 204 || response.status === 205) {
           return { success: true, data: {} as T, message: "No Content" } as APIResponse<T>;
@@ -325,14 +308,6 @@ class APIClient {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-
-    console.log('API DEBUG: Sending FormData Request:', {
-        endpoint: `${this.baseURL}${endpoint}`,
-        method: 'POST',
-        headers: headers,
-        bodyType: 'FormData',
-    });
-    // ----------------------------------------------------
     
     try {
         const response = await fetch(`${this.baseURL}${endpoint}`, {
@@ -342,9 +317,7 @@ class APIClient {
             body: formData,
         });
 
-        console.log('API DEBUG: Received Form Data Response Status:', response.status, 'for endpoint:', endpoint);
         const data = await response.json();
-        console.log('API DEBUG: Final Form Data Response Data:', data);
 
         if (!response.ok || data.success === false) {
           const errorMessage = (data && data.error) || (data && data.message) || `HTTP Error: ${response.status}`;
@@ -509,8 +482,6 @@ class APIClient {
       body: payload as unknown as BodyInit,
     });
   }
-
-
   // ==========================================================================
   // PROVIDER ENDPOINTS 
   // ==========================================================================
@@ -906,13 +877,10 @@ class APIClient {
   async deleteExpense(expenseId: string): Promise<APIResponse<void>> {
     return this.request<void>(`/api/home-management/expenses/${expenseId}`, { method: 'DELETE' });
   }
-
-
   // --- WARRANTIES ---
   async createWarranty(data: CreateWarrantyInput): Promise<APIResponse<Warranty>> {
     return this.request<Warranty>('/api/home-management/warranties', { method: 'POST', body: data as unknown as BodyInit });
   }
-
   /**
    * List warranties
    * FIX: Added propertyId to the function signature
@@ -929,7 +897,6 @@ class APIClient {
   async deleteWarranty(warrantyId: string): Promise<APIResponse<void>> {
     return this.request<void>(`/api/home-management/warranties/${warrantyId}`, { method: 'DELETE' });
   }
-
 
   // --- INSURANCE POLICIES ---
   async createInsurancePolicy(data: CreateInsurancePolicyInput): Promise<APIResponse<InsurancePolicy>> {
@@ -969,7 +936,6 @@ class APIClient {
 
       return this.formDataRequest<Document>('/api/home-management/documents/upload', formData);
   }
-
 
   // ==========================================================================
   // RISK ASSESSMENT ENDPOINTS 
