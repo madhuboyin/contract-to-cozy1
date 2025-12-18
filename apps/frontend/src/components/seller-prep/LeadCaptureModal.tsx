@@ -24,14 +24,16 @@ interface LeadCaptureModalProps {
   propertyId: string;
   open: boolean;
   onClose: () => void;
-  checklistItems: Array<{ code: string; title: string }>;
+  checklistItems?: Array<{ code: string; title: string }>;
+  leadType?: 'CONTRACTOR' | 'AGENT' | 'STAGER';
 }
 
 export function LeadCaptureModal({
   propertyId,
   open,
   onClose,
-  checklistItems,
+  checklistItems = [],
+  leadType = 'CONTRACTOR',
 }: LeadCaptureModalProps) {
   const { toast } = useToast();
   const [formData, setFormData] = useState({
@@ -50,7 +52,7 @@ export function LeadCaptureModal({
     mutationFn: async (data: typeof formData) => {
       return api.createSellerPrepLead(
         propertyId,
-        'CONTRACTOR',
+        leadType,
         {
           tasks: data.selectedTasks,
           otherTask: data.otherTask,
@@ -67,9 +69,10 @@ export function LeadCaptureModal({
     },
     onSuccess: () => {
       setSubmitted(true);
+      const leadTypeText = leadType === 'AGENT' ? 'agents' : leadType === 'STAGER' ? 'stagers' : 'contractors';
       toast({
         title: "Request sent!",
-        description: "We'll connect you with local contractors within 24 hours.",
+        description: `We'll connect you with local ${leadTypeText} within 24 hours.`,
       });
     },
     onError: (error) => {
@@ -84,8 +87,8 @@ export function LeadCaptureModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation
-    if (formData.selectedTasks.length === 0 && !formData.otherTask) {
+    // Validation - Only require tasks for CONTRACTOR leads
+    if (leadType === 'CONTRACTOR' && formData.selectedTasks.length === 0 && !formData.otherTask) {
       toast({
         title: "Selection required",
         description: "Please select at least one task or describe other needs",
@@ -157,17 +160,17 @@ export function LeadCaptureModal({
             <div className="space-y-2">
               <h3 className="text-xl font-semibold">Request Sent!</h3>
               <p className="text-sm text-gray-600">
-                Thanks! We'll connect you with local contractors within 24 hours.
+                Thanks! We'll connect you with local {leadType === 'AGENT' ? 'agents' : leadType === 'STAGER' ? 'stagers' : 'contractors'} within 24 hours.
               </p>
             </div>
 
             <div className="bg-blue-50 rounded-lg p-4 text-left space-y-2">
               <p className="text-sm font-medium text-blue-900">What happens next:</p>
               <ul className="text-sm text-blue-800 space-y-1">
-                <li>• Up to 3 verified contractors will review your request</li>
+                <li>• Up to 3 verified {leadType === 'AGENT' ? 'agents' : leadType === 'STAGER' ? 'stagers' : 'contractors'} will review your request</li>
                 <li>• You'll receive free quotes via email and/or phone</li>
                 <li>• Compare quotes and choose the best fit</li>
-                <li>• Book directly with your chosen contractor</li>
+                <li>• Book directly with your chosen {leadType === 'AGENT' ? 'agent' : leadType === 'STAGER' ? 'stager' : 'contractor'}</li>
               </ul>
             </div>
 
@@ -188,50 +191,56 @@ export function LeadCaptureModal({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Get Free Contractor Quotes</DialogTitle>
+          <DialogTitle>
+            {leadType === 'AGENT' ? 'Find Recommended Agents' : 
+             leadType === 'STAGER' ? 'Get Free Staging Quotes' : 
+             'Get Free Contractor Quotes'}
+          </DialogTitle>
           <DialogDescription>
-            We'll connect you with up to 3 verified local professionals within 24 hours
+            We'll connect you with up to 3 verified local {leadType === 'AGENT' ? 'agents' : leadType === 'STAGER' ? 'stagers' : 'professionals'} within 24 hours
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Task Selection */}
-          <div className="space-y-3">
-            <Label className="text-base font-medium">
-              Which tasks need professional help? *
-            </Label>
-            <div className="space-y-2">
-              {checklistItems.map((item) => (
-                <div key={item.code} className="flex items-center space-x-3">
-                  <Checkbox
-                    id={item.code}
-                    checked={formData.selectedTasks.includes(item.code)}
-                    onCheckedChange={() => handleTaskToggle(item.code)}
-                  />
-                  <Label
-                    htmlFor={item.code}
-                    className="text-sm font-normal cursor-pointer"
-                  >
-                    {item.title}
-                  </Label>
-                </div>
-              ))}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="other" className="text-sm">
-                Other (please describe):
+          {/* Task Selection - Only show for CONTRACTOR leads */}
+          {leadType === 'CONTRACTOR' && checklistItems.length > 0 && (
+            <div className="space-y-3">
+              <Label className="text-base font-medium">
+                Which tasks need professional help? *
               </Label>
-              <Input
-                id="other"
-                placeholder="e.g., Deck refinishing, gutter cleaning..."
-                value={formData.otherTask}
-                onChange={(e) =>
-                  setFormData({ ...formData, otherTask: e.target.value })
-                }
-              />
+              <div className="space-y-2">
+                {checklistItems.map((item) => (
+                  <div key={item.code} className="flex items-center space-x-3">
+                    <Checkbox
+                      id={item.code}
+                      checked={formData.selectedTasks.includes(item.code)}
+                      onCheckedChange={() => handleTaskToggle(item.code)}
+                    />
+                    <Label
+                      htmlFor={item.code}
+                      className="text-sm font-normal cursor-pointer"
+                    >
+                      {item.title}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="other" className="text-sm">
+                  Other (please describe):
+                </Label>
+                <Input
+                  id="other"
+                  placeholder="e.g., Deck refinishing, gutter cleaning..."
+                  value={formData.otherTask}
+                  onChange={(e) =>
+                    setFormData({ ...formData, otherTask: e.target.value })
+                  }
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Contact Information */}
           <div className="space-y-4">

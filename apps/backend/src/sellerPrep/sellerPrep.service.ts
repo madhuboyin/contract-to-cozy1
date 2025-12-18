@@ -18,7 +18,8 @@ export class SellerPrepService {
     personalizedSummary: string | null;
     budget: any;
     value: any;
-    startDate: string; // ADDED for timeline
+    interviews: any[]; // NEW: Added for agent comparison
+    startDate: string; 
   }> {
     const property = await prisma.property.findFirst({
       where: {
@@ -34,7 +35,10 @@ export class SellerPrepService {
   
     let plan = await prisma.sellerPrepPlan.findFirst({
       where: { userId, propertyId },
-      include: { items: true },
+      include: { 
+        items: true,
+        interviews: true // NEW: Include agent interviews
+      },
     });
   
     if (!plan) {
@@ -59,7 +63,7 @@ export class SellerPrepService {
             })),
           },
         },
-        include: { items: true },
+        include: { items: true, interviews: true },
       });
     }
   
@@ -67,7 +71,6 @@ export class SellerPrepService {
     const done = plan.items.filter((i: any) => i.status === 'DONE').length;
     const completionPercent = total ? Math.round((done / total) * 100) : 0;
   
-    // UPDATED: Map items to include timeline fields
     const itemsWithTimestamps = plan.items.map((item: any) => ({
       id: item.id,
       code: item.code,
@@ -76,23 +79,20 @@ export class SellerPrepService {
       roiRange: item.roiRange,
       costBucket: item.costBucket,
       status: item.status,
-      completedAt: item.completedAt,  // ADDED
-      skippedAt: item.skippedAt,      // ADDED
-      createdAt: item.createdAt,      // ADDED
+      completedAt: item.completedAt,
+      skippedAt: item.skippedAt,
+      createdAt: item.createdAt,
     }));
 
-    // Apply personalization if preferences exist
     const preferences = plan.preferences as any;
     const personalizedItems: ChecklistItem[] = preferences
       ? personalizeChecklist(itemsWithTimestamps as ChecklistItem[], preferences)
       : (itemsWithTimestamps as ChecklistItem[]);
   
-    // Generate personalized summary
     const personalizedSummary = preferences
       ? generatePersonalizedSummary(preferences, completionPercent)
       : null;
   
-    // Calculate budget and value estimates
     const budgetAndValue = calculateBudgetAndValue(
       plan.items as any[],
       preferences?.budget
@@ -106,7 +106,8 @@ export class SellerPrepService {
       personalizedSummary,
       budget: budgetAndValue.budget,
       value: budgetAndValue.value,
-      startDate: plan.createdAt.toISOString(), // ADDED for timeline
+      interviews: plan.interviews || [], // NEW: Return saved interviews
+      startDate: plan.createdAt.toISOString(),
     };
   }
 
@@ -115,7 +116,6 @@ export class SellerPrepService {
     itemId: string,
     status: 'PLANNED' | 'DONE' | 'SKIPPED'
   ) {
-    // UPDATED: Set timestamps based on status
     const updateData: any = { status };
     
     if (status === 'DONE') {
@@ -132,6 +132,66 @@ export class SellerPrepService {
     return prisma.sellerPrepPlanItem.update({
       where: { id: itemId },
       data: updateData,
+    });
+  }
+
+  /**
+   * NEW: Persistence for Agent Interviews
+   * Limits to 3 agents per plan
+   */
+  static async upsertAgentInterview(
+    userId: string,
+    planId: string,
+    interviewData: {
+      id?: string;
+      agentName: string;
+      notes?: any;
+      totalScore?: number;
+    }
+  ) {
+    // Verify plan ownership
+    const plan = await prisma.sellerPrepPlan.findFirst({
+      where: { id: planId, userId }
+    });
+    if (!plan) throw new Error('Plan not found or unauthorized');
+
+    // Enforce max 3 agents constraint
+    if (!interviewData.id) {
+      const count = await prisma.agentInterview.count({ where: { planId } });
+      if (count >= 3) throw new Error('Maximum of 3 agent comparisons allowed');
+    }
+
+    return prisma.agentInterview.upsert({
+      where: { id: interviewData.id || 'placeholder-id' },
+      create: {
+        planId,
+        agentName: interviewData.agentName,
+        notes: interviewData.notes || {},
+        totalScore: interviewData.totalScore || 0,
+      },
+      update: {
+        agentName: interviewData.agentName,
+        notes: interviewData.notes,
+        totalScore: interviewData.totalScore,
+      },
+    });
+  }
+
+  /**
+   * NEW: Remove an agent from the comparison matrix
+   */
+  static async deleteAgentInterview(userId: string, interviewId: string) {
+    const interview = await prisma.agentInterview.findFirst({
+      where: { 
+        id: interviewId,
+        plan: { userId } 
+      }
+    });
+
+    if (!interview) throw new Error('Interview record not found');
+
+    return prisma.agentInterview.delete({
+      where: { id: interviewId }
     });
   }
 
@@ -180,7 +240,7 @@ export class SellerPrepLeadService {
   static async createLead(input: {
     userId: string;
     propertyId: string;
-    leadType: string;
+    leadType: string; // Supports 'AGENT' for interview guide routing
     context: string;
     fullName?: string;
     email?: string;
@@ -201,7 +261,6 @@ export class SellerPrepLeadService {
     });
   }
 
-  // Optional: Add method to retrieve leads for admin dashboard
   static async getLeadsByProperty(propertyId: string) {
     return prisma.sellerPrepLead.findMany({
       where: { propertyId },

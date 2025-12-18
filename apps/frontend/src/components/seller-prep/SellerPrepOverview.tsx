@@ -1,4 +1,4 @@
-// apps/frontend/src/components/seller-prep/SellerPrepOverview.tsx (REDESIGNED)
+// apps/frontend/src/components/seller-prep/SellerPrepOverview.tsx
 "use client";
 
 import { useState } from "react";
@@ -66,7 +66,7 @@ interface SellerPrepOverviewProps {
     completionPercent: number;
     preferences?: any;
     personalizedSummary?: string;
-    // ADD THESE TWO FIELDS:
+    interviews?: any[]; // Re-added interviews from the backend
     budget?: {
       totalBudget: number;
       spentAmount: number;
@@ -111,6 +111,9 @@ export default function SellerPrepOverview({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showLeadModal, setShowLeadModal] = useState(false);
+  
+  // Persistence state for agent interviews (max 3)
+  const [interviews, setInterviews] = useState(overview.interviews || []);
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ itemId, status }: { itemId: string; status: string }) => {
@@ -154,18 +157,19 @@ export default function SellerPrepOverview({
       {/* LEFT COLUMN: Main Content Area (Tabs) */}
       <div className="lg:col-span-8 space-y-6">
         <Tabs defaultValue="checklist" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-6">
-            <TabsTrigger value="checklist" className="flex items-center gap-2">
-              <Hammer className="h-4 w-4" /> Action Plan
+          {/* Layout Fix: grid-cols-4 ensures all tabs stay on a single row */}
+          <TabsList className="grid w-full grid-cols-4 mb-6">
+            <TabsTrigger value="checklist" className="flex items-center gap-2 text-xs sm:text-sm">
+              <Hammer className="h-4 w-4" /> <span className="hidden md:inline">Action Plan</span>
             </TabsTrigger>
-            <TabsTrigger value="financials" className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4" /> Financials
+            <TabsTrigger value="financials" className="flex items-center gap-2 text-xs sm:text-sm">
+              <DollarSign className="h-4 w-4" /> <span className="hidden md:inline">Financials</span>
             </TabsTrigger>
-            <TabsTrigger value="market" className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" /> Market Insights
+            <TabsTrigger value="market" className="flex items-center gap-2 text-xs sm:text-sm">
+              <TrendingUp className="h-4 w-4" /> <span className="hidden md:inline">Market</span>
             </TabsTrigger>
-            <TabsTrigger value="agents" className="flex items-center gap-2">
-              <Users className="h-4 w-4" /> Agent Guide
+            <TabsTrigger value="agents" className="flex items-center gap-2 text-xs sm:text-sm">
+              <Users className="h-4 w-4" /> <span className="hidden md:inline">Agent Guide</span>
             </TabsTrigger>
           </TabsList>
 
@@ -245,9 +249,14 @@ export default function SellerPrepOverview({
               </CardContent>
             </Card>
           </TabsContent>
-          {/* TAB 4: Agent Interview Guide */}
+
+          {/* TAB 4: Agent Interview Guide (Interactive) */}
           <TabsContent value="agents" className="outline-none">
-            <AgentInterviewGuide />
+            <AgentInterviewGuide 
+              propertyId={propertyId} 
+              interviews={interviews}
+              onInterviewsChange={setInterviews}
+            />
           </TabsContent>
         </Tabs>
       </div>
@@ -261,7 +270,6 @@ export default function SellerPrepOverview({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Completion Widget */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-medium">
                 <span>Progress</span>
@@ -281,7 +289,6 @@ export default function SellerPrepOverview({
               </div>
             )}
 
-            {/* CTA Section */}
             <div className="pt-4 border-t space-y-3">
               <h4 className="text-xs font-bold uppercase text-gray-500 tracking-wider">Expert Assistance</h4>
               <p className="text-xs text-gray-600">Need help with repairs or staging?</p>
@@ -305,6 +312,7 @@ export default function SellerPrepOverview({
     </div>
   );
 }
+
 
 // Sub-components for cleaner main render
 function TaskItem({ item, onUpdate, isUpdating }: any) {
