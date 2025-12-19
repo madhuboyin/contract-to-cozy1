@@ -171,35 +171,28 @@ export class InspectionAnalysisService {
   private async extractTextFromPDF(buffer: Buffer): Promise<string> {
     try {
       console.log('[DEBUG] Buffer size:', buffer.length);
-      console.log('[DEBUG] First 10 bytes:', buffer.slice(0, 10).toString());
       
-      // Verify it's a PDF
-      if (!buffer.toString('utf8', 0, 4).includes('PDF')) {
-        throw new Error('File does not appear to be a valid PDF');
-      }
+      // Direct require to avoid TypeScript issues
+      const pdfParse = require('pdf-parse');
       
-      // Use eval to avoid TypeScript compilation issues
-      const pdfParse = eval('require')('pdf-parse');
+      // Call pdf-parse directly
+      const data = await pdfParse(buffer);
       
-      const options = {
-        max: 0, // Parse all pages
-      };
-      
-      const data = await pdfParse(buffer, options);
-      
+      console.log('[INSPECTION] PDF parsed successfully');
       console.log('[INSPECTION] Pages:', data.numpages);
-      console.log('[INSPECTION] Text length:', data.text?.length || 0);
+      console.log('[INSPECTION] Text length:', data.text.length);
+      console.log('[INSPECTION] First 500 chars:', data.text.substring(0, 500));
       
       if (!data.text || data.text.trim().length < 100) {
-        throw new Error('Could not extract readable text from PDF');
+        throw new Error('Extracted text is too short or empty');
       }
-      
-      console.log('[INSPECTION] Sample text:', data.text.substring(0, 300));
       
       return data.text;
     } catch (error: any) {
-      console.error('[INSPECTION] PDF Error:', error.message);
-      throw new Error(`Failed to parse PDF: ${error.message}`);
+      console.error('[INSPECTION] PDF parsing error:', error);
+      console.error('[INSPECTION] Error message:', error.message);
+      console.error('[INSPECTION] Error stack:', error.stack);
+      throw new Error(`Failed to parse PDF file: ${error.message}`);
     }
   }
 
