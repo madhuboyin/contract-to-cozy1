@@ -168,29 +168,46 @@ export class InspectionAnalysisService {
   /**
    * Extract text from PDF buffer
    */
-// Remove the top import, then update the method:
-
 private async extractTextFromPDF(buffer: Buffer): Promise<string> {
   try {
     console.log('[DEBUG] Attempting to parse buffer of size:', buffer.length);
     
-    // Dynamic import to ensure proper module loading
-    const pdfParse = require('pdf-parse');
-    const parseFunc = typeof pdfParse === 'function' ? pdfParse : pdfParse.default;
+    // Try multiple ways to load pdf-parse
+    const pdfParseModule = require('pdf-parse');
+    
+    console.log('[DEBUG] pdfParse module type:', typeof pdfParseModule);
+    console.log('[DEBUG] pdfParse module keys:', Object.keys(pdfParseModule));
+    
+    // Handle different module export formats
+    let parseFunc;
+    if (typeof pdfParseModule === 'function') {
+      parseFunc = pdfParseModule;
+    } else if (pdfParseModule.default && typeof pdfParseModule.default === 'function') {
+      parseFunc = pdfParseModule.default;
+    } else if (typeof pdfParseModule === 'object') {
+      // Check all properties for a function
+      const funcKey = Object.keys(pdfParseModule).find(key => typeof pdfParseModule[key] === 'function');
+      if (funcKey) {
+        parseFunc = pdfParseModule[funcKey];
+      }
+    }
     
     if (!parseFunc || typeof parseFunc !== 'function') {
-      console.error('[INSPECTION] pdfParse is not a function:', typeof pdfParse);
+      console.error('[INSPECTION] Could not find parse function in module');
       throw new Error('PDF parser not properly loaded');
     }
     
+    console.log('[DEBUG] Using parse function, calling now...');
     const data = await parseFunc(buffer);
     
     console.log('[INSPECTION] PDF parsed successfully');
     console.log('[INSPECTION] Text length:', data.text.length);
+    console.log('[INSPECTION] First 200 chars:', data.text.substring(0, 200));
     
     return data.text;
   } catch (error: any) {
     console.error('[INSPECTION] PDF parsing error:', error);
+    console.error('[INSPECTION] Error message:', error.message);
     throw new Error(`Failed to parse PDF file: ${error.message}`);
   }
 }
