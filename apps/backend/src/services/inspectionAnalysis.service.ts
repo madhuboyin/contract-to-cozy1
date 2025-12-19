@@ -3,7 +3,9 @@
 import { GoogleGenAI } from "@google/genai";
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-const pdfParse = require('pdf-parse');
+//const pdfParse = require('pdf-parse');
+//import * as pdfParseModule from 'pdf-parse';
+//const pdfParse = (pdfParseModule as any).default || pdfParseModule;
 
 interface InspectionIssue {
   title: string;
@@ -166,19 +168,32 @@ export class InspectionAnalysisService {
   /**
    * Extract text from PDF buffer
    */
-  private async extractTextFromPDF(buffer: Buffer): Promise<string> {
-    try {
-      if (!buffer || buffer.length === 0) {
-        throw new Error('PDF buffer is empty');
-      }
-      console.log(`[DEBUG] Attempting to parse buffer of size: ${buffer.length}`);
-      const data = await pdfParse(buffer);
-      return data.text;
-    } catch (error) {
-      console.error('[INSPECTION] PDF parsing error details:', error);
-      throw new Error('Failed to parse PDF file');
+// Remove the top import, then update the method:
+
+private async extractTextFromPDF(buffer: Buffer): Promise<string> {
+  try {
+    console.log('[DEBUG] Attempting to parse buffer of size:', buffer.length);
+    
+    // Dynamic import to ensure proper module loading
+    const pdfParse = require('pdf-parse');
+    const parseFunc = typeof pdfParse === 'function' ? pdfParse : pdfParse.default;
+    
+    if (!parseFunc || typeof parseFunc !== 'function') {
+      console.error('[INSPECTION] pdfParse is not a function:', typeof pdfParse);
+      throw new Error('PDF parser not properly loaded');
     }
+    
+    const data = await parseFunc(buffer);
+    
+    console.log('[INSPECTION] PDF parsed successfully');
+    console.log('[INSPECTION] Text length:', data.text.length);
+    
+    return data.text;
+  } catch (error: any) {
+    console.error('[INSPECTION] PDF parsing error:', error);
+    throw new Error(`Failed to parse PDF file: ${error.message}`);
   }
+}
 
   /**
    * Analyze inspection text with Gemini AI
