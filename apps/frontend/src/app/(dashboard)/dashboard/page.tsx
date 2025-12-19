@@ -197,20 +197,42 @@ export default function DashboardPage() {
     setData(prev => ({ ...prev, isLoading: true }));
     
     try {
+      // FIX: Add cache busting for checklist endpoint
+      console.log('📊 Dashboard: Fetching data...');
+      
       const [bookingsRes, propertiesRes, checklistRes, warrantiesRes, policiesRes] = await Promise.all([
         api.listBookings({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' }),
         api.getProperties(),
-        api.getChecklist(),
+        // FIX: Force fresh checklist data
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/checklist?_=${Date.now()}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          },
+        }).then(r => r.json()).then(data => {
+          console.log('📊 Dashboard: Raw checklist response:', data);
+          // Handle both wrapped and unwrapped responses
+          if (data.success && data.data) {
+            return { success: true, data: data.data };
+          } else if (data.id && data.items) {
+            return { success: true, data: data };
+          }
+          return { success: false, data: null };
+        }),
         api.listWarranties(),
         api.listInsurancePolicies(),
       ]);
-
+  
+      console.log('📊 Dashboard: Checklist result:', checklistRes);
+  
       const bookings = bookingsRes.success ? bookingsRes.data.bookings : [];
       const properties = propertiesRes.success ? propertiesRes.data.properties : [];
       const checklist = checklistRes.success ? checklistRes.data : null;
       const warranties = warrantiesRes.success ? warrantiesRes.data.warranties : [];
       const policies = policiesRes.success ? policiesRes.data.policies : [];
-
+  
+      console.log('📊 Dashboard: Checklist items count:', checklist?.items?.length || 0);
+      console.log('📊 Dashboard: Checklist items:', checklist?.items || []);
+  
       const scoredProperties = properties.map(p => ({
         ...p,
         healthScore: (p as any).healthScore || { 
@@ -224,14 +246,14 @@ export default function DashboardPage() {
           ctaNeeded: false 
         },
       })) as ScoredProperty[];
-
+  
       const urgentActions = consolidateUrgentActions(
         scoredProperties,
         checklist?.items || [],
         warranties,
         policies
       );
-
+  
       setData({
         bookings,
         properties: scoredProperties,
@@ -240,14 +262,13 @@ export default function DashboardPage() {
         isLoading: false,
         error: null,
       });
-
-      // Extract user type from first property (all properties have same user type)
+  
+      // Extract user type from first property
       if (scoredProperties.length > 0) {
         const firstProperty = scoredProperties[0] as any;
         console.log('🔍 First Property:', firstProperty);
         console.log('🔍 Homeowner Profile:', firstProperty.homeownerProfile);
         
-        // Try multiple paths to find userType
         let detectedUserType = null;
         
         if (firstProperty.homeownerProfile?.userType) {
@@ -262,13 +283,13 @@ export default function DashboardPage() {
           setUserType(detectedUserType);
         }
       }
-
+  
       if (scoredProperties.length > 0 && !selectedPropertyId) {
         setSelectedPropertyId(scoredProperties[0].id);
       }
-
+  
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+      console.error('❌ Dashboard: Error fetching data:', error);
       setData(prev => ({
         ...prev,
         isLoading: false,
@@ -276,7 +297,7 @@ export default function DashboardPage() {
       }));
     }
   }, [user, selectedPropertyId, setSelectedPropertyId]);
-
+  
   useEffect(() => {
     if (!userLoading && user) {
       fetchDashboardData();

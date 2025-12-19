@@ -1,15 +1,19 @@
-// apps/frontend/src/app/(dashboard)/dashboard/checklist/page.tsx
+// Fixed apps/frontend/src/app/(dashboard)/dashboard/checklist/page.tsx
+// Key fixes:
+// 1. Parse API response correctly (unwrap {success, data} wrapper)
+// 2. Add proper error handling
+// 3. Add cache busting
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/auth/AuthContext'; // ADD: Import useAuth
+import { useAuth } from '@/lib/auth/AuthContext';
 import {
   Card,
   CardContent,
   CardDescription,
-  // CardFooter, // No longer used by new row component
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -18,25 +22,24 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import {
   ArrowLeft,
-  Check, // Kept for 'Mark as Complete' in mobile menu (fallback)
+  Check,
   Loader2,
   AlertCircle,
   Search,
   X,
-  MoreVertical, // <-- NEW: For dropdown menu
+  MoreVertical,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Checkbox } from '@/components/ui/checkbox'; // <-- This will now be found
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'; // <-- This will now be found
-import { CheckedState } from '@radix-ui/react-checkbox'; // <-- NEW: Import type for 'checked'
+} from '@/components/ui/dropdown-menu';
+import { CheckedState } from '@radix-ui/react-checkbox';
 
 // --- Types ---
-// These types should match your Prisma schema
 type ChecklistItemStatus = 'PENDING' | 'COMPLETED' | 'NOT_NEEDED';
 
 interface ChecklistItemType {
@@ -54,10 +57,6 @@ interface ChecklistType {
 }
 
 // --- Helper Function ---
-/**
- * Formats a service category string (e.g., "HOME_INSPECTION")
- * into a user-friendly title (e.g., "Home Inspection").
- */
 function formatServiceCategory(category: string | null): string {
   if (!category) return '';
   return category
@@ -69,18 +68,16 @@ function formatServiceCategory(category: string | null): string {
 // --- Main Page Component ---
 export default function ChecklistPage() {
   const router = useRouter();
-  const { user } = useAuth(); // Get current user
+  const { user } = useAuth();
   
   const [checklist, setChecklist] = useState<ChecklistType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Redirect EXISTING_OWNER users to maintenance page
-  // This checklist page is for HOME_BUYER segment only
   useEffect(() => {
     if (user && user.segment === 'EXISTING_OWNER') {
       console.log('Redirecting EXISTING_OWNER to maintenance page');
-      // Preserve query parameters during redirect (e.g., propertyId)
       const searchParams = new URLSearchParams(window.location.search);
       const queryString = searchParams.toString();
       const redirectUrl = queryString 
@@ -95,8 +92,13 @@ export default function ChecklistPage() {
       try {
         setLoading(true);
         const token = localStorage.getItem('accessToken');
+        
+        // FIX: Add cache busting to ensure fresh data
+        const cacheBuster = `?_=${Date.now()}`;
+        
+        console.log('📋 Fetching checklist...');
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/checklist`,
+          `${process.env.NEXT_PUBLIC_API_URL}/api/checklist${cacheBuster}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -107,17 +109,41 @@ export default function ChecklistPage() {
         if (!response.ok) {
           throw new Error('Failed to fetch your checklist.');
         }
+        
         const data = await response.json();
-        setChecklist(data);
+        console.log('📋 Checklist API response:', data);
+        
+        // FIX: Handle both wrapped and unwrapped responses
+        // API should return: {id, items: [...]} directly
+        // But let's handle both cases for safety
+        let checklistData;
+        if (data.success && data.data) {
+          // Wrapped response: {success: true, data: {id, items}}
+          checklistData = data.data;
+        } else if (data.id && data.items) {
+          // Direct response: {id, items}
+          checklistData = data;
+        } else {
+          throw new Error('Invalid checklist response format');
+        }
+        
+        console.log('📋 Parsed checklist data:', checklistData);
+        console.log('📋 Items count:', checklistData.items?.length || 0);
+        
+        setChecklist(checklistData);
       } catch (err: any) {
+        console.error('📋 Checklist fetch error:', err);
         setError(err.message);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchChecklist();
-  }, []);
+    // Only fetch if user is loaded and is HOME_BUYER
+    if (user && user.segment === 'HOME_BUYER') {
+      fetchChecklist();
+    }
+  }, [user]);
 
   // Handler to update an item's status
   const handleUpdateStatus = async (
@@ -126,11 +152,12 @@ export default function ChecklistPage() {
   ) => {
     if (!checklist) return;
 
-    // Find the item we're about to update
     const originalItem = checklist.items.find((item) => item.id === itemId);
     if (!originalItem || originalItem.status === status) return;
 
-    // Optimistic update: Update the UI immediately
+    console.log('✏️ Updating item:', itemId, 'to status:', status);
+
+    // Optimistic update
     const optimisticItems = checklist.items.map((item) =>
       item.id === itemId ? { ...item, status: status, isUpdating: true } : item
     );
@@ -154,17 +181,36 @@ export default function ChecklistPage() {
         throw new Error('Failed to update item.');
       }
 
-      const updatedItem = await response.json();
+      const responseData = await response.json();
+      console.log('✏️ Update response:', responseData);
 
-      // Final update: Replace the item with the confirmed one from the server
+      // FIX: Handle wrapped response from API
+      // Backend returns: {success: true, data: updatedItem}
+      let updatedItem;
+      if (responseData.success && responseData.data) {
+        updatedItem = responseData.data;
+      } else if (responseData.id) {
+        // Unwrapped item
+        updatedItem = responseData;
+      } else {
+        throw new Error('Invalid update response format');
+      }
+
+      console.log('✏️ Updated item:', updatedItem);
+
+      // Final update with server response
       setChecklist((prev) => ({
         ...prev!,
         items: prev!.items.map((item) =>
           item.id === itemId ? updatedItem : item
         ),
       }));
+
+      console.log('✅ Item updated successfully');
     } catch (err: any) {
+      console.error('❌ Update failed:', err);
       setError('Failed to update. Please try again.');
+      
       // Rollback on error
       setChecklist((prev) => ({
         ...prev!,
@@ -222,6 +268,8 @@ export default function ChecklistPage() {
   const totalItems = checklist.items.length;
   const progressPercent = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
 
+  console.log('📊 Progress:', { completedItems, totalItems, progressPercent });
+
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <Button asChild variant="link" className="pl-0 text-blue-600">
@@ -251,28 +299,25 @@ export default function ChecklistPage() {
         </CardContent>
       </Card>
 
-      {/* --- START: Checklist Items Redesign --- */}
-      {/* Replaced <div className="space-y-4"> with a Card-backed list */}
+      {/* Checklist Items */}
       <Card>
         <CardContent className="p-0">
           <ul className="divide-y divide-gray-200">
             {checklist.items.map((item) => (
               <ChecklistItemRow
                 key={item.id}
-                item={item}
+                item={item as any}
                 onUpdateStatus={handleUpdateStatus}
               />
             ))}
           </ul>
         </CardContent>
       </Card>
-      {/* --- END: Checklist Items Redesign --- */}
     </div>
   );
 }
 
-// --- START: Replaced ChecklistItemCard with ChecklistItemRow ---
-
+// --- Checklist Item Row Component ---
 interface ChecklistItemRowProps {
   item: ChecklistItemType & { isUpdating?: boolean };
   onUpdateStatus: (itemId: string, status: ChecklistItemStatus) => void;
@@ -294,107 +339,64 @@ function ChecklistItemRow({ item, onUpdateStatus }: ChecklistItemRowProps) {
         <Checkbox
           id={item.id}
           checked={isCompleted}
-          // --- FIX: Explicitly type 'checked' parameter ---
           onCheckedChange={(checked: CheckedState) =>
             onUpdateStatus(item.id, checked ? 'COMPLETED' : 'PENDING')
           }
-          disabled={item.isUpdating}
-          className="mt-1" // Aligns checkbox with the first line of text
+          className="mt-1"
         />
-        <div
-          className={cn(
-            'grid gap-0.5 flex-1 min-w-0', // min-w-0 ensures truncation works
-            isCompleted && 'text-muted-foreground'
-          )}
+        <label
+          htmlFor={item.id}
+          className="flex-1 min-w-0 cursor-pointer"
         >
-          <label
-            htmlFor={item.id}
+          <p
             className={cn(
-              'font-medium cursor-pointer truncate',
-              isCompleted && 'line-through'
+              'font-medium text-sm',
+              isCompleted && 'line-through text-gray-500'
             )}
           >
             {item.title}
-          </label>
+          </p>
           {item.description && (
-            <p
-              className={cn(
-                'text-sm text-muted-foreground',
-                isCompleted && 'line-through'
-              )}
-            >
-              {item.description}
-            </p>
+            <p className="text-xs text-gray-500 mt-1">{item.description}</p>
           )}
-        </div>
+          {item.serviceCategory && (
+            <Badge variant="outline" className="mt-2">
+              {formatServiceCategory(item.serviceCategory)}
+            </Badge>
+          )}
+        </label>
       </div>
 
-      {/* Right side: Actions */}
-      <div className="flex items-center space-x-2 ml-4 flex-shrink-0">
-        {isPending ? (
-          <>
-            {/* Show "Find Provider" button if a category exists */}
-            {item.serviceCategory && (
-              <Button
-                asChild
-                variant="outline"
-                size="sm"
-                className="hidden sm:flex" // Hide on mobile, show on sm screens up
-              >
-                <Link
-                  href={`/dashboard/providers?service=${item.serviceCategory}`}
-                >
-                  <Search className="mr-2 h-4 w-4" />
-                  Find Provider
-                </Link>
-              </Button>
-            )}
-            {/* "..." menu for secondary actions */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  disabled={item.isUpdating}
-                  className="h-8 w-8"
-                >
-                  <MoreVertical className="h-4 w-4" />
-                  <span className="sr-only">More actions</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                {/* Show "Find Provider" in menu on mobile screens */}
-                {item.serviceCategory && (
-                  <DropdownMenuItem asChild className="sm:hidden">
-                    <Link
-                      href={`/dashboard/providers?service=${item.serviceCategory}`}
-                    >
-                      <Search className="mr-2 h-4 w-4" />
-                      Find Provider
-                    </Link>
-                  </DropdownMenuItem>
-                )}
-                {/* "I don't need this" action */}
-                <DropdownMenuItem
-                  onSelect={() => onUpdateStatus(item.id, 'NOT_NEEDED')}
-                >
-                  <X className="mr-2 h-4 w-4" />
-                  I don't need this
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
-        ) : (
-          // Show status badge if not pending
-          <Badge
-            variant={isCompleted ? 'success' : 'outline'}
-            className="w-fit"
-          >
-            {isCompleted ? 'Completed' : 'Not Needed'}
-          </Badge>
-        )}
-      </div>
+      {/* Right side: Actions dropdown */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="sm">
+            <MoreVertical className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {isPending && (
+            <DropdownMenuItem onClick={() => onUpdateStatus(item.id, 'COMPLETED')}>
+              <Check className="mr-2 h-4 w-4" />
+              Mark Complete
+            </DropdownMenuItem>
+          )}
+          {isCompleted && (
+            <DropdownMenuItem onClick={() => onUpdateStatus(item.id, 'PENDING')}>
+              <X className="mr-2 h-4 w-4" />
+              Mark Pending
+            </DropdownMenuItem>
+          )}
+          {item.serviceCategory && (
+            <DropdownMenuItem asChild>
+              <Link href={`/dashboard/providers?category=${item.serviceCategory}`}>
+                <Search className="mr-2 h-4 w-4" />
+                Find Provider
+              </Link>
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </li>
   );
 }
-// --- END: Replaced ChecklistItemCard with ChecklistItemRow ---

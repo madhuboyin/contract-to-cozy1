@@ -7,30 +7,57 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-// FIX: Import the unified type from the centralized file
 import { DashboardChecklistItem } from '../types'; 
 
 interface HomeBuyerChecklistCardProps {
-  // FIX: Use the unified type
   items: DashboardChecklistItem[]; 
   className?: string;
 }
 
 export const HomeBuyerChecklistCard = ({ items, className }: HomeBuyerChecklistCardProps) => {
+  // DEBUG: Log what we received to understand the filtering issue
+  console.log('🏠 HomeBuyerChecklistCard - Received items:', items?.length || 0);
+  
+  if (!items || items.length === 0) {
+    console.warn('⚠️ HomeBuyerChecklistCard received NO ITEMS - This is the bug!');
+    console.log('🏠 Items value:', items);
+  } else {
+    console.log('🏠 Items breakdown:', items.map(i => ({
+      id: i.id,
+      title: i.title,
+      isRecurring: i.isRecurring,
+      status: i.status,
+      propertyId: i.propertyId
+    })));
+  }
+  
   // Filter only items relevant to the home buyer (non-recurring maintenance/renewal items)
-  const buyerItems = items.filter(item => !item.isRecurring);
-    
+  const buyerItems = (items || []).filter(item => !item.isRecurring);
+  
+  console.log('🏠 After isRecurring filter - buyerItems:', buyerItems.length);
+  console.log('🏠 Filtered items:', buyerItems.map(i => ({ title: i.title, status: i.status })));
+  
+  // Calculate counts
   const completedCount = buyerItems.filter(i => i.status === 'COMPLETED').length;
   const totalCount = buyerItems.length;
+  const pendingCount = totalCount - completedCount;
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
   
-  const cardTitle = totalCount > 0 && completedCount === totalCount 
+  console.log('🏠 Stats:', { totalCount, completedCount, pendingCount, progress: Math.round(progress) + '%' });
+  
+  // Determine card state
+  const allComplete = totalCount > 0 && completedCount === totalCount;
+  const isEmpty = totalCount === 0;
+  
+  const cardTitle = allComplete
     ? "Checklist Completed 🎉" 
     : "Home Buying Checklist";
 
-  const cardDescription = totalCount > 0 && completedCount === totalCount
+  const cardDescription = allComplete
     ? "Congratulations! You're ready to get cozy."
-    : `You have ${totalCount - completedCount} critical steps remaining.`;
+    : isEmpty
+      ? "Loading your checklist..."
+      : `You have ${pendingCount} critical step${pendingCount !== 1 ? 's' : ''} remaining.`;
 
   return (
     <Card className={cn("h-full flex flex-col shadow-lg", className)}>
@@ -89,7 +116,7 @@ export const HomeBuyerChecklistCard = ({ items, className }: HomeBuyerChecklistC
               )}
             </div>
           ))}
-          {buyerItems.length === 0 && (
+          {isEmpty && (
             <div className="text-center py-6 text-muted-foreground">
               <p className="font-body text-sm">Your checklist is empty. Get started in the full checklist view!</p>
             </div>
