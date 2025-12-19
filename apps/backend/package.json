@@ -17,7 +17,6 @@
     "@prisma/client": "^5.22.0",
     "bcrypt": "^5.1.1",
     "bullmq": "^5.65.0",
-    "canvas": "^3.2.0",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.18.2",
@@ -26,7 +25,7 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
-    "pdfjs-dist": "^5.4.449",
+    "pdf-lib": "^1.17.1",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "zod": "^4.1.12"

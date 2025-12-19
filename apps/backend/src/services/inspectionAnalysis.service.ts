@@ -172,30 +172,38 @@ export class InspectionAnalysisService {
     try {
       console.log('[DEBUG] Attempting to parse buffer of size:', buffer.length);
       
-      // Use pdfjs-dist which works better with TypeScript
-      const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
+      const { PDFDocument } = require('pdf-lib');
       
       // Load the PDF
-      const loadingTask = pdfjsLib.getDocument({
-        data: new Uint8Array(buffer)
-      });
-      
-      const pdf = await loadingTask.promise;
-      console.log('[DEBUG] PDF loaded, pages:', pdf.numPages);
+      const pdfDoc = await PDFDocument.load(buffer);
+      console.log('[DEBUG] PDF loaded, pages:', pdfDoc.getPageCount());
       
       let fullText = '';
+      const pages = pdfDoc.getPages();
       
-      // Extract text from each page
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-        const page = await pdf.getPage(pageNum);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items.map((item: any) => item.str).join(' ');
-        fullText += pageText + '\n';
+      // pdf-lib doesn't extract text directly, so we need to use a workaround
+      // Convert buffer to text using a simple approach
+      const text = buffer.toString('utf-8');
+      
+      // Extract readable text (basic approach)
+      // This extracts text between BT (begin text) and ET (end text) operators
+      const textMatches = text.match(/\(([^)]+)\)/g);
+      if (textMatches) {
+        fullText = textMatches
+          .map(match => match.replace(/[()]/g, ''))
+          .join(' ')
+          .replace(/\\[0-9]{3}/g, ' ') // Remove octal escapes
+          .replace(/\s+/g, ' ')
+          .trim();
       }
       
       console.log('[INSPECTION] PDF parsed successfully');
       console.log('[INSPECTION] Text length:', fullText.length);
-      console.log('[INSPECTION] First 200 chars:', fullText.substring(0, 200));
+      console.log('[INSPECTION] First 500 chars:', fullText.substring(0, 500));
+      
+      if (fullText.length < 100) {
+        throw new Error('Extracted text is too short - PDF may be image-based or encrypted');
+      }
       
       return fullText;
     } catch (error: any) {
