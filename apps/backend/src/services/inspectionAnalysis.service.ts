@@ -170,46 +170,36 @@ export class InspectionAnalysisService {
    */
   private async extractTextFromPDF(buffer: Buffer): Promise<string> {
     try {
-      console.log('[DEBUG] Attempting to parse buffer of size:', buffer.length);
+      console.log('[DEBUG] Buffer size:', buffer.length);
+      console.log('[DEBUG] First 10 bytes:', buffer.slice(0, 10).toString());
       
-      const { PDFDocument } = require('pdf-lib');
-      
-      // Load the PDF
-      const pdfDoc = await PDFDocument.load(buffer);
-      console.log('[DEBUG] PDF loaded, pages:', pdfDoc.getPageCount());
-      
-      let fullText = '';
-      const pages = pdfDoc.getPages();
-      
-      // pdf-lib doesn't extract text directly, so we need to use a workaround
-      // Convert buffer to text using a simple approach
-      const text = buffer.toString('utf-8');
-      
-      // Extract readable text (basic approach)
-      // This extracts text between BT (begin text) and ET (end text) operators
-      const textMatches = text.match(/\(([^)]+)\)/g);
-      if (textMatches) {
-        fullText = textMatches
-          .map(match => match.replace(/[()]/g, ''))
-          .join(' ')
-          .replace(/\\[0-9]{3}/g, ' ') // Remove octal escapes
-          .replace(/\s+/g, ' ')
-          .trim();
+      // Verify it's a PDF
+      if (!buffer.toString('utf8', 0, 4).includes('PDF')) {
+        throw new Error('File does not appear to be a valid PDF');
       }
       
-      console.log('[INSPECTION] PDF parsed successfully');
-      console.log('[INSPECTION] Text length:', fullText.length);
-      console.log('[INSPECTION] First 500 chars:', fullText.substring(0, 500));
+      // Use eval to avoid TypeScript compilation issues
+      const pdfParse = eval('require')('pdf-parse');
       
-      if (fullText.length < 100) {
-        throw new Error('Extracted text is too short - PDF may be image-based or encrypted');
+      const options = {
+        max: 0, // Parse all pages
+      };
+      
+      const data = await pdfParse(buffer, options);
+      
+      console.log('[INSPECTION] Pages:', data.numpages);
+      console.log('[INSPECTION] Text length:', data.text?.length || 0);
+      
+      if (!data.text || data.text.trim().length < 100) {
+        throw new Error('Could not extract readable text from PDF');
       }
       
-      return fullText;
+      console.log('[INSPECTION] Sample text:', data.text.substring(0, 300));
+      
+      return data.text;
     } catch (error: any) {
-      console.error('[INSPECTION] PDF parsing error:', error);
-      console.error('[INSPECTION] Error message:', error.message);
-      throw new Error(`Failed to parse PDF file: ${error.message}`);
+      console.error('[INSPECTION] PDF Error:', error.message);
+      throw new Error(`Failed to parse PDF: ${error.message}`);
     }
   }
 
