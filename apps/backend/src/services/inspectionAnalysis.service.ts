@@ -168,49 +168,42 @@ export class InspectionAnalysisService {
   /**
    * Extract text from PDF buffer
    */
-private async extractTextFromPDF(buffer: Buffer): Promise<string> {
-  try {
-    console.log('[DEBUG] Attempting to parse buffer of size:', buffer.length);
-    
-    // Try multiple ways to load pdf-parse
-    const pdfParseModule = require('pdf-parse');
-    
-    console.log('[DEBUG] pdfParse module type:', typeof pdfParseModule);
-    console.log('[DEBUG] pdfParse module keys:', Object.keys(pdfParseModule));
-    
-    // Handle different module export formats
-    let parseFunc;
-    if (typeof pdfParseModule === 'function') {
-      parseFunc = pdfParseModule;
-    } else if (pdfParseModule.default && typeof pdfParseModule.default === 'function') {
-      parseFunc = pdfParseModule.default;
-    } else if (typeof pdfParseModule === 'object') {
-      // Check all properties for a function
-      const funcKey = Object.keys(pdfParseModule).find(key => typeof pdfParseModule[key] === 'function');
-      if (funcKey) {
-        parseFunc = pdfParseModule[funcKey];
+  private async extractTextFromPDF(buffer: Buffer): Promise<string> {
+    try {
+      console.log('[DEBUG] Attempting to parse buffer of size:', buffer.length);
+      
+      // Use pdfjs-dist which works better with TypeScript
+      const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
+      
+      // Load the PDF
+      const loadingTask = pdfjsLib.getDocument({
+        data: new Uint8Array(buffer)
+      });
+      
+      const pdf = await loadingTask.promise;
+      console.log('[DEBUG] PDF loaded, pages:', pdf.numPages);
+      
+      let fullText = '';
+      
+      // Extract text from each page
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map((item: any) => item.str).join(' ');
+        fullText += pageText + '\n';
       }
+      
+      console.log('[INSPECTION] PDF parsed successfully');
+      console.log('[INSPECTION] Text length:', fullText.length);
+      console.log('[INSPECTION] First 200 chars:', fullText.substring(0, 200));
+      
+      return fullText;
+    } catch (error: any) {
+      console.error('[INSPECTION] PDF parsing error:', error);
+      console.error('[INSPECTION] Error message:', error.message);
+      throw new Error(`Failed to parse PDF file: ${error.message}`);
     }
-    
-    if (!parseFunc || typeof parseFunc !== 'function') {
-      console.error('[INSPECTION] Could not find parse function in module');
-      throw new Error('PDF parser not properly loaded');
-    }
-    
-    console.log('[DEBUG] Using parse function, calling now...');
-    const data = await parseFunc(buffer);
-    
-    console.log('[INSPECTION] PDF parsed successfully');
-    console.log('[INSPECTION] Text length:', data.text.length);
-    console.log('[INSPECTION] First 200 chars:', data.text.substring(0, 200));
-    
-    return data.text;
-  } catch (error: any) {
-    console.error('[INSPECTION] PDF parsing error:', error);
-    console.error('[INSPECTION] Error message:', error.message);
-    throw new Error(`Failed to parse PDF file: ${error.message}`);
   }
-}
 
   /**
    * Analyze inspection text with Gemini AI
