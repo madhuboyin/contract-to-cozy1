@@ -1,14 +1,14 @@
 // apps/backend/src/localUpdates/localUpdates.routes.ts
 
 import { Router } from "express";
-import { getLocalUpdates, dismissUpdate } from "../localUpdates/localUpdates.controller";
+import { getLocalUpdates, dismissUpdate } from "./localUpdates.controller";
 import { authenticate } from "../middleware/auth.middleware";
 import { propertyAuthMiddleware } from "../middleware/propertyAuth.middleware";
 
 const router = Router();
 
 /**
- * GET /api/local-updates
+ * GET /api/local-updates/:propertyId
  */
 router.get(
   '/:propertyId',
