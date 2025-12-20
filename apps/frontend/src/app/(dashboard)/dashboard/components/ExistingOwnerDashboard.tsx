@@ -129,21 +129,20 @@ export const ExistingOwnerDashboard = ({
       {/* [NEW ROW 1: MAINTENANCE NUDGE CARD] Inserted here for high visibility after scores */}
       {renderNudgeCard}
 
-      {/* NEW ROW 2: Upcoming Bookings Card (Full width for prominence) */}
-      {/* NOTE: This component remains here but will now be rendered below the Nudge Card */}
-      <div className="w-full">
+      {/* ROW 2: Activity Cards - 3 Column Grid (Angi Style) */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {/* 1. Upcoming Bookings Card */}
         <UpcomingBookingsCard propertyId={selectedPropertyId} />
-      </div>
-
-      {/* ROW 3: Recurring Maintenance and Upcoming Renewals */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+        
+        {/* 2. Recurring Maintenance Card */}
         <RecurringMaintenanceCard 
           maintenance={upcomingMaintenance as any}
           isPropertySelected={isPropertySelected}
           selectedPropertyId={selectedPropertyId}
         />
         
-        <UpcomingRenewalsCard propertyId={selectedPropertyId} /> 
+        {/* 3. Upcoming Renewals Card */}
+        <UpcomingRenewalsCard propertyId={selectedPropertyId} />
       </div>
       
       {/* ROW 4: Favorite Providers Card (Spans full width) */}

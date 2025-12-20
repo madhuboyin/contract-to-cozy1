@@ -28,11 +28,12 @@ export const HomeBuyerDashboard = ({
 
   // FIX: Determine the single property ID to pass to the cards
   // Home Buyer dashboard defaults to the first available property if one exists.
-  const primaryPropertyId = properties.length > 0 ? properties[0].id : undefined;
+  // FIX: Add safety check for properties array
+  const primaryPropertyId = (properties && properties.length > 0) ? properties[0].id : undefined;
 
   // 1. Filter the raw checklistItems down to the set intended for the Home Buyer Card
-  // Assuming the Home Buyer card displays all checklist items (since they are non-recurring/initial)
-  const homeBuyerItems = checklistItems.filter(item => 
+  // FIX: Add safety check for checklistItems to prevent blank screen
+  const homeBuyerItems = (checklistItems || []).filter(item => 
     !item.isRecurring // Filter out any recurring items that may have been created
   ).sort((a, b) => {
     // Basic sort to keep presentation consistent (e.g., by sort order or creation date)

@@ -17,10 +17,6 @@ import { PropertyHealthScoreCard } from './components/PropertyHealthScoreCard';
 import { PropertyRiskScoreCard } from './components/PropertyRiskScoreCard'; 
 import { FinancialEfficiencyScoreCard } from './components/FinancialEfficiencyScoreCard'; 
 import { MyPropertiesCard } from './components/MyPropertiesCard'; 
-// Activity Cards
-import { UpcomingBookingsCard } from './components/UpcomingBookingsCard';
-import { UpcomingRenewalsCard } from './components/UpcomingRenewalsCard';
-import { RecurringMaintenanceCard } from './components/RecurringMaintenanceCard'; 
 // NEW IMPORTS FOR PROPERTY SELECTION
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from 'next/link';
@@ -39,7 +35,6 @@ import { TrendingUp } from 'lucide-react';
 import { Camera } from 'lucide-react';
 import { Scale } from 'lucide-react';
 import { Truck } from 'lucide-react';
-import { Activity } from 'lucide-react';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -695,40 +690,6 @@ export default function DashboardPage() {
         
       </div>
       
-      {/* ========================================= */}
-      {/* ACTIVITY CARDS SECTION - 3 COLUMN GRID */}
-      {/* ========================================= */}
-      <section className="mb-8 mt-8">
-        {/* Section Header */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-blue-100 rounded-lg">
-            <Activity className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">Recent Activity</h2>
-            <p className="text-sm text-gray-500">Track your upcoming tasks and scheduled services</p>
-          </div>
-        </div>
-
-        {/* 3-Column Responsive Grid for Activity Cards */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {/* 1. Upcoming Bookings Card */}
-          <UpcomingBookingsCard propertyId={selectedPropertyId} />
-          
-          {/* 2. Recurring Maintenance Card */}
-          <RecurringMaintenanceCard 
-            maintenance={selectedPropertyId ? checklistItems.filter(item => item.propertyId === selectedPropertyId) : []}
-            isPropertySelected={!!selectedPropertyId}
-            selectedPropertyId={selectedPropertyId}
-          />
-          
-          {/* 3. Upcoming Renewals Card */}
-          <UpcomingRenewalsCard propertyId={selectedPropertyId} />
-        </div>
-      </section>
-      {/* ========================================= */}
-      {/* END ACTIVITY CARDS SECTION */}
-      {/* ========================================= */}
 
       
       {/* Filter data by selected property before passing to child components */}
