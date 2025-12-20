@@ -435,242 +435,181 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* AI Cards Grid - Reverted to 4 columns */}
+        {/* AI Cards Grid - Angi Style: Horizontal layout, white cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           
           {/* Emergency Troubleshooter */}
           <Link href={`/dashboard/emergency?propertyId=${selectedPropertyId}`}>
-            <div className="relative bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-300 rounded-xl p-4 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
-              {/* Sparkle indicator */}
-              <div className="absolute top-3 right-3">
-                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+            <div className="flex items-start p-5 bg-white border border-gray-200 rounded-lg hover:border-2 hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+              <div className="flex-shrink-0 mr-4">
+                <AlertTriangle className="h-12 w-12 text-red-600" />
               </div>
-              
-              {/* Icon */}
-              <div className="p-3 bg-red-100 rounded-lg w-fit mb-3 group-hover:scale-110 transition-transform">
-                <AlertTriangle className="h-7 w-7 text-red-600" />
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
+                  Emergency Troubleshooter
+                </h3>
+                <p className="text-sm text-gray-600 truncate">
+                  Get instant AI guidance for home emergencies
+                </p>
               </div>
-              
-              {/* Content */}
-              <h3 className="text-lg font-bold text-red-900 mb-1">
-                Emergency Troubleshooter
-              </h3>
-              <p className="text-red-700 text-sm">
-                AI guidance for home emergencies
-              </p>
             </div>
           </Link>
 
           {/* Document Intelligence */}
           <Link href={`/dashboard/documents?propertyId=${selectedPropertyId}`}>
-            <div className="relative bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-xl p-4 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
-              <div className="absolute top-3 right-3">
-                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+            <div className="flex items-start p-5 bg-white border border-gray-200 rounded-lg hover:border-2 hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+              <div className="flex-shrink-0 mr-4">
+                <FileText className="h-12 w-12 text-blue-600" />
               </div>
-              
-              <div className="p-3 bg-purple-100 rounded-lg w-fit mb-3 group-hover:scale-110 transition-transform">
-                <FileText className="h-7 w-7 text-purple-600" />
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
+                  Document Intelligence Hub
+                </h3>
+                <p className="text-sm text-gray-600 truncate">
+                  AI document search and analysis
+                </p>
               </div>
-              
-              <h3 className="text-lg font-bold text-purple-900 mb-1">
-                Document Vault
-              </h3>
-              <p className="text-purple-700 text-sm">
-                Smart document analysis
-              </p>
-            </div>
-          </Link>
-          
-          {/* Appliance Oracle */}
-          <Link href={`/dashboard/oracle?propertyId=${selectedPropertyId}`}>
-            <div className="relative bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl p-4 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
-              <div className="absolute top-3 right-3">
-                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
-              </div>
-              
-              <div className="p-3 bg-purple-100 rounded-lg w-fit mb-3 group-hover:scale-110 transition-transform">
-                <Zap className="h-7 w-7 text-purple-600" />
-              </div>
-              
-              <h3 className="text-lg font-bold text-purple-900 mb-1">
-                Appliance Oracle
-              </h3>
-              <p className="text-purple-700 text-sm">
-                Predict failures & replacements
-              </p>
             </div>
           </Link>
 
-          {/* Budget Forecaster */}
-          <Link href={`/dashboard/budget?propertyId=${selectedPropertyId}`}>
-            <div className="relative bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-300 rounded-xl p-4 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
-              <div className="absolute top-3 right-3">
-                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+          {/* Weather Impact */}
+          <Link href={`/dashboard/weather?propertyId=${selectedPropertyId}`}>
+            <div className="flex items-start p-5 bg-white border border-gray-200 rounded-lg hover:border-2 hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+              <div className="flex-shrink-0 mr-4">
+                <Cloud className="h-12 w-12 text-cyan-600" />
               </div>
-              
-              <div className="p-3 bg-blue-100 rounded-lg w-fit mb-3 group-hover:scale-110 transition-transform">
-                <DollarSign className="h-7 w-7 text-blue-600" />
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
+                  Weather Impact
+                </h3>
+                <p className="text-sm text-gray-600 truncate">
+                  AI weather protection tips
+                </p>
               </div>
-              
-              <h3 className="text-lg font-bold text-blue-900 mb-1">
-                Budget Forecaster
-              </h3>
-              <p className="text-blue-700 text-sm">
-                12-month maintenance predictions
-              </p>
             </div>
           </Link>
 
-          {/* Climate Risk */}
-          <Link href={`/dashboard/climate?propertyId=${selectedPropertyId}`}>
-            <div className="relative bg-gradient-to-br from-sky-50 to-blue-50 border-2 border-sky-300 rounded-xl p-4 hover:shadow-xl transition-all cursor-pointer group">
-              <div className="absolute top-3 right-3">
-                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+          {/* Home Modifications - EXISTING_OWNER ONLY */}
+          {userType === 'EXISTING_OWNER' && (
+            <Link href={`/dashboard/home-modifications?propertyId=${selectedPropertyId}`}>
+              <div className="flex items-start p-5 bg-white border border-gray-200 rounded-lg hover:border-2 hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+                <div className="flex-shrink-0 mr-4">
+                  <Home className="h-12 w-12 text-indigo-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
+                    Home Modifications
+                  </h3>
+                  <p className="text-sm text-gray-600 truncate">
+                    AI improvement recommendations
+                  </p>
+                </div>
               </div>
-              <div className="p-3 bg-sky-100 rounded-lg w-fit mb-3 group-hover:scale-110 transition-transform">
-                <Cloud className="h-7 w-7 text-sky-600" />
-              </div>
-              <h3 className="text-lg font-bold text-sky-900 mb-1">
-                Climate Risk
-              </h3>
-              <p className="text-sky-700 text-sm">
-                AI climate risk analysis
-              </p>
-            </div>
-          </Link>
-          
-          {/* Home Modifications */}
-          <Link href={`/dashboard/modifications?propertyId=${selectedPropertyId}`}>
-            <div className="relative bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-xl p-4 hover:shadow-xl transition-all">
-              <div className="absolute top-3 right-3">
-                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
-              </div>
-              <div className="p-3 bg-indigo-100 rounded-lg w-fit mb-3">
-                <Home className="h-7 w-7 text-indigo-600" />
-              </div>
-              <h3 className="text-lg font-bold text-indigo-900 mb-1">
-                Home Modifications
-              </h3>
-              <p className="text-indigo-700 text-sm">
-                AI improvement recommendations
-              </p>
-            </div>
-          </Link>
+            </Link>
+          )}
 
           {/* Property Appreciation */}
           <Link href={`/dashboard/appreciation?propertyId=${selectedPropertyId}`}>
-            <div className="relative bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-4 hover:shadow-xl transition-all">
-              <div className="absolute top-3 right-3">
-                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+            <div className="flex items-start p-5 bg-white border border-gray-200 rounded-lg hover:border-2 hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+              <div className="flex-shrink-0 mr-4">
+                <TrendingUp className="h-12 w-12 text-green-600" />
               </div>
-              <div className="p-3 bg-green-100 rounded-lg w-fit mb-3">
-                <TrendingUp className="h-7 w-7 text-green-600" />
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
+                  Property Appreciation
+                </h3>
+                <p className="text-sm text-gray-600 truncate">
+                  Track value and market trends
+                </p>
               </div>
-              <h3 className="text-lg font-bold text-green-900 mb-1">
-                Property Appreciation
-              </h3>
-              <p className="text-green-700 text-sm">
-                Track value & market trends
-              </p>
             </div>
           </Link>
 
           {/* Energy Auditor */}
           <Link href={`/dashboard/energy?propertyId=${selectedPropertyId}`}>
-            <div className="relative bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-xl p-4 hover:shadow-xl transition-all">
-              <div className="absolute top-3 right-3">
-                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+            <div className="flex items-start p-5 bg-white border border-gray-200 rounded-lg hover:border-2 hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+              <div className="flex-shrink-0 mr-4">
+                <Zap className="h-12 w-12 text-yellow-600" />
               </div>
-              <div className="p-3 bg-yellow-100 rounded-lg w-fit mb-3">
-                <Zap className="h-7 w-7 text-yellow-600" />
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
+                  Energy Auditor
+                </h3>
+                <p className="text-sm text-gray-600 truncate">
+                  AI energy-saving recommendations
+                </p>
               </div>
-              <h3 className="text-lg font-bold text-yellow-900 mb-1">
-                Energy Auditor
-              </h3>
-              <p className="text-yellow-700 text-sm">
-                AI energy-saving recommendations
-              </p>
             </div>
           </Link>
 
           {/* Visual Inspector */}
           <Link href={`/dashboard/visual-inspector?propertyId=${selectedPropertyId}`}>
-            <div className="relative bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl p-4 hover:shadow-xl transition-all">
-              <div className="absolute top-3 right-3">
-                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+            <div className="flex items-start p-5 bg-white border border-gray-200 rounded-lg hover:border-2 hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+              <div className="flex-shrink-0 mr-4">
+                <Camera className="h-12 w-12 text-purple-600" />
               </div>
-              <div className="p-3 bg-purple-100 rounded-lg w-fit mb-3">
-                <Camera className="h-7 w-7 text-purple-600" />
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
+                  Visual Inspector
+                </h3>
+                <p className="text-sm text-gray-600 truncate">
+                  AI image analysis and inspection
+                </p>
               </div>
-              <h3 className="text-lg font-bold text-purple-900 mb-1">
-                Visual Inspector
-              </h3>
-              <p className="text-purple-700 text-sm">
-                AI image analysis & inspection
-              </p>
             </div>
           </Link>
- 
+
           {/* Tax Appeal Assistant */}
           <Link href={`/dashboard/tax-appeal?propertyId=${selectedPropertyId}`}>
-            <div className="relative bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl p-4 hover:shadow-xl transition-all">
-              <div className="absolute top-3 right-3">
-                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+            <div className="flex items-start p-5 bg-white border border-gray-200 rounded-lg hover:border-2 hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+              <div className="flex-shrink-0 mr-4">
+                <Scale className="h-12 w-12 text-blue-700" />
               </div>
-              <div className="p-3 bg-blue-100 rounded-lg w-fit mb-3">
-                <Scale className="h-7 w-7 text-blue-600" />
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
+                  Tax Appeal Assistant
+                </h3>
+                <p className="text-sm text-gray-600 truncate">
+                  AI-powered tax appeal analysis
+                </p>
               </div>
-              <h3 className="text-lg font-bold text-blue-900 mb-1">
-                Tax Appeal Assistant
-              </h3>
-              <p className="text-blue-700 text-sm">
-                AI-powered tax appeal analysis
-              </p>
             </div>
           </Link>
 
           {/* Inspection Report Intelligence - HOME_BUYER ONLY */}
           {userType === 'HOME_BUYER' && (
             <Link href={`/dashboard/inspection-report?propertyId=${selectedPropertyId}`}>
-              <div className="relative bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-xl p-4 hover:shadow-xl transition-all">
-                <div className="absolute top-3 right-3">
-                  <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+              <div className="flex items-start p-5 bg-white border border-gray-200 rounded-lg hover:border-2 hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+                <div className="flex-shrink-0 mr-4">
+                  <FileText className="h-12 w-12 text-indigo-600" />
                 </div>
-                <div className="p-3 bg-indigo-100 rounded-lg w-fit mb-3">
-                  <FileText className="h-7 w-7 text-indigo-600" />
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
+                    Inspection Report Intelligence
+                  </h3>
+                  <p className="text-sm text-gray-600 truncate">
+                    AI analysis, costs, and negotiation
+                  </p>
                 </div>
-                <h3 className="text-lg font-bold text-indigo-900 mb-1">
-                  Inspection Report Intelligence
-                </h3>
-                <p className="text-indigo-700 text-sm">
-                  AI analysis, costs & negotiation
-                </p>
               </div>
             </Link>
           )}
-          
+
           {/* Moving Concierge - HOME_BUYER ONLY */}
           {userType === 'HOME_BUYER' && (
             <Link href="/dashboard/moving-concierge">
-              <div className="relative bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-4 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
-                <div className="absolute top-3 right-3">
-                  <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+              <div className="flex items-start p-5 bg-white border border-gray-200 rounded-lg hover:border-2 hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+                <div className="flex-shrink-0 mr-4">
+                  <Truck className="h-12 w-12 text-green-600" />
                 </div>
-                
-                <div className="p-3 bg-green-100 rounded-lg w-fit mb-3 group-hover:scale-110 transition-transform">
-                  <Truck className="h-7 w-7 text-green-600" />
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
+                    Moving Concierge
+                  </h3>
+                  <p className="text-sm text-gray-600 truncate">
+                    AI moving timeline and checklist
+                  </p>
                 </div>
-                
-                <h3 className="text-lg font-bold text-green-900 mb-1">
-                  Moving Concierge
-                </h3>
-                <p className="text-green-700 text-sm mb-2">
-                  AI moving timeline & checklist
-                </p>
-                
-                <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded">
-                  NEW HOME BUYERS
-                </span>
               </div>
             </Link>
           )}
