@@ -119,7 +119,7 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
             <Card className="h-[190px] flex flex-col border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer">
                 <CardContent className="flex-1 p-5 flex flex-col">
                     {/* Header */}
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                             <DollarSign className="h-5 w-5 text-gray-600" />
                             <h3 className="text-base font-semibold text-gray-900">Financial Health</h3>
@@ -130,10 +130,10 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
                     {/* Large Score - Number First */}
                     <div className="mb-2">
                         <div className="flex items-baseline gap-2">
-                            <span className={`text-5xl font-bold leading-none ${color}`}>
+                            <span className={`text-4xl font-bold leading-none ${color}`}>
                                 {score}
                             </span>
-                            <span className="text-2xl text-gray-400 font-normal">/100</span>
+                            <span className="text-xl text-gray-400 font-normal">/100</span>
                         </div>
                         <p className="text-sm text-gray-600 mt-1">{level}</p>
                     </div>
