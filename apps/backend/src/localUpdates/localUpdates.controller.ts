@@ -22,7 +22,10 @@ export async function getLocalUpdates(req: CustomRequest, res: Response) {
     propertyType: property.propertyType ? String(property.propertyType) : undefined,
   });
 
-  res.json({ updates });
+  res.json({
+    success: true,
+    data: { updates }
+  });
 }
 
 export async function dismissUpdate(req: CustomRequest, res: Response) {
