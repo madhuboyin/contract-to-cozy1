@@ -38,9 +38,9 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
     return (
         <Link href={`/dashboard/properties/${property.id}/?tab=maintenance&view=insights`}>
             <Card className="h-[190px] flex flex-col border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer">
-                <CardContent className="flex-1 p-6 flex flex-col">
+                <CardContent className="flex-1 p-5 flex flex-col">
                     {/* Header */}
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                             <Activity className="h-5 w-5 text-gray-600" />
                             <h3 className="text-base font-semibold text-gray-900">Property Health</h3>
@@ -49,9 +49,9 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
                     </div>
 
                     {/* Large Score - Number First */}
-                    <div className="mb-3">
+                    <div className="mb-2">
                         <div className="flex items-baseline gap-2">
-                            <span className={`text-5xl font-bold ${color}`}>
+                            <span className={`text-5xl font-bold leading-none ${color}`}>
                                 {healthScore}
                             </span>
                             <span className="text-2xl text-gray-400 font-normal">/{maxScore}</span>
@@ -61,9 +61,9 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
 
                     {/* Thin Horizontal Progress Bar */}
                     <div className="mt-auto">
-                        <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
-                            <span>Maintenance Actions</span>
-                            <span>{totalRequiredActions} Required</span>
+                        <div className="flex items-center justify-between text-xs text-gray-500 mb-1.5">
+                            <span className="truncate">Maintenance Actions</span>
+                            <span className="ml-2 whitespace-nowrap">{totalRequiredActions} Required</span>
                         </div>
                         <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
                             <div 

@@ -94,7 +94,7 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
     if (!propertyId || summary.status === 'NO_PROPERTY') {
         return (
             <Card className="h-[190px] flex flex-col border-2 border-dashed border-gray-300">
-                <CardContent className="flex-1 p-6 flex flex-col items-center justify-center">
+                <CardContent className="flex-1 p-5 flex flex-col items-center justify-center">
                     <Shield className="h-8 w-8 text-gray-400 mb-2" />
                     <p className="text-sm text-gray-500 text-center mb-3">Select a property</p>
                     <Link href="/dashboard/properties" passHref>
@@ -111,7 +111,7 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
     if (isInitialLoading || summary.status === 'QUEUED') {
         return (
             <Card className="h-[190px] flex flex-col border border-gray-200">
-                <CardContent className="flex-1 p-6 flex flex-col items-center justify-center">
+                <CardContent className="flex-1 p-5 flex flex-col items-center justify-center">
                     <Loader2 className="h-8 w-8 text-blue-500 animate-spin mb-2" />
                     <p className="text-sm text-gray-500 text-center">
                         {summary.status === 'QUEUED' ? 'Calculating...' : 'Loading...'}
@@ -126,7 +126,7 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
     if (summary.status === 'MISSING_DATA') {
         return (
             <Card className="h-[190px] flex flex-col border-2 border-gray-300">
-                <CardContent className="flex-1 p-6 flex flex-col items-center justify-center">
+                <CardContent className="flex-1 p-5 flex flex-col items-center justify-center">
                     <Home className="h-8 w-8 text-gray-400 mb-2" />
                     <p className="text-sm font-semibold text-gray-700 text-center mb-1">More Details Needed</p>
                     <p className="text-xs text-gray-500 text-center mb-3">Complete property info</p>
@@ -144,9 +144,9 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
     return (
         <Link href={reportLink}>
             <Card className="h-[190px] flex flex-col border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer">
-                <CardContent className="flex-1 p-6 flex flex-col">
+                <CardContent className="flex-1 p-5 flex flex-col">
                     {/* Header */}
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                             <Shield className="h-5 w-5 text-gray-600" />
                             <h3 className="text-base font-semibold text-gray-900">Risk Assessment</h3>
@@ -155,9 +155,9 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
                     </div>
 
                     {/* Large Score - Number First */}
-                    <div className="mb-3">
+                    <div className="mb-2">
                         <div className="flex items-baseline gap-2">
-                            <span className={`text-5xl font-bold ${color}`}>
+                            <span className={`text-5xl font-bold leading-none ${color}`}>
                                 {riskScore}
                             </span>
                             <span className="text-2xl text-gray-400 font-normal">/100</span>
@@ -167,9 +167,9 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
 
                     {/* Thin Horizontal Progress Bar */}
                     <div className="mt-auto">
-                        <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
-                            <span>Exposure</span>
-                            <span>{formatCurrency(exposure)}</span>
+                        <div className="flex items-center justify-between text-xs text-gray-500 mb-1.5">
+                            <span className="truncate">Exposure</span>
+                            <span className="ml-2 whitespace-nowrap">{formatCurrency(exposure)}</span>
                         </div>
                         <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
                             <div 
