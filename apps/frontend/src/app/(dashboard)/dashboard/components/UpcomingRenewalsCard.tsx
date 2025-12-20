@@ -18,7 +18,8 @@ interface RenewalItem {
   expiryDate: Date;
   type: 'warranty' | 'insurance';
   status: 'expired' | 'due_30d' | 'active';
-  propertyId: string;
+  propertyId: string | null; // ✅ FIXED: Allow null to match API response
+  daysUntilExpiry: number;
 }
 
 const getStatusBadge = (status: string) => {
@@ -61,22 +62,22 @@ export const UpcomingRenewalsCard: React.FC<UpcomingRenewalsCardProps> = ({ prop
 
     const combined = [
       ...rawWarranties
-        .filter(w => w.propertyId === propertyId && w.propertyId !== null)
+        .filter(w => w.propertyId === propertyId)
         .map(w => ({
           id: w.id,
           title: w.providerName ? `${w.providerName} Warranty` : 'Home Warranty',
           expiryDate: new Date(w.expiryDate),
           type: 'warranty' as const,
-          propertyId: w.propertyId as string
+          propertyId: w.propertyId
         })),
       ...rawPolicies
-        .filter(p => p.propertyId === propertyId && p.propertyId !== null)
+        .filter(p => p.propertyId === propertyId)
         .map(p => ({
           id: p.id,
           title: p.carrierName ? `${p.carrierName} Insurance` : 'Property Insurance',
           expiryDate: new Date(p.expiryDate),
           type: 'insurance' as const,
-          propertyId: p.propertyId as string
+          propertyId: p.propertyId
         }))
     ];
 
