@@ -147,6 +147,8 @@ class APIClient {
   /**
    * Make HTTP request
    */
+// apps/frontend/src/lib/api/client.ts
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
@@ -164,28 +166,20 @@ class APIClient {
       ...(options.headers as Record<string, string>),
     };
     
-    // The Authorization header is ONLY set if a token is found in localStorage
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    
-    // --- DEBUG LOG 1: Log Request Details ---
-    const bodyPreview = typeof body === 'string' ? body.substring(0, 200) : null;
 
     try {
       let response = await fetch(`${this.baseURL}${endpoint}`, {
         ...options,
-        body, // Use the prepared JSON body
+        body,
         headers,
       });
 
-      // --- START: MODIFIED LOGIC (Token Refresh) ---
-
+      // --- TOKEN REFRESH LOGIC ---
       if (response.status === 401 && !endpoint.startsWith('/api/auth/')) {
-        // Token expired or invalid, and it's not an auth endpoint
-        
         if (this.isRefreshing) {
-          // A refresh is already in progress. Add this request to the queue.
           return new Promise((resolve, reject) => {
             const cleanHeaders = { ...headers };
             delete cleanHeaders['Authorization']; 
@@ -194,47 +188,38 @@ class APIClient {
         }
 
         this.isRefreshing = true;
-        
         const refreshResponse = await this.refreshToken();
 
         if (refreshResponse.success) {
-          // Refresh was successful. 
           const newToken = refreshResponse.data.accessToken;
           this.isRefreshing = false;
           this.processFailedQueue(null, newToken);
 
-          // Retry the original request with the new token
           const newHeaders = { ...headers, 'Authorization': `Bearer ${newToken}` };
           response = await fetch(`${this.baseURL}${endpoint}`, {
             ...options,
             body,
             headers: newHeaders,
           });
-
         } else {
-          // Refresh failed. Log user out.
           this.isRefreshing = false;
-          const error = new Error('Session expired. Please log in again.');
+          const error = new APIError('Session expired. Please log in again.', 401);
           this.processFailedQueue(error, null);
-          
           this.removeToken();
           if (typeof window !== 'undefined') {
             window.location.href = '/login';
           }
-          // FIX: Throw error on session expiry instead of returning an error object
-          throw new APIError('Session expired. Please log in again.', '401');
+          throw error;
         }
       }
 
-      // --- END: MODIFIED LOGIC (Token Refresh) ---
-
-
-      // --- START: FIX FOR 204 AND BODY STREAM READ ERROR ---
-      let data;
+      // --- ROBUST BODY HANDLING ---
+      let data: any = null;
       let text = ''; 
       
-      // FIX: Read the body once only if content is expected. This prevents the 'body stream already read' error.
-      if (response.status !== 204 && response.status !== 205 && response.status !== 304) {
+      // Read the body once as text to prevent "body stream already read" errors later
+      const hasContent = ![204, 205, 304].includes(response.status);
+      if (hasContent) {
           text = await response.text();
       }
 
@@ -242,58 +227,38 @@ class APIClient {
         try {
             data = JSON.parse(text);
         } catch (e) {
-            // FIX: Throw error for non-JSON body
-            throw new APIError(`Server returned status ${response.status}. Body was not JSON.`, response.status);
+            // If JSON parsing fails (e.g. server returned HTML 500 page), throw a clear APIError
+            throw new APIError(`Invalid server response format (${response.status})`, response.status);
         }
       }
-      // --- END: FIX FOR 204 AND BODY STREAM READ ERROR ---
-      
 
-      // 3a. Check for generic non-OK response (e.g., 400, 404, 500)
-      if (!response.ok) {
-        // [MODIFICATION START] Make error message extraction robust
-        let rawError = (data && data.error) || (data && data.message) || `HTTP Error: ${response.status}`;
+      // --- ERROR EXTRACTION ---
+      if (!response.ok || (data && data.success === false)) {
+        let rawError = data?.message || data?.error || `Request failed (${response.status})`;
         
-        // If the error property is an object (e.g., from a validation middleware), try to find its message
-        if (typeof rawError === 'object' && rawError !== null && (rawError as any).message) {
-            rawError = (rawError as any).message;
-        } else if (typeof rawError === 'object' && rawError !== null) {
-            // Last resort: JSON stringify the object if it's still an object
-            rawError = JSON.stringify(rawError);
+        // Flatten error objects if they exist
+        if (typeof rawError === 'object' && rawError !== null) {
+            rawError = (rawError as any).message || JSON.stringify(rawError);
         }
         
-        const errorMessage = typeof rawError === 'string' ? rawError : `HTTP Error: ${response.status}`;
+        const errorMessage = typeof rawError === 'string' ? rawError : 'An unexpected error occurred';
         throw new APIError(errorMessage, response.status);
       }
 
-      // 3b. Check for API logic failure (e.g., backend uses HTTP 200 but sends { success: false })
-      if (data && data.success === false) {
-          // [MODIFICATION START] Apply same robust extraction here
-          let rawError = data.message || (data.error && data.error.message) || 'Request failed due to business logic error.';
-          
-          if (typeof rawError === 'object' && rawError !== null && (rawError as any).message) {
-              rawError = (rawError as any).message;
-          } else if (typeof rawError === 'object' && rawError !== null) {
-              rawError = JSON.stringify(rawError);
-          }
-
-          const errorMessage = typeof rawError === 'string' ? rawError : 'Request failed due to business logic error.';
-          throw new APIError(errorMessage, response.status); 
-      }
-      // If status was 204/205 (No Content), return explicit success with empty data
+      // --- SUCCESS HANDLING ---
       if (response.status === 204 || response.status === 205) {
           return { success: true, data: {} as T, message: "No Content" } as APIResponse<T>;
       }
 
-      // If HTTP 2xx and explicit { success: true } or no success field
       return data; 
 
     } catch (error) {
-      console.error('API Request Error (Catch Block):', error);
-      // FIX 4: Re-throw custom errors, otherwise throw generic network error
+      // Critical: Ensure every error path results in a thrown error so the UI catch/finally blocks run
+      console.error('API Request Error:', error);
       if (error instanceof APIError) {
           throw error;
       }
+      // Convert generic network errors (like DNS failure or Timeout) into APIErrors
       throw new APIError('Network error. Please check your connection.', 'NETWORK');
     }
   }

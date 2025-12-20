@@ -1,6 +1,8 @@
 // apps/frontend/src/app/(auth)/login/page.tsx
 'use client';
 
+// Updated with password visibility toggle
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -34,6 +36,7 @@ export default function LoginPage() {
     return null; 
   }
 
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
       ...formData,
@@ -43,15 +46,25 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-  
+    setError(null); // Clear previous errors
+
     try {
-      setLoading(true); // Button greys out here
-      const result = await login({ email: formData.email, password: formData.password });
-  
+      setLoading(true);
+      
+      // The login function returns LoginResponse (object) or null.
+      const result = await login({ 
+        email: formData.email, 
+        password: formData.password 
+      });
+
+      // FIX: Check if result is a truthy value (not null) for SUCCESS.
       if (result) {
+        // SUCCESS: The AuthContext handled saving tokens and setting user state.
+        
+        // Use the returned user role for immediate redirection
         const userRole = result.user.role; 
 
+        // Role-based redirect
         if (userRole === 'PROVIDER') {
           router.push('/providers/dashboard');
         } else if (userRole === 'ADMIN') {
@@ -59,16 +72,16 @@ export default function LoginPage() {
         } else {
           router.push('/dashboard');
         }
-
+        
       } else {
-        setError('Invalid email or password.');
+        // FAILURE: login() returned null.
+        setError('Invalid email or password. Please try again.');
       }
     } catch (err: any) {
-      // The robust APIClient now ensures we hit this block for server crashes
+      // Catch any unexpected network/API client errors
       console.error('Login component caught network error:', err);
-      setError(err.message || 'An unexpected error occurred.');
+      setError('A network or server error occurred during sign in.');
     } finally {
-      // This MUST run to un-grey the button
       setLoading(false);
     }
   };

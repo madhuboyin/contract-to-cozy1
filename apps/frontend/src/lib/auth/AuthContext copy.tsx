@@ -29,11 +29,6 @@ const REFRESH_TOKEN_KEY = 'refreshToken';
 
 const isBrowser = typeof window !== 'undefined';
 
-// Helper to set a cookie manually on the client
-const setCookie = (name: string, value: string, days = 7) => {
-  const expires = new Date(Date.now() + days * 864e5).toUTCString();
-  document.cookie = `${name}=${value}; expires=${expires}; path=/; SameSite=Lax`;
-};
 /**
  * Fetches the current user data using the stored token.
  */
@@ -115,24 +110,44 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const response = await api.login(data);
       
+      console.log('DEBUG: Full API Login Response:', response); // DEBUG 1
+
+      // CRITICAL FIX: Check response.success first for type narrowing.
       if (response.success) {
+        // Type is now narrowed to APISuccess<LoginResponse>, guaranteeing `response.data` exists.
+        
+        // Handle potential server nesting: attempt to pull from response.data.data first, 
+        // otherwise use response.data (which should be the LoginResponse body itself).
         const loginData = (response.data as any).data || response.data; 
+        
+        console.log('DEBUG: Extracted Login Data (Before Destructuring):', loginData); // DEBUG 2
+
+        // Ensure the data structure is complete
         const { accessToken, refreshToken, user } = loginData; 
-  
+
+        if (!accessToken || !user) {
+             console.error("Login successful but missing required fields (tokens/user).");
+             return null; // Safety check
+        }
+        
+        console.log('DEBUG: Login SUCCESS. Setting User State.'); // DEBUG 3
+        
         if (isBrowser) {
           localStorage.setItem(TOKEN_STORAGE_KEY, accessToken);
           localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
           localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-          
-          // ADD THIS: Synchronize the cookie for the middleware
-          setCookie('accessToken', accessToken);
         }
         setUser(user);
-        return { success: true, accessToken, refreshToken, user };
+        
+        // Return the full object structure expected by LoginResponse
+        return { success: true, accessToken, refreshToken, user }; // Ensuring success is returned
       }
+      // If response.success is false, we return null (triggers 'Invalid email' message)
+      console.warn('DEBUG: Login failed due to API response body (success: false).'); // DEBUG 4
+      console.warn('DEBUG: Error Message:', (response as APIError).message);
       return null;
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error('Login failed in Catch Block:', error); // DEBUG 5
       return null;
     }
   }, []);
