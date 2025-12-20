@@ -3,166 +3,139 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Wrench, Check, Clock } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
+import { Wrench, ArrowRight } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-// FIX: Using canonical ChecklistItem
 import { ChecklistItem } from '@/types'; 
+import { format } from 'date-fns';
 
 interface RecurringMaintenanceCardProps {
-  // FIX: Using canonical ChecklistItem array
   maintenance: ChecklistItem[]; 
-  // FIX: Add explicit property selection status flag
   isPropertySelected: boolean;
-  // ADD: Selected property ID for link context
   selectedPropertyId?: string;
 }
 
-// NEW: Define statuses that count as active/upcoming for the dashboard card
-// ADDED 'OVERDUE' to ensure tasks explicitly marked with this status are included
-const ACTIVE_TASK_STATUSES = ['PENDING', 'SCHEDULED', 'IN_PROGRESS', 'NEEDS_REVIEW', 'OVERDUE'];
+const getStatusBadge = (task: ChecklistItem) => {
+  if (!task.nextDueDate) {
+    return { label: 'Pending', className: 'bg-gray-100 text-gray-700 hover:bg-gray-100' };
+  }
 
-// FIX: Use React.FC for proper prop recognition
+  const dueDate = new Date(task.nextDueDate);
+  const now = new Date();
+  const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (daysUntilDue < 0) {
+    return { label: 'Overdue', className: 'bg-red-100 text-red-700 hover:bg-red-100' };
+  } else if (daysUntilDue <= 14) {
+    return { label: 'Due Soon', className: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-100' };
+  } else {
+    return { label: 'Scheduled', className: 'bg-blue-100 text-blue-700 hover:bg-blue-100' };
+  }
+};
+
 export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> = ({ 
   maintenance, 
   isPropertySelected,
   selectedPropertyId 
 }) => {
   
-  // 🔍 DEBUG: Check what the card receives
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('🎴 RecurringMaintenanceCard DEBUG');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('📥 Received maintenance prop:', maintenance);
-  console.log('📊 Count:', maintenance.length);
-  console.log('🏠 isPropertySelected:', isPropertySelected);
-  console.log('🆔 selectedPropertyId:', selectedPropertyId);
-  console.log('📋 Items:', maintenance.map(t => ({ title: t.title, status: t.status, category: t.serviceCategory, nextDueDate: t.nextDueDate })));
-  
-  // The 'maintenance' prop is already filtered by property ID by the parent component.
-  // No additional status filter needed - parent already filtered
-  const allPendingTasks = maintenance
-    .sort((a, b) => {
+  const sortedTasks = React.useMemo(() => {
+    return [...maintenance]
+      .sort((a, b) => {
         const dateA = a.nextDueDate ? new Date(a.nextDueDate).getTime() : Infinity;
         const dateB = b.nextDueDate ? new Date(b.nextDueDate).getTime() : Infinity;
         return dateA - dateB;
-    });
+      });
+  }, [maintenance]);
 
-  console.log('✅ After sorting:', allPendingTasks.length);
-
-  // Limit display items to 3
-  const displayTasks = allPendingTasks.slice(0, 3);
-  const totalItems = allPendingTasks.length;
-  const overflowCount = totalItems - displayTasks.length;
-
-  console.log('🎯 displayTasks length:', displayTasks.length);
-  console.log('🎯 totalItems:', totalItems);
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-
-  const formatDue = (dateStr: string | null) => {
-    if (!dateStr) return 'No date';
-    const date = new Date(dateStr);
-    const now = new Date();
-    
-    // Check if task is overdue
-    if (date < now) {
-        return <span className="font-body text-red-500 font-semibold">OVERDUE</span>;
-    }
-    
-    // Simple formatting for display
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
-  
-  const setupLink = selectedPropertyId 
-    ? `/dashboard/maintenance-setup?propertyId=${selectedPropertyId}` 
-    : "/dashboard/maintenance-setup";
-  const primaryLink = selectedPropertyId 
-    ? `/dashboard/maintenance?propertyId=${selectedPropertyId}` 
-    : "/dashboard/maintenance";
-  const primaryText = totalItems > 3 ? `View All (${totalItems})` : "View Full List";
-
-  // Use the new explicit prop to determine the message
-  const shouldShowSelectPropertyMessage = !isPropertySelected;
-
+  const displayTasks = sortedTasks.slice(0, 3);
+  const totalTasks = sortedTasks.length;
 
   return (
-    <Card className={cn("flex flex-col")}>
-      <CardHeader>
-        <CardTitle className="font-heading text-xl flex items-center gap-2">
-            <Wrench className="w-5 h-5 text-indigo-600" />
-            <span>Upcoming Maintenance</span>
-        </CardTitle>
-        <CardDescription className="font-body text-sm">
-            {totalItems} active tasks. Focus on high priority items for your selected home.
-        </CardDescription>
-      </CardHeader>
-      
-      <CardContent className="flex-grow">
-        {shouldShowSelectPropertyMessage ? (
-             <div className="flex flex-col items-center justify-center h-full p-4 space-y-2">
-                <p className="font-body text-center text-sm text-gray-500 pt-2">Please select a property to view maintenance tasks.</p>
-             </div>
-        ) : displayTasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full p-4 space-y-2">
-            <Check className="w-8 h-8 text-green-500" />
-            <p className="font-heading text-center text-lg font-medium text-gray-700">All caught up!</p>
-            <p className="font-body text-center text-sm text-gray-500">No active maintenance tasks are currently due for this property.</p>
+    <Card className="h-[320px] flex flex-col border-2 border-gray-100 rounded-2xl shadow-sm hover:border-blue-300 hover:shadow-lg hover:-translate-y-0.5 transition-all">
+      <CardContent className="p-5 flex flex-col h-full">
+        {/* Header */}
+        <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
+          <div className="flex items-center gap-2">
+            <Wrench className="h-5 w-5 text-gray-700" />
+            <h3 className="text-lg font-semibold text-gray-900">Upcoming Maintenance</h3>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {displayTasks.map((task, index) => (
-              <React.Fragment key={task.id}>
-                <Link 
-                  href={`/dashboard/maintenance?${selectedPropertyId ? `propertyId=${selectedPropertyId}&` : ''}taskId=${task.id}`} 
-                  className="block"
-                >
-                  <div className="flex items-center justify-between p-2 -m-2 rounded hover:bg-gray-50 transition-colors">
-                    <span className="font-body text-sm truncate pr-2 font-medium">{task.title}</span>
-                    <span className="font-body flex-shrink-0 text-xs whitespace-nowrap">
-                      {formatDue(task.nextDueDate)}
-                    </span>
-                  </div>
-                </Link>
-                {index < displayTasks.length - 1 && <Separator />}
-              </React.Fragment>
-            ))}
-            {overflowCount > 0 && (
-              <p className="font-body text-xs text-gray-500 pt-2">
-                +{overflowCount} more items hidden.
-              </p>
-            )}
+          <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-100">
+            {totalTasks}
+          </Badge>
+        </div>
+
+        {/* Items List */}
+        <div className="flex-1 overflow-hidden">
+          {!isPropertySelected ? (
+            <div className="flex flex-col items-center justify-center h-full">
+              <span className="text-4xl mb-3">🏠</span>
+              <p className="text-sm text-gray-600 mb-4">Select a property</p>
+              <Link href="/dashboard/properties">
+                <Button variant="outline" size="sm" className="gap-2">
+                  View Properties <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          ) : displayTasks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full">
+              <span className="text-4xl mb-3">✅</span>
+              <p className="text-sm text-gray-600 mb-4">All maintenance up to date</p>
+              <Link href={selectedPropertyId ? `/dashboard/maintenance-setup?propertyId=${selectedPropertyId}` : '/dashboard/maintenance-setup'}>
+                <Button variant="outline" size="sm" className="gap-2">
+                  Setup Schedule <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {displayTasks.map((task) => {
+                const badge = getStatusBadge(task);
+                const taskLink = selectedPropertyId 
+                  ? `/dashboard/maintenance?propertyId=${selectedPropertyId}&taskId=${task.id}`
+                  : `/dashboard/maintenance?taskId=${task.id}`;
+                
+                return (
+                  <Link 
+                    key={task.id} 
+                    href={taskLink}
+                    className="block"
+                  >
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 hover:border-blue-300 hover:shadow-sm hover:bg-white transition-all cursor-pointer">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-1.5 truncate">
+                        {task.title}
+                      </h4>
+                      <p className="text-xs text-gray-600 mb-1.5">
+                        {task.nextDueDate 
+                          ? `Due: ${format(new Date(task.nextDueDate), 'MMM dd, yyyy')}`
+                          : 'No due date'}
+                      </p>
+                      <Badge variant="secondary" className={`text-xs font-medium ${badge.className}`}>
+                        {badge.label}
+                      </Badge>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* CTA Button */}
+        {totalTasks > 0 && isPropertySelected && (
+          <div className="mt-auto pt-4">
+            <Link href={selectedPropertyId ? `/dashboard/maintenance?propertyId=${selectedPropertyId}` : '/dashboard/maintenance'}>
+              <Button 
+                variant="ghost" 
+                className="w-full text-sm font-semibold text-blue-600 hover:bg-blue-50 hover:text-blue-700 rounded-md gap-2"
+              >
+                View All {totalTasks} <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
           </div>
         )}
       </CardContent>
-      <CardFooter className="border-t pt-4">
-        {displayTasks.length === 0 ? (
-            // Case 1: List is Empty -> Primary CTA
-             <Link 
-                href={setupLink}
-                className="font-body text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
-             >
-                Set Up Maintenance Plan →
-             </Link>
-        ) : (
-             // Case 2: List has items -> Secondary link on left, Primary CTA on right
-            <div className="flex justify-between w-full items-center">
-                <Link 
-                    href={setupLink} 
-                    className="font-body text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
-                >
-                    Maintenance Setup
-                </Link>
-                <Link 
-                    href={primaryLink}
-                    className="font-body text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
-                >
-                    {primaryText} →
-                </Link>
-            </div>
-        )}
-      </CardFooter>
     </Card>
   );
 };

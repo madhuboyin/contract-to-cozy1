@@ -2,63 +2,41 @@
 'use client';
 
 import * as React from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/client';
 import { Booking } from '@/types';
-import { Separator } from '@/components/ui/separator';
 import { format, isPast } from 'date-fns';
 import Link from 'next/link';
-import { Calendar, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Calendar, ArrowRight } from 'lucide-react';
 
-/**
- * Helper to format time for display (e.g., 9:00 AM)
- */
-const formatTime = (time: string | null) => {
-    if (!time) return 'TBD';
-    try {
-        // Assume time is in HH:mm:ss format
-        const [hours, minutes] = time.split(':');
-        const date = new Date();
-        date.setHours(parseInt(hours, 10), parseInt(minutes, 10));
-        return format(date, 'h:mm a');
-    } catch {
-        return 'TBD';
-    }
-}
-
-/**
- * Helper to get the correct icon color based on booking status
- */
-const getStatusColor = (status: Booking['status']): string => {
-    switch (status) {
-        case 'PENDING':
-            return 'text-yellow-500';
-        case 'CONFIRMED':
-            return 'text-blue-500';
-        case 'IN_PROGRESS':
-            return 'text-green-500';
-        default:
-            return 'text-gray-500';
-    }
-}
+const getStatusBadge = (status: string) => {
+  switch (status.toUpperCase()) {
+    case 'CONFIRMED':
+      return { variant: 'default' as const, className: 'bg-green-100 text-green-700 hover:bg-green-100' };
+    case 'PENDING':
+      return { variant: 'secondary' as const, className: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-100' };
+    case 'CANCELLED':
+      return { variant: 'destructive' as const, className: 'bg-red-100 text-red-700 hover:bg-red-100' };
+    default:
+      return { variant: 'secondary' as const, className: 'bg-gray-100 text-gray-700 hover:bg-gray-100' };
+  }
+};
 
 interface UpcomingBookingsCardProps {
     propertyId?: string;
 }
 
 export const UpcomingBookingsCard: React.FC<UpcomingBookingsCardProps> = ({ propertyId }) => {
-  const { data, isLoading, error } = useQuery({
-    // FIX: Update query key to include propertyId
+  const { data, isLoading } = useQuery({
     queryKey: ['upcoming-bookings', propertyId],
     queryFn: () => api.listBookings({
-        // FIX: Pass propertyId to the API client
         propertyId: propertyId, 
         sortBy: 'scheduledDate',
         sortOrder: 'asc',
     }),
-    // FIX: Only enable query if propertyId is provided
     enabled: !!propertyId, 
   });
 
@@ -70,99 +48,102 @@ export const UpcomingBookingsCard: React.FC<UpcomingBookingsCardProps> = ({ prop
     const nonUpcomingStatuses = ['COMPLETED', 'CANCELLED', 'DRAFT'];
 
     return rawBookings
-      // START FIX: Defensive client-side filtering by propertyId
       .filter(b => b.property?.id === propertyId) 
-      // END FIX
       .filter(b => b.scheduledDate) 
       .filter(b => !isPast(new Date(b.scheduledDate!))) 
       .filter(b => !nonUpcomingStatuses.includes(b.status)) 
       .sort((a, b) => new Date(a.scheduledDate || 0).getTime() - new Date(b.scheduledDate || 0).getTime());
-  }, [rawBookings, isLoading, propertyId]); // Added propertyId to dependency array
+  }, [rawBookings, isLoading, propertyId]);
 
   const displayBookings = upcomingBookings.slice(0, 3);
-  const overflowCount = upcomingBookings.length - displayBookings.length;
-  const showMore = overflowCount > 0;
-  
-  const isAlert = upcomingBookings.some(b => b.status === 'CONFIRMED' || b.status === 'IN_PROGRESS' || b.status === 'PENDING');
+  const totalUpcoming = upcomingBookings.length;
 
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <div className="space-y-1">
-          <CardTitle className="font-heading text-xl flex items-center gap-2"> 
-            <Calendar className="h-5 w-5 text-blue-600" /> 
-            Upcoming Bookings
-          </CardTitle>
-          <CardDescription className="font-body text-sm">
-            Your scheduled services
-          </CardDescription>
+    <Card className="h-[320px] flex flex-col border-2 border-gray-100 rounded-2xl shadow-sm hover:border-blue-300 hover:shadow-lg hover:-translate-y-0.5 transition-all">
+      <CardContent className="p-5 flex flex-col h-full">
+        {/* Header */}
+        <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-gray-700" />
+            <h3 className="text-lg font-semibold text-gray-900">Upcoming Bookings</h3>
+          </div>
+          <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-100">
+            {totalUpcoming}
+          </Badge>
         </div>
-        {isAlert ? (
-          <AlertTriangle className="h-4 w-4 text-orange-500" />
-        ) : (
-          <CheckCircle className="h-4 w-4 text-green-500" />
-        )}
-      </CardHeader>
-      <CardContent className="flex-1">
-        {isLoading && propertyId ? (
-          <div className="space-y-3 pt-2">
-            <div className="h-4 w-1/2 rounded bg-gray-200 animate-pulse" />
-            <div className="h-4 w-2/3 rounded bg-gray-200 animate-pulse" />
-            <div className="h-4 w-1/3 rounded bg-gray-200 animate-pulse" />
-          </div>
-        ) : !propertyId ? (
-            <p className="font-body text-sm text-gray-500 pt-2">Select a property to view bookings.</p>
-        ) : displayBookings.length > 0 ? (
-          <div className="space-y-3">
-            {displayBookings.map((booking, index) => (
-              <React.Fragment key={booking.id}>
-                <Link href={`/dashboard/bookings/${booking.id}`} className="block">
-                  <div className="flex justify-between items-center p-2 -m-2 rounded hover:bg-gray-50 transition-colors">
-                    <div className="flex items-center space-x-2">
-                      <Calendar className={`h-4 w-4 flex-shrink-0 ${getStatusColor(booking.status)}`} />
-                      <span className="font-body text-sm font-medium text-foreground truncate">
-                        {booking.service.name}
-                      </span>
-                    </div>
-                    <div className="flex-shrink-0 text-right">
-                      <p className="font-body text-sm font-semibold text-gray-700">
-                        {booking.scheduledDate ? format(new Date(booking.scheduledDate), 'MMM dd') : 'TBD'}
+
+        {/* Items List */}
+        <div className="flex-1 overflow-hidden">
+          {isLoading && propertyId ? (
+            <div className="space-y-3">
+              <div className="h-16 rounded-lg bg-gray-100 animate-pulse" />
+              <div className="h-16 rounded-lg bg-gray-100 animate-pulse" />
+              <div className="h-16 rounded-lg bg-gray-100 animate-pulse" />
+            </div>
+          ) : !propertyId ? (
+            <div className="flex flex-col items-center justify-center h-full">
+              <span className="text-4xl mb-3">🏠</span>
+              <p className="text-sm text-gray-600 mb-4">Select a property</p>
+              <Link href="/dashboard/properties">
+                <Button variant="outline" size="sm" className="gap-2">
+                  View Properties <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          ) : displayBookings.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full">
+              <span className="text-4xl mb-3">🎉</span>
+              <p className="text-sm text-gray-600 mb-4">No upcoming bookings</p>
+              <Link href="/dashboard/bookings/new">
+                <Button variant="outline" size="sm" className="gap-2">
+                  Book Service <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {displayBookings.map((booking) => {
+                const badge = getStatusBadge(booking.status);
+                return (
+                  <Link 
+                    key={booking.id} 
+                    href={`/dashboard/bookings/${booking.id}`}
+                    className="block"
+                  >
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 hover:border-blue-300 hover:shadow-sm hover:bg-white transition-all cursor-pointer">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-1.5 truncate">
+                        {booking.service?.name || 'Service Booking'}
+                      </h4>
+                      <p className="text-xs text-gray-600 mb-1.5 flex items-center gap-2">
+                        <span>{format(new Date(booking.scheduledDate!), 'MMM dd, yyyy')}</span>
+                        <span>•</span>
+                        <span className="truncate">{booking.property?.name || 'Property'}</span>
                       </p>
-                      <p className="font-body text-xs text-gray-500">
-                        {formatTime(booking.startTime)}
-                      </p>
+                      <Badge {...badge} className={`text-xs font-medium ${badge.className}`}>
+                        {booking.status}
+                      </Badge>
                     </div>
-                  </div>
-                </Link>
-                {index < displayBookings.length - 1 && <Separator />}
-              </React.Fragment>
-            ))}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* CTA Button */}
+        {totalUpcoming > 0 && (
+          <div className="mt-auto pt-4">
+            <Link href="/dashboard/bookings">
+              <Button 
+                variant="ghost" 
+                className="w-full text-sm font-semibold text-blue-600 hover:bg-blue-50 hover:text-blue-700 rounded-md gap-2"
+              >
+                View All {totalUpcoming} <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
           </div>
-        ) : (
-          <p className="font-body text-sm text-gray-500 pt-2">No upcoming services scheduled for this property.</p>
-        )}
-        {(error) && (
-          <p className="font-body text-sm text-red-500 pt-2">Error loading bookings.</p>
         )}
       </CardContent>
-      
-      <CardFooter className="border-t pt-4">
-        {displayBookings.length > 0 && showMore ? (
-            <Link
-                href="/dashboard/bookings" 
-                className="font-body text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
-            >
-                View {overflowCount} More Booking{overflowCount > 1 ? 's' : ''} →
-            </Link>
-        ) : (
-             <Link 
-                href="/dashboard/bookings"
-                className="font-body text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
-             >
-                View All Bookings →
-             </Link>
-        )}
-      </CardFooter>
     </Card>
   );
 }
