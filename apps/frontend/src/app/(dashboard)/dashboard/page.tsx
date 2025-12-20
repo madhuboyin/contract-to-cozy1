@@ -425,12 +425,14 @@ export default function DashboardPage() {
       {/* ========================================= */}
       <section className="mb-8">
         {/* Section Header */}
-        <div className="flex items-center gap-2 mb-4 pb-3 border-b-2 border-purple-200">
-          <Sparkles className="w-6 h-6 text-purple-600" />
-          <h2 className="text-2xl font-bold text-gray-900">AI-Powered Features</h2>
-          <span className="ml-auto text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-semibold">
-            NEW
-          </span>
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 bg-purple-100 rounded-lg">
+            <Sparkles className="w-5 h-5 text-purple-600" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">AI-Powered Tools</h2>
+            <p className="text-sm text-gray-500">Smart automation for your property</p>
+          </div>
         </div>
 
         {/* AI Cards Grid - Reverted to 4 columns */}
@@ -438,7 +440,7 @@ export default function DashboardPage() {
           
           {/* Emergency Troubleshooter */}
           <Link href={`/dashboard/emergency?propertyId=${selectedPropertyId}`}>
-            <div className="relative bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
+            <div className="relative bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-300 rounded-xl p-4 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
               {/* Sparkle indicator */}
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
@@ -461,7 +463,7 @@ export default function DashboardPage() {
 
           {/* Document Intelligence */}
           <Link href={`/dashboard/documents?propertyId=${selectedPropertyId}`}>
-            <div className="relative bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
+            <div className="relative bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-xl p-4 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
               </div>
@@ -481,7 +483,7 @@ export default function DashboardPage() {
           
           {/* Appliance Oracle */}
           <Link href={`/dashboard/oracle?propertyId=${selectedPropertyId}`}>
-            <div className="relative bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
+            <div className="relative bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl p-4 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
               </div>
@@ -501,7 +503,7 @@ export default function DashboardPage() {
 
           {/* Budget Forecaster */}
           <Link href={`/dashboard/budget?propertyId=${selectedPropertyId}`}>
-            <div className="relative bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
+            <div className="relative bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-300 rounded-xl p-4 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
               </div>
@@ -521,7 +523,7 @@ export default function DashboardPage() {
 
           {/* Climate Risk */}
           <Link href={`/dashboard/climate?propertyId=${selectedPropertyId}`}>
-            <div className="relative bg-gradient-to-br from-sky-50 to-blue-50 border-2 border-sky-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group">
+            <div className="relative bg-gradient-to-br from-sky-50 to-blue-50 border-2 border-sky-300 rounded-xl p-4 hover:shadow-xl transition-all cursor-pointer group">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
               </div>
@@ -539,7 +541,7 @@ export default function DashboardPage() {
           
           {/* Home Modifications */}
           <Link href={`/dashboard/modifications?propertyId=${selectedPropertyId}`}>
-            <div className="relative bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-xl p-5 hover:shadow-xl transition-all">
+            <div className="relative bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-xl p-4 hover:shadow-xl transition-all">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
               </div>
@@ -557,7 +559,7 @@ export default function DashboardPage() {
 
           {/* Property Appreciation */}
           <Link href={`/dashboard/appreciation?propertyId=${selectedPropertyId}`}>
-            <div className="relative bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-5 hover:shadow-xl transition-all">
+            <div className="relative bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-4 hover:shadow-xl transition-all">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
               </div>
@@ -575,7 +577,7 @@ export default function DashboardPage() {
 
           {/* Energy Auditor */}
           <Link href={`/dashboard/energy?propertyId=${selectedPropertyId}`}>
-            <div className="relative bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-xl p-5 hover:shadow-xl transition-all">
+            <div className="relative bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-xl p-4 hover:shadow-xl transition-all">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
               </div>
@@ -593,7 +595,7 @@ export default function DashboardPage() {
 
           {/* Visual Inspector */}
           <Link href={`/dashboard/visual-inspector?propertyId=${selectedPropertyId}`}>
-            <div className="relative bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl p-5 hover:shadow-xl transition-all">
+            <div className="relative bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl p-4 hover:shadow-xl transition-all">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
               </div>
@@ -611,7 +613,7 @@ export default function DashboardPage() {
  
           {/* Tax Appeal Assistant */}
           <Link href={`/dashboard/tax-appeal?propertyId=${selectedPropertyId}`}>
-            <div className="relative bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl p-5 hover:shadow-xl transition-all">
+            <div className="relative bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl p-4 hover:shadow-xl transition-all">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
               </div>
@@ -630,7 +632,7 @@ export default function DashboardPage() {
           {/* Inspection Report Intelligence - HOME_BUYER ONLY */}
           {userType === 'HOME_BUYER' && (
             <Link href={`/dashboard/inspection-report?propertyId=${selectedPropertyId}`}>
-              <div className="relative bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-xl p-5 hover:shadow-xl transition-all">
+              <div className="relative bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-xl p-4 hover:shadow-xl transition-all">
                 <div className="absolute top-3 right-3">
                   <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
                 </div>
@@ -650,7 +652,7 @@ export default function DashboardPage() {
           {/* Moving Concierge - HOME_BUYER ONLY */}
           {userType === 'HOME_BUYER' && (
             <Link href="/dashboard/moving-concierge">
-              <div className="relative bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
+              <div className="relative bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-4 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
                 <div className="absolute top-3 right-3">
                   <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
                 </div>
@@ -678,8 +680,21 @@ export default function DashboardPage() {
       {/* END AI FEATURES SECTION */}
       {/* ========================================= */}
 
+      {/* ========================================= */}
+      {/* SCORE CARDS SECTION */}
+      {/* ========================================= */}
+      <div className="flex items-center gap-3 mb-6">
+        <div className="p-2 bg-blue-100 rounded-lg">
+          <TrendingUp className="w-5 h-5 text-blue-600" />
+        </div>
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900">Property Intelligence Scores</h2>
+          <p className="text-sm text-gray-500">Real-time health, risk, and financial analysis</p>
+        </div>
+      </div>
+
       {/* Scorecards Grid (Existing Non-AI Scores) */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         
         {/* 1. Property Health Score: Uses selectedPropertyId */}
         {selectedProperty ? (
