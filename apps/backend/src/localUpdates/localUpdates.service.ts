@@ -15,18 +15,28 @@ export async function getOwnerLocalUpdates(params: {
     where: {
       startDate: { lte: now },
       endDate: { gte: now },
+      ownerOnly: true,
+
       NOT: {
         dismissals: {
           some: { userId: params.userId },
         },
       },
+
+      propertyTypes: params.propertyType
+        ? { has: params.propertyType as any }
+        : undefined,
+
       OR: [
-        { zipCodes: { has: params.zip } },
-        { cities: { has: params.city } },
+        params.zip ? { zipCodes: { has: params.zip } } : undefined,
+        params.city ? { cities: { has: params.city } } : undefined,
         params.state ? { state: params.state } : undefined,
       ].filter(Boolean) as any,
     },
   });
+
+  // ranking logic unchanged …
+
 
   // ranking (kept simple + deterministic)
   const ranked = updates
