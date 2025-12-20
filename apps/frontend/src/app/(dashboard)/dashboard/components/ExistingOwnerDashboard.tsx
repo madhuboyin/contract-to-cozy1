@@ -104,12 +104,12 @@ export const ExistingOwnerDashboard = ({
     </div>
   ) : null;
 
-  // ------------------------------
-  // Render
-  // ------------------------------
   return (
     <div className="space-y-6 pb-8">
-      {/* 🔔 Local Home Updates (High Visibility, Non-Intrusive) */}
+      {/* Maintenance Nudge Card */}
+      {renderNudgeCard}
+  
+      {/* 💡 Local Home Updates (Helpful Suggestions) */}
       {localUpdates.length > 0 && (
         <LocalUpdatesCarousel
           updates={localUpdates}
@@ -125,9 +125,6 @@ export const ExistingOwnerDashboard = ({
           }}
         />
       )}
-
-      {/* Maintenance Nudge Card */}
-      {renderNudgeCard}
 
       {/* Activity Cards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
