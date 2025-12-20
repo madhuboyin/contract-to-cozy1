@@ -651,17 +651,30 @@ export default function DashboardPage() {
       </section>
 
       {/* ========================================= */}
-      {/* EXISTING OWNER DASHBOARD SECTION */}
+      {/* DASHBOARD SECTION - CONDITIONAL BY USER TYPE */}
       {/* ========================================= */}
       {(() => {
         // Filter checklist items by selected property ID
         const filteredChecklistItems = selectedPropertyId
             ? checklistItems.filter(item => item.propertyId === selectedPropertyId)
-            : []; 
+            : checklistItems; // Don't filter if no property selected
         
         // Filter properties to only the selected one
         const filteredProperties = selectedProperty ? [selectedProperty] : [];
 
+        // CRITICAL FIX: Render different dashboards based on userType
+        if (userType === 'HOME_BUYER') {
+          return (
+            <HomeBuyerDashboard 
+              userFirstName={user.firstName}
+              bookings={data.bookings}
+              properties={data.properties}  // Pass ALL properties for HOME_BUYER
+              checklistItems={filteredChecklistItems}
+            />
+          );
+        }
+
+        // Default: EXISTING_OWNER dashboard
         return (
           <ExistingOwnerDashboard 
             userFirstName={user.firstName}
