@@ -1,28 +1,21 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/PropertyHealthScoreCard.tsx
-// Reduced height version: smaller gauge, less padding, compact layout
-
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-// Re-importing Progress (though we use SVG for the gauge icon)
-import { Progress } from "@/components/ui/progress"; 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Zap, Shield, ArrowRight } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Activity, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { ScoredProperty } from "@/app/(dashboard)/dashboard/types";
 import React from 'react';
 
-// Adjusted to return stroke- classes for the SVG gauge color, ensuring contrast
 const getHealthDetails = (score: number) => {
     if (score >= 85) {
-        return { level: "EXCELLENT", color: "text-green-500", progressClass: "stroke-green-500", badgeVariant: "success" as const };
+        return { level: "Excellent", color: "text-green-600", progressColor: "bg-green-500" };
     } else if (score >= 70) {
-        return { level: "GOOD", color: "text-blue-500", progressClass: "stroke-blue-500", badgeVariant: "secondary" as const };
+        return { level: "Good", color: "text-blue-600", progressColor: "bg-blue-500" };
     } else if (score >= 50) {
-        return { level: "FAIR", color: "text-yellow-500", progressClass: "stroke-yellow-500", badgeVariant: "secondary" as const };
+        return { level: "Fair", color: "text-yellow-600", progressColor: "bg-yellow-500" };
     } else {
-        return { level: "POOR", color: "text-red-500", progressClass: "stroke-red-500", badgeVariant: "destructive" as const };
+        return { level: "Needs Attention", color: "text-red-600", progressColor: "bg-red-500" };
     }
 };
 
@@ -32,100 +25,55 @@ interface PropertyHealthScoreCardProps {
 
 const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data'];
 
-// UPDATED: Optimized gauge size - slightly bigger than before
-const RADIUS = 40; 
-const STROKE_WIDTH = 8; 
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-
 export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardProps) {
     const healthScore = property.healthScore?.totalScore || 0;
-    const { level, color, progressClass, badgeVariant } = getHealthDetails(healthScore);
-    const progressValue = healthScore > 100 ? 100 : healthScore;
+    const maxScore = property.healthScore?.maxPotentialScore || 100;
+    const percentage = (healthScore / maxScore) * 100;
+    const { level, color, progressColor } = getHealthDetails(healthScore);
     
     const totalRequiredActions = property.healthScore?.insights.filter(i => 
         HIGH_PRIORITY_STATUSES.includes(i.status)
     ).length || 0;
 
-    const offset = CIRCUMFERENCE - (progressValue / 100) * CIRCUMFERENCE;
-
     return (
-        <Card className="h-full flex flex-col">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <div className="space-y-1">
-                    <CardTitle className="font-heading text-xl flex items-center gap-2">
-                        <Shield className={`h-5 w-5 ${color}`} />
-                        Property Health
-                    </CardTitle>
-                    <CardDescription className="font-body text-sm">
-                        {property.name || 'Primary Home'} overall condition
-                    </CardDescription>
-                </div>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col justify-between">
-                
-                {/* GAUGE ICON AND SCORE DISPLAY - UPDATED: Optimized size and reduced font */}
-                <div className="flex flex-col items-center justify-center pt-2 pb-2">
-                    <div className="relative w-28 h-28 flex items-center justify-center">
-                        <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                            {/* Background Circle (Track) */}
-                            <circle
-                                cx="50"
-                                cy="50"
-                                r={RADIUS}
-                                fill="none"
-                                stroke="hsl(var(--muted))" 
-                                strokeWidth={STROKE_WIDTH}
+        <Link href={`/dashboard/properties/${property.id}/?tab=maintenance&view=insights`}>
+            <Card className="h-[190px] flex flex-col border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer">
+                <CardContent className="flex-1 p-6 flex flex-col">
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <Activity className="h-5 w-5 text-gray-600" />
+                            <h3 className="text-base font-semibold text-gray-900">Property Health</h3>
+                        </div>
+                        <ArrowRight className="h-4 w-4 text-gray-400" />
+                    </div>
+
+                    {/* Large Score - Number First */}
+                    <div className="mb-3">
+                        <div className="flex items-baseline gap-2">
+                            <span className={`text-5xl font-bold ${color}`}>
+                                {healthScore}
+                            </span>
+                            <span className="text-2xl text-gray-400 font-normal">/{maxScore}</span>
+                        </div>
+                        <p className="text-sm text-gray-600 mt-1">{level}</p>
+                    </div>
+
+                    {/* Thin Horizontal Progress Bar */}
+                    <div className="mt-auto">
+                        <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
+                            <span>Maintenance Actions</span>
+                            <span>{totalRequiredActions} Required</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                            <div 
+                                className={`h-full ${progressColor} transition-all duration-300`}
+                                style={{ width: `${Math.min(percentage, 100)}%` }}
                             />
-                            {/* Progress Arc (Fill) - Color added based on score */}
-                            <circle
-                                cx="50"
-                                cy="50"
-                                r={RADIUS}
-                                fill="none"
-                                className={progressClass}
-                                strokeWidth={STROKE_WIDTH}
-                                strokeLinecap="round"
-                                strokeDasharray={CIRCUMFERENCE}
-                                strokeDashoffset={offset}
-                                style={{ transition: 'stroke-dashoffset 0.5s ease' }}
-                            />
-                        </svg>
-                        {/* Score Text in Center - UPDATED: Reduced font size further */}
-                        <div className="absolute flex flex-col items-center justify-center">
-                            <span className={`text-2xl font-extrabold ${color}`}>{healthScore}</span>
-                            <span className="text-base font-semibold text-muted-foreground ml-1">/100</span>
                         </div>
                     </div>
-                    {/* Status Badge */}
-                    <p className="font-body text-sm text-muted-foreground mt-1">
-                        Overall Status: <Badge variant={badgeVariant} className="text-xs">{level}</Badge>
-                    </p>
-                </div>
-
-                {/* REQUIRED MAINTENANCE ACTIONS - UPDATED: Reduced gap to separator */}
-                <div className="border-t pt-3"> 
-                    <div className="flex items-center justify-between">
-                         <p className="font-body text-base font-semibold flex items-center whitespace-nowrap">
-                            <Zap className="h-4 w-4 mr-1 text-red-600" />
-                            Required Maintenance Actions
-                        </p>
-                        <p className="text-lg font-extrabold text-red-600">
-                            {totalRequiredActions}
-                        </p>
-                    </div>
-                    {/* REMOVED: Description text per user request */}
-                </div>
-
-                {/* VIEW FULL MAINTENANCE PLAN LINK - UPDATED: Reduced margin */}
-                <div className="mt-3">
-                    <Link 
-                        href={`/dashboard/properties/${property.id}/?tab=maintenance&view=insights`}
-                        className="inline-flex items-center text-sm font-semibold text-primary hover:text-primary/80 transition-colors no-underline"
-                    >
-                        View Full Maintenance Plan <ArrowRight className="h-4 w-4 ml-1" />
-                    </Link>
-                </div>
-            </CardContent>
-        </Card>
+                </CardContent>
+            </Card>
+        </Link>
     );
 }
