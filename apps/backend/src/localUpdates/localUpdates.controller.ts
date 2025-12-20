@@ -1,6 +1,6 @@
 // apps/backend/src/localUpdates/localUpdates.controller.ts
 import { Response } from "express";
-import { CustomRequest } from "../types/express-extension.types";
+import { CustomRequest } from "../types";
 import {
   getOwnerLocalUpdates,
   dismissLocalUpdate,
