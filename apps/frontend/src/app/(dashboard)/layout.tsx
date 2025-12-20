@@ -332,7 +332,7 @@ function DesktopUserNav({ user }: { user: User | null }) {
   const handleLogout = () => {
     logout();
     if (typeof window !== 'undefined') {
-      window.location.href = '/signin';
+      window.location.href = '/login';
     }
   };
 
@@ -373,7 +373,7 @@ function MobileUserNav({ user }: { user: User | null }) {
   const handleLogout = () => {
     logout();
     if (typeof window !== 'undefined') {
-      window.location.href = '/signin';
+      window.location.href = '/login';
     }
   };
 
