@@ -11,11 +11,12 @@ const router = Router();
  * GET /api/local-updates
  */
 router.get(
-  '/',
+  '/:propertyId',
   authenticate,
   propertyAuthMiddleware,
   getLocalUpdates
 );
+
 
 /**
  * POST /api/local-updates/:id/dismiss
