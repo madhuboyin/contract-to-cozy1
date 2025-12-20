@@ -435,7 +435,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* AI Cards Grid - Angi Style: Horizontal layout, white cards */}
+        {/* AI Cards Grid - Angi Style: All 12 cards, shortened titles */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           
           {/* Emergency Troubleshooter */}
@@ -446,67 +446,99 @@ export default function DashboardPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
-                  Emergency Troubleshooter
+                  Emergency Help
                 </h3>
                 <p className="text-sm text-gray-600 truncate">
-                  Get instant AI guidance for home emergencies
+                  Instant AI guidance for emergencies
                 </p>
               </div>
             </div>
           </Link>
 
-          {/* Document Intelligence */}
+          {/* Document Vault */}
           <Link href={`/dashboard/documents?propertyId=${selectedPropertyId}`}>
             <div className="flex items-start p-5 bg-white border border-gray-200 rounded-lg hover:border-2 hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
               <div className="flex-shrink-0 mr-4">
-                <FileText className="h-12 w-12 text-blue-600" />
+                <FileText className="h-12 w-12 text-purple-600" />
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
-                  Document Intelligence Hub
+                  Document Vault
                 </h3>
                 <p className="text-sm text-gray-600 truncate">
-                  AI document search and analysis
+                  Smart document analysis
                 </p>
               </div>
             </div>
           </Link>
 
-          {/* Weather Impact */}
-          <Link href={`/dashboard/weather?propertyId=${selectedPropertyId}`}>
+          {/* Appliance Oracle */}
+          <Link href={`/dashboard/oracle?propertyId=${selectedPropertyId}`}>
             <div className="flex items-start p-5 bg-white border border-gray-200 rounded-lg hover:border-2 hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
               <div className="flex-shrink-0 mr-4">
-                <Cloud className="h-12 w-12 text-cyan-600" />
+                <Zap className="h-12 w-12 text-purple-600" />
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
-                  Weather Impact
+                  Appliance Oracle
                 </h3>
                 <p className="text-sm text-gray-600 truncate">
-                  AI weather protection tips
+                  Predict failures & replacements
                 </p>
               </div>
             </div>
           </Link>
 
-          {/* Home Modifications - EXISTING_OWNER ONLY */}
-          {userType === 'EXISTING_OWNER' && (
-            <Link href={`/dashboard/home-modifications?propertyId=${selectedPropertyId}`}>
-              <div className="flex items-start p-5 bg-white border border-gray-200 rounded-lg hover:border-2 hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
-                <div className="flex-shrink-0 mr-4">
-                  <Home className="h-12 w-12 text-indigo-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
-                    Home Modifications
-                  </h3>
-                  <p className="text-sm text-gray-600 truncate">
-                    AI improvement recommendations
-                  </p>
-                </div>
+          {/* Budget Forecaster */}
+          <Link href={`/dashboard/budget?propertyId=${selectedPropertyId}`}>
+            <div className="flex items-start p-5 bg-white border border-gray-200 rounded-lg hover:border-2 hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+              <div className="flex-shrink-0 mr-4">
+                <DollarSign className="h-12 w-12 text-blue-600" />
               </div>
-            </Link>
-          )}
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
+                  Budget Planner
+                </h3>
+                <p className="text-sm text-gray-600 truncate">
+                  12-month maintenance predictions
+                </p>
+              </div>
+            </div>
+          </Link>
+
+          {/* Climate Risk */}
+          <Link href={`/dashboard/climate?propertyId=${selectedPropertyId}`}>
+            <div className="flex items-start p-5 bg-white border border-gray-200 rounded-lg hover:border-2 hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+              <div className="flex-shrink-0 mr-4">
+                <Cloud className="h-12 w-12 text-sky-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
+                  Climate Risk
+                </h3>
+                <p className="text-sm text-gray-600 truncate">
+                  AI climate risk analysis
+                </p>
+              </div>
+            </div>
+          </Link>
+
+          {/* Home Modifications */}
+          <Link href={`/dashboard/modifications?propertyId=${selectedPropertyId}`}>
+            <div className="flex items-start p-5 bg-white border border-gray-200 rounded-lg hover:border-2 hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
+              <div className="flex-shrink-0 mr-4">
+                <Home className="h-12 w-12 text-indigo-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
+                  Home Upgrades
+                </h3>
+                <p className="text-sm text-gray-600 truncate">
+                  AI improvement recommendations
+                </p>
+              </div>
+            </div>
+          </Link>
 
           {/* Property Appreciation */}
           <Link href={`/dashboard/appreciation?propertyId=${selectedPropertyId}`}>
@@ -516,10 +548,10 @@ export default function DashboardPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
-                  Property Appreciation
+                  Value Tracker
                 </h3>
                 <p className="text-sm text-gray-600 truncate">
-                  Track value and market trends
+                  Track value & market trends
                 </p>
               </div>
             </div>
@@ -533,10 +565,10 @@ export default function DashboardPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
-                  Energy Auditor
+                  Energy Audit
                 </h3>
                 <p className="text-sm text-gray-600 truncate">
-                  AI energy-saving recommendations
+                  Energy-saving tips
                 </p>
               </div>
             </div>
@@ -553,7 +585,7 @@ export default function DashboardPage() {
                   Visual Inspector
                 </h3>
                 <p className="text-sm text-gray-600 truncate">
-                  AI image analysis and inspection
+                  AI image analysis
                 </p>
               </div>
             </div>
@@ -567,10 +599,10 @@ export default function DashboardPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
-                  Tax Appeal Assistant
+                  Tax Appeals
                 </h3>
                 <p className="text-sm text-gray-600 truncate">
-                  AI-powered tax appeal analysis
+                  AI tax appeal analysis
                 </p>
               </div>
             </div>
@@ -585,10 +617,10 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
-                    Inspection Report Intelligence
+                    Inspection Reports
                   </h3>
                   <p className="text-sm text-gray-600 truncate">
-                    AI analysis, costs, and negotiation
+                    Analysis, costs & negotiation
                   </p>
                 </div>
               </div>
@@ -604,10 +636,10 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
-                    Moving Concierge
+                    Moving Help
                   </h3>
                   <p className="text-sm text-gray-600 truncate">
-                    AI moving timeline and checklist
+                    AI timeline & checklist
                   </p>
                 </div>
               </div>
