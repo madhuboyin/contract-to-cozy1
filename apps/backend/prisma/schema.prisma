@@ -112,6 +112,18 @@ enum WarrantyCategory {
   OTHER
 }
 
+enum LocalUpdateCategory {
+  INTERNET
+  INSURANCE
+  MAINTENANCE
+  ENERGY
+}
+
+enum LocalUpdateEventType {
+  IMPRESSION
+  CLICK
+}
+
 // NEW: Service 
 // category configuration for segment targeting
 model ServiceCategoryConfig {
@@ -1332,6 +1344,71 @@ model InspectionIssue {
   @@index([severity])
   @@index([category])
   @@map("inspection_issues")
+}
+
+model LocalUpdate {
+  id               String   @id @default(uuid())
+
+  title            String
+  shortDescription String
+
+  category         LocalUpdateCategory
+
+  sourceName       String
+  isSponsored      Boolean  @default(false)
+
+  ctaText          String
+  ctaUrl           String?
+
+  priority         Int      @default(3)
+
+  startDate        DateTime
+  endDate          DateTime
+
+  // Location targeting
+  zipCodes         String[]
+  cities           String[]
+  state            String?
+
+  // Eligibility
+  propertyTypes    PropertyType[]
+  ownerOnly        Boolean  @default(false)
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  dismissals       UserLocalUpdateDismissal[]
+  events           LocalUpdateEvent[]
+
+  @@index([startDate, endDate])
+}
+
+model UserLocalUpdateDismissal {
+  id             String   @id @default(uuid())
+
+  userId         String
+  localUpdateId  String
+
+  dismissedAt    DateTime @default(now())
+
+  localUpdate    LocalUpdate @relation(fields: [localUpdateId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, localUpdateId])
+  @@index([userId])
+}
+model LocalUpdateEvent {
+  id             String   @id @default(uuid())
+
+  userId         String?
+  localUpdateId  String
+
+  eventType      LocalUpdateEventType
+
+  createdAt      DateTime @default(now())
+
+  localUpdate    LocalUpdate @relation(fields: [localUpdateId], references: [id], onDelete: Cascade)
+
+  @@index([localUpdateId])
 }
 
 // ============================================================================
