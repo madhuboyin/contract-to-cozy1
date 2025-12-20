@@ -52,6 +52,11 @@ export type ServiceCategory =
   | 'HOME_WARRANTY_PLAN'
   | 'OTHER';
 
+  export type LocalUpdateCategory =
+  | 'INTERNET'
+  | 'INSURANCE'
+  | 'MAINTENANCE'
+  | 'ENERGY';  
 /**
  * Recurrence Frequency Enum
  */
@@ -957,4 +962,17 @@ export interface CommunityEventSummary {
   category: CommunityEventCategory;
   startTime: string;
   externalUrl?: string | null;
+}
+
+// --- LOCAL UPDATES TYPES (NEW) ---
+
+export interface LocalUpdate {
+  id: string;
+  title: string;
+  shortDescription: string;
+  category: LocalUpdateCategory;
+  sourceName: string;
+  isSponsored: boolean;
+  ctaText: string;
+  ctaUrl?: string | null;
 }

@@ -45,6 +45,8 @@ import {
   BudgetForecast,
   CommunityEvent,
   CommunityEventsResponse,
+  // LOCAL UPDATES
+  LocalUpdate,
 } from '@/types';
 
 // REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
@@ -1622,6 +1624,24 @@ class APIClient {
       method: 'GET',
     });
   }
+
+  /**
+   * Fetch personalized local home updates for owners
+   */
+  async getLocalUpdates(): Promise<APIResponse<{ updates: LocalUpdate[] }>> {
+    return this.request<{ updates: LocalUpdate[] }>('/api/local-updates', {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Dismiss a local update for the current user
+   */
+  async dismissLocalUpdate(updateId: string): Promise<APIResponse<void>> {
+    return this.request<void>(`/api/local-updates/${updateId}/dismiss`, {
+      method: 'POST',
+    });
+  }  
 
 }
 

@@ -38,6 +38,7 @@ import movingConciergeRoutes from './routes/movingConcierge.routes';
 import { communityRoutes } from './community/community.routes';
 import sellerPrepRoutes from './sellerPrep/sellerPrep.routes';
 import inspectionReportRoutes from './routes/inspectionReport.routes';
+import localUpdatesRoutes from './localUpdates/localUpdates.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
@@ -265,7 +266,7 @@ app.use('/api/tax-appeal', taxAppealRoutes);
 app.use('/api/moving-concierge', movingConciergeRoutes);
 app.use('/api/seller-prep', sellerPrepRoutes);
 app.use('/api/inspection-reports', inspectionReportRoutes);
-
+app.use('/api/local-updates', localUpdatesRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
