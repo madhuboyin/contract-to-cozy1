@@ -1628,17 +1628,14 @@ class APIClient {
   /**
    * Fetch personalized local home updates for owners
    */
-  async getLocalUpdates(): Promise<APIResponse<{ updates: LocalUpdate[] }>> {
-    return this.request<{ updates: LocalUpdate[] }>('/api/local-updates', {
+  async getLocalUpdates(propertyId: string): Promise<APIResponse<{ updates: LocalUpdate[] }>> {
+    return this.request(`/api/local-updates?propertyId=${propertyId}`, {
       method: 'GET',
     });
   }
-
-  /**
-   * Dismiss a local update for the current user
-   */
-  async dismissLocalUpdate(updateId: string): Promise<APIResponse<void>> {
-    return this.request<void>(`/api/local-updates/${updateId}/dismiss`, {
+  
+  async dismissLocalUpdate(id: string): Promise<void> {
+    await this.request(`/api/local-updates/${id}/dismiss`, {
       method: 'POST',
     });
   }  

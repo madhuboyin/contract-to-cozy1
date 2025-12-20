@@ -41,17 +41,20 @@ export const ExistingOwnerDashboard = ({
   const [localUpdates, setLocalUpdates] = useState<LocalUpdate[]>([]);
 
   useEffect(() => {
+    if (!selectedPropertyId) return;
+  
     api
-      .getLocalUpdates()
+      .getLocalUpdates(selectedPropertyId)
       .then((res) => {
         if (res.success) {
           setLocalUpdates(res.data.updates);
         }
       })
       .catch(() => {
-        // Fail silently — this feature should never block dashboard
+        // fail silently
       });
-  }, []);
+  }, [selectedPropertyId]);
+  console.log('localUpdates', localUpdates);    
 
   // ------------------------------
   // Existing Logic (Unchanged)
