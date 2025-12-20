@@ -10,19 +10,14 @@ import { Booking, Property, User, ChecklistItem, Warranty, InsurancePolicy } fro
 import { ScoredProperty } from './types'; 
 import { differenceInDays, isPast, parseISO } from 'date-fns'; 
 
-// UPDATED: Dashboard Shell and Components
+// NEW IMPORTS FOR SCORECARDS AND LAYOUT
 import { DashboardShell } from '@/components/DashboardShell';
+import { PageHeader, PageHeaderHeading } from '@/components/page-header';
 import { PropertyHealthScoreCard } from './components/PropertyHealthScoreCard'; 
 import { PropertyRiskScoreCard } from './components/PropertyRiskScoreCard'; 
 import { FinancialEfficiencyScoreCard } from './components/FinancialEfficiencyScoreCard'; 
 import { MyPropertiesCard } from './components/MyPropertiesCard'; 
-
-// PHASE 1: NEW COMPONENT IMPORTS
-import { WelcomeSection } from './components/WelcomeSection';
-import { SectionHeader } from './components/SectionHeader';
-import { ProactiveMaintenanceBanner } from './components/ProactiveMaintenanceBanner';
-
-// Property Selection
+// NEW IMPORTS FOR PROPERTY SELECTION
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from 'next/link';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
@@ -33,7 +28,7 @@ import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
 import { AlertTriangle } from 'lucide-react';
 import { FileText } from 'lucide-react';
 import { Sparkles } from 'lucide-react';
-import { Zap } from 'lucide-react';
+import { Zap } from 'lucide-react'; // Reverted: Removed CloudRain import
 import { Cloud } from 'lucide-react';
 import { Home } from 'lucide-react';
 import { TrendingUp } from 'lucide-react';
@@ -56,6 +51,7 @@ export interface UrgentActionItem {
     propertyId: string;
 }
 
+// FIX 1: Add 'urgentActions' field to the DashboardData interface
 interface DashboardData {
     bookings: Booking[];
     properties: ScoredProperty[];
@@ -192,56 +188,28 @@ export default function DashboardPage() {
   // Track user type for conditional feature display (HOME_BUYER vs EXISTING_OWNER)
   const [userType, setUserType] = useState<string | null>(null);
   
-  // FIXED: Removed isLoading from PropertyContext destructuring
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
 
-  // PHASE 1 OPTIMIZATION: Use useMemo to derive selectedProperty once
-  const selectedProperty = useMemo(
-    () => data.properties.find(p => p.id === selectedPropertyId),
-    [data.properties, selectedPropertyId]
-  );
-
-  // Redirect unauthenticated users to sign-in
-  useEffect(() => {
-    if (!userLoading && !user) {
-      router.push('/signin');
-    }
-    setRedirectChecked(true);
-  }, [user, userLoading, router]);
-
-  // FIXED: Determine user type from user.segment or homeownerProfile
-  useEffect(() => {
-    if (user && !userType) {
-      // Check user.segment first, fallback to homeownerProfile.segment
-      const segment = user.segment || user.homeownerProfile?.segment;
-      if (segment) {
-        setUserType(segment);
-      }
-    }
-  }, [user, userType]);
-  
-  // FIXED: Comprehensive data fetching using correct API methods
+  // --- DATA FETCHING LOGIC (unchanged) ---
   const fetchDashboardData = useCallback(async () => {
     if (!user) return;
-
+    
+    setData(prev => ({ ...prev, isLoading: true }));
+    
     try {
-      setData(prev => ({ ...prev, isLoading: true, error: null }));
-
-      const [
-        bookingsRes,
-        propertiesRes,
-        checklistRes,
-        warrantiesRes,
-        insurancePoliciesRes,
-      ] = await Promise.all([
+      // FIX: Add cache busting for checklist endpoint
+      console.log('📊 Dashboard: Fetching data...');
+      
+      const [bookingsRes, propertiesRes, checklistRes, warrantiesRes, policiesRes] = await Promise.all([
         api.listBookings({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' }),
         api.getProperties(),
-        // Fetch checklist directly with fetch to handle both response formats
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/checklist`, {
+        // FIX: Force fresh checklist data
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/checklist?_=${Date.now()}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           },
         }).then(r => r.json()).then(data => {
+          console.log('📊 Dashboard: Raw checklist response:', data);
           // Handle both wrapped and unwrapped responses
           if (data.success && data.data) {
             return { success: true, data: data.data };
@@ -253,14 +221,18 @@ export default function DashboardPage() {
         api.listWarranties(),
         api.listInsurancePolicies(),
       ]);
-
+  
+      console.log('📊 Dashboard: Checklist result:', checklistRes);
+  
       const bookings = bookingsRes.success ? bookingsRes.data.bookings : [];
       const properties = propertiesRes.success ? propertiesRes.data.properties : [];
       const checklist = checklistRes.success ? checklistRes.data : null;
       const warranties = warrantiesRes.success ? warrantiesRes.data.warranties : [];
-      const policies = insurancePoliciesRes.success ? insurancePoliciesRes.data.policies : [];
-
-      // Map properties to ScoredProperty type
+      const policies = policiesRes.success ? policiesRes.data.policies : [];
+  
+      console.log('📊 Dashboard: Checklist items count:', checklist?.items?.length || 0);
+      console.log('📊 Dashboard: Checklist items:', checklist?.items || []);
+  
       const scoredProperties = properties.map(p => ({
         ...p,
         healthScore: (p as any).healthScore || { 
@@ -274,264 +246,317 @@ export default function DashboardPage() {
           ctaNeeded: false 
         },
       })) as ScoredProperty[];
-      
-      const consolidatedActions = consolidateUrgentActions(
+  
+      const urgentActions = consolidateUrgentActions(
         scoredProperties,
         checklist?.items || [],
         warranties,
         policies
       );
-
+  
       setData({
         bookings,
         properties: scoredProperties,
         checklist,
-        urgentActions: consolidatedActions, 
+        urgentActions,
         isLoading: false,
         error: null,
       });
-
-    } catch (err: any) {
-      console.error('Dashboard fetch error:', err);
+  
+      // Extract user type from first property
+      if (scoredProperties.length > 0) {
+        const firstProperty = scoredProperties[0] as any;
+        console.log('🔍 First Property:', firstProperty);
+        console.log('🔍 Homeowner Profile:', firstProperty.homeownerProfile);
+        
+        let detectedUserType = null;
+        
+        if (firstProperty.homeownerProfile?.userType) {
+          detectedUserType = firstProperty.homeownerProfile.userType;
+        } else if (firstProperty.user?.homeownerProfile?.userType) {
+          detectedUserType = firstProperty.user.homeownerProfile.userType;
+        }
+        
+        console.log('🎯 Detected User Type:', detectedUserType);
+        
+        if (detectedUserType) {
+          setUserType(detectedUserType);
+        }
+      }
+  
+      if (scoredProperties.length > 0 && !selectedPropertyId) {
+        setSelectedPropertyId(scoredProperties[0].id);
+      }
+  
+    } catch (error) {
+      console.error('❌ Dashboard: Error fetching data:', error);
       setData(prev => ({
         ...prev,
         isLoading: false,
-        error: err.message || 'Failed to load dashboard data',
+        error: 'Failed to load dashboard data',
       }));
     }
-  }, [user]);
-
+  }, [user, selectedPropertyId, setSelectedPropertyId]);
+  
   useEffect(() => {
-    if (user) {
+    if (!userLoading && user) {
       fetchDashboardData();
     }
-  }, [user, fetchDashboardData]);
+  }, [userLoading, user, fetchDashboardData]);
 
-  // Initialize selectedPropertyId from context or default to first property
   useEffect(() => {
-    if (data.properties.length > 0 && !selectedPropertyId) {
-      setSelectedPropertyId(data.properties[0].id);
+    if (!userLoading && user && !redirectChecked) {
+      const checkRedirect = async () => {
+        try {
+          const propertiesRes = await api.getProperties();
+          const hasProperties = propertiesRes.success && propertiesRes.data.properties.length > 0;
+
+          if (!hasProperties) {
+            const skipped = localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY);
+            if (!skipped) {
+              setShowWelcomeScreen(true);
+            }
+          }
+        } catch (error) {
+          console.error('Error checking properties:', error);
+        } finally {
+          setRedirectChecked(true);
+        }
+      };
+      checkRedirect();
     }
-  }, [data.properties, selectedPropertyId, setSelectedPropertyId]);
+  }, [userLoading, user, redirectChecked]);
 
-  // Check if user has skipped property setup
-  useEffect(() => {
-    const hasSkipped = localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY);
-    if (!hasSkipped && data.properties.length === 0 && !data.isLoading) {
-      setShowWelcomeScreen(true);
-    }
-  }, [data.properties, data.isLoading]);
+  // --- CONDITIONAL RENDERING ---
+  const loadingMessage = !redirectChecked
+    ? 'Checking your account...'
+    : 'Loading your dashboard...';
 
-  // Extract checklist items for easier access
-  const checklistItems = data.checklist?.items || [];
-
-  // Handle loading states
-  if (!redirectChecked || userLoading || data.isLoading) {
+  if (userLoading || data.isLoading || !redirectChecked) {
     return (
-      <DashboardShell>
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        </div>
-      </DashboardShell>
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        <p className="ml-3 text-lg text-gray-600">{loadingMessage}</p>
+      </div>
     );
   }
 
-  if (!user) {
-    return null;
-  }
-
-  // Handle errors
-  if (data.error) {
-    return (
-      <DashboardShell>
-        <div className="rounded-lg bg-red-50 p-4">
-          <p className="text-sm text-red-800">Error loading dashboard: {data.error}</p>
-        </div>
-      </DashboardShell>
-    );
-  }
-
-  // FIXED: Show welcome modal - WelcomeModal only needs userFirstName prop
-  if (showWelcomeScreen) {
+  if (showWelcomeScreen && user) {
     return <WelcomeModal userFirstName={user.firstName} />;
   }
 
-  // Calculate action count for ProactiveMaintenanceBanner
-  const filteredUrgentActions = selectedPropertyId 
-    ? data.urgentActions.filter(action => action.propertyId === selectedPropertyId)
-    : [];
-  const actionCount = filteredUrgentActions.length;
+  if (!user || data.error) {
+    return (
+      <div className="p-8 text-center">
+        <h2 className="text-2xl font-bold text-red-600">Error Loading Dashboard</h2>
+        <p className="text-muted-foreground">{data.error || 'Please try logging in again.'}</p>
+      </div>
+    );
+  }
+  // --- END CONDITIONAL RENDERING ---
 
+  const userSegment = user.segment;
+  const checklistItems = (data.checklist?.items || []) as ChecklistItem[];
+  
+  // Derived property values using the context state
+  const properties = data.properties;
+  const selectedProperty = properties.find(p => p.id === selectedPropertyId); 
+  console.log('🔍 Selected property:', selectedProperty);
+  const isMultiProperty = properties.length > 1;
+
+  console.log('🎨 Rendering dashboard for', userSegment);
+  
+  if (userSegment === 'HOME_BUYER') {
+    return (
+      <HomeBuyerDashboard 
+        userFirstName={user.firstName}
+        bookings={data.bookings}
+        properties={data.properties}
+        checklistItems={checklistItems}
+      />
+    );
+  }
+
+  // Existing Owner Dashboard (now incorporates the scorecard grid at the top level)
   return (
-    <DashboardShell className="max-w-7xl mx-auto space-y-4">
+    <DashboardShell>
+      <PageHeader className="pt-2 pb-2 gap-1">
+        {/* Welcome message */}
+        <PageHeaderHeading>Welcome, {user.firstName}! Property Intelligence Dashboard</PageHeaderHeading>
+      </PageHeader>
       
-      {/* ========================================= */}
-      {/* PHASE 1: NEW WELCOME SECTION */}
-      {/* ========================================= */}
-      <WelcomeSection userName={user.firstName} />
-
-      {/* ========================================= */}
-      {/* PROPERTY SELECTION */}
-      {/* ========================================= */}
-      <div className="flex items-center space-x-3">
-        <Home className="h-5 w-5 text-brand-primary" />
-        <Select 
-          value={selectedPropertyId || ''} 
-          onValueChange={setSelectedPropertyId}
-        >
-          <SelectTrigger className="w-[280px] bg-white shadow-sm">
-            <SelectValue placeholder="Select property" />
-          </SelectTrigger>
-          <SelectContent>
-            {data.properties.map((property) => (
-              <SelectItem key={property.id} value={property.id}>
-                <div className="flex items-center space-x-2">
-                  {property.isPrimary && <Home className="h-3 w-3 text-brand-primary" />}
-                  <span className="font-medium">
-                    {property.name ? property.name : formatAddress(property)}
-                  </span>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* ========================================= */}
-      {/* PHASE 1: PROACTIVE MAINTENANCE BANNER */}
-      {/* FIXED: Only render if selectedPropertyId exists */}
-      {/* ========================================= */}
-      {selectedProperty && selectedPropertyId && (
-        <ProactiveMaintenanceBanner 
-          propertyName={selectedProperty.name || 'Main Home'}
-          healthScore={selectedProperty.healthScore?.totalScore || 0}
-          actionCount={actionCount}
-          propertyId={selectedPropertyId}
-        />
+      {/* --- Property Selection Row --- */}
+      {selectedProperty && (
+          <div className="flex items-center space-x-3 mb-6"> 
+              {!isMultiProperty ? (
+                  // Scenario 1: Single Property
+                  <p className="text-lg font-medium text-gray-700">
+                      {selectedProperty.name || 'Your Home'}: {formatAddress(selectedProperty)}
+                  </p>
+              ) : (
+                  // Scenario 2: Multiple Properties - Show Dropdown
+                  <div className="flex items-center space-x-2">
+                      <Select 
+                          value={selectedPropertyId} 
+                          onValueChange={setSelectedPropertyId}
+                      >
+                          <SelectTrigger className="w-[300px] text-lg font-medium">
+                              <SelectValue placeholder="Select a property" />
+                          </SelectTrigger>
+                          <SelectContent>
+                              {properties.map((property) => (
+                                  <SelectItem key={property.id} value={property.id}>
+                                      {property.name ? `${property.name} - ${formatAddress(property)}` : formatAddress(property)}
+                                  </SelectItem>
+                              ))}
+                          </SelectContent>
+                      </Select>
+                  </div>
+              )}
+              <Link href="/dashboard/properties" className="text-sm text-blue-500 hover:underline">
+                  {isMultiProperty ? 'Manage Properties' : 'View Details'}
+              </Link>
+          </div>
       )}
-
-      {/* ========================================= */}
-      {/* SCORE CARDS SECTION */}
-      {/* ========================================= */}
-      <div className="space-y-4">
-        <SectionHeader 
-          icon="📊"
-          title="Property Intelligence Scores"
-          description="Real-time health, risk, and financial analysis"
-        />
-        
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
-          {/* 1. Property Health Score */}
-          {selectedProperty ? (
-            <div className="md:col-span-1">
-              <PropertyHealthScoreCard property={selectedProperty} /> 
-            </div>
-          ) : (
-            <div className="md:col-span-1">
-              <PropertyHealthScoreCard property={{} as ScoredProperty} />
-            </div>
-          )}
-          
-          {/* 2. Risk Assessment Score */}
-          <div className="md:col-span-1">
-            <PropertyRiskScoreCard propertyId={selectedPropertyId || ''} />
-          </div>
-          
-          {/* 3. Financial Efficiency Score */}
-          <div className="md:col-span-1">
-            <FinancialEfficiencyScoreCard propertyId={selectedPropertyId || ''} />
-          </div>
-        </div>
-      </div>
+      {/* --- END Property Selection Row --- */}
 
       {/* ========================================= */}
       {/* AI FEATURES SECTION */}
       {/* ========================================= */}
-      <section className="space-y-4">
-        <SectionHeader 
-          icon="✨"
-          title="AI-Powered Tools"
-          description="Smart automation for your property"
-        />
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <section className="mb-8">
+        {/* Section Header */}
+        <div className="flex items-center gap-2 mb-4 pb-3 border-b-2 border-purple-200">
+          <Sparkles className="w-6 h-6 text-purple-600" />
+          <h2 className="text-2xl font-bold text-gray-900">AI-Powered Features</h2>
+          <span className="ml-auto text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-semibold">
+            NEW
+          </span>
+        </div>
+
+        {/* AI Cards Grid - Reverted to 4 columns */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           
           {/* Emergency Troubleshooter */}
-          <Link href={`/dashboard/emergency?propertyId=${selectedPropertyId || ''}`}>
-            <div className="relative bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-300 rounded-xl p-5 hover:shadow-xl transition-all">
+          <Link href={`/dashboard/emergency?propertyId=${selectedPropertyId}`}>
+            <div className="relative bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
+              {/* Sparkle indicator */}
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
               </div>
-              <div className="p-3 bg-red-100 rounded-lg w-fit mb-3">
+              
+              {/* Icon */}
+              <div className="p-3 bg-red-100 rounded-lg w-fit mb-3 group-hover:scale-110 transition-transform">
                 <AlertTriangle className="h-7 w-7 text-red-600" />
               </div>
+              
+              {/* Content */}
               <h3 className="text-lg font-bold text-red-900 mb-1">
                 Emergency Troubleshooter
               </h3>
               <p className="text-red-700 text-sm">
-                Get 24/7 instant AI help for home issues
+                AI guidance for home emergencies
               </p>
             </div>
           </Link>
 
           {/* Document Intelligence */}
-          <Link href={`/dashboard/documents?propertyId=${selectedPropertyId || ''}`}>
-            <div className="relative bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-300 rounded-xl p-5 hover:shadow-xl transition-all">
+          <Link href={`/dashboard/documents?propertyId=${selectedPropertyId}`}>
+            <div className="relative bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
               </div>
-              <div className="p-3 bg-blue-100 rounded-lg w-fit mb-3">
-                <FileText className="h-7 w-7 text-blue-600" />
+              
+              <div className="p-3 bg-purple-100 rounded-lg w-fit mb-3 group-hover:scale-110 transition-transform">
+                <FileText className="h-7 w-7 text-purple-600" />
               </div>
+              
+              <h3 className="text-lg font-bold text-purple-900 mb-1">
+                Document Vault
+              </h3>
+              <p className="text-purple-700 text-sm">
+                Smart document analysis
+              </p>
+            </div>
+          </Link>
+          
+          {/* Appliance Oracle */}
+          <Link href={`/dashboard/oracle?propertyId=${selectedPropertyId}`}>
+            <div className="relative bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
+              <div className="absolute top-3 right-3">
+                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+              </div>
+              
+              <div className="p-3 bg-purple-100 rounded-lg w-fit mb-3 group-hover:scale-110 transition-transform">
+                <Zap className="h-7 w-7 text-purple-600" />
+              </div>
+              
+              <h3 className="text-lg font-bold text-purple-900 mb-1">
+                Appliance Oracle
+              </h3>
+              <p className="text-purple-700 text-sm">
+                Predict failures & replacements
+              </p>
+            </div>
+          </Link>
+
+          {/* Budget Forecaster */}
+          <Link href={`/dashboard/budget?propertyId=${selectedPropertyId}`}>
+            <div className="relative bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
+              <div className="absolute top-3 right-3">
+                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+              </div>
+              
+              <div className="p-3 bg-blue-100 rounded-lg w-fit mb-3 group-hover:scale-110 transition-transform">
+                <DollarSign className="h-7 w-7 text-blue-600" />
+              </div>
+              
               <h3 className="text-lg font-bold text-blue-900 mb-1">
-                Document Intelligence Hub
+                Budget Forecaster
               </h3>
               <p className="text-blue-700 text-sm">
-                AI document search & analysis
+                12-month maintenance predictions
               </p>
             </div>
           </Link>
 
-          {/* Weather Impact */}
-          <Link href={`/dashboard/weather?propertyId=${selectedPropertyId || ''}`}>
-            <div className="relative bg-gradient-to-br from-cyan-50 to-blue-50 border-2 border-cyan-300 rounded-xl p-5 hover:shadow-xl transition-all">
+          {/* Climate Risk */}
+          <Link href={`/dashboard/climate?propertyId=${selectedPropertyId}`}>
+            <div className="relative bg-gradient-to-br from-sky-50 to-blue-50 border-2 border-sky-300 rounded-xl p-5 hover:shadow-xl transition-all cursor-pointer group">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
               </div>
-              <div className="p-3 bg-cyan-100 rounded-lg w-fit mb-3">
-                <Cloud className="h-7 w-7 text-cyan-600" />
+              <div className="p-3 bg-sky-100 rounded-lg w-fit mb-3 group-hover:scale-110 transition-transform">
+                <Cloud className="h-7 w-7 text-sky-600" />
               </div>
-              <h3 className="text-lg font-bold text-cyan-900 mb-1">
-                Weather Impact
+              <h3 className="text-lg font-bold text-sky-900 mb-1">
+                Climate Risk
               </h3>
-              <p className="text-cyan-700 text-sm">
-                AI weather protection tips
+              <p className="text-sky-700 text-sm">
+                AI climate risk analysis
+              </p>
+            </div>
+          </Link>
+          
+          {/* Home Modifications */}
+          <Link href={`/dashboard/modifications?propertyId=${selectedPropertyId}`}>
+            <div className="relative bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-xl p-5 hover:shadow-xl transition-all">
+              <div className="absolute top-3 right-3">
+                <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
+              </div>
+              <div className="p-3 bg-indigo-100 rounded-lg w-fit mb-3">
+                <Home className="h-7 w-7 text-indigo-600" />
+              </div>
+              <h3 className="text-lg font-bold text-indigo-900 mb-1">
+                Home Modifications
+              </h3>
+              <p className="text-indigo-700 text-sm">
+                AI improvement recommendations
               </p>
             </div>
           </Link>
 
-          {/* Home Modifications - EXISTING_OWNER ONLY */}
-          {userType === 'EXISTING_OWNER' && (
-            <Link href={`/dashboard/home-modifications?propertyId=${selectedPropertyId || ''}`}>
-              <div className="relative bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-xl p-5 hover:shadow-xl transition-all">
-                <div className="absolute top-3 right-3">
-                  <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
-                </div>
-                <div className="p-3 bg-indigo-100 rounded-lg w-fit mb-3">
-                  <Home className="h-7 w-7 text-indigo-600" />
-                </div>
-                <h3 className="text-lg font-bold text-indigo-900 mb-1">
-                  Home Modifications
-                </h3>
-                <p className="text-indigo-700 text-sm">
-                  AI improvement recommendations
-                </p>
-              </div>
-            </Link>
-          )}
-
           {/* Property Appreciation */}
-          <Link href={`/dashboard/appreciation?propertyId=${selectedPropertyId || ''}`}>
+          <Link href={`/dashboard/appreciation?propertyId=${selectedPropertyId}`}>
             <div className="relative bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-5 hover:shadow-xl transition-all">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
@@ -549,7 +574,7 @@ export default function DashboardPage() {
           </Link>
 
           {/* Energy Auditor */}
-          <Link href={`/dashboard/energy?propertyId=${selectedPropertyId || ''}`}>
+          <Link href={`/dashboard/energy?propertyId=${selectedPropertyId}`}>
             <div className="relative bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-xl p-5 hover:shadow-xl transition-all">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
@@ -567,7 +592,7 @@ export default function DashboardPage() {
           </Link>
 
           {/* Visual Inspector */}
-          <Link href={`/dashboard/visual-inspector?propertyId=${selectedPropertyId || ''}`}>
+          <Link href={`/dashboard/visual-inspector?propertyId=${selectedPropertyId}`}>
             <div className="relative bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl p-5 hover:shadow-xl transition-all">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
@@ -585,7 +610,7 @@ export default function DashboardPage() {
           </Link>
  
           {/* Tax Appeal Assistant */}
-          <Link href={`/dashboard/tax-appeal?propertyId=${selectedPropertyId || ''}`}>
+          <Link href={`/dashboard/tax-appeal?propertyId=${selectedPropertyId}`}>
             <div className="relative bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl p-5 hover:shadow-xl transition-all">
               <div className="absolute top-3 right-3">
                 <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
@@ -604,7 +629,7 @@ export default function DashboardPage() {
 
           {/* Inspection Report Intelligence - HOME_BUYER ONLY */}
           {userType === 'HOME_BUYER' && (
-            <Link href={`/dashboard/inspection-report?propertyId=${selectedPropertyId || ''}`}>
+            <Link href={`/dashboard/inspection-report?propertyId=${selectedPropertyId}`}>
               <div className="relative bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-xl p-5 hover:shadow-xl transition-all">
                 <div className="absolute top-3 right-3">
                   <Sparkles className="w-5 h-5 text-purple-500 animate-pulse" />
@@ -649,27 +674,62 @@ export default function DashboardPage() {
           )}
         </div>
       </section>
+      {/* ========================================= */}
+      {/* END AI FEATURES SECTION */}
+      {/* ========================================= */}
 
-      {/* ========================================= */}
-      {/* EXISTING OWNER DASHBOARD SECTION */}
-      {/* ========================================= */}
+      {/* Scorecards Grid (Existing Non-AI Scores) */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
+        
+        {/* 1. Property Health Score: Uses selectedPropertyId */}
+        {selectedProperty ? (
+          <div className="md:col-span-1">
+            <PropertyHealthScoreCard property={selectedProperty} /> 
+          </div>
+        ) : (
+           <div className="md:col-span-1">
+            <PropertyHealthScoreCard property={{} as ScoredProperty} />
+           </div>
+        )}
+        
+        {/* 2. Risk Assessment Score: Uses selectedPropertyId */}
+        <div className="md:col-span-1">
+            <PropertyRiskScoreCard propertyId={selectedPropertyId} />
+        </div>
+        
+        {/* 3. Financial Efficiency Score: Uses selectedPropertyId */}
+        <div className="md:col-span-1">
+            <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
+        </div>
+        
+      </div>
+      
+
+      
+      {/* Filter data by selected property before passing to child components */}
+      {/* This ensures the red banner and other components show data for the currently selected property only */}
       {(() => {
-        // Filter checklist items by selected property ID
+        // Filter urgent actions to only those belonging to the selected property
+        const filteredUrgentActions = data.urgentActions.filter(
+          action => action.propertyId === selectedPropertyId
+        );
+        
+        // Filter properties to only the selected one (for consistency)
+        const filteredProperties = selectedProperty ? [selectedProperty] : [];
+        
+        // FIX: Filter checklist items by selected property ID
         const filteredChecklistItems = selectedPropertyId
             ? checklistItems.filter(item => item.propertyId === selectedPropertyId)
             : []; 
-        
-        // Filter properties to only the selected one
-        const filteredProperties = selectedProperty ? [selectedProperty] : [];
 
         return (
           <ExistingOwnerDashboard 
             userFirstName={user.firstName}
             bookings={data.bookings}
-            properties={filteredProperties}
-            checklistItems={filteredChecklistItems}
-            selectedPropertyId={selectedPropertyId || ''}
-            consolidatedActionCount={filteredUrgentActions.length}
+            properties={filteredProperties} // Pass only selected property
+            checklistItems={filteredChecklistItems} // Pass the newly filtered list
+            selectedPropertyId={selectedPropertyId}
+            consolidatedActionCount={filteredUrgentActions.length} // Pass filtered count
           />
         );
       })()}
