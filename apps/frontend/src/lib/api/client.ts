@@ -1629,7 +1629,7 @@ class APIClient {
    * Fetch personalized local home updates for owners
    */
   async getLocalUpdates(propertyId: string): Promise<APIResponse<{ updates: LocalUpdate[] }>> {
-    return this.request(`/api/local-updates?propertyId=${propertyId}`, {
+    return this.request(`/api/local-updates/${propertyId}`, {
       method: 'GET',
     });
   }
