@@ -16,9 +16,9 @@ prometheus:
         # This section filters targets before Prometheus scrapes them.
         relabel_configs:
         # --- ADD THIS RULE START ---
-          # Ignore the Redis port to prevent "Cross Protocol Scripting" alerts
+        # Ignore Redis (6379) to prevent "Cross Protocol Scripting" alerts
           - source_labels: [__address__]
-            regex: '.*:6379'
+            regex: '.*:(6379|5432)'
             action: drop
           # --- ADD THIS RULE END ---
           # DROP all targets whose namespace label matches this regex list.
