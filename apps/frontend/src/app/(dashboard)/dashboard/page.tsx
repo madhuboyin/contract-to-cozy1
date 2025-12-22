@@ -171,8 +171,7 @@ const formatAddress = (property: Property) => {
 }
 
 // Helper to check if a checklist item could be asset-driven
-function couldBeAssetDriven(item: ChecklistItem): boolean {
-  // Exclude non-physical categories
+function isAssetDrivenForRouting(item: ChecklistItem): boolean {
   if (
     item.serviceCategory === 'ADMIN' ||
     item.serviceCategory === 'FINANCE' ||
@@ -183,16 +182,7 @@ function couldBeAssetDriven(item: ChecklistItem): boolean {
     return false;
   }
 
-  // Check if title or description contains asset-related keywords
-  const text = `${item.title} ${item.description || ''}`.toUpperCase();
-  return (
-    text.includes('HVAC') ||
-    text.includes('FURNACE') ||
-    text.includes('WATER HEATER') ||
-    text.includes('ROOF') ||
-    text.includes('SMOKE') ||
-    text.includes('CO')
-  );
+  return true;
 }
 
 export default function DashboardPage() {
@@ -752,8 +742,8 @@ export default function DashboardPage() {
             : []; 
 
         // Calculate if there are any asset-driven actions
-        const hasAssetDrivenActions = filteredChecklistItems.some(item => 
-          couldBeAssetDriven(item) && 
+        const hasAssetDrivenActions = filteredChecklistItems.some(item =>
+          isAssetDrivenForRouting(item) &&
           item.status === 'PENDING'
         );
 
