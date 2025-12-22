@@ -45,3 +45,11 @@ alertmanager:
           resources:
             requests:
               storage: 1Gi  # Alertmanager database for silences is very small
+
+
+grafana:
+  persistence:
+    enabled: true
+    storageClassName: longhorn
+    accessModes: ["ReadWriteOnce"]
+    size: 2Gi
