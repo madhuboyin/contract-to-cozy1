@@ -240,11 +240,14 @@ export default function MaintenancePage() {
     });
     // 4. If priority is true, filter for asset-driven tasks
     if (priority) {
-      items = items.filter(item => {
-        return isAssetDrivenTask(item, riskByAsset);
-      });
-    }
-
+      const priorityItems = items.filter(item =>
+        isAssetDrivenTask(item, riskByAsset)
+      );
+    
+      if (priorityItems.length > 0) {
+        items = priorityItems;
+      }
+    }    
     // Sort and return (by Next Due Date)
     return items
       .sort((a, b) => { 
