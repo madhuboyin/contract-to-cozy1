@@ -9,9 +9,14 @@ import { ScoredProperty } from "@/app/(dashboard)/dashboard/types";
 interface MaintenanceNudgeCardProps {
     property: ScoredProperty;
     consolidatedActionCount: number;
+    hasAssetDrivenActions: boolean;
 }
-
-export function MaintenanceNudgeCard({ property, consolidatedActionCount }: MaintenanceNudgeCardProps) {
+export function MaintenanceNudgeCard({
+        property,
+        consolidatedActionCount,
+        hasAssetDrivenActions,
+    }: MaintenanceNudgeCardProps) {
+    
     // Ensure healthScore data exists
     if (!property.healthScore) {
         return null;
@@ -22,6 +27,9 @@ export function MaintenanceNudgeCard({ property, consolidatedActionCount }: Main
     
     // Show card ONLY IF score is poor (< 70) AND there are actions
     const shouldShowNudge = healthScore < 70 && consolidatedActionCount > 0;
+    const destination = hasAssetDrivenActions
+        ? `/dashboard/maintenance?propertyId=${property.id}&priority=true`
+        : `/dashboard/profile?propertyId=${property.id}`;
     
     if (!shouldShowNudge) {
         return null;
@@ -91,7 +99,7 @@ export function MaintenanceNudgeCard({ property, consolidatedActionCount }: Main
                 <span className="text-[13px] text-gray-600 ml-[30px]">
                     {consolidatedActionCount} unresolved property issues for {propertyName}
                 </span>
-                <Link href={`/dashboard/maintenance?propertyId=${property.id}&priority=true`}>
+                    <Link href={destination}>
                     <button className={`
                         px-3.5 py-1.5
                         text-[13px] font-semibold ${styles.buttonText}
