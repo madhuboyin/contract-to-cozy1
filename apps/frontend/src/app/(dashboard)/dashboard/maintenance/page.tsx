@@ -133,6 +133,8 @@ export default function MaintenancePage() {
   
   // Extract propertyId from URL query parameters
   const selectedPropertyId = searchParams.get('propertyId');
+  const priority = searchParams.get('priority') === 'true';
+
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<DashboardChecklistItem | null>(null);
@@ -236,6 +238,12 @@ export default function MaintenancePage() {
         const isExcluded = isDirectNavigationTask(item.serviceCategory);
         return !isExcluded;
     });
+    // 4. If priority is true, filter for asset-driven tasks
+    if (priority) {
+      items = items.filter(item => {
+        return isAssetDrivenTask(item, riskByAsset);
+      });
+    }
 
     // Sort and return (by Next Due Date)
     return items
