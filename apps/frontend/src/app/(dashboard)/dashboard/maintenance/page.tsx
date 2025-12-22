@@ -609,10 +609,11 @@ export default function MaintenancePage() {
                               ${risk.replacementCost.toLocaleString()}
                             </div>
 
-                            {risk.actionCta && (
-                              <div className="text-blue-600 font-medium">
-                                Recommended: {risk.actionCta}
-                              </div>
+                            {risk.actionCta &&
+                              !(hasWarranty && risk.actionCta.toLowerCase().includes('warranty')) && (
+                                <div className="text-blue-600 font-medium">
+                                  Recommended: {risk.actionCta}
+                                </div>
                             )}
                           </div>
                         );
