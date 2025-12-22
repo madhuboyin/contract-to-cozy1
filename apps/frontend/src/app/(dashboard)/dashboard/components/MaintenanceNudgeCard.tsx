@@ -29,7 +29,7 @@ export function MaintenanceNudgeCard({
     const shouldShowNudge = healthScore < 70 && consolidatedActionCount > 0;
     const destination = hasAssetDrivenActions
         ? `/dashboard/maintenance?propertyId=${property.id}&priority=true`
-        : `/dashboard/profile?propertyId=${property.id}`;
+        : `/dashboard/maintenance?propertyId=${property.id}`;
     
     if (!shouldShowNudge) {
         return null;
