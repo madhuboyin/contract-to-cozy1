@@ -425,18 +425,54 @@ export default function MaintenancePage() {
   return (
     <div className="space-y-6 pb-8 max-w-7xl mx-auto px-4 md:px-8">
       <div className="flex justify-between items-center">
-        {/* Updated heading to be more inclusive of reminders */}
         <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
           <Wrench className="w-7 h-7 text-blue-600" /> Home Tasks & Reminders
         </h2>
-        
-        {/* Link to the Setup Page to add new tasks */}
-        <Button asChild>
-          <Link href="/dashboard/maintenance-setup">
-            <Plus className="w-4 h-4 mr-2" /> Add New Tasks
-          </Link>
-        </Button>
+
+        {/* Priority View Toggle */}
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-gray-600">Priority view</span>
+
+          <button
+            onClick={() => {
+              const params = new URLSearchParams(searchParams.toString());
+
+              if (priority) {
+                params.delete('priority');
+              } else {
+                params.set('priority', 'true');
+              }
+
+              router.push(
+                `/dashboard/maintenance${
+                  selectedPropertyId ? `?propertyId=${selectedPropertyId}&${params.toString()}` : ''
+                }`
+              );
+            }}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              priority ? 'bg-orange-500' : 'bg-gray-300'
+            }`}
+            title={
+              priority
+                ? 'Showing only asset-related tasks affecting home health'
+                : 'Show only high-impact maintenance tasks'
+            }
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                priority ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
       </div>
+
+      {/* Link to the Setup Page to add new tasks */}
+      <Button asChild>
+        <Link href="/dashboard/maintenance-setup">
+          <Plus className="w-4 h-4 mr-2" /> Add New Tasks
+        </Link>
+      </Button>
       <p className="text-muted-foreground">Manage your scheduled maintenance, as well as crucial administrative and financial reminders.</p>
 
       {/* FIX: The list should now correctly show tasks because the filter was adjusted. */}
@@ -454,12 +490,34 @@ export default function MaintenancePage() {
         <>
           {/* Priority View Indicator */}
           {isPriorityView && (
-            <div className="inline-flex items-center gap-2 mb-3 px-3 py-1.5 rounded-full bg-orange-100 text-orange-800 text-sm font-medium">
-              <span className="w-2 h-2 rounded-full bg-orange-500" />
-              Priority view
+            <div className="flex items-center gap-3 mb-3">
+              {/* Priority pill with tooltip */}
+              <div
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-100 text-orange-800 text-sm font-medium cursor-help"
+                title="Showing only asset-related tasks that affect your home's health or risk score"
+              >
+                <span className="w-2 h-2 rounded-full bg-orange-500" />
+                Priority view
+              </div>
+
+              {/* Show all tasks link */}
+              <button
+                onClick={() => {
+                  const params = new URLSearchParams(searchParams.toString());
+                  params.delete('priority');
+
+                  router.push(
+                    `/dashboard/maintenance${
+                      selectedPropertyId ? `?propertyId=${selectedPropertyId}` : ''
+                    }`
+                  );
+                }}
+                className="text-sm text-blue-600 hover:text-blue-700 underline underline-offset-2"
+              >
+                Show all tasks
+              </button>
             </div>
           )}
-
           <div className="rounded-md border bg-white">
           <Table>
             <TableHeader>
