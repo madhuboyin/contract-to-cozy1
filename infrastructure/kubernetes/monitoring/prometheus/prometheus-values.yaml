@@ -4,6 +4,8 @@
 prometheus:
   prometheusSpec:
     # This section allows you to inject custom scrape jobs into Prometheus's configuration.
+    retention: 2d               # Keep only 2 days of metrics
+    retentionSize: "8GB"        # Physically force Prometheus to stay under 8GB
     additionalScrapeConfigs:
 
       # Job to globally drop metrics targets from noisy system/infra namespaces.

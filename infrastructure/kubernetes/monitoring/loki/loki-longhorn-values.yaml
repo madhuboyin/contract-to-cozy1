@@ -1,0 +1,68 @@
+USER-SUPPLIED VALUES:
+backend:
+  replicas: 0
+compactor:
+  enabled: false
+deploymentMode: SingleBinary
+distributor:
+  replicas: 0
+gateway:
+  basicAuth:
+    enabled: true
+    existingSecret: loki-basic-auth
+  enabled: true
+ingester:
+  replicas: 0
+loki:
+  auth_enabled: true
+  commonConfig:
+    replication_factor: 1
+  compactor:
+    delete_request_store: filesystem
+    retention_enabled: true
+  limits_config:
+    retention_period: 7d
+  schemaConfig:
+    configs:
+    - from: "2024-01-01"
+      index:
+        period: 24h
+        prefix: index_
+      object_store: filesystem
+      schema: v13
+      store: tsdb
+  storage:
+    type: filesystem
+  storage_config:
+    filesystem:
+      directory: /var/loki/chunks
+    tsdb_shipper:
+      active_index_directory: /var/loki/index
+lokiCanary:
+  enabled: false
+memcached:
+  enabled: false
+querier:
+  replicas: 0
+queryFrontend:
+  replicas: 0
+read:
+  replicas: 0
+ruler:
+  enabled: false
+singleBinary:
+  persistence:
+    enabled: true
+    size: 10Gi
+  replicas: 1
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2048Mi
+    requests:
+      cpu: 500m
+      memory: 1536Mi
+test:
+  enabled: false
+write:
+  replicas: 0
