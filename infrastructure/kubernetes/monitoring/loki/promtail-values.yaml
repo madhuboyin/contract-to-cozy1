@@ -1,41 +1,92 @@
 # In infrastructure/kubernetes/monitoring/loki/promtail-values.yaml
 
-config:
-  # This clients section is needed for Promtail to know where to send the logs
-  clients:
-    - url: http://loki-gateway.monitoring.svc.cluster.local:80/loki/api/v1/push 
-      basic_auth:
-        username: ${LOKI_USER}
-        password: ${LOKI_PASS}
-      headers:
-        X-Scope-OrgID: fake
+server:
+  log_level: info
+  log_format: logfmt
+  http_listen_port: 3101
 
-  snippets:
-    # 💥 FIX: Inject the filter into the default relabeling chain using 'extraRelabelConfigs'
-    extraRelabelConfigs:
-      # 1. NEW STRICT FILTER: Keep ONLY targets where namespace is 'production'
-      # This rule runs first. If the namespace is not 'production', the scrape target is dropped.
-      - source_labels: [__meta_kubernetes_namespace]
-        regex: production
+clients:
+  - basic_auth:
+      password: ${LOKI_PASS}
+      username: ${LOKI_USER}
+    headers:
+      X-Scope-OrgID: fake
+    url: http://loki-gateway.monitoring.svc.cluster.local:80/loki/api/v1/push
+
+positions:
+  filename: /run/promtail/positions.yaml
+
+scrape_configs:
+  # 1. JOB: API BACKEND
+  - job_name: production/api-logs
+    pipeline_stages:
+      - cri: {}
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_pod_label_app]
+        regex: 'production;api' # Matches combined string
         action: keep
-      
-      # 2. Add the rule to promote the namespace meta label to a permanent label.
-      # This rule is critical and often included in the default chart config, but it's safest to keep it.
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        target_label: app
+        action: replace
       - source_labels: [__meta_kubernetes_namespace]
         target_label: namespace
+        action: replace
 
-# The remaining sections (extraEnv, extraArgs) must remain the same
-extraEnv:
-- name: LOKI_USER
-  valueFrom:
-    secretKeyRef:
-      name: loki-basic-auth
-      key: username
-- name: LOKI_PASS
-  valueFrom:
-    secretKeyRef:
-      name: loki-basic-auth
-      key: password
+  # 2. JOB: FRONTEND
+  - job_name: production/frontend-logs
+    pipeline_stages:
+      - cri: {}
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_pod_label_app]
+        regex: 'production;frontend'
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        target_label: app
+        action: replace
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+        action: replace
 
-extraArgs:
-  - -config.expand-env=true
+  # 3. JOB: POSTGRES
+  - job_name: production/postgres-logs
+    pipeline_stages:
+      - cri: {}
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_pod_label_app]
+        regex: 'production;postgres'
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        target_label: app
+        action: replace
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+        action: replace
+
+  # 4. JOB: SYSTEM/DEFAULT (Drops specific apps to prevent duplicates)
+  - job_name: kubernetes-pods
+    pipeline_stages:
+      - cri: {}
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        regex: api|frontend|postgres|postgres-exporter
+        action: drop
+      - action: replace
+        source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - action: replace
+        source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - action: replace
+        source_labels: [__meta_kubernetes_pod_container_name]
+        target_label: container
+      - action: keep
+        source_labels: [__meta_kubernetes_namespace]
+        regex: production|monitoring|longhorn-system
