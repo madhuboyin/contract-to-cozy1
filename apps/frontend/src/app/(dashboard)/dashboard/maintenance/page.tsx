@@ -56,7 +56,11 @@ const isDirectNavigationTask = (category: ServiceCategory | null): boolean => {
 }
 // --- END: UPDATED CATEGORY LOGIC ---
 
-
+const RISK_SEVERITY_ORDER: Record<string, number> = {
+  HIGH: 3,
+  MEDIUM: 2,
+  LOW: 1,
+};
 // Helper to format days until due
 const formatDueDate = (dueDateString: string | null) => {
     if (!dueDateString) return { text: 'N/A', color: 'text-gray-500', isAlert: false }; 
@@ -78,14 +82,12 @@ const formatDueDate = (dueDateString: string | null) => {
     }
     return { text: `${format(dueDate, 'MMM dd, yyyy')}`, color: 'text-gray-700', isAlert: false };
 };
-
 // FIX: Renamed and modified helper to accept string | null, resolving the type error.
 function formatEnumString(val: string | null | undefined): string {
     if (!val) return 'N/A';
     // Use replace to convert underscores and then capitalize
     return val.toString().replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
-
 // Helper to format category for display (now just calls the generic formatter)
 function formatCategory(category: ServiceCategory | null) {
     if (!category) return 'General';
@@ -102,7 +104,6 @@ function resolveAssetKeyFromTask(item: ChecklistItem): string | null {
 
   return null;
 }
-
 function isAssetDrivenTask(
   item: ChecklistItem,
   riskByAsset: Record<string, AssetRiskDetail>
@@ -135,7 +136,24 @@ export default function MaintenancePage() {
   const selectedPropertyId = searchParams.get('propertyId');
   const priority = searchParams.get('priority') === 'true';
 
-
+  const togglePriorityView = (enabled: boolean) => {
+    const params = new URLSearchParams(searchParams.toString());
+  
+    // Always SET — never append
+    if (enabled) {
+      params.set('priority', 'true');
+    } else {
+      params.delete('priority');
+    }
+  
+    // Ensure propertyId exists exactly once
+    if (selectedPropertyId) {
+      params.set('propertyId', selectedPropertyId);
+    }
+  
+    router.push(`/dashboard/maintenance?${params.toString()}`);
+  };
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<DashboardChecklistItem | null>(null);
 
@@ -204,9 +222,7 @@ export default function MaintenancePage() {
     return Object.fromEntries(
       (riskReport.details || []).map(r => [r.assetName, r])
     );
-  }, [riskReport]);
-    
-  
+  }, [riskReport]);      
   // Helper to map property ID to display name
   const getPropertyName = (propertyId: string | null): string => {
     if (!propertyId || !mainData?.propertiesMap) return 'No Property Linked';
@@ -219,43 +235,51 @@ export default function MaintenancePage() {
 
   const allChecklistItems = mainData?.checklistItems || [];
   
-  // Filter the list for active tasks, excluding direct navigation categories (INSURANCE, WARRANTY, ATTORNEY)
   const maintenanceItems = useMemo(() => {
     let items = allChecklistItems;
-    
-    // 1. Filter by property if propertyId is specified in URL
+  
+    // 1. Filter by property
     if (selectedPropertyId) {
       items = items.filter(item => item.propertyId === selectedPropertyId);
     }
-    
-    // 2. Must be active (not COMPLETED or NOT_NEEDED)
-    items = items.filter(item => 
-      item.status !== 'COMPLETED' && item.status !== 'NOT_NEEDED'
+  
+    // 2. Active only
+    items = items.filter(
+      item => item.status !== 'COMPLETED' && item.status !== 'NOT_NEEDED'
     );
-
-    // 3. Must NOT be a direct navigation task (Keeps FINANCE and ADMIN)
-    items = items.filter(item => {
-        const isExcluded = isDirectNavigationTask(item.serviceCategory);
-        return !isExcluded;
-    });
-    // 4. If priority is true, filter for asset-driven tasks
+  
+    // 3. Exclude direct navigation categories
+    items = items.filter(item => !isDirectNavigationTask(item.serviceCategory));
+  
+    // 4. PRIORITY MODE
     if (priority) {
-      const priorityItems = items.filter(item =>
-        isAssetDrivenTask(item, riskByAsset)
-      );
-    
+      const priorityItems = items
+        .map(item => {
+          const risk = isAssetDrivenTask(item, riskByAsset);
+          return risk ? { item, risk } : null;
+        })
+        .filter(Boolean) as { item: ChecklistItem; risk: AssetRiskDetail }[];
+  
       if (priorityItems.length > 0) {
-        items = priorityItems;
+        // Sort by risk severity (HIGH → LOW)
+        priorityItems.sort(
+          (a, b) =>
+            (RISK_SEVERITY_ORDER[b.risk.riskLevel] ?? 0) -
+            (RISK_SEVERITY_ORDER[a.risk.riskLevel] ?? 0)
+        );
+  
+        return priorityItems.map(p => p.item);
       }
-    }    
-    // Sort and return (by Next Due Date)
-    return items
-      .sort((a, b) => { 
-        const dateA = a.nextDueDate ? parseISO(a.nextDueDate).getTime() : Infinity;
-        const dateB = b.nextDueDate ? parseISO(b.nextDueDate).getTime() : Infinity;
-        return dateA - dateB;
-      });
-  }, [allChecklistItems, selectedPropertyId]); 
+      // else → fallback to full list
+    }
+  
+    // 5. Default sort by next due date
+    return items.sort((a, b) => {
+      const dateA = a.nextDueDate ? parseISO(a.nextDueDate).getTime() : Infinity;
+      const dateB = b.nextDueDate ? parseISO(b.nextDueDate).getTime() : Infinity;
+      return dateA - dateB;
+    });
+  }, [allChecklistItems, selectedPropertyId, priority, riskByAsset]);  
 
   // 🔴 Priority View flag (asset-driven filtered view)
   const isPriorityView =
@@ -264,8 +288,6 @@ export default function MaintenancePage() {
     maintenanceItems.every(item =>
       isAssetDrivenTask(item, riskByAsset)
     );
-
-
   // --- Modal Handlers & Mutations ---
   
   // Step 3.1: Update handleOpenModal for redirection
@@ -289,8 +311,7 @@ export default function MaintenancePage() {
           variant: 'default' // Using default variant for informational toast
         });
         return; // Skip opening the modal
-    }
-    
+    }    
     // For MAINTENANCE, FINANCE, and ADMIN tasks, proceed to open the modal for configuration/reminders
     setEditingTask(task);
     setIsModalOpen(true);
@@ -384,7 +405,6 @@ export default function MaintenancePage() {
     }
   });
 
-
   const handleSaveTaskUpdate = (config: MaintenanceTaskConfig) => {
     if (!editingTask) return;
 
@@ -409,9 +429,7 @@ export default function MaintenancePage() {
   const handleRemoveTask = (taskId: string) => {
     deleteMutation.mutate(taskId);
   };
-  // --- End Modal Handlers & Mutations ---
-  
-
+  // --- End Modal Handlers & Mutations ---  
   if (isInitialLoading || updateMutation.isPending || deleteMutation.isPending || handleMarkComplete.isPending) { 
     return (
       <div className="space-y-6 pb-8">
@@ -421,7 +439,6 @@ export default function MaintenancePage() {
     );
   }
 
-
   return (
     <div className="space-y-6 pb-8 max-w-7xl mx-auto px-4 md:px-8">
       <div className="flex justify-between items-center">
@@ -429,6 +446,25 @@ export default function MaintenancePage() {
           <Wrench className="w-7 h-7 text-blue-600" /> Home Tasks & Reminders
         </h2>
 
+        {priority && (
+          <div className="flex items-center gap-3 mt-2">
+            <span
+              className="inline-flex items-center rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700"
+              title="Showing only high-impact maintenance tasks affecting property health"
+            >
+              Priority ({maintenanceItems.length})
+            </span>
+
+            <Link
+              href={`/dashboard/maintenance${
+                selectedPropertyId ? `?propertyId=${selectedPropertyId}` : ''
+              }`}
+              className="text-xs text-blue-600 hover:underline"
+            >
+              Show all tasks
+            </Link>
+          </div>
+        )}
         {/* Priority View Toggle */}
         <div className="flex items-center gap-2 text-sm">
           <span className="text-gray-600">Priority view</span>
@@ -468,11 +504,24 @@ export default function MaintenancePage() {
       </div>
 
       {/* Link to the Setup Page to add new tasks */}
-      <Button asChild>
-        <Link href="/dashboard/maintenance-setup">
-          <Plus className="w-4 h-4 mr-2" /> Add New Tasks
-        </Link>
-      </Button>
+      <div className="flex items-center gap-3">
+        {/* Priority Toggle */}
+        <Button
+          size="sm"
+          variant={priority ? 'default' : 'outline'}
+          onClick={() => togglePriorityView(!priority)}
+        >
+          {priority ? 'Show all tasks' : 'Priority view'}
+        </Button>
+
+        {/* Add New Tasks */}
+        <Button asChild>
+          <Link href="/dashboard/maintenance-setup">
+            <Plus className="w-4 h-4 mr-2" /> Add New Tasks
+          </Link>
+        </Button>
+      </div>
+
       <p className="text-muted-foreground">Manage your scheduled maintenance, as well as crucial administrative and financial reminders.</p>
 
       {/* FIX: The list should now correctly show tasks because the filter was adjusted. */}
