@@ -73,7 +73,7 @@ export function MaintenanceNudgeCard({ property, consolidatedActionCount }: Main
                 <div className="flex items-center gap-2.5">
                     <AlertTriangle className={`h-5 w-5 ${styles.icon} flex-shrink-0`} />
                     <span className="text-[15px] font-semibold text-gray-900">
-                        Maintenance Needed: Health Score {healthScore}/100
+                        Property Attention Needed: Health Score {healthScore}/100
                     </span>
                 </div>
                 <div className={`
@@ -89,7 +89,7 @@ export function MaintenanceNudgeCard({ property, consolidatedActionCount }: Main
             {/* Line 2: Description + Button */}
             <div className="flex items-center justify-between">
                 <span className="text-[13px] text-gray-600 ml-[30px]">
-                    {consolidatedActionCount} {actionText} required for {propertyName}
+                    {consolidatedActionCount} unresolved property issues for {propertyName}
                 </span>
                 <Link href={`/dashboard/maintenance?propertyId=${property.id}&priority=true`}>
                     <button className={`
@@ -102,7 +102,7 @@ export function MaintenanceNudgeCard({ property, consolidatedActionCount }: Main
                         hover:shadow-sm hover:-translate-y-px
                         flex-shrink-0
                     `}>
-                        View Plan
+                        View Action Plan
                         <ArrowRight className="h-3.5 w-3.5" />
                     </button>
                 </Link>
