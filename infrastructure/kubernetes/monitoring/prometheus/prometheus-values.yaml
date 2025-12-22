@@ -17,7 +17,7 @@ prometheus:
     retentionSize: "8GB"
     
     # Allow Prometheus to find your PodMonitor regardless of labels
-    podMonitorSelectorNilUsesHelmValues: false 
+    podMonitorSelectorNilUsesHelmValues: false
     podMonitorNamespaceSelector:
       any: true
 
@@ -33,3 +33,15 @@ prometheus:
           - source_labels: [__meta_kubernetes_namespace]
             regex: 'kube-system|kube-public|monitoring|argocd|default|cattle-system|kube-node-lease'
             action: drop
+
+# --- NEW ALERTMANAGER SECTION ---
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 1Gi  # Alertmanager database for silences is very small
