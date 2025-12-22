@@ -136,23 +136,24 @@ export default function MaintenancePage() {
   const selectedPropertyId = searchParams.get('propertyId');
   const priority = searchParams.get('priority') === 'true';
 
-  const togglePriorityView = (enabled: boolean) => {
-    const params = new URLSearchParams(searchParams.toString());
+  const togglePriorityView = useCallback(
+    (enabled: boolean) => {
+      const params = new URLSearchParams();
   
-    // Always SET — never append
-    if (enabled) {
-      params.set('priority', 'true');
-    } else {
-      params.delete('priority');
-    }
+      if (selectedPropertyId) {
+        params.set('propertyId', selectedPropertyId);
+      }
   
-    // Ensure propertyId exists exactly once
-    if (selectedPropertyId) {
-      params.set('propertyId', selectedPropertyId);
-    }
+      if (enabled) {
+        params.set('priority', 'true');
+      }
   
-    router.push(`/dashboard/maintenance?${params.toString()}`);
-  };
+      router.replace(`/dashboard/maintenance?${params.toString()}`, {
+        scroll: false,
+      });
+    },
+    [router, selectedPropertyId]
+  );  
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<DashboardChecklistItem | null>(null);
@@ -470,21 +471,7 @@ export default function MaintenancePage() {
           <span className="text-gray-600">Priority view</span>
 
           <button
-            onClick={() => {
-              const params = new URLSearchParams(searchParams.toString());
-
-              if (priority) {
-                params.delete('priority');
-              } else {
-                params.set('priority', 'true');
-              }
-
-              router.push(
-                `/dashboard/maintenance${
-                  selectedPropertyId ? `?propertyId=${selectedPropertyId}&${params.toString()}` : ''
-                }`
-              );
-            }}
+            onClick={() => togglePriorityView(!priority)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
               priority ? 'bg-orange-500' : 'bg-gray-300'
             }`}
@@ -551,16 +538,7 @@ export default function MaintenancePage() {
 
               {/* Show all tasks link */}
               <button
-                onClick={() => {
-                  const params = new URLSearchParams(searchParams.toString());
-                  params.delete('priority');
-
-                  router.push(
-                    `/dashboard/maintenance${
-                      selectedPropertyId ? `?propertyId=${selectedPropertyId}` : ''
-                    }`
-                  );
-                }}
+                onClick={() => togglePriorityView(false)}
                 className="text-sm text-blue-600 hover:text-blue-700 underline underline-offset-2"
               >
                 Show all tasks
