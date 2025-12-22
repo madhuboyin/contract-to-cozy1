@@ -50,7 +50,6 @@ const DIRECT_NAVIGATION_CATEGORIES: ServiceCategory[] = [
   'WARRANTY',
   'ATTORNEY',
 ];
-
 // Helper to check if a task belongs to the immediate redirect group
 const isDirectNavigationTask = (category: ServiceCategory | null): boolean => {
     return !!category && DIRECT_NAVIGATION_CATEGORIES.includes(category);
@@ -104,12 +103,25 @@ function resolveAssetKeyFromTask(item: ChecklistItem): string | null {
   return null;
 }
 
-function mapAssetToWarrantyCategory(assetKey: string): string | null {
-  if (assetKey.includes('HVAC')) return 'SYSTEMS';
-  if (assetKey.includes('WATER_HEATER')) return 'SYSTEMS';
-  if (assetKey.includes('ROOF')) return 'STRUCTURE';
-  if (assetKey.includes('SMOKE')) return 'SAFETY';
-  return null;
+function isAssetDrivenTask(
+  item: ChecklistItem,
+  riskByAsset: Record<string, AssetRiskDetail>
+): AssetRiskDetail | null {
+  // Exclude non-physical categories early
+  if (
+    item.serviceCategory === 'ADMIN' ||
+    item.serviceCategory === 'FINANCE' ||
+    item.serviceCategory === 'INSURANCE' ||
+    item.serviceCategory === 'WARRANTY' ||
+    item.serviceCategory === 'ATTORNEY'
+  ) {
+    return null;
+  }
+
+  const assetKey = resolveAssetKeyFromTask(item);
+  if (!assetKey) return null;
+
+  return riskByAsset[assetKey] ?? null;
 }
 
 // --- Main Page Component ---
@@ -434,10 +446,8 @@ export default function MaintenancePage() {
             </TableHeader>
             <TableBody>
               {maintenanceItems.map(item => {
-                const assetKey = resolveAssetKeyFromTask(item);
-                const risk = assetKey ? riskByAsset[assetKey] : null;
-                const dueDateInfo = formatDueDate(item.nextDueDate);
-                
+
+                const dueDateInfo = formatDueDate(item.nextDueDate);                
                 // FINAL FIX: Explicitly check for ADMIN and override the display based on the category,
                 // ignoring the overridden isRecurring/frequency flags saved in the database.
                 const frequencyDisplay = item.serviceCategory === 'ADMIN'
@@ -466,37 +476,33 @@ export default function MaintenancePage() {
                       {/* ============================
                           Phase 4 — Why this exists
                         ============================ */}
-                      {risk && (
-                        <div className="mt-1 text-xs text-gray-600 space-y-0.5">
-                          <div>
-                            <strong>Why:</strong>{' '}
-                            {formatEnumString(risk.assetName)} at{' '}
-                            {formatEnumString(risk.riskLevel)} risk —{' '}
-                            {risk.age}/{risk.expectedLife} yrs
-                          </div>
+                      {(() => {
+                        const risk = isAssetDrivenTask(item, riskByAsset);
 
-                          <div>
-                            <strong>Exposure:</strong>{' '}
-                            ${risk.replacementCost.toLocaleString()}
-                          </div>
+                        if (!risk) return null;
 
-                          {risk.actionCta === 'Add Home Warranty' ? (
-                            hasWarranty ? (
-                              <div className="text-green-700 font-medium">
-                                Covered by existing warranty
-                              </div>
-                            ) : (
-                              <div className="text-blue-600 font-medium">
-                                Recommended: Add Home Warranty
-                              </div>
-                            )
-                          ) : risk.actionCta ? (
-                            <div className="text-blue-600 font-medium">
-                              Recommended: {risk.actionCta}
+                        return (
+                          <div className="mt-1 text-xs text-gray-600 space-y-0.5">
+                            <div>
+                              <strong>Why:</strong>{' '}
+                              {formatEnumString(risk.category)} —{' '}
+                              {formatEnumString(risk.riskLevel)} risk (
+                              {risk.age}/{risk.expectedLife} yrs)
                             </div>
-                          ) : null}
-                        </div>
-                      )}
+
+                            <div>
+                              <strong>Exposure:</strong>{' '}
+                              ${risk.replacementCost.toLocaleString()}
+                            </div>
+
+                            {risk.actionCta && (
+                              <div className="text-blue-600 font-medium">
+                                Recommended: {risk.actionCta}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="text-sm">
                       {formatCategory(item.serviceCategory)}
