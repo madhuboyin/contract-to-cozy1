@@ -1,40 +1,41 @@
 # In infrastructure/kubernetes/monitoring/prometheus/prometheus-values.yaml
-# Used to customize the prometheus-community/kube-prometheus-stack Helm chart
 
 prometheus:
   prometheusSpec:
-    # This section allows you to inject custom scrape jobs into Prometheus's configuration.
-    retention: 2d               # Keep only 2 days of metrics
-    retentionSize: "8GB"        # Physically force Prometheus to stay under 8GB
-    additionalScrapeConfigs:
+    # --- STORAGE MIGRATION START ---
+    # Provision a 10Gi replicated volume on Longhorn
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+    # --- STORAGE MIGRATION END ---
 
-      # Job to globally drop metrics targets from noisy system/infra namespaces.
+    retention: 2d               # Keeping your 2-day metrics setting
+    retentionSize: "8GB"        # Keeping your 8GB limit
+    
+    # Ensures Prometheus looks for the PodMonitor you attached
+    podMonitorSelectorNilUsesHelmValues: false
+    podMonitorNamespaceSelector:
+      any: true
+
+    additionalScrapeConfigs:
       - job_name: 'namespace-filter-drop-list'
-        
-        # This uses Kubernetes Service Discovery (Pod role) to find all scrape targets.
         kubernetes_sd_configs:
           - role: pod
-        
-        # This section filters targets before Prometheus scrapes them.
         relabel_configs:
-        # --- ADD THIS RULE START ---
-        # Ignore Redis (6379) to prevent "Cross Protocol Scripting" alerts
           - source_labels: [__address__]
             regex: '.*:(6379|5432)'
             action: drop
-          # --- ADD THIS RULE END ---
-          # DROP all targets whose namespace label matches this regex list.
-          # Including 'default' and 'monitoring' (where Prometheus itself lives) 
-          # prevents self-monitoring metric duplication and noise.
           - source_labels: [__meta_kubernetes_namespace]
             regex: 'kube-system|kube-public|monitoring|argocd|default|cattle-system|kube-node-lease'
             action: drop
-          
-          # Standard labels that must be retained
           - source_labels: [__meta_kubernetes_pod_name]
             target_label: pod
             action: replace
-          
           - source_labels: [__meta_kubernetes_namespace]
             target_label: namespace
             action: replace

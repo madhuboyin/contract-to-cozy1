@@ -1,8 +1,7 @@
-USER-SUPPLIED VALUES:
 backend:
   replicas: 0
 compactor:
-  enabled: false
+  enabled: true  # Changed to true: Compactor is REQUIRED for retention to actually work
 deploymentMode: SingleBinary
 distributor:
   replicas: 0
@@ -18,10 +17,12 @@ loki:
   commonConfig:
     replication_factor: 1
   compactor:
+    working_directory: /var/loki/compactor
     delete_request_store: filesystem
     retention_enabled: true
+    retention_delete_delay: 2h
   limits_config:
-    retention_period: 7d
+    retention_period: 24h  # CHANGED: Set to 24 hours as requested
   schemaConfig:
     configs:
     - from: "2024-01-01"
@@ -54,6 +55,7 @@ singleBinary:
   persistence:
     enabled: true
     size: 10Gi
+    storageClass: "longhorn"  # ADDED: Forces the move to your healthy mb-08 storage
   replicas: 1
   resources:
     limits:
