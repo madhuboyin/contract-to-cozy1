@@ -39,6 +39,7 @@ import { communityRoutes } from './community/community.routes';
 import sellerPrepRoutes from './sellerPrep/sellerPrep.routes';
 import inspectionReportRoutes from './routes/inspectionReport.routes';
 import localUpdatesRoutes from './localUpdates/localUpdates.routes';
+import orchestrationRoutes from './routes/orchestration.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
@@ -267,6 +268,7 @@ app.use('/api/moving-concierge', movingConciergeRoutes);
 app.use('/api/seller-prep', sellerPrepRoutes);
 app.use('/api/inspection-reports', inspectionReportRoutes);
 app.use('/api/local-updates', localUpdatesRoutes);
+app.use('/api/orchestration', orchestrationRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

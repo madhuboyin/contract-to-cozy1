@@ -175,6 +175,9 @@ export default function DashboardPage() {
   const { user, loading: userLoading } = useAuth();
   const [redirectChecked, setRedirectChecked] = useState(false);
   const [showWelcomeScreen, setShowWelcomeScreen] = useState(false);
+  const [orchestrationSummary, setOrchestrationSummary] = useState<{
+    pendingActionCount: number;
+  } | null>(null);
   
   const [data, setData] = useState<DashboardData>({
     bookings: [],
@@ -287,7 +290,22 @@ export default function DashboardPage() {
       if (scoredProperties.length > 0 && !selectedPropertyId) {
         setSelectedPropertyId(scoredProperties[0].id);
       }
-  
+      // Phase 2: Fetch orchestration summary for selected property
+      const propertyIdForOrchestration =
+      selectedPropertyId || scoredProperties[0]?.id;
+
+      if (propertyIdForOrchestration) {
+        try {
+          const orchestration = await api.getOrchestrationSummary(
+            propertyIdForOrchestration
+          );
+          setOrchestrationSummary(orchestration);
+        } catch (e) {
+          console.warn('Failed to fetch orchestration summary', e);
+          setOrchestrationSummary(null);
+        }
+      }      
+
     } catch (error) {
       console.error('❌ Dashboard: Error fetching data:', error);
       setData(prev => ({
@@ -715,7 +733,9 @@ export default function DashboardPage() {
             properties={filteredProperties} // Pass only selected property
             checklistItems={filteredChecklistItems} // Pass the newly filtered list
             selectedPropertyId={selectedPropertyId}
-            consolidatedActionCount={filteredUrgentActions.length} // Pass filtered count
+            consolidatedActionCount={
+              orchestrationSummary?.pendingActionCount ?? filteredUrgentActions.length
+            }
           />
         );
       })()}

@@ -1603,9 +1603,25 @@ class APIClient {
     await this.request(`/api/local-updates/${id}/dismiss`, {
       method: 'POST',
     });
-  }  
+  }
+
+  // ORCHESTRATION — Phase 2
+  async getOrchestrationSummary(propertyId: string): Promise<{
+    pendingActionCount: number;
+  }> {
+    const response = await this.request<{
+      pendingActionCount: number;
+    }>(`/api/orchestration/summary/${propertyId}`);
+
+    if (response.success && response.data) {
+      return response.data;
+    }
+
+    return { pendingActionCount: 0 };
+  }
 
 }
+
 
 // Export singleton instance
 export const api = new APIClient(API_BASE_URL);
