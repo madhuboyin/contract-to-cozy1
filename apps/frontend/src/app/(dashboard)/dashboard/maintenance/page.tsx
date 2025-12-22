@@ -525,26 +525,6 @@ export default function MaintenancePage() {
       {!isInitialLoading && maintenanceItems.length > 0 && (
         <>
           {/* Priority View Indicator */}
-          {isPriorityView && (
-            <div className="flex items-center gap-3 mb-3">
-              {/* Priority pill with tooltip */}
-              <div
-                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-100 text-orange-800 text-sm font-medium cursor-help"
-                title="Showing only asset-related tasks that affect your home's health or risk score"
-              >
-                <span className="w-2 h-2 rounded-full bg-orange-500" />
-                Priority view
-              </div>
-
-              {/* Show all tasks link */}
-              <button
-                onClick={() => togglePriorityView(false)}
-                className="text-sm text-blue-600 hover:text-blue-700 underline underline-offset-2"
-              >
-                Show all tasks
-              </button>
-            </div>
-          )}
           <div className="rounded-md border bg-white">
           <Table>
             <TableHeader>
