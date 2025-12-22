@@ -257,6 +257,15 @@ export default function MaintenancePage() {
       });
   }, [allChecklistItems, selectedPropertyId]); 
 
+  // 🔴 Priority View flag (asset-driven filtered view)
+  const isPriorityView =
+    priority &&
+    maintenanceItems.length > 0 &&
+    maintenanceItems.every(item =>
+      isAssetDrivenTask(item, riskByAsset)
+    );
+
+
   // --- Modal Handlers & Mutations ---
   
   // Step 3.1: Update handleOpenModal for redirection
@@ -442,7 +451,16 @@ export default function MaintenancePage() {
       )}
 
       {!isInitialLoading && maintenanceItems.length > 0 && (
-        <div className="rounded-md border bg-white">
+        <>
+          {/* Priority View Indicator */}
+          {isPriorityView && (
+            <div className="inline-flex items-center gap-2 mb-3 px-3 py-1.5 rounded-full bg-orange-100 text-orange-800 text-sm font-medium">
+              <span className="w-2 h-2 rounded-full bg-orange-500" />
+              Priority view
+            </div>
+          )}
+
+          <div className="rounded-md border bg-white">
           <Table>
             <TableHeader>
               <TableRow>
@@ -559,6 +577,7 @@ export default function MaintenancePage() {
             </TableBody>
           </Table>
         </div>
+        </>
       )}
 
       {/* --- MODAL FOR EDITING (Now handles FINANCE/ADMIN flow) --- */}
