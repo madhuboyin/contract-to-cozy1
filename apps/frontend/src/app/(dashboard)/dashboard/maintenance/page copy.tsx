@@ -32,11 +32,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-import { AssetRiskDetail, RiskAssessmentReport } from '@/types';
+
 // Define the type for items fetched from the checklist endpoint
-interface DashboardChecklistItem extends ChecklistItem {
-  assetName?: string; // Optional asset name for risk assessment matching
-}
+interface DashboardChecklistItem extends ChecklistItem {}
 
 // Define the custom type needed for the existingConfig prop to resolve the propertyId conflict
 type EditingConfig = MaintenanceTaskConfig & {
@@ -93,17 +91,6 @@ function formatCategory(category: ServiceCategory | null) {
     return formatEnumString(category);
 }
 
-function resolveAssetKeyFromTask(item: ChecklistItem): string | null {
-  const text = `${item.title} ${item.description || ''}`.toUpperCase();
-
-  if (text.includes('HVAC') || text.includes('FURNACE')) return 'HVAC_FURNACE';
-  if (text.includes('WATER HEATER')) return 'WATER_HEATER_TANK';
-  if (text.includes('ROOF')) return 'ROOF_SHINGLE';
-  if (text.includes('SMOKE') || text.includes('CO')) return 'SAFETY_SMOKE_CO_DETECTORS';
-
-  return null;
-}
-
 
 // --- Main Page Component ---
 export default function MaintenancePage() {
@@ -152,25 +139,7 @@ export default function MaintenancePage() {
     staleTime: 5 * 60 * 1000, // Keep data fresh for 5 mins
   });
   // --- END FIX ---
-  // =======================
-  // Phase 4 — Risk Context
-  // =======================
-  const { data: riskReport } = useQuery({
-    queryKey: ['risk-report', selectedPropertyId],
-    enabled: !!selectedPropertyId,
-    queryFn: async () => {
-      if (!selectedPropertyId) return null;
-      const res = await api.getRiskReportSummary(selectedPropertyId);
-      return res === 'QUEUED' ? null : res;
-    },
-  });
-  const riskByAsset = useMemo<Record<string, AssetRiskDetail>>(() => {
-    if (!riskReport || !('details' in riskReport)) return {};
-    return Object.fromEntries(
-      (riskReport.details || []).map(r => [r.assetName, r])
-    );
-  }, [riskReport]);
-  
+
   // Helper to map property ID to display name
   const getPropertyName = (propertyId: string | null): string => {
     if (!propertyId || !mainData?.propertiesMap) return 'No Property Linked';
@@ -412,9 +381,6 @@ export default function MaintenancePage() {
             </TableHeader>
             <TableBody>
               {maintenanceItems.map(item => {
-                const assetKey = resolveAssetKeyFromTask(item);
-                const risk = assetKey ? riskByAsset[assetKey] : null;
-
                 const dueDateInfo = formatDueDate(item.nextDueDate);
                 
                 // FINAL FIX: Explicitly check for ADMIN and override the display based on the category,
@@ -437,34 +403,9 @@ export default function MaintenancePage() {
 
                     <TableCell className="font-medium text-gray-900">
                       {item.title}
-
                       <div className="text-xs text-muted-foreground mt-0.5 max-w-xs truncate">
                         {item.description || 'No description.'}
                       </div>
-
-                      {/* ============================
-                          Phase 4 — Why this exists
-                        ============================ */}
-                      {risk && (
-                        <div className="mt-1 text-xs text-gray-600 space-y-0.5">
-                          <div>
-                            <strong>Why:</strong>{' '}
-                            {formatEnumString(risk.riskLevel)} risk —{' '}
-                            {risk.age}/{risk.expectedLife} yrs
-                          </div>
-
-                          <div>
-                            <strong>Exposure:</strong>{' '}
-                            ${risk.replacementCost.toLocaleString()}
-                          </div>
-
-                          {risk.actionCta && (
-                            <div className="text-blue-600 font-medium">
-                              Recommended: {risk.actionCta}
-                            </div>
-                          )}
-                        </div>
-                      )}
                     </TableCell>
                     <TableCell className="text-sm">
                       {formatCategory(item.serviceCategory)}
