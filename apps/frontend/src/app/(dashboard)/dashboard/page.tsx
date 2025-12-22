@@ -167,7 +167,32 @@ const consolidateUrgentActions = (
 // --- END PHASE 1: DATA CONSOLIDATION TYPES ---
 
 const formatAddress = (property: Property) => {
-    return `${property.address}, ${property.city}, ${property.state}`;
+  return `${property.address}, ${property.city}, ${property.state}`;
+}
+
+// Helper to check if a checklist item could be asset-driven
+function couldBeAssetDriven(item: ChecklistItem): boolean {
+  // Exclude non-physical categories
+  if (
+    item.serviceCategory === 'ADMIN' ||
+    item.serviceCategory === 'FINANCE' ||
+    item.serviceCategory === 'INSURANCE' ||
+    item.serviceCategory === 'WARRANTY' ||
+    item.serviceCategory === 'ATTORNEY'
+  ) {
+    return false;
+  }
+
+  // Check if title or description contains asset-related keywords
+  const text = `${item.title} ${item.description || ''}`.toUpperCase();
+  return (
+    text.includes('HVAC') ||
+    text.includes('FURNACE') ||
+    text.includes('WATER HEATER') ||
+    text.includes('ROOF') ||
+    text.includes('SMOKE') ||
+    text.includes('CO')
+  );
 }
 
 export default function DashboardPage() {
@@ -726,6 +751,12 @@ export default function DashboardPage() {
             ? checklistItems.filter(item => item.propertyId === selectedPropertyId)
             : []; 
 
+        // Calculate if there are any asset-driven actions
+        const hasAssetDrivenActions = filteredChecklistItems.some(item => 
+          couldBeAssetDriven(item) && 
+          item.status === 'PENDING'
+        );
+
         return (
           <ExistingOwnerDashboard 
             userFirstName={user.firstName}
@@ -736,6 +767,7 @@ export default function DashboardPage() {
             consolidatedActionCount={
               orchestrationSummary?.pendingActionCount ?? filteredUrgentActions.length
             }
+            hasAssetDrivenActions={hasAssetDrivenActions}
           />
         );
       })()}

@@ -26,6 +26,7 @@ interface ExistingOwnerDashboardProps {
   userFirstName: string;
   selectedPropertyId: string | undefined;
   consolidatedActionCount: number;
+  hasAssetDrivenActions: boolean; 
 }
 
 export const ExistingOwnerDashboard = ({
@@ -34,6 +35,7 @@ export const ExistingOwnerDashboard = ({
   checklistItems,
   selectedPropertyId,
   consolidatedActionCount,
+  hasAssetDrivenActions,
 }: ExistingOwnerDashboardProps) => {
   // ------------------------------
   // Local Home Updates (NEW)
@@ -100,6 +102,7 @@ export const ExistingOwnerDashboard = ({
       <MaintenanceNudgeCard
         property={selectedProperty}
         consolidatedActionCount={consolidatedActionCount}
+        hasAssetDrivenActions={hasAssetDrivenActions}
       />
     </div>
   ) : null;
