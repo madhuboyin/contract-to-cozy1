@@ -104,6 +104,13 @@ function resolveAssetKeyFromTask(item: ChecklistItem): string | null {
   return null;
 }
 
+function mapAssetToWarrantyCategory(assetKey: string): string | null {
+  if (assetKey.includes('HVAC')) return 'SYSTEMS';
+  if (assetKey.includes('WATER_HEATER')) return 'SYSTEMS';
+  if (assetKey.includes('ROOF')) return 'STRUCTURE';
+  if (assetKey.includes('SMOKE')) return 'SAFETY';
+  return null;
+}
 
 // --- Main Page Component ---
 export default function MaintenancePage() {
@@ -164,12 +171,27 @@ export default function MaintenancePage() {
       return res === 'QUEUED' ? null : res;
     },
   });
+  const { data: warrantiesRes } = useQuery({
+    queryKey: ['warranties', selectedPropertyId],
+    enabled: !!selectedPropertyId,
+    queryFn: async () => {
+      if (!selectedPropertyId) return [];
+      const res = await api.listWarranties(selectedPropertyId);
+      return res.success ? res.data.warranties : [];
+    },
+  });
+  
+  const hasWarranty = useMemo(() => {
+    return (warrantiesRes?.length ?? 0) > 0;
+  }, [warrantiesRes]);
+
   const riskByAsset = useMemo<Record<string, AssetRiskDetail>>(() => {
     if (!riskReport || !('details' in riskReport)) return {};
     return Object.fromEntries(
       (riskReport.details || []).map(r => [r.assetName, r])
     );
   }, [riskReport]);
+    
   
   // Helper to map property ID to display name
   const getPropertyName = (propertyId: string | null): string => {
@@ -414,7 +436,6 @@ export default function MaintenancePage() {
               {maintenanceItems.map(item => {
                 const assetKey = resolveAssetKeyFromTask(item);
                 const risk = assetKey ? riskByAsset[assetKey] : null;
-
                 const dueDateInfo = formatDueDate(item.nextDueDate);
                 
                 // FINAL FIX: Explicitly check for ADMIN and override the display based on the category,
@@ -449,6 +470,7 @@ export default function MaintenancePage() {
                         <div className="mt-1 text-xs text-gray-600 space-y-0.5">
                           <div>
                             <strong>Why:</strong>{' '}
+                            {formatEnumString(risk.assetName)} at{' '}
                             {formatEnumString(risk.riskLevel)} risk —{' '}
                             {risk.age}/{risk.expectedLife} yrs
                           </div>
@@ -458,11 +480,21 @@ export default function MaintenancePage() {
                             ${risk.replacementCost.toLocaleString()}
                           </div>
 
-                          {risk.actionCta && (
+                          {risk.actionCta === 'Add Home Warranty' ? (
+                            hasWarranty ? (
+                              <div className="text-green-700 font-medium">
+                                Covered by existing warranty
+                              </div>
+                            ) : (
+                              <div className="text-blue-600 font-medium">
+                                Recommended: Add Home Warranty
+                              </div>
+                            )
+                          ) : risk.actionCta ? (
                             <div className="text-blue-600 font-medium">
                               Recommended: {risk.actionCta}
                             </div>
-                          )}
+                          ) : null}
                         </div>
                       )}
                     </TableCell>
