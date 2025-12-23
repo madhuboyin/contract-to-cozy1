@@ -7,6 +7,13 @@ import {
   SuppressionReasonEntryDTO,
   DecisionTraceStepDTO,
 } from '@/types';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { TRACE_COPY } from './decisionTraceLabels';
 
 type Props = {
   suppressed: boolean;
@@ -79,10 +86,30 @@ export const DecisionTracePanel: React.FC<Props> = ({
                   How we decided this
                 </div>
 
-                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Info size={12} />
-                  Internal evaluation
-                </span>
+                {/* ✅ FIXED: Internal evaluation with working tooltip */}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground hover:text-gray-900 flex items-center gap-1 cursor-help"
+                      >
+                        <Info size={12} />
+                        Internal evaluation
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <div className="space-y-2">
+                        <div className="font-semibold text-sm">
+                          {TRACE_COPY.tooltip.title}
+                        </div>
+                        <div className="text-xs text-gray-700">
+                          {TRACE_COPY.tooltip.body}
+                        </div>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
 
               <div className="space-y-2">
@@ -92,7 +119,7 @@ export const DecisionTracePanel: React.FC<Props> = ({
                     className="flex items-start gap-2"
                   >
                     <span className="mt-0.5">
-                      {step.outcome === 'APPLIED' ? '✅' : '⏭'}
+                      {step.outcome === 'APPLIED' ? '✅' : '⭕'}
                     </span>
 
                     <div>
@@ -118,7 +145,7 @@ export const DecisionTracePanel: React.FC<Props> = ({
           {suppressed && reasons.length > 0 && (
             <div>
               <div className="text-xs font-semibold text-gray-500 uppercase mb-2">
-                Why it’s hidden
+                Why it's hidden
               </div>
 
               <div className="space-y-2">
