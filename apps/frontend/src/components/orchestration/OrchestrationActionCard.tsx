@@ -6,6 +6,7 @@ import { DecisionTracePanel } from './DecisionTracePanel';
 type Props = {
   action: OrchestratedActionDTO;
   onCtaClick?: (action: OrchestratedActionDTO) => void;
+  onDismiss?: () => void;
 };
 
 function formatMoney(amount?: number | null) {
@@ -45,6 +46,7 @@ function riskBadge(riskLevel?: string | null) {
 export const OrchestrationActionCard: React.FC<Props> = ({
   action,
   onCtaClick,
+  onDismiss,
 }) => {
   const suppressed = Boolean(action.suppression?.suppressed);
 
@@ -122,6 +124,25 @@ export const OrchestrationActionCard: React.FC<Props> = ({
           reasons={action.suppression.reasons}
         />
       )}
+      <div className="mt-3 flex items-center gap-3">
+        {action.cta?.show && action.cta.label && (
+          <button
+            onClick={() => onCtaClick?.(action)}
+            className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm font-semibold"
+          >
+            {action.cta.label}
+          </button>
+        )}
+
+        {onDismiss && (
+          <button
+            onClick={onDismiss}
+            className="text-sm text-muted-foreground hover:underline"
+          >
+            Dismiss
+          </button>
+        )}
+      </div>
     </div>
   );
 };
