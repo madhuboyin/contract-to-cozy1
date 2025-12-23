@@ -1,35 +1,65 @@
 // apps/frontend/src/components/orchestration/DecisionTraceItem.tsx
+'use client';
 
 import React from 'react';
-import { SuppressionReasonEntryDTO } from '@/types';
+import { CheckCircle2, SkipForward } from 'lucide-react';
+import {
+  DecisionTraceStepDTO,
+  SuppressionReasonEntryDTO,
+} from '@/types';
 
-export const DecisionTraceItem: React.FC<{ entry: SuppressionReasonEntryDTO }> = ({ entry }) => {
-  const reason = entry.reason;
+type Props =
+  | {
+      type: 'RULE';
+      step: DecisionTraceStepDTO;
+    }
+  | {
+      type: 'REASON';
+      reason: SuppressionReasonEntryDTO;
+    };
 
-  const pillClass =
-    reason === 'COVERED'
-      ? 'bg-green-100 text-green-700'
-      : reason === 'BOOKING_EXISTS'
-      ? 'bg-blue-100 text-blue-700'
-      : reason === 'NOT_ACTIONABLE'
-      ? 'bg-amber-100 text-amber-700'
-      : 'bg-gray-100 text-gray-700';
+export const DecisionTraceItem: React.FC<Props> = (props) => {
+  if (props.type === 'RULE') {
+    const { step } = props;
+    const applied = step.outcome === 'APPLIED';
+
+    return (
+      <div className="flex items-start gap-2 text-sm">
+        {applied ? (
+          <CheckCircle2 className="text-green-600 mt-0.5" size={16} />
+        ) : (
+          <SkipForward className="text-gray-400 mt-0.5" size={16} />
+        )}
+
+        <div>
+          <div className="font-medium text-gray-800">
+            {step.rule}
+          </div>
+
+          {step.details && (
+            <div className="text-xs text-muted-foreground">
+              {JSON.stringify(step.details)}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // SUPPRESSION / REASON
+  const { reason } = props;
 
   return (
-    <div className="border-l-2 border-gray-300 pl-4 py-2 space-y-1">
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className={`text-xs font-semibold px-2 py-0.5 rounded ${pillClass}`}>
-          {reason.replaceAll('_', ' ')}
-        </span>
-
-        {entry.relatedType && (
-          <span className="text-xs text-gray-500">
-            via {entry.relatedType.toLowerCase()}
-          </span>
-        )}
+    <div className="flex items-start gap-2 text-sm">
+      <span className="text-gray-400 mt-0.5">•</span>
+      <div>
+        <div className="font-medium text-gray-800">
+          {reason.reason.replace(/_/g, ' ')}
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {reason.message}
+        </div>
       </div>
-
-      {entry.message && <p className="text-sm text-gray-700">{entry.message}</p>}
     </div>
   );
 };
