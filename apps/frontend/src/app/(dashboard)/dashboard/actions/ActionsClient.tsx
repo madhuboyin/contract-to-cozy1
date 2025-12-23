@@ -14,10 +14,12 @@ import {
   RecurrenceFrequency,
   ServiceCategory,
 } from '@/types';
+import { useToast } from '@/components/ui/use-toast';
 
 export function ActionsClient() {
   const { selectedPropertyId } = usePropertyContext();
   const propertyId = selectedPropertyId;
+  const { toast } = useToast();
 
   const [actions, setActions] = useState<OrchestratedActionDTO[]>([]);
   const [suppressedActions, setSuppressedActions] = useState<OrchestratedActionDTO[]>([]);
@@ -29,6 +31,7 @@ export function ActionsClient() {
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [template, setTemplate] = useState<MaintenanceTaskTemplate | null>(null);
+  const [activeActionId, setActiveActionId] = useState<string | null>(null);
 
   const loadActions = async () => {
     if (!propertyId) {
@@ -77,6 +80,7 @@ export function ActionsClient() {
   const handleActionCta = (action: OrchestratedActionDTO) => {
     if (action.suppression?.suppressed) return;
 
+    setActiveActionId(action.id);
     setTemplate({
       id: `orchestration:${action.id}`,
       title: action.title,
@@ -90,6 +94,30 @@ export function ActionsClient() {
     });
 
     setIsModalOpen(true);
+  };
+
+  // Success handler with optimistic UI and toast
+  const handleSuccess = () => {
+    // Show success toast
+    toast({
+      title: 'Task scheduled successfully',
+      description: 'The action has been added to your maintenance checklist.',
+    });
+
+    // Optimistic UI: Remove action from active list immediately
+    if (activeActionId) {
+      setActions(prev => prev.filter(a => a.id !== activeActionId));
+    }
+
+    // Close modal and reset
+    setIsModalOpen(false);
+    setTemplate(null);
+    setActiveActionId(null);
+
+    // Background refresh to sync with server
+    setTimeout(() => {
+      loadActions();
+    }, 1000);
   };
 
   if (loading) {
@@ -190,12 +218,9 @@ export function ActionsClient() {
         onClose={() => {
           setIsModalOpen(false);
           setTemplate(null);
+          setActiveActionId(null);
         }}
-        onSuccess={() => {
-          setIsModalOpen(false);
-          setTemplate(null);
-          loadActions();
-        }}
+        onSuccess={handleSuccess}
       />
     </>
   );

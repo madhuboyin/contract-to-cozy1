@@ -14,6 +14,7 @@ import {
   RecurrenceFrequency,
   ServiceCategory,
 } from '@/types';
+import { useToast } from '@/components/ui/use-toast';
 
 type Props = {
   propertyId: string;
@@ -24,6 +25,7 @@ export const ActionCenter: React.FC<Props> = ({
   propertyId,
   maxItems = 5,
 }) => {
+  const { toast } = useToast();
   const [actions, setActions] = useState<OrchestratedActionDTO[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +37,7 @@ export const ActionCenter: React.FC<Props> = ({
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [template, setTemplate] = useState<MaintenanceTaskTemplate | null>(null);
+  const [activeActionId, setActiveActionId] = useState<string | null>(null);
 
   // ---------------------------------------------------------------------------
   // ✅ LOAD ACTIONS AND PROPERTIES
@@ -76,6 +79,7 @@ export const ActionCenter: React.FC<Props> = ({
   const handleActionCta = (action: OrchestratedActionDTO) => {
     if (action.suppression?.suppressed) return;
 
+    setActiveActionId(action.id);
     setTemplate({
       id: `orchestration:${action.id}`,
       title: action.title,
@@ -89,6 +93,33 @@ export const ActionCenter: React.FC<Props> = ({
     });
 
     setIsModalOpen(true);
+  };
+
+  // ---------------------------------------------------------------------------
+  // SUCCESS HANDLER - TOAST + OPTIMISTIC UPDATE
+  // ---------------------------------------------------------------------------
+
+  const handleSuccess = () => {
+    // Show success toast
+    toast({
+      title: 'Task scheduled successfully',
+      description: 'The action has been added to your maintenance checklist.',
+    });
+
+    // Optimistic UI: Remove action from list immediately
+    if (activeActionId) {
+      setActions(prev => prev.filter(a => a.id !== activeActionId));
+    }
+
+    // Close modal and reset
+    setIsModalOpen(false);
+    setTemplate(null);
+    setActiveActionId(null);
+
+    // Background refresh to sync with server
+    setTimeout(() => {
+      loadActions();
+    }, 1000);
   };
 
   // ---------------------------------------------------------------------------
@@ -214,12 +245,9 @@ export const ActionCenter: React.FC<Props> = ({
         onClose={() => {
           setIsModalOpen(false);
           setTemplate(null);
+          setActiveActionId(null);
         }}
-        onSuccess={() => {
-          setIsModalOpen(false);
-          setTemplate(null);
-          loadActions();
-        }}
+        onSuccess={handleSuccess}
       />
     </>
   );
