@@ -43,6 +43,7 @@ function riskBadge(riskLevel?: string | null) {
   }
 }
 
+
 /**
  * Suppress description if it duplicates CTA intent
  */
@@ -61,6 +62,13 @@ function resolveDescription(
   return description;
 }
 
+function confidenceLabel(score?: number) {
+  if (score === undefined || score === null) return null;
+  if (score >= 0.75) return { label: 'High', color: 'bg-green-100 text-green-700' };
+  if (score >= 0.5) return { label: 'Medium', color: 'bg-amber-100 text-amber-700' };
+  return { label: 'Low', color: 'bg-red-100 text-red-700' };
+}
+
 export const OrchestrationActionCard: React.FC<Props> = ({
   action,
   onCtaClick,
@@ -74,6 +82,7 @@ export const OrchestrationActionCard: React.FC<Props> = ({
     action.description,
     action.cta?.label
   );
+  const confidence = confidenceLabel(action.confidence?.score ?? undefined);
 
   return (
     <div
@@ -89,6 +98,14 @@ export const OrchestrationActionCard: React.FC<Props> = ({
               {action.title}
             </h3>
             {riskBadge(action.riskLevel)}
+            {confidence && (
+              <span
+                className={`text-xs font-semibold px-2 py-0.5 rounded ${confidence.color}`}
+                title="How confident the system is that this action is relevant"
+              >
+                Confidence: {confidence.label}
+              </span>
+            )}
             {action.category && (
               <span className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700">
                 {action.category}
@@ -148,15 +165,6 @@ export const OrchestrationActionCard: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Decision Trace */}
-      {action.suppression?.reasons &&
-        action.suppression.reasons.length > 0 && (
-          <DecisionTracePanel
-            suppressed={Boolean(action.suppression?.suppressed)}
-            reasons={action.suppression?.reasons}
-            steps={action.decisionTrace?.steps}
-          />
-        )}
     </div>
   );
 };
