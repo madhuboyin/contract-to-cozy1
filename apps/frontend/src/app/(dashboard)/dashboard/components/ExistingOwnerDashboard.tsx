@@ -137,7 +137,7 @@ export const ExistingOwnerDashboard = ({
               Action Center
             </h2>
             <Link
-              href={`/actions?propertyId=${selectedPropertyId}`}
+              href={`/dashboard/actions?propertyId=${selectedPropertyId}`}
               className="text-sm font-medium text-blue-600 hover:underline"
             >
               View all

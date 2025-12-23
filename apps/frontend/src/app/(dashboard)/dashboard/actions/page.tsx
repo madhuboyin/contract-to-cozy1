@@ -1,3 +1,4 @@
+// apps/frontend/src/app/actions/page.tsx
 import { Suspense } from 'react';
 import { ActionsClient } from './ActionsClient';
 
