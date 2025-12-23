@@ -424,7 +424,7 @@ export function MaintenanceConfigModal({
                     <Home className="h-4 w-4" /> Property
                 </Label>
                 
-                {isEditing ? (
+                {isEditing || orchestrationMode ? (
                     <Input
                         value={currentProperty?.name || currentProperty?.address || 'Property Not Linked'}
                         disabled
@@ -450,7 +450,7 @@ export function MaintenanceConfigModal({
                 )}
                 
                 <p className="text-sm text-gray-500">
-                    {isEditing ? 'Property link cannot be changed.' : 'This task will be linked to the selected property.'}
+                    {isEditing || orchestrationMode ? 'Property link cannot be changed.' : 'This task will be linked to the selected property.'}
                 </p>
             </div>
             {/* --- End Property Selection Field --- */}
