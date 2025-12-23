@@ -4,16 +4,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api/client';
-import { OrchestratedActionDTO } from '@/types';
+import {
+  OrchestratedActionDTO,
+  MaintenanceTaskTemplate,
+  RecurrenceFrequency,
+  ServiceCategory,
+  Property,
+} from '@/types';
+
 import { adaptOrchestrationSummary } from '@/adapters/orchestration.adapter';
 import { OrchestrationActionCard } from './OrchestrationActionCard';
 
 import { MaintenanceConfigModal } from '@/app/(dashboard)/dashboard/maintenance-setup/MaintenanceConfigModal';
-import {
-  MaintenanceTaskTemplate,
-  RecurrenceFrequency,
-  ServiceCategory,
-} from '@/types';
 
 type Props = {
   propertyId: string;
@@ -25,6 +27,8 @@ export const ActionCenter: React.FC<Props> = ({
   maxItems = 5,
 }) => {
   const [actions, setActions] = useState<OrchestratedActionDTO[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,17 +40,26 @@ export const ActionCenter: React.FC<Props> = ({
   const [template, setTemplate] = useState<MaintenanceTaskTemplate | null>(null);
 
   // ---------------------------------------------------------------------------
-  // LOAD ACTIONS
+  // LOAD ACTIONS + PROPERTIES
   // ---------------------------------------------------------------------------
 
-  const loadActions = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const summary = await api.getOrchestrationSummary(propertyId);
+      const [summary, propertiesRes] = await Promise.all([
+        api.getOrchestrationSummary(propertyId),
+        api.getProperties(),
+      ]);
+
       const adapted = adaptOrchestrationSummary(summary);
+
       setActions(adapted.actions);
+
+      if (propertiesRes.success) {
+        setProperties(propertiesRes.data.properties);
+      }
     } catch (err) {
       console.error('ActionCenter error:', err);
       setError('Unable to load actions right now.');
@@ -57,7 +70,7 @@ export const ActionCenter: React.FC<Props> = ({
 
   useEffect(() => {
     if (!propertyId) return;
-    loadActions();
+    loadData();
   }, [propertyId]);
 
   // ---------------------------------------------------------------------------
@@ -76,10 +89,11 @@ export const ActionCenter: React.FC<Props> = ({
         (action.category as ServiceCategory) ??
         'INSPECTION',
       defaultFrequency: RecurrenceFrequency.ANNUALLY,
-    
-      // ✅ REQUIRED by type, irrelevant for orchestration → modal
+
+      // Required by type
       sortOrder: 0,
     });
+
     setIsModalOpen(true);
   };
 
@@ -196,7 +210,7 @@ export const ActionCenter: React.FC<Props> = ({
         )}
       </div>
 
-      {/* ================= MODAL ================= */}
+      {/* ================= MAINTENANCE MODAL ================= */}
       <MaintenanceConfigModal
         isOpen={isModalOpen}
         onClose={() => {
@@ -204,11 +218,12 @@ export const ActionCenter: React.FC<Props> = ({
           setTemplate(null);
         }}
         template={template}
+        properties={properties}
         selectedPropertyId={propertyId}
         onSuccess={() => {
           setIsModalOpen(false);
           setTemplate(null);
-          loadActions(); // refresh orchestration after task creation
+          loadData(); // refresh orchestration after task creation
         }}
       />
     </>
