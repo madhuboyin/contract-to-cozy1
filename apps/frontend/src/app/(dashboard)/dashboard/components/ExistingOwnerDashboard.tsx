@@ -127,30 +127,26 @@ export const ExistingOwnerDashboard = ({
 
   return (
     <div className="space-y-6 pb-8">
-      {/* 🚦 Action Center — Phase 7 (Primary Intelligence Surface) */}
-      {selectedPropertyId && (
-        <ActionCenter propertyId={selectedPropertyId} />
-      )}
       {/* Maintenance Nudge Card */}
       {renderNudgeCard}
-       {/* 🔔 Action Center (Top Actions) */}
-       {actions.length > 0 && selectedPropertyId && (
-         <div className="space-y-2">
-           <div className="flex items-center justify-between">
-             <h2 className="text-lg font-semibold text-gray-900">
-               Action Center
-             </h2>
-             <Link
-               href="/actions"
-               className="text-sm font-medium text-blue-600 hover:underline"
-             >
-               View all
-             </Link>
-           </div>
+      {/* 🔔 Action Center (Top Actions) */}
+      {selectedPropertyId && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Action Center
+            </h2>
+            <Link
+              href={`/actions?propertyId=${selectedPropertyId}`}
+              className="text-sm font-medium text-blue-600 hover:underline"
+            >
+              View all
+            </Link>
+          </div>
 
-           <ActionCenter propertyId={selectedPropertyId} maxItems={5} />
-         </div>
-       )}
+          <ActionCenter propertyId={selectedPropertyId} maxItems={5} />
+        </div>
+      )}
 
       {/* 💡 Local Home Updates (Helpful Suggestions) */}
       {localUpdates.length > 0 && (

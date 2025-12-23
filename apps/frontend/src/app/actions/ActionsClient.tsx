@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-
+import { Breadcrumb } from '@/components/navigation/Breadcrumb';
 import { api } from '@/lib/api/client';
 import { OrchestratedActionDTO } from '@/types';
 import { adaptOrchestrationSummary } from '@/adapters/orchestration.adapter';
@@ -18,6 +18,8 @@ export function ActionsClient() {
   const [suppressedActions, setSuppressedActions] = useState<OrchestratedActionDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [propertyName, setPropertyName] = useState<string | null>(null);
+
 
   useEffect(() => {
     if (!propertyId) {
@@ -25,21 +27,36 @@ export function ActionsClient() {
       setLoading(false);
       return;
     }
-
+  
     let cancelled = false;
-
+  
     async function load() {
       try {
         setLoading(true);
         setError(null);
-
+  
+        /**
+         * Run both requests in parallel:
+         * - Orchestration summary (primary)
+         * - Property name (breadcrumb context)
+         */
         // TypeScript knows propertyId is not null due to the early return above
-        const summary = await api.getOrchestrationSummary(propertyId!);
+        const [summary, propertyRes] = await Promise.all([
+          api.getOrchestrationSummary(propertyId!),
+          api.getProperty(propertyId!),
+        ]);
+  
         const adapted = adaptOrchestrationSummary(summary);
-
+  
         if (!cancelled) {
           setActions(adapted.actions);
           setSuppressedActions(adapted.suppressedActions ?? []);
+  
+          if (propertyRes?.success) {
+            setPropertyName(propertyRes.data.name ?? 'My Home');
+          } else {
+            setPropertyName('My Home');
+          }
         }
       } catch (err) {
         console.error('ActionsClient error:', err);
@@ -52,12 +69,14 @@ export function ActionsClient() {
         }
       }
     }
-
+  
     load();
+  
     return () => {
       cancelled = true;
     };
   }, [propertyId]);
+  
 
   if (loading) {
     return (
