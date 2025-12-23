@@ -62,12 +62,36 @@ function resolveDescription(
   return description;
 }
 
-function confidenceLabel(score?: number) {
-  if (score === undefined || score === null) return null;
-  if (score >= 0.75) return { label: 'High', color: 'bg-green-100 text-green-700' };
-  if (score >= 0.5) return { label: 'Medium', color: 'bg-amber-100 text-amber-700' };
-  return { label: 'Low', color: 'bg-red-100 text-red-700' };
+function confidenceLabel(
+  confidence?: {
+    score: number;
+    level: 'LOW' | 'MEDIUM' | 'HIGH';
+    explanation?: string[];
+  }
+) {
+  if (!confidence) return null;
+
+  switch (confidence.level) {
+    case 'HIGH':
+      return {
+        label: 'High',
+        color: 'bg-green-100 text-green-700',
+      };
+    case 'MEDIUM':
+      return {
+        label: 'Medium',
+        color: 'bg-amber-100 text-amber-700',
+      };
+    case 'LOW':
+      return {
+        label: 'Low',
+        color: 'bg-red-100 text-red-700',
+      };
+    default:
+      return null;
+  }
 }
+
 
 export const OrchestrationActionCard: React.FC<Props> = ({
   action,
@@ -82,7 +106,8 @@ export const OrchestrationActionCard: React.FC<Props> = ({
     action.description,
     action.cta?.label
   );
-  const confidence = confidenceLabel(action.confidence?.score ?? undefined);
+ 
+  const confidence = confidenceLabel(action.confidence);
 
   return (
     <div
@@ -164,7 +189,12 @@ export const OrchestrationActionCard: React.FC<Props> = ({
           )}
         </div>
       )}
-
+      {/* ✅ ALWAYS render decision trace if data exists */}
+      <DecisionTracePanel
+        suppressed={suppressed}
+        reasons={action.suppression?.reasons ?? []}
+        steps={action.decisionTrace?.steps ?? []}
+      />
     </div>
   );
 };
