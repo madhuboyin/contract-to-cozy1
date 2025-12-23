@@ -2,27 +2,32 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Info } from 'lucide-react';
+import {
+  Info,
+  CheckCircle,
+  SkipForward,
+} from 'lucide-react';
+
 import {
   SuppressionReasonEntryDTO,
   DecisionTraceStepDTO,
 } from '@/types';
-import { DecisionTraceItem } from './DecisionTraceItem';
 
 type Props = {
   suppressed: boolean;
-  reasons: SuppressionReasonEntryDTO[];
-  steps?: DecisionTraceStepDTO[]; // NEW
+  reasons?: SuppressionReasonEntryDTO[];
+  steps?: DecisionTraceStepDTO[];
 };
 
 export const DecisionTracePanel: React.FC<Props> = ({
   suppressed,
-  reasons,
+  reasons = [],
   steps = [],
 }) => {
   const [expanded, setExpanded] = useState(false);
 
-  if ((!reasons || reasons.length === 0) && steps.length === 0) return null;
+  // 🔑 Critical: render if *either* trace or reasons exist
+  if (reasons.length === 0 && steps.length === 0) return null;
 
   const title = suppressed
     ? 'Why this action was suppressed'
@@ -30,7 +35,7 @@ export const DecisionTracePanel: React.FC<Props> = ({
 
   return (
     <div className="mt-3 rounded-md border border-gray-200 bg-gray-50">
-      {/* Header */}
+      {/* Header / Toggle */}
       <button
         type="button"
         onClick={() => setExpanded(v => !v)}
@@ -42,19 +47,24 @@ export const DecisionTracePanel: React.FC<Props> = ({
         </span>
       </button>
 
-      {/* Expanded */}
+      {/* Expanded Content */}
       {expanded && (
-        <div className="px-4 pb-4 pt-2 space-y-4 text-sm">
-          {/* RULE TRACE */}
+        <div className="px-4 pb-4 pt-3 space-y-4 text-sm">
+          {/* ============================
+              Decision Engine Trace
+             ============================ */}
           {steps.length > 0 && (
             <div>
-              <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase mb-2">
-                Decision Engine Trace
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-semibold text-gray-500 uppercase">
+                  Decision Engine Trace
+                </div>
+
                 <a
                   href="/docs/orchestration/decision-engine"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline flex items-center gap-1"
+                  className="text-xs text-blue-600 hover:underline flex items-center gap-1"
                 >
                   <Info size={12} />
                   Learn why
@@ -63,30 +73,50 @@ export const DecisionTracePanel: React.FC<Props> = ({
 
               <div className="space-y-1">
                 {steps.map((step, idx) => (
-                  <DecisionTraceItem
+                  <div
                     key={`step-${idx}`}
-                    type="RULE"
-                    step={step}
-                  />
+                    className="flex items-center gap-2"
+                  >
+                    {step.outcome === 'APPLIED' ? (
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <SkipForward className="h-4 w-4 text-gray-400" />
+                    )}
+
+                    <span className="font-mono text-xs text-gray-800">
+                      {step.rule}
+                    </span>
+                  </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* SUPPRESSION / EXPLANATION */}
+          {/* ============================
+              Suppression / Explanation
+             ============================ */}
           {reasons.length > 0 && (
             <div>
               <div className="text-xs font-semibold text-gray-500 uppercase mb-2">
                 Explanation
               </div>
 
-              <div className="space-y-1">
+              <div className="space-y-2">
                 {reasons.map((r, idx) => (
-                  <DecisionTraceItem
+                  <div
                     key={`reason-${idx}`}
-                    type="REASON"
-                    reason={r}
-                  />
+                    className="flex items-start gap-2"
+                  >
+                    <Info className="h-4 w-4 text-amber-500 mt-0.5" />
+                    <div>
+                      <div className="font-medium text-gray-900">
+                        {r.reason}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {r.message}
+                      </div>
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>

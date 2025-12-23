@@ -152,8 +152,9 @@ export const OrchestrationActionCard: React.FC<Props> = ({
       {action.suppression?.reasons &&
         action.suppression.reasons.length > 0 && (
           <DecisionTracePanel
-            suppressed={action.suppression.suppressed}
-            reasons={action.suppression.reasons}
+            suppressed={Boolean(action.suppression?.suppressed)}
+            reasons={action.suppression?.reasons}
+            steps={action.decisionTrace?.steps}
           />
         )}
     </div>
