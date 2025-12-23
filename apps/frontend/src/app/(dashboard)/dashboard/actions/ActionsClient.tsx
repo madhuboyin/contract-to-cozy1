@@ -1,4 +1,4 @@
-// apps/frontend/src/app/actions/ActionsClient.tsx
+// apps/frontend/src/app/(dashboard)/dashboard/actions/ActionsClient.tsx
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -9,10 +9,11 @@ import { OrchestratedActionDTO } from '@/types';
 import { adaptOrchestrationSummary } from '@/adapters/orchestration.adapter';
 import { OrchestrationActionCard } from '@/components/orchestration/OrchestrationActionCard';
 import { Separator } from '@/components/ui/separator';
+import { usePropertyContext } from '@/lib/property/PropertyContext';
 
 export function ActionsClient() {
-  const searchParams = useSearchParams();
-  const propertyId = searchParams.get('propertyId');
+  const { selectedPropertyId } = usePropertyContext();
+  const propertyId = selectedPropertyId;
 
   const [actions, setActions] = useState<OrchestratedActionDTO[]>([]);
   const [suppressedActions, setSuppressedActions] = useState<OrchestratedActionDTO[]>([]);
