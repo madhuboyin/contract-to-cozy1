@@ -1,7 +1,6 @@
 // apps/backend/src/services/orchestration.service.ts
 
 import { prisma } from '../lib/prisma';
-import { RiskCategory } from '@prisma/client';
 
 type DerivedFrom = {
   riskAssessment: boolean;
@@ -13,10 +12,9 @@ export type OrchestrationSummary = {
   pendingActionCount: number;
   derivedFrom: DerivedFrom;
 
-  // ✅ Phase 6 (Non-breaking extension): detailed actions for UI
+  // Phase 6
   actions: OrchestratedAction[];
 
-  // Optional rollups to help UI quickly render counts
   counts: {
     riskActions: number;
     checklistActions: number;
@@ -31,33 +29,26 @@ export type CoverageInfo = {
 };
 
 export type OrchestratedAction = {
-  // Stable identity for UI keys
   id: string;
-
   source: 'RISK' | 'CHECKLIST';
   propertyId: string;
 
-  // Display fields (generic + compatible)
   title: string;
   description?: string | null;
 
-  // ✅ Risk-specific (present when source === 'RISK')
   systemType?: string | null;
   category?: string | null;
-  riskLevel?: 'LOW' | 'MODERATE' | 'ELEVATED' | 'HIGH' | 'CRITICAL' | string | null;
+  riskLevel?: string | null;
 
-  // Helpful risk facts (best-effort)
   age?: number | null;
   expectedLife?: number | null;
   exposure?: number | null;
 
-  // ✅ Checklist-specific (present when source === 'CHECKLIST')
   checklistItemId?: string | null;
   status?: string | null;
   nextDueDate?: Date | null;
   isRecurring?: boolean | null;
 
-  // ✅ Phase 6 extensions
   coverage?: CoverageInfo;
   cta?: {
     show: boolean;
@@ -65,13 +56,14 @@ export type OrchestratedAction = {
     reason: 'COVERED' | 'MISSING_DATA' | 'ACTION_REQUIRED' | 'NONE';
   };
 
-  // UX sorting hints
-  priority: number; // higher = more urgent
+  priority: number;
   overdue: boolean;
   createdAt?: Date | null;
 };
 
-// Keep in sync with frontend intent: "actionable" = overdue OR unscheduled recurring OR active review states
+// ----------------------------
+// Constants
+// ----------------------------
 const ACTIVE_TASK_STATUSES = [
   'PENDING',
   'SCHEDULED',
@@ -80,9 +72,14 @@ const ACTIVE_TASK_STATUSES = [
   'OVERDUE',
 ] as const;
 
-function safeParseDate(dateLike: unknown): Date | null {
-  if (!dateLike) return null;
-  const d = new Date(String(dateLike));
+const ACTIVE_BOOKING_STATUSES = ['CONFIRMED', 'IN_PROGRESS', 'DISPUTED'] as const;
+
+// ----------------------------
+// Helpers
+// ----------------------------
+function safeParseDate(v: unknown): Date | null {
+  if (!v) return null;
+  const d = new Date(String(v));
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
@@ -94,134 +91,91 @@ function isPastDate(d: Date): boolean {
   return x.getTime() < today.getTime();
 }
 
-function normalizeRiskLevel(raw: unknown): string {
-  return String(raw ?? '')
-    .trim()
-    .toUpperCase();
-}
-
-function normalizeStatus(raw: unknown): string {
-  return String(raw ?? '')
-    .trim()
-    .toUpperCase();
+function normalize(v: unknown): string {
+  return String(v ?? '').trim().toUpperCase();
 }
 
 function toNumberSafe(v: unknown): number | null {
-  if (v === null || v === undefined) return null;
-  const n = typeof v === 'number' ? v : Number(v);
+  const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
 
-/**
- * Risk details are stored as JSON in many implementations.
- * We keep this tolerant: we count "high-priority" risk details based on any of:
- * - riskLevel in ['HIGH','CRITICAL']
- * - status in ['NEEDS_ATTENTION','ACTION_REQUIRED','MISSING_DATA','NEEDS_REVIEW']
- * - recommendedAction exists and non-empty
- */
+// ----------------------------
+// Risk helpers
+// ----------------------------
 function isRiskActionable(d: any): boolean {
-  const HIGH_LEVELS = new Set(['HIGH', 'CRITICAL']);
-  const ACTION_STATUSES = new Set(['NEEDS_ATTENTION', 'ACTION_REQUIRED', 'MISSING_DATA', 'NEEDS_REVIEW']);
+  const level = normalize(d?.riskLevel ?? d?.severity);
+  const status = normalize(d?.status);
 
-  const riskLevel = normalizeRiskLevel(d?.riskLevel ?? d?.severity);
-  const status = normalizeStatus(d?.status);
-  const hasRecommendedAction =
-    typeof d?.recommendedAction === 'string' && d.recommendedAction.trim().length > 0;
+  if (['HIGH', 'CRITICAL'].includes(level)) return true;
+  if (['NEEDS_ATTENTION', 'ACTION_REQUIRED', 'MISSING_DATA', 'NEEDS_REVIEW'].includes(status)) return true;
 
-  const isHigh = HIGH_LEVELS.has(riskLevel);
-  const isActionStatus = ACTION_STATUSES.has(status);
-
-  return Boolean(isHigh || isActionStatus || hasRecommendedAction);
+  return typeof d?.recommendedAction === 'string' && d.recommendedAction.trim().length > 0;
 }
 
 function countRiskActions(details: any[]): number {
-  if (!Array.isArray(details)) return 0;
-  let count = 0;
-  for (const d of details) {
-    if (isRiskActionable(d)) count += 1;
-  }
-  return count;
+  return Array.isArray(details) ? details.filter(isRiskActionable).length : 0;
 }
 
-/**
- * Counts checklist items that require attention:
- * - status is in ACTIVE_TASK_STATUSES AND
- *   - nextDueDate exists and is in the past  OR
- *   - isRecurring = true and nextDueDate is missing (unscheduled recurring task)
- */
-function isChecklistActionable(item: any): { actionable: boolean; overdue: boolean; unscheduledRecurring: boolean } {
-  const status = normalizeStatus(item?.status);
-  const isActive = ACTIVE_TASK_STATUSES.includes(status as any);
-  if (!isActive) return { actionable: false, overdue: false, unscheduledRecurring: false };
+// ----------------------------
+// Checklist helpers
+// ----------------------------
+function isChecklistActionable(item: any) {
+  const status = normalize(item?.status);
+  if (!ACTIVE_TASK_STATUSES.includes(status as any)) {
+    return { actionable: false, overdue: false };
+  }
 
   const nextDue = safeParseDate(item?.nextDueDate);
-  const isRecurring = Boolean(item?.isRecurring);
-
   const overdue = nextDue ? isPastDate(nextDue) : false;
-  const unscheduledRecurring = isRecurring && !nextDue;
+  const unscheduledRecurring = Boolean(item?.isRecurring) && !nextDue;
 
-  return { actionable: overdue || unscheduledRecurring, overdue, unscheduledRecurring };
+  return {
+    actionable: overdue || unscheduledRecurring,
+    overdue,
+  };
 }
 
 function countChecklistActions(items: any[]): number {
-  if (!Array.isArray(items)) return 0;
-  let count = 0;
-  for (const item of items) {
-    const { actionable } = isChecklistActionable(item);
-    if (actionable) count += 1;
-  }
-  return count;
+  return items.filter(i => isChecklistActionable(i).actionable).length;
 }
 
-/**
- * Coverage resolution (Phase 6)
- * NOTE:
- * - This is intentionally "best-effort" + non-breaking:
- *   - Warranty/Insurance are treated as property-level coverage by default.
- *   - Later you can refine to per-asset coverage if you store coveredSystemTypes.
- */
+// ----------------------------
+// Coverage (Phase 6)
+// ----------------------------
 function resolveCoverageForAsset(
-  systemType: string | null | undefined,
-  warranties: Array<{ id: string; expiryDate: Date | string | null }> = [],
-  insurancePolicies: Array<{ id: string; expiryDate: Date | string | null }> = [],
+  systemType: string | null,
+  warranties: any[] = [],
+  insurancePolicies: any[] = [],
 ): CoverageInfo {
   const now = new Date();
 
-  const activeWarranty = warranties.find(w => {
-    const exp = w?.expiryDate ? new Date(w.expiryDate as any) : null;
-    return exp && exp > now;
-  });
-
-  if (activeWarranty) {
+  const warranty = warranties.find(w => w.expiryDate && new Date(w.expiryDate) > now);
+  if (warranty) {
     return {
       hasCoverage: true,
       type: 'HOME_WARRANTY',
-      expiresOn: activeWarranty.expiryDate ? new Date(activeWarranty.expiryDate as any) : null,
-      sourceId: activeWarranty.id,
+      expiresOn: new Date(warranty.expiryDate),
+      sourceId: warranty.id,
     };
   }
 
-  const activeInsurance = insurancePolicies.find(p => {
-    const exp = p?.expiryDate ? new Date(p.expiryDate as any) : null;
-    return exp && exp > now;
-  });
-
-  if (activeInsurance) {
+  const insurance = insurancePolicies.find(p => p.expiryDate && new Date(p.expiryDate) > now);
+  if (insurance) {
     return {
       hasCoverage: true,
       type: 'INSURANCE',
-      expiresOn: activeInsurance.expiryDate ? new Date(activeInsurance.expiryDate as any) : null,
-      sourceId: activeInsurance.id,
+      expiresOn: new Date(insurance.expiryDate),
+      sourceId: insurance.id,
     };
   }
 
-  return { hasCoverage: false, type: 'NONE', expiresOn: null, sourceId: null };
+  return { hasCoverage: false, type: 'NONE', expiresOn: null };
 }
 
-/**
- * Convert risk detail JSON → Phase 6 orchestrated action.
- * Tolerant mapper: supports your RiskAssessment JSON shape (assetName/systemType/category/etc).
- */
+// ----------------------------
+// Action mappers
+// ----------------------------
 function mapRiskDetailToAction(
   propertyId: string,
   d: any,
@@ -230,207 +184,156 @@ function mapRiskDetailToAction(
 ): OrchestratedAction | null {
   if (!isRiskActionable(d)) return null;
 
-  const assetName = String(d?.assetName ?? d?.title ?? d?.name ?? 'Risk Item');
-  const systemType = d?.systemType ? String(d.systemType) : null;
+  const level = normalize(d?.riskLevel ?? d?.severity);
 
-  const categoryRaw = d?.category ?? d?.riskCategory ?? null;
-  const category = categoryRaw ? String(categoryRaw) : null;
-
-  const riskLevelRaw = d?.riskLevel ?? d?.severity ?? null;
-  const riskLevel = riskLevelRaw ? (normalizeRiskLevel(riskLevelRaw) as any) : null;
-
-  const age = toNumberSafe(d?.age);
-  const expectedLife = toNumberSafe(d?.expectedLife);
-  const exposure = toNumberSafe(d?.riskDollar ?? d?.exposure ?? d?.outOfPocketCost);
-
-  const recommendedAction =
-    typeof d?.recommendedAction === 'string' && d.recommendedAction.trim().length > 0
-      ? d.recommendedAction.trim()
-      : typeof d?.actionCta === 'string' && d.actionCta.trim().length > 0
-        ? d.actionCta.trim()
-        : null;
-
-  // Priority heuristic (non-breaking, UI-friendly)
-  // CRITICAL > HIGH > ELEVATED > MODERATE > LOW
-  const level = normalizeRiskLevel(riskLevel);
-  const basePriority =
+  const priority =
     level === 'CRITICAL' ? 100 :
     level === 'HIGH' ? 80 :
     level === 'ELEVATED' ? 60 :
-    level === 'MODERATE' ? 40 :
-    level === 'LOW' ? 20 : 30;
-
-  // CTA rules (Phase 6)
-  // If covered: still show action but CTA indicates coverage.
-  const cta =
-    coverage.hasCoverage
-      ? { show: true, label: 'Review coverage', reason: 'COVERED' as const }
-      : recommendedAction
-        ? { show: true, label: recommendedAction, reason: 'ACTION_REQUIRED' as const }
-        : { show: false, label: null, reason: 'NONE' as const };
+    level === 'MODERATE' ? 40 : 20;
 
   return {
-    id: `risk:${propertyId}:${systemType ?? 'unknown'}:${index}`,
+    id: `risk:${propertyId}:${d?.systemType ?? index}`,
     source: 'RISK',
     propertyId,
-    title: assetName,
-    description: recommendedAction ? `Recommended: ${recommendedAction}` : null,
 
-    systemType,
-    category,
-    riskLevel,
-    age,
-    expectedLife,
-    exposure,
+    title: String(d?.assetName ?? d?.title ?? 'Risk Item'),
+    description: d?.recommendedAction ?? null,
+
+    systemType: d?.systemType ?? null,
+    category: d?.category ?? null,
+    riskLevel: level,
+
+    age: toNumberSafe(d?.age),
+    expectedLife: toNumberSafe(d?.expectedLife),
+    exposure: toNumberSafe(d?.riskDollar ?? d?.exposure),
 
     coverage,
-    cta,
+    cta: coverage.hasCoverage
+      ? { show: true, label: 'Review coverage', reason: 'COVERED' }
+      : d?.recommendedAction
+        ? { show: true, label: d.recommendedAction, reason: 'ACTION_REQUIRED' }
+        : { show: false, label: null, reason: 'NONE' },
 
-    // Risk items aren't "overdue" by date; keep false.
     overdue: false,
-    priority: basePriority,
-    createdAt: safeParseDate(d?.createdAt) ?? null,
+    priority,
+    createdAt: safeParseDate(d?.createdAt),
   };
 }
 
-/**
- * Convert checklist item → orchestrated action.
- */
 function mapChecklistItemToAction(propertyId: string, item: any): OrchestratedAction | null {
-  const { actionable, overdue, unscheduledRecurring } = isChecklistActionable(item);
+  const { actionable, overdue } = isChecklistActionable(item);
   if (!actionable) return null;
 
-  const status = normalizeStatus(item?.status);
-
-  // Priority heuristic: overdue > needs review > in progress > scheduled/pending
-  let priority = overdue ? 90 : 50;
-  if (status === 'NEEDS_REVIEW') priority = 85;
-  if (status === 'IN_PROGRESS') priority = Math.max(priority, 70);
-  if (unscheduledRecurring) priority = Math.max(priority, 75);
-
-  const nextDueDate = safeParseDate(item?.nextDueDate);
-
-  const ctaLabel =
-    overdue ? 'Schedule / Complete now' :
-    unscheduledRecurring ? 'Set schedule' :
-    'Review';
-
   return {
-    id: `checklist:${propertyId}:${item?.id ?? 'unknown'}`,
+    id: `checklist:${propertyId}:${item.id}`,
     source: 'CHECKLIST',
     propertyId,
 
-    title: String(item?.title ?? 'Checklist Item'),
-    description: item?.description ?? null,
+    title: item.title ?? 'Checklist Item',
+    description: item.description ?? null,
 
-    checklistItemId: item?.id ?? null,
-    status,
-    nextDueDate,
-    isRecurring: Boolean(item?.isRecurring),
+    checklistItemId: item.id,
+    status: normalize(item.status),
+    nextDueDate: safeParseDate(item.nextDueDate),
+    isRecurring: Boolean(item.isRecurring),
 
-    // Coverage does not apply to generic checklist items
-    coverage: { hasCoverage: false, type: 'NONE', expiresOn: null, sourceId: null },
-    cta: { show: true, label: ctaLabel, reason: 'ACTION_REQUIRED' },
+    coverage: { hasCoverage: false, type: 'NONE', expiresOn: null },
+    cta: { show: true, label: overdue ? 'Complete now' : 'Review', reason: 'ACTION_REQUIRED' },
 
-    priority,
+    priority: overdue ? 90 : 60,
     overdue,
-    createdAt: safeParseDate(item?.createdAt) ?? null,
+    createdAt: safeParseDate(item.createdAt),
   };
 }
 
-/**
- * Phase 6:
- * - Non-breaking extension: summary still returns pendingActionCount + derivedFrom
- * - Adds actions[] with coverage + CTA (best-effort)
- */
+// ============================================================================
+// MAIN — Phase 5 + Phase 6
+// ============================================================================
 export async function getOrchestrationSummary(propertyId: string): Promise<OrchestrationSummary> {
-  // 0) Pull property coverage (warranties + insurance) for coverage computations
-  // NOTE: this assumes Warranty/InsurancePolicy relate to Property (as in your RiskAssessment.service include)
-  // If your schema ties warranty/policy to homeownerProfile only, this still works if you also store propertyId.
-  const propertyCoverage = await prisma.property
-    .findUnique({
-      where: { id: propertyId },
-      select: {
-        id: true,
-        warranties: { select: { id: true, expiryDate: true } },
-        insurancePolicies: { select: { id: true, expiryDate: true } },
-      },
-    })
-    .catch(() => null as any);
-
-  const warranties = propertyCoverage?.warranties ?? [];
-  const insurancePolicies = propertyCoverage?.insurancePolicies ?? [];
-
-  // 1) Pull latest risk report (if exists)
-  const riskReport = await prisma.riskAssessmentReport
-    .findFirst({
-      where: { propertyId },
-      orderBy: { lastCalculatedAt: 'desc' },
-      select: {
-        details: true,
-        lastCalculatedAt: true,
-      },
-    })
-    .catch(() => null);
-
-  const riskDetails = (riskReport as any)?.details ?? [];
-  const riskCount = countRiskActions(riskDetails);
-
-  // 2) Pull checklist items for this property
-  const checklistItems = await prisma.checklistItem
-    .findMany({
-      where: { propertyId },
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        status: true,
-        nextDueDate: true,
-        isRecurring: true,
-        createdAt: true,
-      },
-    })
-    .catch(() => []);
-
-  const checklistCount = countChecklistActions(checklistItems);
-
-  // 3) Build actions (Phase 6)
-  const riskActions: OrchestratedAction[] = Array.isArray(riskDetails)
-    ? riskDetails
-        .map((d: any, idx: number) => {
-          const sysType = d?.systemType ? String(d.systemType) : null;
-          const coverage = resolveCoverageForAsset(sysType, warranties, insurancePolicies);
-          return mapRiskDetailToAction(propertyId, d, coverage, idx);
-        })
-        .filter(Boolean) as OrchestratedAction[]
-    : [];
-
-  const checklistActions: OrchestratedAction[] = checklistItems
-    .map(i => mapChecklistItemToAction(propertyId, i))
-    .filter(Boolean) as OrchestratedAction[];
-
-  // 4) Merge + sort (highest priority first, then overdue, then nearest due date)
-  const actions = [...riskActions, ...checklistActions].sort((a, b) => {
-    if (b.priority !== a.priority) return b.priority - a.priority;
-    if (b.overdue !== a.overdue) return b.overdue ? 1 : -1;
-    const ad = a.nextDueDate ? a.nextDueDate.getTime() : Number.POSITIVE_INFINITY;
-    const bd = b.nextDueDate ? b.nextDueDate.getTime() : Number.POSITIVE_INFINITY;
-    return ad - bd;
+  // 1) Coverage
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: {
+      warranties: { select: { id: true, expiryDate: true } },
+      insurancePolicies: { select: { id: true, expiryDate: true } },
+    },
   });
 
-  const derivedFrom: DerivedFrom = {
-    riskAssessment: Boolean(riskReport),
-    checklist: checklistItems.length > 0,
-  };
+  // 2) Risk
+  const riskReport = await prisma.riskAssessmentReport.findFirst({
+    where: { propertyId },
+    orderBy: { lastCalculatedAt: 'desc' },
+    select: { details: true },
+  });
+
+  const riskDetails = (riskReport as any)?.details ?? [];
+
+  // 3) Checklist
+  const checklistItems = await prisma.checklistItem.findMany({
+    where: { propertyId },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      status: true,
+      serviceCategory: true,
+      nextDueDate: true,
+      isRecurring: true,
+      createdAt: true,
+    },
+  });
+
+  // 4) BOOKINGS — Phase 5
+  const activeBookings = await prisma.booking.findMany({
+    where: {
+      propertyId,
+      status: { in: ACTIVE_BOOKING_STATUSES as any },
+    },
+    select: {
+      category: true,
+    },
+  });
+
+  const suppressedCategories = new Set(
+    activeBookings.map(b => String(b.category))
+  );
+
+  // 5) Build actions
+  const riskActions = riskDetails
+    .map((d: any, i: number) =>
+      suppressedCategories.has(String(d?.category))
+        ? null
+        : mapRiskDetailToAction(
+            propertyId,
+            d,
+            resolveCoverageForAsset(d?.systemType, property?.warranties, property?.insurancePolicies),
+            i,
+          )
+    )
+    .filter(Boolean) as OrchestratedAction[];
+
+  const checklistActions = checklistItems
+    .map(i =>
+      suppressedCategories.has(String(i?.serviceCategory))
+        ? null
+        : mapChecklistItemToAction(propertyId, i)
+    )
+    .filter(Boolean) as OrchestratedAction[];
+
+  const actions = [...riskActions, ...checklistActions].sort((a, b) => b.priority - a.priority);
 
   return {
     propertyId,
-    pendingActionCount: riskCount + checklistCount,
-    derivedFrom,
+    pendingActionCount: actions.length,
+    derivedFrom: {
+      riskAssessment: Boolean(riskReport),
+      checklist: checklistItems.length > 0,
+    },
     actions,
     counts: {
-      riskActions: riskCount,
-      checklistActions: checklistCount,
+      riskActions: riskActions.length,
+      checklistActions: checklistActions.length,
     },
   };
 }
