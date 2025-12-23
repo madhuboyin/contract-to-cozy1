@@ -43,6 +43,24 @@ function riskBadge(riskLevel?: string | null) {
   }
 }
 
+/**
+ * Suppress description if it duplicates CTA intent
+ */
+function resolveDescription(
+  description?: string | null,
+  ctaLabel?: string | null
+) {
+  if (!description) return null;
+  if (!ctaLabel) return description;
+
+  const d = description.toLowerCase();
+  const c = ctaLabel.toLowerCase();
+
+  if (d.includes(c)) return null;
+
+  return description;
+}
+
 export const OrchestrationActionCard: React.FC<Props> = ({
   action,
   onCtaClick,
@@ -52,6 +70,10 @@ export const OrchestrationActionCard: React.FC<Props> = ({
 
   const exposure = formatMoney(action.exposure ?? null);
   const dueDateLabel = formatDateLabel(action.nextDueDate ?? null);
+  const description = resolveDescription(
+    action.description,
+    action.cta?.label
+  );
 
   return (
     <div
@@ -74,8 +96,8 @@ export const OrchestrationActionCard: React.FC<Props> = ({
             )}
           </div>
 
-          {action.description && (
-            <p className="text-sm text-gray-600">{action.description}</p>
+          {description && (
+            <p className="text-sm text-gray-600">{description}</p>
           )}
         </div>
 
@@ -94,9 +116,9 @@ export const OrchestrationActionCard: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* CTA */}
+      {/* Primary CTA */}
       {action.cta?.show && action.cta.label && (
-        <div className="mt-4">
+        <div className="mt-4 flex items-center gap-3">
           <button
             type="button"
             disabled={suppressed}
@@ -114,35 +136,26 @@ export const OrchestrationActionCard: React.FC<Props> = ({
           >
             {action.cta.label}
           </button>
+
+          {onDismiss && (
+            <button
+              onClick={onDismiss}
+              className="text-sm text-muted-foreground hover:underline"
+            >
+              Dismiss
+            </button>
+          )}
         </div>
       )}
 
       {/* Decision Trace */}
-      {action.suppression?.reasons && action.suppression.reasons.length > 0 && (
-        <DecisionTracePanel
-          suppressed={action.suppression.suppressed}
-          reasons={action.suppression.reasons}
-        />
-      )}
-      <div className="mt-3 flex items-center gap-3">
-        {action.cta?.show && action.cta.label && (
-          <button
-            onClick={() => onCtaClick?.(action)}
-            className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm font-semibold"
-          >
-            {action.cta.label}
-          </button>
+      {action.suppression?.reasons &&
+        action.suppression.reasons.length > 0 && (
+          <DecisionTracePanel
+            suppressed={action.suppression.suppressed}
+            reasons={action.suppression.reasons}
+          />
         )}
-
-        {onDismiss && (
-          <button
-            onClick={onDismiss}
-            className="text-sm text-muted-foreground hover:underline"
-          >
-            Dismiss
-          </button>
-        )}
-      </div>
     </div>
   );
 };
