@@ -2,6 +2,8 @@
 import React from 'react';
 import { OrchestratedActionDTO } from '@/types';
 import { DecisionTracePanel } from './DecisionTracePanel';
+import { ConfidenceBar } from './ConfidenceBar';
+import { ConfidencePopover } from './ConfidencePopover';
 
 type Props = {
   action: OrchestratedActionDTO;
@@ -43,7 +45,6 @@ function riskBadge(riskLevel?: string | null) {
   }
 }
 
-
 /**
  * Suppress description if it duplicates CTA intent
  */
@@ -54,44 +55,12 @@ function resolveDescription(
   if (!description) return null;
   if (!ctaLabel) return description;
 
-  const d = description.toLowerCase();
-  const c = ctaLabel.toLowerCase();
-
-  if (d.includes(c)) return null;
+  if (description.toLowerCase().includes(ctaLabel.toLowerCase())) {
+    return null;
+  }
 
   return description;
 }
-
-function confidenceLabel(
-  confidence?: {
-    score: number;
-    level: 'LOW' | 'MEDIUM' | 'HIGH';
-    explanation?: string[];
-  }
-) {
-  if (!confidence) return null;
-
-  switch (confidence.level) {
-    case 'HIGH':
-      return {
-        label: 'High',
-        color: 'bg-green-100 text-green-700',
-      };
-    case 'MEDIUM':
-      return {
-        label: 'Medium',
-        color: 'bg-amber-100 text-amber-700',
-      };
-    case 'LOW':
-      return {
-        label: 'Low',
-        color: 'bg-red-100 text-red-700',
-      };
-    default:
-      return null;
-  }
-}
-
 
 export const OrchestrationActionCard: React.FC<Props> = ({
   action,
@@ -102,12 +71,9 @@ export const OrchestrationActionCard: React.FC<Props> = ({
 
   const exposure = formatMoney(action.exposure ?? null);
   const dueDateLabel = formatDateLabel(action.nextDueDate ?? null);
-  const description = resolveDescription(
-    action.description,
-    action.cta?.label
-  );
- 
-  const confidence = confidenceLabel(action.confidence);
+  const description = resolveDescription(action.description, action.cta?.label);
+
+  const confidence = action.confidence;
 
   return (
     <div
@@ -115,22 +81,16 @@ export const OrchestrationActionCard: React.FC<Props> = ({
         suppressed ? 'bg-gray-50 opacity-70' : 'bg-white'
       }`}
     >
-      {/* Header */}
+      {/* ================= Header ================= */}
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="text-base font-semibold text-gray-900">
               {action.title}
             </h3>
+
             {riskBadge(action.riskLevel)}
-            {confidence && (
-              <span
-                className={`text-xs font-semibold px-2 py-0.5 rounded ${confidence.color}`}
-                title="How confident the system is that this action is relevant"
-              >
-                Confidence: {confidence.label}
-              </span>
-            )}
+
             {action.category && (
               <span className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700">
                 {action.category}
@@ -143,7 +103,7 @@ export const OrchestrationActionCard: React.FC<Props> = ({
           )}
         </div>
 
-        {/* Meta */}
+        {/* ================= Meta ================= */}
         <div className="text-right space-y-1">
           {exposure && (
             <div className="text-sm font-semibold text-gray-900">
@@ -158,7 +118,23 @@ export const OrchestrationActionCard: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Primary CTA */}
+      {/* ================= Confidence ================= */}
+      {confidence && (
+        <div className="mt-4 space-y-2">
+          <ConfidenceBar
+            score={confidence.score}
+            level={confidence.level}
+          />
+
+          <ConfidencePopover
+            score={confidence.score}
+            level={confidence.level}
+            explanation={confidence.explanation}
+          />
+        </div>
+      )}
+
+      {/* ================= CTA ================= */}
       {action.cta?.show && action.cta.label && (
         <div className="mt-4 flex items-center gap-3">
           <button
@@ -170,11 +146,6 @@ export const OrchestrationActionCard: React.FC<Props> = ({
                 ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                 : 'bg-blue-600 text-white hover:bg-blue-700'
             }`}
-            title={
-              suppressed
-                ? 'This action is currently suppressed'
-                : undefined
-            }
           >
             {action.cta.label}
           </button>
@@ -189,7 +160,8 @@ export const OrchestrationActionCard: React.FC<Props> = ({
           )}
         </div>
       )}
-      {/* ✅ ALWAYS render decision trace if data exists */}
+
+      {/* ================= Decision Trace (ALWAYS) ================= */}
       <DecisionTracePanel
         suppressed={suppressed}
         reasons={action.suppression?.reasons ?? []}
