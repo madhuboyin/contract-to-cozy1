@@ -67,6 +67,7 @@ export type OrchestratedAction = {
 
   // Coverage-aware CTA
   coverage?: CoverageInfo;
+  confidence?: number;
   cta?: {
     show: boolean;
     label: string | null;
@@ -417,6 +418,43 @@ function resolveCoverageForAction(params: {
   };
 }
 
+function computeConfidence(input: {
+  source: 'RISK' | 'CHECKLIST';
+  riskLevel?: string | null;
+  age?: number | null;
+  expectedLife?: number | null;
+  exposure?: number | null;
+  overdue?: boolean;
+  unscheduledRecurring?: boolean;
+  status?: string | null;
+  suppressed: boolean;
+  coverage?: CoverageInfo;
+}): number {
+  let score = 0.5;
+
+  if (input.source === 'RISK') {
+    if (input.riskLevel === 'CRITICAL') score += 0.3;
+    if (input.riskLevel === 'HIGH') score += 0.2;
+    if (
+      input.age &&
+      input.expectedLife &&
+      input.age / input.expectedLife > 0.9
+    ) score += 0.2;
+    if (input.exposure && input.exposure > 5000) score += 0.1;
+  }
+
+  if (input.source === 'CHECKLIST') {
+    if (input.overdue) score += 0.25;
+    if (input.unscheduledRecurring) score += 0.15;
+    if (input.status === 'NEEDS_REVIEW') score += 0.1;
+  }
+
+  if (input.coverage?.hasCoverage) score -= 0.15;
+  if (input.suppressed) score -= 0.3;
+
+  return Math.max(0, Math.min(1, Number(score.toFixed(2))));
+}
+
 function buildSuppression(
   steps: DecisionTraceStep[],
   suppressed: boolean,
@@ -575,6 +613,16 @@ function mapRiskDetailToAction(params: {
 
   const suppression = buildSuppression(steps, suppressedByBooking, suppressionReasons);
 
+  const confidence = computeConfidence({
+    source: 'RISK',
+    riskLevel,
+    age,
+    expectedLife,
+    exposure,
+    coverage,
+    suppressed: suppression.suppressed,
+  });
+
   return {
     id: `risk:${propertyId}:${systemType ?? 'unknown'}:${index}`,
     source: 'RISK',
@@ -593,7 +641,7 @@ function mapRiskDetailToAction(params: {
 
     coverage,
     cta,
-
+    confidence,
     suppression,
     decisionTrace: { steps },
 
@@ -674,6 +722,14 @@ function mapChecklistItemToAction(params: {
   }
 
   const suppression = buildSuppression(steps, suppressedByBooking, suppressionReasons);
+  
+  const confidence = computeConfidence({
+    source: 'CHECKLIST',
+    overdue,
+    unscheduledRecurring,
+    status,
+    suppressed: suppression.suppressed,
+  });
 
   return {
     id: `checklist:${propertyId}:${item?.id ?? 'unknown'}`,
@@ -691,7 +747,7 @@ function mapChecklistItemToAction(params: {
 
     coverage: { hasCoverage: false, type: 'NONE', expiresOn: null, sourceId: null },
     cta: { show: true, label: ctaLabel, reason: 'ACTION_REQUIRED' },
-
+    confidence,
     suppression,
     decisionTrace: { steps },
 

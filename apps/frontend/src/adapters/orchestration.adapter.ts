@@ -36,6 +36,32 @@ import {
     };
   }
   
+  function computeConfidence(action: OrchestratedActionDTO) {
+    let score = 50;
+    const reasons: string[] = [];
+  
+    if (action.riskLevel === 'HIGH' || action.riskLevel === 'CRITICAL') {
+      score += 25;
+      reasons.push('High risk severity');
+    }
+  
+    if (action.exposure && action.exposure > 5000) {
+      score += 15;
+      reasons.push('High financial exposure');
+    }
+  
+    if (!action.suppression?.suppressed) {
+      score += 10;
+      reasons.push('No blocking conditions detected');
+    }
+  
+    return {
+      score: Math.min(100, score),
+      level: score >= 80 ? 'HIGH' : score >= 60 ? 'MEDIUM' : 'LOW',
+      explanation: reasons,
+    };
+  }
+  
   /**
    * Main adapter
    */

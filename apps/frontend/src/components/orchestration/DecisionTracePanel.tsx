@@ -2,16 +2,14 @@
 'use client';
 
 import React, { useState } from 'react';
-import {
-  Info,
-  CheckCircle,
-  SkipForward,
-} from 'lucide-react';
+import { Info } from 'lucide-react';
 
 import {
   SuppressionReasonEntryDTO,
   DecisionTraceStepDTO,
 } from '@/types';
+
+import { DecisionTraceItem } from './DecisionTraceItem';
 
 type Props = {
   suppressed: boolean;
@@ -26,7 +24,11 @@ export const DecisionTracePanel: React.FC<Props> = ({
 }) => {
   const [expanded, setExpanded] = useState(false);
 
-  // 🔑 Critical: render if *either* trace or reasons exist
+  /**
+   * 🔑 Critical:
+   * Render if EITHER rules OR reasons exist
+   * (this fixes missing "View decision trace" for active actions)
+   */
   if (reasons.length === 0 && steps.length === 0) return null;
 
   const title = suppressed
@@ -35,7 +37,7 @@ export const DecisionTracePanel: React.FC<Props> = ({
 
   return (
     <div className="mt-3 rounded-md border border-gray-200 bg-gray-50">
-      {/* Header / Toggle */}
+      {/* Toggle Header */}
       <button
         type="button"
         onClick={() => setExpanded(v => !v)}
@@ -54,7 +56,7 @@ export const DecisionTracePanel: React.FC<Props> = ({
               Decision Engine Trace
              ============================ */}
           {steps.length > 0 && (
-            <div>
+            <section>
               <div className="flex items-center justify-between mb-2">
                 <div className="text-xs font-semibold text-gray-500 uppercase">
                   Decision Engine Trace
@@ -73,53 +75,35 @@ export const DecisionTracePanel: React.FC<Props> = ({
 
               <div className="space-y-1">
                 {steps.map((step, idx) => (
-                  <div
+                  <DecisionTraceItem
                     key={`step-${idx}`}
-                    className="flex items-center gap-2"
-                  >
-                    {step.outcome === 'APPLIED' ? (
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                    ) : (
-                      <SkipForward className="h-4 w-4 text-gray-400" />
-                    )}
-
-                    <span className="font-mono text-xs text-gray-800">
-                      {step.rule}
-                    </span>
-                  </div>
+                    type="RULE"
+                    step={step}
+                  />
                 ))}
               </div>
-            </div>
+            </section>
           )}
 
           {/* ============================
               Suppression / Explanation
              ============================ */}
           {reasons.length > 0 && (
-            <div>
+            <section>
               <div className="text-xs font-semibold text-gray-500 uppercase mb-2">
                 Explanation
               </div>
 
-              <div className="space-y-2">
-                {reasons.map((r, idx) => (
-                  <div
+              <div className="space-y-1">
+                {reasons.map((reason, idx) => (
+                  <DecisionTraceItem
                     key={`reason-${idx}`}
-                    className="flex items-start gap-2"
-                  >
-                    <Info className="h-4 w-4 text-amber-500 mt-0.5" />
-                    <div>
-                      <div className="font-medium text-gray-900">
-                        {r.reason}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {r.message}
-                      </div>
-                    </div>
-                  </div>
+                    type="REASON"
+                    reason={reason}
+                  />
                 ))}
               </div>
-            </div>
+            </section>
           )}
         </div>
       )}

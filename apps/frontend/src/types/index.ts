@@ -994,6 +994,7 @@ export interface DecisionTraceStepDTO {
   rule: string; // stable rule identifier
   outcome: 'APPLIED' | 'SKIPPED';
   details?: Record<string, any> | null;
+  confidenceImpact?: number; // -1.0 → +1.0
 }
 
 /**
@@ -1042,7 +1043,12 @@ export interface OrchestratedActionDTO {
   decisionTrace?: {
     steps: DecisionTraceStepDTO[];
   };
-
+  
+  confidence?: {
+    score: number; // 0–100
+    level: 'LOW' | 'MEDIUM' | 'HIGH';
+    explanation?: string[];
+  };
   // Sorting / urgency
   priority: number;
   overdue: boolean;
