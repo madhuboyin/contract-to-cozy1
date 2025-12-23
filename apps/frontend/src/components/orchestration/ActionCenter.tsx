@@ -39,8 +39,11 @@ export const ActionCenter: React.FC<Props> = ({
   const [template, setTemplate] = useState<MaintenanceTaskTemplate | null>(null);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
 
+  // Track which actions have been handled (task created)
+  const [handledActions, setHandledActions] = useState<Set<string>>(new Set());
+
   // ---------------------------------------------------------------------------
-  // ✅ LOAD ACTIONS AND PROPERTIES
+  // LOAD ACTIONS AND PROPERTIES
   // ---------------------------------------------------------------------------
 
   const loadActions = async () => {
@@ -96,19 +99,19 @@ export const ActionCenter: React.FC<Props> = ({
   };
 
   // ---------------------------------------------------------------------------
-  // SUCCESS HANDLER - TOAST + OPTIMISTIC UPDATE
+  // SUCCESS HANDLER - DISABLE CTA
   // ---------------------------------------------------------------------------
 
   const handleSuccess = () => {
     // Show success toast
     toast({
       title: 'Task scheduled successfully',
-      description: 'The action has been added to your maintenance checklist.',
+      description: "We're tracking this for you.",
     });
 
-    // Optimistic UI: Remove action from list immediately
+    // Mark action as handled (disable CTA)
     if (activeActionId) {
-      setActions(prev => prev.filter(a => a.id !== activeActionId));
+      setHandledActions(prev => new Set(prev).add(activeActionId));
     }
 
     // Close modal and reset
@@ -116,10 +119,10 @@ export const ActionCenter: React.FC<Props> = ({
     setTemplate(null);
     setActiveActionId(null);
 
-    // Background refresh to sync with server
+    // Background refresh to eventually sync with server suppression
     setTimeout(() => {
       loadActions();
-    }, 1000);
+    }, 3000);
   };
 
   // ---------------------------------------------------------------------------
@@ -194,6 +197,8 @@ export const ActionCenter: React.FC<Props> = ({
               key={action.id}
               action={action}
               onCtaClick={handleActionCta}
+              ctaDisabled={handledActions.has(action.id)}
+              ctaLabel={handledActions.has(action.id) ? "Task scheduled" : undefined}
             />
           ))}
         </div>

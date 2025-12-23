@@ -33,6 +33,9 @@ export function ActionsClient() {
   const [template, setTemplate] = useState<MaintenanceTaskTemplate | null>(null);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
 
+  // Track which actions have been handled (task created)
+  const [handledActions, setHandledActions] = useState<Set<string>>(new Set());
+
   const loadActions = async () => {
     if (!propertyId) {
       setError('No property selected.');
@@ -96,17 +99,17 @@ export function ActionsClient() {
     setIsModalOpen(true);
   };
 
-  // Success handler with optimistic UI and toast
+  // Success handler - mark action as handled and disable CTA
   const handleSuccess = () => {
     // Show success toast
     toast({
       title: 'Task scheduled successfully',
-      description: "We're tracking this for you — it won't show up here anymore.",
+      description: "We're tracking this for you.",
     });
 
-    // Optimistic UI: Remove action from active list immediately
+    // Mark action as handled (disable CTA)
     if (activeActionId) {
-      setActions(prev => prev.filter(a => a.id !== activeActionId));
+      setHandledActions(prev => new Set(prev).add(activeActionId));
     }
 
     // Close modal and reset
@@ -114,10 +117,10 @@ export function ActionsClient() {
     setTemplate(null);
     setActiveActionId(null);
 
-    // Background refresh to sync with server
+    // Background refresh to eventually sync with server suppression
     setTimeout(() => {
       loadActions();
-    }, 1000);
+    }, 3000);
   };
 
   if (loading) {
@@ -180,6 +183,8 @@ export function ActionsClient() {
                   key={action.id} 
                   action={action}
                   onCtaClick={handleActionCta}
+                  ctaDisabled={handledActions.has(action.id)}
+                  ctaLabel={handledActions.has(action.id) ? "Task scheduled" : undefined}
                 />
               ))}
             </div>
