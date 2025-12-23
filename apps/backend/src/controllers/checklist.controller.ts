@@ -190,11 +190,49 @@ const handleCreateMaintenanceItems = async (
 };
 // --- END NEW FUNCTION ---
 
+/**
+ * Creates a single checklist item directly (used by orchestration/action center).
+ * Does not use templates - creates item from provided data.
+ */
+const handleCreateChecklistItem = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required.' });
+    }
+    const userId = req.user.userId;
+    const itemData = req.body;
+
+    // Validate required fields
+    if (!itemData.title || !itemData.propertyId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: title and propertyId are required.',
+      });
+    }
+
+    const newItem = await ChecklistService.createDirectChecklistItem(
+      userId,
+      itemData
+    );
+
+    res.status(201).json({
+      success: true,
+      data: newItem,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const checklistController = {
   handleGetChecklist,
   handleUpdateChecklistItem,
   handlePatchChecklistItem,
   handleCreateMaintenanceItems,
-  // FIX: Add the new handler to the exported object
   handleDeleteChecklistItem,
+  handleCreateChecklistItem, // ADD THIS LINE
 };

@@ -514,6 +514,50 @@ export class ChecklistService {
     return updatedItem;
   }
   
+  /**
+   * Creates a single checklist item directly without using templates.
+   * Used by orchestration/action center.
+   */
+  static async createDirectChecklistItem(
+    userId: string,
+    itemData: {
+      title: string;
+      description?: string | null;
+      serviceCategory?: string | null;
+      propertyId: string;
+      isRecurring: boolean;
+      frequency?: string | null;
+      nextDueDate: string; // ISO date string
+    }
+  ): Promise<ChecklistItem> {
+    // 1. Get the user's checklist (or create one)
+    const checklist = await this.getOrCreateChecklist(userId);
+    if (!checklist) {
+      throw new Error('Could not find or create a checklist for the user.');
+    }
+
+    // 2. Parse the date
+    const parsedDate = itemData.nextDueDate ? new Date(itemData.nextDueDate) : null;
+
+    // 3. Create the checklist item
+    const newItem = await prisma.checklistItem.create({
+      data: {
+        checklistId: checklist.id,
+        title: itemData.title,
+        description: itemData.description || null,
+        serviceCategory: itemData.serviceCategory as any,
+        status: ChecklistItemStatus.PENDING,
+        isRecurring: itemData.isRecurring,
+        frequency: itemData.isRecurring ? (itemData.frequency as RecurrenceFrequency | null) : null,
+        nextDueDate: parsedDate,
+        propertyId: itemData.propertyId,
+        sortOrder: 999, // Default high sort order for manually created items
+      },
+    });
+
+    return newItem;
+  }
+
   // --- FIX: ADDED MISSING deleteChecklistItem METHOD ---
   /**
    * Deletes a specific checklist item.

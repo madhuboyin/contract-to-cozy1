@@ -147,7 +147,56 @@ router.delete(
   authenticate,
   checklistController.handleDeleteChecklistItem
 );
+// Add this route to apps/backend/src/routes/checklist.routes.ts
+// Insert AFTER the DELETE route and BEFORE the POST /maintenance-items route
 
+/**
+ * @swagger
+ * /api/checklist/items:
+ *   post:
+ *     summary: Create a new checklist item directly (used by orchestration/action center)
+ *     tags: [Checklist]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - title
+ *               - propertyId
+ *             properties:
+ *               title:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               serviceCategory:
+ *                 type: string
+ *               propertyId:
+ *                 type: string
+ *                 format: uuid
+ *               isRecurring:
+ *                 type: boolean
+ *               frequency:
+ *                 type: string
+ *               nextDueDate:
+ *                 type: string
+ *                 format: date-time
+ *     responses:
+ *       201:
+ *         description: Checklist item created
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.post(
+  '/items',
+  authenticate,
+  checklistController.handleCreateChecklistItem
+);
 /**
  * @swagger
  * /api/checklist/maintenance-items:
