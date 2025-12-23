@@ -1,3 +1,4 @@
+// apps/frontend/src/components/orchestration/ActionCenter.tsx
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -293,9 +294,40 @@ export const ActionCenter: React.FC<Props> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>   
       );
-    })()}
+      })()}
+        <div className="space-y-6">
+          {renderGroup('Critical', critical, 'text-red-700')}
+          {renderGroup('High Priority', high, 'text-amber-700')}
+          {renderGroup('Other Actions', other, 'text-gray-700')}
+
+          {/* Suppressed Actions */}
+          {suppressed.length > 0 && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowSuppressed(v => !v)}
+                className="text-sm font-medium text-muted-foreground hover:underline"
+              >
+                {showSuppressed
+                  ? 'Hide suppressed actions'
+                  : `Show suppressed actions (${suppressed.length})`}
+              </button>
+
+              {showSuppressed && (
+                <div className="mt-3 space-y-3">
+                  {suppressed.map(action => (
+                    <OrchestrationActionCard
+                      key={action.id}
+                      action={action}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
       {/* ================= MODAL ================= */}
       <MaintenanceConfigModal
