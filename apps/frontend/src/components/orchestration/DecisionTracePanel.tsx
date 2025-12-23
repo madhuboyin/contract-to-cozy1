@@ -86,15 +86,15 @@ export const DecisionTracePanel: React.FC<Props> = ({
                   How we decided this
                 </div>
 
-                {/* ✅ FIXED: Internal evaluation with working tooltip */}
+                {/* ✅ FIXED: Internal evaluation with matching ConfidencePopover styling */}
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
                         type="button"
-                        className="text-xs text-muted-foreground hover:text-gray-900 flex items-center gap-1 cursor-help"
+                        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-gray-900"
                       >
-                        <Info size={12} />
+                        <Info className="h-3.5 w-3.5" />
                         Internal evaluation
                       </button>
                     </TooltipTrigger>
