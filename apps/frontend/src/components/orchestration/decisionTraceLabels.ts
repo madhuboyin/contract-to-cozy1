@@ -53,6 +53,20 @@ export const TRACE_COPY = {
           'This action is shown because it still requires attention.',
         icon: '✅',
       },
+      suppressedSummary: {
+        BOOKING_EXISTS: {
+          title: 'Work is already scheduled',
+          description:
+            'This action is hidden because there is already related work scheduled for your home.',
+          icon: '📅',
+        },
+        COVERED: {
+          title: 'This issue is already covered',
+          description:
+            'This action is hidden because it’s covered by an active warranty or insurance policy.',
+          icon: '🛡',
+        },
+      }  
     },
   };
   
