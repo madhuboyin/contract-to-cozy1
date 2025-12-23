@@ -101,7 +101,7 @@ export function ActionsClient() {
     // Show success toast
     toast({
       title: 'Task scheduled successfully',
-      description: 'The action has been added to your maintenance checklist.',
+      description: "We're tracking this for you — it won't show up here anymore.",
     });
 
     // Optimistic UI: Remove action from active list immediately

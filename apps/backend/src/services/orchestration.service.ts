@@ -12,6 +12,7 @@ export type SuppressionReason =
   | 'BOOKING_EXISTS'
   | 'COVERED'
   | 'NOT_ACTIONABLE'
+  | 'CHECKLIST_TRACKED'
   | 'UNKNOWN';
 
 type SuppressionReasonEntry = {
@@ -533,6 +534,7 @@ function mapRiskDetailToAction(params: {
 
   bookingCategorySet: Set<ServiceCategory>;
   bookingByCategory: Map<ServiceCategory, { id: string; status: BookingStatus }>;
+  checklistItems: Array<any>;
 }): OrchestratedAction | null {
   const { propertyId, d, index, warranties, insurancePolicies, bookingCategorySet, bookingByCategory } = params;
 
@@ -660,7 +662,58 @@ function mapRiskDetailToAction(params: {
       details: inferredCategory ? { serviceCategory: inferredCategory } : { reason: 'NO_CATEGORY' },
     });
   }
+  // ✅ CHECKLIST suppression: suppress risk if matching scheduled checklist item exists
+  const { checklistItems } = params;
+  let suppressedByChecklist = false;
+  
+  if (inferredCategory && Array.isArray(checklistItems)) {
+    const matchingChecklistItem = checklistItems.find((item: any) => {
+      const itemCategory = item?.serviceCategory 
+        ? String(item.serviceCategory).trim().toUpperCase() 
+        : null;
+      const itemStatus = item?.status ? String(item.status).trim().toUpperCase() : null;
+      const itemNextDue = safeParseDate(item?.nextDueDate);
+      
+      // Match if: same category, active status, and has future due date
+      return (
+        itemCategory === inferredCategory &&
+        ['PENDING', 'SCHEDULED', 'IN_PROGRESS'].includes(itemStatus || '') &&
+        itemNextDue && !isPastDate(itemNextDue)
+      );
+    });
 
+    if (matchingChecklistItem) {
+      suppressedByChecklist = true;
+      const itemId = matchingChecklistItem?.id ?? null;
+      const dueDate = matchingChecklistItem?.nextDueDate 
+        ? safeParseDate(matchingChecklistItem.nextDueDate) 
+        : null;
+      const dueDateStr = dueDate ? dueDate.toISOString().split('T')[0] : 'future';
+
+      suppressionReasons.push({
+        reason: 'CHECKLIST_TRACKED',
+        message: `Already tracked in maintenance checklist (scheduled for ${dueDateStr})`,
+        relatedId: itemId,
+        relatedType: 'BOOKING', // Use BOOKING as type since no CHECKLIST type exists
+      });
+
+      steps.push({
+        rule: 'CHECKLIST_SUPPRESSION',
+        outcome: 'APPLIED',
+        details: { 
+          serviceCategory: inferredCategory, 
+          checklistItemId: itemId,
+          nextDueDate: dueDateStr,
+        },
+      });
+    } else {
+      steps.push({
+        rule: 'CHECKLIST_SUPPRESSION',
+        outcome: 'SKIPPED',
+        details: inferredCategory ? { serviceCategory: inferredCategory } : { reason: 'NO_CATEGORY' },
+      });
+    }
+  }
   const suppression = buildSuppression(steps, suppressedByBooking, suppressionReasons);
 
   const confidenceRaw = computeConfidence({
@@ -893,6 +946,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
             insurancePolicies,
             bookingCategorySet,
             bookingByCategory,
+            checklistItems,
           })
         )
         .filter(Boolean) as OrchestratedAction[])
