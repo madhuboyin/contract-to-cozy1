@@ -1643,6 +1643,25 @@ class APIClient {
     const summary = await this.getOrchestrationSummary(propertyId);
     return summary.pendingActionCount;
   }
+  /**
+   * Creates a new checklist item directly (used by orchestration / action center).
+   * This bypasses maintenance templates.
+   */
+  async createChecklistItem(data: {
+    title: string;
+    description?: string | null;
+    serviceCategory: ServiceCategory | string | null;
+    propertyId: string;
+    isRecurring: boolean;
+    frequency?: string | null;
+    nextDueDate: string; // ISO date string
+  }): Promise<APIResponse<ChecklistItem>> {
+    return this.request<ChecklistItem>('/api/checklist/items', {
+      method: 'POST',
+      body: data as unknown as BodyInit,
+    });
+  }
+
 }
 
 // Export singleton instance

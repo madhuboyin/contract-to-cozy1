@@ -92,6 +92,7 @@ interface MaintenanceConfigModalProps {
   existingConfig?: (MaintenanceTaskConfig & { propertyId: string | null }) | null; // Existing task data
   onSave?: (config: MaintenanceTaskConfig) => void; // Callback for saving edits
   onRemove?: (taskId: string) => void; // Callback for removing task
+  orchestrationMode?: boolean;
 }
 // === END FIX ===
 
@@ -106,6 +107,7 @@ export function MaintenanceConfigModal({
   onPropertyChange,
   onSave,
   onRemove,
+  orchestrationMode = false,
 }: MaintenanceConfigModalProps) {
   const router = useRouter();
 
@@ -322,6 +324,24 @@ export function MaintenanceConfigModal({
     setServerError(null);
 
     try {
+              // ============================================================
+        // 🟢 ORCHESTRATION MODE (NO TEMPLATE)
+        // ============================================================
+        if (orchestrationMode) {
+          await api.createChecklistItem({
+            title,
+            description: description || null,
+            serviceCategory: category!,
+            propertyId: propertyIdToUse,
+            isRecurring,
+            frequency: isRecurring ? frequency : null,
+            nextDueDate: finalNextDueDateString,
+          });
+
+          onSuccess?.(1);
+          onClose();
+          return;
+        }
         if (isEditing && onSave) {
             // EDITING FLOW: Calls parent's onSave 
             onSave(configForEdit);
