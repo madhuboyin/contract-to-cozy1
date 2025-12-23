@@ -8,9 +8,16 @@ import { OrchestratedActionDTO } from '@/types';
 import { adaptOrchestrationSummary } from '@/adapters/orchestration.adapter';
 import { OrchestrationActionCard } from './OrchestrationActionCard';
 
+import { MaintenanceConfigModal } from '@/app/(dashboard)/dashboard/maintenance-setup/MaintenanceConfigModal';
+import {
+  MaintenanceTaskTemplate,
+  RecurrenceFrequency,
+  ServiceCategory,
+} from '@/types';
+
 type Props = {
   propertyId: string;
-  maxItems?: number; // default 5
+  maxItems?: number;
 };
 
 export const ActionCenter: React.FC<Props> = ({
@@ -21,49 +28,63 @@ export const ActionCenter: React.FC<Props> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Frontend-only UX state
+  // UI state
   const [showSuppressed, setShowSuppressed] = useState(false);
 
+  // Modal state
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [template, setTemplate] = useState<MaintenanceTaskTemplate | null>(null);
+
   // ---------------------------------------------------------------------------
-  // DATA LOAD
+  // LOAD ACTIONS
   // ---------------------------------------------------------------------------
+
+  const loadActions = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const summary = await api.getOrchestrationSummary(propertyId);
+      const adapted = adaptOrchestrationSummary(summary);
+      setActions(adapted.actions);
+    } catch (err) {
+      console.error('ActionCenter error:', err);
+      setError('Unable to load actions right now.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!propertyId) return;
-
-    let cancelled = false;
-
-    async function load() {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const summary = await api.getOrchestrationSummary(propertyId);
-        const adapted = adaptOrchestrationSummary(summary);
-
-        if (!cancelled) {
-          setActions(adapted.actions);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          console.error('ActionCenter error:', err);
-          setError('Unable to load actions right now.');
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    load();
-    return () => {
-      cancelled = true;
-    };
+    loadActions();
   }, [propertyId]);
 
   // ---------------------------------------------------------------------------
-  // DERIVED STATE
+  // CTA HANDLER → OPEN MAINTENANCE MODAL
+  // ---------------------------------------------------------------------------
+
+  const handleActionCta = (action: OrchestratedActionDTO) => {
+    if (action.suppression?.suppressed) return;
+
+    setTemplate({
+      id: `orchestration:${action.id}`,
+      title: action.title,
+      description: action.description ?? '',
+      serviceCategory:
+        (action.serviceCategory as ServiceCategory) ??
+        (action.category as ServiceCategory) ??
+        'INSPECTION',
+      defaultFrequency: RecurrenceFrequency.ANNUALLY,
+    
+      // ✅ REQUIRED by type, irrelevant for orchestration → modal
+      sortOrder: 0,
+    });
+    setIsModalOpen(true);
+  };
+
+  // ---------------------------------------------------------------------------
+  // DERIVED GROUPS
   // ---------------------------------------------------------------------------
 
   const { active, suppressed } = useMemo(() => {
@@ -112,7 +133,7 @@ export const ActionCenter: React.FC<Props> = ({
   }
 
   // ---------------------------------------------------------------------------
-  // RENDER (cards only — parent controls header)
+  // RENDER GROUP
   // ---------------------------------------------------------------------------
 
   const renderGroup = (
@@ -133,6 +154,7 @@ export const ActionCenter: React.FC<Props> = ({
             <OrchestrationActionCard
               key={action.id}
               action={action}
+              onCtaClick={handleActionCta}
             />
           ))}
         </div>
@@ -141,36 +163,54 @@ export const ActionCenter: React.FC<Props> = ({
   };
 
   return (
-    <div className="space-y-6">
-      {renderGroup('Critical', critical, 'text-red-700')}
-      {renderGroup('High Priority', high, 'text-amber-700')}
-      {renderGroup('Other Actions', other, 'text-gray-700')}
+    <>
+      <div className="space-y-6">
+        {renderGroup('Critical', critical, 'text-red-700')}
+        {renderGroup('High Priority', high, 'text-amber-700')}
+        {renderGroup('Other Actions', other, 'text-gray-700')}
 
-      {/* Suppressed (collapsed by default) */}
-      {suppressed.length > 0 && (
-        <div className="pt-2">
-          <button
-            type="button"
-            onClick={() => setShowSuppressed(v => !v)}
-            className="text-sm font-medium text-muted-foreground hover:underline"
-          >
-            {showSuppressed
-              ? 'Hide suppressed actions'
-              : `Show suppressed actions (${suppressed.length})`}
-          </button>
+        {/* Suppressed Actions */}
+        {suppressed.length > 0 && (
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => setShowSuppressed(v => !v)}
+              className="text-sm font-medium text-muted-foreground hover:underline"
+            >
+              {showSuppressed
+                ? 'Hide suppressed actions'
+                : `Show suppressed actions (${suppressed.length})`}
+            </button>
 
-          {showSuppressed && (
-            <div className="mt-3 space-y-3">
-              {suppressed.map(action => (
-                <OrchestrationActionCard
-                  key={action.id}
-                  action={action}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+            {showSuppressed && (
+              <div className="mt-3 space-y-3">
+                {suppressed.map(action => (
+                  <OrchestrationActionCard
+                    key={action.id}
+                    action={action}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ================= MODAL ================= */}
+      <MaintenanceConfigModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setTemplate(null);
+        }}
+        template={template}
+        selectedPropertyId={propertyId}
+        onSuccess={() => {
+          setIsModalOpen(false);
+          setTemplate(null);
+          loadActions(); // refresh orchestration after task creation
+        }}
+      />
+    </>
   );
 };
