@@ -47,6 +47,11 @@ import {
   CommunityEventsResponse,
   // LOCAL UPDATES
   LocalUpdate,
+  // NEW ORCHESTRATION TYPES 
+  OrchestratedActionDTO,
+  OrchestrationSummaryDTO,
+  SuppressionReason,
+  ServiceCategory,
 } from '@/types';
 
 // REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
@@ -1605,23 +1610,40 @@ class APIClient {
     });
   }
 
-  // ORCHESTRATION — Phase 2
-  async getOrchestrationSummary(propertyId: string): Promise<{
-    pendingActionCount: number;
-  }> {
-    const response = await this.request<{
-      pendingActionCount: number;
-    }>(`/api/orchestration/summary/${propertyId}`);
+// ==========================================================================
+// ORCHESTRATION ENDPOINTS (PHASE 6)
+// ==========================================================================
+
+/**
+ * Fetch full orchestration summary for a property.
+ * Returns backend decision model as-is (DTO).
+ * UI transformation happens in orchestration.adapter.ts
+ */
+  async getOrchestrationSummary(
+    propertyId: string
+  ): Promise<OrchestrationSummaryDTO> {
+    const response = await this.request<OrchestrationSummaryDTO>(
+      `/api/orchestration/summary/${propertyId}`
+    );
 
     if (response.success && response.data) {
       return response.data;
     }
 
-    return { pendingActionCount: 0 };
+    throw new APIError('Failed to load orchestration summary', 'ORCHESTRATION_ERROR');
   }
 
+  /**
+   * Lightweight orchestration count for dashboard badges.
+   * Non-breaking, optional convenience method.
+   */
+  async getOrchestrationActionCount(
+    propertyId: string
+  ): Promise<number> {
+    const summary = await this.getOrchestrationSummary(propertyId);
+    return summary.pendingActionCount;
+  }
 }
-
 
 // Export singleton instance
 export const api = new APIClient(API_BASE_URL);

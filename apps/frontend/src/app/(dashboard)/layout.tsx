@@ -28,6 +28,7 @@ import {
   DollarSign,
   FileText,
   Globe,
+  AlertTriangle
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { User } from '@/types';
@@ -226,6 +227,7 @@ function DesktopNav({ user }: { user: User | null }) {
 
   const allLinks: NavLink[] = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
+    { name: 'Actions', href: '/actions', icon: AlertTriangle },
     { name: 'Properties', href: '/dashboard/properties', icon: Building },
     { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
     { name: 'Find Services', href: '/dashboard/providers', icon: Search },

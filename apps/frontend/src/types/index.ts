@@ -946,6 +946,134 @@ export interface BudgetForecast {
   generatedAt: string; // ISO Date string
 }
 
+// ============================================================================
+// ORCHESTRATION TYPES (PHASE 7)
+// Central intelligence contract between backend + frontend
+// ============================================================================
+
+/**
+ * Source of an orchestrated action
+ */
+export type OrchestrationSource = 'RISK' | 'CHECKLIST';
+
+/**
+ * Why an action was suppressed
+ */
+export type SuppressionReason =
+  | 'BOOKING_EXISTS'
+  | 'COVERED'
+  | 'NOT_ACTIONABLE'
+  | 'UNKNOWN';
+
+/**
+ * Coverage context (from warranty / insurance)
+ */
+export type CoverageType = 'HOME_WARRANTY' | 'INSURANCE' | 'NONE';
+
+export interface CoverageInfoDTO {
+  hasCoverage: boolean;
+  type: CoverageType;
+  expiresOn: string | null;
+  sourceId?: string | null;
+}
+
+/**
+ * Individual suppression explanation
+ */
+export interface SuppressionReasonEntryDTO {
+  reason: SuppressionReason;
+  message: string;
+  relatedId?: string | null;
+  relatedType?: 'BOOKING' | 'WARRANTY' | 'INSURANCE' | null;
+}
+
+/**
+ * Decision trace step (Gap 5)
+ */
+export interface DecisionTraceStepDTO {
+  rule: string; // stable rule identifier
+  outcome: 'APPLIED' | 'SKIPPED';
+  details?: Record<string, any> | null;
+}
+
+/**
+ * Orchestrated Action DTO
+ * Returned by /api/orchestration/:propertyId
+ */
+export interface OrchestratedActionDTO {
+  id: string;
+  source: OrchestrationSource;
+  propertyId: string;
+
+  // Generic display
+  title: string;
+  description?: string | null;
+
+  // Risk-specific
+  systemType?: string | null;
+  category?: string | null;
+  riskLevel?: string | null;
+  age?: number | null;
+  expectedLife?: number | null;
+  exposure?: number | null;
+
+  // Checklist-specific
+  checklistItemId?: string | null;
+  status?: string | null;
+  nextDueDate?: string | null;
+  isRecurring?: boolean | null;
+  serviceCategory?: ServiceCategory | null;
+
+  // Coverage-aware CTA
+  coverage?: CoverageInfoDTO;
+  cta?: {
+    show: boolean;
+    label: string | null;
+    reason: 'COVERED' | 'MISSING_DATA' | 'ACTION_REQUIRED' | 'NONE';
+  };
+
+  // Suppression (Gap 4)
+  suppression?: {
+    suppressed: boolean;
+    reasons: SuppressionReasonEntryDTO[];
+  };
+
+  // Decision trace (Gap 5)
+  decisionTrace?: {
+    steps: DecisionTraceStepDTO[];
+  };
+
+  // Sorting / urgency
+  priority: number;
+  overdue: boolean;
+  createdAt?: string | null;
+}
+
+/**
+ * Orchestration Summary DTO
+ */
+export interface OrchestrationSummaryDTO {
+  propertyId: string;
+  pendingActionCount: number;
+
+  derivedFrom: {
+    riskAssessment: boolean;
+    checklist: boolean;
+  };
+
+  // Actionable only
+  actions: OrchestratedActionDTO[];
+
+  // Explicitly suppressed (transparent UX)
+  suppressedActions: OrchestratedActionDTO[];
+
+  counts: {
+    riskActions: number;
+    checklistActions: number;
+    suppressedActions: number;
+  };
+}
+
 /**
  * Community Events API payload
  */
