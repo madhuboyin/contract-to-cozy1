@@ -997,6 +997,11 @@ export interface DecisionTraceStepDTO {
   confidenceImpact?: number; // -1.0 → +1.0
 }
 
+export interface ActionConfidenceDTO {
+  score: number; // 0 → 1
+  level: 'LOW' | 'MEDIUM' | 'HIGH';
+  explanation?: string[];
+};
 /**
  * Orchestrated Action DTO
  * Returned by /api/orchestration/:propertyId
@@ -1043,12 +1048,7 @@ export interface OrchestratedActionDTO {
   decisionTrace?: {
     steps: DecisionTraceStepDTO[];
   };
-  
-  confidence?: {
-    score: number; // 0–100
-    level: 'LOW' | 'MEDIUM' | 'HIGH';
-    explanation?: string[];
-  };
+  confidence?: ActionConfidenceDTO;
   // Sorting / urgency
   priority: number;
   overdue: boolean;

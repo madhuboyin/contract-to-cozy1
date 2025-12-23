@@ -67,7 +67,11 @@ export type OrchestratedAction = {
 
   // Coverage-aware CTA
   coverage?: CoverageInfo;
-  confidence?: number;
+  confidence?: {
+    score: number;
+    level: 'HIGH' | 'MEDIUM' | 'LOW';
+    explanation: string[];
+  };
   cta?: {
     show: boolean;
     label: string | null;
@@ -429,30 +433,76 @@ function computeConfidence(input: {
   status?: string | null;
   suppressed: boolean;
   coverage?: CoverageInfo;
-}): number {
+}): { score: number; level: 'HIGH' | 'MEDIUM' | 'LOW'; explanation: string[] } {
   let score = 0.5;
+  const explanation: string[] = [];
 
   if (input.source === 'RISK') {
-    if (input.riskLevel === 'CRITICAL') score += 0.3;
-    if (input.riskLevel === 'HIGH') score += 0.2;
+    if (input.riskLevel === 'CRITICAL') {
+      score += 0.3;
+      explanation.push('Critical risk level');
+    }
+    if (input.riskLevel === 'HIGH') {
+      score += 0.2;
+      explanation.push('High risk level');
+    }
     if (
       input.age &&
       input.expectedLife &&
       input.age / input.expectedLife > 0.9
-    ) score += 0.2;
-    if (input.exposure && input.exposure > 5000) score += 0.1;
+    ) {
+      score += 0.2;
+      explanation.push('Asset near end of expected life');
+    }
+    if (input.exposure && input.exposure > 5000) {
+      score += 0.1;
+      explanation.push('High financial exposure');
+    }
   }
 
   if (input.source === 'CHECKLIST') {
-    if (input.overdue) score += 0.25;
-    if (input.unscheduledRecurring) score += 0.15;
-    if (input.status === 'NEEDS_REVIEW') score += 0.1;
+    if (input.overdue) {
+      score += 0.25;
+      explanation.push('Task is overdue');
+    }
+    if (input.unscheduledRecurring) {
+      score += 0.15;
+      explanation.push('Recurring task not scheduled');
+    }
+    if (input.status === 'NEEDS_REVIEW') {
+      score += 0.1;
+      explanation.push('Task needs review');
+    }
   }
 
-  if (input.coverage?.hasCoverage) score -= 0.15;
-  if (input.suppressed) score -= 0.3;
+  if (input.coverage?.hasCoverage) {
+    score -= 0.15;
+    explanation.push('Coverage reduces urgency');
+  }
+  if (input.suppressed) {
+    score -= 0.3;
+    explanation.push('Action is suppressed');
+  }
 
-  return Math.max(0, Math.min(1, Number(score.toFixed(2))));
+  const finalScore = Math.max(0, Math.min(1, Number(score.toFixed(2))));
+  
+  return {
+    score: finalScore,
+    level: finalScore >= 0.75 ? 'HIGH' : finalScore >= 0.5 ? 'MEDIUM' : 'LOW',
+    explanation: explanation.length > 0 ? explanation : ['Standard confidence calculation'],
+  };
+}
+
+function withDefaultConfidence(
+  confidence?: OrchestratedAction['confidence']
+): OrchestratedAction['confidence'] {
+  return (
+    confidence ?? {
+      score: 0.5,
+      level: 'MEDIUM',
+      explanation: ['Default confidence applied'],
+    }
+  );
 }
 
 function buildSuppression(
@@ -613,7 +663,7 @@ function mapRiskDetailToAction(params: {
 
   const suppression = buildSuppression(steps, suppressedByBooking, suppressionReasons);
 
-  const confidence = computeConfidence({
+  const confidenceRaw = computeConfidence({
     source: 'RISK',
     riskLevel,
     age,
@@ -641,7 +691,7 @@ function mapRiskDetailToAction(params: {
 
     coverage,
     cta,
-    confidence,
+    confidence: withDefaultConfidence(confidenceRaw),
     suppression,
     decisionTrace: { steps },
 
@@ -723,7 +773,7 @@ function mapChecklistItemToAction(params: {
 
   const suppression = buildSuppression(steps, suppressedByBooking, suppressionReasons);
   
-  const confidence = computeConfidence({
+  const confidenceRaw = computeConfidence({
     source: 'CHECKLIST',
     overdue,
     unscheduledRecurring,
@@ -747,7 +797,7 @@ function mapChecklistItemToAction(params: {
 
     coverage: { hasCoverage: false, type: 'NONE', expiresOn: null, sourceId: null },
     cta: { show: true, label: ctaLabel, reason: 'ACTION_REQUIRED' },
-    confidence,
+    confidence: withDefaultConfidence(confidenceRaw),
     suppression,
     decisionTrace: { steps },
 

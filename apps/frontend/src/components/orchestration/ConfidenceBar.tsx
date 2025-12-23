@@ -1,3 +1,4 @@
+// components/orchestration/ConfidenceBar.tsx
 'use client';
 
 import React from 'react';
@@ -8,6 +9,17 @@ type Props = {
 };
 
 export const ConfidenceBar: React.FC<Props> = ({ score, level }) => {
+  if (
+    score === undefined ||
+    score === null ||
+    Number.isNaN(score)
+  ) {
+    return (
+      <div className="text-xs text-muted-foreground">
+        Confidence unavailable
+      </div>
+    );
+  }
   const percent = Math.round(score * 100);
 
   const color =
