@@ -227,7 +227,7 @@ function DesktopNav({ user }: { user: User | null }) {
 
   const allLinks: NavLink[] = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
-    { name: 'Actions', href: 'dashboard/actions', icon: AlertTriangle },
+    { name: 'Actions', href: '/dashboard/actions', icon: AlertTriangle },
     { name: 'Properties', href: '/dashboard/properties', icon: Building },
     { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
     { name: 'Find Services', href: '/dashboard/providers', icon: Search },
