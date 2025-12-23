@@ -1,10 +1,10 @@
+// apps/frontend/src/components/orchestration/ActionCenter.tsx
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
 
 import { api } from '@/lib/api/client';
-import { OrchestratedActionDTO, OrchestrationSummaryDTO } from '@/types';
+import { OrchestratedActionDTO } from '@/types';
 import { adaptOrchestrationSummary } from '@/adapters/orchestration.adapter';
 import { OrchestrationActionCard } from './OrchestrationActionCard';
 
@@ -32,17 +32,12 @@ export const ActionCenter: React.FC<Props> = ({
         setError(null);
 
         const summary = await api.getOrchestrationSummary(propertyId);
-
-        if (!summary) {
-          throw new Error('Failed to load orchestration summary');
-        }
-
         const adapted = adaptOrchestrationSummary(summary);
 
         if (!cancelled) {
           setActions(adapted.actions);
         }
-      } catch (err: any) {
+      } catch (err) {
         if (!cancelled) {
           console.error('ActionCenter error:', err);
           setError('Unable to load actions right now.');
@@ -55,7 +50,6 @@ export const ActionCenter: React.FC<Props> = ({
     }
 
     load();
-
     return () => {
       cancelled = true;
     };
@@ -94,36 +88,17 @@ export const ActionCenter: React.FC<Props> = ({
   }
 
   // ---------------------------------------------------------------------------
-  // RENDER
+  // RENDER (cards only — no header)
   // ---------------------------------------------------------------------------
 
-  const visibleActions = actions.slice(0, maxItems);
-
   return (
-    <section className="rounded-lg border bg-white p-4 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">
-          Action Center
-        </h2>
-
-        <Link
-          href={`/dashboard/actions?propertyId=${propertyId}`}
-          className="text-sm font-medium text-blue-600 hover:text-blue-700"
-        >
-          View all
-        </Link>
-      </div>
-
-      {/* Actions */}
-      <div className="space-y-3">
-        {visibleActions.map(action => (
-          <OrchestrationActionCard
-            key={action.id}
-            action={action}
-          />
-        ))}
-      </div>
-    </section>
+    <div className="space-y-3">
+      {actions.slice(0, maxItems).map(action => (
+        <OrchestrationActionCard
+          key={action.id}
+          action={action}
+        />
+      ))}
+    </div>
   );
 };
