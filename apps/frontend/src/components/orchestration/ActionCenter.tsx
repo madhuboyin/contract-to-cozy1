@@ -216,24 +216,77 @@ export const ActionCenter: React.FC<Props> = ({
       </section>
     );
   };
+  
+  const getPostSaveCtas = (action: OrchestratedActionDTO) => {
+    // Check category for roof-related items (from risk assessment)
+    if (action.category && action.category.toUpperCase().includes('ROOF')) {
+      return {
+        primary: { label: 'Check warranty coverage', href: '/dashboard/warranties' },
+        secondary: { label: 'View related tasks', href: '/dashboard/maintenance' },
+      };
+    }
 
+    switch (action.serviceCategory) {
+      case 'HVAC':
+      case 'PLUMBING':
+      case 'ELECTRICAL':
+        return {
+          primary: { label: 'Schedule a service', href: '/dashboard/bookings' },
+          secondary: { label: 'Find a provider', href: '/dashboard/providers' },
+        };
+  
+      case 'INSPECTION':
+        return {
+          primary: { label: 'Upload inspection report', href: '/dashboard/inspection-reports' },
+          secondary: { label: 'View checklist', href: '/dashboard/maintenance' },
+        };
+  
+      default:
+        return {
+          primary: { label: 'View maintenance checklist', href: '/dashboard/maintenance' },
+        };
+    }
+  };
+  
   return (
     <>
       {/* ================= POST SAVE PANEL ================= */}
-      {showPostSavePanel && lastHandledAction && (
+      {showPostSavePanel && lastHandledAction && (() => {
+      const ctas = getPostSaveCtas(lastHandledAction);
+
+      return (
         <div className="rounded-lg border bg-green-50 p-4 text-sm mb-4">
-          <div className="flex gap-2 items-start">
-            <CheckCircle2 className="text-green-600 mt-0.5" />
-            <div className="space-y-1">
-              <div className="font-semibold text-green-800">
-                Task added to your checklist
-              </div>
-              <div className="text-green-700">
-                We’ll remind you when it’s due. You can schedule a service,
-                add coverage, or simply come back later.
-              </div>
+          <div className="space-y-2">
+            <div className="font-semibold text-green-800">
+              Task scheduled
+            </div>
+
+            <div className="text-green-700">
+              We’ve added this to your maintenance checklist.
+              You can take the next step now — or come back anytime.
+            </div>
+
+            <div className="flex gap-2 flex-wrap pt-2">
+              {ctas.primary && (
+                <a
+                  href={ctas.primary.href}
+                  className="px-3 py-1.5 rounded-md bg-green-700 text-white text-xs font-medium"
+                >
+                  {ctas.primary.label}
+                </a>
+              )}
+
+              {ctas.secondary && (
+                <a
+                  href={ctas.secondary.href}
+                  className="px-3 py-1.5 rounded-md border border-green-700 text-green-700 text-xs font-medium"
+                >
+                  {ctas.secondary.label}
+                </a>
+              )}
+
               <button
-                className="text-green-700 underline text-xs mt-1"
+                className="text-xs text-green-700 underline ml-auto"
                 onClick={() => setShowPostSavePanel(false)}
               >
                 Dismiss
@@ -241,38 +294,8 @@ export const ActionCenter: React.FC<Props> = ({
             </div>
           </div>
         </div>
-      )}
-
-      <div className="space-y-6">
-        {renderGroup('Critical', critical, 'text-red-700')}
-        {renderGroup('High Priority', high, 'text-amber-700')}
-        {renderGroup('Other Actions', other, 'text-gray-700')}
-
-        {suppressed.length > 0 && (
-          <div className="pt-2">
-            <button
-              type="button"
-              onClick={() => setShowSuppressed(v => !v)}
-              className="text-sm font-medium text-muted-foreground hover:underline"
-            >
-              {showSuppressed
-                ? 'Hide suppressed actions'
-                : `Show suppressed actions (${suppressed.length})`}
-            </button>
-
-            {showSuppressed && (
-              <div className="mt-3 space-y-3">
-                {suppressed.map(action => (
-                  <OrchestrationActionCard
-                    key={action.id}
-                    action={action}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      );
+    })()}
 
       {/* ================= MODAL ================= */}
       <MaintenanceConfigModal
