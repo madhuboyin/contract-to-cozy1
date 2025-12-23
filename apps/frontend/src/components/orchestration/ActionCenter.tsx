@@ -4,7 +4,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api/client';
-import { OrchestratedActionDTO } from '@/types';
+import { OrchestratedActionDTO, Property } from '@/types';
 import { adaptOrchestrationSummary } from '@/adapters/orchestration.adapter';
 import { OrchestrationActionCard } from './OrchestrationActionCard';
 
@@ -25,6 +25,7 @@ export const ActionCenter: React.FC<Props> = ({
   maxItems = 5,
 }) => {
   const [actions, setActions] = useState<OrchestratedActionDTO[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,7 +37,7 @@ export const ActionCenter: React.FC<Props> = ({
   const [template, setTemplate] = useState<MaintenanceTaskTemplate | null>(null);
 
   // ---------------------------------------------------------------------------
-  // ✅ LOAD ACTIONS (FIXED SCOPE)
+  // ✅ LOAD ACTIONS AND PROPERTIES
   // ---------------------------------------------------------------------------
 
   const loadActions = async () => {
@@ -44,9 +45,17 @@ export const ActionCenter: React.FC<Props> = ({
       setLoading(true);
       setError(null);
 
-      const summary = await api.getOrchestrationSummary(propertyId);
+      const [summary, propertiesRes] = await Promise.all([
+        api.getOrchestrationSummary(propertyId),
+        api.getProperties(),
+      ]);
+      
       const adapted = adaptOrchestrationSummary(summary);
       setActions(adapted.actions);
+      
+      if (propertiesRes.success) {
+        setProperties(propertiesRes.data.properties || []);
+      }
     } catch (err) {
       console.error('ActionCenter error:', err);
       setError('Unable to load actions right now.');
@@ -76,7 +85,7 @@ export const ActionCenter: React.FC<Props> = ({
         (action.category as ServiceCategory) ??
         'INSPECTION',
       defaultFrequency: RecurrenceFrequency.ANNUALLY,
-      sortOrder: 0, // required by type
+      sortOrder: 0,
     });
 
     setIsModalOpen(true);
@@ -200,6 +209,7 @@ export const ActionCenter: React.FC<Props> = ({
         isOpen={isModalOpen}
         orchestrationMode
         template={template}
+        properties={properties}
         selectedPropertyId={propertyId}
         onClose={() => {
           setIsModalOpen(false);
@@ -208,7 +218,7 @@ export const ActionCenter: React.FC<Props> = ({
         onSuccess={() => {
           setIsModalOpen(false);
           setTemplate(null);
-          loadActions(); // ✅ now in scope
+          loadActions();
         }}
       />
     </>
