@@ -1,184 +1,182 @@
-// apps/frontend/src/components/orchestration/OrchestrationActionCard.tsx
-'use client';
-
-import React, { useState } from 'react';
+// components/orchestration/OrchestrationActionCard.tsx
+import React from 'react';
 import { OrchestratedActionDTO } from '@/types';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
+import { DecisionTracePanel } from './DecisionTracePanel';
+import { ConfidenceBar } from './ConfidenceBar';
+import { ConfidencePopover } from './ConfidencePopover';
 
 type Props = {
   action: OrchestratedActionDTO;
   onCtaClick?: (action: OrchestratedActionDTO) => void;
+  onDismiss?: () => void;
   ctaDisabled?: boolean;
   ctaLabel?: string;
 };
 
+function formatMoney(amount?: number | null) {
+  if (amount === null || amount === undefined) return null;
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(amount);
+}
+
+function formatDateLabel(date?: string | Date | null) {
+  if (!date) return null;
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString();
+}
+
+function riskBadge(riskLevel?: string | null) {
+  if (!riskLevel) return null;
+
+  const base = 'text-xs font-semibold px-2 py-0.5 rounded';
+
+  switch (riskLevel) {
+    case 'CRITICAL':
+    case 'HIGH':
+      return <span className={`${base} bg-red-100 text-red-700`}>{riskLevel}</span>;
+    case 'ELEVATED':
+    case 'MODERATE':
+      return <span className={`${base} bg-amber-100 text-amber-700`}>{riskLevel}</span>;
+    case 'LOW':
+      return <span className={`${base} bg-green-100 text-green-700`}>{riskLevel}</span>;
+    default:
+      return <span className={`${base} bg-gray-100 text-gray-700`}>{riskLevel}</span>;
+  }
+}
+
+/**
+ * Suppress description if it duplicates CTA intent
+ */
+function resolveDescription(
+  description?: string | null,
+  ctaLabel?: string | null
+) {
+  if (!description) return null;
+  if (!ctaLabel) return description;
+
+  if (description.toLowerCase().includes(ctaLabel.toLowerCase())) {
+    return null;
+  }
+
+  return description;
+}
+
 export const OrchestrationActionCard: React.FC<Props> = ({
   action,
   onCtaClick,
+  onDismiss,
   ctaDisabled = false,
   ctaLabel,
 }) => {
-  const [showDetails, setShowDetails] = useState(false);
+  const suppressed = Boolean(action.suppression?.suppressed);
 
-  const showCta = action.cta?.show && onCtaClick;
-  const buttonLabel = ctaLabel || action.cta?.label || 'Take Action';
-  const confidencePercent = action.confidence ? Math.round(action.confidence.score * 100) : 0;
+  const exposure = formatMoney(action.exposure ?? null);
+  const dueDateLabel = formatDateLabel(action.nextDueDate ?? null);
+  const description = resolveDescription(action.description, action.cta?.label);
 
-  // Color based on risk level
-  const getRiskColor = () => {
-    switch (action.riskLevel) {
-      case 'CRITICAL':
-        return 'bg-red-500';
-      case 'HIGH':
-        return 'bg-orange-500';
-      case 'MODERATE':
-        return 'bg-yellow-500';
-      case 'LOW':
-        return 'bg-blue-500';
-      default:
-        return 'bg-gray-500';
-    }
-  };
+  const confidence = action.confidence;
+
+  // Use custom label if provided, otherwise use action's CTA label
+  const buttonLabel = ctaLabel || action.cta?.label;
+
+  // Disable if suppressed OR if explicitly disabled via prop
+  const isDisabled = suppressed || ctaDisabled;
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:border-blue-300 hover:shadow-md transition-all">
-      {/* Header Row */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <h3 className="text-lg font-semibold text-gray-900 leading-tight">
-            {action.title}
-          </h3>
-          {action.description && (
-            <p className="text-sm text-gray-600 mt-1">{action.description}</p>
+    <div
+      className={`rounded-lg border p-4 shadow-sm ${
+        suppressed ? 'bg-gray-50 opacity-70' : 'bg-white'
+      }`}
+    >
+      {/* ================= Header ================= */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-base font-semibold text-gray-900">
+              {action.title}
+            </h3>
+
+            {riskBadge(action.riskLevel)}
+
+            {action.category && (
+              <span className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700">
+                {action.category}
+              </span>
+            )}
+          </div>
+
+          {description && (
+            <p className="text-sm text-gray-600">{description}</p>
           )}
         </div>
 
-        {/* Risk Badge */}
-        {action.riskLevel && (
-          <span
-            className={`
-              px-2.5 py-1 text-xs font-bold rounded-md uppercase shrink-0
-              ${action.riskLevel === 'CRITICAL' ? 'bg-red-100 text-red-800' : ''}
-              ${action.riskLevel === 'HIGH' ? 'bg-orange-100 text-orange-800' : ''}
-              ${action.riskLevel === 'MODERATE' ? 'bg-yellow-100 text-yellow-800' : ''}
-              ${action.riskLevel === 'LOW' ? 'bg-blue-100 text-blue-800' : ''}
-            `}
-          >
-            {action.riskLevel}
-          </span>
-        )}
-      </div>
-
-      {/* Metadata Row */}
-      <div className="mt-3 flex flex-wrap items-center gap-4 text-sm">
-        {action.category && (
-          <span className="font-semibold text-gray-700 uppercase">
-            {action.category}
-          </span>
-        )}
-        {action.exposure && (
-          <span className="font-semibold text-gray-900">
-            ${action.exposure.toLocaleString()}
-          </span>
-        )}
-      </div>
-
-      {/* Confidence Progress Bar */}
-      {action.confidence && (
-        <div className="mt-3">
-          <div className="flex items-center justify-between text-xs text-gray-600 mb-1.5">
-            <span>Confidence</span>
-            <button
-              onClick={() => setShowDetails(!showDetails)}
-              className="text-blue-600 hover:text-blue-700 hover:underline"
-            >
-              {confidencePercent}%
-            </button>
-          </div>
-          <Progress 
-            value={confidencePercent} 
-            className="h-2"
-            indicatorClassName={getRiskColor()}
-          />
-          
-          {/* Confidence Details Dropdown */}
-          {showDetails && action.confidence.explanation && (
-            <div className="mt-2 p-2 bg-gray-50 rounded text-xs text-gray-600">
-              <div className="font-medium mb-1">How is this calculated?</div>
-              <ul className="list-disc list-inside space-y-0.5">
-                {action.confidence.explanation.map((exp, idx) => (
-                  <li key={idx}>{exp}</li>
-                ))}
-              </ul>
+        {/* ================= Meta ================= */}
+        <div className="text-right space-y-1">
+          {exposure && (
+            <div className="text-sm font-semibold text-gray-900">
+              {exposure}
+            </div>
+          )}
+          {dueDateLabel && (
+            <div className="text-xs text-gray-600">
+              Due {dueDateLabel}
             </div>
           )}
         </div>
+      </div>
+
+      {/* ================= Confidence ================= */}
+      {confidence && (
+        <div className="mt-4 space-y-2">
+          <ConfidenceBar
+            score={confidence.score}
+            level={confidence.level}
+          />
+
+          <ConfidencePopover
+            score={confidence.score}
+            level={confidence.level}
+            explanation={confidence.explanation}
+          />
+        </div>
       )}
 
-      {/* Action Row */}
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        {/* CTA Button */}
-        {showCta && (
-          <Button
-            size="sm"
-            onClick={() => !ctaDisabled && onCtaClick(action)}
-            disabled={ctaDisabled}
-            className={ctaDisabled ? 'cursor-not-allowed opacity-60' : ''}
+      {/* ================= CTA ================= */}
+      {action.cta?.show && buttonLabel && (
+        <div className="mt-4 flex items-center gap-3">
+          <button
+            type="button"
+            disabled={isDisabled}
+            onClick={() => !isDisabled && onCtaClick?.(action)}
+            className={`px-3 py-2 rounded-md text-sm font-semibold ${
+              isDisabled
+                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
           >
             {buttonLabel}
-          </Button>
-        )}
-
-        {/* Info Links */}
-        {action.suppression?.reasons && action.suppression.reasons.length > 0 && (
-          <button
-            className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
-            onClick={() => setShowDetails(!showDetails)}
-          >
-            Why you're seeing this
           </button>
-        )}
 
-        {action.decisionTrace?.steps && action.decisionTrace.steps.length > 0 && (
-          <details className="text-sm">
-            <summary className="cursor-pointer text-blue-600 hover:text-blue-700 hover:underline list-none">
-              See how this was decided
-            </summary>
-            <div className="mt-2 p-3 bg-gray-50 rounded border border-gray-200">
-              <ul className="space-y-2 text-xs">
-                {action.decisionTrace.steps.map((step, idx) => (
-                  <li key={idx} className="flex items-start gap-2">
-                    <span
-                      className={`
-                        font-medium
-                        ${step.outcome === 'APPLIED' ? 'text-green-600' : 'text-gray-400'}
-                      `}
-                    >
-                      {step.outcome === 'APPLIED' ? '✓' : '○'}
-                    </span>
-                    <span className="text-gray-700">{step.rule}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </details>
-        )}
-      </div>
-
-      {/* Suppression Reasons (when expanded) */}
-      {showDetails && action.suppression?.reasons && action.suppression.reasons.length > 0 && (
-        <div className="mt-3 p-3 bg-yellow-50 rounded border border-yellow-200">
-          <div className="text-xs font-medium text-yellow-900 mb-2">
-            Why you're seeing this:
-          </div>
-          <ul className="space-y-1 text-xs text-yellow-800">
-            {action.suppression.reasons.map((reason, idx) => (
-              <li key={idx}>• {reason.message}</li>
-            ))}
-          </ul>
+          {onDismiss && (
+            <button
+              onClick={onDismiss}
+              className="text-sm text-muted-foreground hover:underline"
+            >
+              Dismiss
+            </button>
+          )}
         </div>
       )}
+
+      {/* ================= Decision Trace (ALWAYS) ================= */}
+      <DecisionTracePanel
+        suppressed={suppressed}
+        reasons={action.suppression?.reasons ?? []}
+        steps={action.decisionTrace?.steps ?? []}
+      />
     </div>
   );
 };
