@@ -59,22 +59,6 @@ export const ExistingOwnerDashboard = ({
       });
   }, [selectedPropertyId]);
   console.log('localUpdates', localUpdates);    
-
-  const [actions, setActions] = useState<OrchestratedActionDTO[]>([]);
-  useEffect(() => {
-    if (!selectedPropertyId) return;
-  
-    api
-      .getOrchestrationSummary(selectedPropertyId)
-      .then((summary) => {
-        if (summary?.actions) {
-          setActions(summary.actions);
-        }
-      })
-      .catch(() => {
-        // orchestration is non-blocking
-      });
-  }, [selectedPropertyId]);
   
   // ------------------------------
   // Existing Logic (Unchanged)
@@ -137,8 +121,10 @@ export const ExistingOwnerDashboard = ({
               Action Center
             </h2>
             <Link
-              href={`/dashboard/actions?propertyId=${selectedPropertyId}`}
-              className="text-sm font-medium text-blue-600 hover:underline"
+              href={`/dashboard/actions${
+                selectedPropertyId ? `?propertyId=${selectedPropertyId}` : ''
+              }`}
+              className="text-lg font-semibold text-blue-600 hover:text-blue-700 transition-colors flex items-center"
             >
               View all
             </Link>
