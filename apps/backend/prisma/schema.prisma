@@ -503,6 +503,7 @@ model ChecklistItem {
   status      ChecklistItemStatus @default(PENDING)
   
   serviceCategory String?
+  orchestrationActionId String?
   // NEW: Recurring task fields
   isRecurring        Boolean   @default(false)
   frequency          RecurrenceFrequency?
@@ -515,6 +516,7 @@ model ChecklistItem {
   sortOrder   Int @default(0)
 
   @@index([checklistId])
+  @@unique([propertyId, orchestrationActionId])
   @@map("checklist_items")
 }
 
