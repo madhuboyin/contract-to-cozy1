@@ -49,6 +49,7 @@ interface ChecklistItemType {
   status: ChecklistItemStatus;
   serviceCategory: string | null;
   createdAt: string;
+  orchestrationActionId?: string | null;
 }
 
 interface ChecklistType {
@@ -326,6 +327,7 @@ interface ChecklistItemRowProps {
 function ChecklistItemRow({ item, onUpdateStatus }: ChecklistItemRowProps) {
   const isPending = item.status === 'PENDING';
   const isCompleted = item.status === 'COMPLETED';
+  const isNotNeeded = item.status === 'NOT_NEEDED';
 
   return (
     <li
@@ -351,11 +353,17 @@ function ChecklistItemRow({ item, onUpdateStatus }: ChecklistItemRowProps) {
           <p
             className={cn(
               'font-medium text-sm',
-              isCompleted && 'line-through text-gray-500'
+              isCompleted && 'line-through text-gray-500',
+              isNotNeeded && 'italic text-gray-400',
             )}
           >
             {item.title}
           </p>
+          {item.orchestrationActionId && (
+            <Badge variant="secondary" className="mt-1">
+              Created from recommendation
+            </Badge>
+          )}
           {item.description && (
             <p className="text-xs text-gray-500 mt-1">{item.description}</p>
           )}
@@ -379,6 +387,14 @@ function ChecklistItemRow({ item, onUpdateStatus }: ChecklistItemRowProps) {
             <DropdownMenuItem onClick={() => onUpdateStatus(item.id, 'COMPLETED')}>
               <Check className="mr-2 h-4 w-4" />
               Mark Complete
+            </DropdownMenuItem>
+          )}
+          {isPending && (
+            <DropdownMenuItem
+              onClick={() => onUpdateStatus(item.id, 'NOT_NEEDED')}
+            >
+              <X className="mr-2 h-4 w-4" />
+              Mark Not Needed
             </DropdownMenuItem>
           )}
           {isCompleted && (

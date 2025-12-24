@@ -525,39 +525,82 @@ export class ChecklistService {
       description?: string | null;
       serviceCategory?: string | null;
       propertyId: string;
+  
       isRecurring: boolean;
       frequency?: string | null;
-      nextDueDate: string; // ISO date string
+      nextDueDate: string;
+  
+      orchestrationActionId: string; // 🔑 REQUIRED
     }
-  ): Promise<ChecklistItem> {
-    // 1. Get the user's checklist (or create one)
+  ): Promise<{ item: ChecklistItem; deduped: boolean }> {
+  
+    // 1️⃣ Hard validation (Action Center only)
+    if (!itemData.orchestrationActionId) {
+      throw new Error('orchestrationActionId is required for Action Center checklist items');
+    }
+  
+    // 2️⃣ Get checklist
     const checklist = await this.getOrCreateChecklist(userId);
     if (!checklist) {
-      throw new Error('Could not find or create a checklist for the user.');
+      throw new Error('Could not find or create checklist for user');
     }
-
-    // 2. Parse the date
-    const parsedDate = itemData.nextDueDate ? new Date(itemData.nextDueDate) : null;
-
-    // 3. Create the checklist item
-    const newItem = await prisma.checklistItem.create({
-      data: {
-        checklistId: checklist.id,
-        title: itemData.title,
-        description: itemData.description || null,
-        serviceCategory: itemData.serviceCategory as any,
-        status: ChecklistItemStatus.PENDING,
-        isRecurring: itemData.isRecurring,
-        frequency: itemData.isRecurring ? (itemData.frequency as RecurrenceFrequency | null) : null,
-        nextDueDate: parsedDate,
+  
+    // 3️⃣ FAST PATH — check existing
+    const existing = await prisma.checklistItem.findFirst({
+      where: {
         propertyId: itemData.propertyId,
-        sortOrder: 999, // Default high sort order for manually created items
+        orchestrationActionId: itemData.orchestrationActionId,
       },
     });
-
-    return newItem;
+  
+    if (existing) {
+      return { item: existing, deduped: true };
+    }
+  
+    // 4️⃣ CREATE (race-safe)
+    try {
+      const created = await prisma.checklistItem.create({
+        data: {
+          checklistId: checklist.id,
+          title: itemData.title,
+          description: itemData.description ?? null,
+          serviceCategory: itemData.serviceCategory as any,
+          status: ChecklistItemStatus.PENDING,
+  
+          isRecurring: itemData.isRecurring,
+          frequency: itemData.isRecurring
+            ? (itemData.frequency as RecurrenceFrequency | null)
+            : null,
+  
+          nextDueDate: new Date(itemData.nextDueDate),
+  
+          propertyId: itemData.propertyId,
+          orchestrationActionId: itemData.orchestrationActionId, // 🔑 KEY
+  
+          sortOrder: 999,
+        },
+      });
+  
+      return { item: created, deduped: false };
+  
+    } catch (err: any) {
+      // 5️⃣ UNIQUE CONSTRAINT FALLBACK (P2002)
+      if (err?.code === 'P2002') {
+        const fallback = await prisma.checklistItem.findFirst({
+          where: {
+            propertyId: itemData.propertyId,
+            orchestrationActionId: itemData.orchestrationActionId,
+          },
+        });
+  
+        if (fallback) {
+          return { item: fallback, deduped: true };
+        }
+      }
+      throw err;
+    }
   }
-
+  
   // --- FIX: ADDED MISSING deleteChecklistItem METHOD ---
   /**
    * Deletes a specific checklist item.

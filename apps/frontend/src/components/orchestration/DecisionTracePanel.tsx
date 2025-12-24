@@ -1,4 +1,3 @@
-// components/orchestration/DecisionTracePanel.tsx
 'use client';
 
 import React, { useState } from 'react';
@@ -6,6 +5,7 @@ import { Info } from 'lucide-react';
 import {
   SuppressionReasonEntryDTO,
   DecisionTraceStepDTO,
+  OrchestratedActionDTO,
 } from '@/types';
 import {
   Tooltip,
@@ -14,11 +14,22 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { TRACE_COPY } from './decisionTraceLabels';
+import { DecisionTraceModal } from './DecisionTraceModal';
 
 type Props = {
   suppressed: boolean;
   reasons?: SuppressionReasonEntryDTO[];
   steps?: DecisionTraceStepDTO[];
+
+  /**
+   * NEW — required to allow resolution from modal
+   */
+  action?: OrchestratedActionDTO;
+
+  /**
+   * NEW — called when user marks action completed from modal
+   */
+  onMarkCompleted?: (action: OrchestratedActionDTO) => void;
 };
 
 function suppressionSummary(reason?: SuppressionReasonEntryDTO) {
@@ -31,8 +42,10 @@ function suppressionSummary(reason?: SuppressionReasonEntryDTO) {
       return 'This action is hidden because related work is already scheduled.';
     case 'COVERED':
       return 'This action is hidden because it is already covered by a warranty or insurance.';
+    case 'CHECKLIST_TRACKED':
+      return 'This action is hidden because it is already tracked in your maintenance checklist.';
     default:
-      return 'This action is hidden because it does not currently require attention.';
+      return reason.message || 'This action is hidden because it does not currently require attention.';
   }
 }
 
@@ -40,8 +53,11 @@ export const DecisionTracePanel: React.FC<Props> = ({
   suppressed,
   reasons = [],
   steps = [],
+  action,
+  onMarkCompleted,
 }) => {
   const [expanded, setExpanded] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
 
   // Nothing to show
   if (reasons.length === 0 && steps.length === 0) return null;
@@ -54,22 +70,25 @@ export const DecisionTracePanel: React.FC<Props> = ({
 
   return (
     <div className="mt-3 rounded-md border border-gray-200 bg-gray-50">
-      {/* Header */}
-      <button
-        type="button"
-        onClick={() => setExpanded(v => !v)}
-        className="w-full flex items-center justify-between px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
-      >
-        <span>{headerTitle}</span>
-        <span className="text-xs text-blue-600">
-          {expanded ? 'Hide explanation' : 'See how this was decided'}
+      {/* ================= Header ================= */}
+      <div className="flex items-center justify-between px-4 py-2">
+        <span className="text-sm font-medium text-gray-700">
+          {headerTitle}
         </span>
-      </button>
 
+        <button
+          type="button"
+          onClick={() => setModalOpen(true)}
+          className="text-xs text-blue-600 hover:underline"
+        >
+          See how this was decided
+        </button>
+      </div>
+
+      {/* ================= Inline Summary ================= */}
       {expanded && (
         <div className="px-4 pt-3 pb-4 space-y-4 text-sm">
-
-          {/* 🔴 SUPPRESSION SUMMARY (TOP PRIORITY) */}
+          {/* 🔴 SUPPRESSION SUMMARY */}
           {suppressed && (
             <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
               <strong>Hidden:</strong> {suppressionSummary(primaryReason)}
@@ -77,7 +96,7 @@ export const DecisionTracePanel: React.FC<Props> = ({
           )}
 
           {/* ============================
-              DECISION ENGINE TRACE
+              DECISION ENGINE TRACE (INLINE)
              ============================ */}
           {steps.length > 0 && (
             <div>
@@ -86,7 +105,6 @@ export const DecisionTracePanel: React.FC<Props> = ({
                   How we decided this
                 </div>
 
-                {/* ✅ FIXED: Internal evaluation with matching ConfidencePopover styling */}
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -113,7 +131,7 @@ export const DecisionTracePanel: React.FC<Props> = ({
               </div>
 
               <div className="space-y-2">
-                {steps.map((step, idx) => (
+                {steps.slice(0, 3).map((step, idx) => (
                   <div
                     key={`step-${idx}`}
                     className="flex items-start gap-2"
@@ -136,41 +154,32 @@ export const DecisionTracePanel: React.FC<Props> = ({
                   </div>
                 ))}
               </div>
+
+              {steps.length > 3 && (
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(true)}
+                  className="mt-2 text-xs text-blue-600 hover:underline"
+                >
+                  View full decision trace
+                </button>
+              )}
             </div>
           )}
-
-          {/* ============================
-              SUPPRESSION EXPLANATION
-             ============================ */}
-          {suppressed && reasons.length > 0 && (
-            <div>
-              <div className="text-xs font-semibold text-gray-500 uppercase mb-2">
-                Why it's hidden
-              </div>
-
-              <div className="space-y-2">
-                {reasons.map((r, idx) => (
-                  <div
-                    key={`reason-${idx}`}
-                    className="flex items-start gap-2"
-                  >
-                    <span className="mt-0.5">🛑</span>
-                    <div>
-                      <div className="font-medium text-gray-900">
-                        {r.reason.replace(/_/g, ' ')}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {r.message}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
         </div>
       )}
+
+      {/* ================= Modal ================= */}
+      <DecisionTraceModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        steps={steps}
+        onMarkCompleted={
+          action && onMarkCompleted
+            ? () => onMarkCompleted(action)
+            : undefined
+        }
+      />
     </div>
   );
 };

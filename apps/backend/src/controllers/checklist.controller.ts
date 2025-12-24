@@ -20,7 +20,7 @@ const handleGetChecklist = async (
     const userId = req.user.userId;
 
     const checklist = await ChecklistService.getOrCreateChecklist(userId);
-    res.status(200).json(checklist);
+    return res.status(200).json(checklist);
   } catch (error) {
     next(error);
   }
@@ -45,9 +45,9 @@ const handleUpdateChecklistItem = async (
 
     // Basic validation
     if (!status || !Object.values(ChecklistItemStatus).includes(status)) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: 'Invalid or missing status.' 
+        message: 'Invalid or missing status.',
       });
     }
 
@@ -57,20 +57,18 @@ const handleUpdateChecklistItem = async (
       status
     );
 
-    // FIX: Wrap response in standard APIResponse format
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      data: updatedItem
+      data: updatedItem,
     });
   } catch (error) {
-    // Handle specific error from the service
     if (
       error instanceof Error &&
       (error.message.includes('access') || error.message.includes('not found'))
     ) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: error.message 
+        message: error.message,
       });
     }
     next(error);
@@ -100,26 +98,24 @@ const handlePatchChecklistItem = async (
       updateData
     );
 
-    // FIX: Wrap response in standard APIResponse format
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      data: updatedItem
+      data: updatedItem,
     });
   } catch (error) {
     if (
       error instanceof Error &&
       (error.message.includes('access') || error.message.includes('not found'))
     ) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: error.message 
+        message: error.message,
       });
     }
     next(error);
   }
 };
 
-// --- NEW FUNCTION for DELETE (ADDED) ---
 /**
  * Deletes a single checklist item.
  */
@@ -138,22 +134,21 @@ const handleDeleteChecklistItem = async (
 
     await ChecklistService.deleteChecklistItem(userId, itemId);
 
-    // Send a 204 No Content response for successful deletion
-    res.status(204).send();
+    return res.status(204).send();
   } catch (error) {
-    // Handle specific error from the service (e.g., item not found or unauthorized access)
     if (
       error instanceof Error &&
       (error.message.includes('access') || error.message.includes('not found'))
     ) {
-      return res.status(404).json({ message: error.message });
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
     }
     next(error);
   }
 };
-// --- END NEW FUNCTION ---
 
-// --- NEW FUNCTION for Phase 3 ---
 /**
  * Creates new maintenance checklist items from a list of template IDs.
  */
@@ -167,10 +162,11 @@ const handleCreateMaintenanceItems = async (
       return res.status(401).json({ message: 'Authentication required.' });
     }
     const userId = req.user.userId;
-    const { templateIds, propertyId } = req.body; // FIX: Extract propertyId from request
+    const { templateIds, propertyId } = req.body;
 
     if (!Array.isArray(templateIds) || templateIds.length === 0) {
       return res.status(400).json({
+        success: false,
         message: 'Invalid input: templateIds must be a non-empty array.',
       });
     }
@@ -178,21 +174,27 @@ const handleCreateMaintenanceItems = async (
     const result = await ChecklistService.addMaintenanceItemsToChecklist(
       userId,
       templateIds,
-      propertyId // FIX: Pass propertyId to service
+      propertyId
     );
 
-    res
-      .status(201)
-      .json({ success: true, message: `Added ${result.count} items.` });
+    return res.status(201).json({
+      success: true,
+      message: `Added ${result.count} items.`,
+      data: result,
+    });
   } catch (error) {
     next(error);
   }
 };
-// --- END NEW FUNCTION ---
 
 /**
  * Creates a single checklist item directly (used by orchestration/action center).
- * Does not use templates - creates item from provided data.
+ * Idempotent: if an item already exists for (propertyId, orchestrationActionId),
+ * returns the existing item instead of creating a duplicate.
+ *
+ * Response behavior:
+ * - 201 Created when a new item is created
+ * - 200 OK when an existing item is returned (deduped=true)
  */
 const handleCreateChecklistItem = async (
   req: AuthRequest,
@@ -203,25 +205,64 @@ const handleCreateChecklistItem = async (
     if (!req.user) {
       return res.status(401).json({ message: 'Authentication required.' });
     }
-    const userId = req.user.userId;
-    const itemData = req.body;
 
-    // Validate required fields
-    if (!itemData.title || !itemData.propertyId) {
+    const userId = req.user.userId;
+
+    const {
+      title,
+      description,
+      serviceCategory,
+      propertyId,
+      isRecurring,
+      frequency,
+      nextDueDate,
+      orchestrationActionId,
+    } = req.body ?? {};
+
+    // ✅ Required fields for Action Center idempotency contract
+    if (!title || !propertyId || !orchestrationActionId) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: title and propertyId are required.',
+        message:
+          'Missing required fields: title, propertyId, and orchestrationActionId are required.',
       });
     }
 
-    const newItem = await ChecklistService.createDirectChecklistItem(
-      userId,
-      itemData
-    );
+    // Light validation to prevent silent bad writes
+    if (typeof title !== 'string' || typeof propertyId !== 'string' || typeof orchestrationActionId !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid input: title, propertyId, and orchestrationActionId must be strings.',
+      });
+    }
 
-    res.status(201).json({
+    // nextDueDate is required in your current service signature — keep strict to avoid null date bugs
+    if (!nextDueDate || typeof nextDueDate !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required field: nextDueDate must be an ISO date string.',
+      });
+    }
+
+    const result = await ChecklistService.createDirectChecklistItem(userId, {
+      title,
+      description: description ?? null,
+      serviceCategory: serviceCategory ?? null,
+      propertyId,
+      isRecurring: Boolean(isRecurring),
+      frequency: frequency ?? null,
+      nextDueDate,
+      orchestrationActionId,
+    });
+
+    // If service returns { item, deduped }, honor status code accordingly.
+    // If your service currently returns just ChecklistItem, this still works safely by normalizing.
+    const deduped = (result as any)?.deduped === true;
+    const item = (result as any)?.item ?? result;
+
+    return res.status(deduped ? 200 : 201).json({
       success: true,
-      data: newItem,
+      data: deduped ? { item, deduped: true } : { item, deduped: false },
     });
   } catch (error) {
     next(error);
@@ -234,5 +275,5 @@ export const checklistController = {
   handlePatchChecklistItem,
   handleCreateMaintenanceItems,
   handleDeleteChecklistItem,
-  handleCreateChecklistItem, // ADD THIS LINE
+  handleCreateChecklistItem,
 };

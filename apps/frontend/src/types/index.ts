@@ -1,4 +1,8 @@
 // apps/frontend/src/types/index.ts
+/**
+ * Checklist Item Status - Synced with Backend Enum
+ */
+export type ChecklistItemStatus = 'PENDING' | 'COMPLETED' | 'NOT_NEEDED';
 
 /**
  * User Roles
@@ -962,7 +966,9 @@ export type OrchestrationSource = 'RISK' | 'CHECKLIST';
 export type SuppressionReason =
   | 'BOOKING_EXISTS'
   | 'COVERED'
+  | 'CHECKLIST_TRACKED'
   | 'NOT_ACTIONABLE'
+  | 'USER_MARKED_COMPLETE'
   | 'UNKNOWN';
 
 /**
@@ -1011,7 +1017,6 @@ export interface OrchestratedActionDTO {
   source: OrchestrationSource;
   propertyId: string;
 
-  // Generic display
   title: string;
   description?: string | null;
 
@@ -1022,6 +1027,7 @@ export interface OrchestratedActionDTO {
   age?: number | null;
   expectedLife?: number | null;
   exposure?: number | null;
+  orchestrationActionId?: string | null;
 
   // Checklist-specific
   checklistItemId?: string | null;
@@ -1030,26 +1036,36 @@ export interface OrchestratedActionDTO {
   isRecurring?: boolean | null;
   serviceCategory?: ServiceCategory | null;
 
-  // Coverage-aware CTA
   coverage?: CoverageInfoDTO;
+
   cta?: {
     show: boolean;
     label: string | null;
     reason: 'COVERED' | 'MISSING_DATA' | 'ACTION_REQUIRED' | 'NONE';
   };
 
-  // Suppression (Gap 4)
-  suppression?: {
+  // ✅ Non-optional suppression
+  suppression: {
     suppressed: boolean;
     reasons: SuppressionReasonEntryDTO[];
+    suppressionSource?: {
+      type: 'CHECKLIST_ITEM';
+      checklistItem: {
+        id: string;
+        title: string;
+        frequency?: string | null;
+        nextDueDate?: string | null;
+        status: ChecklistItemStatus;
+      };
+    } | null;
   };
 
-  // Decision trace (Gap 5)
   decisionTrace?: {
     steps: DecisionTraceStepDTO[];
   };
+
   confidence?: ActionConfidenceDTO;
-  // Sorting / urgency
+
   priority: number;
   overdue: boolean;
   createdAt?: string | null;
@@ -1079,6 +1095,17 @@ export interface OrchestrationSummaryDTO {
     suppressedActions: number;
   };
 }
+
+export type SuppressionSourceDTO = {
+  type: 'CHECKLIST_ITEM';
+  checklistItem: {
+    id: string;
+    title: string;
+    frequency?: string | null;
+    nextDueDate?: string | null; // ISO string
+    status: ChecklistItemStatus;
+  };
+};
 
 /**
  * Community Events API payload

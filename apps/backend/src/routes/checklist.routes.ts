@@ -167,6 +167,7 @@ router.delete(
  *             required:
  *               - title
  *               - propertyId
+ *               - orchestrationActionId
  *             properties:
  *               title:
  *                 type: string
@@ -184,6 +185,9 @@ router.delete(
  *               nextDueDate:
  *                 type: string
  *                 format: date-time
+ *  *            orchestrationActionId:
+ *                 type: string
+ *                 description: Stable ID for Action Center deduplication
  *     responses:
  *       201:
  *         description: Checklist item created
