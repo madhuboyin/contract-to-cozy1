@@ -70,7 +70,7 @@ export async function getOrchestrationSummaryHandler(
   res: Response
 ) {
   try {
-    const { propertyId } = req.body;
+    const { propertyId } = req.params;
 
     // -----------------------------
     // 1. Input Validation
