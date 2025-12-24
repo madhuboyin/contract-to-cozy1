@@ -1413,6 +1413,48 @@ model LocalUpdateEvent {
   @@index([localUpdateId])
 }
 
+// ===============================
+// Orchestration Action Events
+// ===============================
+
+model OrchestrationActionEvent {
+  id            String   @id @default(cuid())
+
+  // Scope
+  propertyId    String
+  actionKey     String   // canonical identity (stable across recalculations)
+
+  // Event semantics
+  actionType    OrchestrationActionEventType
+  source        OrchestrationActionSource
+
+  // Metadata / audit
+  payload       Json?
+  createdBy     String?  // userId (nullable for system actions)
+  createdAt     DateTime @default(now())
+
+  // Performance + idempotency
+  @@index([propertyId])
+  @@index([propertyId, actionKey])
+  @@index([actionKey])
+
+  // Guarantees idempotency per action type
+  @@unique([propertyId, actionKey, actionType])
+}
+
+enum OrchestrationActionEventType {
+  USER_MARKED_COMPLETE
+  USER_DISMISSED
+  SYSTEM_SUPPRESSED
+  SYSTEM_UNSUPPRESSED
+}
+
+enum OrchestrationActionSource {
+  USER
+  SYSTEM
+}
+
+
 // ============================================================================
 // REVIEWS & RATINGS
 // ============================================================================
