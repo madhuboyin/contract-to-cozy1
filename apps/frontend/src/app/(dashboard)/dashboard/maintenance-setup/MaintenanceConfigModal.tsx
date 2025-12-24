@@ -334,7 +334,27 @@ export function MaintenanceConfigModal({
             setServerError('Missing orchestration context. Please refresh and try again.');
             return;
           }
-        
+          
+                    // 🐛 DEBUG LOGGING
+          console.log('🔍 Orchestration Mode - Submitting with:', {
+            title,
+            description: description || null,
+            serviceCategory: category,
+            propertyId: propertyIdToUse,
+            actionKey: orchestrationActionKey,
+            isRecurring,
+            frequency: isRecurring ? frequency : null,
+            nextDueDate: finalNextDueDateString,
+          });
+
+          // 🔴 VALIDATION CHECK
+          if (!title || !propertyIdToUse || !orchestrationActionKey) {
+            setServerError(
+              `Missing required fields: ${!title ? 'title ' : ''}${!propertyIdToUse ? 'propertyId ' : ''}${!orchestrationActionKey ? 'actionKey' : ''}`
+            );
+            return;
+          }
+
           await api.createChecklistItem({
             title,
             description: description || null,
