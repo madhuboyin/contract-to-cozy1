@@ -93,6 +93,7 @@ interface MaintenanceConfigModalProps {
   onSave?: (config: MaintenanceTaskConfig) => void; // Callback for saving edits
   onRemove?: (taskId: string) => void; // Callback for removing task
   orchestrationMode?: boolean;
+  orchestrationActionId?: string | null; // ID of the orchestration action that triggered this modal
 }
 // === END FIX ===
 
@@ -108,6 +109,7 @@ export function MaintenanceConfigModal({
   onSave,
   onRemove,
   orchestrationMode = false,
+  orchestrationActionId,
 }: MaintenanceConfigModalProps) {
   const router = useRouter();
 
@@ -328,20 +330,30 @@ export function MaintenanceConfigModal({
         // 🟢 ORCHESTRATION MODE (NO TEMPLATE)
         // ============================================================
         if (orchestrationMode) {
+          if (!orchestrationActionId) {
+            setServerError('Missing orchestration context. Please refresh and try again.');
+            return;
+          }
+        
           await api.createChecklistItem({
             title,
             description: description || null,
             serviceCategory: category!,
             propertyId: propertyIdToUse,
+        
+            // 🔑 REQUIRED — THIS FIXES EVERYTHING
+            orchestrationActionId,
+        
             isRecurring,
             frequency: isRecurring ? frequency : null,
             nextDueDate: finalNextDueDateString,
           });
-
+        
           onSuccess?.(1);
           onClose();
           return;
         }
+        
         if (isEditing && onSave) {
             // EDITING FLOW: Calls parent's onSave 
             onSave(configForEdit);

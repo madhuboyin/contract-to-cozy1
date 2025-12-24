@@ -472,6 +472,7 @@ export const ActionCenter: React.FC<Props> = ({
         template={template}
         properties={properties}
         selectedPropertyId={propertyId}
+        orchestrationActionId={activeActionId}
         onClose={() => {
           setIsModalOpen(false);
           setTemplate(null);
