@@ -63,6 +63,33 @@ export const ActionCenter: React.FC<Props> = ({
 
       const adapted = adaptOrchestrationSummary(summary);
 
+      // 🐛 EXPLICIT DEBUG LOG - NO OBJECTS
+      console.log('=== ACTIONS LOADED ===');
+      console.log('Total Active:', adapted.actions.length);
+      console.log('Total Suppressed:', adapted.suppressedActions.length);
+      
+      console.log('\n--- ACTIVE ACTIONS ---');
+      adapted.actions.forEach((a, i) => {
+        console.log(`[${i}] ${a.actionKey}`);
+        console.log(`    Title: ${a.title}`);
+        console.log(`    Source: ${a.source}`);
+        console.log(`    Suppressed: ${a.suppression?.suppressed}`);
+        console.log(`    SuppressionSource: ${a.suppression?.suppressionSource?.type || 'NONE'}`);
+      });
+      
+      console.log('\n--- SUPPRESSED ACTIONS ---');
+      adapted.suppressedActions.forEach((a, i) => {
+        console.log(`[${i}] ${a.actionKey}`);
+        console.log(`    Title: ${a.title}`);
+        console.log(`    Source: ${a.source}`);
+        console.log(`    Suppressed: ${a.suppression?.suppressed}`);
+        console.log(`    SuppressionSource: ${a.suppression?.suppressionSource?.type || 'NONE'}`);
+      });
+      
+      console.log('===================\n');
+      
+      setActions(adapted.actions);
+
       // 🐛 DEBUG LOG
       console.log('📊 Actions loaded:', {
         totalActions: adapted.actions.length,
