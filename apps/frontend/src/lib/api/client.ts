@@ -1655,7 +1655,7 @@ class APIClient {
     isRecurring: boolean;
     frequency?: string | null;
     nextDueDate: string; // ISO date string
-    orchestrationActionId?: string | null;
+    actionKey: string; // 🔑 CHANGED FROM orchestrationActionId
   }): Promise<APIResponse<ChecklistItem>> {
     return this.request<ChecklistItem>('/api/checklist/items', {
       method: 'POST',

@@ -549,14 +549,10 @@ async function mapRiskDetailToAction(params: {
   propertyId: string;
   d: any;
   index: number;
-
-  // Phase 8: pass coverage sources, compute coverage per action
   warranties: Array<any>;
   insurancePolicies: Array<any>;
-
   bookingCategorySet: Set<ServiceCategory>;
   bookingByCategory: Map<ServiceCategory, { id: string; status: BookingStatus }>;
-  checklistItems: Array<any>;
 }): Promise<OrchestratedAction | null> {
   const { propertyId, d, index, warranties, insurancePolicies, bookingCategorySet, bookingByCategory } = params;
 
@@ -638,6 +634,7 @@ async function mapRiskDetailToAction(params: {
 
   // 🔑 AUTHORITATIVE suppression via orchestrationActionId (Action Center)
   if (d?.orchestrationActionId) {
+// 🔑 AUTHORITATIVE suppression via actionKey
     const actionKey = computeActionKey({
       propertyId,
       source: 'RISK',
@@ -647,84 +644,78 @@ async function mapRiskDetailToAction(params: {
       systemType,
       category,
     });
-    const source =
-      await OrchestrationSuppressionService.resolveSuppressionSource({
-        propertyId,
-        orchestrationActionId: d.orchestrationActionId,
-        actionKey,
-      });
 
-      if (source) {
-        suppressionSource = source;
-      
-        // -----------------------------
-        // USER EVENT SUPPRESSION
-        // -----------------------------
-        if (source?.type === 'USER_EVENT') {
-          if (source.eventType === 'USER_MARKED_COMPLETE') {
-            suppressedByChecklist = true;
-            pushUniqueReason(suppressionReasons, {
-              reason: 'USER_MARKED_COMPLETE',
-              message: 'You marked this action as completed.',
-            });
-        
-            steps.push({
-              rule: 'USER_MARKED_COMPLETE',
-              outcome: 'APPLIED',
-              details: { at: source.createdAt },
-            });
-          }
-        
-          if (source.eventType === 'USER_UNMARKED_COMPLETE') {
-            suppressedByChecklist = false;
-            
-            // 🔑 Clear checklist-based reasons
-            suppressionReasons.length = 0;
-            
-            // Add restoration reason for UI trace
-            pushUniqueReason(suppressionReasons, {
-              reason: 'USER_UNMARKED_COMPLETE',
-              message: 'You restored this action.',
-            });
-        
-            steps.push({
-              rule: 'USER_UNMARKED_COMPLETE',
-              outcome: 'APPLIED',
-              details: { at: source.createdAt },
-            });
-          }
-          
-          // 🔑 USER_EVENT always wins — prevent fallback suppression
-          // (Defensive enforcement of precedence)
-        }
-      
-        // -----------------------------
-        // CHECKLIST SUPPRESSION
-        // -----------------------------
-        if (source?.type === 'CHECKLIST_ITEM') {
+    const source = await OrchestrationSuppressionService.resolveSuppressionSource({
+      propertyId,
+      actionKey,
+    });
+
+    if (source) {
+      suppressionSource = source;
+
+      // -----------------------------
+      // USER EVENT SUPPRESSION
+      // -----------------------------
+      if (source?.type === 'USER_EVENT') {
+        if (source.eventType === 'USER_MARKED_COMPLETE') {
           suppressedByChecklist = true;
-        
-          const isCompleted = source.checklistItem.status === 'COMPLETED';          
-        
           pushUniqueReason(suppressionReasons, {
-            reason: 'CHECKLIST_TRACKED',
-            message: isCompleted
-              ? `"${source.checklistItem.title}" is completed in checklist.`
-              : `Already covered by "${source.checklistItem.title}".`,
-            relatedId: source.checklistItem.id,
-            relatedType: 'CHECKLIST',
+            reason: 'USER_MARKED_COMPLETE',
+            message: 'You marked this action as completed.',
           });
-        
+
           steps.push({
-            rule: 'CHECKLIST_SUPPRESSION_AUTHORITATIVE',
+            rule: 'USER_MARKED_COMPLETE',
             outcome: 'APPLIED',
-            details: {
-              checklistItemId: source.checklistItem.id,
-              status: source.checklistItem.status,
-            },
+            details: { at: source.createdAt },
+          });
+        }
+
+        if (source.eventType === 'USER_UNMARKED_COMPLETE') {
+          suppressedByChecklist = false;
+          suppressionReasons.length = 0;
+
+          pushUniqueReason(suppressionReasons, {
+            reason: 'USER_UNMARKED_COMPLETE',
+            message: 'You restored this action.',
+          });
+
+          steps.push({
+            rule: 'USER_UNMARKED_COMPLETE',
+            outcome: 'APPLIED',
+            details: { at: source.createdAt },
           });
         }
       }
+
+      // -----------------------------
+      // CHECKLIST SUPPRESSION
+      // -----------------------------
+      if (source?.type === 'CHECKLIST_ITEM') {
+        suppressedByChecklist = true;
+
+        const isCompleted = source.checklistItem.status === 'COMPLETED';
+
+        pushUniqueReason(suppressionReasons, {
+          reason: 'CHECKLIST_TRACKED',
+          message: isCompleted
+            ? `"${source.checklistItem.title}" is completed in checklist.`
+            : `Already covered by "${source.checklistItem.title}".`,
+          relatedId: source.checklistItem.id,
+          relatedType: 'CHECKLIST',
+        });
+
+        steps.push({
+          rule: 'CHECKLIST_SUPPRESSION_AUTHORITATIVE',
+          outcome: 'APPLIED',
+          details: {
+            checklistItemId: source.checklistItem.id,
+            status: source.checklistItem.status,
+            actionKey,
+          },
+        });
+      }
+    }
   }
 
   // IMPORTANT: covered does not suppress; it provides WHY + CTA adjustment
@@ -777,58 +768,7 @@ async function mapRiskDetailToAction(params: {
       details: inferredCategory ? { serviceCategory: inferredCategory } : { reason: 'NO_CATEGORY' },
     });
   }
-  // ✅ CHECKLIST suppression (HEURISTIC FALLBACK): suppress risk if matching scheduled checklist item exists
-  const { checklistItems } = params;
-  
-  if (!suppressionSource && inferredCategory && Array.isArray(checklistItems)) {
-    const matchingChecklistItem = checklistItems.find((item: any) => {
-      const itemCategory = item?.serviceCategory 
-        ? String(item.serviceCategory).trim().toUpperCase() 
-        : null;
-      const itemStatus = item?.status ? String(item.status).trim().toUpperCase() : null;
-      const itemNextDue = safeParseDate(item?.nextDueDate);
-      
-      // Match if: same category, active status, and has future due date
-      return (
-        itemCategory === inferredCategory &&
-        ['PENDING', 'SCHEDULED', 'IN_PROGRESS'].includes(itemStatus || '') &&
-        itemNextDue && !isPastDate(itemNextDue)
-      );
-    });
 
-    if (matchingChecklistItem) {
-      suppressedByChecklist = true;
-      const itemId = matchingChecklistItem?.id ?? null;
-      const dueDate = matchingChecklistItem?.nextDueDate 
-        ? safeParseDate(matchingChecklistItem.nextDueDate) 
-        : null;
-      const dueDateStr = dueDate ? dueDate.toISOString().split('T')[0] : 'future';
-
-      // Avoid duplicate CHECKLIST_TRACKED reasons
-      pushUniqueReason(suppressionReasons, {
-        reason: 'CHECKLIST_TRACKED',
-        message: `Already tracked in maintenance checklist (scheduled for ${dueDateStr})`,
-        relatedId: itemId,
-        relatedType: 'CHECKLIST',
-      });
-
-      steps.push({
-        rule: 'CHECKLIST_SUPPRESSION',
-        outcome: 'APPLIED',
-        details: { 
-          serviceCategory: inferredCategory, 
-          checklistItemId: itemId,
-          nextDueDate: dueDateStr,
-        },
-      });
-    } else {
-      steps.push({
-        rule: 'CHECKLIST_SUPPRESSION',
-        outcome: 'SKIPPED',
-        details: inferredCategory ? { serviceCategory: inferredCategory } : { reason: 'NO_CATEGORY' },
-      });
-    }
-  }
   const suppression = buildSuppression(
     steps, 
     suppressedByBooking || suppressedByChecklist, 
@@ -1087,7 +1027,6 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
             insurancePolicies,
             bookingCategorySet,
             bookingByCategory,
-            checklistItems,
           })
         )
       )).filter(Boolean) as OrchestratedAction[]
@@ -1109,44 +1048,41 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
     ...candidateChecklistActions,
   ];
     
-  // -------------------------------------------------
-  // SAFETY NET: Resolve authoritative suppression for legacy data
-  // (Actions created before orchestrationActionId was stored on the action)
-  // -------------------------------------------------
-  for (const action of candidates) {
-    if (
-      action.source === 'RISK' &&
-      action.suppression.suppressed &&
-      !action.suppression.suppressionSource &&
-      action.orchestrationActionId // Only if we have the ID but somehow missed it
-    ) {
-      const source =
-        await OrchestrationSuppressionService.resolveSuppressionSource({
-          propertyId,
-          orchestrationActionId: action.orchestrationActionId,
-          actionKey: action.actionKey,
+// -------------------------------------------------
+// SAFETY NET: Resolve authoritative suppression for legacy data
+// -------------------------------------------------
+for (const action of candidates) {
+  if (
+    action.source === 'RISK' &&
+    action.suppression.suppressed &&
+    !action.suppression.suppressionSource
+  ) {
+    const source =
+      await OrchestrationSuppressionService.resolveSuppressionSource({
+        propertyId,
+        actionKey: action.actionKey,
+      });
+
+    if (source) {
+      action.suppression.suppressionSource = source;
+
+      // Replace heuristic checklist reason with authoritative one (avoid duplicates)
+      action.suppression.reasons = action.suppression.reasons.filter(
+        (r) => r.reason !== 'CHECKLIST_TRACKED'
+      );
+
+      // Add authoritative reason if not already present (only for CHECKLIST_ITEM type)
+      if (source.type === 'CHECKLIST_ITEM') {
+        pushUniqueReason(action.suppression.reasons, {
+          reason: 'CHECKLIST_TRACKED',
+          message: `Already covered by "${source.checklistItem.title}".`,
+          relatedId: source.checklistItem.id,
+          relatedType: 'CHECKLIST',
         });
-
-      if (source) {
-        action.suppression.suppressionSource = source;
-
-        // Replace heuristic checklist reason with authoritative one (avoid duplicates)
-        action.suppression.reasons = action.suppression.reasons.filter(
-          (r) => r.reason !== 'CHECKLIST_TRACKED'
-        );
-
-        // Add authoritative reason if not already present (only for CHECKLIST_ITEM type)
-        if (source.type === 'CHECKLIST_ITEM') {
-          pushUniqueReason(action.suppression.reasons, {
-            reason: 'CHECKLIST_TRACKED',
-            message: `Already covered by "${source.checklistItem.title}".`,
-            relatedId: source.checklistItem.id,
-            relatedType: 'CHECKLIST',
-          });
-        }
       }
     }
   }
+}
   
   const suppressedActions = candidates.filter(a => a.suppression.suppressed);
   const actionable = candidates.filter(a => !a.suppression.suppressed);  

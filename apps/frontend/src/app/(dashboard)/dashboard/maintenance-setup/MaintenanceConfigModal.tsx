@@ -93,7 +93,7 @@ interface MaintenanceConfigModalProps {
   onSave?: (config: MaintenanceTaskConfig) => void; // Callback for saving edits
   onRemove?: (taskId: string) => void; // Callback for removing task
   orchestrationMode?: boolean;
-  orchestrationActionId?: string | null; // ID of the orchestration action that triggered this modal
+  orchestrationActionKey?: string | null; // ID of the orchestration action that triggered this modal
 }
 // === END FIX ===
 
@@ -109,7 +109,7 @@ export function MaintenanceConfigModal({
   onSave,
   onRemove,
   orchestrationMode = false,
-  orchestrationActionId,
+  orchestrationActionKey,
 }: MaintenanceConfigModalProps) {
   const router = useRouter();
 
@@ -330,7 +330,7 @@ export function MaintenanceConfigModal({
         // 🟢 ORCHESTRATION MODE (NO TEMPLATE)
         // ============================================================
         if (orchestrationMode) {
-          if (!orchestrationActionId) {
+          if (!orchestrationActionKey) {
             setServerError('Missing orchestration context. Please refresh and try again.');
             return;
           }
@@ -342,7 +342,7 @@ export function MaintenanceConfigModal({
             propertyId: propertyIdToUse,
         
             // 🔑 REQUIRED — THIS FIXES EVERYTHING
-            orchestrationActionId,
+            actionKey: orchestrationActionKey,
         
             isRecurring,
             frequency: isRecurring ? frequency : null,

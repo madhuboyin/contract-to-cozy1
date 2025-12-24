@@ -525,38 +525,36 @@ export class ChecklistService {
       description?: string | null;
       serviceCategory?: string | null;
       propertyId: string;
-  
       isRecurring: boolean;
       frequency?: string | null;
       nextDueDate: string;
-  
-      orchestrationActionId: string; // 🔑 REQUIRED
+      actionKey: string; // 🔑 NEW - REQUIRED
     }
   ): Promise<{ item: ChecklistItem; deduped: boolean }> {
-  
-    // 1️⃣ Hard validation (Action Center only)
-    if (!itemData.orchestrationActionId) {
-      throw new Error('orchestrationActionId is required for Action Center checklist items');
+
+    // 1️⃣ Hard validation
+    if (!itemData.actionKey) {
+      throw new Error('actionKey is required for Action Center checklist items');
     }
-  
+
     // 2️⃣ Get checklist
     const checklist = await this.getOrCreateChecklist(userId);
     if (!checklist) {
       throw new Error('Could not find or create checklist for user');
     }
-  
-    // 3️⃣ FAST PATH — check existing
+
+    // 3️⃣ FAST PATH - check existing by actionKey
     const existing = await prisma.checklistItem.findFirst({
       where: {
         propertyId: itemData.propertyId,
-        orchestrationActionId: itemData.orchestrationActionId,
+        actionKey: itemData.actionKey,
       },
     });
-  
+
     if (existing) {
       return { item: existing, deduped: true };
     }
-  
+
     // 4️⃣ CREATE (race-safe)
     try {
       const created = await prisma.checklistItem.create({
@@ -566,33 +564,33 @@ export class ChecklistService {
           description: itemData.description ?? null,
           serviceCategory: itemData.serviceCategory as any,
           status: ChecklistItemStatus.PENDING,
-  
+
           isRecurring: itemData.isRecurring,
           frequency: itemData.isRecurring
             ? (itemData.frequency as RecurrenceFrequency | null)
             : null,
-  
+
           nextDueDate: new Date(itemData.nextDueDate),
-  
+
           propertyId: itemData.propertyId,
-          orchestrationActionId: itemData.orchestrationActionId, // 🔑 KEY
-  
+          actionKey: itemData.actionKey, // 🔑 PRIMARY IDENTITY
+
           sortOrder: 999,
         },
       });
-  
+
       return { item: created, deduped: false };
-  
+
     } catch (err: any) {
       // 5️⃣ UNIQUE CONSTRAINT FALLBACK (P2002)
       if (err?.code === 'P2002') {
         const fallback = await prisma.checklistItem.findFirst({
           where: {
             propertyId: itemData.propertyId,
-            orchestrationActionId: itemData.orchestrationActionId,
+            actionKey: itemData.actionKey,
           },
         });
-  
+
         if (fallback) {
           return { item: fallback, deduped: true };
         }

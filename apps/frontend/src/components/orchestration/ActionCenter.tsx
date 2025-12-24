@@ -23,23 +23,6 @@ type Props = {
   maxItems?: number;
 };
 
-/* ------------------------------------------------------------------
-   Helpers
-------------------------------------------------------------------- */
-function isUserEventSuppression(
-  source: SuppressionSourceDTO | null | undefined
-): source is { type: 'USER_EVENT'; eventType: 'USER_MARKED_COMPLETE' | 'USER_UNMARKED_COMPLETE'; createdAt: string } {
-  return !!source && source.type === 'USER_EVENT';
-}
-
-function isUserMarkedComplete(action: OrchestratedActionDTO): boolean {
-  const source = action.suppression?.suppressionSource;
-  if (!isUserEventSuppression(source)) {
-    return false;
-  }
-  return source.eventType === 'USER_MARKED_COMPLETE';
-}
-
 
 export const ActionCenter: React.FC<Props> = ({
   propertyId,
@@ -103,14 +86,13 @@ export const ActionCenter: React.FC<Props> = ({
 
   const handleActionCta = (action: OrchestratedActionDTO) => {
     if (action.suppression?.suppressed) return;
-    if (isUserMarkedComplete(action)) return;
     if (isModalOpen) return;
     if (activeActionKey === action.actionKey) return;
-
+  
     setActiveActionKey(action.actionKey);
-
+  
     setTemplate({
-      id: `orchestration:${action.actionKey}`,
+      id: `orchestration:${action.actionKey}`, // ✅ No change needed here - already correct
       title: action.title,
       description: action.description ?? '',
       serviceCategory:
@@ -120,7 +102,7 @@ export const ActionCenter: React.FC<Props> = ({
       defaultFrequency: RecurrenceFrequency.ANNUALLY,
       sortOrder: 0,
     });
-
+  
     setIsModalOpen(true);
   };
 
@@ -227,24 +209,38 @@ export const ActionCenter: React.FC<Props> = ({
     labelClass: string
   ) => {
     if (!items.length) return null;
-
+  
     return (
       <section className="space-y-2">
         <div className={`text-xs font-semibold uppercase ${labelClass}`}>
           {label} ({items.length})
         </div>
-
+  
         <div className="space-y-3">
           {items.slice(0, maxItems).map(action => {
-            const completed = isUserMarkedComplete(action);
-
+            // ✅ FIX: Check ANY authoritative suppression (PENDING 1)
+            const isAuthoritativelySuppressed =
+              action.suppression?.suppressed &&
+              action.suppression?.suppressionSource !== null;
+  
+            // ✅ FIX: Optimistic disable during scheduling (PENDING 2)
+            const isCurrentlyBeingScheduled = activeActionKey === action.actionKey;
+  
             return (
               <OrchestrationActionCard
                 key={action.actionKey}
                 action={action}
                 onCtaClick={handleActionCta}
-                ctaDisabled={completed || isModalOpen}
-                ctaLabel={completed ? 'Completed' : undefined}
+                ctaDisabled={
+                  isAuthoritativelySuppressed ||
+                  isCurrentlyBeingScheduled ||
+                  isModalOpen
+                }
+                ctaLabel={
+                  isAuthoritativelySuppressed
+                    ? 'Already scheduled'
+                    : undefined
+                }
                 forceShowCta
                 onMarkCompleted={() => setTraceAction(action)}
               />
@@ -329,7 +325,7 @@ export const ActionCenter: React.FC<Props> = ({
         template={template}
         properties={properties}
         selectedPropertyId={propertyId}
-        orchestrationActionId={activeActionKey as any}
+        orchestrationActionKey={activeActionKey} // 🔑 CHANGED FROM orchestrationActionId
         onClose={() => {
           setIsModalOpen(false);
           setTemplate(null);

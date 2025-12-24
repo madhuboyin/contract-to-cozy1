@@ -216,34 +216,34 @@ const handleCreateChecklistItem = async (
       isRecurring,
       frequency,
       nextDueDate,
-      orchestrationActionId,
+      actionKey, // 🔑 CHANGED FROM orchestrationActionId
     } = req.body ?? {};
-
+    
     // ✅ Required fields for Action Center idempotency contract
-    if (!title || !propertyId || !orchestrationActionId) {
+    if (!title || !propertyId || !actionKey) {
       return res.status(400).json({
         success: false,
         message:
-          'Missing required fields: title, propertyId, and orchestrationActionId are required.',
+          'Missing required fields: title, propertyId, and actionKey are required.',
       });
     }
-
+    
     // Light validation to prevent silent bad writes
-    if (typeof title !== 'string' || typeof propertyId !== 'string' || typeof orchestrationActionId !== 'string') {
+    if (typeof title !== 'string' || typeof propertyId !== 'string' || typeof actionKey !== 'string') {
       return res.status(400).json({
         success: false,
-        message: 'Invalid input: title, propertyId, and orchestrationActionId must be strings.',
+        message: 'Invalid input: title, propertyId, and actionKey must be strings.',
       });
     }
-
-    // nextDueDate is required in your current service signature — keep strict to avoid null date bugs
+    
+    // nextDueDate is required
     if (!nextDueDate || typeof nextDueDate !== 'string') {
       return res.status(400).json({
         success: false,
         message: 'Missing required field: nextDueDate must be an ISO date string.',
       });
     }
-
+    
     const result = await ChecklistService.createDirectChecklistItem(userId, {
       title,
       description: description ?? null,
@@ -252,7 +252,7 @@ const handleCreateChecklistItem = async (
       isRecurring: Boolean(isRecurring),
       frequency: frequency ?? null,
       nextDueDate,
-      orchestrationActionId,
+      actionKey, // 🔑 PASS actionKey
     });
 
     // If service returns { item, deduped }, honor status code accordingly.

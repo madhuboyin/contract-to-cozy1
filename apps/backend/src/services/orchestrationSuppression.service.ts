@@ -29,16 +29,22 @@ export class OrchestrationSuppressionService {
    * 1. Latest USER_EVENT (MARK / UNMARK)
    * 2. Checklist-backed suppression
    */
+/**
+ * Canonical suppression resolution.
+ *
+ * Precedence:
+ * 1. Latest USER_EVENT (MARK / UNMARK)
+ * 2. Checklist-backed suppression (via actionKey)
+ */
   static async resolveSuppressionSource(params: {
     propertyId: string;
-    orchestrationActionId?: string | null;
     actionKey: string;
   }): Promise<SuppressionSource> {
-    const { propertyId, orchestrationActionId, actionKey } = params;
+    const { propertyId, actionKey } = params;
 
     /* --------------------------------------------
-     * 1️⃣ USER EVENT (highest precedence)
-     * ------------------------------------------ */
+    * 1️⃣ USER EVENT (highest precedence)
+    * ------------------------------------------ */
     const latestEvent = await prisma.orchestrationActionEvent.findFirst({
       where: {
         propertyId,
@@ -68,16 +74,13 @@ export class OrchestrationSuppressionService {
     }
 
     /* --------------------------------------------
-     * 2️⃣ CHECKLIST ITEM SUPPRESSION
-     * ------------------------------------------ */
-    if (!orchestrationActionId) {
-      return null;
-    }
-
+    * 2️⃣ CHECKLIST ITEM SUPPRESSION (via actionKey)
+    * ✅ DIRECT LOOKUP - NO FALLBACKS NEEDED
+    * ------------------------------------------ */
     const checklistItem = await prisma.checklistItem.findFirst({
       where: {
         propertyId,
-        orchestrationActionId,
+        actionKey,
       },
       select: {
         id: true,
