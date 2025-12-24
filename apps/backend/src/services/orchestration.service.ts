@@ -984,7 +984,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
   const { categorySet: bookingCategorySet, bookingByCategory } =
     await getActiveBookingCategorySet(propertyId);
 
-  const propertyCoverage = await prisma.property
+    const propertyCoverage = await prisma.property
     .findUnique({
       where: { id: propertyId },
       select: {
@@ -993,12 +993,15 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
           select: {
             id: true,
             expiryDate: true,
-            // Optional / schema-dependent:
-            category: true as any,
-            homeAssetId: true as any,
-            homeAsset: { select: { assetType: true } } as any,
-            assetType: true as any,
-          } as any,
+            category: true,
+            homeAssetId: true,
+            homeAsset: {
+              select: {
+                assetType: true
+              }
+            },
+            // assetType is available via warranty.homeAsset.assetType
+          },
         },
         insurancePolicies: {
           select: {
@@ -1006,7 +1009,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
             expiryDate: true,
           },
         },
-      } as any,
+      },
     })
     .catch(() => null as any);
 
