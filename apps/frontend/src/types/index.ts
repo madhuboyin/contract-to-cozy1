@@ -1050,16 +1050,7 @@ export interface OrchestratedActionDTO {
   suppression: {
     suppressed: boolean;
     reasons: SuppressionReasonEntryDTO[];
-    suppressionSource?: {
-      type: 'CHECKLIST_ITEM';
-      checklistItem: {
-        id: string;
-        title: string;
-        frequency?: string | null;
-        nextDueDate?: string | null;
-        status: ChecklistItemStatus;
-      };
-    } | null;
+    suppressionSource?: SuppressionSourceDTO;
   };
 
   decisionTrace?: {
@@ -1098,16 +1089,23 @@ export interface OrchestrationSummaryDTO {
   };
 }
 
-export type SuppressionSourceDTO = {
-  type: 'CHECKLIST_ITEM';
-  checklistItem: {
-    id: string;
-    title: string;
-    frequency?: string | null;
-    nextDueDate?: string | null; // ISO string
-    status: ChecklistItemStatus;
-  };
-};
+export type SuppressionSourceDTO =
+  | {
+      type: 'CHECKLIST_ITEM';
+      checklistItem: {
+        id: string;
+        title: string;
+        frequency?: string | null;
+        nextDueDate?: string | null;
+        status: ChecklistItemStatus;
+      };
+    }
+  | {
+      type: 'USER_EVENT';
+      eventType: 'USER_MARKED_COMPLETE' | 'USER_UNMARKED_COMPLETE';
+      createdAt: string;
+    }
+  | null;
 
 /**
  * Community Events API payload

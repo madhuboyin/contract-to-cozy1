@@ -4,7 +4,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 
 import { api } from '@/lib/api/client';
-import { OrchestratedActionDTO, Property } from '@/types';
+import { OrchestratedActionDTO, Property, SuppressionSourceDTO } from '@/types';
 import { adaptOrchestrationSummary } from '@/adapters/orchestration.adapter';
 import { OrchestrationActionCard } from './OrchestrationActionCard';
 
@@ -23,9 +23,23 @@ type Props = {
   maxItems?: number;
 };
 
-function formatLabelFromTitle(title?: string | null) {
-  return title || 'Task';
+/* ------------------------------------------------------------------
+   Helpers
+------------------------------------------------------------------- */
+function isUserEventSuppression(
+  source: SuppressionSourceDTO | null | undefined
+): source is { type: 'USER_EVENT'; eventType: 'USER_MARKED_COMPLETE' | 'USER_UNMARKED_COMPLETE'; createdAt: string } {
+  return !!source && source.type === 'USER_EVENT';
 }
+
+function isUserMarkedComplete(action: OrchestratedActionDTO): boolean {
+  const source = action.suppression?.suppressionSource;
+  if (!isUserEventSuppression(source)) {
+    return false;
+  }
+  return source.eventType === 'USER_MARKED_COMPLETE';
+}
+
 
 export const ActionCenter: React.FC<Props> = ({
   propertyId,
@@ -38,25 +52,21 @@ export const ActionCenter: React.FC<Props> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // UI state
   const [showSuppressed, setShowSuppressed] = useState(false);
 
-  // Maintenance modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [template, setTemplate] = useState<MaintenanceTaskTemplate | null>(null);
   const [activeActionKey, setActiveActionKey] = useState<string | null>(null);
 
-  // Decision trace modal (global)
   const [traceAction, setTraceAction] =
     useState<OrchestratedActionDTO | null>(null);
 
-  // Recent action banner (persistent but informational only)
   const recentKey = `ctc:actioncenter:recent:${propertyId}`;
   const recent = useRecentAction(recentKey);
 
-  // ---------------------------------------------------------------------------
-  // LOAD ACTIONS
-  // ---------------------------------------------------------------------------
+  /* ------------------------------------------------------------------
+     Load Actions
+  ------------------------------------------------------------------- */
 
   const loadActions = useCallback(async () => {
     try {
@@ -87,12 +97,13 @@ export const ActionCenter: React.FC<Props> = ({
     loadActions();
   }, [propertyId, loadActions]);
 
-  // ---------------------------------------------------------------------------
-  // CTA HANDLER
-  // ---------------------------------------------------------------------------
+  /* ------------------------------------------------------------------
+     CTA Handler
+  ------------------------------------------------------------------- */
 
   const handleActionCta = (action: OrchestratedActionDTO) => {
     if (action.suppression?.suppressed) return;
+    if (isUserMarkedComplete(action)) return;
     if (isModalOpen) return;
     if (activeActionKey === action.actionKey) return;
 
@@ -113,9 +124,9 @@ export const ActionCenter: React.FC<Props> = ({
     setIsModalOpen(true);
   };
 
-  // ---------------------------------------------------------------------------
-  // MAINTENANCE MODAL SUCCESS
-  // ---------------------------------------------------------------------------
+  /* ------------------------------------------------------------------
+     Maintenance Modal Success
+  ------------------------------------------------------------------- */
 
   const handleSuccess = () => {
     toast({
@@ -124,25 +135,20 @@ export const ActionCenter: React.FC<Props> = ({
     });
 
     if (activeActionKey) {
-      const action = actions.find(
-        (a) => a.actionKey === activeActionKey
-      );
-      if (action) {
-        recent.setScheduled(action);
-      }
+      const action = actions.find(a => a.actionKey === activeActionKey);
+      if (action) recent.setScheduled(action);
     }
 
     setIsModalOpen(false);
     setTemplate(null);
     setActiveActionKey(null);
 
-    // Server-side suppression will apply after background refresh
     setTimeout(loadActions, 1000);
   };
 
-  // ---------------------------------------------------------------------------
-  // DECISION TRACE ACTIONS
-  // ---------------------------------------------------------------------------
+  /* ------------------------------------------------------------------
+     Decision Trace Actions
+  ------------------------------------------------------------------- */
 
   const handleMarkCompletedFromTrace = useCallback(async () => {
     if (!traceAction) return;
@@ -161,7 +167,6 @@ export const ActionCenter: React.FC<Props> = ({
       setTraceAction(null);
       await loadActions();
     } catch (e: any) {
-      console.error(e);
       toast({
         title: 'Unable to mark completed',
         description: e?.message || 'Please try again.',
@@ -187,7 +192,6 @@ export const ActionCenter: React.FC<Props> = ({
       setTraceAction(null);
       await loadActions();
     } catch (e: any) {
-      console.error(e);
       toast({
         title: 'Unable to undo completion',
         description: e?.message || 'Please try again.',
@@ -196,26 +200,64 @@ export const ActionCenter: React.FC<Props> = ({
     }
   }, [traceAction, propertyId, loadActions, toast]);
 
-  // ---------------------------------------------------------------------------
-  // DERIVED GROUPS
-  // ---------------------------------------------------------------------------
+  /* ------------------------------------------------------------------
+     Derived Groups
+  ------------------------------------------------------------------- */
 
   const { active, suppressed } = useMemo(() => {
     return {
-      active: actions.filter((a) => !a.suppression?.suppressed),
-      suppressed: actions.filter((a) => a.suppression?.suppressed),
+      active: actions.filter(a => !a.suppression?.suppressed),
+      suppressed: actions.filter(a => a.suppression?.suppressed),
     };
   }, [actions]);
 
-  const critical = active.filter((a) => a.riskLevel === 'CRITICAL');
-  const high = active.filter((a) => a.riskLevel === 'HIGH');
+  const critical = active.filter(a => a.riskLevel === 'CRITICAL');
+  const high = active.filter(a => a.riskLevel === 'HIGH');
   const other = active.filter(
-    (a) => a.riskLevel !== 'CRITICAL' && a.riskLevel !== 'HIGH'
+    a => a.riskLevel !== 'CRITICAL' && a.riskLevel !== 'HIGH'
   );
 
-  // ---------------------------------------------------------------------------
-  // STATES
-  // ---------------------------------------------------------------------------
+  /* ------------------------------------------------------------------
+     Render Group
+  ------------------------------------------------------------------- */
+
+  const renderGroup = (
+    label: string,
+    items: OrchestratedActionDTO[],
+    labelClass: string
+  ) => {
+    if (!items.length) return null;
+
+    return (
+      <section className="space-y-2">
+        <div className={`text-xs font-semibold uppercase ${labelClass}`}>
+          {label} ({items.length})
+        </div>
+
+        <div className="space-y-3">
+          {items.slice(0, maxItems).map(action => {
+            const completed = isUserMarkedComplete(action);
+
+            return (
+              <OrchestrationActionCard
+                key={action.actionKey}
+                action={action}
+                onCtaClick={handleActionCta}
+                ctaDisabled={completed || isModalOpen}
+                ctaLabel={completed ? 'Completed' : undefined}
+                forceShowCta
+                onMarkCompleted={() => setTraceAction(action)}
+              />
+            );
+          })}
+        </div>
+      </section>
+    );
+  };
+
+  /* ------------------------------------------------------------------
+     Render
+  ------------------------------------------------------------------- */
 
   if (loading) {
     return (
@@ -245,64 +287,18 @@ export const ActionCenter: React.FC<Props> = ({
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // RENDER GROUP
-  // ---------------------------------------------------------------------------
-
-  const renderGroup = (
-    label: string,
-    items: OrchestratedActionDTO[],
-    labelClass: string
-  ) => {
-    if (!items.length) return null;
-
-    return (
-      <section className="space-y-2">
-        <div className={`text-xs font-semibold uppercase ${labelClass}`}>
-          {label} ({items.length})
-        </div>
-
-        <div className="space-y-3">
-          {items.slice(0, maxItems).map((action) => {
-            const ctaDisabled =
-              action.suppression?.suppressed ||
-              isModalOpen ||
-              activeActionKey === action.actionKey;
-
-            return (
-              <OrchestrationActionCard
-                key={action.actionKey}
-                action={action}
-                onCtaClick={handleActionCta}
-                ctaDisabled={ctaDisabled}
-                forceShowCta
-                onMarkCompleted={() => setTraceAction(action)}
-              />
-            );
-          })}
-        </div>
-      </section>
-    );
-  };
-
-  // ---------------------------------------------------------------------------
-  // RENDER
-  // ---------------------------------------------------------------------------
-
   return (
     <>
-      {/* ACTION LIST */}
       <div className="space-y-6">
         {renderGroup('Critical', critical, 'text-red-700')}
         {renderGroup('High Priority', high, 'text-amber-700')}
         {renderGroup('Other Actions', other, 'text-gray-700')}
 
-        {/* Suppressed */}
         {suppressed.length > 0 && (
           <div className="pt-2">
             <button
               type="button"
-              onClick={() => setShowSuppressed((v) => !v)}
+              onClick={() => setShowSuppressed(v => !v)}
               className="text-sm font-medium text-muted-foreground hover:underline"
             >
               {showSuppressed
@@ -312,7 +308,7 @@ export const ActionCenter: React.FC<Props> = ({
 
             {showSuppressed && (
               <div className="mt-3 space-y-3">
-                {suppressed.map((action) => (
+                {suppressed.map(action => (
                   <OrchestrationActionCard
                     key={action.actionKey}
                     action={action}
@@ -327,7 +323,6 @@ export const ActionCenter: React.FC<Props> = ({
         )}
       </div>
 
-      {/* MAINTENANCE MODAL */}
       <MaintenanceConfigModal
         isOpen={isModalOpen}
         orchestrationMode
@@ -343,7 +338,6 @@ export const ActionCenter: React.FC<Props> = ({
         onSuccess={handleSuccess}
       />
 
-      {/* DECISION TRACE MODAL */}
       <DecisionTraceModal
         open={Boolean(traceAction)}
         onClose={() => setTraceAction(null)}
