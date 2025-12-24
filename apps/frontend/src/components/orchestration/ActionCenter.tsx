@@ -23,88 +23,14 @@ type Props = {
   maxItems?: number;
 };
 
-type HandledState = {
-  // actionId -> createdAt
-  [actionKey: string]: number;
-};
-
-function dedupeByActionKey(
-  actions: OrchestratedActionDTO[]
-): OrchestratedActionDTO[] {
-  const map = new Map<string, OrchestratedActionDTO>();
-
-  for (const action of actions) {
-    // First one wins (highest priority already sorted by backend)
-    if (!map.has(action.actionKey)) {
-      map.set(action.actionKey, action);
-    }
-  }
-
-  return Array.from(map.values());
-}
-
-function safeJsonParse<T>(raw: string | null): T | null {
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return null;
-  }
-}
-
 function formatLabelFromTitle(title?: string | null) {
-  if (!title) return 'Task';
-  return title;
+  return title || 'Task';
 }
 
-function computeUiDedupeKey(a: OrchestratedActionDTO): string {
-  const stable =
-    a.checklistItemId ||
-    a.orchestrationActionId ||
-    a.serviceCategory ||
-    a.systemType ||
-    a.category ||
-    a.title ||
-    'UNKNOWN';
-
-  // include date if checklist-driven duplicates exist
-  const due = a.nextDueDate ? new Date(a.nextDueDate).toISOString().slice(0, 10) : '';
-
-  return `${a.propertyId}:${a.source}:${String(stable).toUpperCase()}:${due}`;
-}
-
-function dedupeActionsForUi(list: OrchestratedActionDTO[]): OrchestratedActionDTO[] {
-  const map = new Map<string, OrchestratedActionDTO>();
-
-  for (const a of list) {
-    const key = computeUiDedupeKey(a);
-    const existing = map.get(key);
-
-    if (!existing) {
-      map.set(key, a);
-      continue;
-    }
-
-    // pick the "better" one (higher priority; then higher confidence)
-    const aConf = a.confidence?.score ?? 0;
-    const eConf = existing.confidence?.score ?? 0;
-
-    const winner =
-      (a.priority ?? 0) > (existing.priority ?? 0)
-        ? a
-        : (a.priority ?? 0) < (existing.priority ?? 0)
-          ? existing
-          : aConf >= eConf
-            ? a
-            : existing;
-
-    map.set(key, winner);
-  }
-
-  return Array.from(map.values());
-}
-
-export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
+export const ActionCenter: React.FC<Props> = ({
+  propertyId,
+  maxItems = 5,
+}) => {
   const { toast } = useToast();
 
   const [actions, setActions] = useState<OrchestratedActionDTO[]>([]);
@@ -115,70 +41,21 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
   // UI state
   const [showSuppressed, setShowSuppressed] = useState(false);
 
-  // Maintenance modal state
+  // Maintenance modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [template, setTemplate] = useState<MaintenanceTaskTemplate | null>(null);
-  const [activeActionId, setActiveActionId] = useState<string | null>(null);
+  const [activeActionKey, setActiveActionKey] = useState<string | null>(null);
 
-  // ✅ Decision trace modal state (GLOBAL, not inside map)
-  const [traceAction, setTraceAction] = useState<OrchestratedActionDTO | null>(
-    null
-  );
+  // Decision trace modal (global)
+  const [traceAction, setTraceAction] =
+    useState<OrchestratedActionDTO | null>(null);
 
-  // ---------------------------------------------------------------------------
-  // ✅ Persistent handled actions (prevents duplicate tasks after refresh)
-  // ---------------------------------------------------------------------------
-
-  const handledStorageKey = `ctc:actioncenter:handled:${propertyId}`;
-  const [handledActions, setHandledActions] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (!propertyId) return;
-
-    const parsed = safeJsonParse<HandledState>(
-      typeof window !== 'undefined'
-        ? window.localStorage.getItem(handledStorageKey)
-        : null
-    );
-
-    const ids = parsed ? Object.keys(parsed) : [];
-    setHandledActions(new Set(ids));
-  }, [propertyId, handledStorageKey]);
-
-  const persistHandled = useCallback(
-    (nextSet: Set<string>) => {
-      setHandledActions(nextSet);
-
-      if (typeof window === 'undefined') return;
-
-      const state: HandledState = {};
-      nextSet.forEach((id) => {
-        state[id] = Date.now();
-      });
-
-      window.localStorage.setItem(handledStorageKey, JSON.stringify(state));
-    },
-    [handledStorageKey]
-  );
-
-  const markHandled = useCallback(
-    (actionId: string) => {
-      const next = new Set(handledActions);
-      next.add(actionId);
-      persistHandled(next);
-    },
-    [handledActions, persistHandled]
-  );
-
-  // ---------------------------------------------------------------------------
-  // ✅ Recent action panel (persistent)
-  // ---------------------------------------------------------------------------
-
+  // Recent action banner (persistent but informational only)
   const recentKey = `ctc:actioncenter:recent:${propertyId}`;
   const recent = useRecentAction(recentKey);
 
   // ---------------------------------------------------------------------------
-  // LOAD ACTIONS & PROPERTIES
+  // LOAD ACTIONS
   // ---------------------------------------------------------------------------
 
   const loadActions = useCallback(async () => {
@@ -192,8 +69,7 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
       ]);
 
       const adapted = adaptOrchestrationSummary(summary);
-      const deduped = dedupeByActionKey(adapted.actions);
-      setActions(deduped);
+      setActions(adapted.actions);
 
       if (propertiesRes.success) {
         setProperties(propertiesRes.data.properties || []);
@@ -216,14 +92,11 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
   // ---------------------------------------------------------------------------
 
   const handleActionCta = (action: OrchestratedActionDTO) => {
-    if (!action) return;
-
     if (action.suppression?.suppressed) return;
     if (isModalOpen) return;
-    if (activeActionId && activeActionId === action.actionKey) return;
-    if (handledActions.has(action.actionKey)) return;
+    if (activeActionKey === action.actionKey) return;
 
-    setActiveActionId(action.actionKey);
+    setActiveActionKey(action.actionKey);
 
     setTemplate({
       id: `orchestration:${action.actionKey}`,
@@ -241,43 +114,40 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
   };
 
   // ---------------------------------------------------------------------------
-  // SUCCESS HANDLER
+  // MAINTENANCE MODAL SUCCESS
   // ---------------------------------------------------------------------------
 
   const handleSuccess = () => {
-    const id = activeActionId;
-
     toast({
       title: 'Task scheduled successfully',
       description: "We've added this to your maintenance checklist.",
     });
 
-    if (id) {
-      markHandled(id);
-
-      const action = actions.find((a) => a.id === id) || null;
-      if (action) recent.setScheduled(action);
+    if (activeActionKey) {
+      const action = actions.find(
+        (a) => a.actionKey === activeActionKey
+      );
+      if (action) {
+        recent.setScheduled(action);
+      }
     }
 
     setIsModalOpen(false);
     setTemplate(null);
-    setActiveActionId(null);
+    setActiveActionKey(null);
 
-    // Background refresh to sync server-side suppression (eventually)
-    setTimeout(loadActions, 1500);
+    // Server-side suppression will apply after background refresh
+    setTimeout(loadActions, 1000);
   };
 
   // ---------------------------------------------------------------------------
-  // ✅ Mark as completed from DecisionTraceModal
+  // DECISION TRACE ACTIONS
   // ---------------------------------------------------------------------------
 
   const handleMarkCompletedFromTrace = useCallback(async () => {
-    if (!traceAction?.id) return;
+    if (!traceAction) return;
 
     try {
-      // You should have a backend endpoint for this.
-      // If your api client name differs, adjust accordingly.
-      // The intention: mark orchestration action as USER_MARKED_COMPLETE.
       await api.markOrchestrationActionCompleted(
         propertyId,
         traceAction.actionKey
@@ -289,18 +159,42 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
       });
 
       setTraceAction(null);
-
-      // Refresh actions to reflect suppression immediately
       await loadActions();
     } catch (e: any) {
-      console.error('Mark completed failed:', e);
+      console.error(e);
       toast({
         title: 'Unable to mark completed',
         description: e?.message || 'Please try again.',
         variant: 'destructive',
       });
     }
-  }, [traceAction, toast, loadActions]);
+  }, [traceAction, propertyId, loadActions, toast]);
+
+  const handleUndoCompletedFromTrace = useCallback(async () => {
+    if (!traceAction) return;
+
+    try {
+      await api.undoOrchestrationActionCompleted(
+        propertyId,
+        traceAction.actionKey
+      );
+
+      toast({
+        title: 'Completion undone',
+        description: 'This action is active again.',
+      });
+
+      setTraceAction(null);
+      await loadActions();
+    } catch (e: any) {
+      console.error(e);
+      toast({
+        title: 'Unable to undo completion',
+        description: e?.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    }
+  }, [traceAction, propertyId, loadActions, toast]);
 
   // ---------------------------------------------------------------------------
   // DERIVED GROUPS
@@ -320,7 +214,7 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
   );
 
   // ---------------------------------------------------------------------------
-  // States
+  // STATES
   // ---------------------------------------------------------------------------
 
   if (loading) {
@@ -343,80 +237,13 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
 
   if (!active.length && !suppressed.length) {
     return (
-      <div className="space-y-4">
-        {recent.visible && recent.recent && (
-          <div className="rounded-lg border bg-green-50 p-4 text-sm">
-            <div className="font-semibold text-green-800">Task scheduled</div>
-            <div className="mt-1 text-green-700">
-              <span className="font-medium">
-                {formatLabelFromTitle(recent.recent.actionTitle)}
-              </span>{' '}
-              has been added to your maintenance checklist.
-            </div>
-            <div className="mt-3 flex items-center gap-2 flex-wrap">
-              <a
-                href="/dashboard/maintenance"
-                className="px-3 py-1.5 rounded-md bg-green-700 text-white text-xs font-medium"
-              >
-                View maintenance checklist
-              </a>
-              <button
-                type="button"
-                className="text-xs text-green-700 underline ml-auto"
-                onClick={recent.dismiss}
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="rounded-lg border p-4 bg-white">
-          <div className="text-sm text-muted-foreground">
-            No urgent actions at the moment.
-          </div>
+      <div className="rounded-lg border p-4 bg-white">
+        <div className="text-sm text-muted-foreground">
+          No urgent actions at the moment.
         </div>
       </div>
     );
   }
-
-  // ---------------------------------------------------------------------------
-  // Post-save contextual CTA suggestions
-  // ---------------------------------------------------------------------------
-
-  const getPostSaveCtas = (
-    title: string,
-    serviceCategory?: string | null,
-    category?: string | null
-  ) => {
-    const upperCat = (category || '').toUpperCase();
-    const upperSvc = (serviceCategory || '').toUpperCase();
-
-    if (upperCat.includes('ROOF') || upperSvc.includes('ROOF')) {
-      return {
-        primary: { label: 'Check warranty coverage', href: '/dashboard/warranties' },
-        secondary: { label: 'View checklist', href: '/dashboard/maintenance' },
-      };
-    }
-
-    if (['HVAC', 'PLUMBING', 'ELECTRICAL'].includes(upperSvc)) {
-      return {
-        primary: { label: 'Schedule a service', href: '/dashboard/bookings' },
-        secondary: { label: 'Find a provider', href: '/dashboard/providers' },
-      };
-    }
-
-    if (upperSvc === 'INSPECTION') {
-      return {
-        primary: { label: 'Upload inspection report', href: '/dashboard/inspection-reports' },
-        secondary: { label: 'View checklist', href: '/dashboard/maintenance' },
-      };
-    }
-
-    return {
-      primary: { label: 'View maintenance checklist', href: '/dashboard/maintenance' },
-    };
-  };
 
   // ---------------------------------------------------------------------------
   // RENDER GROUP
@@ -437,14 +264,10 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
 
         <div className="space-y-3">
           {items.slice(0, maxItems).map((action) => {
-            const isHandled = handledActions.has(action.actionKey);
-            const isActive = activeActionId === action.actionKey;
-
             const ctaDisabled =
-              Boolean(action.suppression?.suppressed) ||
+              action.suppression?.suppressed ||
               isModalOpen ||
-              isHandled ||
-              isActive;
+              activeActionKey === action.actionKey;
 
             return (
               <OrchestrationActionCard
@@ -452,9 +275,8 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
                 action={action}
                 onCtaClick={handleActionCta}
                 ctaDisabled={ctaDisabled}
-                ctaLabel={isHandled ? 'Task scheduled' : undefined}
                 forceShowCta
-                onMarkCompleted={(a) => setTraceAction(a)} // optional: can be handled in modal
+                onMarkCompleted={() => setTraceAction(action)}
               />
             );
           })}
@@ -463,72 +285,19 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
     );
   };
 
-  const recentTitle = recent.recent?.actionTitle || '';
-  const recentAction = recent.recent?.actionId
-    ? actions.find((a) => a.id === recent.recent!.actionId) || null
-    : null;
-
-  const recentCtas = recentTitle
-    ? getPostSaveCtas(
-        recentTitle,
-        recentAction?.serviceCategory ?? null,
-        recentAction?.category ?? null
-      )
-    : null;
+  // ---------------------------------------------------------------------------
+  // RENDER
+  // ---------------------------------------------------------------------------
 
   return (
     <>
-      {/* ================= POST SAVE PANEL (persistent) ================= */}
-      {recent.visible && recent.recent && (
-        <div className="rounded-lg border bg-green-50 p-4 text-sm mb-4">
-          <div className="space-y-2">
-            <div className="font-semibold text-green-800">Task scheduled</div>
-
-            <div className="text-green-700">
-              <span className="font-medium">
-                {formatLabelFromTitle(recent.recent.actionTitle)}
-              </span>{' '}
-              has been added to your maintenance checklist.
-            </div>
-
-            <div className="flex gap-2 flex-wrap pt-2 items-center">
-              {recentCtas?.primary && (
-                <a
-                  href={recentCtas.primary.href}
-                  className="px-3 py-1.5 rounded-md bg-green-700 text-white text-xs font-medium"
-                >
-                  {recentCtas.primary.label}
-                </a>
-              )}
-
-              {recentCtas?.secondary && (
-                <a
-                  href={recentCtas.secondary.href}
-                  className="px-3 py-1.5 rounded-md border border-green-700 text-green-700 text-xs font-medium"
-                >
-                  {recentCtas.secondary.label}
-                </a>
-              )}
-
-              <button
-                type="button"
-                className="text-xs text-green-700 underline ml-auto"
-                onClick={recent.dismiss}
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================= ACTION LIST ================= */}
+      {/* ACTION LIST */}
       <div className="space-y-6">
         {renderGroup('Critical', critical, 'text-red-700')}
         {renderGroup('High Priority', high, 'text-amber-700')}
         {renderGroup('Other Actions', other, 'text-gray-700')}
 
-        {/* Suppressed Actions */}
+        {/* Suppressed */}
         {suppressed.length > 0 && (
           <div className="pt-2">
             <button
@@ -558,42 +327,29 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
         )}
       </div>
 
-      {/* ================= Maintenance Modal ================= */}
+      {/* MAINTENANCE MODAL */}
       <MaintenanceConfigModal
         isOpen={isModalOpen}
         orchestrationMode
         template={template}
         properties={properties}
         selectedPropertyId={propertyId}
-        orchestrationActionId={activeActionId as any}
+        orchestrationActionId={activeActionKey as any}
         onClose={() => {
           setIsModalOpen(false);
           setTemplate(null);
-          setActiveActionId(null);
+          setActiveActionKey(null);
         }}
         onSuccess={handleSuccess}
       />
 
-      {/* ================= Decision Trace Modal ================= */}
+      {/* DECISION TRACE MODAL */}
       <DecisionTraceModal
         open={Boolean(traceAction)}
         onClose={() => setTraceAction(null)}
         steps={traceAction?.decisionTrace?.steps ?? []}
-        isMarkedCompleted={
-          traceAction?.suppression?.reasons?.some(
-            r => r.reason === 'USER_MARKED_COMPLETE'
-          )
-        }
-        onUndoCompleted={async () => {
-          await api.unmarkOrchestrationActionCompleted(
-            propertyId,
-            traceAction!.actionKey
-          );
-          await loadActions();
-        }}
-        onMarkCompleted={
-          traceAction ? handleMarkCompletedFromTrace : undefined
-        }
+        onMarkCompleted={handleMarkCompletedFromTrace}
+        onUndo={handleUndoCompletedFromTrace}
       />
     </>
   );

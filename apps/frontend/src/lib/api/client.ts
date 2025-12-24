@@ -1679,20 +1679,18 @@ class APIClient {
       }
     );
   }  
-    // ORCHESTRATION — Undo mark completed
-  async unmarkOrchestrationActionCompleted(
+  async undoOrchestrationActionCompleted(
     propertyId: string,
     actionKey: string
   ): Promise<APIResponse<{ success: boolean }>> {
     return this.request<{ success: boolean }>(
-      `/api/orchestration/actions/unmark-complete`,
+      `/api/orchestration/actions/${actionKey}/undo`,
       {
         method: 'POST',
-        body: JSON.stringify({ propertyId, actionKey }),
+        body: JSON.stringify({ propertyId }),
       }
     );
   }
-
 }
 
 // Export singleton instance

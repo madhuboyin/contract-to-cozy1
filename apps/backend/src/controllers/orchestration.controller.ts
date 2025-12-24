@@ -1,3 +1,4 @@
+// apps/backend/src/controllers/orchestration.controller.ts
 import { Request, Response } from 'express';
 import { getOrchestrationSummary } from '../services/orchestration.service';
 import { AuthRequest } from '../types/auth.types';
@@ -39,37 +40,37 @@ export async function markOrchestrationActionCompleted(
   return res.json({ success: true });
 }
 
-// POST /api/orchestration/actions/unmark-complete
-export async function unmarkOrchestrationActionComplete(
+// POST /api/orchestration/actions/:actionKey/undo
+// POST /api/orchestration/:propertyId/actions/:actionKey/undo
+export async function undoOrchestrationAction(
   req: AuthRequest,
   res: Response
 ) {
-  const { propertyId, actionKey } = req.body;
+  const { propertyId, actionKey } = req.params;
   const userId = req.user?.userId ?? null;
 
   if (!propertyId || !actionKey) {
     return res.status(400).json({ error: 'Missing propertyId or actionKey' });
   }
 
-  await prisma.orchestrationActionEvent.create({
-    data: {
+  await prisma.orchestrationActionEvent.deleteMany({
+    where: {
       propertyId,
       actionKey,
-      actionType: 'USER_UNMARKED_COMPLETE',
-      source: 'USER',
-      createdBy: userId,
+      actionType: 'USER_MARKED_COMPLETE',
     },
   });
 
-  res.json({ success: true });
+  return res.json({ success: true });
 }
+
 
 export async function getOrchestrationSummaryHandler(
   req: Request,
   res: Response
 ) {
   try {
-    const { propertyId } = req.params;
+    const { propertyId } = req.body;
 
     // -----------------------------
     // 1. Input Validation

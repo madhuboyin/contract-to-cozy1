@@ -16,12 +16,8 @@ type Props = {
   onClose: () => void;
   steps: DecisionTraceStepDTO[];
 
-  /**
-   * Optional action resolution
-   */
   onMarkCompleted?: () => void;
-  onUndoCompleted?: () => void;
-  isMarkedCompleted?: boolean;
+  onUndo?: () => void;
 };
 
 export const DecisionTraceModal: React.FC<Props> = ({
@@ -29,8 +25,7 @@ export const DecisionTraceModal: React.FC<Props> = ({
   onClose,
   steps,
   onMarkCompleted,
-  onUndoCompleted,
-  isMarkedCompleted,
+  onUndo,
 }) => {
   return (
     <Dialog
@@ -105,17 +100,13 @@ export const DecisionTraceModal: React.FC<Props> = ({
               Mark as completed
             </Button>
           )}
-          {isMarkedCompleted && onUndoCompleted && (
-            <Button
-              variant="ghost"
-              onClick={() => {
-                onUndoCompleted();
-                onClose();
-              }}
-            >
-              Undo completion
+
+          {onUndo && (
+            <Button variant="outline" onClick={onUndo}>
+              Undo
             </Button>
           )}
+
           <Button variant="outline" onClick={onClose}>
             Close
           </Button>
@@ -143,6 +134,11 @@ function humanizeRule(rule: string) {
       return 'We checked for existing scheduled work';
     case 'SUPPRESSION_FINAL':
       return 'Final decision made';
+    case 'USER_MARKED_COMPLETE':
+      return 'You marked this recommendation as completed';
+    case 'CHECKLIST_SUPPRESSION':
+    case 'CHECKLIST_SUPPRESSION_AUTHORITATIVE':
+      return 'This is already tracked in your maintenance checklist';
     default:
       return rule.replace(/_/g, ' ');
   }

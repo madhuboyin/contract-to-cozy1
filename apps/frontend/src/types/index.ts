@@ -969,6 +969,7 @@ export type SuppressionReason =
   | 'CHECKLIST_TRACKED'
   | 'NOT_ACTIONABLE'
   | 'USER_MARKED_COMPLETE'
+  | 'USER_UNMARKED_COMPLETE'
   | 'UNKNOWN';
 
 /**
