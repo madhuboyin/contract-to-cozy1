@@ -923,7 +923,9 @@ function mapChecklistItemToAction(params: {
   });
 
   // Use stored actionKey if exists, otherwise compute legacy key
-  const actionKey = item?.actionKey || computeActionKey({
+  // 🔑 CRITICAL FIX: Use stored actionKey if it exists (from Action Center)
+  const storedKey = item?.actionKey;
+  const computedKey = computeActionKey({
     propertyId,
     source: 'CHECKLIST',
     orchestrationActionId: null,
@@ -931,6 +933,18 @@ function mapChecklistItemToAction(params: {
     serviceCategory,
     systemType: null,
     category: null,
+  });
+
+  const actionKey = storedKey || computedKey;
+
+  // 🐛 DEBUG LOG
+  console.log('🔍 CHECKLIST ACTION KEY DECISION:', {
+    itemId: item?.id,
+    title: item?.title,
+    storedKey: storedKey,
+    computedKey: computedKey,
+    finalKey: actionKey,
+    usedStored: !!storedKey,
   });
 
   return {
@@ -1029,15 +1043,13 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
     })
     .catch(() => []);
 
-    // 🐛 DEBUG LOG
-    console.log('🔍 Fetched checklist items:', {
-      count: checklistItems.length,
-      items: checklistItems.map(item => ({
-        id: item.id,
-        title: item.title,
-        actionKey: item.actionKey,
-      })),
-    });
+    // 🐛 ADD THIS DEBUG LOG IMMEDIATELY AFTER
+    console.log('🔍 RAW CHECKLIST ITEMS FROM DB:', JSON.stringify(checklistItems.map(item => ({
+      id: item.id,
+      title: item.title,
+      actionKey: item.actionKey,
+      hasActionKey: !!item.actionKey,
+    })), null, 2));
 
   countChecklistActions(checklistItems); // keeps behavior aligned (not used directly below)
 
