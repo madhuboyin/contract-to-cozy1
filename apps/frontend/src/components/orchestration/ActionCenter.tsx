@@ -42,6 +42,53 @@ function formatLabelFromTitle(title?: string | null) {
   return title;
 }
 
+function computeUiDedupeKey(a: OrchestratedActionDTO): string {
+  const stable =
+    a.checklistItemId ||
+    a.orchestrationActionId ||
+    a.serviceCategory ||
+    a.systemType ||
+    a.category ||
+    a.title ||
+    'UNKNOWN';
+
+  // include date if checklist-driven duplicates exist
+  const due = a.nextDueDate ? new Date(a.nextDueDate).toISOString().slice(0, 10) : '';
+
+  return `${a.propertyId}:${a.source}:${String(stable).toUpperCase()}:${due}`;
+}
+
+function dedupeActionsForUi(list: OrchestratedActionDTO[]): OrchestratedActionDTO[] {
+  const map = new Map<string, OrchestratedActionDTO>();
+
+  for (const a of list) {
+    const key = computeUiDedupeKey(a);
+    const existing = map.get(key);
+
+    if (!existing) {
+      map.set(key, a);
+      continue;
+    }
+
+    // pick the "better" one (higher priority; then higher confidence)
+    const aConf = a.confidence?.score ?? 0;
+    const eConf = existing.confidence?.score ?? 0;
+
+    const winner =
+      (a.priority ?? 0) > (existing.priority ?? 0)
+        ? a
+        : (a.priority ?? 0) < (existing.priority ?? 0)
+          ? existing
+          : aConf >= eConf
+            ? a
+            : existing;
+
+    map.set(key, winner);
+  }
+
+  return Array.from(map.values());
+}
+
 export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
   const { toast } = useToast();
 
@@ -130,7 +177,7 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
       ]);
 
       const adapted = adaptOrchestrationSummary(summary);
-      setActions(adapted.actions);
+      setActions(dedupeActionsForUi(adapted.actions));
 
       if (propertiesRes.success) {
         setProperties(propertiesRes.data.properties || []);
