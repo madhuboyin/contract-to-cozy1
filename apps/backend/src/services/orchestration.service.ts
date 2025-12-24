@@ -651,6 +651,13 @@ async function mapRiskDetailToAction(params: {
     });
 
     // 🐛 DEBUG LOG
+    console.log('🔍 Suppression resolution:', {
+      riskActionKey: actionKey,
+      foundSource: source?.type || 'NONE',
+      checklistItemId: source?.type === 'CHECKLIST_ITEM' ? source.checklistItem.id : null,
+    });
+
+    // 🐛 DEBUG LOG
     console.log('🔍 Suppression check:', {
       actionKey,
       propertyId,
@@ -926,6 +933,15 @@ function mapChecklistItemToAction(params: {
     category: null,
   });
 
+  // 🐛 DEBUG LOG
+  console.log('🔍 mapChecklistItemToAction:', {
+    itemId: item?.id,
+    title: item?.title,
+    storedActionKey: item?.actionKey,
+    computedActionKey: actionKey,
+    usingStored: !!item?.actionKey,
+  });
+
   return {
     id: `checklist:${propertyId}:${item?.id ?? 'unknown'}`,
     actionKey, // 🔑 Now uses stored actionKey
@@ -1022,6 +1038,16 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
       },
     })
     .catch(() => []);
+
+    // 🐛 DEBUG LOG
+    console.log('🔍 Fetched checklist items:', {
+      count: checklistItems.length,
+      items: checklistItems.map(item => ({
+        id: item.id,
+        title: item.title,
+        actionKey: item.actionKey,
+      })),
+    });
 
   countChecklistActions(checklistItems); // keeps behavior aligned (not used directly below)
 
