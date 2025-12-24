@@ -1,4 +1,3 @@
-// components/orchestration/OrchestrationActionCard.tsx
 import React from 'react';
 import { OrchestratedActionDTO } from '@/types';
 import { DecisionTracePanel } from './DecisionTracePanel';
@@ -75,14 +74,21 @@ export const OrchestrationActionCard: React.FC<Props> = ({
 
   const exposure = formatMoney(action.exposure ?? null);
   const dueDateLabel = formatDateLabel(action.nextDueDate ?? null);
-  const description = resolveDescription(action.description, action.cta?.label);
+
+  // CTA LABEL — frontend is authoritative
+  const resolvedCtaLabel =
+    ctaLabel ||
+    action.cta?.label ||
+    'Schedule task';
+
+  const description = resolveDescription(
+    action.description,
+    resolvedCtaLabel
+  );
 
   const confidence = action.confidence;
 
-  // Use custom label if provided, otherwise use action's CTA label
-  const buttonLabel = ctaLabel || action.cta?.label;
-
-  // Disable if suppressed OR if explicitly disabled via prop
+  // Disable rules (single source of truth)
   const isDisabled = suppressed || ctaDisabled;
 
   return (
@@ -144,32 +150,30 @@ export const OrchestrationActionCard: React.FC<Props> = ({
         </div>
       )}
 
-      {/* ================= CTA ================= */}
-      {action.cta?.show && buttonLabel && (
-        <div className="mt-4 flex items-center gap-3">
-          <button
-            type="button"
-            disabled={isDisabled}
-            onClick={() => !isDisabled && onCtaClick?.(action)}
-            className={`px-3 py-2 rounded-md text-sm font-semibold ${
-              isDisabled
-                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
-          >
-            {buttonLabel}
-          </button>
+      {/* ================= CTA (ALWAYS RENDERED) ================= */}
+      <div className="mt-4 flex items-center gap-3">
+        <button
+          type="button"
+          disabled={isDisabled}
+          onClick={() => !isDisabled && onCtaClick?.(action)}
+          className={`px-3 py-2 rounded-md text-sm font-semibold ${
+            isDisabled
+              ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+              : 'bg-blue-600 text-white hover:bg-blue-700'
+          }`}
+        >
+          {isDisabled ? 'Task scheduled' : resolvedCtaLabel}
+        </button>
 
-          {onDismiss && (
-            <button
-              onClick={onDismiss}
-              className="text-sm text-muted-foreground hover:underline"
-            >
-              Dismiss
-            </button>
-          )}
-        </div>
-      )}
+        {onDismiss && (
+          <button
+            onClick={onDismiss}
+            className="text-sm text-muted-foreground hover:underline"
+          >
+            Dismiss
+          </button>
+        )}
+      </div>
 
       {/* ================= Decision Trace (ALWAYS) ================= */}
       <DecisionTracePanel
