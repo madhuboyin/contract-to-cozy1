@@ -914,7 +914,9 @@ function mapChecklistItemToAction(params: {
     suppressed: suppression.suppressed,
   });
 
-  const actionKey = computeActionKey({
+  // 🔑 CRITICAL FIX: Use stored actionKey if it exists (from Action Center)
+  // Only compute new one for legacy checklist items created before actionKey was added
+  const actionKey = item?.actionKey || computeActionKey({
     propertyId,
     source: 'CHECKLIST',
     orchestrationActionId: null,
@@ -923,11 +925,10 @@ function mapChecklistItemToAction(params: {
     systemType: null,
     category: null,
   });
-  
 
   return {
     id: `checklist:${propertyId}:${item?.id ?? 'unknown'}`,
-    actionKey,
+    actionKey, // 🔑 Now uses stored actionKey
     source: 'CHECKLIST',
     propertyId,
 
@@ -1017,6 +1018,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
         isRecurring: true,
         createdAt: true,
         serviceCategory: true,
+        actionKey: true,
       },
     })
     .catch(() => []);
