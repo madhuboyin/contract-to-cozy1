@@ -1,3 +1,4 @@
+// apps/frontend/src/components/orchestration/OrchestrationActionCard.tsx
 import React from 'react';
 import { OrchestratedActionDTO } from '@/types';
 import { DecisionTracePanel } from './DecisionTracePanel';
@@ -10,6 +11,12 @@ type Props = {
   onDismiss?: () => void;
   ctaDisabled?: boolean;
   ctaLabel?: string;
+
+  /**
+   * Enforce CTA consistency across cards (even if action.cta.show is false/missing).
+   * ActionCenter uses this to keep the layout predictable.
+   */
+  forceShowCta?: boolean;
 };
 
 function formatMoney(amount?: number | null) {
@@ -49,10 +56,7 @@ function riskBadge(riskLevel?: string | null) {
 /**
  * Suppress description if it duplicates CTA intent
  */
-function resolveDescription(
-  description?: string | null,
-  ctaLabel?: string | null
-) {
+function resolveDescription(description?: string | null, ctaLabel?: string | null) {
   if (!description) return null;
   if (!ctaLabel) return description;
 
@@ -69,27 +73,25 @@ export const OrchestrationActionCard: React.FC<Props> = ({
   onDismiss,
   ctaDisabled = false,
   ctaLabel,
+  forceShowCta = false,
 }) => {
   const suppressed = Boolean(action.suppression?.suppressed);
 
   const exposure = formatMoney(action.exposure ?? null);
   const dueDateLabel = formatDateLabel(action.nextDueDate ?? null);
-
-  // CTA LABEL — frontend is authoritative
-  const resolvedCtaLabel =
-    ctaLabel ||
-    action.cta?.label ||
-    'Schedule task';
-
-  const description = resolveDescription(
-    action.description,
-    resolvedCtaLabel
-  );
+  const description = resolveDescription(action.description, action.cta?.label);
 
   const confidence = action.confidence;
 
-  // Disable rules (single source of truth)
+  // If parent provides ctaLabel, it wins.
+  // Otherwise fallback to action.cta.label or a safe default.
+  const resolvedLabel = ctaLabel || action.cta?.label || 'Schedule task';
+
+  // Disable if suppressed OR explicitly disabled via prop
   const isDisabled = suppressed || ctaDisabled;
+
+  // When forcing CTA, show it even if action.cta is missing.
+  const shouldShowCta = forceShowCta ? true : Boolean(action.cta?.show);
 
   return (
     <div
@@ -114,22 +116,16 @@ export const OrchestrationActionCard: React.FC<Props> = ({
             )}
           </div>
 
-          {description && (
-            <p className="text-sm text-gray-600">{description}</p>
-          )}
+          {description && <p className="text-sm text-gray-600">{description}</p>}
         </div>
 
         {/* ================= Meta ================= */}
         <div className="text-right space-y-1">
           {exposure && (
-            <div className="text-sm font-semibold text-gray-900">
-              {exposure}
-            </div>
+            <div className="text-sm font-semibold text-gray-900">{exposure}</div>
           )}
           {dueDateLabel && (
-            <div className="text-xs text-gray-600">
-              Due {dueDateLabel}
-            </div>
+            <div className="text-xs text-gray-600">Due {dueDateLabel}</div>
           )}
         </div>
       </div>
@@ -137,11 +133,7 @@ export const OrchestrationActionCard: React.FC<Props> = ({
       {/* ================= Confidence ================= */}
       {confidence && (
         <div className="mt-4 space-y-2">
-          <ConfidenceBar
-            score={confidence.score}
-            level={confidence.level}
-          />
-
+          <ConfidenceBar score={confidence.score} level={confidence.level} />
           <ConfidencePopover
             score={confidence.score}
             level={confidence.level}
@@ -150,30 +142,33 @@ export const OrchestrationActionCard: React.FC<Props> = ({
         </div>
       )}
 
-      {/* ================= CTA (ALWAYS RENDERED) ================= */}
-      <div className="mt-4 flex items-center gap-3">
-        <button
-          type="button"
-          disabled={isDisabled}
-          onClick={() => !isDisabled && onCtaClick?.(action)}
-          className={`px-3 py-2 rounded-md text-sm font-semibold ${
-            isDisabled
-              ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-              : 'bg-blue-600 text-white hover:bg-blue-700'
-          }`}
-        >
-          {isDisabled ? 'Task scheduled' : resolvedCtaLabel}
-        </button>
-
-        {onDismiss && (
+      {/* ================= CTA ================= */}
+      {shouldShowCta && resolvedLabel && (
+        <div className="mt-4 flex items-center gap-3">
           <button
-            onClick={onDismiss}
-            className="text-sm text-muted-foreground hover:underline"
+            type="button"
+            disabled={isDisabled}
+            onClick={() => !isDisabled && onCtaClick?.(action)}
+            className={`px-3 py-2 rounded-md text-sm font-semibold ${
+              isDisabled
+                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
           >
-            Dismiss
+            {resolvedLabel}
           </button>
-        )}
-      </div>
+
+          {onDismiss && (
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="text-sm text-muted-foreground hover:underline"
+            >
+              Dismiss
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ================= Decision Trace (ALWAYS) ================= */}
       <DecisionTracePanel
