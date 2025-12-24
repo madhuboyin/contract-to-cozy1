@@ -22,7 +22,7 @@ router.get(
 
 // POST /api/orchestration/actions/mark-completed
 router.post(
-  '/actions/mark-completed',
+  '/:propertyId/actions/mark-completed',
   authenticate,
   propertyAuthMiddleware,
   markOrchestrationActionCompleted

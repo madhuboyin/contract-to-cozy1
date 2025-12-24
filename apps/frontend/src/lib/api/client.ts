@@ -1669,7 +1669,7 @@ class APIClient {
     actionKey: string
   ): Promise<APIResponse<{ success: boolean }>> {
     return this.request<{ success: boolean }>(
-      `/api/orchestration/actions/mark-completed`,
+      `/api/orchestration/${propertyId}/actions/mark-completed`,
       {
         method: 'POST',
         body: JSON.stringify({
@@ -1678,13 +1678,16 @@ class APIClient {
         }),
       }
     );
-  }  
+  }
   async undoOrchestrationActionCompleted(
     propertyId: string,
     actionKey: string
   ): Promise<APIResponse<{ success: boolean }>> {
+    // URL-encode the actionKey since it contains colons
+    const encodedActionKey = encodeURIComponent(actionKey);
+    
     return this.request<{ success: boolean }>(
-      `/api/orchestration/actions/${actionKey}/undo`,
+      `/api/orchestration/${propertyId}/actions/${encodedActionKey}/undo`,
       {
         method: 'POST',
         body: JSON.stringify({ propertyId }),
