@@ -503,20 +503,26 @@ model ChecklistItem {
   status      ChecklistItemStatus @default(PENDING)
   
   serviceCategory String?
+  actionKey String?
   orchestrationActionId String?
-  // NEW: Recurring task fields
+  
   isRecurring        Boolean   @default(false)
   frequency          RecurrenceFrequency?
   nextDueDate        DateTime?
   lastCompletedDate  DateTime?
   checklistId        String
   propertyId         String?
+  
   checklist   Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
-  property    Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)  // ← ADD THIS
+  property    Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  
   sortOrder   Int @default(0)
 
   @@index([checklistId])
+  @@index([actionKey])
+  @@unique([propertyId, actionKey])
   @@unique([propertyId, orchestrationActionId])
+  
   @@map("checklist_items")
 }
 
