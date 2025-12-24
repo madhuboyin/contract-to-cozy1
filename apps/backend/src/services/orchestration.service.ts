@@ -167,7 +167,9 @@ function toNumberSafe(v: unknown): number | null {
  * Actions with the same key are considered duplicates and should be merged.
  */
 function computeDedupeKey(action: OrchestratedAction): string {
-  const asset =
+  const assetKey =
+    action.checklistItemId ??
+    action.orchestrationActionId ??
     action.serviceCategory ??
     action.systemType ??
     action.category ??
@@ -176,7 +178,7 @@ function computeDedupeKey(action: OrchestratedAction): string {
   return [
     action.propertyId,
     action.source,
-    normalizeUpper(asset),
+    normalizeUpper(assetKey),
   ].join(':');
 }
 
@@ -214,13 +216,8 @@ function mergeDuplicateActions(
         null,
     },
 
-    // Merge decision trace
-    decisionTrace: {
-      steps: [
-        ...(winner.decisionTrace?.steps ?? []),
-        ...(loser.decisionTrace?.steps ?? []),
-      ],
-    },
+    // Merge decision trace (deduplicate by rule to avoid noise)
+    decisionTrace: winner.decisionTrace ?? loser.decisionTrace,
 
     // Preserve strongest confidence
     confidence:
@@ -1117,7 +1114,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
   // SAFETY NET: Resolve authoritative suppression for legacy data
   // (Actions created before orchestrationActionId was stored on the action)
   // -------------------------------------------------
-  for (const action of candidateRiskActions) {
+  for (const action of candidates) {
     if (
       action.source === 'RISK' &&
       action.suppression.suppressed &&
