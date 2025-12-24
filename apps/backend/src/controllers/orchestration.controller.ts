@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { getOrchestrationSummary } from '../services/orchestration.service';
+import { AuthRequest } from '../types/auth.types';
+import { recordOrchestrationEvent } from '../services/orchestrationEvent.service';
 
 /**
  * GET /api/orchestration/:propertyId/summary
@@ -13,6 +15,29 @@ import { getOrchestrationSummary } from '../services/orchestration.service';
  * - Authorization is expected to be enforced by middleware (propertyAuth, auth, etc.)
  * - Controller remains intentionally thin
  */
+
+export async function markOrchestrationActionCompleted(
+  req: AuthRequest,
+  res: Response
+) {
+  const { propertyId, actionKey } = req.body;
+  const userId = req.user?.userId ?? null;
+
+  if (!propertyId || !actionKey) {
+    return res.status(400).json({ error: 'Missing propertyId or actionKey' });
+  }
+
+  await recordOrchestrationEvent({
+    propertyId,
+    actionKey,
+    actionType: 'USER_MARKED_COMPLETE',
+    source: 'USER',
+    createdBy: userId,
+  });
+
+  return res.json({ success: true });
+}
+
 export async function getOrchestrationSummaryHandler(
   req: Request,
   res: Response

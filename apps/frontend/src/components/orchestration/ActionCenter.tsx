@@ -25,8 +25,23 @@ type Props = {
 
 type HandledState = {
   // actionId -> createdAt
-  [actionId: string]: number;
+  [actionKey: string]: number;
 };
+
+function dedupeByActionKey(
+  actions: OrchestratedActionDTO[]
+): OrchestratedActionDTO[] {
+  const map = new Map<string, OrchestratedActionDTO>();
+
+  for (const action of actions) {
+    // First one wins (highest priority already sorted by backend)
+    if (!map.has(action.actionKey)) {
+      map.set(action.actionKey, action);
+    }
+  }
+
+  return Array.from(map.values());
+}
 
 function safeJsonParse<T>(raw: string | null): T | null {
   if (!raw) return null;
@@ -177,7 +192,8 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
       ]);
 
       const adapted = adaptOrchestrationSummary(summary);
-      setActions(dedupeActionsForUi(adapted.actions));
+      const deduped = dedupeByActionKey(adapted.actions);
+      setActions(deduped);
 
       if (propertiesRes.success) {
         setProperties(propertiesRes.data.properties || []);
@@ -204,13 +220,13 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
 
     if (action.suppression?.suppressed) return;
     if (isModalOpen) return;
-    if (activeActionId && activeActionId === action.id) return;
-    if (handledActions.has(action.id)) return;
+    if (activeActionId && activeActionId === action.actionKey) return;
+    if (handledActions.has(action.actionKey)) return;
 
-    setActiveActionId(action.id);
+    setActiveActionId(action.actionKey);
 
     setTemplate({
-      id: `orchestration:${action.id}`,
+      id: `orchestration:${action.actionKey}`,
       title: action.title,
       description: action.description ?? '',
       serviceCategory:
@@ -262,7 +278,10 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
       // You should have a backend endpoint for this.
       // If your api client name differs, adjust accordingly.
       // The intention: mark orchestration action as USER_MARKED_COMPLETE.
-      await api.markOrchestrationActionCompleted(traceAction.id);
+      await api.markOrchestrationActionCompleted(
+        propertyId,
+        traceAction.actionKey
+      );
 
       toast({
         title: 'Marked as completed',
@@ -418,8 +437,8 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
 
         <div className="space-y-3">
           {items.slice(0, maxItems).map((action) => {
-            const isHandled = handledActions.has(action.id);
-            const isActive = activeActionId === action.id;
+            const isHandled = handledActions.has(action.actionKey);
+            const isActive = activeActionId === action.actionKey;
 
             const ctaDisabled =
               Boolean(action.suppression?.suppressed) ||
@@ -429,7 +448,7 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
 
             return (
               <OrchestrationActionCard
-                key={action.id}
+                key={action.actionKey}
                 action={action}
                 onCtaClick={handleActionCta}
                 ctaDisabled={ctaDisabled}
@@ -526,7 +545,7 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
               <div className="mt-3 space-y-3">
                 {suppressed.map((action) => (
                   <OrchestrationActionCard
-                    key={action.id}
+                    key={action.actionKey}
                     action={action}
                     ctaDisabled
                     ctaLabel="Suppressed"

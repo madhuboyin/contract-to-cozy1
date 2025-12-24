@@ -3,6 +3,7 @@
 import { prisma } from '../lib/prisma';
 import { ServiceCategory, BookingStatus } from '@prisma/client';
 import { OrchestrationSuppressionService } from './orchestrationSuppression.service';
+import { computeActionKey } from './orchestrationActionKey';
 
 type DerivedFrom = {
   riskAssessment: boolean;
@@ -46,7 +47,7 @@ export type DecisionTraceStep = {
 
 export type OrchestratedAction = {
   id: string;
-
+  actionKey: string;
   source: 'RISK' | 'CHECKLIST';
   propertyId: string;
 
@@ -162,71 +163,19 @@ function toNumberSafe(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/**
- * Compute deduplication key for an action.
- * Actions with the same key are considered duplicates and should be merged.
- */
-function computeDedupeKey(action: OrchestratedAction): string {
-  const assetKey =
-    action.checklistItemId ??
-    action.orchestrationActionId ??
-    action.serviceCategory ??
-    action.systemType ??
-    action.category ??
-    'UNKNOWN';
-
-  return [
-    action.propertyId,
-    action.source,
-    normalizeUpper(assetKey),
-  ].join(':');
-}
-
-/**
- * Merge two duplicate actions.
- * Preserves higher priority, combines suppression reasons, and merges decision traces.
- */
-function mergeDuplicateActions(
-  a: OrchestratedAction,
-  b: OrchestratedAction
-): OrchestratedAction {
-  // Prefer higher priority
-  const winner = a.priority >= b.priority ? a : b;
-  const loser = winner === a ? b : a;
-
-  return {
-    ...winner,
-
-    // Merge suppression (once suppressed, always suppressed)
-    suppression: {
-      suppressed:
-        winner.suppression.suppressed || loser.suppression.suppressed,
-      reasons: [
-        ...winner.suppression.reasons,
-        ...loser.suppression.reasons.filter(
-          (r) =>
-            !winner.suppression.reasons.some(
-              (wr) => wr.reason === r.reason && wr.relatedId === r.relatedId
-            )
-        ),
-      ],
-      suppressionSource:
-        winner.suppression.suppressionSource ??
-        loser.suppression.suppressionSource ??
-        null,
+async function loadSuppressionEvents(propertyId: string) {
+  const events = await prisma.orchestrationActionEvent.findMany({
+    where: {
+      propertyId,
+      actionType: 'USER_MARKED_COMPLETE',
     },
+    select: {
+      actionKey: true,
+    },
+  });
 
-    // Merge decision trace (deduplicate by rule to avoid noise)
-    decisionTrace: winner.decisionTrace ?? loser.decisionTrace,
-
-    // Preserve strongest confidence
-    confidence:
-      (winner.confidence?.score ?? 0) >= (loser.confidence?.score ?? 0)
-        ? winner.confidence ?? loser.confidence
-        : loser.confidence ?? winner.confidence,
-  };
+  return new Set(events.map(e => e.actionKey));
 }
-
 
 /**
  * Risk is actionable if:
@@ -853,9 +802,20 @@ async function mapRiskDetailToAction(params: {
     coverage,
     suppressed: suppression.suppressed,
   });
+  
+  const actionKey = computeActionKey({
+    propertyId,
+    source: 'RISK',
+    orchestrationActionId: d?.orchestrationActionId ?? null,
+    checklistItemId: null,
+    serviceCategory: inferredCategory,
+    systemType,
+    category,
+  });
 
   return {
     id: `risk:${propertyId}:${systemType ?? 'unknown'}:${index}`,
+    actionKey,
     source: 'RISK',
     propertyId,
     title: assetName,
@@ -963,8 +923,19 @@ function mapChecklistItemToAction(params: {
     suppressed: suppression.suppressed,
   });
 
+  const actionKey = computeActionKey({
+    propertyId,
+    source: 'CHECKLIST',
+    orchestrationActionId: null,
+    checklistItemId: item?.id ?? null,
+    serviceCategory,
+    systemType: null,
+    category: null,
+  });
+
   return {
     id: `checklist:${propertyId}:${item?.id ?? 'unknown'}`,
+    actionKey,
     source: 'CHECKLIST',
     propertyId,
 
@@ -999,6 +970,10 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
   // 0) Booking context (Phase 5)
   const { categorySet: bookingCategorySet, bookingByCategory } =
     await getActiveBookingCategorySet(propertyId);
+
+  // 0.5) User-completed action keys (for suppression)
+  const userCompletedActionKeys =
+    await loadSuppressionEvents(propertyId);
 
   // 1) Coverage sources (Phase 8)
   // NOTE: This select is defensive. If your Prisma schema doesn't have some fields,
@@ -1092,24 +1067,11 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
     )
     .filter(Boolean) as OrchestratedAction[];
 
-  // -------------------------------------------------
-  // DEDUPLICATION: Merge duplicate actions by asset key
-  // -------------------------------------------------
-  const dedupedMap = new Map<string, OrchestratedAction>();
-
-  for (const action of [...candidateRiskActions, ...candidateChecklistActions]) {
-    const key = computeDedupeKey(action);
-    const existing = dedupedMap.get(key);
-
-    if (!existing) {
-      dedupedMap.set(key, action);
-    } else {
-      dedupedMap.set(key, mergeDuplicateActions(existing, action));
-    }
-  }
-
-  const candidates = Array.from(dedupedMap.values());
-
+  const candidates = [
+    ...candidateRiskActions,
+    ...candidateChecklistActions,
+  ];
+    
   // -------------------------------------------------
   // SAFETY NET: Resolve authoritative suppression for legacy data
   // (Actions created before orchestrationActionId was stored on the action)
@@ -1149,8 +1111,29 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
   }
 
   // 5) Split actionable vs suppressed
-  const suppressedActions = candidates.filter((a) => a.suppression?.suppressed);
-  const actionable = candidates.filter((a) => !a.suppression?.suppressed);
+  for (const action of candidates) {
+    if (userCompletedActionKeys.has(action.actionKey)) {
+      action.suppression = {
+        suppressed: true,
+        reasons: [
+          {
+            reason: 'USER_MARKED_COMPLETE',
+            message: 'You marked this action as completed.',
+            relatedType: 'CHECKLIST',
+          },
+        ],
+        suppressionSource: null,
+      };
+  
+      action.decisionTrace?.steps.push({
+        rule: 'USER_MARKED_COMPLETE',
+        outcome: 'APPLIED',
+      });
+    }
+  }
+  
+  const suppressedActions = candidates.filter(a => a.suppression.suppressed);
+  const actionable = candidates.filter(a => !a.suppression.suppressed);  
 
   // 6) Sort actionable
   const actions = actionable.sort((a, b) => {

@@ -1663,20 +1663,23 @@ class APIClient {
     });
   }
 
-  // ORCHESTRATION — Mark action as completed
+  // ORCHESTRATION — Mark action as completed (CANONICAL)
   async markOrchestrationActionCompleted(
-    orchestrationActionId: string
+    propertyId: string,
+    actionKey: string
   ): Promise<APIResponse<{ success: boolean }>> {
-    // TODO: Implement backend endpoint for this
-    // For now, this is a placeholder that will need backend implementation
     return this.request<{ success: boolean }>(
-      `/api/orchestration/actions/${orchestrationActionId}/complete`,
+      `/api/orchestration/actions/mark-completed`,
       {
         method: 'POST',
+        body: JSON.stringify({
+          propertyId,
+          actionKey,
+        }),
       }
     );
   }
-
+  
 }
 
 // Export singleton instance

@@ -1014,6 +1014,7 @@ export interface ActionConfidenceDTO {
  */
 export interface OrchestratedActionDTO {
   id: string;
+  actionKey: string;
   source: OrchestrationSource;
   propertyId: string;
 

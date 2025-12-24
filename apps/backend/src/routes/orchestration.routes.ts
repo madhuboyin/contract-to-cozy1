@@ -1,6 +1,6 @@
 // apps/backend/src/routes/orchestration.routes.ts
 import { Router } from 'express';
-import { getOrchestrationSummaryHandler } from '../controllers/orchestration.controller';
+import { getOrchestrationSummaryHandler, markOrchestrationActionCompleted } from '../controllers/orchestration.controller';
 
 // Use your actual auth middleware import path
 import { authenticate } from '../middleware/auth.middleware';
@@ -14,6 +14,12 @@ router.get(
   authenticate,
   propertyAuthMiddleware,
   getOrchestrationSummaryHandler
+);
+
+router.post(
+  '/actions/mark-completed',
+  authenticate,
+  markOrchestrationActionCompleted
 );
 
 export default router;
