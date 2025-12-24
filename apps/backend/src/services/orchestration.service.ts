@@ -866,7 +866,6 @@ function mapChecklistItemToAction(params: {
 
   const status = normalizeUpper(item?.status);
 
-  // Priority heuristic
   let priority = overdue ? 90 : 50;
   if (status === 'NEEDS_REVIEW') priority = 85;
   if (status === 'IN_PROGRESS') priority = Math.max(priority, 70);
@@ -911,6 +910,8 @@ function mapChecklistItemToAction(params: {
     });
   }
 
+  // 🔑 CRITICAL: Checklist actions should NOT suppress themselves
+  // They can only be suppressed by BOOKING or USER_EVENT
   const suppression = buildSuppression(steps, suppressedByBooking, suppressionReasons);
   
   const confidenceRaw = computeConfidence({
@@ -921,8 +922,7 @@ function mapChecklistItemToAction(params: {
     suppressed: suppression.suppressed,
   });
 
-  // 🔑 CRITICAL FIX: Use stored actionKey if it exists (from Action Center)
-  // Only compute new one for legacy checklist items created before actionKey was added
+  // Use stored actionKey if exists, otherwise compute legacy key
   const actionKey = item?.actionKey || computeActionKey({
     propertyId,
     source: 'CHECKLIST',
@@ -933,18 +933,9 @@ function mapChecklistItemToAction(params: {
     category: null,
   });
 
-  // 🐛 DEBUG LOG
-  console.log('🔍 mapChecklistItemToAction:', {
-    itemId: item?.id,
-    title: item?.title,
-    storedActionKey: item?.actionKey,
-    computedActionKey: actionKey,
-    usingStored: !!item?.actionKey,
-  });
-
   return {
     id: `checklist:${propertyId}:${item?.id ?? 'unknown'}`,
-    actionKey, // 🔑 Now uses stored actionKey
+    actionKey,
     source: 'CHECKLIST',
     propertyId,
 
@@ -968,7 +959,6 @@ function mapChecklistItemToAction(params: {
     createdAt: safeParseDate(item?.createdAt) ?? null,
   };
 }
-
 /**
  * Phase 5 + 6 + 8:
  * - actions[] remains actionable-only (non-breaking)
