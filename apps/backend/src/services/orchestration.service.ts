@@ -163,6 +163,75 @@ function toNumberSafe(v: unknown): number | null {
 }
 
 /**
+ * Compute deduplication key for an action.
+ * Actions with the same key are considered duplicates and should be merged.
+ */
+function computeDedupeKey(action: OrchestratedAction): string {
+  const asset =
+    action.serviceCategory ??
+    action.systemType ??
+    action.category ??
+    'UNKNOWN';
+
+  return [
+    action.propertyId,
+    action.source,
+    normalizeUpper(asset),
+  ].join(':');
+}
+
+/**
+ * Merge two duplicate actions.
+ * Preserves higher priority, combines suppression reasons, and merges decision traces.
+ */
+function mergeDuplicateActions(
+  a: OrchestratedAction,
+  b: OrchestratedAction
+): OrchestratedAction {
+  // Prefer higher priority
+  const winner = a.priority >= b.priority ? a : b;
+  const loser = winner === a ? b : a;
+
+  return {
+    ...winner,
+
+    // Merge suppression (once suppressed, always suppressed)
+    suppression: {
+      suppressed:
+        winner.suppression.suppressed || loser.suppression.suppressed,
+      reasons: [
+        ...winner.suppression.reasons,
+        ...loser.suppression.reasons.filter(
+          (r) =>
+            !winner.suppression.reasons.some(
+              (wr) => wr.reason === r.reason && wr.relatedId === r.relatedId
+            )
+        ),
+      ],
+      suppressionSource:
+        winner.suppression.suppressionSource ??
+        loser.suppression.suppressionSource ??
+        null,
+    },
+
+    // Merge decision trace
+    decisionTrace: {
+      steps: [
+        ...(winner.decisionTrace?.steps ?? []),
+        ...(loser.decisionTrace?.steps ?? []),
+      ],
+    },
+
+    // Preserve strongest confidence
+    confidence:
+      (winner.confidence?.score ?? 0) >= (loser.confidence?.score ?? 0)
+        ? winner.confidence ?? loser.confidence
+        : loser.confidence ?? winner.confidence,
+  };
+}
+
+
+/**
  * Risk is actionable if:
  * - HIGH/CRITICAL
  * - or status indicates attention
@@ -1026,7 +1095,23 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
     )
     .filter(Boolean) as OrchestratedAction[];
 
-  const candidates = [...candidateRiskActions, ...candidateChecklistActions];
+  // -------------------------------------------------
+  // DEDUPLICATION: Merge duplicate actions by asset key
+  // -------------------------------------------------
+  const dedupedMap = new Map<string, OrchestratedAction>();
+
+  for (const action of [...candidateRiskActions, ...candidateChecklistActions]) {
+    const key = computeDedupeKey(action);
+    const existing = dedupedMap.get(key);
+
+    if (!existing) {
+      dedupedMap.set(key, action);
+    } else {
+      dedupedMap.set(key, mergeDuplicateActions(existing, action));
+    }
+  }
+
+  const candidates = Array.from(dedupedMap.values());
 
   // -------------------------------------------------
   // SAFETY NET: Resolve authoritative suppression for legacy data
