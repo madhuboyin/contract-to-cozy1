@@ -1663,6 +1663,20 @@ class APIClient {
     });
   }
 
+  // ORCHESTRATION — Mark action as completed
+  async markOrchestrationActionCompleted(
+    orchestrationActionId: string
+  ): Promise<APIResponse<{ success: boolean }>> {
+    // TODO: Implement backend endpoint for this
+    // For now, this is a placeholder that will need backend implementation
+    return this.request<{ success: boolean }>(
+      `/api/orchestration/actions/${orchestrationActionId}/complete`,
+      {
+        method: 'POST',
+      }
+    );
+  }
+
 }
 
 // Export singleton instance

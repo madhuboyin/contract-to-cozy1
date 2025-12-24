@@ -16,6 +16,7 @@ import {
 } from '@/types';
 import { useToast } from '@/components/ui/use-toast';
 import { useRecentAction } from '@/hooks/useRecentAction';
+import { DecisionTraceModal } from './DecisionTraceModal';
 
 type Props = {
   propertyId: string;
@@ -41,10 +42,7 @@ function formatLabelFromTitle(title?: string | null) {
   return title;
 }
 
-export const ActionCenter: React.FC<Props> = ({
-  propertyId,
-  maxItems = 5,
-}) => {
+export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
   const { toast } = useToast();
 
   const [actions, setActions] = useState<OrchestratedActionDTO[]>([]);
@@ -55,22 +53,26 @@ export const ActionCenter: React.FC<Props> = ({
   // UI state
   const [showSuppressed, setShowSuppressed] = useState(false);
 
-  // Modal state
+  // Maintenance modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [template, setTemplate] = useState<MaintenanceTaskTemplate | null>(null);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
+
+  // ✅ Decision trace modal state (GLOBAL, not inside map)
+  const [traceAction, setTraceAction] = useState<OrchestratedActionDTO | null>(
+    null
+  );
 
   // ---------------------------------------------------------------------------
   // ✅ Persistent handled actions (prevents duplicate tasks after refresh)
   // ---------------------------------------------------------------------------
 
   const handledStorageKey = `ctc:actioncenter:handled:${propertyId}`;
-
   const [handledActions, setHandledActions] = useState<Set<string>>(new Set());
 
-  // Load handled actions whenever property changes
   useEffect(() => {
     if (!propertyId) return;
+
     const parsed = safeJsonParse<HandledState>(
       typeof window !== 'undefined'
         ? window.localStorage.getItem(handledStorageKey)
@@ -88,7 +90,7 @@ export const ActionCenter: React.FC<Props> = ({
       if (typeof window === 'undefined') return;
 
       const state: HandledState = {};
-      nextSet.forEach(id => {
+      nextSet.forEach((id) => {
         state[id] = Date.now();
       });
 
@@ -117,7 +119,7 @@ export const ActionCenter: React.FC<Props> = ({
   // LOAD ACTIONS & PROPERTIES
   // ---------------------------------------------------------------------------
 
-  const loadActions = async () => {
+  const loadActions = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -139,19 +141,15 @@ export const ActionCenter: React.FC<Props> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [propertyId]);
 
   useEffect(() => {
     if (!propertyId) return;
     loadActions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [propertyId]);
+  }, [propertyId, loadActions]);
 
   // ---------------------------------------------------------------------------
   // CTA HANDLER
-  // Fix 1: Disable CTA while modal open
-  // Fix 2: Prevent CTA on active action only (also prevents double clicks)
-  // + Prevent CTA if already handled (persistent)
   // ---------------------------------------------------------------------------
 
   const handleActionCta = (action: OrchestratedActionDTO) => {
@@ -181,8 +179,6 @@ export const ActionCenter: React.FC<Props> = ({
 
   // ---------------------------------------------------------------------------
   // SUCCESS HANDLER
-  // - Persist handled state
-  // - Persist recent panel state
   // ---------------------------------------------------------------------------
 
   const handleSuccess = () => {
@@ -196,7 +192,7 @@ export const ActionCenter: React.FC<Props> = ({
     if (id) {
       markHandled(id);
 
-      const action = actions.find(a => a.id === id) || null;
+      const action = actions.find((a) => a.id === id) || null;
       if (action) recent.setScheduled(action);
     }
 
@@ -209,20 +205,52 @@ export const ActionCenter: React.FC<Props> = ({
   };
 
   // ---------------------------------------------------------------------------
+  // ✅ Mark as completed from DecisionTraceModal
+  // ---------------------------------------------------------------------------
+
+  const handleMarkCompletedFromTrace = useCallback(async () => {
+    if (!traceAction?.id) return;
+
+    try {
+      // You should have a backend endpoint for this.
+      // If your api client name differs, adjust accordingly.
+      // The intention: mark orchestration action as USER_MARKED_COMPLETE.
+      await api.markOrchestrationActionCompleted(traceAction.id);
+
+      toast({
+        title: 'Marked as completed',
+        description: 'This recommendation will be suppressed going forward.',
+      });
+
+      setTraceAction(null);
+
+      // Refresh actions to reflect suppression immediately
+      await loadActions();
+    } catch (e: any) {
+      console.error('Mark completed failed:', e);
+      toast({
+        title: 'Unable to mark completed',
+        description: e?.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    }
+  }, [traceAction, toast, loadActions]);
+
+  // ---------------------------------------------------------------------------
   // DERIVED GROUPS
   // ---------------------------------------------------------------------------
 
   const { active, suppressed } = useMemo(() => {
     return {
-      active: actions.filter(a => !a.suppression?.suppressed),
-      suppressed: actions.filter(a => a.suppression?.suppressed),
+      active: actions.filter((a) => !a.suppression?.suppressed),
+      suppressed: actions.filter((a) => a.suppression?.suppressed),
     };
   }, [actions]);
 
-  const critical = active.filter(a => a.riskLevel === 'CRITICAL');
-  const high = active.filter(a => a.riskLevel === 'HIGH');
+  const critical = active.filter((a) => a.riskLevel === 'CRITICAL');
+  const high = active.filter((a) => a.riskLevel === 'HIGH');
   const other = active.filter(
-    a => a.riskLevel !== 'CRITICAL' && a.riskLevel !== 'HIGH'
+    (a) => a.riskLevel !== 'CRITICAL' && a.riskLevel !== 'HIGH'
   );
 
   // ---------------------------------------------------------------------------
@@ -248,7 +276,6 @@ export const ActionCenter: React.FC<Props> = ({
   }
 
   if (!active.length && !suppressed.length) {
-    // Still show recent panel if it exists, even if no actions
     return (
       <div className="space-y-4">
         {recent.visible && recent.recent && (
@@ -289,14 +316,16 @@ export const ActionCenter: React.FC<Props> = ({
 
   // ---------------------------------------------------------------------------
   // Post-save contextual CTA suggestions
-  // (keep simple + reliable; you can expand rules later)
   // ---------------------------------------------------------------------------
 
-  const getPostSaveCtas = (title: string, serviceCategory?: string | null, category?: string | null) => {
+  const getPostSaveCtas = (
+    title: string,
+    serviceCategory?: string | null,
+    category?: string | null
+  ) => {
     const upperCat = (category || '').toUpperCase();
     const upperSvc = (serviceCategory || '').toUpperCase();
 
-    // Roof-related
     if (upperCat.includes('ROOF') || upperSvc.includes('ROOF')) {
       return {
         primary: { label: 'Check warranty coverage', href: '/dashboard/warranties' },
@@ -304,7 +333,6 @@ export const ActionCenter: React.FC<Props> = ({
       };
     }
 
-    // Systems → bookings/providers
     if (['HVAC', 'PLUMBING', 'ELECTRICAL'].includes(upperSvc)) {
       return {
         primary: { label: 'Schedule a service', href: '/dashboard/bookings' },
@@ -312,7 +340,6 @@ export const ActionCenter: React.FC<Props> = ({
       };
     }
 
-    // Inspection
     if (upperSvc === 'INSPECTION') {
       return {
         primary: { label: 'Upload inspection report', href: '/dashboard/inspection-reports' },
@@ -320,7 +347,6 @@ export const ActionCenter: React.FC<Props> = ({
       };
     }
 
-    // Default
     return {
       primary: { label: 'View maintenance checklist', href: '/dashboard/maintenance' },
     };
@@ -344,15 +370,15 @@ export const ActionCenter: React.FC<Props> = ({
         </div>
 
         <div className="space-y-3">
-          {items.slice(0, maxItems).map(action => {
+          {items.slice(0, maxItems).map((action) => {
             const isHandled = handledActions.has(action.id);
             const isActive = activeActionId === action.id;
 
-            // Enforce CTA consistency:
-            // - If handled → disable + label “Task scheduled”
-            // - If modal open → disable
-            // - If active → disable
-            const ctaDisabled = Boolean(action.suppression?.suppressed) || isModalOpen || isHandled || isActive;
+            const ctaDisabled =
+              Boolean(action.suppression?.suppressed) ||
+              isModalOpen ||
+              isHandled ||
+              isActive;
 
             return (
               <OrchestrationActionCard
@@ -361,7 +387,9 @@ export const ActionCenter: React.FC<Props> = ({
                 onCtaClick={handleActionCta}
                 ctaDisabled={ctaDisabled}
                 ctaLabel={isHandled ? 'Task scheduled' : undefined}
-                forceShowCta // makes sure every card has a consistent CTA area
+                forceShowCta
+                onOpenDecisionTrace={() => setTraceAction(action)}
+                onMarkCompleted={(a) => setTraceAction(a)} // optional: can be handled in modal
               />
             );
           })}
@@ -372,7 +400,7 @@ export const ActionCenter: React.FC<Props> = ({
 
   const recentTitle = recent.recent?.actionTitle || '';
   const recentAction = recent.recent?.actionId
-    ? actions.find(a => a.id === recent.recent!.actionId) || null
+    ? actions.find((a) => a.id === recent.recent!.actionId) || null
     : null;
 
   const recentCtas = recentTitle
@@ -440,7 +468,7 @@ export const ActionCenter: React.FC<Props> = ({
           <div className="pt-2">
             <button
               type="button"
-              onClick={() => setShowSuppressed(v => !v)}
+              onClick={() => setShowSuppressed((v) => !v)}
               className="text-sm font-medium text-muted-foreground hover:underline"
             >
               {showSuppressed
@@ -450,13 +478,14 @@ export const ActionCenter: React.FC<Props> = ({
 
             {showSuppressed && (
               <div className="mt-3 space-y-3">
-                {suppressed.map(action => (
+                {suppressed.map((action) => (
                   <OrchestrationActionCard
                     key={action.id}
                     action={action}
                     ctaDisabled
                     ctaLabel="Suppressed"
                     forceShowCta
+                    onOpenDecisionTrace={() => setTraceAction(action)}
                   />
                 ))}
               </div>
@@ -465,20 +494,30 @@ export const ActionCenter: React.FC<Props> = ({
         )}
       </div>
 
-      {/* ================= MODAL ================= */}
+      {/* ================= Maintenance Modal ================= */}
       <MaintenanceConfigModal
         isOpen={isModalOpen}
         orchestrationMode
         template={template}
         properties={properties}
         selectedPropertyId={propertyId}
-        orchestrationActionId={activeActionId}
+        orchestrationActionId={activeActionId as any}
         onClose={() => {
           setIsModalOpen(false);
           setTemplate(null);
           setActiveActionId(null);
         }}
         onSuccess={handleSuccess}
+      />
+
+      {/* ================= Decision Trace Modal ================= */}
+      <DecisionTraceModal
+        open={Boolean(traceAction)}
+        onClose={() => setTraceAction(null)}
+        steps={traceAction?.decisionTrace?.steps ?? []}
+        onMarkCompleted={
+          traceAction ? handleMarkCompletedFromTrace : undefined
+        }
       />
     </>
   );

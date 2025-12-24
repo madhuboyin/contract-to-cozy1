@@ -22,12 +22,12 @@ type Props = {
   steps?: DecisionTraceStepDTO[];
 
   /**
-   * NEW — required to allow resolution from modal
+   * Required for modal + resolution actions
    */
   action?: OrchestratedActionDTO;
 
   /**
-   * NEW — called when user marks action completed from modal
+   * Called when user marks action completed from modal
    */
   onMarkCompleted?: (action: OrchestratedActionDTO) => void;
 };
@@ -42,10 +42,12 @@ function suppressionSummary(reason?: SuppressionReasonEntryDTO) {
       return 'This action is hidden because related work is already scheduled.';
     case 'COVERED':
       return 'This action is hidden because it is already covered by a warranty or insurance.';
-    case 'CHECKLIST_TRACKED':
-      return 'This action is hidden because it is already tracked in your maintenance checklist.';
     default:
-      return reason.message || 'This action is hidden because it does not currently require attention.';
+      // ✅ Safe fallback for CHECKLIST_TRACKED, USER_MARKED_COMPLETE, future enums
+      return (
+        reason.message ||
+        'This action is hidden because it does not currently require attention.'
+      );
   }
 }
 
@@ -56,10 +58,10 @@ export const DecisionTracePanel: React.FC<Props> = ({
   action,
   onMarkCompleted,
 }) => {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(false); // suppressed-only
   const [modalOpen, setModalOpen] = useState(false);
 
-  // Nothing to show
+  // Nothing to show at all
   if (reasons.length === 0 && steps.length === 0) return null;
 
   const primaryReason = reasons[0];
@@ -68,36 +70,45 @@ export const DecisionTracePanel: React.FC<Props> = ({
     ? 'Why this action is hidden'
     : 'Why you’re seeing this';
 
+  const handleHeaderClick = () => {
+    if (suppressed) {
+      setExpanded((v) => !v);
+      return;
+    }
+
+    // Non-suppressed → modal only if steps exist
+    if (steps.length > 0) {
+      setModalOpen(true);
+    }
+  };
+
   return (
     <div className="mt-3 rounded-md border border-gray-200 bg-gray-50">
       {/* ================= Header ================= */}
-      <div className="flex items-center justify-between px-4 py-2">
-        <span className="text-sm font-medium text-gray-700">
-          {headerTitle}
+      <button
+        type="button"
+        onClick={handleHeaderClick}
+        className="w-full flex items-center justify-between px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+      >
+        <span>{headerTitle}</span>
+        <span className="text-xs text-blue-600">
+          {suppressed
+            ? expanded
+              ? 'Hide explanation'
+              : 'See why this is hidden'
+            : 'See how this was decided'}
         </span>
+      </button>
 
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
-          className="text-xs text-blue-600 hover:underline"
-        >
-          See how this was decided
-        </button>
-      </div>
-
-      {/* ================= Inline Summary ================= */}
-      {expanded && (
+      {/* ================= Inline Content (Suppressed only) ================= */}
+      {suppressed && expanded && (
         <div className="px-4 pt-3 pb-4 space-y-4 text-sm">
-          {/* 🔴 SUPPRESSION SUMMARY */}
-          {suppressed && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-              <strong>Hidden:</strong> {suppressionSummary(primaryReason)}
-            </div>
-          )}
+          {/* 🔴 Suppression Summary */}
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <strong>Hidden:</strong> {suppressionSummary(primaryReason)}
+          </div>
 
-          {/* ============================
-              DECISION ENGINE TRACE (INLINE)
-             ============================ */}
+          {/* ================= Decision Trace Preview ================= */}
           {steps.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -132,10 +143,7 @@ export const DecisionTracePanel: React.FC<Props> = ({
 
               <div className="space-y-2">
                 {steps.slice(0, 3).map((step, idx) => (
-                  <div
-                    key={`step-${idx}`}
-                    className="flex items-start gap-2"
-                  >
+                  <div key={`step-${idx}`} className="flex items-start gap-2">
                     <span className="mt-0.5">
                       {step.outcome === 'APPLIED' ? '✅' : '⭕'}
                     </span>
@@ -145,7 +153,7 @@ export const DecisionTracePanel: React.FC<Props> = ({
                         {humanizeRule(step.rule)}
                       </div>
 
-                      {step.details && (
+                      {humanizeDetails(step) && (
                         <div className="text-xs text-muted-foreground">
                           {humanizeDetails(step)}
                         </div>
