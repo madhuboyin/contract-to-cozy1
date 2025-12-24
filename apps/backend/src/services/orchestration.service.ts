@@ -650,6 +650,14 @@ async function mapRiskDetailToAction(params: {
       actionKey,
     });
 
+    // 🐛 DEBUG LOG
+    console.log('🔍 Suppression check:', {
+      actionKey,
+      propertyId,
+      foundSource: source?.type || 'NONE',
+      checklistItemId: source?.type === 'CHECKLIST_ITEM' ? source.checklistItem.id : null,
+    });
+
     if (source) {
       suppressionSource = source;
 

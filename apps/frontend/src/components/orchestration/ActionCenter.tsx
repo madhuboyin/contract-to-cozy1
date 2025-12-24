@@ -62,6 +62,19 @@ export const ActionCenter: React.FC<Props> = ({
       ]);
 
       const adapted = adaptOrchestrationSummary(summary);
+
+      // 🐛 DEBUG LOG
+      console.log('📊 Actions loaded:', {
+        totalActions: adapted.actions.length,
+        totalSuppressed: adapted.suppressedActions.length,
+        actions: adapted.actions.map(a => ({
+          key: a.actionKey,
+          title: a.title,
+          suppressed: a.suppression?.suppressed,
+          sourceType: a.suppression?.suppressionSource?.type,
+        })),
+      });
+
       setActions(adapted.actions);
 
       if (propertiesRes.success) {
@@ -225,7 +238,19 @@ export const ActionCenter: React.FC<Props> = ({
   
             // ✅ FIX: Optimistic disable during scheduling (PENDING 2)
             const isCurrentlyBeingScheduled = activeActionKey === action.actionKey;
-  
+            
+            // 🐛 DEBUG LOG
+            console.log('🎯 Rendering action:', {
+              key: action.actionKey,
+              title: action.title,
+              suppressed: action.suppression?.suppressed,
+              hasSource: action.suppression?.suppressionSource !== null,
+              sourceType: action.suppression?.suppressionSource?.type,
+              isAuthSuppressed: isAuthoritativelySuppressed,
+              isBeingScheduled: isCurrentlyBeingScheduled,
+              ctaWillBeDisabled: isAuthoritativelySuppressed || isCurrentlyBeingScheduled || isModalOpen,
+            });
+
             return (
               <OrchestrationActionCard
                 key={action.actionKey}

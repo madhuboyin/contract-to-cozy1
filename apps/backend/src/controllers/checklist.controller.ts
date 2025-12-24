@@ -254,7 +254,13 @@ const handleCreateChecklistItem = async (
       nextDueDate,
       actionKey, // 🔑 PASS actionKey
     });
-
+    // 🐛 DEBUG LOG
+    console.log('✅ Checklist item created/found:', {
+      itemId: result.item.id,
+      actionKey: result.item.actionKey,
+      propertyId: result.item.propertyId,
+      deduped: result.deduped,
+    });
     // If service returns { item, deduped }, honor status code accordingly.
     // If your service currently returns just ChecklistItem, this still works safely by normalizing.
     const deduped = (result as any)?.deduped === true;
