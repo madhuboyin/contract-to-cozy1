@@ -185,7 +185,7 @@ router.delete(
  *               nextDueDate:
  *                 type: string
  *                 format: date-time
- *  *            orchestrationActionId:
+ *               orchestrationActionId:
  *                 type: string
  *                 description: Stable ID for Action Center deduplication
  *     responses:
