@@ -20,6 +20,8 @@ type Props = {
    * Optional action resolution
    */
   onMarkCompleted?: () => void;
+  onUndoCompleted?: () => void;
+  isMarkedCompleted?: boolean;
 };
 
 export const DecisionTraceModal: React.FC<Props> = ({
@@ -27,6 +29,8 @@ export const DecisionTraceModal: React.FC<Props> = ({
   onClose,
   steps,
   onMarkCompleted,
+  onUndoCompleted,
+  isMarkedCompleted,
 }) => {
   return (
     <Dialog
@@ -101,7 +105,17 @@ export const DecisionTraceModal: React.FC<Props> = ({
               Mark as completed
             </Button>
           )}
-
+          {isMarkedCompleted && onUndoCompleted && (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                onUndoCompleted();
+                onClose();
+              }}
+            >
+              Undo completion
+            </Button>
+          )}
           <Button variant="outline" onClick={onClose}>
             Close
           </Button>

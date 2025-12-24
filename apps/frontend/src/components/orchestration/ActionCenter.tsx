@@ -579,6 +579,18 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
         open={Boolean(traceAction)}
         onClose={() => setTraceAction(null)}
         steps={traceAction?.decisionTrace?.steps ?? []}
+        isMarkedCompleted={
+          traceAction?.suppression?.reasons?.some(
+            r => r.reason === 'USER_MARKED_COMPLETE'
+          )
+        }
+        onUndoCompleted={async () => {
+          await api.unmarkOrchestrationActionCompleted(
+            propertyId,
+            traceAction!.actionKey
+          );
+          await loadActions();
+        }}
         onMarkCompleted={
           traceAction ? handleMarkCompletedFromTrace : undefined
         }

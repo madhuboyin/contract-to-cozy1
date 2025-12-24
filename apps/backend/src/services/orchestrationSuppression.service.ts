@@ -1,6 +1,7 @@
 // apps/backend/src/services/orchestrationSuppression.service.ts
+
 import { prisma } from '../lib/prisma';
-import { ChecklistItemStatus } from '@prisma/client';
+import { ChecklistItemStatus, OrchestrationActionEventType } from '@prisma/client';
 
 export type SuppressionSource =
   | {
@@ -13,20 +14,73 @@ export type SuppressionSource =
         status: ChecklistItemStatus;
       };
     }
+  | {
+      type: 'USER_EVENT';
+      eventType: 'USER_MARKED_COMPLETE';
+      createdAt: Date;
+    }
   | null;
 
 export class OrchestrationSuppressionService {
   /**
-   * Resolves the source of suppression for a given orchestration action.
-   * Currently supports checklist-based suppression.
+   * Resolves the authoritative suppression source for an orchestration action.
+   *
+   * Priority:
+   * 1. USER_MARKED_COMPLETE (latest event wins, undo-aware)
+   * 2. Checklist item linkage (legacy / system-driven)
    */
   static async resolveSuppressionSource(params: {
     propertyId: string;
     orchestrationActionId: string;
+    actionKey?: string; // preferred when available
   }): Promise<SuppressionSource> {
-    const { propertyId, orchestrationActionId } = params;
+    const { propertyId, orchestrationActionId, actionKey } = params;
 
-    if (!propertyId || !orchestrationActionId) {
+    if (!propertyId) {
+      return null;
+    }
+
+    // ---------------------------------------------------------------------
+    // 1️⃣ USER EVENT–BASED SUPPRESSION (AUTHORITATIVE, IDEMPOTENT)
+    // ---------------------------------------------------------------------
+
+    if (actionKey) {
+      const events = await prisma.orchestrationActionEvent.findMany({
+        where: {
+          propertyId,
+          actionKey,
+          actionType: {
+            in: [
+              OrchestrationActionEventType.USER_MARKED_COMPLETE,
+              OrchestrationActionEventType.USER_UNMARKED_COMPLETE,
+            ],
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 1, // only latest matters
+      });
+
+      const latest = events[0];
+
+      if (latest?.actionType === OrchestrationActionEventType.USER_MARKED_COMPLETE) {
+        return {
+          type: 'USER_EVENT',
+          eventType: 'USER_MARKED_COMPLETE',
+          createdAt: latest.createdAt,
+        };
+      }
+
+      // If latest is UNMARK, explicitly not suppressed
+      if (latest?.actionType === OrchestrationActionEventType.USER_UNMARKED_COMPLETE) {
+        return null;
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // 2️⃣ CHECKLIST-BASED SUPPRESSION (LEGACY / SYSTEM)
+    // ---------------------------------------------------------------------
+
+    if (!orchestrationActionId) {
       return null;
     }
 

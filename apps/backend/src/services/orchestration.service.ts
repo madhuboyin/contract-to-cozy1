@@ -2,7 +2,7 @@
 
 import { prisma } from '../lib/prisma';
 import { ServiceCategory, BookingStatus } from '@prisma/client';
-import { OrchestrationSuppressionService } from './orchestrationSuppression.service';
+import { OrchestrationSuppressionService, SuppressionSource } from './orchestrationSuppression.service';
 import { computeActionKey } from './orchestrationActionKey';
 
 type DerivedFrom = {
@@ -88,16 +88,7 @@ export type OrchestratedAction = {
     reasons: SuppressionReasonEntry[];
 
     // Authoritative suppression source (Action Center)
-    suppressionSource?: {
-      type: 'CHECKLIST_ITEM';
-      checklistItem: {
-        id: string;
-        title: string;
-        frequency?: string | null;
-        nextDueDate?: Date | null;
-        status: import('@prisma/client').ChecklistItemStatus;
-      };
-    } | null;
+    suppressionSource?: SuppressionSource;
   };
   decisionTrace?: {
     steps: DecisionTraceStep[];
@@ -651,35 +642,56 @@ async function mapRiskDetailToAction(params: {
       await OrchestrationSuppressionService.resolveSuppressionSource({
         propertyId,
         orchestrationActionId: d.orchestrationActionId,
+        actionKey: d.actionKey,
       });
 
       if (source) {
-        suppressedByChecklist = true;
         suppressionSource = source;
       
-        const isCompleted =
-          source.checklistItem.status === 'COMPLETED';
+        // -----------------------------
+        // USER EVENT SUPPRESSION
+        // -----------------------------
+        if (source.type === 'USER_EVENT') {
+          suppressedByChecklist = true;
       
-        suppressionReasons.push({
-          reason: isCompleted
-            ? 'USER_MARKED_COMPLETE'
-            : 'CHECKLIST_TRACKED',
-          message: isCompleted
-            ? `You marked "${source.checklistItem.title}" as completed.`
-            : `Already covered by "${source.checklistItem.title}".`,
-          relatedId: source.checklistItem.id,
-          relatedType: 'CHECKLIST',
-        });
+          suppressionReasons.push({
+            reason: 'USER_MARKED_COMPLETE',
+            message: 'You marked this action as completed.',
+            relatedId: null,
+            relatedType: null,
+          });
+        }
       
-        steps.push({
-          rule: 'CHECKLIST_SUPPRESSION_AUTHORITATIVE',
-          outcome: 'APPLIED',
-          details: {
-            checklistItemId: source.checklistItem.id,
-            status: source.checklistItem.status,
-          },
-        });
-      }      
+        // -----------------------------
+        // CHECKLIST SUPPRESSION
+        // -----------------------------
+        if (source.type === 'CHECKLIST_ITEM') {
+          suppressedByChecklist = true;
+      
+          const isCompleted =
+            source.checklistItem.status === 'COMPLETED';
+      
+          suppressionReasons.push({
+            reason: isCompleted
+              ? 'USER_MARKED_COMPLETE'
+              : 'CHECKLIST_TRACKED',
+            message: isCompleted
+              ? `You marked "${source.checklistItem.title}" as completed.`
+              : `Already covered by "${source.checklistItem.title}".`,
+            relatedId: source.checklistItem.id,
+            relatedType: 'CHECKLIST',
+          });
+          
+          steps.push({
+            rule: 'CHECKLIST_SUPPRESSION_AUTHORITATIVE',
+            outcome: 'APPLIED',
+            details: {
+              checklistItemId: source.checklistItem.id,
+              status: source.checklistItem.status,
+            },
+          });
+        }
+      }
   }
 
   // IMPORTANT: covered does not suppress; it provides WHY + CTA adjustment
@@ -1087,6 +1099,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
         await OrchestrationSuppressionService.resolveSuppressionSource({
           propertyId,
           orchestrationActionId: action.orchestrationActionId,
+          actionKey: action.actionKey,
         });
 
       if (source) {
@@ -1097,8 +1110,8 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
           (r) => r.reason !== 'CHECKLIST_TRACKED'
         );
 
-        // Add authoritative reason if not already present
-        if (!action.suppression.reasons.some(r => r.reason === 'CHECKLIST_TRACKED')) {
+        // Add authoritative reason if not already present (only for CHECKLIST_ITEM type)
+        if (source.type === 'CHECKLIST_ITEM' && !action.suppression.reasons.some(r => r.reason === 'CHECKLIST_TRACKED')) {
           action.suppression.reasons.push({
             reason: 'CHECKLIST_TRACKED',
             message: `Already covered by "${source.checklistItem.title}".`,

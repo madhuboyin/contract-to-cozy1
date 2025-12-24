@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { getOrchestrationSummary } from '../services/orchestration.service';
 import { AuthRequest } from '../types/auth.types';
 import { recordOrchestrationEvent } from '../services/orchestrationEvent.service';
+import { prisma } from '../lib/prisma';
 
 /**
  * GET /api/orchestration/:propertyId/summary
@@ -36,6 +37,31 @@ export async function markOrchestrationActionCompleted(
   });
 
   return res.json({ success: true });
+}
+
+// POST /api/orchestration/actions/unmark-complete
+export async function unmarkOrchestrationActionComplete(
+  req: AuthRequest,
+  res: Response
+) {
+  const { propertyId, actionKey } = req.body;
+  const userId = req.user?.userId ?? null;
+
+  if (!propertyId || !actionKey) {
+    return res.status(400).json({ error: 'Missing propertyId or actionKey' });
+  }
+
+  await prisma.orchestrationActionEvent.create({
+    data: {
+      propertyId,
+      actionKey,
+      actionType: 'USER_UNMARKED_COMPLETE',
+      source: 'USER',
+      createdBy: userId,
+    },
+  });
+
+  res.json({ success: true });
 }
 
 export async function getOrchestrationSummaryHandler(
