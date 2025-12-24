@@ -1444,6 +1444,7 @@ model OrchestrationActionEvent {
 
 enum OrchestrationActionEventType {
   USER_MARKED_COMPLETE
+  USER_UNMARKED_COMPLETE
   USER_DISMISSED
   SYSTEM_SUPPRESSED
   SYSTEM_UNSUPPRESSED
