@@ -388,7 +388,6 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
                 ctaDisabled={ctaDisabled}
                 ctaLabel={isHandled ? 'Task scheduled' : undefined}
                 forceShowCta
-                onOpenDecisionTrace={() => setTraceAction(action)}
                 onMarkCompleted={(a) => setTraceAction(a)} // optional: can be handled in modal
               />
             );
@@ -485,7 +484,6 @@ export const ActionCenter: React.FC<Props> = ({ propertyId, maxItems = 5 }) => {
                     ctaDisabled
                     ctaLabel="Suppressed"
                     forceShowCta
-                    onOpenDecisionTrace={() => setTraceAction(action)}
                   />
                 ))}
               </div>
