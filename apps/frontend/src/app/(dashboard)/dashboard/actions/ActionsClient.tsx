@@ -189,7 +189,6 @@ export function ActionsClient() {
           ) : (
             <div className="space-y-3">
               {actions.map(action => {
-                // 🔑 Check if this is a CHECKLIST action
                 const isChecklistAction = action.source === 'CHECKLIST';
                 const isAuthoritativelySuppressed =
                   action.suppression?.suppressed &&
@@ -203,7 +202,7 @@ export function ActionsClient() {
                     ctaDisabled={
                       handledActions.has(action.id) ||
                       isAuthoritativelySuppressed ||
-                      isChecklistAction  // 🔑 Disable for CHECKLIST
+                      isChecklistAction
                     }
                     ctaLabel={
                       handledActions.has(action.id)
@@ -211,9 +210,11 @@ export function ActionsClient() {
                         : isAuthoritativelySuppressed
                           ? 'Already scheduled'
                           : isChecklistAction
-                            ? 'View in Maintenance'  // 🔑 Different label
+                            ? 'View in Maintenance'
                             : undefined
                     }
+                    onMarkCompleted={(a) => console.log('Mark completed:', a)}  // 🔑 ADD - placeholder for now
+                    onUndo={(a) => console.log('Undo:', a)}                    // 🔑 ADD - placeholder for now
                   />
                 );
               })}
@@ -230,11 +231,14 @@ export function ActionsClient() {
                 Suppressed Actions ({suppressedActions.length})
               </h2>
               <div className="space-y-3">
+              // REPLACE WITH:
                 {suppressedActions.map(action => (
                   <OrchestrationActionCard 
                     key={action.id} 
                     action={action}
                     onCtaClick={handleActionCta}
+                    onMarkCompleted={(a) => console.log('Mark completed:', a)}  // 🔑 ADD - placeholder for now
+                    onUndo={(a) => console.log('Undo:', a)}                    // 🔑 ADD - placeholder for now
                   />
                 ))}
               </div>

@@ -278,17 +278,18 @@ export const ActionCenter: React.FC<Props> = ({
                   isAuthoritativelySuppressed ||
                   isCurrentlyBeingScheduled ||
                   isModalOpen ||
-                  isChecklistAction  // 🔑 Disable for CHECKLIST actions
+                  isChecklistAction
                 }
                 ctaLabel={
                   isAuthoritativelySuppressed
                     ? 'Already scheduled'
                     : isChecklistAction
-                      ? 'View in Maintenance'  // Different label for checklist
+                      ? 'View in Maintenance'
                       : undefined
                 }
                 forceShowCta
                 onMarkCompleted={() => setTraceAction(action)}
+                onUndo={() => setTraceAction(action)}
               />
             );
           })}
@@ -357,8 +358,8 @@ export const ActionCenter: React.FC<Props> = ({
                     ctaDisabled
                     ctaLabel="Suppressed"
                     forceShowCta
-                    onMarkCompleted={() => setTraceAction(action)}  // 🔑 ADD THIS LINE
-                    onUndo={() => setTraceAction(action)}           // 🔑 ADD THIS LINE
+                    onMarkCompleted={() => setTraceAction(action)}
+                    onUndo={() => setTraceAction(action)}
                   />
                 ))}
               </div>
