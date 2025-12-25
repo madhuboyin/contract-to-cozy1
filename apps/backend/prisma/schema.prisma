@@ -1511,31 +1511,62 @@ model Review {
 // ============================================================================
 
 model Notification {
-  id       String  @id @default(uuid())
-  userId   String
-  
-  // Notification Details
-  type     String  // booking_confirmed, payment_received, etc.
-  title    String
-  message  String
-  
-  // Action
-  actionUrl String?
-  // Status
-  isRead   Boolean @default(false)
-  readAt   DateTime?
-  
-  // Metadata
-  metadata Json?
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  createdAt DateTime @default(now())
-  
-  @@index([userId])
-  @@index([isRead])
-  @@index([createdAt])
-  @@map("notifications")
+  id          String   @id @default(uuid())
+  userId      String
+
+  type        String
+  title       String
+  message     String
+  actionUrl   String?
+
+  entityType  String?
+  entityId    String?
+
+  isRead      Boolean  @default(false)
+  readAt      DateTime?
+
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  deliveries  NotificationDelivery[]
+
+  @@index([userId, createdAt])
+  @@index([userId, isRead])
+  @@index([entityType, entityId])
+}
+
+model NotificationDelivery {
+  id                 String   @id @default(uuid())
+  notificationId     String
+  channel            NotificationChannel
+
+  status             DeliveryStatus @default(PENDING)
+  sentAt             DateTime?
+  failureReason      String?
+  digestId           String?
+  providerMessageId  String?
+
+  createdAt          DateTime @default(now())
+
+  notification       Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, channel])
+  @@index([channel, status])
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  PUSH
+  SMS
+  WHATSAPP
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
 }
 
 // ============================================================================
