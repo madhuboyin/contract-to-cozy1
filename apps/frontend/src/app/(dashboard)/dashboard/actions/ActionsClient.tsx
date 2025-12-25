@@ -15,6 +15,8 @@ import {
   ServiceCategory,
 } from '@/types';
 import { useToast } from '@/components/ui/use-toast';
+import { DecisionTraceModal } from '@/components/orchestration/DecisionTraceModal';
+import { useCallback } from 'react';
 
 export function ActionsClient() {
   const { selectedPropertyId } = usePropertyContext();
@@ -35,6 +37,7 @@ export function ActionsClient() {
 
   // Track which actions have been handled (task created)
   const [handledActions, setHandledActions] = useState<Set<string>>(new Set());
+  const [traceAction, setTraceAction] = useState<OrchestratedActionDTO | null>(null);
 
   const loadActions = async () => {
     if (!propertyId) {
@@ -133,6 +136,60 @@ export function ActionsClient() {
     }, 3000);
   };
 
+  const handleOpenDecisionTrace = useCallback((action: OrchestratedActionDTO) => {
+    setTraceAction(action);
+  }, []);
+  
+  const handleMarkCompletedFromTrace = useCallback(async () => {
+    if (!traceAction || !propertyId) return; 
+  
+    try {
+      await api.markOrchestrationActionCompleted(
+        propertyId,
+        traceAction.actionKey
+      );
+  
+      toast({
+        title: 'Marked as completed',
+        description: 'This recommendation will be suppressed going forward.',
+      });
+  
+      setTraceAction(null);
+      loadActions(); // Reload actions
+    } catch (e: any) {
+      toast({
+        title: 'Unable to mark completed',
+        description: e?.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    }
+  }, [traceAction, propertyId, toast]);
+  
+  const handleUndoCompletedFromTrace = useCallback(async () => {
+    if (!traceAction || !propertyId) return;
+  
+    try {
+      await api.undoOrchestrationActionCompleted(
+        propertyId,
+        traceAction.actionKey
+      );
+  
+      toast({
+        title: 'Completion undone',
+        description: 'This action is active again.',
+      });
+  
+      setTraceAction(null);
+      loadActions(); // Reload actions
+    } catch (e: any) {
+      toast({
+        title: 'Unable to undo completion',
+        description: e?.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    }
+  }, [traceAction, propertyId, toast]);
+
   if (loading) {
     return (
       <div className="p-6 text-sm text-muted-foreground">
@@ -213,8 +270,7 @@ export function ActionsClient() {
                             ? 'View in Maintenance'
                             : undefined
                     }
-                    onMarkCompleted={(a) => console.log('Mark completed:', a)}  // 🔑 ADD - placeholder for now
-                    onUndo={(a) => console.log('Undo:', a)}                    // 🔑 ADD - placeholder for now
+                    onOpenTrace={handleOpenDecisionTrace}
                   />
                 );
               })}
@@ -231,16 +287,14 @@ export function ActionsClient() {
                 Suppressed Actions ({suppressedActions.length})
               </h2>
               <div className="space-y-3">
-              // REPLACE WITH:
-                {suppressedActions.map(action => (
-                  <OrchestrationActionCard 
-                    key={action.id} 
-                    action={action}
-                    onCtaClick={handleActionCta}
-                    onMarkCompleted={(a) => console.log('Mark completed:', a)}  // 🔑 ADD - placeholder for now
-                    onUndo={(a) => console.log('Undo:', a)}                    // 🔑 ADD - placeholder for now
-                  />
-                ))}
+              {suppressedActions.map(action => (
+                <OrchestrationActionCard 
+                  key={action.id} 
+                  action={action}
+                  onCtaClick={handleActionCta}
+                  onOpenTrace={handleOpenDecisionTrace}
+                />
+              ))}
               </div>
             </section>
           </>
@@ -260,6 +314,26 @@ export function ActionsClient() {
           setActiveActionId(null);
         }}
         onSuccess={handleSuccess}
+      />
+      <DecisionTraceModal
+        open={Boolean(traceAction)}
+        onClose={() => setTraceAction(null)}
+        steps={traceAction?.decisionTrace?.steps ?? []}
+        onMarkCompleted={
+          traceAction && 
+          traceAction.source === 'RISK' && 
+          !traceAction.suppression?.suppressed
+            ? handleMarkCompletedFromTrace
+            : undefined
+        }
+        onUndo={
+          traceAction &&
+          traceAction.source === 'RISK' &&
+          traceAction.suppression?.suppressionSource?.type === 'USER_EVENT' &&
+          traceAction.suppression?.suppressionSource?.eventType === 'USER_MARKED_COMPLETE'
+            ? handleUndoCompletedFromTrace
+            : undefined
+        }
       />
     </>
   );

@@ -8,92 +8,50 @@ import {
   DecisionTraceStepDTO,
   OrchestratedActionDTO,
 } from '@/types';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { TRACE_COPY } from './decisionTraceLabels';
-import { DecisionTraceModal } from './DecisionTraceModal';
 
 type Props = {
   suppressed: boolean;
   reasons?: SuppressionReasonEntryDTO[];
   steps?: DecisionTraceStepDTO[];
-
-  /**
-   * Required for modal + resolution actions
-   */
   action?: OrchestratedActionDTO;
 
   /**
-   * Called when user marks action completed from modal
+   * Called when user wants to open the decision trace modal
+   * Parent component handles the modal
    */
-  onMarkCompleted?: (action: OrchestratedActionDTO) => void;
-
-  /**
-   * Called when user undoes completion
-   */
-  onUndo?: (action: OrchestratedActionDTO) => void;
+  onOpenTrace?: (action: OrchestratedActionDTO) => void;
 };
-
-function suppressionSummary(reason?: SuppressionReasonEntryDTO) {
-  if (!reason) {
-    return 'This action is hidden because it is no longer relevant right now.';
-  }
-
-  switch (reason.reason) {
-    case 'BOOKING_EXISTS':
-      return 'This action is hidden because related work is already scheduled.';
-    case 'COVERED':
-      return 'This action is hidden because it is already covered by a warranty or insurance.';
-    default:
-      return (
-        reason.message ||
-        'This action is hidden because it does not currently require attention.'
-      );
-  }
-}
 
 export const DecisionTracePanel: React.FC<Props> = ({
   suppressed,
   reasons = [],
   steps = [],
   action,
-  onMarkCompleted,
-  onUndo,
+  onOpenTrace,
 }) => {
   const [expanded, setExpanded] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
 
   // Nothing to show at all
   if (reasons.length === 0 && steps.length === 0) return null;
 
-  const primaryReason = reasons[0];
+  const isChecklistAction = action?.source === 'CHECKLIST';
 
-  // 🔑 Check if this is a user-marked-complete RISK action
-  const isUserMarkedComplete = 
-    action?.source === 'RISK' &&  // 🔑 Only for RISK actions, not CHECKLIST
-    action?.suppression?.suppressionSource?.type === 'USER_EVENT' &&
-    action?.suppression?.suppressionSource?.eventType === 'USER_MARKED_COMPLETE';
-
-  const headerTitle = suppressed
-    ? 'Why this action is hidden'
-    : 'How we decided this';
-
-  // 🔑 UX IMPROVEMENT: For suppressed actions, open modal directly instead of inline expansion
-  const handleOpenModal = () => {
-    setModalOpen(true);
-  };
+  // 🔑 UX IMPROVEMENT: Open modal directly for suppressed actions OR checklist items
+  const shouldOpenModalDirectly = suppressed || isChecklistAction;
 
   const handleToggleExpanded = () => {
-    if (suppressed) {
-      // For suppressed actions, open modal directly
-      handleOpenModal();
+    if (shouldOpenModalDirectly && action && onOpenTrace) {
+      // For suppressed actions or checklist items, open modal directly
+      onOpenTrace(action);
     } else {
-      // For active actions, toggle inline expansion
+      // For active RISK actions, toggle inline expansion
       setExpanded(v => !v);
+    }
+  };
+
+  const handleOpenModal = () => {
+    if (action && onOpenTrace) {
+      onOpenTrace(action);
     }
   };
 
@@ -109,8 +67,8 @@ export const DecisionTracePanel: React.FC<Props> = ({
         {suppressed ? 'See why this is hidden' : 'See how this was decided'}
       </button>
 
-      {/* Inline Content - Only for non-suppressed actions */}
-      {!suppressed && expanded && (
+      {/* Inline Content - Only for active RISK actions (not suppressed, not checklist) */}
+      {!shouldOpenModalDirectly && expanded && (
         <div className="rounded-md border p-3 bg-gray-50 space-y-2">
           {steps.length > 0 && (
             <div className="space-y-2">
@@ -145,24 +103,6 @@ export const DecisionTracePanel: React.FC<Props> = ({
           </button>
         </div>
       )}
-
-      {/* Modal */}
-      <DecisionTraceModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        steps={steps}
-        onMarkCompleted={
-          action && onMarkCompleted && !suppressed
-            ? () => onMarkCompleted(action)
-            : undefined
-        }
-        onUndo={
-          // 🔑 Only show Undo for RISK actions that were user-marked-complete
-          action && onUndo && isUserMarkedComplete
-            ? () => onUndo(action)
-            : undefined
-        }
-      />
     </div>
   );
 };
@@ -190,6 +130,8 @@ function humanizeRule(rule: string) {
     case 'CHECKLIST_SUPPRESSION':
     case 'CHECKLIST_SUPPRESSION_AUTHORITATIVE':
       return 'This is already tracked in your maintenance checklist';
+    case 'CHECKLIST_ACTIONABLE':
+      return 'This maintenance task needs attention';
     default:
       return rule.replace(/_/g, ' ');
   }

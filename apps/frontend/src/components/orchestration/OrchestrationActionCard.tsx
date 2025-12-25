@@ -11,14 +11,10 @@ type Props = {
   onCtaClick?: (action: OrchestratedActionDTO) => void;
 
   /**
-   * Called when user marks action completed (from decision trace modal)
+   * Called when user wants to open the decision trace modal
+   * Parent component handles showing the modal and action buttons
    */
-  onMarkCompleted?: (action: OrchestratedActionDTO) => void;
-
-  /**
-   * Called when user undoes completion (from decision trace modal)
-   */
-  onUndo?: (action: OrchestratedActionDTO) => void;
+  onOpenTrace?: (action: OrchestratedActionDTO) => void;
 
   /**
    * Optional UI-only dismiss
@@ -137,8 +133,7 @@ function getSuppressionCopy(action: OrchestratedActionDTO) {
 export const OrchestrationActionCard: React.FC<Props> = ({
   action,
   onCtaClick,
-  onMarkCompleted,
-  onUndo,
+  onOpenTrace,
   onDismiss,
   ctaDisabled = false,
   ctaLabel,
@@ -246,8 +241,7 @@ export const OrchestrationActionCard: React.FC<Props> = ({
         reasons={suppression.reasons}
         steps={action.decisionTrace?.steps ?? []}
         action={action}
-        onMarkCompleted={onMarkCompleted}
-        onUndo={onUndo}
+        onOpenTrace={onOpenTrace}
       />
     </div>
   );

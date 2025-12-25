@@ -222,6 +222,10 @@ export const ActionCenter: React.FC<Props> = ({
     }
   }, [traceAction, propertyId, loadActions, toast]);
 
+  const handleOpenDecisionTrace = useCallback((action: OrchestratedActionDTO) => {
+    setTraceAction(action);
+  }, []);
+
   /* ------------------------------------------------------------------
      Derived Groups
   ------------------------------------------------------------------- */
@@ -258,15 +262,11 @@ export const ActionCenter: React.FC<Props> = ({
   
         <div className="space-y-3">
           {items.slice(0, maxItems).map(action => {
-            // ✅ FIX: Check ANY authoritative suppression
             const isAuthoritativelySuppressed =
               action.suppression?.suppressed &&
               action.suppression?.suppressionSource !== null;
   
-            // ✅ FIX: Optimistic disable during scheduling
             const isCurrentlyBeingScheduled = activeActionKey === action.actionKey;
-  
-            // 🔑 NEW FIX: CHECKLIST actions shouldn't allow creating new tasks
             const isChecklistAction = action.source === 'CHECKLIST';
   
             return (
@@ -288,8 +288,7 @@ export const ActionCenter: React.FC<Props> = ({
                       : undefined
                 }
                 forceShowCta
-                onMarkCompleted={() => setTraceAction(action)}
-                onUndo={() => setTraceAction(action)}
+                onOpenTrace={handleOpenDecisionTrace}
               />
             );
           })}
@@ -358,8 +357,7 @@ export const ActionCenter: React.FC<Props> = ({
                     ctaDisabled
                     ctaLabel="Suppressed"
                     forceShowCta
-                    onMarkCompleted={() => setTraceAction(action)}
-                    onUndo={() => setTraceAction(action)}
+                    onOpenTrace={handleOpenDecisionTrace}
                   />
                 ))}
               </div>
@@ -387,8 +385,23 @@ export const ActionCenter: React.FC<Props> = ({
         open={Boolean(traceAction)}
         onClose={() => setTraceAction(null)}
         steps={traceAction?.decisionTrace?.steps ?? []}
-        onMarkCompleted={handleMarkCompletedFromTrace}
-        onUndo={handleUndoCompletedFromTrace}
+        // 🔑 Only show "Mark as completed" for non-suppressed RISK actions
+        onMarkCompleted={
+          traceAction && 
+          traceAction.source === 'RISK' && 
+          !traceAction.suppression?.suppressed
+            ? handleMarkCompletedFromTrace
+            : undefined
+        }
+        // 🔑 Only show "Undo" for RISK actions with USER_MARKED_COMPLETE
+        onUndo={
+          traceAction &&
+          traceAction.source === 'RISK' &&
+          traceAction.suppression?.suppressionSource?.type === 'USER_EVENT' &&
+          traceAction.suppression?.suppressionSource?.eventType === 'USER_MARKED_COMPLETE'
+            ? handleUndoCompletedFromTrace
+            : undefined
+        }
       />
     </>
   );

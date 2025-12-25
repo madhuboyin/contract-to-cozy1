@@ -139,6 +139,8 @@ function humanizeRule(rule: string) {
     case 'CHECKLIST_SUPPRESSION':
     case 'CHECKLIST_SUPPRESSION_AUTHORITATIVE':
       return 'This is already tracked in your maintenance checklist';
+    case 'CHECKLIST_ACTIONABLE':
+      return 'This maintenance task needs attention';
     default:
       return rule.replace(/_/g, ' ');
   }
