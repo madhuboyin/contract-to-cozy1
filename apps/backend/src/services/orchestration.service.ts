@@ -1028,6 +1028,19 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
   const riskDetails: any[] = (riskReport as any)?.details ?? [];
   countRiskActions(riskDetails); // keeps behavior aligned (not used directly below)
 
+    // 🐛 ADD THIS DEBUG LOG
+  console.log('🔍 RISK REPORT DATA:', {
+    reportExists: !!riskReport,
+    detailsCount: riskDetails.length,
+    details: riskDetails.map((d, i) => ({
+      index: i,
+      assetName: d?.assetName,
+      systemType: d?.systemType,
+      riskLevel: d?.riskLevel,
+      actionable: d?.riskLevel && d?.riskLevel !== 'LOW',
+    })),
+  });
+
   // 3) Checklist items (include serviceCategory)
   const checklistItems = await prisma.checklistItem
     .findMany({
@@ -1058,20 +1071,30 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
 
   // 4) Build candidate actions (includes suppression + trace)
   const candidateRiskActions: OrchestratedAction[] = Array.isArray(riskDetails)
-    ? (await Promise.all(
-        riskDetails.map((d: any, idx: number) =>
-          mapRiskDetailToAction({
-            propertyId,
-            d,
-            index: idx,
-            warranties,
-            insurancePolicies,
-            bookingCategorySet,
-            bookingByCategory,
-          })
-        )
-      )).filter(Boolean) as OrchestratedAction[]
-    : [];
+  ? (await Promise.all(
+      riskDetails.map((d: any, idx: number) => {
+        // 🐛 LOG EACH RISK ITEM
+        console.log(`🔍 Processing risk item ${idx}:`, {
+          assetName: d?.assetName,
+          systemType: d?.systemType,
+          willMap: !!d,
+        });
+        
+        return mapRiskDetailToAction({
+          propertyId,
+          d,
+          index: idx,
+          warranties,
+          insurancePolicies,
+          bookingCategorySet,
+          bookingByCategory,
+        });
+      })
+    )).filter(Boolean) as OrchestratedAction[]
+  : [];
+
+// 🐛 LOG RESULTS
+console.log('🔍 RISK ACTIONS CREATED:', candidateRiskActions.length);
 
   const candidateChecklistActions: OrchestratedAction[] = checklistItems
     .map((i: any) =>
