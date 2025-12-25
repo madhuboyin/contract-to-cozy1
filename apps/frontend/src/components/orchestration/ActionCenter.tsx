@@ -357,6 +357,8 @@ export const ActionCenter: React.FC<Props> = ({
                     ctaDisabled
                     ctaLabel="Suppressed"
                     forceShowCta
+                    onMarkCompleted={() => setTraceAction(action)}  // 🔑 ADD THIS LINE
+                    onUndo={() => setTraceAction(action)}           // 🔑 ADD THIS LINE
                   />
                 ))}
               </div>

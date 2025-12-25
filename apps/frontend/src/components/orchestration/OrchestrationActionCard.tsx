@@ -11,13 +11,14 @@ type Props = {
   onCtaClick?: (action: OrchestratedActionDTO) => void;
 
   /**
-   * Allows parent (ActionCenter) to control decision-trace opening
-   */
-
-  /**
    * Called when user marks action completed (from decision trace modal)
    */
   onMarkCompleted?: (action: OrchestratedActionDTO) => void;
+
+  /**
+   * Called when user undoes completion (from decision trace modal)
+   */
+  onUndo?: (action: OrchestratedActionDTO) => void;
 
   /**
    * Optional UI-only dismiss
@@ -137,6 +138,7 @@ export const OrchestrationActionCard: React.FC<Props> = ({
   action,
   onCtaClick,
   onMarkCompleted,
+  onUndo,
   onDismiss,
   ctaDisabled = false,
   ctaLabel,
@@ -245,6 +247,7 @@ export const OrchestrationActionCard: React.FC<Props> = ({
         steps={action.decisionTrace?.steps ?? []}
         action={action}
         onMarkCompleted={onMarkCompleted}
+        onUndo={onUndo}
       />
     </div>
   );
