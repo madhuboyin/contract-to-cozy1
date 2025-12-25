@@ -1514,6 +1514,8 @@ model Notification {
   id          String   @id @default(uuid())
   userId      String
 
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   type        String
   title       String
   message     String
@@ -1534,6 +1536,7 @@ model Notification {
   @@index([userId, isRead])
   @@index([entityType, entityId])
 }
+
 
 model NotificationDelivery {
   id                 String   @id @default(uuid())
