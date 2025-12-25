@@ -152,5 +152,12 @@ function humanizeDetails(step: DecisionTraceStepDTO) {
       : 'Active coverage was found.';
   }
 
+  // 🔑 NEW: Handle CHECKLIST_ITEM_TRACKED
+  if (step.rule === 'CHECKLIST_ITEM_TRACKED') {
+    return step.details?.title 
+      ? `Tracked in your maintenance schedule as "${step.details.title}".`
+      : 'Tracked in your maintenance schedule.';
+  }
+
   return 'Additional context was evaluated.';
 }

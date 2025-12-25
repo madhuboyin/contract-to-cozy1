@@ -155,17 +155,20 @@ export const ActionCenter: React.FC<Props> = ({
       title: 'Task scheduled successfully',
       description: "We've added this to your maintenance checklist.",
     });
-
+  
     if (activeActionKey) {
       const action = actions.find(a => a.actionKey === activeActionKey);
       if (action) recent.setScheduled(action);
     }
-
+  
     setIsModalOpen(false);
     setTemplate(null);
     setActiveActionKey(null);
-
-    setTimeout(loadActions, 1000);
+  
+    // 🔑 Reduced timeout - action stays active with hasRelatedChecklistItem = true
+    setTimeout(() => {
+      loadActions();
+    }, 500);  // Reduced from 1000ms or 2000ms
   };
 
   /* ------------------------------------------------------------------
@@ -262,11 +265,16 @@ export const ActionCenter: React.FC<Props> = ({
   
         <div className="space-y-3">
           {items.slice(0, maxItems).map(action => {
-            const isAuthoritativelySuppressed =
-              action.suppression?.suppressed &&
-              action.suppression?.suppressionSource !== null;
-  
+            // 🔑 Check suppression status
+            const isSuppressed = action.suppression?.suppressed;
+            
+            // 🔑 NEW: Check if task was created from this action
+            const hasTaskCreated = action.hasRelatedChecklistItem === true;
+            
+            // 🔑 Check if currently being scheduled
             const isCurrentlyBeingScheduled = activeActionKey === action.actionKey;
+            
+            // 🔑 CHECKLIST actions
             const isChecklistAction = action.source === 'CHECKLIST';
   
             return (
@@ -275,17 +283,20 @@ export const ActionCenter: React.FC<Props> = ({
                 action={action}
                 onCtaClick={handleActionCta}
                 ctaDisabled={
-                  isAuthoritativelySuppressed ||
-                  isCurrentlyBeingScheduled ||
-                  isModalOpen ||
-                  isChecklistAction
+                  isSuppressed ||           // Suppressed actions
+                  hasTaskCreated ||         // 🔑 NEW: Task already created
+                  isCurrentlyBeingScheduled ||  // Currently being processed
+                  isModalOpen ||            // Modal is open
+                  isChecklistAction         // Checklist items always disabled
                 }
                 ctaLabel={
-                  isAuthoritativelySuppressed
-                    ? 'Already scheduled'
-                    : isChecklistAction
-                      ? 'View in Maintenance'
-                      : undefined
+                  isSuppressed
+                    ? 'Suppressed'
+                    : hasTaskCreated
+                      ? 'Already scheduled'  // 🔑 NEW: Show for created tasks
+                      : isChecklistAction
+                        ? 'View in Maintenance'
+                        : undefined
                 }
                 forceShowCta
                 onOpenTrace={handleOpenDecisionTrace}

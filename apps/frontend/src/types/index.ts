@@ -1046,12 +1046,13 @@ export interface OrchestratedActionDTO {
     reason: 'COVERED' | 'MISSING_DATA' | 'ACTION_REQUIRED' | 'NONE';
   };
 
-  // ✅ Non-optional suppression
   suppression: {
     suppressed: boolean;
     reasons: SuppressionReasonEntryDTO[];
     suppressionSource?: SuppressionSourceDTO;
   };
+
+  hasRelatedChecklistItem?: boolean;
 
   decisionTrace?: {
     steps: DecisionTraceStepDTO[];

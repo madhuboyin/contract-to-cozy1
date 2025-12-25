@@ -247,30 +247,34 @@ export function ActionsClient() {
             <div className="space-y-3">
               {actions.map(action => {
                 const isChecklistAction = action.source === 'CHECKLIST';
-                const isAuthoritativelySuppressed =
-                  action.suppression?.suppressed &&
-                  action.suppression?.suppressionSource !== null;
+                const isSuppressed = action.suppression?.suppressed;
+                
+                // 🔑 NEW: Check if task was created from this RISK action
+                const hasTaskCreated = action.hasRelatedChecklistItem === true;
 
                 return (
                   <OrchestrationActionCard 
                     key={action.id} 
                     action={action}
                     onCtaClick={handleActionCta}
+                    onOpenTrace={handleOpenDecisionTrace}
                     ctaDisabled={
                       handledActions.has(action.id) ||
-                      isAuthoritativelySuppressed ||
+                      isSuppressed ||
+                      hasTaskCreated ||        // 🔑 NEW: Task already created
                       isChecklistAction
                     }
                     ctaLabel={
                       handledActions.has(action.id)
                         ? 'Task scheduled'
-                        : isAuthoritativelySuppressed
-                          ? 'Already scheduled'
-                          : isChecklistAction
-                            ? 'View in Maintenance'
-                            : undefined
+                        : isSuppressed
+                          ? 'Suppressed'
+                          : hasTaskCreated
+                            ? 'Already scheduled'  // 🔑 NEW: Show for created tasks
+                            : isChecklistAction
+                              ? 'View in Maintenance'
+                              : undefined
                     }
-                    onOpenTrace={handleOpenDecisionTrace}
                   />
                 );
               })}
