@@ -645,11 +645,23 @@ async function mapRiskDetailToAction(params: {
       category,
     });
 
+    // 🐛 ADD LOG HERE - BEFORE calling resolveSuppressionSource
+    console.log('🔍 ABOUT TO RESOLVE SUPPRESSION FOR RISK:', {
+      assetName,
+      actionKey,
+    });
+
     const source = await OrchestrationSuppressionService.resolveSuppressionSource({
       propertyId,
       actionKey,
     });
-
+    // 🐛 ADD LOG HERE - AFTER calling resolveSuppressionSource
+    console.log('🔍 RISK SUPPRESSION RESOLUTION RESULT:', {
+      assetName,
+      actionKey,
+      foundSourceType: source?.type || 'NONE',
+      checklistItemId: source?.type === 'CHECKLIST_ITEM' ? source.checklistItem.id : null,
+    });
     // 🐛 DEBUG LOG
     console.log('🔍 Suppression resolution:', {
       riskActionKey: actionKey,
@@ -1126,6 +1138,13 @@ for (const action of candidates) {
         propertyId,
         actionKey: action.actionKey,
       });
+
+    // 🐛 ADD LOG HERE - AFTER calling resolveSuppressionSource
+    console.log('🔍 RESOLVED SUPPRESSION SOURCE FOR RISK:', {
+      actionKey: action.actionKey,
+      foundSourceType: source?.type || 'NONE',
+      checklistItemId: source?.type === 'CHECKLIST_ITEM' ? source.checklistItem.id : null,
+    });
 
     if (source) {
       action.suppression.suppressionSource = source;
