@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 export async function recordOrchestrationEvent(params: {
   propertyId: string;
   actionKey: string;
-  actionType: 'USER_MARKED_COMPLETE' | 'USER_DISMISSED';
+  actionType: 'USER_MARKED_COMPLETE' | 'USER_UNMARKED_COMPLETE' | 'USER_DISMISSED';
   source: 'USER' | 'SYSTEM';
   createdBy?: string | null;
   payload?: Record<string, any>;

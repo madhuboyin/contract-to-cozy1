@@ -40,8 +40,18 @@ export async function markOrchestrationActionCompleted(
   return res.json({ success: true });
 }
 
-// POST /api/orchestration/actions/:actionKey/undo
-// POST /api/orchestration/:propertyId/actions/:actionKey/undo
+/**
+ * POST /api/orchestration/:propertyId/actions/:actionKey/undo
+ * 
+ * Undoes a user's "mark as completed" action by:
+ * 1. Deleting the USER_MARKED_COMPLETE event
+ * 2. Recording a USER_UNMARKED_COMPLETE event for audit trail
+ * 
+ * This ensures:
+ * - The action becomes active again
+ * - Full audit trail is maintained
+ * - Decision trace shows the restoration event
+ */
 export async function undoOrchestrationAction(
   req: AuthRequest,
   res: Response
@@ -53,12 +63,22 @@ export async function undoOrchestrationAction(
     return res.status(400).json({ error: 'Missing propertyId or actionKey' });
   }
 
+  // Delete the mark-complete event
   await prisma.orchestrationActionEvent.deleteMany({
     where: {
       propertyId,
       actionKey,
       actionType: 'USER_MARKED_COMPLETE',
     },
+  });
+
+  // 🔑 FIX: Record the undo event for audit trail and decision trace
+  await recordOrchestrationEvent({
+    propertyId,
+    actionKey,
+    actionType: 'USER_UNMARKED_COMPLETE',
+    source: 'USER',
+    createdBy: userId,
   });
 
   return res.json({ success: true });
