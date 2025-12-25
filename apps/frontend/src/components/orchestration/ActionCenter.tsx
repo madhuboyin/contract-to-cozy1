@@ -258,26 +258,17 @@ export const ActionCenter: React.FC<Props> = ({
   
         <div className="space-y-3">
           {items.slice(0, maxItems).map(action => {
-            // ✅ FIX: Check ANY authoritative suppression (PENDING 1)
+            // ✅ FIX: Check ANY authoritative suppression
             const isAuthoritativelySuppressed =
               action.suppression?.suppressed &&
               action.suppression?.suppressionSource !== null;
   
-            // ✅ FIX: Optimistic disable during scheduling (PENDING 2)
+            // ✅ FIX: Optimistic disable during scheduling
             const isCurrentlyBeingScheduled = activeActionKey === action.actionKey;
-            
-            // 🐛 DEBUG LOG
-            console.log('🎯 Rendering action:', {
-              key: action.actionKey,
-              title: action.title,
-              suppressed: action.suppression?.suppressed,
-              hasSource: action.suppression?.suppressionSource !== null,
-              sourceType: action.suppression?.suppressionSource?.type,
-              isAuthSuppressed: isAuthoritativelySuppressed,
-              isBeingScheduled: isCurrentlyBeingScheduled,
-              ctaWillBeDisabled: isAuthoritativelySuppressed || isCurrentlyBeingScheduled || isModalOpen,
-            });
-
+  
+            // 🔑 NEW FIX: CHECKLIST actions shouldn't allow creating new tasks
+            const isChecklistAction = action.source === 'CHECKLIST';
+  
             return (
               <OrchestrationActionCard
                 key={action.actionKey}
@@ -286,12 +277,15 @@ export const ActionCenter: React.FC<Props> = ({
                 ctaDisabled={
                   isAuthoritativelySuppressed ||
                   isCurrentlyBeingScheduled ||
-                  isModalOpen
+                  isModalOpen ||
+                  isChecklistAction  // 🔑 Disable for CHECKLIST actions
                 }
                 ctaLabel={
                   isAuthoritativelySuppressed
                     ? 'Already scheduled'
-                    : undefined
+                    : isChecklistAction
+                      ? 'View in Maintenance'  // Different label for checklist
+                      : undefined
                 }
                 forceShowCta
                 onMarkCompleted={() => setTraceAction(action)}
