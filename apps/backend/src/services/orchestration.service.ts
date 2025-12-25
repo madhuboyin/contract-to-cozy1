@@ -798,11 +798,20 @@ function mapChecklistItemToAction(params: {
 }): OrchestratedAction | null {
   const { propertyId, item, bookingCategorySet, bookingByCategory } = params;
 
+  // 🔑 CRITICAL: Skip checklist items that represent risk actions
+  // These are managed by the RISK system, not the CHECKLIST system
+  if (item?.actionKey && item.actionKey.includes(':RISK:')) {
+    console.log('🔍 SKIPPING CHECKLIST ITEM - Managed by RISK system:', {
+      itemId: item.id,
+      actionKey: item.actionKey,
+    });
+    return null;
+  }
+
   const steps: DecisionTraceStep[] = [];
 
   const { actionable, overdue, unscheduledRecurring } = isChecklistActionable(item);
   if (!actionable) return null;
-
   steps.push({
     rule: 'CHECKLIST_ACTIONABLE',
     outcome: 'APPLIED',
