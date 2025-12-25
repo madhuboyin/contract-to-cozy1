@@ -1,3 +1,4 @@
+// apps/frontend/src/components/orchestration/DecisionTracePanel.tsx
 'use client';
 
 import React, { useState } from 'react';
@@ -30,6 +31,11 @@ type Props = {
    * Called when user marks action completed from modal
    */
   onMarkCompleted?: (action: OrchestratedActionDTO) => void;
+
+  /**
+   * 🔑 NEW: Called when user undoes completion
+   */
+  onUndo?: (action: OrchestratedActionDTO) => void;
 };
 
 function suppressionSummary(reason?: SuppressionReasonEntryDTO) {
@@ -57,6 +63,7 @@ export const DecisionTracePanel: React.FC<Props> = ({
   steps = [],
   action,
   onMarkCompleted,
+  onUndo, // 🔑 Accept new prop
 }) => {
   const [expanded, setExpanded] = useState(false); // suppressed-only
   const [modalOpen, setModalOpen] = useState(false);
@@ -65,6 +72,11 @@ export const DecisionTracePanel: React.FC<Props> = ({
   if (reasons.length === 0 && steps.length === 0) return null;
 
   const primaryReason = reasons[0];
+
+  // 🔑 Check if this is a user-marked-complete action
+  const isUserMarkedComplete = 
+    action?.suppression?.suppressionSource?.type === 'USER_EVENT' &&
+    action?.suppression?.suppressionSource?.eventType === 'USER_MARKED_COMPLETE';
 
   const headerTitle = suppressed
     ? 'Why this action is hidden'
@@ -80,6 +92,12 @@ export const DecisionTracePanel: React.FC<Props> = ({
     if (steps.length > 0) {
       setModalOpen(true);
     }
+  };
+
+  // 🔑 NEW: Handler for opening modal from inline content
+  const handleOpenModal = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent header click
+    setModalOpen(true);
   };
 
   return (
@@ -163,15 +181,18 @@ export const DecisionTracePanel: React.FC<Props> = ({
                 ))}
               </div>
 
-              {steps.length > 3 && (
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(true)}
-                  className="mt-2 text-xs text-blue-600 hover:underline"
-                >
-                  View full decision trace
-                </button>
-              )}
+              {/* 🔑 UPDATED: Show link to open modal (for Undo button access) */}
+              <button
+                type="button"
+                onClick={handleOpenModal}
+                className="mt-2 text-xs text-blue-600 hover:underline"
+              >
+                {steps.length > 3 
+                  ? 'View full decision trace' 
+                  : isUserMarkedComplete 
+                    ? 'View full trace & undo'
+                    : 'View full decision trace'}
+              </button>
             </div>
           )}
         </div>
@@ -183,8 +204,14 @@ export const DecisionTracePanel: React.FC<Props> = ({
         onClose={() => setModalOpen(false)}
         steps={steps}
         onMarkCompleted={
-          action && onMarkCompleted
+          action && onMarkCompleted && !suppressed
             ? () => onMarkCompleted(action)
+            : undefined
+        }
+        onUndo={
+          // 🔑 Only show Undo for user-marked-complete actions
+          action && onUndo && isUserMarkedComplete
+            ? () => onUndo(action)
             : undefined
         }
       />
@@ -210,6 +237,11 @@ function humanizeRule(rule: string) {
       return 'We checked for existing scheduled work';
     case 'SUPPRESSION_FINAL':
       return 'Final decision made';
+    case 'USER_MARKED_COMPLETE':
+      return 'You marked this recommendation as completed';
+    case 'CHECKLIST_SUPPRESSION':
+    case 'CHECKLIST_SUPPRESSION_AUTHORITATIVE':
+      return 'This is already tracked in your maintenance checklist';
     default:
       return rule.replace(/_/g, ' ');
   }
