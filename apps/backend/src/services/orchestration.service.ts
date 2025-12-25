@@ -624,98 +624,123 @@ async function mapRiskDetailToAction(params: {
         ? { show: true, label: recommendedAction, reason: 'ACTION_REQUIRED' as const }
         : { show: false, label: null, reason: 'NONE' as const };
 
-    const suppressionReasons: OrchestratedAction['suppression']['reasons'] = [];
-    let suppressionSource: OrchestratedAction['suppression']['suppressionSource'] | null = null;
-    let suppressedByUser = false;  // 🔑 RENAMED from suppressedByChecklist
-    
-    // 🔑 NEW: Track if checklist item exists (but don't suppress for it)
-    let hasRelatedChecklistItem = false;
-    
-    // 🔑 AUTHORITATIVE suppression via actionKey
-    const actionKey = computeActionKey({
-      propertyId,
-      source: 'RISK',
-      orchestrationActionId: d?.orchestrationActionId ?? null,
-      checklistItemId: null,
-      serviceCategory: inferredCategory,
-      systemType,
-      category,
-    });
-    
-    // 🐛 DEBUG LOG - BEFORE
-    console.log('🔍 ABOUT TO RESOLVE SUPPRESSION FOR RISK:', {
-      assetName,
-      actionKey,
-      propertyId,
-    });
-    
-    const source = await OrchestrationSuppressionService.resolveSuppressionSource({
-      propertyId,
-      actionKey,
-    });
-    
-    // 🐛 DEBUG LOG - AFTER
-    console.log('🔍 RISK SUPPRESSION RESOLUTION RESULT:', {
-      assetName,
-      actionKey,
-      foundSourceType: source?.type || 'NONE',
-      checklistItemId: source?.type === 'CHECKLIST_ITEM' ? source.checklistItem.id : null,
-    });
-    
-    if (source) {
-      // 🔑 CRITICAL CHANGE: Only USER_EVENT actually suppresses
-      if (source?.type === 'USER_EVENT') {
-        suppressionSource = source;
-        
-        if (source.eventType === 'USER_MARKED_COMPLETE') {
-          suppressedByUser = true;  // 🔑 Use new variable name
-          pushUniqueReason(suppressionReasons, {
-            reason: 'USER_MARKED_COMPLETE',
-            message: 'You marked this action as completed.',
-          });
-    
-          steps.push({
-            rule: 'USER_MARKED_COMPLETE',
-            outcome: 'APPLIED',
-            details: { at: source.createdAt },
-          });
-        }
-    
-        if (source.eventType === 'USER_UNMARKED_COMPLETE') {
-          suppressedByUser = false;  // 🔑 Use new variable name
-          suppressionReasons.length = 0;
-    
-          pushUniqueReason(suppressionReasons, {
-            reason: 'USER_UNMARKED_COMPLETE',
-            message: 'You restored this action.',
-          });
-    
-          steps.push({
-            rule: 'USER_UNMARKED_COMPLETE',
-            outcome: 'APPLIED',
-            details: { at: source.createdAt },
-            });
-        }
-      }
+        const suppressionReasons: OrchestratedAction['suppression']['reasons'] = [];
+        let suppressionSource: OrchestratedAction['suppression']['suppressionSource'] | null = null;
+        let suppressedByUser = false;
       
-      // 🔑 CRITICAL CHANGE: CHECKLIST_ITEM just tracks, doesn't suppress
-      if (source?.type === 'CHECKLIST_ITEM') {
-        hasRelatedChecklistItem = true;  // 🔑 Track but DON'T suppress
-        
-        // Add to decision trace for transparency
-        steps.push({
-          rule: 'CHECKLIST_ITEM_TRACKED',
-          outcome: 'APPLIED',
-          details: { 
-            checklistItemId: source.checklistItem.id,
-            title: source.checklistItem.title,
-            status: source.checklistItem.status,
-            note: 'Task created but action remains active'
+        // 🔑 NEW: Track if checklist item exists (checked independently)
+        let hasRelatedChecklistItem = false;
+      
+        // 🔑 AUTHORITATIVE suppression via actionKey
+        const actionKey = computeActionKey({
+          propertyId,
+          source: 'RISK',
+          orchestrationActionId: d?.orchestrationActionId ?? null,
+          checklistItemId: null,
+          serviceCategory: inferredCategory,
+          systemType,
+          category,
+        });
+      
+        // 🐛 DEBUG LOG - BEFORE
+        console.log('🔍 ABOUT TO RESOLVE SUPPRESSION FOR RISK:', {
+          assetName,
+          actionKey,
+          propertyId,
+        });
+      
+        // 🔑 FIX: Check for checklist item FIRST with direct query
+        // This runs independently of suppression resolution
+        const relatedChecklistItem = await prisma.checklistItem.findFirst({
+          where: {
+            propertyId,
+            actionKey,
+          },
+          select: {
+            id: true,
+            title: true,
+            status: true,
           },
         });
-
-      }
-    }
+      
+        if (relatedChecklistItem) {
+          hasRelatedChecklistItem = true;
+          
+          console.log('🔍 FOUND RELATED CHECKLIST ITEM:', {
+            assetName,
+            actionKey,
+            checklistItemId: relatedChecklistItem.id,
+            title: relatedChecklistItem.title,
+            status: relatedChecklistItem.status,
+          });
+          
+          // Add to decision trace for transparency
+          steps.push({
+            rule: 'CHECKLIST_ITEM_TRACKED',
+            outcome: 'APPLIED',
+            details: { 
+              checklistItemId: relatedChecklistItem.id,
+              title: relatedChecklistItem.title,
+              status: relatedChecklistItem.status,
+              note: 'Task created but action remains active'
+            },
+          });
+        }
+      
+        // 🔑 THEN check for USER_EVENT suppression
+        const source = await OrchestrationSuppressionService.resolveSuppressionSource({
+          propertyId,
+          actionKey,
+        });
+      
+        // 🐛 DEBUG LOG - AFTER
+        console.log('🔍 RISK SUPPRESSION RESOLUTION RESULT:', {
+          assetName,
+          actionKey,
+          foundSourceType: source?.type || 'NONE',
+          checklistItemId: source?.type === 'CHECKLIST_ITEM' ? source.checklistItem.id : null,
+        });
+      
+        if (source) {
+          // 🔑 CRITICAL: Only USER_EVENT actually suppresses the action
+          if (source?.type === 'USER_EVENT') {
+            suppressionSource = source;
+            
+            if (source.eventType === 'USER_MARKED_COMPLETE') {
+              suppressedByUser = true;
+              pushUniqueReason(suppressionReasons, {
+                reason: 'USER_MARKED_COMPLETE',
+                message: 'You marked this action as completed.',
+              });
+      
+              steps.push({
+                rule: 'USER_MARKED_COMPLETE',
+                outcome: 'APPLIED',
+                details: { at: source.createdAt },
+              });
+            }
+      
+            if (source.eventType === 'USER_UNMARKED_COMPLETE') {
+              suppressedByUser = false;
+              suppressionReasons.length = 0;
+      
+              pushUniqueReason(suppressionReasons, {
+                reason: 'USER_UNMARKED_COMPLETE',
+                message: 'You restored this action.',
+              });
+      
+              steps.push({
+                rule: 'USER_UNMARKED_COMPLETE',
+                outcome: 'APPLIED',
+                details: { at: source.createdAt },
+              });
+            }
+          }
+          
+          // 🔑 REMOVED: The if (source?.type === 'CHECKLIST_ITEM') block
+          // We now handle checklist items via the direct query above
+          // This prevents CHECKLIST_ITEM from suppressing the action
+        }
 
   if (coverage.hasCoverage) {
     const conf = coverage.confidence ?? 'UNKNOWN';
