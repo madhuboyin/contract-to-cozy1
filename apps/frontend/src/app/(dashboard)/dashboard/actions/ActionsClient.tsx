@@ -83,6 +83,16 @@ export function ActionsClient() {
   const handleActionCta = (action: OrchestratedActionDTO) => {
     if (action.suppression?.suppressed) return;
 
+    // 🔑 PREVENT creating tasks from CHECKLIST actions
+    if (action.source === 'CHECKLIST') {
+      toast({
+        title: 'View in Maintenance',
+        description: 'This task is already in your maintenance schedule.',
+        variant: 'default',
+      });
+      return;
+    }
+
     setActiveActionId(action.id);
     setTemplate({
       id: `orchestration:${action.id}`,
@@ -178,15 +188,35 @@ export function ActionsClient() {
             </div>
           ) : (
             <div className="space-y-3">
-              {actions.map(action => (
-                <OrchestrationActionCard 
-                  key={action.id} 
-                  action={action}
-                  onCtaClick={handleActionCta}
-                  ctaDisabled={handledActions.has(action.id)}
-                  ctaLabel={handledActions.has(action.id) ? "Task scheduled" : undefined}
-                />
-              ))}
+              {actions.map(action => {
+                // 🔑 Check if this is a CHECKLIST action
+                const isChecklistAction = action.source === 'CHECKLIST';
+                const isAuthoritativelySuppressed =
+                  action.suppression?.suppressed &&
+                  action.suppression?.suppressionSource !== null;
+
+                return (
+                  <OrchestrationActionCard 
+                    key={action.id} 
+                    action={action}
+                    onCtaClick={handleActionCta}
+                    ctaDisabled={
+                      handledActions.has(action.id) ||
+                      isAuthoritativelySuppressed ||
+                      isChecklistAction  // 🔑 Disable for CHECKLIST
+                    }
+                    ctaLabel={
+                      handledActions.has(action.id)
+                        ? 'Task scheduled'
+                        : isAuthoritativelySuppressed
+                          ? 'Already scheduled'
+                          : isChecklistAction
+                            ? 'View in Maintenance'  // 🔑 Different label
+                            : undefined
+                    }
+                  />
+                );
+              })}
             </div>
           )}
         </section>
