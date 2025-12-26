@@ -52,6 +52,9 @@ import {
   OrchestrationSummaryDTO,
   SuppressionReason,
   ServiceCategory,
+  CompletionResponseDTO,
+  CompletionDataDTO,
+  CompletionPhotoDTO,
 
 } from '@/types';
 
@@ -1667,15 +1670,17 @@ class APIClient {
   // ORCHESTRATION — Mark action as completed (CANONICAL)
   async markOrchestrationActionCompleted(
     propertyId: string,
-    actionKey: string
-  ): Promise<APIResponse<{ success: boolean }>> {
-    return this.request<{ success: boolean }>(
+    actionKey: string,
+    completionData?: CompletionDataDTO
+  ): Promise<APIResponse<{ success: boolean; completion: CompletionResponseDTO | null }>> {
+    return this.request<{ success: boolean; completion: CompletionResponseDTO | null }>(
       `/api/orchestration/${propertyId}/actions/mark-completed`,
       {
         method: 'POST',
         body: JSON.stringify({
           propertyId,
           actionKey,
+          completionData: completionData || undefined,
         }),
       }
     );
@@ -1734,6 +1739,62 @@ class APIClient {
       }
     );
   }
+  async getCompletion(
+    propertyId: string,
+    completionId: string
+  ): Promise<APIResponse<CompletionResponseDTO>> {
+    return this.request<CompletionResponseDTO>(
+      `/api/orchestration/${propertyId}/completions/${completionId}`
+    );
+  }
+  
+  async updateCompletion(
+    propertyId: string,
+    completionId: string,
+    data: Partial<CompletionDataDTO>
+  ): Promise<APIResponse<CompletionResponseDTO>> {
+    return this.request<CompletionResponseDTO>(
+      `/api/orchestration/${propertyId}/completions/${completionId}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }
+    );
+  }
+  
+  async uploadCompletionPhoto(
+    propertyId: string,
+    actionKey: string,
+    file: File,
+    orderIndex: number
+  ): Promise<APIResponse<{ success: boolean; photo: CompletionPhotoDTO }>> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('actionKey', actionKey);
+    formData.append('orderIndex', orderIndex.toString());
+  
+    return this.request<{ success: boolean; photo: CompletionPhotoDTO }>(
+      `/api/orchestration/${propertyId}/completions/photos`,
+      {
+        method: 'POST',
+        body: formData,
+        headers: {}, // Let browser set Content-Type for FormData
+      }
+    );
+  }
+  
+  async deleteCompletionPhoto(
+    propertyId: string,
+    photoId: string
+  ): Promise<APIResponse<{ success: boolean }>> {
+    return this.request<{ success: boolean }>(
+      `/api/orchestration/${propertyId}/completions/photos/${photoId}`,
+      {
+        method: 'DELETE',
+      }
+    );
+  }
+
   // ==========================================================================
   // NOTIFICATIONS ENDPOINTS (PHASE 3)
   // ==========================================================================

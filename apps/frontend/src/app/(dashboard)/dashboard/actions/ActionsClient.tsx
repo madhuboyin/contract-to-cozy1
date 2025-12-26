@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api } from '@/lib/api/client';
-import { OrchestratedActionDTO, Property } from '@/types';
+import { OrchestratedActionDTO, Property, CompletionDataDTO } from '@/types';
 import { adaptOrchestrationSummary } from '@/adapters/orchestration.adapter';
 import { OrchestrationActionCard } from '@/components/orchestration/OrchestrationActionCard';
 import { Separator } from '@/components/ui/separator';
@@ -18,6 +18,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { DecisionTraceModal } from '@/components/orchestration/DecisionTraceModal';
 import { useCallback } from 'react';
 import { SnoozeModal } from '@/components/orchestration/SnoozeModal';
+import { CompletionModal } from '@/components/orchestration/CompletionModal';
 
 export function ActionsClient() {
   const { selectedPropertyId } = usePropertyContext();
@@ -43,6 +44,9 @@ export function ActionsClient() {
   const [isSnoozeModalOpen, setIsSnoozeModalOpen] = useState(false);
   const [snoozedActions, setSnoozedActions] = useState<OrchestratedActionDTO[]>([]);
   const [showSnoozed, setShowSnoozed] = useState(false);
+
+  const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false);
+  const [completionAction, setCompletionAction] = useState<OrchestratedActionDTO | null>(null);
 
   const loadActions = async () => {
     if (!propertyId) {
@@ -146,30 +150,13 @@ export function ActionsClient() {
     setTraceAction(action);
   }, []);
   
-  const handleMarkCompletedFromTrace = useCallback(async () => {
-    if (!traceAction || !propertyId) return; 
-  
-    try {
-      await api.markOrchestrationActionCompleted(
-        propertyId,
-        traceAction.actionKey
-      );
-  
-      toast({
-        title: 'Marked as completed',
-        description: 'This recommendation will be suppressed going forward.',
-      });
-  
-      setTraceAction(null);
-      loadActions(); // Reload actions
-    } catch (e: any) {
-      toast({
-        title: 'Unable to mark completed',
-        description: e?.message || 'Please try again.',
-        variant: 'destructive',
-      });
-    }
-  }, [traceAction, propertyId, toast]);
+  const handleMarkCompletedFromTrace = useCallback(() => {
+    if (!traceAction) return;
+    
+    setCompletionAction(traceAction);
+    setTraceAction(null);
+    setIsCompletionModalOpen(true);
+  }, [traceAction]);
   
   const handleUndoCompletedFromTrace = useCallback(async () => {
     if (!traceAction || !propertyId) return;
@@ -282,6 +269,49 @@ export function ActionsClient() {
     },
     [propertyId, loadActions, toast]
   );
+  const handleCompletionSubmit = useCallback(async (data: CompletionDataDTO) => {
+    if (!completionAction || !propertyId) return;
+  
+    try {
+      await api.markOrchestrationActionCompleted(
+        propertyId,
+        completionAction.actionKey,
+        data
+      );
+  
+      toast({
+        title: 'Marked as completed',
+        description: 'Your completion details have been saved.',
+      });
+  
+      setIsCompletionModalOpen(false);
+      setCompletionAction(null);
+      await loadActions();
+    } catch (e: any) {
+      toast({
+        title: 'Unable to mark completed',
+        description: e?.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    }
+  }, [completionAction, propertyId, loadActions, toast]);
+  
+  const handlePhotoUpload = useCallback(async (file: File, orderIndex: number) => {
+    if (!completionAction || !propertyId) throw new Error('No action selected or property ID missing');
+  
+    const result = await api.uploadCompletionPhoto(
+      propertyId,
+      completionAction.actionKey,
+      file,
+      orderIndex
+    );
+  
+    if (!result.success) {
+      throw new Error('Upload failed');
+    }
+  
+    return result.data.photo;
+  }, [completionAction, propertyId]);
 
   if (loading) {
     return (
@@ -508,6 +538,20 @@ export function ActionsClient() {
         onSnooze={handleSnooze}
         currentSnoozeUntil={traceAction?.snooze?.snoozeUntil}
       />
+      {propertyId && (
+        <CompletionModal
+          open={isCompletionModalOpen}
+          onClose={() => {
+            setIsCompletionModalOpen(false);
+            setCompletionAction(null);
+          }}
+          onSubmit={handleCompletionSubmit}
+          actionTitle={completionAction?.title || ''}
+          propertyId={propertyId}
+          actionKey={completionAction?.actionKey || ''}
+          onPhotoUpload={handlePhotoUpload}
+        />
+      )}
     </>
   );
 }

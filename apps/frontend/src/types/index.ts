@@ -1128,6 +1128,41 @@ export type SuppressionSourceDTO =
     }
   | null;
 
+  // Completion types
+export interface CompletionDataDTO {
+  completedAt: string;
+  cost?: number | null;
+  didItMyself?: boolean;
+  serviceProviderName?: string | null;
+  serviceProviderRating?: number | null;
+  notes?: string | null;
+  photoIds?: string[];
+}
+
+export interface CompletionResponseDTO {
+  id: string;
+  actionKey: string;
+  completedAt: string;
+  cost: number | null;
+  didItMyself: boolean;
+  serviceProviderName: string | null;
+  serviceProviderRating: number | null;
+  notes: string | null;
+  photoCount: number;
+  photos: CompletionPhotoDTO[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CompletionPhotoDTO {
+  id: string;
+  thumbnailUrl: string;
+  originalUrl: string;
+  fileName: string;
+  fileSize: number;
+  order: number;
+}
+
 /**
  * Community Events API payload
  */

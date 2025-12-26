@@ -112,8 +112,11 @@ export const DecisionTraceModal: React.FC<Props> = ({
             {onMarkCompleted && (
               <Button
                 onClick={() => {
-                  onMarkCompleted();
-                  onClose();
+                  // Instead of calling onMarkCompleted directly, we need to signal
+                  // that we want to open the completion modal
+                  // The parent component (ActionCenter/ActionsClient) will handle this
+                  onClose(); // Close decision trace
+                  onMarkCompleted(); // This will now trigger opening CompletionModal
                 }}
               >
                 Mark as completed
