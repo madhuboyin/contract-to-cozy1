@@ -1461,6 +1461,24 @@ enum OrchestrationActionSource {
   SYSTEM
 }
 
+model OrchestrationActionSnooze {
+  id            String   @id @default(uuid())
+  propertyId    String
+  actionKey     String
+  
+  snoozedAt     DateTime @default(now())
+  snoozeUntil   DateTime
+  snoozeReason  String?
+  
+  endedAt       DateTime?  // When un-snoozed or auto-expired
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([propertyId, actionKey])
+  @@index([snoozeUntil])
+  @@map("orchestration_action_snoozes")
+}
 
 // ============================================================================
 // REVIEWS & RATINGS
