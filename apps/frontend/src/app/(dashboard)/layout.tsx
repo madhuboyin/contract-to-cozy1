@@ -37,6 +37,7 @@ import { api } from '@/lib/api/client';
 // --- NEW IMPORT ---
 import { AIChat } from '@/components/AIChat';
 import { PropertyProvider } from '@/lib/property/PropertyContext';
+import { NotificationProvider } from '@/lib/notifications/NotificationContext';
 
 
 interface NavLink {
@@ -205,19 +206,20 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* [MODIFICATION] Wrap main content with PropertyProvider */}
-      <PropertyProvider> 
-          <main className="flex-1 bg-gray-50">
-            <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
-              {children}
-            </div>
-          </main>
+      <NotificationProvider>
+        <PropertyProvider> 
+            <main className="flex-1 bg-gray-50">
+              <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
+                {children}
+              </div>
+            </main>
 
-          {/* --- NEW: FLOATING AI CHAT WIDGET --- */}
-          {/* Renders the chat widget in a fixed position across all dashboard pages */}
-          <AIChat />
-          {/* ------------------------------------ */}
-      </PropertyProvider>
-      
+            {/* --- NEW: FLOATING AI CHAT WIDGET --- */}
+            {/* Renders the chat widget in a fixed position across all dashboard pages */}
+            <AIChat />
+            {/* ------------------------------------ */}
+        </PropertyProvider>
+      </NotificationProvider>
     </div>
   );
 }

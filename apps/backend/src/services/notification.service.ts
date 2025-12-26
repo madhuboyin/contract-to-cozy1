@@ -1,3 +1,4 @@
+// apps/backend/src/services/notification.service.ts
 import { prisma } from '../lib/prisma';
 import { NotificationChannel, DeliveryStatus } from '@prisma/client';
 import {
@@ -19,6 +20,7 @@ type CreateNotificationInput = {
 
 /**
  * Notification types that MUST be delivered immediately
+ * (Email immediacy — NOT in-app behavior)
  */
 const IMPORTANT_TYPES = new Set([
   'BOOKING_CREATED',
@@ -27,6 +29,11 @@ const IMPORTANT_TYPES = new Set([
 ]);
 
 export class NotificationService {
+  /**
+   * ============================================================
+   * CREATE NOTIFICATION (single source of truth)
+   * ============================================================
+   */
   static async create(input: CreateNotificationInput) {
     /**
      * 1️⃣ Load user notification preferences
@@ -43,23 +50,28 @@ export class NotificationService {
     const emailEnabled = preferences?.emailEnabled !== false;
 
     /**
-     * 2️⃣ Decide delivery behavior
+     * 2️⃣ Decide priority
      */
     const isImportant = IMPORTANT_TYPES.has(input.type);
 
-    const channels: NotificationChannel[] = [];
-    if (emailEnabled) channels.push(NotificationChannel.EMAIL);
+    /**
+     * 3️⃣ Decide channels
+     * IN_APP is ALWAYS created (cannot be opted out)
+     */
+    const channels: NotificationChannel[] = [
+      NotificationChannel.IN_APP,
+    ];
+
+    if (emailEnabled) {
+      channels.push(NotificationChannel.EMAIL);
+    }
 
     // Future channels
     // channels.push(NotificationChannel.PUSH);
     // channels.push(NotificationChannel.SMS);
 
-    if (channels.length === 0) {
-      return null; // user opted out
-    }
-
     /**
-     * 3️⃣ Create notification + delivery rows
+     * 4️⃣ Create notification + delivery rows
      */
     const notification = await prisma.notification.create({
       data: {
@@ -72,12 +84,15 @@ export class NotificationService {
         entityId: input.entityId,
         metadata: {
           ...input.metadata,
-          importance: isImportant ? 'IMPORTANT' : 'NORMAL',
+          priority: isImportant ? 'HIGH' : 'LOW',
         },
         deliveries: {
           create: channels.map((channel) => ({
             channel,
-            status: DeliveryStatus.PENDING,
+            status:
+              channel === NotificationChannel.IN_APP
+                ? DeliveryStatus.SENT // in-app is immediately "delivered"
+                : DeliveryStatus.PENDING,
           })),
         },
       },
@@ -85,7 +100,7 @@ export class NotificationService {
     });
 
     /**
-     * 4️⃣ Enqueue ONLY immediate notifications
+     * 5️⃣ Enqueue ONLY immediate EMAIL notifications
      */
     if (isImportant) {
       for (const delivery of notification.deliveries) {
@@ -94,9 +109,7 @@ export class NotificationService {
             await emailNotificationQueue.add(
               'SEND_EMAIL_NOTIFICATION',
               { notificationDeliveryId: delivery.id },
-              {
-                jobId: delivery.id, // idempotency
-              }
+              { jobId: delivery.id } // idempotent
             );
             break;
 
@@ -120,5 +133,55 @@ export class NotificationService {
      * Daily digest worker will pick them up.
      */
     return notification;
+  }
+
+  /**
+   * ============================================================
+   * IN-APP NOTIFICATION QUERIES
+   * ============================================================
+   */
+
+  static async listForUser(userId: string, limit = 30) {
+    return prisma.notification.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
+
+  static async getUnreadCount(userId: string) {
+    return prisma.notification.count({
+      where: { userId, isRead: false },
+    });
+  }
+
+  static async markRead(userId: string, notificationId: string) {
+    const notification = await prisma.notification.findFirst({
+      where: { id: notificationId, userId },
+    });
+
+    if (!notification) {
+      throw new Error('Notification not found');
+    }
+
+    if (notification.isRead) return notification;
+
+    return prisma.notification.update({
+      where: { id: notificationId },
+      data: {
+        isRead: true,
+        readAt: new Date(),
+      },
+    });
+  }
+
+  static async markAllRead(userId: string) {
+    return prisma.notification.updateMany({
+      where: { userId, isRead: false },
+      data: {
+        isRead: true,
+        readAt: new Date(),
+      },
+    });
   }
 }

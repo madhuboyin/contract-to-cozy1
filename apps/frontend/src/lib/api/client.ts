@@ -417,6 +417,55 @@ class APIClient {
   }
 
   // ==========================================================================
+  // GENERIC HTTP METHODS (for use by API wrapper files)
+  // ==========================================================================
+
+  /**
+   * Generic GET request
+   */
+  async get<T = any>(endpoint: string, options?: { params?: Record<string, any> }): Promise<{ data: T }> {
+    const url = options?.params 
+      ? `${endpoint}?${new URLSearchParams(options.params).toString()}`
+      : endpoint;
+    const response = await this.request<T>(url, { method: 'GET' });
+    // request() throws on error, so response is always APISuccess<T>
+    return { data: (response as APISuccess<T>).data };
+  }
+
+  /**
+   * Generic POST request
+   */
+  async post<T = any>(endpoint: string, data?: any): Promise<{ data: T }> {
+    const response = await this.request<T>(endpoint, {
+      method: 'POST',
+      body: data as unknown as BodyInit,
+    });
+    // request() throws on error, so response is always APISuccess<T>
+    return { data: (response as APISuccess<T>).data };
+  }
+
+  /**
+   * Generic PUT request
+   */
+  async put<T = any>(endpoint: string, data?: any): Promise<{ data: T }> {
+    const response = await this.request<T>(endpoint, {
+      method: 'PUT',
+      body: data as unknown as BodyInit,
+    });
+    // request() throws on error, so response is always APISuccess<T>
+    return { data: (response as APISuccess<T>).data };
+  }
+
+  /**
+   * Generic DELETE request
+   */
+  async delete<T = any>(endpoint: string): Promise<{ data: T }> {
+    const response = await this.request<T>(endpoint, { method: 'DELETE' });
+    // request() throws on error, so response is always APISuccess<T>
+    return { data: (response as APISuccess<T>).data };
+  }
+
+  // ==========================================================================
   // CHECKLIST ENDPOINTS 
   // ==========================================================================
   
@@ -1821,6 +1870,11 @@ class APIClient {
   ): Promise<APIResponse<void>> {
     return this.request<void>(`/api/notifications/${notificationId}/read`, {
       method: 'PATCH',
+    });
+  }
+  async markAllNotificationsRead() {
+    return this.request<void>('/api/notifications/read-all', {
+      method: 'POST',
     });
   }
 

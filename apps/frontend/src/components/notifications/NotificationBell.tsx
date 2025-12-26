@@ -1,23 +1,37 @@
-import { useEffect, useState } from 'react';
-import { api } from '@/lib/api/client';
+// apps/frontend/src/components/notifications/NotificationBell.tsx
+'use client';
+
+import Link from 'next/link';
+import { useNotifications } from '@/lib/notifications/NotificationContext';
 
 export function NotificationBell() {
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    api.getUnreadNotificationCount().then((res) => {
-      if (res.success) {
-        setCount(res.data.count);
-      }
-    });
-  }, []);
+  const { unreadCount } = useNotifications();
 
   return (
-    <a href="/dashboard/notifications" className="relative">
-      🔔
-      {count > 0 && (
-        <span className="badge">{count}</span>
+    <Link
+      href="/dashboard/notifications"
+      className="relative inline-flex items-center"
+      aria-label="Notifications"
+    >
+      <span className="text-lg">🔔</span>
+
+      {unreadCount > 0 && (
+        <span
+          className="
+            absolute -top-1 -right-2
+            min-w-[18px] h-[18px]
+            px-1
+            flex items-center justify-center
+            rounded-full
+            bg-red-600
+            text-white
+            text-xs
+            font-medium
+          "
+        >
+          {unreadCount}
+        </span>
       )}
-    </a>
+    </Link>
   );
 }

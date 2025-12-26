@@ -43,6 +43,8 @@ import orchestrationRoutes from './routes/orchestration.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
+import notificationRoutes from './routes/notification.routes';
+import seasonalChecklistRoutes from './routes/seasonalChecklist.routes';
 
 dotenv.config();
 
@@ -269,6 +271,8 @@ app.use('/api/seller-prep', sellerPrepRoutes);
 app.use('/api/inspection-reports', inspectionReportRoutes);
 app.use('/api/local-updates', localUpdatesRoutes);
 app.use('/api/orchestration', orchestrationRoutes);
+app.use('/notifications', notificationRoutes);
+app.use('/api', seasonalChecklistRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
