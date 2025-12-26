@@ -1664,7 +1664,7 @@ model SeasonalChecklistItem {
   seasonalChecklistId      String                @map("seasonal_checklist_id")
   seasonalTaskTemplateId   String                @map("seasonal_task_template_id")
   propertyId               String                @map("property_id")
-  checklistItemId          String?               @map("checklist_item_id")
+  checklistItemId          String?               @unique @map("checklist_item_id")
   taskKey                  String                @map("task_key")
   title                    String
   description              String?
