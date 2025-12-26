@@ -4,6 +4,7 @@ import { OrchestratedActionDTO } from '@/types';
 import { DecisionTracePanel } from './DecisionTracePanel';
 import { ConfidenceBar } from './ConfidenceBar';
 import { ConfidencePopover } from './ConfidencePopover';
+import { TaskStatusBadge } from './TaskStatusBadge';
 
 type Props = {
   action: OrchestratedActionDTO;
@@ -233,6 +234,11 @@ export const OrchestrationActionCard: React.FC<Props> = ({
             </button>
           )}
         </div>
+      )}
+
+      {/* 🔑 NEW: Task Status Badge - Show when task has been created */}
+      {action.hasRelatedChecklistItem && action.relatedChecklistItem && (
+        <TaskStatusBadge checklistItem={action.relatedChecklistItem} />
       )}
 
       {/* Decision Trace */}

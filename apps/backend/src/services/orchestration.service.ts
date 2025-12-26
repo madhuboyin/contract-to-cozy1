@@ -92,6 +92,16 @@ export type OrchestratedAction = {
     suppressionSource?: SuppressionSource;
   };
   hasRelatedChecklistItem?: boolean;
+
+  relatedChecklistItem?: {
+    id: string;
+    title: string;
+    nextDueDate: string | null;
+    isRecurring: boolean;
+    frequency: string | null;
+    status: string;
+    lastCompletedDate: string | null;
+  };
   decisionTrace?: {
     steps: DecisionTraceStep[];
   };
@@ -660,18 +670,41 @@ async function mapRiskDetailToAction(params: {
             id: true,
             title: true,
             status: true,
+            nextDueDate: true,
+            isRecurring: true,
+            frequency: true,
+            lastCompletedDate: true,
           },
         });
-      
+        
+        let relatedChecklistItemDetails: OrchestratedAction['relatedChecklistItem'] = undefined;
+        
         if (relatedChecklistItem) {
           hasRelatedChecklistItem = true;
           
-          console.log('🔍 FOUND RELATED CHECKLIST ITEM:', {
+          // 🔑 NEW: Build the full details object for the frontend
+          relatedChecklistItemDetails = {
+            id: relatedChecklistItem.id,
+            title: relatedChecklistItem.title,
+            nextDueDate: relatedChecklistItem.nextDueDate 
+              ? relatedChecklistItem.nextDueDate.toISOString() 
+              : null,
+            isRecurring: relatedChecklistItem.isRecurring ?? false,
+            frequency: relatedChecklistItem.frequency ?? null,
+            status: relatedChecklistItem.status ?? 'PENDING',
+            lastCompletedDate: relatedChecklistItem.lastCompletedDate 
+              ? relatedChecklistItem.lastCompletedDate.toISOString() 
+              : null,
+          };
+          
+          console.log('🔍 FOUND RELATED CHECKLIST ITEM WITH DETAILS:', {
             assetName,
             actionKey,
             checklistItemId: relatedChecklistItem.id,
             title: relatedChecklistItem.title,
             status: relatedChecklistItem.status,
+            nextDueDate: relatedChecklistItem.nextDueDate,
+            isRecurring: relatedChecklistItem.isRecurring,
           });
           
           // Add to decision trace for transparency
@@ -682,6 +715,7 @@ async function mapRiskDetailToAction(params: {
               checklistItemId: relatedChecklistItem.id,
               title: relatedChecklistItem.title,
               status: relatedChecklistItem.status,
+              nextDueDate: relatedChecklistItem.nextDueDate,
               note: 'Task created but action remains active'
             },
           });
@@ -803,6 +837,7 @@ async function mapRiskDetailToAction(params: {
     confidence: withDefaultConfidence(confidenceRaw),
     suppression,
     hasRelatedChecklistItem,
+    relatedChecklistItem: relatedChecklistItemDetails,
     decisionTrace: { steps },
 
     overdue: false,

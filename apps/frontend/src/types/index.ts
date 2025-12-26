@@ -1054,6 +1054,17 @@ export interface OrchestratedActionDTO {
 
   hasRelatedChecklistItem?: boolean;
 
+  // 🔑 NEW: Related checklist item details
+  relatedChecklistItem?: {
+    id: string;
+    title: string;
+    nextDueDate: string | null;
+    isRecurring: boolean;
+    frequency: string | null;
+    status: string;
+    lastCompletedDate: string | null;
+  };
+
   decisionTrace?: {
     steps: DecisionTraceStepDTO[];
   };
