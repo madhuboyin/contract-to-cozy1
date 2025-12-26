@@ -196,8 +196,17 @@ export function ActionsClient() {
     }
   }, [traceAction, propertyId, toast]);
   const handleSnoozeFromTrace = useCallback(() => {
-    if (!traceAction) return;
+    console.log('🔍 SNOOZE BUTTON CLICKED IN TRACE MODAL');
+    console.log('🔍 traceAction:', traceAction);
+    
+    if (!traceAction) {
+      console.log('🔍 ABORT: No traceAction');
+      return;
+    }
+    
+    console.log('🔍 Opening SnoozeModal...');
     setIsSnoozeModalOpen(true);
+    console.log('🔍 isSnoozeModalOpen set to true');
   }, [traceAction]);
   
   const handleSnooze = useCallback(

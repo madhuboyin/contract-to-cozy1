@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { DecisionTraceStepDTO } from '@/types';
+import { Clock } from 'lucide-react';
 
 type Props = {
   open: boolean;
@@ -93,14 +94,17 @@ export const DecisionTraceModal: React.FC<Props> = ({
         {/* ================= Footer ================= */}
         <DialogFooter className="flex justify-between gap-2">
           <div className="flex gap-2">
-            {onSnooze && (
+          {onSnooze && (
               <Button
                 variant="outline"
                 onClick={() => {
+                  console.log('🔍 DECISION TRACE: Snooze button onClick fired');
+                  console.log('🔍 DECISION TRACE: Calling onSnooze prop');
                   onSnooze();
-                  onClose();
+                  console.log('🔍 DECISION TRACE: onSnooze prop called');
                 }}
               >
+                <Clock className="mr-2 h-4 w-4" />
                 Snooze
               </Button>
             )}
