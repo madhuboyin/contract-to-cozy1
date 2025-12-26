@@ -3,6 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import { SeasonalChecklistService } from '../services/seasonalChecklist.service';
 import { ClimateZoneService } from '../services/climateZone.service';
 import { Season } from '@prisma/client';
+import { prisma } from '../config/database';
 
 // Extend Request type to include user
 interface AuthRequest extends Request {
@@ -24,6 +25,18 @@ export class SeasonalChecklistController {
   ): Promise<void> {
     try {
       const { propertyId } = req.params;
+      const property = await prisma.property.findUnique({
+        where: { id: propertyId },
+        include: { homeownerProfile: true },
+      });
+      
+      if (property?.homeownerProfile?.segment !== 'EXISTING_OWNER') {
+        res.status(403).json({
+          success: false,
+          message: 'Seasonal maintenance is only available for existing homeowners',
+        });
+        return;
+      }
       const { year, season, status } = req.query;
 
       const filters: any = {};

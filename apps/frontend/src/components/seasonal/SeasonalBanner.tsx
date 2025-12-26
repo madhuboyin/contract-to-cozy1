@@ -6,12 +6,19 @@ import { X, Calendar } from 'lucide-react';
 import { useSeasonalChecklists, useClimateInfo } from '@/lib/hooks/useSeasonalChecklists';
 import { getSeasonIcon, getSeasonColors, formatDaysRemaining } from '@/lib/utils/seasonHelpers';
 import { SeasonalChecklistModal } from './SeasonalChecklistModal';
+import { useHomeownerSegment } from '@/lib/hooks/useHomeownerSegment';
 
 interface SeasonalBannerProps {
   propertyId: string;
 }
 
 export function SeasonalBanner({ propertyId }: SeasonalBannerProps) {
+  const { data: segment } = useHomeownerSegment();
+  console.log('👤 Homeowner segment:', segment);
+  // Don't show for home buyers
+  if (segment !== 'EXISTING_OWNER') {
+    return null;
+  }
   const [showModal, setShowModal] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [selectedChecklistId, setSelectedChecklistId] = useState<string | null>(null);

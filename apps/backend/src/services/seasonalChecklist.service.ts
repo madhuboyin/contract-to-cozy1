@@ -33,13 +33,17 @@ export class SeasonalChecklistService {
       where: { id: propertyId },
       include: {
         homeAssets: true,
+        homeownerProfile: true,
       },
     });
 
     if (!property) {
       throw new Error('Property not found');
     }
-
+    if (property.homeownerProfile?.segment !== 'EXISTING_OWNER') {
+      console.log(`Skipping seasonal checklist - not an existing owner (property: ${propertyId})`);
+      return null;
+    }
     const climateSettings = await ClimateZoneService.getOrCreateClimateSettings(propertyId);
 
     if (!climateSettings.autoGenerateChecklists) {

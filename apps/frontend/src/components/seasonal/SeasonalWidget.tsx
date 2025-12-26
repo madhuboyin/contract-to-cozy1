@@ -12,12 +12,19 @@ import {
   formatDaysRemaining,
 } from '@/lib/utils/seasonHelpers';
 import { SeasonalChecklistModal } from './SeasonalChecklistModal';
+import { useHomeownerSegment } from '@/lib/hooks/useHomeownerSegment';
 
 interface SeasonalWidgetProps {
   propertyId: string;
 }
 
 export function SeasonalWidget({ propertyId }: SeasonalWidgetProps) {
+  const { data: segment } = useHomeownerSegment();
+  console.log('👤 Homeowner segment:', segment);
+  // Don't show for home buyers
+  if (segment !== 'EXISTING_OWNER') {
+    return null;
+  }
   const [showModal, setShowModal] = useState(false);
   const [selectedChecklistId, setSelectedChecklistId] = useState<string | null>(null);
 

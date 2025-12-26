@@ -35,6 +35,9 @@ import { TrendingUp } from 'lucide-react';
 import { Camera } from 'lucide-react';
 import { Scale } from 'lucide-react';
 import { Truck } from 'lucide-react';
+import { SeasonalBanner } from '@/components/seasonal/SeasonalBanner';
+import { SeasonalWidget } from '@/components/seasonal/SeasonalWidget';
+import { useHomeownerSegment } from '@/lib/hooks/useHomeownerSegment';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -207,6 +210,7 @@ export default function DashboardPage() {
   const [userType, setUserType] = useState<string | null>(null);
   
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
+  const { data: homeownerSegment } = useHomeownerSegment(); // Get user segment for conditional features
 
   // --- DATA FETCHING LOGIC (unchanged) ---
   const fetchDashboardData = useCallback(async () => {
@@ -454,6 +458,13 @@ export default function DashboardPage() {
       {/* --- END Property Selection Row --- */}
 
       {/* ========================================= */}
+      {/* SEASONAL MAINTENANCE BANNER - EXISTING_OWNER ONLY */}
+      {/* ========================================= */}
+      {homeownerSegment === 'EXISTING_OWNER' && selectedPropertyId && (
+        <SeasonalBanner propertyId={selectedPropertyId} />
+      )}
+
+      {/* ========================================= */}
       {/* AI FEATURES SECTION */}
       {/* ========================================= */}
       <section className="mb-8">
@@ -677,6 +688,13 @@ export default function DashboardPage() {
                 </div>
               </div>
             </Link>
+          )}
+
+          {/* Seasonal Maintenance Widget - EXISTING_OWNER ONLY */}
+          {homeownerSegment === 'EXISTING_OWNER' && selectedPropertyId && (
+            <div className="col-span-1">
+              <SeasonalWidget propertyId={selectedPropertyId} />
+            </div>
           )}
         </div>
       </section>
