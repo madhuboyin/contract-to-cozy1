@@ -17,7 +17,7 @@ export const transporter = nodemailer.createTransport({
   port: Number(SMTP_PORT || 587),
   secure: false,              // ✅ MUST be false for port 587
   auth: {
-    user: SMTP_USER || 'apikey',
+    user: SMTP_USER || '9ec830001@smtp-brevo.com',
     pass: SMTP_PASS,          // xkeysib-...
   },
   requireTLS: true,           // ✅ Explicit STARTTLS
