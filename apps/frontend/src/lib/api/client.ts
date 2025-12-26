@@ -52,6 +52,7 @@ import {
   OrchestrationSummaryDTO,
   SuppressionReason,
   ServiceCategory,
+
 } from '@/types';
 
 // REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
@@ -1694,6 +1695,36 @@ class APIClient {
       }
     );
   }
+
+  // ==========================================================================
+  // NOTIFICATIONS ENDPOINTS (PHASE 3)
+  // ==========================================================================
+
+  /**
+   * Fetch all notifications for the current user
+   */
+  async listNotifications(): Promise<APIResponse<any[]>> {
+    return this.request<any[]>('/api/notifications');
+  }
+
+  /**
+   * Get unread notification count for badge
+   */
+  async getUnreadNotificationCount(): Promise<APIResponse<{ count: number }>> {
+    return this.request<{ count: number }>('/api/notifications/unread-count');
+  }
+
+  /**
+   * Mark a notification as read
+   */
+  async markNotificationAsRead(
+    notificationId: string
+  ): Promise<APIResponse<void>> {
+    return this.request<void>(`/api/notifications/${notificationId}/read`, {
+      method: 'PATCH',
+    });
+  }
+
 }
 
 // Export singleton instance

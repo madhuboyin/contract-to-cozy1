@@ -47,6 +47,22 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: EVENTS_STALE_DAYS
+            - name: EMAIL_FROM
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: EMAIL_FROM
+            - name: SMTP_HOST
+              value: smtp-relay.brevo.com
+            - name: SMTP_PORT
+              value: "587"
+            - name: SMTP_USER
+              value: apikey
+            - name: SMTP_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: brevo-secrets
+                  key: SMTP_PASS
           resources:
             requests:
               cpu: "250m"

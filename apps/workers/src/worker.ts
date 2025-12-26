@@ -14,6 +14,10 @@ import { Worker } from 'bullmq';
 import { calculateAssetRisk, calculateTotalRiskScore, filterRelevantAssets, AssetRiskDetail } from '../../backend/src/utils/riskCalculator.util';
 import { RISK_ASSET_CONFIG } from '../../backend/src/config/risk-constants';
 import { calculateFinancialEfficiency } from '../../backend/src/utils/FinancialCalculator.util';
+import { sendEmailNotificationJob } from './jobs/sendEmailNotification.job';
+import { sendPushNotificationJob } from './jobs/sendPushNotification.job';
+import { sendSmsNotificationJob } from './jobs/sendSmsNotification.job';
+
 
 const prisma = new PrismaClient();
 
@@ -423,6 +427,60 @@ function startWorker() {
     console.error('[QUEUE] Worker experienced an error:', err);
   });
 
+  // =============================================================================
+  // Email Notification Worker
+  // =============================================================================
+  const emailNotificationWorker = new Worker(
+    'email-notification-queue',
+    async (job) => {
+      await sendEmailNotificationJob(job.data.notificationDeliveryId);
+    },
+    {
+      connection: redisConnection,
+      concurrency: 5,
+    }
+  );
+
+  emailNotificationWorker.on('ready', () => {
+    console.log('[QUEUE] Email Notification Worker ready');
+  });
+
+  emailNotificationWorker.on('completed', (job) => {
+    console.log(`[QUEUE] Email notification job ${job.id} completed`);
+  });
+
+  emailNotificationWorker.on('failed', (job, err) => {
+    console.error(
+      `[QUEUE] Email notification job ${job?.id} failed:`,
+      err.message
+    );
+  });
+
+  emailNotificationWorker.on('error', (err) => {
+    console.error('[QUEUE] Email notification worker error:', err);
+  });
+
+  // ===============================
+  // PUSH NOTIFICATIONS
+  // ===============================
+  const pushWorker = new Worker(
+    'push-notification-queue',
+    async (job) => {
+      await sendPushNotificationJob(job.data.notificationDeliveryId);
+    },
+    { connection: redisConnection }
+  );
+  
+  // ===============================
+  // SMS NOTIFICATIONS
+  // ===============================
+  const smsWorker = new Worker(
+    'sms-notification-queue',
+    async (job) => {
+      await sendSmsNotificationJob(job.data.notificationDeliveryId);
+    },
+    { connection: redisConnection }
+  );
   console.log(`[WORKER] Property Intelligence Worker started for queue: ${QUEUE_NAME}`);
 
   // Run maintenance reminders once on startup for demo

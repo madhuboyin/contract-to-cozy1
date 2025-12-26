@@ -17,6 +17,7 @@ import {
 import JobQueueService from './JobQueue.service';
 
 import { prisma } from '../lib/prisma';
+import { NotificationService } from './notification.service';
 
 export class BookingService {
   /**
@@ -133,6 +134,16 @@ export class BookingService {
         },
       },
     });
+    
+    await NotificationService.create({
+      userId: booking.homeownerId,
+      type: 'BOOKING_CREATED',
+      title: 'Booking request submitted',
+      message: `Your booking request for ${booking.service.name} has been submitted.`,
+      actionUrl: `/bookings/${booking.id}`,
+      entityType: 'BOOKING',
+      entityId: booking.id,
+    });    
 
     // --- PHASE 3 IMPLEMENTATION START ---
     // Trigger re-calculation of Health Score / Risk Report immediately.
@@ -149,6 +160,7 @@ export class BookingService {
     return this.formatBookingResponse(booking);
   }
 
+  
   /**
    * List bookings with filters
    * FIX: Implemented defensive coding to prevent formatting errors from crashing the endpoint.
@@ -588,7 +600,17 @@ export class BookingService {
         },
       },
     });
-
+ 
+    await NotificationService.create({
+      userId: updated.homeownerId,
+      type: 'BOOKING_CANCELLED',
+      title: 'Booking cancelled',
+      message: `Your booking has been cancelled.`,
+      actionUrl: `/bookings/${updated.id}`,
+      entityType: 'BOOKING',
+      entityId: updated.id,
+    });
+    
     return this.formatBookingResponse(updated);
   }
 
