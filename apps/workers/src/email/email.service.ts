@@ -17,7 +17,7 @@ if (!SMTP_HOST || !SMTP_PASS) {
 export const transporter = nodemailer.createTransport({
   host: SMTP_HOST,                       // smtp-relay.brevo.com
   port: Number(SMTP_PORT || 587),        // 587
-  secure: false,                         // MUST be false for STARTTLS
+  secure: true,                         // MUST be false for STARTTLS
   auth: {
     user: SMTP_USER || 'apikey',         // MUST be literally "apikey"
     pass: SMTP_PASS,                     // xsmtpsib-****
