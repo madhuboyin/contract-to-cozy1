@@ -1538,8 +1538,7 @@ model OrchestrationActionCompletionPhoto {
   uploadedAt    DateTime @default(now())
   
   // Relations
-  completion    OrchestrationActionCompletion @relation(fields: [completionId], references: [id], onDelete: Cascade)
-  
+  completion    OrchestrationActionCompletion? @relation(fields: [completionId], references: [id], onDelete: Cascade)
   @@index([completionId])
   @@index([propertyId])
   @@map("orchestration_action_completion_photos")
