@@ -1,5 +1,3 @@
-// apps/workers/src/email/email.service.ts
-
 import nodemailer from 'nodemailer';
 
 const {
@@ -15,19 +13,17 @@ if (!SMTP_HOST || !SMTP_PASS) {
 }
 
 export const transporter = nodemailer.createTransport({
-  host: SMTP_HOST,                       // smtp-relay.brevo.com
-  port: Number(SMTP_PORT || 587),        // 587
-  secure: true,                         // MUST be false for STARTTLS
+  host: SMTP_HOST,
+  port: Number(SMTP_PORT || 587),
+  secure: false,              // ✅ MUST be false for port 587
   auth: {
-    user: SMTP_USER || 'apikey',         // MUST be literally "apikey"
-    pass: SMTP_PASS,                     // xsmtpsib-****
+    user: SMTP_USER || 'apikey',
+    pass: SMTP_PASS,          // xkeysib-...
   },
+  requireTLS: true,           // ✅ Explicit STARTTLS
   tls: {
-    rejectUnauthorized: false,           // ✅ REQUIRED for Brevo
-  },
-  pool: true,
-  maxConnections: 3,
-  maxMessages: 50,
+    rejectUnauthorized: false // ✅ avoids cert edge cases
+  }
 });
 
 export async function sendEmail(
@@ -36,7 +32,7 @@ export async function sendEmail(
   html: string
 ) {
   await transporter.sendMail({
-    from: EMAIL_FROM || 'no-reply@contracttocozy.com',
+    from: EMAIL_FROM || 'Contract to Cozy <no-reply@contracttocozy.com>',
     to,
     subject,
     html,
