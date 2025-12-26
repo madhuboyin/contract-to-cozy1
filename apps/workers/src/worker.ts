@@ -433,13 +433,16 @@ function startWorker() {
   const emailNotificationWorker = new Worker(
     'email-notification-queue',
     async (job) => {
-      await sendEmailNotificationJob(job.data.notificationDeliveryId);
+      if (job.name === 'SEND_EMAIL_NOTIFICATION') {
+        await sendEmailNotificationJob(job.data.notificationDeliveryId);
+      }
     },
     {
       connection: redisConnection,
       concurrency: 5,
     }
   );
+  console.log(`[WORKER] Email Notification Worker started for queue: email-notification-queue`);
 
   emailNotificationWorker.on('ready', () => {
     console.log('[QUEUE] Email Notification Worker ready');
@@ -466,18 +469,22 @@ function startWorker() {
   const pushWorker = new Worker(
     'push-notification-queue',
     async (job) => {
-      await sendPushNotificationJob(job.data.notificationDeliveryId);
+      if (job.name === 'SEND_PUSH_NOTIFICATION') {
+        await sendPushNotificationJob(job.data.notificationDeliveryId);
+      }
     },
     { connection: redisConnection }
   );
-  
+  console.log(`[WORKER] Push Notification Worker started for queue: push-notification-queue`);
   // ===============================
   // SMS NOTIFICATIONS
   // ===============================
   const smsWorker = new Worker(
     'sms-notification-queue',
     async (job) => {
-      await sendSmsNotificationJob(job.data.notificationDeliveryId);
+      if (job.name === 'SEND_SMS_NOTIFICATION') {
+        await sendSmsNotificationJob(job.data.notificationDeliveryId);
+      }
     },
     { connection: redisConnection }
   );
