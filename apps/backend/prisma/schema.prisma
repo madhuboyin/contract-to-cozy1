@@ -1595,6 +1595,121 @@ model OrchestrationActionCompletionPhoto {
   @@index([propertyId])
   @@map("orchestration_action_completion_photos")
 }
+
+// =============================================================================
+// SEASONAL MAINTENANCE MODELS
+// =============================================================================
+
+model SeasonalTaskTemplate {
+  id                    String           @id @default(cuid())
+  taskKey               String           @unique @map("task_key")
+  season                Season
+  title                 String
+  description           String?
+  whyItMatters          String?          @map("why_it_matters")
+  typicalCostMin        Decimal?         @map("typical_cost_min") @db.Decimal(10, 2)
+  typicalCostMax        Decimal?         @map("typical_cost_max") @db.Decimal(10, 2)
+  isDiyPossible         Boolean          @default(false) @map("is_diy_possible")
+  estimatedHours        Decimal?         @map("estimated_hours") @db.Decimal(4, 1)
+  priority              TaskPriority     @default(RECOMMENDED)
+  serviceCategory       String?          @map("service_category")
+  climateRegions        ClimateRegion[]  @map("climate_regions")
+  requiredAssetType     String?          @map("required_asset_type")
+  requiredAssetCheck    String?          @map("required_asset_check")
+  timingOffsetDays      Int              @default(-14) @map("timing_offset_days")
+  recurrencePattern     String           @default("ANNUAL") @map("recurrence_pattern")
+  isActive              Boolean          @default(true) @map("is_active")
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @updatedAt @map("updated_at")
+  
+  // Relations
+  seasonalChecklistItems SeasonalChecklistItem[]
+  
+  @@index([season])
+  @@index([isActive, priority])
+  @@map("seasonal_task_templates")
+}
+
+model SeasonalChecklist {
+  id                   String                  @id @default(cuid())
+  propertyId           String                  @map("property_id")
+  season               Season
+  year                 Int
+  climateRegion        ClimateRegion           @map("climate_region")
+  seasonStartDate      DateTime                @map("season_start_date") @db.Date
+  seasonEndDate        DateTime                @map("season_end_date") @db.Date
+  status               SeasonalChecklistStatus @default(PENDING)
+  totalTasks           Int                     @default(0) @map("total_tasks")
+  tasksAdded           Int                     @default(0) @map("tasks_added")
+  tasksCompleted       Int                     @default(0) @map("tasks_completed")
+  generatedAt          DateTime                @default(now()) @map("generated_at")
+  firstViewedAt        DateTime?               @map("first_viewed_at")
+  notificationSentAt   DateTime?               @map("notification_sent_at")
+  dismissedAt          DateTime?               @map("dismissed_at")
+  createdAt            DateTime                @default(now()) @map("created_at")
+  updatedAt            DateTime                @updatedAt @map("updated_at")
+  
+  // Relations
+  property             Property                @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  items                SeasonalChecklistItem[]
+  
+  @@unique([propertyId, season, year])
+  @@index([propertyId])
+  @@index([status, seasonStartDate])
+  @@map("seasonal_checklists")
+}
+
+model SeasonalChecklistItem {
+  id                       String                @id @default(cuid())
+  seasonalChecklistId      String                @map("seasonal_checklist_id")
+  seasonalTaskTemplateId   String                @map("seasonal_task_template_id")
+  propertyId               String                @map("property_id")
+  checklistItemId          String?               @map("checklist_item_id")
+  taskKey                  String                @map("task_key")
+  title                    String
+  description              String?
+  priority                 TaskPriority          @default(RECOMMENDED)
+  status                   SeasonalTaskStatus    @default(RECOMMENDED)
+  recommendedDate          DateTime?             @map("recommended_date") @db.Date
+  addedAt                  DateTime?             @map("added_at")
+  completedAt              DateTime?             @map("completed_at")
+  dismissedAt              DateTime?             @map("dismissed_at")
+  snoozedUntil             DateTime?             @map("snoozed_until")
+  createdAt                DateTime              @default(now()) @map("created_at")
+  updatedAt                DateTime              @updatedAt @map("updated_at")
+  
+  // Relations
+  seasonalChecklist        SeasonalChecklist     @relation(fields: [seasonalChecklistId], references: [id], onDelete: Cascade)
+  seasonalTaskTemplate     SeasonalTaskTemplate  @relation(fields: [seasonalTaskTemplateId], references: [id])
+  property                 Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  checklistItem            ChecklistItem?        @relation(fields: [checklistItemId], references: [id], onDelete: SetNull)
+  
+  @@index([seasonalChecklistId])
+  @@index([propertyId, status])
+  @@index([checklistItemId])
+  @@map("seasonal_checklist_items")
+}
+
+model PropertyClimateSetting {
+  id                      String              @id @default(cuid())
+  propertyId              String              @unique @map("property_id")
+  climateRegion           ClimateRegion       @map("climate_region")
+  climateRegionSource     String              @default("AUTO_DETECTED") @map("climate_region_source")
+  notificationTiming      NotificationTiming  @default(STANDARD) @map("notification_timing")
+  notificationEnabled     Boolean             @default(true) @map("notification_enabled")
+  autoGenerateChecklists  Boolean             @default(true) @map("auto_generate_checklists")
+  customSeasonDates       Json?               @map("custom_season_dates")
+  excludedTaskKeys        String[]            @default([]) @map("excluded_task_keys")
+  createdAt               DateTime            @default(now()) @map("created_at")
+  updatedAt               DateTime            @updatedAt @map("updated_at")
+  
+  // Relations
+  property                Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  @@index([propertyId])
+  @@index([climateRegion])
+  @@map("property_climate_settings")
+}
 // ============================================================================
 // REVIEWS & RATINGS
 // ============================================================================
