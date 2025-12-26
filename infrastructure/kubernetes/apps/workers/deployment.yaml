@@ -57,7 +57,10 @@ spec:
             - name: SMTP_PORT
               value: "587"
             - name: SMTP_USER
-              value: apikey
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: SMTP_USER
             - name: SMTP_PASS
               valueFrom:
                 secretKeyRef:
