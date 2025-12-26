@@ -137,6 +137,44 @@ export type OrchestrationSummary = {
   };
 };
 
+export interface CompletionCreateInput {
+  completedAt: string; // ISO date
+  cost?: number | null;
+  didItMyself?: boolean;
+  serviceProviderName?: string | null;
+  serviceProviderRating?: number | null; // 1-5
+  notes?: string | null;
+  photoIds?: string[]; // IDs of uploaded photos
+}
+
+export interface CompletionUpdateInput extends Partial<CompletionCreateInput> {
+  // Can update any field except completedAt (date changes restricted to 7 days from original)
+}
+
+export interface CompletionResponse {
+  id: string;
+  actionKey: string;
+  completedAt: string;
+  cost: number | null;
+  didItMyself: boolean;
+  serviceProviderName: string | null;
+  serviceProviderRating: number | null;
+  notes: string | null;
+  photoCount: number;
+  photos: CompletionPhotoResponse[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CompletionPhotoResponse {
+  id: string;
+  thumbnailUrl: string;
+  originalUrl: string;
+  fileName: string;
+  fileSize: number;
+  order: number;
+}
+
 // Keep in sync with frontend intent: "actionable" = overdue OR unscheduled recurring OR active review states
 const ACTIVE_TASK_STATUSES = [
   'PENDING',

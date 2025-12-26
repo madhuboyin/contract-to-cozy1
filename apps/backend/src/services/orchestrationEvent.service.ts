@@ -19,7 +19,7 @@ export async function recordOrchestrationEvent(params: {
   } = params;
 
   // ✅ Idempotent write (unique constraint enforces it)
-  await prisma.orchestrationActionEvent.upsert({
+  const event = await prisma.orchestrationActionEvent.upsert({
     where: {
       propertyId_actionKey_actionType: {
         propertyId,
@@ -37,4 +37,6 @@ export async function recordOrchestrationEvent(params: {
     },
     update: {}, // no-op (idempotent)
   });
+
+  return event; // Return the event so we can link it to completion
 }

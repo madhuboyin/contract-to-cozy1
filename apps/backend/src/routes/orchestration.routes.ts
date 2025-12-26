@@ -11,6 +11,7 @@ import {
 
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import completionRoutes from './orchestrationCompletion.routes';
 
 const router = Router();
 
@@ -53,5 +54,6 @@ router.post(
   propertyAuthMiddleware,
   unsnoozeOrchestrationAction
 );
-
+// Mount completion routes
+router.use('/', completionRoutes);
 export default router;

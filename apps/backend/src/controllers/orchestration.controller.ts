@@ -5,6 +5,8 @@ import { AuthRequest } from '../types/auth.types';
 import { recordOrchestrationEvent } from '../services/orchestrationEvent.service';
 import { snoozeAction, unsnoozeAction } from '../services/orchestrationSnooze.service';
 import { prisma } from '../lib/prisma';
+import { createCompletion } from '../services/orchestrationCompletion.service';
+import { completionCreateSchema } from '../validators/orchestrationCompletion.validator';
 
 /**
  * GET /api/orchestration/:propertyId/summary
@@ -23,14 +25,26 @@ export async function markOrchestrationActionCompleted(
   req: AuthRequest,
   res: Response
 ) {
-  const { propertyId, actionKey } = req.body;
+  const { propertyId, actionKey, completionData } = req.body;
   const userId = req.user?.userId ?? null;
 
   if (!propertyId || !actionKey) {
     return res.status(400).json({ error: 'Missing propertyId or actionKey' });
   }
 
-  await recordOrchestrationEvent({
+  // Validate completion data if provided
+  if (completionData) {
+    const validation = completionCreateSchema.safeParse(completionData);
+    if (!validation.success) {
+      return res.status(400).json({ 
+        error: 'Invalid completion data', 
+        details: validation.error.issues 
+      });
+    }
+  }
+
+  // Create the event
+  const event = await recordOrchestrationEvent({
     propertyId,
     actionKey,
     actionType: 'USER_MARKED_COMPLETE',
@@ -38,7 +52,22 @@ export async function markOrchestrationActionCompleted(
     createdBy: userId,
   });
 
-  return res.json({ success: true });
+  // If completion data provided, create completion record
+  let completion = null;
+  if (completionData && event) {
+    completion = await createCompletion({
+      propertyId,
+      actionKey,
+      eventId: event.id, // Link to the event
+      data: completionData,
+      userId,
+    });
+  }
+
+  return res.json({ 
+    success: true,
+    completion: completion ?? null,
+  });
 }
 
 /**
