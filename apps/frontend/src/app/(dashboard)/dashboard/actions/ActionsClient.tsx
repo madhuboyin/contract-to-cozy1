@@ -202,15 +202,33 @@ export function ActionsClient() {
   
   const handleSnooze = useCallback(
     async (snoozeUntil: Date, snoozeReason?: string) => {
-      if (!traceAction || !propertyId) return;
+      console.log('🔍 SNOOZE HANDLER CALLED:', { 
+        hasTraceAction: !!traceAction, 
+        hasPropertyId: !!propertyId,
+        snoozeUntil, 
+        snoozeReason 
+      });
+
+      if (!traceAction || !propertyId) {
+        console.log('🔍 SNOOZE ABORTED: Missing traceAction or propertyId');
+        return;
+      }
   
       try {
+        console.log('🔍 CALLING API snoozeOrchestrationAction:', {
+          propertyId,
+          actionKey: traceAction.actionKey,
+          snoozeUntil: snoozeUntil.toISOString(),
+        });
+
         await api.snoozeOrchestrationAction(
           propertyId,
           traceAction.actionKey,
           snoozeUntil.toISOString(),
           snoozeReason
         );
+
+        console.log('🔍 SNOOZE API SUCCESS');
   
         toast({
           title: 'Action snoozed',
@@ -221,6 +239,7 @@ export function ActionsClient() {
         setIsSnoozeModalOpen(false);
         loadActions();
       } catch (e: any) {
+        console.error('🔍 SNOOZE API ERROR:', e);
         toast({
           title: 'Unable to snooze action',
           description: e?.message || 'Please try again.',

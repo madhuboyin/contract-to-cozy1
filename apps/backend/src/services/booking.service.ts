@@ -141,6 +141,9 @@ export class BookingService {
       title: 'Booking request submitted',
       message: `Your booking request for ${booking.service.name} has been submitted.`,
       actionUrl: `/bookings/${booking.id}`,
+      metadata: {
+        priority: 'HIGH', // 🔴 REQUIRED for immediate email
+      },
       entityType: 'BOOKING',
       entityId: booking.id,
     });    
@@ -607,6 +610,9 @@ export class BookingService {
       title: 'Booking cancelled',
       message: `Your booking has been cancelled.`,
       actionUrl: `/bookings/${updated.id}`,
+      metadata: {
+        priority: 'HIGH', // 🔴 REQUIRED for immediate email
+      },
       entityType: 'BOOKING',
       entityId: updated.id,
     });
