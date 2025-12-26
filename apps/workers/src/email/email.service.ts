@@ -1,3 +1,5 @@
+// apps/workers/src/email/email.service.ts
+
 import nodemailer from 'nodemailer';
 
 const {
@@ -13,21 +15,19 @@ if (!SMTP_HOST || !SMTP_PASS) {
 }
 
 export const transporter = nodemailer.createTransport({
-  host: SMTP_HOST, // smtp-relay.brevo.com
-  port: Number(SMTP_PORT || 587),
-  secure: false,              // MUST be false for 587
-  requireTLS: true,           // 🔴 IMPORTANT
+  host: SMTP_HOST,                       // smtp-relay.brevo.com
+  port: Number(SMTP_PORT || 587),        // 587
+  secure: false,                         // MUST be false for STARTTLS
   auth: {
-    user: 'apikey',           // 🔴 MUST be literal
-    pass: SMTP_PASS,
+    user: SMTP_USER || 'apikey',         // MUST be literally "apikey"
+    pass: SMTP_PASS,                     // xsmtpsib-****
   },
   tls: {
-    rejectUnauthorized: false,
-    servername: SMTP_HOST,
-    minVersion: 'TLSv1.2',    // 🔴 IMPORTANT for Brevo
+    rejectUnauthorized: false,           // ✅ REQUIRED for Brevo
   },
   pool: true,
-  maxConnections: 5,
+  maxConnections: 3,
+  maxMessages: 50,
 });
 
 export async function sendEmail(
