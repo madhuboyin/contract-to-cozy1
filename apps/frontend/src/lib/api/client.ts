@@ -1695,7 +1695,45 @@ class APIClient {
       }
     );
   }
+  /**
+   * Snooze an orchestration action
+   */
+  async snoozeOrchestrationAction(
+    propertyId: string,
+    actionKey: string,
+    snoozeUntil: string, // ISO date string
+    snoozeReason?: string
+  ): Promise<APIResponse<{ success: boolean }>> {
+    const encodedActionKey = encodeURIComponent(actionKey);
+    
+    return this.request<{ success: boolean }>(
+      `/api/orchestration/${propertyId}/actions/${encodedActionKey}/snooze`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          snoozeUntil,
+          snoozeReason,
+        }),
+      }
+    );
+  }
 
+  /**
+   * Un-snooze an orchestration action
+   */
+  async unsnoozeOrchestrationAction(
+    propertyId: string,
+    actionKey: string
+  ): Promise<APIResponse<{ success: boolean }>> {
+    const encodedActionKey = encodeURIComponent(actionKey);
+    
+    return this.request<{ success: boolean }>(
+      `/api/orchestration/${propertyId}/actions/${encodedActionKey}/unsnooze`,
+      {
+        method: 'POST',
+      }
+    );
+  }
   // ==========================================================================
   // NOTIFICATIONS ENDPOINTS (PHASE 3)
   // ==========================================================================

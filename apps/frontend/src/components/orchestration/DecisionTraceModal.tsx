@@ -18,6 +18,7 @@ type Props = {
 
   onMarkCompleted?: () => void;
   onUndo?: () => void;
+  onSnooze?: () => void;
 };
 
 export const DecisionTraceModal: React.FC<Props> = ({
@@ -26,6 +27,7 @@ export const DecisionTraceModal: React.FC<Props> = ({
   steps,
   onMarkCompleted,
   onUndo,
+  onSnooze,
 }) => {
   return (
     <Dialog
@@ -90,26 +92,42 @@ export const DecisionTraceModal: React.FC<Props> = ({
 
         {/* ================= Footer ================= */}
         <DialogFooter className="flex justify-between gap-2">
-          {onMarkCompleted && (
-            <Button
-              onClick={() => {
-                onMarkCompleted();
-                onClose();
-              }}
-            >
-              Mark as completed
-            </Button>
-          )}
+          <div className="flex gap-2">
+            {onSnooze && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  onSnooze();
+                  onClose();
+                }}
+              >
+                Snooze
+              </Button>
+            )}
 
-          {onUndo && (
-            <Button variant="outline" onClick={onUndo}>
-              Undo
-            </Button>
-          )}
+            {onMarkCompleted && (
+              <Button
+                onClick={() => {
+                  onMarkCompleted();
+                  onClose();
+                }}
+              >
+                Mark as completed
+              </Button>
+            )}
+          </div>
 
-          <Button variant="outline" onClick={onClose}>
-            Close
-          </Button>
+          <div className="flex gap-2">
+            {onUndo && (
+              <Button variant="outline" onClick={onUndo}>
+                Undo
+              </Button>
+            )}
+
+            <Button variant="outline" onClick={onClose}>
+              Close
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -124,6 +142,8 @@ function humanizeRule(rule: string) {
   switch (rule) {
     case 'RISK_ACTIONABLE':
       return 'This issue requires attention';
+    case 'USER_SNOOZED': 
+      return 'You snoozed this recommendation';
     case 'RISK_INFER_ASSET_KEY':
       return 'We identified the part of your home involved';
     case 'COVERAGE_MATCHING':
@@ -153,6 +173,20 @@ function humanizeDetails(step: DecisionTraceStepDTO) {
     return step.outcome === 'APPLIED'
       ? 'Related work is already scheduled.'
       : 'No related work is currently scheduled.';
+  }
+  
+  if (step.rule === 'USER_SNOOZED') {
+    const snoozeUntil = step.details?.snoozeUntil 
+      ? new Date(step.details.snoozeUntil).toLocaleDateString('en-US', {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric',
+        })
+      : 'a future date';
+    
+    const reason = step.details?.reason;
+    
+    return `Snoozed until ${snoozeUntil}${reason ? `. Reason: ${reason}` : ''}`;
   }
 
   if (step.rule === 'COVERAGE_MATCHING') {

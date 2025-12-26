@@ -17,6 +17,7 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { useRecentAction } from '@/hooks/useRecentAction';
 import { DecisionTraceModal } from './DecisionTraceModal';
+import { SnoozeModal } from './SnoozeModal';
 
 type Props = {
   propertyId: string;
@@ -36,6 +37,7 @@ export const ActionCenter: React.FC<Props> = ({
   const [error, setError] = useState<string | null>(null);
 
   const [showSuppressed, setShowSuppressed] = useState(false);
+  const [showSnoozed, setShowSnoozed] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [template, setTemplate] = useState<MaintenanceTaskTemplate | null>(null);
@@ -43,6 +45,7 @@ export const ActionCenter: React.FC<Props> = ({
 
   const [traceAction, setTraceAction] =
     useState<OrchestratedActionDTO | null>(null);
+  const [isSnoozeModalOpen, setIsSnoozeModalOpen] = useState(false);
 
   const recentKey = `ctc:actioncenter:recent:${propertyId}`;
   const recent = useRecentAction(recentKey);
@@ -228,15 +231,76 @@ export const ActionCenter: React.FC<Props> = ({
   const handleOpenDecisionTrace = useCallback((action: OrchestratedActionDTO) => {
     setTraceAction(action);
   }, []);
+  const handleSnoozeFromTrace = useCallback(() => {
+    if (!traceAction) return;
+    setIsSnoozeModalOpen(true);
+  }, [traceAction]);
+  
+  const handleSnooze = useCallback(
+    async (snoozeUntil: Date, snoozeReason?: string) => {
+      if (!traceAction || !propertyId) return;
+  
+      try {
+        await api.snoozeOrchestrationAction(
+          propertyId,
+          traceAction.actionKey,
+          snoozeUntil.toISOString(),
+          snoozeReason
+        );
+  
+        toast({
+          title: 'Action snoozed',
+          description: `We'll remind you about this on ${snoozeUntil.toLocaleDateString()}.`,
+        });
+  
+        setTraceAction(null);
+        setIsSnoozeModalOpen(false);
+        await loadActions();
+      } catch (e: any) {
+        toast({
+          title: 'Unable to snooze action',
+          description: e?.message || 'Please try again.',
+          variant: 'destructive',
+        });
+      }
+    },
+    [traceAction, propertyId, loadActions, toast]
+  );
+  
+  const handleUnsnooze = useCallback(
+    async (action: OrchestratedActionDTO) => {
+      if (!propertyId) return;
+  
+      try {
+        await api.unsnoozeOrchestrationAction(propertyId, action.actionKey);
+  
+        toast({
+          title: 'Action un-snoozed',
+          description: 'This action is now active again.',
+        });
+  
+        await loadActions();
+      } catch (e: any) {
+        toast({
+          title: 'Unable to un-snooze action',
+          description: e?.message || 'Please try again.',
+          variant: 'destructive',
+        });
+      }
+    },
+    [propertyId, loadActions, toast]
+  );
+
 
   /* ------------------------------------------------------------------
      Derived Groups
   ------------------------------------------------------------------- */
 
-  const { active, suppressed } = useMemo(() => {
+  const { active, suppressed, snoozed } = useMemo(() => {
     return {
       active: actions.filter(a => !a.suppression?.suppressed),
       suppressed: actions.filter(a => a.suppression?.suppressed),
+      snoozed: actions.filter(a => a.snooze !== null),
     };
   }, [actions]);
 
@@ -375,6 +439,65 @@ export const ActionCenter: React.FC<Props> = ({
             )}
           </div>
         )}
+
+        {/* Snoozed Actions */}
+        {snoozed.length > 0 && (
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => setShowSnoozed(v => !v)}
+              className="text-sm font-medium text-muted-foreground hover:underline"
+            >
+              {showSnoozed
+                ? 'Hide snoozed actions'
+                : `Show snoozed actions (${snoozed.length})`}
+            </button>
+
+            {showSnoozed && (
+              <div className="mt-3 space-y-3">
+                {snoozed.map(action => {
+                  const snoozeInfo = action.snooze;
+                  const snoozeLabel = snoozeInfo
+                    ? `Snoozed for ${snoozeInfo.daysRemaining} more ${
+                        snoozeInfo.daysRemaining === 1 ? 'day' : 'days'
+                      }`
+                    : 'Snoozed';
+
+                  return (
+                    <div key={action.actionKey} className="relative">
+                      <OrchestrationActionCard
+                        action={action}
+                        ctaDisabled
+                        ctaLabel={snoozeLabel}
+                        forceShowCta
+                        onOpenTrace={handleOpenDecisionTrace}
+                      />
+                      
+                      {/* Un-snooze Button */}
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          onClick={() => handleUnsnooze(action)}
+                          className="text-xs text-blue-600 hover:underline"
+                        >
+                          Un-snooze now
+                        </button>
+                        <button
+                          onClick={() => {
+                            setTraceAction(action);
+                            setIsSnoozeModalOpen(true);
+                          }}
+                          className="text-xs text-blue-600 hover:underline"
+                        >
+                          Extend snooze
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <MaintenanceConfigModal
@@ -396,15 +519,21 @@ export const ActionCenter: React.FC<Props> = ({
         open={Boolean(traceAction)}
         onClose={() => setTraceAction(null)}
         steps={traceAction?.decisionTrace?.steps ?? []}
-        // 🔑 Only show "Mark as completed" for non-suppressed RISK actions
         onMarkCompleted={
           traceAction && 
           traceAction.source === 'RISK' && 
-          !traceAction.suppression?.suppressed
+          !traceAction.suppression?.suppressed &&
+          !traceAction.snooze  // 🔑 Don't show if snoozed
             ? handleMarkCompletedFromTrace
             : undefined
         }
-        // 🔑 Only show "Undo" for RISK actions with USER_MARKED_COMPLETE
+        onSnooze={
+          traceAction &&
+          traceAction.source === 'RISK' &&
+          !traceAction.suppression?.suppressed  // 🔑 NEW: Show for non-suppressed RISK
+            ? handleSnoozeFromTrace
+            : undefined
+        }
         onUndo={
           traceAction &&
           traceAction.source === 'RISK' &&
@@ -413,6 +542,12 @@ export const ActionCenter: React.FC<Props> = ({
             ? handleUndoCompletedFromTrace
             : undefined
         }
+      />
+      <SnoozeModal
+        open={isSnoozeModalOpen}
+        onClose={() => setIsSnoozeModalOpen(false)}
+        onSnooze={handleSnooze}
+        currentSnoozeUntil={traceAction?.snooze?.snoozeUntil}
       />
     </>
   );

@@ -4,7 +4,9 @@ import { Router } from 'express';
 import {
   getOrchestrationSummaryHandler,
   markOrchestrationActionCompleted,
+  snoozeOrchestrationAction,
   undoOrchestrationAction,
+  unsnoozeOrchestrationAction,
 } from '../controllers/orchestration.controller';
 
 import { authenticate } from '../middleware/auth.middleware';
@@ -34,6 +36,22 @@ router.post(
   authenticate,
   propertyAuthMiddleware,
   undoOrchestrationAction
+);
+
+// POST /api/orchestration/:propertyId/actions/:actionKey/snooze
+router.post(
+  '/:propertyId/actions/:actionKey/snooze',
+  authenticate,
+  propertyAuthMiddleware,
+  snoozeOrchestrationAction
+);
+
+// POST /api/orchestration/:propertyId/actions/:actionKey/unsnooze
+router.post(
+  '/:propertyId/actions/:actionKey/unsnooze',
+  authenticate,
+  propertyAuthMiddleware,
+  unsnoozeOrchestrationAction
 );
 
 export default router;

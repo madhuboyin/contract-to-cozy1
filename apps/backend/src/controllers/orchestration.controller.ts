@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { getOrchestrationSummary } from '../services/orchestration.service';
 import { AuthRequest } from '../types/auth.types';
 import { recordOrchestrationEvent } from '../services/orchestrationEvent.service';
+import { snoozeAction, unsnoozeAction } from '../services/orchestrationSnooze.service';
 import { prisma } from '../lib/prisma';
 
 /**
@@ -137,4 +138,67 @@ export async function getOrchestrationSummaryHandler(
       message: 'Failed to build orchestration summary',
     });
   }
+}
+
+/**
+ * POST /api/orchestration/:propertyId/actions/:actionKey/snooze
+ * 
+ * Snooze an action until a specific date
+ */
+export async function snoozeOrchestrationAction(
+  req: AuthRequest,
+  res: Response
+) {
+  const { propertyId, actionKey } = req.params;
+  const { snoozeUntil, snoozeReason } = req.body;
+
+  if (!propertyId || !actionKey) {
+    return res.status(400).json({ error: 'Missing propertyId or actionKey' });
+  }
+
+  if (!snoozeUntil) {
+    return res.status(400).json({ error: 'Missing snoozeUntil date' });
+  }
+
+  // Validate snoozeUntil is in the future
+  const snoozeDate = new Date(snoozeUntil);
+  if (snoozeDate <= new Date()) {
+    return res.status(400).json({ error: 'Snooze date must be in the future' });
+  }
+
+  // Cap at 365 days
+  const maxDate = new Date();
+  maxDate.setDate(maxDate.getDate() + 365);
+  if (snoozeDate > maxDate) {
+    return res.status(400).json({ error: 'Snooze period cannot exceed 365 days' });
+  }
+
+  await snoozeAction({
+    propertyId,
+    actionKey: decodeURIComponent(actionKey),
+    snoozeUntil: snoozeDate,
+    snoozeReason: snoozeReason || undefined,
+  });
+
+  return res.json({ success: true });
+}
+
+/**
+ * POST /api/orchestration/:propertyId/actions/:actionKey/unsnooze
+ * 
+ * Un-snooze an action (bring back immediately)
+ */
+export async function unsnoozeOrchestrationAction(
+  req: AuthRequest,
+  res: Response
+) {
+  const { propertyId, actionKey } = req.params;
+
+  if (!propertyId || !actionKey) {
+    return res.status(400).json({ error: 'Missing propertyId or actionKey' });
+  }
+
+  await unsnoozeAction(propertyId, decodeURIComponent(actionKey));
+
+  return res.json({ success: true });
 }

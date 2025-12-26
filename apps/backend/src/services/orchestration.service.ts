@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { ServiceCategory, BookingStatus } from '@prisma/client';
 import { OrchestrationSuppressionService, SuppressionSource } from './orchestrationSuppression.service';
 import { computeActionKey } from './orchestrationActionKey';
+import { getPropertySnoozes, ActiveSnooze } from './orchestrationSnooze.service';
 
 type DerivedFrom = {
   riskAssessment: boolean;
@@ -102,6 +103,14 @@ export type OrchestratedAction = {
     status: string;
     lastCompletedDate: string | null;
   };
+
+  snooze?: {
+    snoozedAt: string;
+    snoozeUntil: string;
+    snoozeReason: string | null;
+    daysRemaining: number;
+  };
+
   decisionTrace?: {
     steps: DecisionTraceStep[];
   };
@@ -118,11 +127,13 @@ export type OrchestrationSummary = {
 
   actions: OrchestratedAction[];
   suppressedActions: OrchestratedAction[];
+  snoozedActions: OrchestratedAction[];
 
   counts: {
     riskActions: number;
     checklistActions: number;
     suppressedActions: number;
+    snoozedActions: number;
   };
 };
 
@@ -564,8 +575,9 @@ async function mapRiskDetailToAction(params: {
   insurancePolicies: Array<any>;
   bookingCategorySet: Set<ServiceCategory>;
   bookingByCategory: Map<ServiceCategory, { id: string; status: BookingStatus }>;
+  snoozeMap: Map<string, ActiveSnooze>;
 }): Promise<OrchestratedAction | null> {
-  const { propertyId, d, index, warranties, insurancePolicies, bookingCategorySet, bookingByCategory } = params;
+  const { propertyId, d, index, warranties, insurancePolicies, bookingCategorySet, bookingByCategory, snoozeMap } = params;
 
   if (!isRiskActionable(d)) return null;
 
@@ -804,6 +816,31 @@ async function mapRiskDetailToAction(params: {
     sourceType: suppressionSource?.type || 'NONE',
   });
 
+  // 🔑 NEW: Check for active snooze
+  const activeSnooze = snoozeMap.get(actionKey);
+  const snoozeInfo = activeSnooze
+    ? {
+        snoozedAt: activeSnooze.snoozedAt.toISOString(),
+        snoozeUntil: activeSnooze.snoozeUntil.toISOString(),
+        snoozeReason: activeSnooze.snoozeReason,
+        daysRemaining: activeSnooze.daysRemaining,
+      }
+    : undefined;
+
+  // Add to decision trace if snoozed
+  if (activeSnooze) {
+    steps.push({
+      rule: 'USER_SNOOZED',
+      outcome: 'APPLIED',
+      details: {
+        snoozedAt: activeSnooze.snoozedAt.toISOString(),
+        snoozeUntil: activeSnooze.snoozeUntil.toISOString(),
+        daysRemaining: activeSnooze.daysRemaining,
+        reason: activeSnooze.snoozeReason,
+      },
+    });
+  }
+
   const confidenceRaw = computeConfidence({
     source: 'RISK',
     riskLevel,
@@ -838,6 +875,7 @@ async function mapRiskDetailToAction(params: {
     suppression,
     hasRelatedChecklistItem,
     relatedChecklistItem: relatedChecklistItemDetails,
+    snooze: snoozeInfo,
     decisionTrace: { steps },
 
     overdue: false,
@@ -998,7 +1036,9 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
   const { categorySet: bookingCategorySet, bookingByCategory } =
     await getActiveBookingCategorySet(propertyId);
 
-    const propertyCoverage = await prisma.property
+  // 1) Fetch property coverage and snoozes in parallel
+  const [propertyCoverage, snoozeMap] = await Promise.all([
+    prisma.property
     .findUnique({
       where: { id: propertyId },
       select: {
@@ -1025,7 +1065,9 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
         },
       },
     })
-    .catch(() => null as any);
+    .catch(() => null as any),
+    getPropertySnoozes(propertyId),
+  ]);
 
   const warranties = propertyCoverage?.warranties ?? [];
   const insurancePolicies = propertyCoverage?.insurancePolicies ?? [];
@@ -1102,6 +1144,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
           insurancePolicies,
           bookingCategorySet,
           bookingByCategory,
+          snoozeMap,
         });
       })
     )).filter(Boolean) as OrchestratedAction[]
@@ -1169,8 +1212,10 @@ for (const action of candidates) {
   }
 }
   
-  const suppressedActions = candidates.filter(a => a.suppression.suppressed);
-  const actionable = candidates.filter(a => !a.suppression.suppressed);  
+  // 5) Separate snoozed, suppressed, and active
+  const snoozedActions = candidates.filter(a => a.snooze);
+  const suppressedActions = candidates.filter(a => !a.snooze && a.suppression.suppressed);
+  const actionable = candidates.filter(a => !a.snooze && !a.suppression.suppressed);
 
   // 6) Sort actionable
   const actions = actionable.sort((a, b) => {
@@ -1196,10 +1241,12 @@ for (const action of candidates) {
     derivedFrom,
     actions,
     suppressedActions,
+    snoozedActions,
     counts: {
       riskActions,
       checklistActions,
       suppressedActions: suppressedActions.length,
+      snoozedActions: snoozedActions.length,
     },
   };
 }

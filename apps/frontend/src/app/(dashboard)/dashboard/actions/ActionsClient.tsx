@@ -17,6 +17,7 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { DecisionTraceModal } from '@/components/orchestration/DecisionTraceModal';
 import { useCallback } from 'react';
+import { SnoozeModal } from '@/components/orchestration/SnoozeModal';
 
 export function ActionsClient() {
   const { selectedPropertyId } = usePropertyContext();
@@ -39,6 +40,10 @@ export function ActionsClient() {
   const [handledActions, setHandledActions] = useState<Set<string>>(new Set());
   const [traceAction, setTraceAction] = useState<OrchestratedActionDTO | null>(null);
 
+  const [isSnoozeModalOpen, setIsSnoozeModalOpen] = useState(false);
+  const [snoozedActions, setSnoozedActions] = useState<OrchestratedActionDTO[]>([]);
+  const [showSnoozed, setShowSnoozed] = useState(false);
+
   const loadActions = async () => {
     if (!propertyId) {
       setError('No property selected.');
@@ -60,6 +65,7 @@ export function ActionsClient() {
 
       setActions(adapted.actions);
       setSuppressedActions(adapted.suppressedActions ?? []);
+      setSnoozedActions(summary.snoozedActions || []);
 
       if (propertyRes?.success) {
         setPropertyName(propertyRes.data.name ?? 'My Home');
@@ -189,6 +195,65 @@ export function ActionsClient() {
       });
     }
   }, [traceAction, propertyId, toast]);
+  const handleSnoozeFromTrace = useCallback(() => {
+    if (!traceAction) return;
+    setIsSnoozeModalOpen(true);
+  }, [traceAction]);
+  
+  const handleSnooze = useCallback(
+    async (snoozeUntil: Date, snoozeReason?: string) => {
+      if (!traceAction || !propertyId) return;
+  
+      try {
+        await api.snoozeOrchestrationAction(
+          propertyId,
+          traceAction.actionKey,
+          snoozeUntil.toISOString(),
+          snoozeReason
+        );
+  
+        toast({
+          title: 'Action snoozed',
+          description: `We'll remind you about this on ${snoozeUntil.toLocaleDateString()}.`,
+        });
+  
+        setTraceAction(null);
+        setIsSnoozeModalOpen(false);
+        loadActions();
+      } catch (e: any) {
+        toast({
+          title: 'Unable to snooze action',
+          description: e?.message || 'Please try again.',
+          variant: 'destructive',
+        });
+      }
+    },
+    [traceAction, propertyId, loadActions, toast]
+  );
+  
+  const handleUnsnooze = useCallback(
+    async (action: OrchestratedActionDTO) => {
+      if (!propertyId) return;
+  
+      try {
+        await api.unsnoozeOrchestrationAction(propertyId, action.actionKey);
+  
+        toast({
+          title: 'Action un-snoozed',
+          description: 'This action is now active again.',
+        });
+  
+        loadActions();
+      } catch (e: any) {
+        toast({
+          title: 'Unable to un-snooze action',
+          description: e?.message || 'Please try again.',
+          variant: 'destructive',
+        });
+      }
+    },
+    [propertyId, loadActions, toast]
+  );
 
   if (loading) {
     return (
@@ -303,6 +368,68 @@ export function ActionsClient() {
             </section>
           </>
         )}
+        {/* Snoozed Actions */}
+        {snoozedActions.length > 0 && (
+          <>
+            <Separator />
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-700">
+                  Snoozed Actions ({snoozedActions.length})
+                </h2>
+                <button
+                  onClick={() => setShowSnoozed(!showSnoozed)}
+                  className="text-sm text-blue-600 hover:underline"
+                >
+                  {showSnoozed ? 'Hide' : 'Show'}
+                </button>
+              </div>
+
+              {showSnoozed && (
+                <div className="space-y-3">
+                  {snoozedActions.map(action => {
+                    const snoozeInfo = action.snooze;
+                    const snoozeLabel = snoozeInfo
+                      ? `Snoozed for ${snoozeInfo.daysRemaining} more ${
+                          snoozeInfo.daysRemaining === 1 ? 'day' : 'days'
+                        }`
+                      : 'Snoozed';
+
+                    return (
+                      <div key={action.id} className="space-y-2">
+                        <OrchestrationActionCard
+                          action={action}
+                          onCtaClick={handleActionCta}
+                          onOpenTrace={handleOpenDecisionTrace}
+                          ctaDisabled
+                          ctaLabel={snoozeLabel}
+                        />
+                        
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleUnsnooze(action)}
+                            className="text-xs text-blue-600 hover:underline"
+                          >
+                            Un-snooze now
+                          </button>
+                          <button
+                            onClick={() => {
+                              setTraceAction(action);
+                              setIsSnoozeModalOpen(true);
+                            }}
+                            className="text-xs text-blue-600 hover:underline"
+                          >
+                            Extend snooze
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </>
+        )}
       </div>
 
       {/* Modal */}
@@ -326,8 +453,16 @@ export function ActionsClient() {
         onMarkCompleted={
           traceAction && 
           traceAction.source === 'RISK' && 
-          !traceAction.suppression?.suppressed
+          !traceAction.suppression?.suppressed &&
+          !traceAction.snooze
             ? handleMarkCompletedFromTrace
+            : undefined
+        }
+        onSnooze={
+          traceAction &&
+          traceAction.source === 'RISK' &&
+          !traceAction.suppression?.suppressed
+            ? handleSnoozeFromTrace
             : undefined
         }
         onUndo={
@@ -338,6 +473,12 @@ export function ActionsClient() {
             ? handleUndoCompletedFromTrace
             : undefined
         }
+      />
+      <SnoozeModal
+        open={isSnoozeModalOpen}
+        onClose={() => setIsSnoozeModalOpen(false)}
+        onSnooze={handleSnooze}
+        currentSnoozeUntil={traceAction?.snooze?.snoozeUntil}
       />
     </>
   );

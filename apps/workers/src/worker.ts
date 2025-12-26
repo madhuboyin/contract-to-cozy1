@@ -14,7 +14,7 @@ import { Worker } from 'bullmq';
 import { calculateAssetRisk, calculateTotalRiskScore, filterRelevantAssets, AssetRiskDetail } from '../../backend/src/utils/riskCalculator.util';
 import { RISK_ASSET_CONFIG } from '../../backend/src/config/risk-constants';
 import { calculateFinancialEfficiency } from '../../backend/src/utils/FinancialCalculator.util';
-import { sendEmailNotificationJob } from './jobs/sendEmailNotification.job';
+import { sendEmailNotificationJob, runDailyEmailDigest } from './jobs/sendEmailNotification.job';
 import { sendPushNotificationJob } from './jobs/sendPushNotification.job';
 import { sendSmsNotificationJob } from './jobs/sendSmsNotification.job';
 
@@ -372,6 +372,14 @@ function startWorker() {
     timezone: 'America/New_York',
   });
   
+  cron.schedule(
+    '0 8 * * *',
+    async () => {
+      console.log('[DIGEST] Running daily email digest...');
+      await runDailyEmailDigest();
+    },
+    { timezone: 'America/New_York' }
+  );
   // =============================================================================
   // FIX: Initialize BullMQ Worker with correct queue name and job handlers
   // =============================================================================

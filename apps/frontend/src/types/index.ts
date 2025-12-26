@@ -1009,6 +1009,13 @@ export interface ActionConfidenceDTO {
   level: 'LOW' | 'MEDIUM' | 'HIGH';
   explanation?: string[];
 };
+
+export interface SnoozeInfoDTO {
+  snoozedAt: string;
+  snoozeUntil: string;
+  snoozeReason: string | null;
+  daysRemaining: number;
+}
 /**
  * Orchestrated Action DTO
  * Returned by /api/orchestration/:propertyId
@@ -1064,7 +1071,7 @@ export interface OrchestratedActionDTO {
     status: string;
     lastCompletedDate: string | null;
   };
-
+  snooze?: SnoozeInfoDTO;  
   decisionTrace?: {
     steps: DecisionTraceStepDTO[];
   };
@@ -1093,11 +1100,13 @@ export interface OrchestrationSummaryDTO {
 
   // Explicitly suppressed (transparent UX)
   suppressedActions: OrchestratedActionDTO[];
+  snoozedActions: OrchestratedActionDTO[];
 
   counts: {
     riskActions: number;
     checklistActions: number;
     suppressedActions: number;
+    snoozedActions: number;
   };
 }
 
