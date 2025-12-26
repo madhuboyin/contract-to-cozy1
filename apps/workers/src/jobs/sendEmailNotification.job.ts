@@ -11,9 +11,7 @@ export async function sendEmailNotificationJob(
     where: { id: notificationDeliveryId },
     include: {
       notification: {
-        include: {
-          user: true,
-        },
+        include: { user: true },
       },
     },
   });
@@ -37,14 +35,74 @@ export async function sendEmailNotificationJob(
 
   try {
     const html = `
-      <h3>${notification.title}</h3>
-      <p>${notification.message}</p>
-      ${
-        notification.actionUrl
-          ? `<p><a href="${notification.actionUrl}">View details</a></p>`
-          : ''
-      }
-    `;
+<!DOCTYPE html>
+<html>
+  <body style="margin:0;padding:0;background:#f4f5f7;font-family:Arial,sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td align="center" style="padding:24px;">
+          <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;">
+            
+            <!-- Header -->
+            <tr>
+              <td style="padding:20px 24px;border-bottom:1px solid #eee;">
+                <h2 style="margin:0;color:#2e7d32;">Contract to Cozy</h2>
+                <p style="margin:6px 0 0;color:#555;font-size:14px;">
+                  See what’s happening with your home
+                </p>
+              </td>
+            </tr>
+
+            <!-- Notification Card -->
+            <tr>
+              <td style="padding:20px 24px;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:6px;">
+                  <tr>
+                    <td style="padding:16px;">
+                      <h3 style="margin:0 0 8px;font-size:16px;color:#111;">
+                        ${notification.title}
+                      </h3>
+                      <p style="margin:0 0 12px;font-size:14px;color:#444;">
+                        ${notification.message}
+                      </p>
+
+                      ${
+                        notification.actionUrl
+                          ? `
+                        <a href="${notification.actionUrl}"
+                           style="display:inline-block;padding:10px 14px;
+                                  background:#2e7d32;color:#ffffff;
+                                  text-decoration:none;border-radius:4px;
+                                  font-size:14px;">
+                          View details →
+                        </a>
+                      `
+                          : ''
+                      }
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style="padding:16px 24px;font-size:12px;color:#777;">
+                You’re receiving this because you’re a Contract to Cozy user.
+                <br />
+                <a href="#" style="color:#777;text-decoration:underline;">
+                  Manage notification preferences
+                </a>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+`;
 
     await sendEmail(user.email, notification.title, html);
 
