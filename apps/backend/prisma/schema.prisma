@@ -124,6 +124,48 @@ enum LocalUpdateEventType {
   CLICK
 }
 
+enum Season {
+  SPRING
+  SUMMER
+  FALL
+  WINTER
+}
+
+enum ClimateRegion {
+  VERY_COLD
+  COLD
+  MODERATE
+  WARM
+  TROPICAL
+}
+
+enum SeasonalChecklistStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  DISMISSED
+}
+
+enum SeasonalTaskStatus {
+  RECOMMENDED
+  ADDED
+  COMPLETED
+  DISMISSED
+  SNOOZED
+}
+
+enum TaskPriority {
+  CRITICAL
+  RECOMMENDED
+  OPTIONAL
+}
+
+enum NotificationTiming {
+  EARLY
+  STANDARD
+  LATE
+}
+
 // NEW: Service 
 // category configuration for segment targeting
 model ServiceCategoryConfig {
@@ -512,6 +554,11 @@ model ChecklistItem {
   lastCompletedDate  DateTime?
   checklistId        String
   propertyId         String?
+
+  seasonalChecklistItemId  String?    @map("seasonal_checklist_item_id")
+  isSeasonal               Boolean    @default(false) @map("is_seasonal")
+  season                   Season?
+  seasonalChecklistItem    SeasonalChecklistItem?   @relation
   
   checklist   Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
   property    Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
@@ -522,6 +569,7 @@ model ChecklistItem {
   @@index([actionKey])
   @@unique([propertyId, actionKey])
   @@unique([propertyId, orchestrationActionId])
+  @@index([isSeasonal, season])
   
   @@map("checklist_items")
 }
@@ -605,6 +653,10 @@ model Property {
   // 1.3 NEW RELATION FOR FINANCIAL EFFICIENCY (Phase 2):
   financialReport  FinancialEfficiencyReport? @relation(name: "PropertyFinancialReport")
   inspectionReports   InspectionReport[]
+
+  seasonalChecklists       SeasonalChecklist[]
+  seasonalChecklistItems   SeasonalChecklistItem[]
+  climateSetting           PropertyClimateSetting?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
