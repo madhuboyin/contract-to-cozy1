@@ -1480,6 +1480,70 @@ model OrchestrationActionSnooze {
   @@map("orchestration_action_snoozes")
 }
 
+model OrchestrationActionCompletion {
+  id            String   @id @default(uuid())
+  
+  // Scope
+  propertyId    String
+  actionKey     String   // Links to orchestration action
+  eventId       String   @unique // Links to USER_MARKED_COMPLETE event
+  
+  // Completion details
+  completedAt   DateTime
+  costAmount    Decimal? @db.Decimal(10, 2)
+  costCurrency  String   @default("USD")
+  didItMyself   Boolean  @default(false)
+  
+  serviceProviderName   String?
+  serviceProviderRating Int? // 1-5
+  
+  notes         String?  @db.Text
+  photoCount    Int      @default(0)
+  
+  // Metadata
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdBy     String?  // userId
+  undoneAt      DateTime? // If user undoes completion
+  
+  // Relations
+  photos        OrchestrationActionCompletionPhoto[]
+  
+  @@index([propertyId, actionKey])
+  @@index([propertyId, completedAt])
+  @@index([serviceProviderName])
+  @@map("orchestration_action_completions")
+}
+
+model OrchestrationActionCompletionPhoto {
+  id            String   @id @default(uuid())
+  
+  completionId  String
+  propertyId    String
+  
+  // File metadata
+  fileName      String
+  fileSizeBytes Int
+  mimeType      String
+  
+  // URLs (PLACEHOLDER - will store S3 URLs when image processing is implemented)
+  originalUrl   String
+  thumbnailUrl  String
+  
+  // Dimensions
+  width         Int?
+  height        Int?
+  
+  orderIndex    Int      @default(0)
+  uploadedAt    DateTime @default(now())
+  
+  // Relations
+  completion    OrchestrationActionCompletion @relation(fields: [completionId], references: [id], onDelete: Cascade)
+  
+  @@index([completionId])
+  @@index([propertyId])
+  @@map("orchestration_action_completion_photos")
+}
 // ============================================================================
 // REVIEWS & RATINGS
 // ============================================================================
