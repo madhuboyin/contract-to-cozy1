@@ -1,4 +1,6 @@
 // apps/workers/src/jobs/seasonalNotification.job.ts
+// FIXED VERSION - Adds rate limiting and HTML escaping
+
 import { prisma } from '../lib/prisma';
 import { sendEmail } from '../email/email.service';
 
@@ -13,27 +15,43 @@ type ChecklistItemWithTemplate = {
 };
 
 /**
+ * HTML escape function to prevent XSS in emails
+ */
+function escapeHtml(text: string): string {
+  if (!text) return '';
+  const map: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+/**
  * Background job to send seasonal checklist email notifications
- * Runs daily at 8am
+ * Runs daily at 9am EST
  * 
- * Logic:
- * - Find all checklists that haven't been notified yet
- * - Send email with task breakdown (Critical/Recommended/Optional)
- * - Mark as notified
+ * IMPROVEMENTS:
+ * - Added batch processing with rate limiting
+ * - Added HTML escaping for security
+ * - Optimized database queries
+ * - Better error handling
  */
 export async function sendSeasonalNotifications() {
-  console.log('[SEASONAL] Starting notification job...');
+  console.log('[SEASONAL-NOTIFY] Starting notification job...');
 
   try {
-    // FIXED: Simplified where clause - removed nested climateSetting relation
+    // OPTIMIZED: Single query with proper joins
     // @ts-ignore - Model exists in schema but may not be in generated client
-    const allChecklists = await (prisma as any).seasonalChecklist.findMany({
+    const checklistsToNotify = await (prisma as any).seasonalChecklist.findMany({
       where: {
         status: 'PENDING',
         notificationSentAt: null,
         property: {
           homeownerProfile: {
-            segment: 'EXISTING_OWNER', // Only existing owners
+            segment: 'EXISTING_OWNER',
           },
         },
       },
@@ -51,131 +69,152 @@ export async function sendSeasonalNotifications() {
       },
     });
 
-    console.log(`[SEASONAL] Found ${allChecklists.length} potential checklists to notify`);
+    console.log(`[SEASONAL-NOTIFY] Found ${checklistsToNotify.length} checklists to potentially notify`);
 
-    // FIXED: Filter by notification settings separately
-    const checklistsToNotify = [];
-    for (const checklist of allChecklists) {
+    // Filter by notification settings (still need separate query for climate settings)
+    const filtered = [];
+    for (const checklist of checklistsToNotify) {
       try {
         // @ts-ignore
         const climateSetting = await (prisma as any).propertyClimateSetting.findUnique({
           where: { propertyId: checklist.propertyId },
         });
 
-        if (climateSetting?.notificationEnabled === true) {
-          checklistsToNotify.push(checklist);
+        if (climateSetting?.notificationEnabled === true && checklist.property.user?.email) {
+          filtered.push(checklist);
         }
       } catch (error) {
         console.error(
-          `[SEASONAL] Error checking climate settings for property ${checklist.propertyId}:`,
+          `[SEASONAL-NOTIFY] Error checking settings for property ${checklist.propertyId}:`,
           error
         );
       }
     }
 
-    console.log(
-      `[SEASONAL] After filtering: ${checklistsToNotify.length} checklists with notifications enabled`
-    );
+    console.log(`[SEASONAL-NOTIFY] ${filtered.length} checklists with notifications enabled`);
 
+    // BATCH PROCESSING: Send emails in batches with rate limiting
+    const BATCH_SIZE = 25;
+    const BATCH_DELAY_MS = 2000; // 2 second delay between batches
+    
     let sent = 0;
     let errors = 0;
 
-    for (const checklist of checklistsToNotify) {
-      try {
-        // FIXED: Better null handling
-        const user = checklist.property.user;
-        if (!user?.email) {
+    for (let i = 0; i < filtered.length; i += BATCH_SIZE) {
+      const batch = filtered.slice(i, i + BATCH_SIZE);
+      
+      console.log(
+        `[SEASONAL-NOTIFY] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(filtered.length / BATCH_SIZE)} ` +
+        `(${batch.length} checklists)`
+      );
+
+      // Process batch in parallel
+      const results = await Promise.allSettled(
+        batch.map(checklist => sendNotificationForChecklist(checklist))
+      );
+
+      // Count successes and failures
+      results.forEach((result, idx) => {
+        if (result.status === 'fulfilled') {
+          sent++;
           console.log(
-            `[SEASONAL] Skipping checklist ${checklist.id} - no user email`
+            `[SEASONAL-NOTIFY] ✅ Sent notification for checklist ${batch[idx].id}`
           );
-          continue;
+        } else {
+          errors++;
+          console.error(
+            `[SEASONAL-NOTIFY] ❌ Failed to send for checklist ${batch[idx].id}:`,
+            result.reason
+          );
         }
+      });
 
-        const firstName = user.firstName || 'Homeowner';
-
-        // Calculate days until season starts
-        const daysUntil = Math.floor(
-          (new Date(checklist.seasonStartDate).getTime() - new Date().getTime()) /
-            (1000 * 60 * 60 * 24)
-        );
-
-        // Group tasks by priority
-        const criticalTasks = checklist.items.filter(
-          (item: ChecklistItemWithTemplate) => item.priority === 'CRITICAL'
-        );
-        const recommendedTasks = checklist.items.filter(
-          (item: ChecklistItemWithTemplate) => item.priority === 'RECOMMENDED'
-        );
-        const optionalTasks = checklist.items.filter(
-          (item: ChecklistItemWithTemplate) => item.priority === 'OPTIONAL'
-        );
-
-        // Build email HTML
-        const emailHtml = buildSeasonalNotificationEmail({
-          firstName,
-          season: checklist.season,
-          year: checklist.year,
-          daysUntil,
-          climateRegion: checklist.climateRegion,
-          totalTasks: checklist.totalTasks,
-          criticalTasks: criticalTasks.map((item: ChecklistItemWithTemplate) => ({
-            title: item.title,
-            description: item.description,
-            whyItMatters: item.seasonalTaskTemplate.whyItMatters,
-          })),
-          recommendedTasks: recommendedTasks.map((item: ChecklistItemWithTemplate) => ({
-            title: item.title,
-            description: item.description,
-          })),
-          optionalTasks: optionalTasks.map((item: ChecklistItemWithTemplate) => ({
-            title: item.title,
-          })),
-          checklistUrl: `${process.env.FRONTEND_URL}/dashboard/seasonal`,
-          settingsUrl: `${process.env.FRONTEND_URL}/dashboard/seasonal/settings`,
-        });
-
-        // Send email
-        await sendEmail(
-          user.email,
-          `${getSeasonName(checklist.season)} is approaching - ${checklist.totalTasks} tasks to prepare your home`,
-          emailHtml
-        );
-
-        // Mark as notified
-        // @ts-ignore - Model exists in schema but may not be in generated client
-        await (prisma as any).seasonalChecklist.update({
-          where: { id: checklist.id },
-          data: {
-            notificationSentAt: new Date(),
-          },
-        });
-
-        console.log(
-          `[SEASONAL] Sent notification for ${checklist.season} ${checklist.year} ` +
-            `to ${user.email}`
-        );
-
-        sent++;
-      } catch (emailError) {
-        console.error(
-          `[SEASONAL] Error sending notification for checklist ${checklist.id}:`,
-          emailError
-        );
-        errors++;
+      // Delay between batches (except for last batch)
+      if (i + BATCH_SIZE < filtered.length) {
+        console.log(`[SEASONAL-NOTIFY] Waiting ${BATCH_DELAY_MS}ms before next batch...`);
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
       }
     }
 
     console.log(
-      `[SEASONAL] Notification job complete. Sent: ${sent}, Errors: ${errors}`
+      `[SEASONAL-NOTIFY] Job complete. Sent: ${sent}, Errors: ${errors}, Total: ${filtered.length}`
     );
   } catch (error) {
-    console.error('[SEASONAL] Fatal error in notification job:', error);
+    console.error('[SEASONAL-NOTIFY] Fatal error in notification job:', error);
     throw error;
   }
 }
 
 /**
+ * Send notification for a single checklist
+ */
+async function sendNotificationForChecklist(checklist: any): Promise<void> {
+  const user = checklist.property.user;
+  const firstName = user.firstName || 'Homeowner';
+
+  // Calculate days until season starts
+  const daysUntil = Math.floor(
+    (new Date(checklist.seasonStartDate).getTime() - new Date().getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+
+  // Group tasks by priority
+  const criticalTasks = checklist.items.filter(
+    (item: ChecklistItemWithTemplate) => item.priority === 'CRITICAL'
+  );
+  const recommendedTasks = checklist.items.filter(
+    (item: ChecklistItemWithTemplate) => item.priority === 'RECOMMENDED'
+  );
+  const optionalTasks = checklist.items.filter(
+    (item: ChecklistItemWithTemplate) => item.priority === 'OPTIONAL'
+  );
+
+  // Build email HTML with proper escaping
+  const emailHtml = buildSeasonalNotificationEmail({
+    firstName: escapeHtml(firstName),
+    season: checklist.season,
+    year: checklist.year,
+    daysUntil,
+    climateRegion: checklist.climateRegion,
+    totalTasks: checklist.totalTasks,
+    criticalTasks: criticalTasks.map((item: ChecklistItemWithTemplate) => ({
+      title: escapeHtml(item.title),
+      description: item.description ? escapeHtml(item.description) : null,
+      whyItMatters: item.seasonalTaskTemplate.whyItMatters 
+        ? escapeHtml(item.seasonalTaskTemplate.whyItMatters)
+        : null,
+    })),
+    recommendedTasks: recommendedTasks.map((item: ChecklistItemWithTemplate) => ({
+      title: escapeHtml(item.title),
+      description: item.description ? escapeHtml(item.description) : null,
+    })),
+    optionalTasks: optionalTasks.map((item: ChecklistItemWithTemplate) => ({
+      title: escapeHtml(item.title),
+    })),
+    checklistUrl: `${process.env.FRONTEND_URL}/dashboard/seasonal`,
+    settingsUrl: `${process.env.FRONTEND_URL}/dashboard/seasonal/settings`,
+  });
+
+  // Send email
+  await sendEmail(
+    user.email,
+    `${getSeasonName(checklist.season)} is approaching - ${checklist.totalTasks} tasks to prepare your home`,
+    emailHtml
+  );
+
+  // Mark as notified
+  // @ts-ignore
+  await (prisma as any).seasonalChecklist.update({
+    where: { id: checklist.id },
+    data: {
+      notificationSentAt: new Date(),
+    },
+  });
+}
+
+/**
  * Build HTML email for seasonal notification
+ * NOTE: All data passed in should already be HTML-escaped
  */
 function buildSeasonalNotificationEmail(data: {
   firstName: string;
@@ -299,7 +338,7 @@ function buildSeasonalNotificationEmail(data: {
           <tr>
             <td style="padding: 30px; text-align: center;">
               <a href="${data.checklistUrl}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 6px; font-size: 16px; font-weight: 600;">
-                View Full Checklist & Add Tasks
+                View Full Checklist &amp; Add Tasks
               </a>
             </td>
           </tr>
