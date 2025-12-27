@@ -14,17 +14,31 @@ import {
   formatDaysRemaining,
 } from '@/lib/utils/seasonHelpers';
 import { SeasonalChecklist } from '@/types/seasonal.types';
+import { usePropertyContext } from '@/lib/property/PropertyContext';
 
 export default function SeasonalMaintenancePage() {
   const [selectedChecklistId, setSelectedChecklistId] = useState<string | null>(null);
   const [expandedSeasons, setExpandedSeasons] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'current' | 'all' | 'completed'>('current');
 
-  // TODO: Get propertyId from context or route params
-  const propertyId = 'default-property-id';
+  // FIX: Get propertyId from context instead of hardcoded value
+  const { selectedPropertyId } = usePropertyContext();
+  const propertyId = selectedPropertyId;
 
-  const { data: climateInfo } = useClimateInfo(propertyId);
-  const { data: checklistsData, isLoading } = useSeasonalChecklists(propertyId);
+  const { data: climateInfo } = useClimateInfo(propertyId!);
+  const { data: checklistsData, isLoading } = useSeasonalChecklists(propertyId!);
+
+  // FIX: Handle no property selected
+  if (!propertyId) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+          <p className="text-yellow-800 font-medium">Please select a property to view seasonal maintenance</p>
+          <p className="text-yellow-600 text-sm mt-2">Go to the main dashboard and select a property</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -59,12 +73,12 @@ export default function SeasonalMaintenancePage() {
     return acc;
   }, {});
 
-  const toggleSeason = (key: string) => {
+  const toggleSeason = (seasonKey: string) => {
     const newExpanded = new Set(expandedSeasons);
-    if (newExpanded.has(key)) {
-      newExpanded.delete(key);
+    if (newExpanded.has(seasonKey)) {
+      newExpanded.delete(seasonKey);
     } else {
-      newExpanded.add(key);
+      newExpanded.add(seasonKey);
     }
     setExpandedSeasons(newExpanded);
   };
@@ -75,165 +89,169 @@ export default function SeasonalMaintenancePage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Seasonal Maintenance</h1>
         <p className="text-gray-600">
-          Keep your home in top shape with seasonal maintenance tasks tailored to your climate zone
+          Stay on top of seasonal home maintenance tasks tailored to your climate
         </p>
       </div>
 
-      {/* Tabs */}
-      <div className="mb-6 border-b border-gray-200">
-        <div className="flex space-x-8">
-          <button
-            onClick={() => setActiveTab('current')}
-            className={`pb-4 font-medium text-sm border-b-2 transition-colors ${
-              activeTab === 'current'
-                ? 'border-green-600 text-green-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <div className="flex items-center space-x-2">
-              <Calendar className="w-4 h-4" />
-              <span>Current Season</span>
+      {/* Climate Info Banner */}
+      {climateInfo?.data && (
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-6 mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-1">
+                Current Season: {currentSeason}
+              </h3>
+              <p className="text-sm text-gray-600">
+                Climate Region: {climateInfo.data.climateRegion}
+              </p>
             </div>
-          </button>
-          <button
-            onClick={() => setActiveTab('all')}
-            className={`pb-4 font-medium text-sm border-b-2 transition-colors ${
-              activeTab === 'all'
-                ? 'border-green-600 text-green-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            All Seasons
-          </button>
-          <button
-            onClick={() => setActiveTab('completed')}
-            className={`pb-4 font-medium text-sm border-b-2 transition-colors ${
-              activeTab === 'completed'
-                ? 'border-green-600 text-green-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <div className="flex items-center space-x-2">
-              <CheckCircle className="w-4 h-4" />
-              <span>Completed</span>
+            <div className="text-right">
+              <p className="text-sm text-gray-600">Next Season</p>
+              <p className="font-medium text-gray-900">{climateInfo.data.nextSeason}</p>
+              <p className="text-xs text-gray-500">
+                {climateInfo.data.daysUntilNextSeason} days away
+              </p>
             </div>
-          </button>
+          </div>
         </div>
+      )}
+
+      {/* Tabs */}
+      <div className="flex space-x-1 bg-gray-100 rounded-lg p-1 mb-6">
+        <button
+          onClick={() => setActiveTab('current')}
+          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+            activeTab === 'current'
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          Current Season
+        </button>
+        <button
+          onClick={() => setActiveTab('all')}
+          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+            activeTab === 'all'
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          All Seasons
+        </button>
+        <button
+          onClick={() => setActiveTab('completed')}
+          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+            activeTab === 'completed'
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          Completed
+        </button>
       </div>
 
       {/* Checklists */}
-      {filteredChecklists.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600">No seasonal checklists found</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {Object.keys(groupedChecklists).map((key) => {
-            const [season, year] = key.split('-');
-            const checklistsForSeason = groupedChecklists[key];
-            const checklist = checklistsForSeason[0]; // Use first one for display
-            const isExpanded = expandedSeasons.has(key);
-            const colors = getSeasonColors(season as any);
-            const seasonIcon = getSeasonIcon(season as any);
-            const seasonName = getSeasonName(season as any);
-            const completionPercentage = getCompletionPercentage(
-              checklist.tasksCompleted,
-              checklist.totalTasks
-            );
-            const progressColor = getProgressBarColor(completionPercentage);
+      <div className="space-y-4">
+        {Object.keys(groupedChecklists).length === 0 ? (
+          <div className="bg-white border border-gray-200 rounded-lg p-12 text-center">
+            <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No checklists yet</h3>
+            <p className="text-gray-600">
+              Seasonal checklists will be generated automatically as seasons change
+            </p>
+          </div>
+        ) : (
+          Object.entries(groupedChecklists).map(([seasonKey, seasonChecklists]: [string, any]) => {
+            const isExpanded = expandedSeasons.has(seasonKey);
+            const firstChecklist = seasonChecklists[0];
+            const season = firstChecklist.season;
+            const colors = getSeasonColors(season);
 
             return (
-              <div key={key} className="border border-gray-200 rounded-lg overflow-hidden">
-                {/* Header - Clickable */}
+              <div
+                key={seasonKey}
+                className={`bg-white border-2 rounded-lg overflow-hidden ${colors.borderColor}`}
+              >
+                {/* Season Header */}
                 <button
-                  onClick={() => toggleSeason(key)}
-                  className="w-full px-6 py-4 bg-white hover:bg-gray-50 transition-colors flex items-center justify-between"
+                  onClick={() => toggleSeason(seasonKey)}
+                  className={`w-full p-6 flex items-center justify-between hover:bg-gray-50 transition-colors ${colors.bgColor}`}
                 >
                   <div className="flex items-center space-x-4">
-                    <span className="text-3xl">{seasonIcon}</span>
+                    <span className="text-4xl">{getSeasonIcon(season)}</span>
                     <div className="text-left">
-                      <h3 className="text-lg font-semibold text-gray-900">
-                        {seasonName} {year}
+                      <h3 className={`text-xl font-bold ${colors.textColor}`}>
+                        {getSeasonName(season)} {firstChecklist.year}
                       </h3>
-                      <div className="flex items-center space-x-4 mt-1">
-                        <span className="text-sm text-gray-600">
-                          {checklist.tasksCompleted}/{checklist.totalTasks} completed
-                        </span>
-                        {checklist.status === 'COMPLETED' && (
-                          <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                            ✓ Complete
-                          </span>
-                        )}
-                        {checklist.daysRemaining !== undefined && checklist.daysRemaining > 0 && (
-                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full flex items-center space-x-1">
-                            <Clock className="w-3 h-3" />
-                            <span>{formatDaysRemaining(checklist.daysRemaining)}</span>
-                          </span>
-                        )}
-                      </div>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {firstChecklist.totalTasks} tasks • {firstChecklist.tasksCompleted} completed
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center space-x-4">
-                    {/* Progress Bar */}
-                    <div className="w-32">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className={`${progressColor} h-2 rounded-full transition-all`}
-                          style={{ width: `${completionPercentage}%` }}
-                        ></div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-gray-900">
+                        {getCompletionPercentage(firstChecklist.tasksCompleted, firstChecklist.totalTasks)}%
                       </div>
+                      <div className="text-xs text-gray-500">Complete</div>
                     </div>
                     {isExpanded ? (
-                      <ChevronDown className="w-5 h-5 text-gray-400" />
+                      <ChevronDown className="w-6 h-6 text-gray-400" />
                     ) : (
-                      <ChevronRight className="w-5 h-5 text-gray-400" />
+                      <ChevronRight className="w-6 h-6 text-gray-400" />
                     )}
                   </div>
                 </button>
 
-                {/* Expanded Content */}
+                {/* Checklist Details */}
                 {isExpanded && (
-                  <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <p className="text-sm text-gray-600">
-                          {checklist.totalTasks - checklist.tasksCompleted} tasks remaining
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Generated: {new Date(checklist.generatedAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => setSelectedChecklistId(checklist.id)}
-                        className={`px-4 py-2 rounded-md bg-gradient-to-r ${colors.gradient} text-white font-medium text-sm hover:shadow-md transition-shadow`}
-                      >
-                        View Full Checklist
-                      </button>
-                    </div>
+                  <div className="p-6 border-t border-gray-200">
+                    {seasonChecklists.map((checklist: SeasonalChecklist) => (
+                      <div key={checklist.id} className="mb-4 last:mb-0">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                              checklist.status === 'COMPLETED'
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {checklist.status}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => setSelectedChecklistId(checklist.id)}
+                            className="text-sm text-green-600 hover:text-green-700 font-medium"
+                          >
+                            View Details →
+                          </button>
+                        </div>
+                        
+                        {/* Progress Bar */}
+                        <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                          <div
+                            className={`h-2 rounded-full transition-all ${getProgressBarColor(getCompletionPercentage(checklist.tasksCompleted, checklist.totalTasks))}`}
+                            style={{ width: `${getCompletionPercentage(checklist.tasksCompleted, checklist.totalTasks)}%` }}
+                          />
+                        </div>
 
-                    {/* Quick Stats */}
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="text-center p-3 bg-white rounded-lg">
-                        <p className="text-2xl font-bold text-gray-900">{checklist.totalTasks}</p>
-                        <p className="text-xs text-gray-600">Total Tasks</p>
+                        <div className="flex items-center justify-between text-sm text-gray-600">
+                          <span>
+                            {checklist.tasksCompleted} of {checklist.totalTasks} tasks complete
+                          </span>
+                          <span className="flex items-center">
+                            <Clock className="w-4 h-4 mr-1" />
+                            {checklist.daysRemaining !== undefined ? formatDaysRemaining(checklist.daysRemaining) : 'N/A'}
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-center p-3 bg-white rounded-lg">
-                        <p className="text-2xl font-bold text-green-600">{checklist.tasksCompleted}</p>
-                        <p className="text-xs text-gray-600">Completed</p>
-                      </div>
-                      <div className="text-center p-3 bg-white rounded-lg">
-                        <p className="text-2xl font-bold text-blue-600">{checklist.tasksAdded}</p>
-                        <p className="text-xs text-gray-600">Added to Tasks</p>
-                      </div>
-                    </div>
+                    ))}
                   </div>
                 )}
               </div>
             );
-          })}
-        </div>
-      )}
+          })
+        )}
+      </div>
 
       {/* Modal */}
       {selectedChecklistId && (
