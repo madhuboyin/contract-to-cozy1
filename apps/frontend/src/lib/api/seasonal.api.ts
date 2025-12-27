@@ -5,7 +5,7 @@ import { Season, ClimateRegion, NotificationTiming } from '@/types/seasonal.type
 export const seasonalAPI = {
   // Climate zone endpoints
   getClimateInfo: async (propertyId: string) => {
-    const response = await apiClient.get(`/properties/${propertyId}/climate`);
+    const response = await apiClient.get(`/api/properties/${propertyId}/climate`);
     return response.data;
   },
 
@@ -19,7 +19,7 @@ export const seasonalAPI = {
       excludedTaskKeys?: string[];
     }
   ) => {
-    const response = await apiClient.put(`/properties/${propertyId}/climate`, data);
+    const response = await apiClient.put(`/api/properties/${propertyId}/climate`, data);
     return response.data;
   },
 
@@ -32,29 +32,29 @@ export const seasonalAPI = {
       status?: string;
     }
   ) => {
-    const response = await apiClient.get(`/properties/${propertyId}/seasonal-checklists`, {
+    const response = await apiClient.get(`/api/properties/${propertyId}/seasonal-checklists`, {
       params: filters,
     });
     return response.data;
   },
 
   getChecklistDetails: async (checklistId: string) => {
-    const response = await apiClient.get(`/seasonal-checklists/${checklistId}`);
+    const response = await apiClient.get(`/api/seasonal-checklists/${checklistId}`);
     return response.data;
   },
 
   generateChecklist: async (data: { propertyId: string; season: Season; year: number }) => {
-    const response = await apiClient.post('/seasonal-checklists/generate', data);
+    const response = await apiClient.post('/api/seasonal-checklists/generate', data);
     return response.data;
   },
 
   dismissChecklist: async (checklistId: string) => {
-    const response = await apiClient.post(`/seasonal-checklists/${checklistId}/dismiss`);
+    const response = await apiClient.post(`/api/seasonal-checklists/${checklistId}/dismiss`);
     return response.data;
   },
 
   addAllCriticalTasks: async (checklistId: string) => {
-    const response = await apiClient.post(`/seasonal-checklists/${checklistId}/add-all-critical`);
+    const response = await apiClient.post(`/api/seasonal-checklists/${checklistId}/add-all-critical`);
     return response.data;
   },
 
@@ -68,17 +68,17 @@ export const seasonalAPI = {
       notes?: string;
     }
   ) => {
-    const response = await apiClient.post(`/seasonal-checklist-items/${itemId}/add-to-tasks`, options);
+    const response = await apiClient.post(`/api/seasonal-checklist-items/${itemId}/add-to-tasks`, options);
     return response.data;
   },
 
   dismissTask: async (itemId: string) => {
-    const response = await apiClient.post(`/seasonal-checklist-items/${itemId}/dismiss`);
+    const response = await apiClient.post(`/api/seasonal-checklist-items/${itemId}/dismiss`);
     return response.data;
   },
 
   snoozeTask: async (itemId: string, days: number = 7) => {
-    const response = await apiClient.post(`/seasonal-checklist-items/${itemId}/snooze`, { days });
+    const response = await apiClient.post(`/api/seasonal-checklist-items/${itemId}/snooze`, { days });
     return response.data;
   },
 };

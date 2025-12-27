@@ -4,7 +4,7 @@ import { authenticate } from '../middleware/auth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import * as propertyController from '../controllers/property.controller';
 // CRITICAL FIX: Import the comprehensive schemas (with all new fields) from validators.ts
-import { createPropertySchema, updatePropertySchema } from '../utils/validators';
+import { createPropertySchema, updatePropertySchema } from '../utils/validators'; 
 import { AuthRequest } from '../types/auth.types'; 
 
 const router = Router();
@@ -333,7 +333,7 @@ router.get('/:id/seasonal-checklist/current', authenticate, async (req: AuthRequ
       where: {
         id: propertyId,
         homeownerProfile: {
-          userId: userId,
+        userId: userId,
         },
       },
     });
