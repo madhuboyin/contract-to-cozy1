@@ -4,10 +4,12 @@ import { Season, ClimateRegion, NotificationTiming } from '@/types/seasonal.type
 
 export const seasonalAPI = {
   /**
-   * Climate zone endpoints
-   * Backend: router.get('/properties/:propertyId/climate', ...)
+   * FIX: Added /api prefix to all endpoints to match backend mounting in index.ts
    */
+
+  // Climate zone endpoints
   getClimateInfo: async (propertyId: string) => {
+    // Backend: router.get('/properties/:propertyId/climate', ...) mounted at /api
     const response = await apiClient.get(`/api/properties/${propertyId}/climate`);
     return response.data;
   },
@@ -26,22 +28,18 @@ export const seasonalAPI = {
     return response.data;
   },
 
+  // Seasonal checklists endpoints
+  
   /**
-   * Seasonal checklists endpoints
-   */
-
-  /**
-   * FIX: Added specific endpoint for the dashboard "current" checklist.
-   * Backend defined in property.routes.ts.
+   * Dashboard Preview Endpoint
+   * FIX: This specifically addresses the 404 in your logs.
+   * Path matches router.get('/:id/seasonal-checklist/current') in property.routes.ts (mounted at /api/properties)
    */
   getCurrentChecklist: async (propertyId: string) => {
     const response = await apiClient.get(`/api/properties/${propertyId}/seasonal-checklist/current`);
     return response.data;
   },
 
-  /**
-   * FIX: Changed to plural 'seasonal-checklists' to match backend seasonalChecklist.routes.ts.
-   */
   getPropertyChecklists: async (
     propertyId: string,
     filters?: {
@@ -50,6 +48,7 @@ export const seasonalAPI = {
       status?: string;
     }
   ) => {
+    // Backend: router.get('/properties/:propertyId/seasonal-checklists', ...) mounted at /api
     const response = await apiClient.get(`/api/properties/${propertyId}/seasonal-checklists`, {
       params: filters,
     });
@@ -76,9 +75,7 @@ export const seasonalAPI = {
     return response.data;
   },
 
-  /**
-   * Task item endpoints
-   */
+  // Task item endpoints
   addTaskToChecklist: async (
     itemId: string,
     options?: {
