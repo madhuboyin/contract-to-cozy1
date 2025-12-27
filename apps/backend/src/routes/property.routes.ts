@@ -4,7 +4,8 @@ import { authenticate } from '../middleware/auth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import * as propertyController from '../controllers/property.controller';
 // CRITICAL FIX: Import the comprehensive schemas (with all new fields) from validators.ts
-import { createPropertySchema, updatePropertySchema } from '../utils/validators'; 
+import { createPropertySchema, updatePropertySchema } from '../utils/validators';
+import { AuthRequest } from '../types/auth.types'; 
 
 const router = Router();
 
@@ -233,5 +234,162 @@ router.put('/:id', authenticate, validateBody(updatePropertySchema), propertyCon
  *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.delete('/:id', authenticate, propertyController.deleteProperty);
+
+/**
+ * @swagger
+ * /api/properties/{id}/seasonal-checklist/current:
+ *   get:
+ *     summary: Get current or upcoming seasonal checklist for a property
+ *     tags: [Properties, Seasonal Maintenance]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Property ID
+ *     responses:
+ *       200:
+ *         description: Current seasonal checklist
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     checklist:
+ *                       type: object
+ *                       nullable: true
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                           format: uuid
+ *                         season:
+ *                           type: string
+ *                           enum: [SPRING, SUMMER, FALL, WINTER]
+ *                         year:
+ *                           type: integer
+ *                         climateRegion:
+ *                           type: string
+ *                           enum: [COLD, MODERATE, WARM, HOT_DRY, HOT_HUMID]
+ *                         totalTasks:
+ *                           type: integer
+ *                         tasksCompleted:
+ *                           type: integer
+ *                         tasksAdded:
+ *                           type: integer
+ *                         status:
+ *                           type: string
+ *                           enum: [PENDING, IN_PROGRESS, COMPLETED, DISMISSED]
+ *                         seasonStartDate:
+ *                           type: string
+ *                           format: date
+ *                         items:
+ *                           type: array
+ *                           items:
+ *                             type: object
+ *                             properties:
+ *                               id:
+ *                                 type: string
+ *                                 format: uuid
+ *                               title:
+ *                                 type: string
+ *                               priority:
+ *                                 type: string
+ *                                 enum: [CRITICAL, RECOMMENDED, OPTIONAL]
+ *                               status:
+ *                                 type: string
+ *                                 enum: [RECOMMENDED, ADDED, COMPLETED, SKIPPED, DISMISSED]
+ *       404:
+ *         description: Property not found
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.get('/:id/seasonal-checklist/current', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { id: propertyId } = req.params;
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required',
+      });
+    }
+
+    // Import prisma at the top if not already imported
+    const { prisma } = await import('../lib/prisma');
+
+    // Verify user owns this property using nested relation check
+    const property = await prisma.property.findFirst({
+      where: {
+        id: propertyId,
+        homeownerProfile: {
+          userId: userId,
+        },
+      },
+    });
+
+    if (!property) {
+      return res.status(404).json({
+        success: false,
+        error: 'Property not found',
+      });
+    }
+
+    // Get the most recent PENDING or IN_PROGRESS checklist
+    // Using 'any' type since seasonal models may not be in generated Prisma types yet
+    const checklist = await (prisma as any).seasonalChecklist.findFirst({
+      where: {
+        propertyId,
+        status: {
+          in: ['PENDING', 'IN_PROGRESS'],
+        },
+      },
+      include: {
+        items: {
+          where: {
+            status: 'RECOMMENDED', // Only show pending tasks for dashboard
+          },
+          orderBy: [
+            {
+              priority: 'asc', // CRITICAL first, then RECOMMENDED, then OPTIONAL
+            },
+            {
+              title: 'asc',
+            },
+          ],
+          take: 10, // Limit for dashboard preview
+        },
+      },
+      orderBy: {
+        seasonStartDate: 'asc', // Get the next upcoming season
+      },
+    });
+
+    console.log(`[SEASONAL API] Found checklist for property ${propertyId}:`, checklist ? 'Yes' : 'No');
+
+    return res.json({
+      success: true,
+      data: {
+        checklist,
+      },
+    });
+  } catch (error) {
+    console.error('[SEASONAL API] Error fetching seasonal checklist:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch seasonal checklist',
+    });
+  }
+});
 
 export default router;
