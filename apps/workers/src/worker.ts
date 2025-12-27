@@ -17,6 +17,9 @@ import { calculateFinancialEfficiency } from '../../backend/src/utils/FinancialC
 import { sendEmailNotificationJob, runDailyEmailDigest } from './jobs/sendEmailNotification.job';
 import { sendPushNotificationJob } from './jobs/sendPushNotification.job';
 import { sendSmsNotificationJob } from './jobs/sendSmsNotification.job';
+import { generateSeasonalChecklists } from './jobs/seasonalChecklistGeneration.job';
+import { sendSeasonalNotifications } from './jobs/seasonalNotification.job';
+import { expireSeasonalChecklists } from './jobs/seasonalChecklistExpiration.job';
 
 
 const prisma = new PrismaClient();
@@ -380,6 +383,11 @@ function startWorker() {
     },
     { timezone: 'America/New_York' }
   );
+
+  cron.schedule('0 2 * * *', generateSeasonalChecklists);
+  cron.schedule('0 8 * * *', sendSeasonalNotifications);
+  cron.schedule('0 3 * * *', expireSeasonalChecklists);
+  console.log('Seasonal checklist generation, notification, and expiration jobs scheduled.');
   // =============================================================================
   // FIX: Initialize BullMQ Worker with correct queue name and job handlers
   // =============================================================================

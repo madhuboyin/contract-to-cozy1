@@ -38,6 +38,8 @@ import { api } from '@/lib/api/client';
 import { AIChat } from '@/components/AIChat';
 import { PropertyProvider } from '@/lib/property/PropertyContext';
 import { NotificationProvider } from '@/lib/notifications/NotificationContext';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
+
 
 
 interface NavLink {
@@ -342,6 +344,10 @@ function DesktopUserNav({ user }: { user: User | null }) {
 
   return (
     <div className="hidden lg:flex items-center gap-4">
+      {/* 🔔 Notifications */}
+      <NotificationBell />
+
+      {/* 👤 Profile */}
       <Link 
         href="/dashboard/profile"
         className="font-body font-medium flex items-center gap-2 text-sm text-gray-700 hover:text-brand-primary transition-colors duration-200"
@@ -358,11 +364,11 @@ function DesktopUserNav({ user }: { user: User | null }) {
         </div>
       </Link>
       
+      {/* 🚪 Logout */}
       <Button 
         onClick={handleLogout} 
         variant="ghost" 
         size="sm"
-        // FIX: Replaced hardcoded red classes with destructive color utilities
         className="font-body font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive tracking-wide transition-colors duration-200"
       >
         Logout
@@ -370,6 +376,7 @@ function DesktopUserNav({ user }: { user: User | null }) {
     </div>
   );
 }
+
 
 function MobileUserNav({ user }: { user: User | null }) {
   const { logout } = useAuth();

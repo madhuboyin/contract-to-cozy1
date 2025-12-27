@@ -1,4 +1,5 @@
 // apps/backend/src/services/notification.service.ts
+
 import { prisma } from '../lib/prisma';
 import { NotificationChannel, DeliveryStatus } from '@prisma/client';
 import {
@@ -20,9 +21,9 @@ type CreateNotificationInput = {
 
 /**
  * Notification types that MUST be delivered immediately
- * (Email immediacy — NOT in-app behavior)
+ * (affects EMAIL/SMS/PUSH urgency — NOT in-app behavior)
  */
-const IMPORTANT_TYPES = new Set([
+const IMPORTANT_TYPES = new Set<string>([
   'BOOKING_CREATED',
   'BOOKING_CANCELLED',
   'BOOKING_CONFIRMED',
@@ -31,7 +32,7 @@ const IMPORTANT_TYPES = new Set([
 export class NotificationService {
   /**
    * ============================================================
-   * CREATE NOTIFICATION (single source of truth)
+   * CREATE NOTIFICATION (Single Source of Truth)
    * ============================================================
    */
   static async create(input: CreateNotificationInput) {
@@ -50,13 +51,15 @@ export class NotificationService {
     const emailEnabled = preferences?.emailEnabled !== false;
 
     /**
-     * 2️⃣ Decide priority
+     * 2️⃣ Decide importance / priority
      */
     const isImportant = IMPORTANT_TYPES.has(input.type);
 
     /**
      * 3️⃣ Decide channels
-     * IN_APP is ALWAYS created (cannot be opted out)
+     *
+     * 🔒 IN_APP is ALWAYS created
+     *     (cannot be disabled; UI depends on it)
      */
     const channels: NotificationChannel[] = [
       NotificationChannel.IN_APP,
@@ -66,12 +69,12 @@ export class NotificationService {
       channels.push(NotificationChannel.EMAIL);
     }
 
-    // Future channels
+    // Future extensibility
     // channels.push(NotificationChannel.PUSH);
     // channels.push(NotificationChannel.SMS);
 
     /**
-     * 4️⃣ Create notification + delivery rows
+     * 4️⃣ Create Notification + Delivery rows atomically
      */
     const notification = await prisma.notification.create({
       data: {
@@ -91,7 +94,7 @@ export class NotificationService {
             channel,
             status:
               channel === NotificationChannel.IN_APP
-                ? DeliveryStatus.SENT // in-app is immediately "delivered"
+                ? DeliveryStatus.SENT // In-app is instant
                 : DeliveryStatus.PENDING,
           })),
         },
@@ -100,7 +103,9 @@ export class NotificationService {
     });
 
     /**
-     * 5️⃣ Enqueue ONLY immediate EMAIL notifications
+     * 5️⃣ Enqueue ONLY immediate (important) async deliveries
+     *
+     * IN_APP never goes to a queue
      */
     if (isImportant) {
       for (const delivery of notification.deliveries) {
@@ -109,28 +114,39 @@ export class NotificationService {
             await emailNotificationQueue.add(
               'SEND_EMAIL_NOTIFICATION',
               { notificationDeliveryId: delivery.id },
-              { jobId: delivery.id } // idempotent
+              {
+                jobId: delivery.id, // idempotent
+                removeOnComplete: true,
+                removeOnFail: false,
+              }
             );
             break;
 
           case NotificationChannel.PUSH:
-            await pushNotificationQueue.add('SEND_PUSH_NOTIFICATION', {
-              notificationDeliveryId: delivery.id,
-            });
+            await pushNotificationQueue.add(
+              'SEND_PUSH_NOTIFICATION',
+              { notificationDeliveryId: delivery.id }
+            );
             break;
 
           case NotificationChannel.SMS:
-            await smsNotificationQueue.add('SEND_SMS_NOTIFICATION', {
-              notificationDeliveryId: delivery.id,
-            });
+            await smsNotificationQueue.add(
+              'SEND_SMS_NOTIFICATION',
+              { notificationDeliveryId: delivery.id }
+            );
+            break;
+
+          case NotificationChannel.IN_APP:
+            // No-op — already delivered
             break;
         }
       }
     }
 
     /**
-     * Digest notifications are stored only.
-     * Daily digest worker will pick them up.
+     * Non-important notifications:
+     * - Stored only
+     * - Picked up later by digest workers (email/push)
      */
     return notification;
   }
@@ -151,7 +167,10 @@ export class NotificationService {
 
   static async getUnreadCount(userId: string) {
     return prisma.notification.count({
-      where: { userId, isRead: false },
+      where: {
+        userId,
+        isRead: false,
+      },
     });
   }
 
@@ -164,7 +183,9 @@ export class NotificationService {
       throw new Error('Notification not found');
     }
 
-    if (notification.isRead) return notification;
+    if (notification.isRead) {
+      return notification;
+    }
 
     return prisma.notification.update({
       where: { id: notificationId },

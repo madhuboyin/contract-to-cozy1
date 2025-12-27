@@ -25,18 +25,15 @@ export async function sendSeasonalNotifications() {
   console.log('[SEASONAL] Starting notification job...');
 
   try {
-    // Find checklists that need notifications
+    // FIXED: Simplified where clause - removed nested climateSetting relation
     // @ts-ignore - Model exists in schema but may not be in generated client
-    const checklists = await (prisma as any).seasonalChecklist.findMany({
+    const allChecklists = await (prisma as any).seasonalChecklist.findMany({
       where: {
         status: 'PENDING',
         notificationSentAt: null,
         property: {
           homeownerProfile: {
             segment: 'EXISTING_OWNER', // Only existing owners
-          },
-          climateSetting: {
-            notificationEnabled: true, // Only if notifications enabled
           },
         },
       },
@@ -54,20 +51,47 @@ export async function sendSeasonalNotifications() {
       },
     });
 
-    console.log(`[SEASONAL] Found ${checklists.length} checklists to notify`);
+    console.log(`[SEASONAL] Found ${allChecklists.length} potential checklists to notify`);
+
+    // FIXED: Filter by notification settings separately
+    const checklistsToNotify = [];
+    for (const checklist of allChecklists) {
+      try {
+        // @ts-ignore
+        const climateSetting = await (prisma as any).propertyClimateSetting.findUnique({
+          where: { propertyId: checklist.propertyId },
+        });
+
+        if (climateSetting?.notificationEnabled === true) {
+          checklistsToNotify.push(checklist);
+        }
+      } catch (error) {
+        console.error(
+          `[SEASONAL] Error checking climate settings for property ${checklist.propertyId}:`,
+          error
+        );
+      }
+    }
+
+    console.log(
+      `[SEASONAL] After filtering: ${checklistsToNotify.length} checklists with notifications enabled`
+    );
 
     let sent = 0;
     let errors = 0;
 
-    for (const checklist of checklists) {
+    for (const checklist of checklistsToNotify) {
       try {
-        // Skip if no user email
-        if (!checklist.property.user?.email) {
+        // FIXED: Better null handling
+        const user = checklist.property.user;
+        if (!user?.email) {
           console.log(
             `[SEASONAL] Skipping checklist ${checklist.id} - no user email`
           );
           continue;
         }
+
+        const firstName = user.firstName || 'Homeowner';
 
         // Calculate days until season starts
         const daysUntil = Math.floor(
@@ -88,7 +112,7 @@ export async function sendSeasonalNotifications() {
 
         // Build email HTML
         const emailHtml = buildSeasonalNotificationEmail({
-          firstName: checklist.property.user.firstName || 'Homeowner',
+          firstName,
           season: checklist.season,
           year: checklist.year,
           daysUntil,
@@ -112,7 +136,7 @@ export async function sendSeasonalNotifications() {
 
         // Send email
         await sendEmail(
-          checklist.property.user.email,
+          user.email,
           `${getSeasonName(checklist.season)} is approaching - ${checklist.totalTasks} tasks to prepare your home`,
           emailHtml
         );
@@ -128,7 +152,7 @@ export async function sendSeasonalNotifications() {
 
         console.log(
           `[SEASONAL] Sent notification for ${checklist.season} ${checklist.year} ` +
-            `to ${checklist.property.user.email}`
+            `to ${user.email}`
         );
 
         sent++;
