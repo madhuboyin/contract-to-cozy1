@@ -1,4 +1,5 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/ExistingOwnerDashboard.tsx
+// UPDATED: Added seasonal card and providers in new row above activity cards
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -7,6 +8,7 @@ import { UpcomingBookingsCard } from './UpcomingBookingsCard';
 import { RecurringMaintenanceCard } from './RecurringMaintenanceCard';
 import { UpcomingRenewalsCard } from './UpcomingRenewalsCard';
 import { FavoriteProvidersCard } from './FavoriteProvidersCard';
+import { SeasonalChecklistCard } from '@/app/(dashboard)/dashboard/components/SeasonalChecklistCard';
 import { ArrowRight } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
@@ -113,6 +115,7 @@ export const ExistingOwnerDashboard = ({
     <div className="space-y-6 pb-8">
       {/* Maintenance Nudge Card */}
       {renderNudgeCard}
+      
       {/* 🔔 Action Center (Top Actions) */}
       {selectedPropertyId && (
         <div className="space-y-2">
@@ -151,7 +154,13 @@ export const ExistingOwnerDashboard = ({
         />
       )}
 
-      {/* Activity Cards */}
+      {/* NEW ROW: Seasonal Checklist + Favorite Providers */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <SeasonalChecklistCard propertyId={selectedPropertyId} />
+        <FavoriteProvidersCard />
+      </div>
+
+      {/* Activity Cards (UNCHANGED - Original 3 cards) */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <UpcomingBookingsCard propertyId={selectedPropertyId} />
 
@@ -162,11 +171,6 @@ export const ExistingOwnerDashboard = ({
         />
 
         <UpcomingRenewalsCard propertyId={selectedPropertyId} />
-      </div>
-
-      {/* Favorite Providers */}
-      <div className="w-full">
-        <FavoriteProvidersCard />
       </div>
 
       {/* Footer CTA */}

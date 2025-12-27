@@ -150,6 +150,8 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   console.log('🎌 Banner showBanner state:', showBanner);
 
   return (
+  <NotificationProvider>
+    <PropertyProvider> 
     <div className="flex min-h-screen w-full flex-col">
       <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-white px-4 sm:px-6">
         <Link
@@ -208,21 +210,19 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* [MODIFICATION] Wrap main content with PropertyProvider */}
-      <NotificationProvider>
-        <PropertyProvider> 
-            <main className="flex-1 bg-gray-50">
-              <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
-                {children}
-              </div>
-            </main>
+      <main className="flex-1 bg-gray-50">
+        <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
+          {children}
+        </div>
+      </main>
 
-            {/* --- NEW: FLOATING AI CHAT WIDGET --- */}
-            {/* Renders the chat widget in a fixed position across all dashboard pages */}
-            <AIChat />
-            {/* ------------------------------------ */}
-        </PropertyProvider>
-      </NotificationProvider>
+      {/* --- NEW: FLOATING AI CHAT WIDGET --- */}
+      {/* Renders the chat widget in a fixed position across all dashboard pages */}
+      <AIChat />
+      {/* ------------------------------------ */}
     </div>
+    </PropertyProvider>
+  </NotificationProvider>
   );
 }
 
