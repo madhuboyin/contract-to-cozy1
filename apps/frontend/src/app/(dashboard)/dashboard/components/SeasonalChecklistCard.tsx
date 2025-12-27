@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Loader2, Calendar, CheckCircle, AlertCircle } from 'lucide-react';
-import { api } from '@/lib/api/client';
+import { seasonalAPI } from '@/lib/api/seasonal.api';
 
 // Season emoji mapping
 const SEASON_EMOJI: Record<string, string> = {
@@ -64,11 +64,11 @@ export const SeasonalChecklistCard: React.FC<SeasonalChecklistCardProps> = ({
         setLoading(true);
         setError(null);
 
-        // Call API to get current/upcoming seasonal checklist
-        const response = await api.get(`/properties/${propertyId}/seasonal-checklist/current`);
+        // Call API to get current/upcoming seasonal checklist using seasonalAPI
+        const data = await seasonalAPI.getCurrentChecklist(propertyId);
         
-        if (response.data?.checklist) {
-          setChecklist(response.data.checklist);
+        if (data?.checklist) {
+          setChecklist(data.checklist);
         } else {
           setChecklist(null);
         }
