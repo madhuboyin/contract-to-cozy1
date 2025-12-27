@@ -20,10 +20,10 @@ type SeasonalTaskTemplate = {
  * Background job to auto-generate seasonal checklists
  * Runs daily at 2am
  * 
- * Logic:
+ * FIXED LOGIC:
  * - Find all EXISTING_OWNER properties with autoGenerateChecklists=true
  * - Calculate days until next season starts
- * - Generate checklist when days match notification offset (EARLY=21, STANDARD=14, LATE=7)
+ * - Generate checklist when days <= notification offset (not exact match)
  * - Skip if checklist already exists for that season/year
  */
 export async function generateSeasonalChecklists() {
@@ -33,7 +33,7 @@ export async function generateSeasonalChecklists() {
     const today = new Date();
     const currentYear = today.getFullYear();
     
-    // Get all properties for EXISTING_OWNER homeowners with auto-generation enabled
+    // Get all properties for EXISTING_OWNER homeowners
     const properties = await prisma.property.findMany({
       where: {
         homeownerProfile: {
@@ -42,7 +42,7 @@ export async function generateSeasonalChecklists() {
       },
       include: {
         homeownerProfile: true,
-        homeAssets: true, // Include assets for filtering
+        homeAssets: true,
       },
     });
 
@@ -54,19 +54,21 @@ export async function generateSeasonalChecklists() {
 
     for (const property of properties) {
       try {
-        // Get climate settings or create default (query separately since relation may not be available)
+        // Get or create climate settings
         // @ts-ignore - Model exists in schema but may not be in generated client
         let climateSetting = await (prisma as any).propertyClimateSetting.findUnique({
           where: { propertyId: property.id },
         });
         
         if (!climateSetting) {
-          // Create default climate setting with auto-detected region
+          // FIX: Create default climate setting with fallback region detection
+          const detectedRegion = detectClimateRegionFallback(property.zipCode, property.state);
+          
           // @ts-ignore - Model exists in schema but may not be in generated client
           climateSetting = await (prisma as any).propertyClimateSetting.create({
             data: {
               propertyId: property.id,
-              climateRegion: await detectClimateRegion(property.zipCode, property.state),
+              climateRegion: detectedRegion,
               climateRegionSource: 'AUTO_DETECTED',
               notificationTiming: 'STANDARD',
               notificationEnabled: true,
@@ -74,6 +76,8 @@ export async function generateSeasonalChecklists() {
               excludedTaskKeys: [],
             },
           });
+          
+          console.log(`[SEASONAL] Created climate settings for property ${property.id.substring(0, 8)}: ${detectedRegion}`);
         }
         
         // Skip if auto-generation is disabled
@@ -102,15 +106,21 @@ export async function generateSeasonalChecklists() {
         let targetYear = currentYear;
         if (nextSeason === 'WINTER' && currentSeason === 'FALL') {
           targetYear = currentYear + 1;
+        } else if (nextSeason === 'SPRING' && currentSeason === 'WINTER') {
+          // Winter to Spring crosses year boundary if winter start date is in next year
+          if (nextSeasonStartDate.getFullYear() > currentYear) {
+            targetYear = nextSeasonStartDate.getFullYear();
+          }
         }
 
         console.log(
           `[SEASONAL] Property ${property.id.substring(0, 8)}: ` +
-          `Next season=${nextSeason}, Days until=${daysUntilNextSeason}, Offset=${offsetDays}`
+          `Current=${currentSeason}, Next=${nextSeason}, Days until=${daysUntilNextSeason}, Offset=${offsetDays}`
         );
 
-        // Generate checklist if we're at the notification threshold
-        if (daysUntilNextSeason === offsetDays) {
+        // FIX: Generate checklist if we're within the notification window (not exact match)
+        // This ensures we don't miss generation if the cron runs slightly off schedule
+        if (daysUntilNextSeason >= 0 && daysUntilNextSeason <= offsetDays) {
           // Check if checklist already exists
           // @ts-ignore - Model exists in schema but may not be in generated client
           const existingChecklist = await (prisma as any).seasonalChecklist.findFirst({
@@ -133,7 +143,7 @@ export async function generateSeasonalChecklists() {
           // Generate the checklist
           console.log(
             `[SEASONAL] Generating ${nextSeason} ${targetYear} checklist for property ` +
-            `${property.id.substring(0, 8)}`
+            `${property.id.substring(0, 8)} (${daysUntilNextSeason} days until season)`
           );
 
           await generateChecklistForProperty(
@@ -145,7 +155,32 @@ export async function generateSeasonalChecklists() {
 
           generated++;
         } else {
-          skipped++;
+          // FIX: Also check current season - if season just started and no checklist exists, generate one
+          // @ts-ignore
+          const currentSeasonChecklist = await (prisma as any).seasonalChecklist.findFirst({
+            where: {
+              propertyId: property.id,
+              season: currentSeason,
+              year: currentYear,
+            },
+          });
+
+          if (!currentSeasonChecklist) {
+            console.log(
+              `[SEASONAL] No checklist for current season ${currentSeason} ${currentYear}, generating now for property ${property.id.substring(0, 8)}`
+            );
+
+            await generateChecklistForProperty(
+              property.id,
+              currentSeason,
+              currentYear,
+              climateRegion
+            );
+
+            generated++;
+          } else {
+            skipped++;
+          }
         }
       } catch (propertyError) {
         console.error(
@@ -186,23 +221,21 @@ async function generateChecklistForProperty(
     throw new Error(`Property ${propertyId} not found`);
   }
 
-  // Get climate setting separately (query separately since relation may not be available)
+  // Get climate setting
   // @ts-ignore - Model exists in schema but may not be in generated client
   const climateSetting = await (prisma as any).propertyClimateSetting.findUnique({
     where: { propertyId: propertyId },
   });
 
   // Get task templates for this season and climate
-  // FIXED: Use array contains operator for climate regions
   // @ts-ignore - Model exists in schema but may not be in generated client
   const templates = await (prisma as any).seasonalTaskTemplate.findMany({
     where: {
       season: season,
       climateRegions: {
-        // Use array contains - works with PostgreSQL text arrays
         hasSome: [climateRegion],
       },
-      isActive: true, // Only active templates
+      isActive: true,
     },
   });
 
@@ -210,18 +243,10 @@ async function generateChecklistForProperty(
     `[SEASONAL] Found ${templates.length} templates for ${season} in ${climateRegion} climate`
   );
 
-  // FIXED: Filter templates based on user exclusions only
-  // Asset-based filtering removed since schema doesn't support it yet
+  // Filter templates based on user exclusions
   const excludedTaskKeys = climateSetting?.excludedTaskKeys || [];
   const filteredTemplates = templates.filter((template: SeasonalTaskTemplate) => {
-    // Skip if user has excluded this task
-    if (excludedTaskKeys.includes(template.taskKey)) {
-      return false;
-    }
-
-    // TODO: Add asset-based filtering when requiredAssetType/requiredAssetCheck are populated
-    // For now, include all non-excluded tasks
-    return true;
+    return !excludedTaskKeys.includes(template.taskKey);
   });
 
   console.log(
@@ -252,48 +277,107 @@ async function generateChecklistForProperty(
   });
 
   // Create checklist items
-  const items = filteredTemplates.map((template: SeasonalTaskTemplate) => ({
-    seasonalChecklistId: checklist.id,
-    seasonalTaskTemplateId: template.id,
-    propertyId,
-    taskKey: template.taskKey,
-    title: template.title,
-    description: template.description,
-    priority: template.priority,
-    status: 'RECOMMENDED',
-    recommendedDate: seasonStartDate,
-  }));
+  if (filteredTemplates.length > 0) {
+    const items = filteredTemplates.map((template: SeasonalTaskTemplate) => ({
+      seasonalChecklistId: checklist.id,
+      seasonalTaskTemplateId: template.id,
+      propertyId,
+      taskKey: template.taskKey,
+      title: template.title,
+      description: template.description,
+      priority: template.priority,
+      status: 'RECOMMENDED',
+      recommendedDate: seasonStartDate,
+    }));
 
-  // @ts-ignore - Model exists in schema but may not be in generated client
-  await (prisma as any).seasonalChecklistItem.createMany({
-    data: items,
-  });
+    // @ts-ignore - Model exists in schema but may not be in generated client
+    await (prisma as any).seasonalChecklistItem.createMany({
+      data: items,
+    });
+  }
 
   console.log(
-    `[SEASONAL] Created ${season} ${year} checklist with ${filteredTemplates.length} tasks ` +
+    `[SEASONAL] ✅ Created ${season} ${year} checklist with ${filteredTemplates.length} tasks ` +
     `for property ${propertyId.substring(0, 8)}`
   );
 }
 
 /**
- * Detect climate region from ZIP code
+ * FIX: Fallback climate region detection without external JSON file
+ * Uses simple state-based mapping
  */
-async function detectClimateRegion(zipCode: string, state: string): Promise<string> {
-  // Import climate mapping data
-  const climateMapping = require('../data/zipToClimateRegion.json');
+function detectClimateRegionFallback(zipCode: string, state: string): string {
+  // Simple state-based mapping
+  const stateToClimate: Record<string, string> = {
+    // Very Cold
+    'AK': 'VERY_COLD',
+    'ME': 'VERY_COLD',
+    'VT': 'VERY_COLD',
+    'NH': 'VERY_COLD',
+    'MN': 'VERY_COLD',
+    'ND': 'VERY_COLD',
+    'SD': 'VERY_COLD',
+    'MT': 'VERY_COLD',
+    'WY': 'VERY_COLD',
+    
+    // Cold
+    'WI': 'COLD',
+    'MI': 'COLD',
+    'NY': 'COLD',
+    'MA': 'COLD',
+    'CT': 'COLD',
+    'RI': 'COLD',
+    'IA': 'COLD',
+    'IL': 'COLD',
+    'IN': 'COLD',
+    'OH': 'COLD',
+    'PA': 'COLD',
+    'ID': 'COLD',
+    
+    // Moderate
+    'WA': 'MODERATE',
+    'OR': 'MODERATE',
+    'CA': 'MODERATE', // Northern CA
+    'NV': 'MODERATE',
+    'UT': 'MODERATE',
+    'CO': 'MODERATE',
+    'NE': 'MODERATE',
+    'KS': 'MODERATE',
+    'MO': 'MODERATE',
+    'KY': 'MODERATE',
+    'WV': 'MODERATE',
+    'VA': 'MODERATE',
+    'MD': 'MODERATE',
+    'DE': 'MODERATE',
+    'NJ': 'MODERATE',
+    'NC': 'MODERATE',
+    'TN': 'MODERATE',
+    'AR': 'MODERATE',
+    'OK': 'MODERATE',
+    'NM': 'MODERATE',
+    
+    // Warm
+    'AZ': 'WARM',
+    'TX': 'WARM',
+    'LA': 'WARM',
+    'MS': 'WARM',
+    'AL': 'WARM',
+    'GA': 'WARM',
+    'SC': 'WARM',
+    
+    // Tropical
+    'FL': 'TROPICAL',
+    'HI': 'TROPICAL',
+  };
   
-  // Try ZIP prefix (first 3 digits)
-  const zipPrefix = zipCode.substring(0, 3);
-  if (climateMapping.zipPrefixes && climateMapping.zipPrefixes[zipPrefix]) {
-    return climateMapping.zipPrefixes[zipPrefix];
-  }
-  
-  // Fallback to state
-  if (climateMapping.states && climateMapping.states[state]) {
-    return climateMapping.states[state];
+  const climateRegion = stateToClimate[state];
+  if (climateRegion) {
+    console.log(`[SEASONAL] Detected climate region for ${state}: ${climateRegion}`);
+    return climateRegion;
   }
   
   // Default to MODERATE
+  console.log(`[SEASONAL] No mapping for state ${state}, defaulting to MODERATE`);
   return 'MODERATE';
 }
 
@@ -304,12 +388,7 @@ function getCurrentSeason(climateRegion: string, date: Date): Season {
   const month = date.getMonth() + 1; // 1-12
   const day = date.getDate();
 
-  // Astronomical seasons (approximate)
-  // Spring: March 20 - June 20
-  // Summer: June 21 - September 22
-  // Fall: September 23 - December 20
-  // Winter: December 21 - March 19
-
+  // Astronomical seasons
   if ((month === 3 && day >= 20) || month === 4 || month === 5 || (month === 6 && day < 21)) {
     return 'SPRING';
   } else if ((month === 6 && day >= 21) || month === 7 || month === 8 || (month === 9 && day < 23)) {

@@ -384,10 +384,55 @@ function startWorker() {
     { timezone: 'America/New_York' }
   );
 
-  cron.schedule('0 2 * * *', generateSeasonalChecklists);
-  cron.schedule('0 8 * * *', sendSeasonalNotifications);
-  cron.schedule('0 3 * * *', expireSeasonalChecklists);
-  console.log('Seasonal checklist generation, notification, and expiration jobs scheduled.');
+  // Clean up expired checklists first (1 AM)
+  cron.schedule(
+    '0 1 * * *',
+    async () => {
+      console.log('[SEASONAL-EXPIRE] Running checklist expiration job...');
+      try {
+        await expireSeasonalChecklists();
+        console.log('[SEASONAL-EXPIRE] ✅ Job completed successfully');
+      } catch (error) {
+        console.error('[SEASONAL-EXPIRE] ❌ Job failed:', error);
+      }
+    },
+    { timezone: 'America/New_York' }
+  );
+
+  // Generate new seasonal checklists (2 AM)
+  cron.schedule(
+    '0 2 * * *',
+    async () => {
+      console.log('[SEASONAL-GEN] Running checklist generation job...');
+      try {
+        await generateSeasonalChecklists();
+        console.log('[SEASONAL-GEN] ✅ Job completed successfully');
+      } catch (error) {
+        console.error('[SEASONAL-GEN] ❌ Job failed:', error);
+      }
+    },
+    { timezone: 'America/New_York' }
+  );
+
+  // Send notifications during morning hours (9 AM)
+  cron.schedule(
+    '0 9 * * *',
+    async () => {
+      console.log('[SEASONAL-NOTIFY] Running notification job...');
+      try {
+        await sendSeasonalNotifications();
+        console.log('[SEASONAL-NOTIFY] ✅ Job completed successfully');
+      } catch (error) {
+        console.error('[SEASONAL-NOTIFY] ❌ Job failed:', error);
+      }
+    },
+    { timezone: 'America/New_York' }
+  );
+
+  console.log('✅ Seasonal maintenance jobs scheduled:');
+  console.log('   - Expiration: Daily at 1:00 AM EST (clean up old checklists)');
+  console.log('   - Generation: Daily at 2:00 AM EST (create new checklists)');
+  console.log('   - Notifications: Daily at 9:00 AM EST (send emails)');
   // =============================================================================
   // FIX: Initialize BullMQ Worker with correct queue name and job handlers
   // =============================================================================
