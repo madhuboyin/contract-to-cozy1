@@ -271,8 +271,8 @@ app.use('/api/seller-prep', sellerPrepRoutes);
 app.use('/api/inspection-reports', inspectionReportRoutes);
 app.use('/api/local-updates', localUpdatesRoutes);
 app.use('/api/orchestration', orchestrationRoutes);
-app.use('/notifications', notificationRoutes);
-app.use('/api', seasonalChecklistRoutes);
+app.use('api/notifications', notificationRoutes);
+app.use('/api/seasonal-checklist', seasonalChecklistRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
