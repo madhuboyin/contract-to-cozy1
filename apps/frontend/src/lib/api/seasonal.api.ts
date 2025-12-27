@@ -3,7 +3,10 @@ import { api as apiClient } from './client';
 import { Season, ClimateRegion, NotificationTiming } from '@/types/seasonal.types';
 
 export const seasonalAPI = {
-  // Climate zone endpoints
+  /**
+   * Climate zone endpoints
+   * Backend: router.get('/properties/:propertyId/climate', ...)
+   */
   getClimateInfo: async (propertyId: string) => {
     const response = await apiClient.get(`/api/properties/${propertyId}/climate`);
     return response.data;
@@ -23,7 +26,22 @@ export const seasonalAPI = {
     return response.data;
   },
 
-  // Seasonal checklists endpoints
+  /**
+   * Seasonal checklists endpoints
+   */
+
+  /**
+   * FIX: Added specific endpoint for the dashboard "current" checklist.
+   * Backend defined in property.routes.ts.
+   */
+  getCurrentChecklist: async (propertyId: string) => {
+    const response = await apiClient.get(`/api/properties/${propertyId}/seasonal-checklist/current`);
+    return response.data;
+  },
+
+  /**
+   * FIX: Changed to plural 'seasonal-checklists' to match backend seasonalChecklist.routes.ts.
+   */
   getPropertyChecklists: async (
     propertyId: string,
     filters?: {
@@ -58,7 +76,9 @@ export const seasonalAPI = {
     return response.data;
   },
 
-  // Task item endpoints
+  /**
+   * Task item endpoints
+   */
   addTaskToChecklist: async (
     itemId: string,
     options?: {
