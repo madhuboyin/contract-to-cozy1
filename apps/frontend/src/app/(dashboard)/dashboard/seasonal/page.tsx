@@ -29,6 +29,14 @@ export default function SeasonalMaintenancePage() {
 
   const { data: climateInfo } = useClimateInfo(propertyId!);
   const { data: checklistsData, isLoading } = useSeasonalChecklists(propertyId!);
+  console.log('=== SEASONAL PAGE DEBUG ===');
+  console.log('URL propertyId:', searchParams.get('propertyId'));
+  console.log('Context propertyId:', selectedPropertyId);
+  console.log('Final propertyId:', propertyId);
+  console.log('Checklists data:', checklistsData);
+  console.log('Checklists array:', checklistsData?.data?.checklists);
+  console.log('Is loading:', isLoading);
+  console.log('=========================');
 
   // FIX: Handle no property selected
   if (!propertyId) {

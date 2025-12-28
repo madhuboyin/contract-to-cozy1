@@ -17,6 +17,13 @@ export default function SeasonalSettingsPage() {
 
   const { data: climateData, isLoading } = useClimateInfo(propertyId!);
   const updateSettingsMutation = useUpdateClimateSettings();
+  console.log('=== SEASONAL SETTINGS PAGE DEBUG ===');
+  console.log('URL propertyId:', searchParams.get('propertyId'));
+  console.log('Context propertyId:', selectedPropertyId);
+  console.log('Final propertyId:', propertyId);
+  console.log('Climate data:', climateData);
+  console.log('Is loading:', isLoading);
+  console.log('=========================');
 
   const [formData, setFormData] = useState({
     climateRegion: 'MODERATE' as ClimateRegion,
