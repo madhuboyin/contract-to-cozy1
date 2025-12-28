@@ -3,6 +3,8 @@
 
 import Link from 'next/link';
 import { useNotifications } from '@/lib/notifications/NotificationContext';
+import { Badge } from '@/components/ui/badge';
+import { Circle } from 'lucide-react';
 
 export default function NotificationsPage() {
   const {
@@ -12,15 +14,20 @@ export default function NotificationsPage() {
   } = useNotifications();
 
   return (
-    <div className="space-y-4">
+    <div className="max-w-4xl mx-auto space-y-4 p-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Notifications</h1>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Notifications</h1>
+          <p className="text-muted-foreground text-sm">
+            Stay updated with your home and booking activities.
+          </p>
+        </div>
 
         {notifications.some(n => !n.isRead) && (
           <button
             onClick={markAllRead}
-            className="text-sm text-blue-600 hover:underline"
+            className="text-sm font-medium text-primary hover:underline transition-all"
           >
             Mark all as read
           </button>
@@ -29,57 +36,82 @@ export default function NotificationsPage() {
 
       {/* Empty State */}
       {notifications.length === 0 && (
-        <div className="text-muted-foreground">
-          No notifications yet
+        <div className="flex flex-col items-center justify-center py-12 text-center border rounded-lg bg-background">
+          <p className="text-muted-foreground">No notifications yet</p>
         </div>
       )}
 
       {/* Notification List */}
-      {notifications.map((n) => {
-        const content = (
-          <div
-            className={`rounded border p-4 ${
-              n.isRead ? 'bg-background' : 'bg-muted'
-            }`}
-          >
-            <div className="font-medium">{n.title}</div>
-            <div className="text-sm text-muted-foreground">
-              {n.message}
-            </div>
-            <div className="text-xs text-muted-foreground mt-1">
-              {new Date(n.createdAt).toLocaleString()}
-            </div>
-          </div>
-        );
+      <div className="space-y-3">
+        {notifications.map((n) => {
+          const content = (
+            <div
+              className={`relative flex items-start gap-4 rounded-lg border p-4 transition-all hover:shadow-sm ${
+                n.isRead 
+                  ? 'bg-background border-border/50 opacity-80' 
+                  : 'bg-muted/30 border-primary/20 shadow-sm'
+              }`}
+            >
+              {/* Unread Indicator Dot */}
+              {!n.isRead && (
+                <div className="mt-1.5">
+                  <Circle className="h-2.5 w-2.5 fill-primary text-primary" />
+                </div>
+              )}
 
-        return (
-          <div
-            key={n.id}
-            onClick={() => {
-              if (!n.isRead) {
-                markRead(n.id);
-              }
-            }}
-            className="cursor-pointer"
-          >
-            {n.actionUrl ? (
-              <Link 
-                href={
-                  // Prepend /dashboard if the URL is a relative app path (e.g., /bookings/...)
-                  // and doesn't already have it.
-                  (n.actionUrl.startsWith('/') && !n.actionUrl.startsWith('/dashboard')) 
-                    ? `/dashboard${n.actionUrl}` 
-                    : n.actionUrl
+              <div className="flex-1 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div className={`text-sm leading-none ${n.isRead ? 'font-medium text-muted-foreground' : 'font-bold text-foreground'}`}>
+                    {n.title}
+                  </div>
+                  {!n.isRead && (
+                    <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 uppercase tracking-wider">
+                      New
+                    </Badge>
+                  )}
+                </div>
+                <p className={`text-sm ${n.isRead ? 'text-muted-foreground/70' : 'text-muted-foreground'}`}>
+                  {n.message}
+                </p>
+                <div className="text-[11px] text-muted-foreground/60 pt-1">
+                  {new Date(n.createdAt).toLocaleString([], { 
+                    month: 'short', 
+                    day: 'numeric', 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+
+          return (
+            <div
+              key={n.id}
+              onClick={() => {
+                if (!n.isRead) {
+                  markRead(n.id);
                 }
-              >
-                {content}
-              </Link>
-            ) : (
-              content
-            )}
-          </div>
-        );
-      })}
+              }}
+              className="cursor-pointer block group"
+            >
+              {n.actionUrl ? (
+                <Link 
+                  href={
+                    (n.actionUrl.startsWith('/') && !n.actionUrl.startsWith('/dashboard')) 
+                      ? `/dashboard${n.actionUrl}` 
+                      : n.actionUrl
+                  }
+                >
+                  {content}
+                </Link>
+              ) : (
+                content
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
