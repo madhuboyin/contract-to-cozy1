@@ -373,7 +373,7 @@ export default function MaintenancePage() {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/checklist/items/${item.id}`,
         {
-          method: 'PUT', // Use PUT for status updates
+          method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
@@ -390,10 +390,15 @@ export default function MaintenancePage() {
       return response.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); 
+      queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] });
+      
+      // ✅ ADD THESE LINES:
+      queryClient.invalidateQueries({ queryKey: ['seasonal-checklists'] });
+      queryClient.invalidateQueries({ queryKey: ['seasonal-checklist'] });
+      
       toast({ 
         title: "Task Completed", 
-        description: `"${data.title}" reset for its next cycle.`, 
+        description: `"${data.title}" completed successfully.`, 
         variant: 'default'
       });
     },

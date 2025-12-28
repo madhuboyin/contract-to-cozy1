@@ -11,6 +11,7 @@ import {
 } from '@prisma/client';
 import { MaintenanceTaskConfig } from '../types/maintenance.types';
 import { prisma } from '../lib/prisma';
+import SeasonalChecklistService from './seasonalChecklist.service';
 
 // --- START HELPER FUNCTIONS ---
 
@@ -415,48 +416,89 @@ export class ChecklistService {
   /**
    * Update the status of a specific checklist item.
    */
-  static async updateChecklistItemStatus(
-    userId: string,
-    itemId: string,
-    status: ChecklistItemStatus
-  ): Promise<ChecklistItem> {
-    // First, verify the checklist item belongs to the user
-    const item = await prisma.checklistItem.findFirst({
-      where: {
-        id: itemId,
-        checklist: {
-          homeownerProfile: {
-            userId: userId,
-          },
+/**
+ * Update the status of a specific checklist item.
+ * ✅ NOW WITH SEASONAL SYNC
+ */
+/**
+ * Update the status of a specific checklist item.
+ * ✅ NOW WITH SEASONAL SYNC
+ */
+static async updateChecklistItemStatus(
+  userId: string,
+  itemId: string,
+  status: ChecklistItemStatus
+): Promise<ChecklistItem> {
+  // First, verify the checklist item belongs to the user
+  const item = await prisma.checklistItem.findFirst({
+    where: {
+      id: itemId,
+      checklist: {
+        homeownerProfile: {
+          userId: userId,
         },
       },
-    });
+    },
+    // ✅ ADD THIS: Include seasonal link
+    include: {
+      seasonalChecklistItem: true,
+    },
+  });
 
-    if (!item) {
-      throw new Error('Checklist item not found or user does not have access.');
-    }
-
-    let dataToUpdate: any = { status: status };
-
-    if (item.isRecurring && status === 'COMPLETED') {
-      // If a recurring item is "completed", reset its due date for the next cycle
-      dataToUpdate = {
-        status: ChecklistItemStatus.PENDING,
-        lastCompletedDate: new Date(),
-        nextDueDate: calculateNextDueDate(item.frequency),
-      };
-    }
-
-    // Update the item
-    const updatedItem = await prisma.checklistItem.update({
-      where: {
-        id: itemId,
-      },
-      data: dataToUpdate,
-    });
-
-    return updatedItem;
+  if (!item) {
+    throw new Error('Checklist item not found or user does not have access.');
   }
+
+  let dataToUpdate: any = { status: status };
+
+  if (item.isRecurring && status === 'COMPLETED') {
+    // If a recurring item is "completed", reset its due date for the next cycle
+    dataToUpdate = {
+      status: ChecklistItemStatus.PENDING,
+      lastCompletedDate: new Date(),
+      nextDueDate: calculateNextDueDate(item.frequency),
+    };
+  }
+
+  // Update the item
+  const updatedItem = await prisma.checklistItem.update({
+    where: {
+      id: itemId,
+    },
+    data: dataToUpdate,
+    // ✅ ADD THIS: Include seasonal items in response
+    include: {
+      seasonalChecklistItem: true,
+    },
+  });
+
+  // ============================================================================
+  // ✅ NEW: SYNC TO SEASONAL TABLES
+  // ============================================================================
+  if (updatedItem.seasonalChecklistItem) {
+    console.log(`📅 Syncing seasonal status for task ${itemId}`);
+    
+    const seasonalItem = updatedItem.seasonalChecklistItem;
+    
+    try {
+      if (status === 'COMPLETED') {
+        // Import at top of file: import SeasonalChecklistService from './seasonalChecklist.service';
+        await SeasonalChecklistService.markTaskCompleted(seasonalItem.id);
+        console.log(`✅ Marked seasonal item ${seasonalItem.id} as completed`);
+      } else if (status === ChecklistItemStatus.PENDING && seasonalItem.status === 'COMPLETED') {
+        // Call the new uncomplete method (see Fix #2)
+        await SeasonalChecklistService.markTaskUncompleted(seasonalItem.id);
+        console.log(`🔄 Unmarked seasonal item ${seasonalItem.id} as completed`);
+      }
+    } catch (syncError) {
+      // Log but don't fail the whole operation
+      console.error(`❌ Failed to sync seasonal item ${seasonalItem.id}:`, syncError);
+    }
+  }
+  // ============================================================================
+
+  return updatedItem;
+}
 
     /**
    * Update configuration of a checklist item (not just status).

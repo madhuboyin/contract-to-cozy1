@@ -7,6 +7,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { QueryProvider } from '@/lib/providers/QueryProvider'; // FIX 1: Import the Query Provider
 import './globals.css';
 
+
 // Inter for body text
 const inter = Inter({ 
   subsets: ['latin'],

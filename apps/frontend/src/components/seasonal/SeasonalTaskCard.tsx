@@ -10,6 +10,8 @@ import {
   formatCostRange,
 } from '@/lib/utils/seasonHelpers';
 import { useAddTaskToChecklist, useDismissTask } from '@/lib/hooks/useSeasonalChecklists';
+import { useToast } from '@/components/ui/use-toast'; // Add this import at top
+import { Loader2,  Plus, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface SeasonalTaskCardProps {
   item: SeasonalChecklistItem;
@@ -24,6 +26,8 @@ export function SeasonalTaskCard({ item, onTaskAdded, onTaskDismissed }: Seasona
   const addTaskMutation = useAddTaskToChecklist();
   const dismissTaskMutation = useDismissTask();
 
+  const { toast } = useToast(); // Add this hook
+
   const handleAddTask = async () => {
     setIsAdding(true);
     try {
@@ -33,9 +37,25 @@ export function SeasonalTaskCard({ item, onTaskAdded, onTaskDismissed }: Seasona
           nextDueDate: item.recommendedDate,
         },
       });
+      
+      // ✅ ADD THIS: Show success toast
+      toast({
+        title: "Task Added! ✓",
+        description: `"${item.title}" is now in your Action Center`,
+        variant: "default",
+      });
+      
       onTaskAdded?.();
     } catch (error) {
       console.error('Failed to add task:', error);
+      
+      // ✅ ADD THIS: Show error toast
+      toast({
+        title: "Failed to Add Task",
+        description: (error as Error).message || "Please try again", 
+        variant: "destructive",
+
+      });
     } finally {
       setIsAdding(false);
     }
@@ -116,11 +136,36 @@ export function SeasonalTaskCard({ item, onTaskAdded, onTaskDismissed }: Seasona
           <>
             <button
               onClick={handleAddTask}
-              disabled={isAdding}
-              className="flex-1 inline-flex items-center justify-center px-4 py-2 rounded-md bg-green-600 text-white font-medium text-sm hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isAdding || item.status === 'ADDED'}
+              className={`
+                mt-3 px-4 py-2 rounded-md font-medium text-sm
+                transition-all duration-200 flex items-center gap-2
+                ${item.status === 'ADDED'
+                  ? 'bg-green-100 text-green-700 cursor-default'
+                  : isAdding
+                  ? 'bg-gray-100 text-gray-400 cursor-wait'
+                  : 'bg-green-600 text-white hover:bg-green-700 active:scale-95'
+                }
+              `}
             >
-              <Check className="w-4 h-4 mr-2" />
-              {isAdding ? 'Adding...' : 'Add to my tasks'}
+              {isAdding && (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Adding...
+                </>
+              )}
+              {item.status === 'ADDED' && !isAdding && (
+                <>
+                  <Check className="w-4 h-4" />
+                  Added to Tasks
+                </>
+              )}
+              {!isAdding && item.status !== 'ADDED' && (
+                <>
+                  <Plus className="w-4 h-4" />
+                  Add to my tasks
+                </>
+              )}
             </button>
             <button
               onClick={handleDismiss}

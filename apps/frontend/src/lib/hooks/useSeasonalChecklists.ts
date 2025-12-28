@@ -2,6 +2,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { seasonalAPI } from '@/lib/api/seasonal.api';
 import { Season } from '@/types/seasonal.types';
+import { useToast } from '@/components/ui/use-toast'; // Add import
 
 export function useSeasonalChecklists(
   propertyId: string,
@@ -36,6 +37,7 @@ export function useClimateInfo(propertyId: string) {
 
 export function useAddTaskToChecklist() {
   const queryClient = useQueryClient();
+  const { toast } = useToast(); // Add this
 
   return useMutation({
     mutationFn: ({ itemId, options }: { itemId: string; options?: any }) =>
@@ -44,6 +46,21 @@ export function useAddTaskToChecklist() {
       queryClient.invalidateQueries({ queryKey: ['seasonal-checklist'] });
       queryClient.invalidateQueries({ queryKey: ['seasonal-checklists'] });
       queryClient.invalidateQueries({ queryKey: ['checklist'] });
+      
+      // ✅ ADD THIS:
+      toast({
+        title: "Task Added Successfully! ✓",
+        description: "Check your Action Center to complete this task",
+        variant: "default",
+      });
+    },
+    onError: (error) => {
+      // ✅ ADD THIS:
+      toast({
+        title: "Failed to Add Task",
+        description: error.message || "Please try again",
+        variant: "destructive",
+      });
     },
   });
 }
@@ -106,5 +123,20 @@ export function useUpdateClimateSettings() {
       queryClient.invalidateQueries({ queryKey: ['climate-info', variables.propertyId] });
       queryClient.invalidateQueries({ queryKey: ['seasonal-checklists', variables.propertyId] });
     },
-  });
+  });  
+}
+
+/**
+ * Invalidate all seasonal-related queries
+ * Call this after any action that might affect seasonal data
+ */
+export function useInvalidateSeasonalCache() {
+  const queryClient = useQueryClient();
+
+  return () => {
+    queryClient.invalidateQueries({ queryKey: ['seasonal-checklists'] });
+    queryClient.invalidateQueries({ queryKey: ['seasonal-checklist'] });
+    queryClient.invalidateQueries({ queryKey: ['climate-info'] });
+    console.log('✅ Seasonal cache invalidated');
+  };
 }

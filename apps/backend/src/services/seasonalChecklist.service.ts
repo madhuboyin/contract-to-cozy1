@@ -479,6 +479,60 @@ export class SeasonalChecklistService {
 
     return updated;
   }
+    /**
+   * Mark seasonal task as uncompleted (reverses completion)
+   * Called when user uncompletes a task in Action Center
+   */
+  static async markTaskUncompleted(seasonalItemId: string) {
+    const seasonalItem = await prisma.seasonalChecklistItem.findUnique({
+      where: { id: seasonalItemId },
+      include: {
+        seasonalChecklist: true,
+      },
+    });
+
+    if (!seasonalItem) {
+      throw new Error('Seasonal checklist item not found');
+    }
+
+    // Only allow uncompleting if it was previously completed
+    if (seasonalItem.status !== 'COMPLETED') {
+      console.log(`⚠️ Seasonal item ${seasonalItemId} is not completed (status: ${seasonalItem.status}), skipping uncomplete`);
+      return seasonalItem;
+    }
+
+    // Update the seasonal item back to ADDED status
+    const updated = await prisma.seasonalChecklistItem.update({
+      where: { id: seasonalItemId },
+      data: {
+        status: 'ADDED', // Back to ADDED since it was added to Action Center
+        completedAt: null, // Clear completion timestamp
+      },
+      include: {
+        seasonalChecklist: true,
+      },
+    });
+
+    // Decrement the checklist completed count
+    const currentChecklist = await prisma.seasonalChecklist.findUnique({
+      where: { id: updated.seasonalChecklistId },
+    });
+
+    if (currentChecklist && currentChecklist.tasksCompleted > 0) {
+      await prisma.seasonalChecklist.update({
+        where: { id: updated.seasonalChecklistId },
+        data: {
+          tasksCompleted: { decrement: 1 },
+          // If it was marked COMPLETED due to 100%, change back to IN_PROGRESS
+          status: currentChecklist.status === 'COMPLETED' ? 'IN_PROGRESS' : currentChecklist.status,
+        },
+      });
+    }
+
+    console.log(`🔄 Uncompleted seasonal task: ${seasonalItem.title}`);
+    
+    return updated;
+  }
 }
 
 export default SeasonalChecklistService;

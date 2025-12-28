@@ -38,6 +38,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { CheckedState } from '@radix-ui/react-checkbox';
+import { useQueryClient } from '@tanstack/react-query';
 
 // --- Types ---
 type ChecklistItemStatus = 'PENDING' | 'COMPLETED' | 'NOT_NEEDED';
@@ -70,7 +71,7 @@ function formatServiceCategory(category: string | null): string {
 export default function ChecklistPage() {
   const router = useRouter();
   const { user } = useAuth();
-  
+  const queryClient = useQueryClient();
   const [checklist, setChecklist] = useState<ChecklistType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -208,6 +209,9 @@ export default function ChecklistPage() {
       }));
 
       console.log('✅ Item updated successfully');
+      queryClient.invalidateQueries({ queryKey: ['seasonal-checklists'] });
+      queryClient.invalidateQueries({ queryKey: ['seasonal-checklist'] });
+      console.log('📅 Invalidated seasonal cache');
     } catch (err: any) {
       console.error('❌ Update failed:', err);
       setError('Failed to update. Please try again.');
