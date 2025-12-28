@@ -58,7 +58,7 @@ export default function SeasonalMaintenancePage() {
     );
   }
 
-  const checklists = checklistsData?.data?.checklists || [];
+  const checklists = checklistsData?.checklists || [];
   const currentSeason = climateInfo?.data?.currentSeason;
   const currentYear = new Date().getFullYear();
 
