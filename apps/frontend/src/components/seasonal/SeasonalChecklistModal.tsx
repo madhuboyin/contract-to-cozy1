@@ -37,10 +37,11 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
     );
   }
 
-  if (error || !data?.data) {
+  if (error || !data) {
+    console.log('❌ RETURNING NULL');
     return null;
   }
-
+  console.log('✅ PAST THE CHECK, WILL RENDER MODAL');
   const { checklist, tasks } = data?.data || data;
   console.log('🔍 Destructured checklist:', checklist);
   console.log('🔍 Destructured tasks:', tasks);
