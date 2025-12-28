@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { FileText, Loader2, Wrench, Calendar, Settings, Plus, Edit, Trash2, CheckCircle } from 'lucide-react';
-import { format, parseISO, differenceInDays } from 'date-fns';
+import { format, parseISO, differenceInDays, addDays } from 'date-fns';
 import { api } from '@/lib/api/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -333,6 +333,8 @@ export default function MaintenancePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); 
+      queryClient.invalidateQueries({ queryKey: ['seasonal-checklists'] });
+      queryClient.invalidateQueries({ queryKey: ['seasonal-checklist'] });
       toast({ title: "Task Updated", description: "Maintenance task configuration saved." });
       handleCloseModal();
     },
@@ -355,6 +357,8 @@ export default function MaintenancePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['maintenance-page-data'] }); 
+      queryClient.invalidateQueries({ queryKey: ['seasonal-checklists'] });
+      queryClient.invalidateQueries({ queryKey: ['seasonal-checklist'] });
       toast({ title: "Task Removed", description: "Maintenance task permanently deleted." });
       handleCloseModal();
     },
@@ -424,7 +428,7 @@ export default function MaintenancePage() {
       // FIX: nextDueDate assignment. Format the Date object to ISO string if it exists.
       nextDueDate: config.nextDueDate 
         ? format(config.nextDueDate, 'yyyy-MM-dd') 
-        : null,
+        : format(addDays(new Date(), 7), 'yyyy-MM-dd'), // ✅ Default to 7 days from
         
       serviceCategory: config.serviceCategory,
     };
