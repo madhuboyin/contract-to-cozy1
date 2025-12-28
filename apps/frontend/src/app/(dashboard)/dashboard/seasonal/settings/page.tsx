@@ -2,6 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Save, MapPin, Bell, CheckCircle } from 'lucide-react';
 import { useClimateInfo, useUpdateClimateSettings } from '@/lib/hooks/useSeasonalChecklists';
 import { ClimateRegion, NotificationTiming } from '@/types/seasonal.types';
@@ -9,9 +10,10 @@ import { getClimateRegionName, getClimateRegionIcon } from '@/lib/utils/seasonHe
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 
 export default function SeasonalSettingsPage() {
-  // FIX: Use actual property ID from context instead of hardcoded value
+  // FIX: Get propertyId from URL params first (for page reload), then fall back to context
+  const searchParams = useSearchParams();
   const { selectedPropertyId } = usePropertyContext();
-  const propertyId = selectedPropertyId;
+  const propertyId = searchParams.get('propertyId') || selectedPropertyId;
 
   const { data: climateData, isLoading } = useClimateInfo(propertyId!);
   const updateSettingsMutation = useUpdateClimateSettings();

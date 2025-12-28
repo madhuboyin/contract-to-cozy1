@@ -2,6 +2,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Calendar, ChevronDown, ChevronRight, CheckCircle, Clock } from 'lucide-react';
 import { useSeasonalChecklists, useClimateInfo } from '@/lib/hooks/useSeasonalChecklists';
 import { SeasonalChecklistModal } from '@/components/seasonal/SeasonalChecklistModal';
@@ -21,9 +22,10 @@ export default function SeasonalMaintenancePage() {
   const [expandedSeasons, setExpandedSeasons] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'current' | 'all' | 'completed'>('current');
 
-  // FIX: Get propertyId from context instead of hardcoded value
+  // FIX: Get propertyId from URL params first (for page reload), then fall back to context
+  const searchParams = useSearchParams();
   const { selectedPropertyId } = usePropertyContext();
-  const propertyId = selectedPropertyId;
+  const propertyId = searchParams.get('propertyId') || selectedPropertyId;
 
   const { data: climateInfo } = useClimateInfo(propertyId!);
   const { data: checklistsData, isLoading } = useSeasonalChecklists(propertyId!);
