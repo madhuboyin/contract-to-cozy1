@@ -6,6 +6,7 @@ import { X, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useSeasonalChecklistDetails, useDismissChecklist, useAddAllCriticalTasks } from '@/lib/hooks/useSeasonalChecklists';
 import { SeasonalTaskCard } from './SeasonalTaskCard';
 import { getSeasonName, getSeasonIcon, getClimateRegionName } from '@/lib/utils/seasonHelpers';
+import { DiyDifficultyBadge } from './DiyDifficultyBadge';
 
 interface SeasonalChecklistModalProps {
   checklistId: string;

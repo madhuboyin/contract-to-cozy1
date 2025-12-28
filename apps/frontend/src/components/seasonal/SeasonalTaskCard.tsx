@@ -12,6 +12,7 @@ import {
 import { useAddTaskToChecklist, useDismissTask } from '@/lib/hooks/useSeasonalChecklists';
 import { useToast } from '@/components/ui/use-toast'; // Add this import at top
 import { Loader2,  Plus, CheckCircle2, AlertCircle } from 'lucide-react';
+import { DiyDifficultyBadge, ProfessionalServiceBadge } from './DiyDifficultyBadge';
 
 interface SeasonalTaskCardProps {
   item: SeasonalChecklistItem;
@@ -99,17 +100,24 @@ export function SeasonalTaskCard({ item, onTaskAdded, onTaskDismissed }: Seasona
           <DollarSign className="w-4 h-4" />
           <span>{formatCostRange(template.typicalCostMin, template.typicalCostMax)}</span>
         </div>
-        {template.estimatedHours && (
+        {template.estimatedHours && template.isDiyPossible && (
           <div className="flex items-center space-x-1">
             <Timer className="w-4 h-4" />
             <span>~{template.estimatedHours} hrs</span>
           </div>
         )}
-        {template.isDiyPossible && (
-          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
-            DIY Possible
-          </span>
-        )}
+      </div>
+
+      {/* DIY Difficulty Badge - NEW SECTION */}
+      <div className="mb-3">
+        {template.isDiyPossible && template.diyDifficulty ? (
+          <DiyDifficultyBadge 
+            difficulty={template.diyDifficulty}
+            estimatedHours={template.estimatedHours}
+          />
+        ) : !template.isDiyPossible ? (
+          <ProfessionalServiceBadge />
+        ) : null}
       </div>
 
       {/* Why It Matters - Collapsible */}

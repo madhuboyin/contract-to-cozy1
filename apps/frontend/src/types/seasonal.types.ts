@@ -6,6 +6,7 @@ export type SeasonalChecklistStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 
 export type SeasonalTaskStatus = 'RECOMMENDED' | 'ADDED' | 'COMPLETED' | 'DISMISSED' | 'SNOOZED';
 export type TaskPriority = 'CRITICAL' | 'RECOMMENDED' | 'OPTIONAL';
 export type NotificationTiming = 'EARLY' | 'STANDARD' | 'LATE';
+export type DiyDifficulty = 'EASY' | 'MODERATE' | 'ADVANCED';
 
 export interface SeasonalTaskTemplate {
   id: string;
@@ -18,6 +19,7 @@ export interface SeasonalTaskTemplate {
   typicalCostMax?: number;
   isDiyPossible: boolean;
   estimatedHours?: number;
+  diyDifficulty?: DiyDifficulty;
   priority: TaskPriority;
   serviceCategory?: string;
   climateRegions: ClimateRegion[];
