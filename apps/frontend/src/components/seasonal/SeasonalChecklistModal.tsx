@@ -17,6 +17,13 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
   const [dismissing, setDismissing] = useState(false);
 
   const { data, isLoading, error } = useSeasonalChecklistDetails(checklistId);
+  console.log('🔍 Modal data:', data);
+  console.log('🔍 Modal error:', error);
+  console.log('🔍 Modal isLoading:', isLoading);
+  console.log('🔍 Modal checklistId:', checklistId);
+  console.log('🔍 Modal onClose:', onClose);
+  console.log('🔍 Modal activeTab:', activeTab);
+  console.log('🔍 Modal dismissing:', dismissing);
   const dismissChecklistMutation = useDismissChecklist();
   const addAllCriticalMutation = useAddAllCriticalTasks();
 
@@ -34,7 +41,7 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
     return null;
   }
 
-  const { checklist, tasks } = data;
+  const { checklist, tasks } = data?.data || data;
   const seasonName = getSeasonName(checklist.season);
   const seasonIcon = getSeasonIcon(checklist.season);
   const climateName = getClimateRegionName(checklist.climateRegion);

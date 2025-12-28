@@ -386,8 +386,8 @@ function startWorker() {
 
   // Clean up expired checklists first (1 AM)
   cron.schedule(
-    //'0 1 * * *',
-    '*/5 * * * *',
+    '0 1 * * *',
+    //'*/5 * * * *',
     async () => {
       console.log('[SEASONAL-EXPIRE] Running checklist expiration job...');
       try {
@@ -402,8 +402,8 @@ function startWorker() {
 
   // Generate new seasonal checklists (2 AM)
   cron.schedule(
-    // '0 2 * * *',
-    '*/5 * * * *',
+     '0 2 * * *',
+    //'*/5 * * * *',
     async () => {
       console.log('[SEASONAL-GEN] Running checklist generation job...');
       try {
@@ -418,8 +418,8 @@ function startWorker() {
 
   // Send notifications during morning hours (9 AM)
   cron.schedule(
-    // '0 9 * * *',
-    '*/5 * * * *',
+     '0 9 * * *',
+    //'*/5 * * * *',
     async () => {
       console.log('[SEASONAL-NOTIFY] Running notification job...');
       try {
