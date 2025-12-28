@@ -1611,6 +1611,8 @@ model SeasonalTaskTemplate {
   typicalCostMax        Decimal?         @map("typical_cost_max") @db.Decimal(10, 2)
   isDiyPossible         Boolean          @default(false) @map("is_diy_possible")
   diyDifficulty         String?          @default("MODERATE") @map("diy_difficulty")
+  tutorialUrl           String?          @map("tutorial_url")
+  materialsList         String?          @map("materials_list")
   estimatedHours        Decimal?         @map("estimated_hours") @db.Decimal(4, 1)
   priority              TaskPriority     @default(RECOMMENDED)
   serviceCategory       String?          @map("service_category")
