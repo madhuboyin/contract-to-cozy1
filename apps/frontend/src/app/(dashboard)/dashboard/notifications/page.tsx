@@ -63,7 +63,15 @@ export default function NotificationsPage() {
             className="cursor-pointer"
           >
             {n.actionUrl ? (
-              <Link href={n.actionUrl}>
+              <Link 
+                href={
+                  // Prepend /dashboard if the URL is a relative app path (e.g., /bookings/...)
+                  // and doesn't already have it.
+                  (n.actionUrl.startsWith('/') && !n.actionUrl.startsWith('/dashboard')) 
+                    ? `/dashboard${n.actionUrl}` 
+                    : n.actionUrl
+                }
+              >
                 {content}
               </Link>
             ) : (
