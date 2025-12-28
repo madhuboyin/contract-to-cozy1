@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Calendar, ChevronDown, ChevronRight, CheckCircle, Clock } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronRight, CheckCircle, Clock, Settings } from 'lucide-react';
 import { useSeasonalChecklists, useClimateInfo } from '@/lib/hooks/useSeasonalChecklists';
 import { SeasonalChecklistModal } from '@/components/seasonal/SeasonalChecklistModal';
 import {
@@ -16,8 +16,11 @@ import {
 } from '@/lib/utils/seasonHelpers';
 import { SeasonalChecklist } from '@/types/seasonal.types';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
+import { useRouter } from 'next/navigation';
+import { SettingsIcon } from 'lucide-react';
 
 export default function SeasonalMaintenancePage() {
+  const router = useRouter(); 
   const [selectedChecklistId, setSelectedChecklistId] = useState<string | null>(null);
   useEffect(() => {
     console.log('🔍 selectedChecklistId changed to:', selectedChecklistId);
@@ -100,10 +103,21 @@ export default function SeasonalMaintenancePage() {
     <div className="max-w-6xl mx-auto px-4 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Seasonal Maintenance</h1>
-        <p className="text-gray-600">
-          Stay on top of seasonal home maintenance tasks tailored to your climate
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Seasonal Maintenance</h1>
+            <p className="text-gray-600">
+              Stay on top of seasonal home maintenance tasks tailored to your climate
+            </p>
+          </div>
+          <button
+            onClick={() => router.push(`/dashboard/seasonal/settings?propertyId=${propertyId}`)}
+            className="flex items-center space-x-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Settings className="w-4 h-4" />
+            <span>Settings</span>
+          </button>
+        </div>
       </div>
 
       {/* Climate Info Banner */}
