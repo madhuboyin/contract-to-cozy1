@@ -59,7 +59,7 @@ export default function SeasonalMaintenancePage() {
   }
 
   const checklists = checklistsData?.checklists || [];
-  const currentSeason = climateInfo?.data?.currentSeason;
+  const currentSeason = climateInfo?.currentSeason;
   const currentYear = new Date().getFullYear();
 
   // Filter checklists based on active tab
