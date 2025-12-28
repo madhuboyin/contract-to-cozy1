@@ -136,15 +136,17 @@ export function SeasonalTaskCard({ item, onTaskAdded, onTaskDismissed }: Seasona
           )}
         </div>
       )}
-      {/* Quick Action Buttons */}
-      {showDetails && (
-        <TaskActionButtons
-          tutorialUrl={template.tutorialUrl}
-          materialsList={template.materialsList}
-          serviceCategory={template.serviceCategory}
-          taskTitle={item.title}
-          isDiyPossible={template.isDiyPossible}
-        />
+      {/* Quick Action Buttons - Always visible */}
+      {(template.isDiyPossible || template.serviceCategory) && (
+        <div className="mb-3">
+          <TaskActionButtons
+            tutorialUrl={template.tutorialUrl}
+            materialsList={template.materialsList}
+            serviceCategory={template.serviceCategory}
+            taskTitle={item.title}
+            isDiyPossible={template.isDiyPossible}
+          />
+        </div>
       )}
       {/* Action Buttons */}
       <div className="flex items-center space-x-2 mt-4">
