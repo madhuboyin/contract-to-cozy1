@@ -22,6 +22,7 @@ export interface SeasonalTaskTemplate {
   diyDifficulty?: DiyDifficulty;
   tutorialUrl?: string;        // ADD THIS
   materialsList?: string;      // ADD THIS
+  safetyWarning?: string;
   priority: TaskPriority;
   serviceCategory?: string;
   climateRegions: ClimateRegion[];
