@@ -42,6 +42,9 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
   }
 
   const { checklist, tasks } = data?.data || data;
+  console.log('🔍 Destructured checklist:', checklist);
+  console.log('🔍 Destructured tasks:', tasks);
+  console.log('🔍 About to call getSeasonName with:', checklist?.season);
   const seasonName = getSeasonName(checklist.season);
   const seasonIcon = getSeasonIcon(checklist.season);
   const climateName = getClimateRegionName(checklist.climateRegion);
