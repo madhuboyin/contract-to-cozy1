@@ -1613,6 +1613,7 @@ model SeasonalTaskTemplate {
   diyDifficulty         String?          @default("MODERATE") @map("diy_difficulty")
   tutorialUrl           String?          @map("tutorial_url")
   materialsList         String?          @map("materials_list")
+  safetyWarning         String?          @map("safety_warning")
   estimatedHours        Decimal?         @map("estimated_hours") @db.Decimal(4, 1)
   priority              TaskPriority     @default(RECOMMENDED)
   serviceCategory       String?          @map("service_category")
