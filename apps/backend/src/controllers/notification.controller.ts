@@ -32,31 +32,29 @@ export class NotificationController {
    * MARK SINGLE NOTIFICATION AS READ
    * ============================================================
    */
-  static async markAsRead(req: AuthRequest, res: Response) {
-    const userId = req.user?.userId;
-    const { id } = req.params;
+// apps/backend/src/controllers/notification.controller.ts
 
-    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+static async markAsRead(req: AuthRequest, res: Response) {
+  const userId = req.user?.userId;
+  const { id } = req.params;
 
-    // Use the service to update persistence in DB
-    const notification = await NotificationService.markRead(userId, id);
-    return res.json({ success: true, data: notification });
-  }
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
-  static async markAsUnread(req: AuthRequest, res: Response) {
-    const userId = req.user?.userId;
-    const { id } = req.params;
+  // This service call performs the persistent DB update
+  const notification = await NotificationService.markRead(userId, id);
+  return res.json({ success: true, data: notification });
+}
 
-    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+static async markAsUnread(req: AuthRequest, res: Response) {
+  const userId = req.user?.userId;
+  const { id } = req.params;
 
-    // This calls the service which performs the DB update
-    const notification = await NotificationService.markUnread(userId, id);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
-    return res.json({
-      success: true,
-      data: notification,
-    });
-  }
+  // This service call clears the read status in the DB
+  const notification = await NotificationService.markUnread(userId, id);
+  return res.json({ success: true, data: notification });
+}
   /**
    * ============================================================
    * MARK ALL NOTIFICATIONS AS READ

@@ -23,27 +23,20 @@ export function TaskActionButtons({
     `https://www.youtube.com/results?search_query=${encodeURIComponent(taskTitle + ' DIY home maintenance')}`;
 
   return (
-    <div className="space-y-3">
-      {/* Quick Actions Header */}
-      <div className="flex items-center gap-2 pt-3 border-t border-gray-200">
-        <span className="text-sm font-semibold text-gray-700">Quick Actions:</span>
-      </div>
-
-      <div className="grid grid-cols-1 gap-2">
+    <div className="space-y-2">
+      {/* Quick Actions - Compact horizontal layout */}
+      <div className="flex items-center gap-2 flex-wrap">
         {/* Watch Tutorial Button */}
         {isDiyPossible && (
           <a
             href={youtubeUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors group"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 transition-colors text-xs group"
           >
-            <Youtube className="w-5 h-5 text-red-600" />
-            <div className="flex-1">
-              <p className="font-medium text-red-900 text-sm">Watch Tutorial</p>
-              <p className="text-xs text-red-600">Step-by-step video guide</p>
-            </div>
-            <ExternalLink className="w-4 h-4 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <Youtube className="w-3.5 h-3.5 text-red-600" />
+            <span className="font-medium text-red-900">Tutorial</span>
+            <ExternalLink className="w-3 h-3 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity" />
           </a>
         )}
 
@@ -51,16 +44,12 @@ export function TaskActionButtons({
         {isDiyPossible && materialsList && (
           <button
             onClick={() => {
-              // Could open a modal or expand section
               alert(`Materials needed:\n\n${materialsList}`);
             }}
-            className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors text-left"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors text-xs"
           >
-            <FileText className="w-5 h-5 text-blue-600" />
-            <div className="flex-1">
-              <p className="font-medium text-blue-900 text-sm">View Materials List</p>
-              <p className="text-xs text-blue-600">Tools & supplies needed</p>
-            </div>
+            <FileText className="w-3.5 h-3.5 text-blue-600" />
+            <span className="font-medium text-blue-900">Materials</span>
           </button>
         )}
 
@@ -68,14 +57,11 @@ export function TaskActionButtons({
         {serviceCategory && (
           <Link
             href={`/dashboard/providers?category=${serviceCategory}`}
-            className="flex items-center gap-3 px-4 py-3 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors group"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 transition-colors text-xs group"
           >
-            <Phone className="w-5 h-5 text-green-600" />
-            <div className="flex-1">
-              <p className="font-medium text-green-900 text-sm">Find Professional</p>
-              <p className="text-xs text-green-600">Get quotes from local pros</p>
-            </div>
-            <ExternalLink className="w-4 h-4 text-green-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <Phone className="w-3.5 h-3.5 text-green-600" />
+            <span className="font-medium text-green-900">Find Pro</span>
+            <ExternalLink className="w-3 h-3 text-green-600 opacity-0 group-hover:opacity-100 transition-opacity" />
           </Link>
         )}
       </div>

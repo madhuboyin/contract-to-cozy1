@@ -20,71 +20,66 @@ export function CostComparison({
     return null;
   }
 
-  const professionalCost = typicalCostMax || typicalCostMin || 0;
-  const avgProfessionalCost = typicalCostMin && typicalCostMax 
-    ? (typicalCostMin + typicalCostMax) / 2 
-    : professionalCost;
+  // Convert to numbers and ensure they're in dollars (not cents)
+  const minCost = Number(typicalCostMin) || 0;
+  const maxCost = Number(typicalCostMax) || 0;
+  
+  const avgProfessionalCost = minCost && maxCost 
+    ? (minCost + maxCost) / 2 
+    : (maxCost || minCost);
 
   // DIY cost is typically 20-40% of professional cost (materials only)
   const diyMaterialsPercentage = diyDifficulty === 'EASY' ? 0.2 : diyDifficulty === 'MODERATE' ? 0.3 : 0.4;
   const diyCost = isDiyPossible ? Math.round(avgProfessionalCost * diyMaterialsPercentage) : 0;
   const savings = isDiyPossible ? Math.round(avgProfessionalCost - diyCost) : 0;
-  const savingsPercentage = isDiyPossible ? Math.round((savings / avgProfessionalCost) * 100) : 0;
+  const savingsPercentage = isDiyPossible && avgProfessionalCost > 0 
+    ? Math.round((savings / avgProfessionalCost) * 100) 
+    : 0;
 
   if (!isDiyPossible) {
-    // Professional only - just show cost
+    // Professional only - compact display
     return (
-      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <div className="flex items-center gap-2 mb-2">
-          <DollarSign className="w-5 h-5 text-blue-600" />
-          <span className="font-semibold text-blue-900">Professional Service</span>
-        </div>
-        <p className="text-2xl font-bold text-blue-900">
-          ${typicalCostMin?.toLocaleString()} - ${typicalCostMax?.toLocaleString()}
-        </p>
-        <p className="text-xs text-blue-600 mt-1">Typical cost range</p>
+      <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded border border-blue-200 text-sm">
+        <DollarSign className="w-3.5 h-3.5 text-blue-600" />
+        <span className="font-semibold text-blue-900">
+          ${minCost.toLocaleString()}-${maxCost.toLocaleString()}
+        </span>
+        <span className="text-xs text-blue-600">Pro only</span>
       </div>
     );
   }
 
-  // DIY option available - show comparison
+  // DIY option available - show compact comparison
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="flex items-center gap-3 text-sm">
       {/* DIY Cost */}
-      <div className="p-4 bg-green-50 border-2 border-green-300 rounded-lg">
-        <div className="flex items-center gap-2 mb-2">
-          <DollarSign className="w-4 h-4 text-green-600" />
-          <span className="text-sm font-semibold text-green-900">DIY Cost</span>
+      <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1 px-2 py-1 bg-green-50 rounded border border-green-200">
+          <DollarSign className="w-3.5 h-3.5 text-green-600" />
+          <span className="font-semibold text-green-900">${diyCost}</span>
+          <span className="text-xs text-green-600">DIY</span>
         </div>
-        <p className="text-2xl font-bold text-green-900">${diyCost}</p>
-        <p className="text-xs text-green-600 mt-1">Materials only</p>
       </div>
+
+      {/* Divider */}
+      <span className="text-gray-400">vs</span>
 
       {/* Professional Cost */}
-      <div className="p-4 bg-gray-50 border border-gray-300 rounded-lg">
-        <div className="flex items-center gap-2 mb-2">
-          <DollarSign className="w-4 h-4 text-gray-600" />
-          <span className="text-sm font-semibold text-gray-900">Professional</span>
-        </div>
-        <p className="text-2xl font-bold text-gray-900">
-          ${typicalCostMin?.toLocaleString()}-${typicalCostMax?.toLocaleString()}
-        </p>
-        <p className="text-xs text-gray-600 mt-1">Typical range</p>
+      <div className="flex items-center gap-1 px-2 py-1 bg-gray-50 rounded border border-gray-200">
+        <DollarSign className="w-3.5 h-3.5 text-gray-600" />
+        <span className="font-semibold text-gray-900">
+          ${minCost.toLocaleString()}-${maxCost.toLocaleString()}
+        </span>
+        <span className="text-xs text-gray-600">Pro</span>
       </div>
 
-      {/* Savings Banner */}
+      {/* Savings Indicator */}
       {savings > 0 && (
-        <div className="col-span-2 p-3 bg-gradient-to-r from-green-500 to-green-600 rounded-lg text-white">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <TrendingDown className="w-5 h-5" />
-              <span className="font-semibold">You Save</span>
-            </div>
-            <div className="text-right">
-              <p className="text-2xl font-bold">~${savings.toLocaleString()}</p>
-              <p className="text-xs opacity-90">Save {savingsPercentage}% by doing it yourself</p>
-            </div>
-          </div>
+        <div className="flex items-center gap-1 px-2 py-1 bg-green-100 rounded border border-green-300">
+          <TrendingDown className="w-3.5 h-3.5 text-green-700" />
+          <span className="text-xs font-semibold text-green-900">
+            Save ${savings.toLocaleString()} ({savingsPercentage}%)
+          </span>
         </div>
       )}
     </div>

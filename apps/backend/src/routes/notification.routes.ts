@@ -18,13 +18,13 @@ router.get('/', authenticate, NotificationController.list);
 // Unread count (badge)
 router.get('/unread-count', authenticate, NotificationController.unreadCount);
 
-// Mark single notification as read
-router.post('/:id/read', authenticate, NotificationController.markAsRead);
-
 // Mark all notifications as read
 router.post('/read-all', authenticate, NotificationController.markAllAsRead);
 
-// Add this line to notification.routes.ts
+// Mark single notification as read (Changed from .post to .patch to match frontend)
+router.patch('/:id/read', authenticate, NotificationController.markAsRead);
+
+// Mark single notification as unread (Persistent Reset)
 router.patch('/:id/unread', authenticate, NotificationController.markAsUnread);
 
 /**
