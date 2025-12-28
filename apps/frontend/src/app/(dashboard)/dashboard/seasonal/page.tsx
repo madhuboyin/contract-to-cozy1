@@ -228,12 +228,15 @@ export default function SeasonalMaintenancePage() {
                               {checklist.status}
                             </span>
                           </div>
-                          <button
-                            onClick={() => setSelectedChecklistId(checklist.id)}
-                            className="text-sm text-green-600 hover:text-green-700 font-medium"
-                          >
-                            View Details →
-                          </button>
+                            <button
+                              onClick={() => {
+                                console.log('🔍 Opening modal for checklist ID:', checklist.id);
+                                setSelectedChecklistId(checklist.id);
+                              }}
+                              className="text-sm text-green-600 hover:text-green-700 font-medium"
+                            >
+                              View Details →
+                            </button>
                         </div>
                         
                         {/* Progress Bar */}

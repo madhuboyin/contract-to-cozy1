@@ -34,7 +34,7 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
     return null;
   }
 
-  const { checklist, tasks } = data.data;
+  const { checklist, tasks } = data;
   const seasonName = getSeasonName(checklist.season);
   const seasonIcon = getSeasonIcon(checklist.season);
   const climateName = getClimateRegionName(checklist.climateRegion);
