@@ -12,7 +12,7 @@ export default function NotificationsPage() {
     notifications,
     markRead,
     markAllRead,
-    refresh // Used to sync state after manual 'unread' toggle
+    refresh 
   } = useNotifications();
 
   // Sort: Unread items (isRead === false) go to the top
@@ -24,9 +24,10 @@ export default function NotificationsPage() {
   });
 
   const handleToggleUnread = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation(); // Prevent navigation if the item has an actionUrl
+    e.preventDefault();
+    e.stopPropagation();
     try {
-      // Direct API call to update state; would be ideal to add this to Context in next iteration
+      // Calls the persistent PATCH endpoint in the backend
       await api.patch(`/api/notifications/${id}/unread`, {}); 
       await refresh();
     } catch (err) {
@@ -41,7 +42,7 @@ export default function NotificationsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Notifications</h1>
           <p className="text-muted-foreground text-sm">
-            Unread updates are shown first.
+            Unread updates are shown first and persisted across sessions.
           </p>
         </div>
 
@@ -65,7 +66,7 @@ export default function NotificationsPage() {
       {/* Notification List */}
       <div className="space-y-3">
         {sortedNotifications.map((n) => {
-          const content = (
+          const innerContent = (
             <div
               className={`relative flex items-start gap-4 rounded-lg border p-4 transition-all hover:shadow-sm ${
                 n.isRead 
@@ -85,15 +86,16 @@ export default function NotificationsPage() {
                   <div className={`text-sm leading-none ${n.isRead ? 'font-medium text-muted-foreground' : 'font-bold text-foreground'}`}>
                     {n.title}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-h-[24px]">
                     {!n.isRead ? (
                       <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 uppercase tracking-wider">
                         New
                       </Badge>
                     ) : (
+                      /* Reset Button - Decoupled from main Link click area */
                       <button
                         onClick={(e) => handleToggleUnread(e, n.id)}
-                        className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors"
+                        className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors py-1 px-2 hover:bg-muted rounded-md border border-transparent hover:border-border"
                         title="Mark as unread"
                       >
                         <RotateCcw className="h-3 w-3" />
@@ -118,15 +120,7 @@ export default function NotificationsPage() {
           );
 
           return (
-            <div
-              key={n.id}
-              onClick={() => {
-                if (!n.isRead) {
-                  markRead(n.id);
-                }
-              }}
-              className="cursor-pointer block group"
-            >
+            <div key={n.id} className="block group">
               {n.actionUrl ? (
                 <Link 
                   href={
@@ -134,11 +128,16 @@ export default function NotificationsPage() {
                       ? `/dashboard${n.actionUrl}` 
                       : n.actionUrl
                   }
+                  onClick={() => {
+                    if (!n.isRead) markRead(n.id);
+                  }}
                 >
-                  {content}
+                  {innerContent}
                 </Link>
               ) : (
-                content
+                <div onClick={() => { if (!n.isRead) markRead(n.id); }}>
+                  {innerContent}
+                </div>
               )}
             </div>
           );

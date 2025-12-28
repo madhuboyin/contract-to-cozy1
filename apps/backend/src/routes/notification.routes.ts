@@ -24,6 +24,9 @@ router.post('/:id/read', authenticate, NotificationController.markAsRead);
 // Mark all notifications as read
 router.post('/read-all', authenticate, NotificationController.markAllAsRead);
 
+// Add this line to notification.routes.ts
+router.patch('/:id/unread', authenticate, NotificationController.markAsUnread);
+
 /**
  * ============================================================
  * DELIVERY MANAGEMENT (Admin / Advanced)

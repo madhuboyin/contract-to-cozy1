@@ -13,6 +13,8 @@ import { useAddTaskToChecklist, useDismissTask } from '@/lib/hooks/useSeasonalCh
 import { useToast } from '@/components/ui/use-toast'; // Add this import at top
 import { Loader2,  Plus, CheckCircle2, AlertCircle } from 'lucide-react';
 import { DiyDifficultyBadge, ProfessionalServiceBadge } from './DiyDifficultyBadge';
+import { CostComparison } from './CostComparison';
+import { TaskActionButtons } from './TaskActionButtons';
 
 interface SeasonalTaskCardProps {
   item: SeasonalChecklistItem;
@@ -95,20 +97,17 @@ export function SeasonalTaskCard({ item, onTaskAdded, onTaskDismissed }: Seasona
       </div>
 
       {/* Cost and Time Info */}
-      <div className="flex items-center space-x-4 mb-3 text-sm text-gray-600">
-        <div className="flex items-center space-x-1">
-          <DollarSign className="w-4 h-4" />
-          <span>{formatCostRange(template.typicalCostMin, template.typicalCostMax)}</span>
-        </div>
-        {template.estimatedHours && template.isDiyPossible && (
-          <div className="flex items-center space-x-1">
-            <Timer className="w-4 h-4" />
-            <span>~{template.estimatedHours} hrs</span>
-          </div>
-        )}
+      {/* Cost Comparison - Enhanced */}
+      <div className="mb-4">
+        <CostComparison
+          typicalCostMin={template.typicalCostMin}
+          typicalCostMax={template.typicalCostMax}
+          isDiyPossible={template.isDiyPossible}
+          diyDifficulty={template.diyDifficulty}
+        />
       </div>
 
-      {/* DIY Difficulty Badge - NEW SECTION */}
+      {/* DIY Difficulty Badge */}
       <div className="mb-3">
         {template.isDiyPossible && template.diyDifficulty ? (
           <DiyDifficultyBadge 
@@ -137,7 +136,16 @@ export function SeasonalTaskCard({ item, onTaskAdded, onTaskDismissed }: Seasona
           )}
         </div>
       )}
-
+      {/* Quick Action Buttons */}
+      {showDetails && (
+        <TaskActionButtons
+          tutorialUrl={template.tutorialUrl}
+          materialsList={template.materialsList}
+          serviceCategory={template.serviceCategory}
+          taskTitle={item.title}
+          isDiyPossible={template.isDiyPossible}
+        />
+      )}
       {/* Action Buttons */}
       <div className="flex items-center space-x-2 mt-4">
         {!isAdded ? (
