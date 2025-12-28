@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/seasonal/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Calendar, ChevronDown, ChevronRight, CheckCircle, Clock } from 'lucide-react';
 import { useSeasonalChecklists, useClimateInfo } from '@/lib/hooks/useSeasonalChecklists';
@@ -19,6 +19,9 @@ import { usePropertyContext } from '@/lib/property/PropertyContext';
 
 export default function SeasonalMaintenancePage() {
   const [selectedChecklistId, setSelectedChecklistId] = useState<string | null>(null);
+  useEffect(() => {
+    console.log('🔍 selectedChecklistId changed to:', selectedChecklistId);
+  }, [selectedChecklistId]);
   const [expandedSeasons, setExpandedSeasons] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'current' | 'all' | 'completed'>('current');
 
