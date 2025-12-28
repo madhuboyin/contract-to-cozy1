@@ -38,12 +38,22 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   };
 
   const markRead = async (id: string) => {
+    // Optimistic UI Update
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+    setUnreadCount(prev => Math.max(0, prev - 1));
+    
     await api.markNotificationAsRead(id);
-    await refresh();
+    // Optional: full refresh to ensure sync
+    await refresh(); // Optional: full refresh to ensure sync
   };
 
   const markAllRead = async () => {
+    // Optimistic UI Update
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    setUnreadCount(0);
+    
     await api.markAllNotificationsRead();
+    // Optional: full refresh to ensure sync
     await refresh();
   };
 
