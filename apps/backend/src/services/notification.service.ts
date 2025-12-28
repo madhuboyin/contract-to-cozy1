@@ -196,6 +196,21 @@ export class NotificationService {
     });
   }
 
+  static async markUnread(userId: string, notificationId: string) {
+    const notification = await prisma.notification.findFirst({
+      where: { id: notificationId, userId },
+    });
+
+    if (!notification) throw new Error('Notification not found');
+
+    return prisma.notification.update({
+      where: { id: notificationId },
+      data: {
+        isRead: false,
+        readAt: null, // Critical: Clear the date so it doesn't count as read
+      },
+    });
+  }
   static async markAllRead(userId: string) {
     return prisma.notification.updateMany({
       where: { userId, isRead: false },

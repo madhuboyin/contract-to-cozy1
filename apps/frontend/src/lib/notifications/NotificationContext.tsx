@@ -28,13 +28,18 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [unreadCount, setUnreadCount] = useState(0);
 
   const refresh = async () => {
-    const [listRes, countRes] = await Promise.all([
-      api.listNotifications(),
-      api.getUnreadNotificationCount(),
-    ]);
+    try {
+      const [listRes, countRes] = await Promise.all([
+        api.listNotifications(),
+        api.getUnreadNotificationCount(),
+      ]);
 
-    if (listRes.success) setNotifications(listRes.data);
-    if (countRes.success) setUnreadCount(countRes.data.count);
+      // Force state update from fresh API data
+      if (listRes.success) setNotifications(listRes.data);
+      if (countRes.success) setUnreadCount(countRes.data.count);
+    } catch (err) {
+      console.error("Refresh failed, count may be stale", err);
+    }
   };
 
   const markRead = async (id: string) => {

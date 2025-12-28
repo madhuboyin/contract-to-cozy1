@@ -4,14 +4,35 @@
 import Link from 'next/link';
 import { useNotifications } from '@/lib/notifications/NotificationContext';
 import { Badge } from '@/components/ui/badge';
-import { Circle } from 'lucide-react';
+import { Circle, RotateCcw } from 'lucide-react';
+import { api } from '@/lib/api/client';
 
 export default function NotificationsPage() {
   const {
     notifications,
     markRead,
     markAllRead,
+    refresh // Used to sync state after manual 'unread' toggle
   } = useNotifications();
+
+  // Sort: Unread items (isRead === false) go to the top
+  const sortedNotifications = [...notifications].sort((a, b) => {
+    if (a.isRead === b.isRead) {
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    }
+    return a.isRead ? 1 : -1;
+  });
+
+  const handleToggleUnread = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation(); // Prevent navigation if the item has an actionUrl
+    try {
+      // Direct API call to update state; would be ideal to add this to Context in next iteration
+      await api.patch(`/api/notifications/${id}/unread`, {}); 
+      await refresh();
+    } catch (err) {
+      console.error('Failed to mark as unread:', err);
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-4 p-4">
@@ -20,7 +41,7 @@ export default function NotificationsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Notifications</h1>
           <p className="text-muted-foreground text-sm">
-            Stay updated with your home and booking activities.
+            Unread updates are shown first.
           </p>
         </div>
 
@@ -43,7 +64,7 @@ export default function NotificationsPage() {
 
       {/* Notification List */}
       <div className="space-y-3">
-        {notifications.map((n) => {
+        {sortedNotifications.map((n) => {
           const content = (
             <div
               className={`relative flex items-start gap-4 rounded-lg border p-4 transition-all hover:shadow-sm ${
@@ -64,11 +85,22 @@ export default function NotificationsPage() {
                   <div className={`text-sm leading-none ${n.isRead ? 'font-medium text-muted-foreground' : 'font-bold text-foreground'}`}>
                     {n.title}
                   </div>
-                  {!n.isRead && (
-                    <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 uppercase tracking-wider">
-                      New
-                    </Badge>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {!n.isRead ? (
+                      <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 uppercase tracking-wider">
+                        New
+                      </Badge>
+                    ) : (
+                      <button
+                        onClick={(e) => handleToggleUnread(e, n.id)}
+                        className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors"
+                        title="Mark as unread"
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                        <span>Reset</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <p className={`text-sm ${n.isRead ? 'text-muted-foreground/70' : 'text-muted-foreground'}`}>
                   {n.message}

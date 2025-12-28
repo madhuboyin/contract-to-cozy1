@@ -1878,6 +1878,24 @@ class APIClient {
     });
   }
 
+  /**
+   * Generic PATCH request
+   */
+  async patch<T = any>(endpoint: string, data?: any): Promise<{ data: T }> {
+    const response = await this.request<T>(endpoint, {
+      method: 'PATCH',
+      body: data as unknown as BodyInit,
+    });
+    return { data: (response as APISuccess<T>).data };
+  }
+
+  // Add a specific helper for marking as unread to maintain clean code
+  async markNotificationAsUnread(notificationId: string): Promise<APIResponse<void>> {
+    return this.request<void>(`/api/notifications/${notificationId}/unread`, {
+      method: 'PATCH',
+    });
+  }
+
 }
 
 // Export singleton instance
