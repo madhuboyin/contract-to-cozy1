@@ -10,11 +10,12 @@ import {
   formatCostRange,
 } from '@/lib/utils/seasonHelpers';
 import { useAddTaskToChecklist, useDismissTask } from '@/lib/hooks/useSeasonalChecklists';
-import { useToast } from '@/components/ui/use-toast'; // Add this import at top
+import { useToast } from '@/components/ui/use-toast';
 import { Loader2,  Plus, CheckCircle2, AlertCircle } from 'lucide-react';
 import { DiyDifficultyBadge, ProfessionalServiceBadge } from './DiyDifficultyBadge';
 import { CostComparison } from './CostComparison';
 import { TaskActionButtons } from './TaskActionButtons';
+import { SafetyAlert } from './SafetyAlert'; // ✅ ADD THIS
 
 interface SeasonalTaskCardProps {
   item: SeasonalChecklistItem;
@@ -29,7 +30,7 @@ export function SeasonalTaskCard({ item, onTaskAdded, onTaskDismissed }: Seasona
   const addTaskMutation = useAddTaskToChecklist();
   const dismissTaskMutation = useDismissTask();
 
-  const { toast } = useToast(); // Add this hook
+  const { toast } = useToast();
 
   const handleAddTask = async () => {
     setIsAdding(true);
@@ -41,7 +42,6 @@ export function SeasonalTaskCard({ item, onTaskAdded, onTaskDismissed }: Seasona
         },
       });
       
-      // ✅ ADD THIS: Show success toast
       toast({
         title: "Task Added! ✓",
         description: `"${item.title}" is now in your Action Center`,
@@ -52,12 +52,10 @@ export function SeasonalTaskCard({ item, onTaskAdded, onTaskDismissed }: Seasona
     } catch (error) {
       console.error('Failed to add task:', error);
       
-      // ✅ ADD THIS: Show error toast
       toast({
         title: "Failed to Add Task",
         description: (error as Error).message || "Please try again", 
         variant: "destructive",
-
       });
     } finally {
       setIsAdding(false);
@@ -96,8 +94,14 @@ export function SeasonalTaskCard({ item, onTaskAdded, onTaskDismissed }: Seasona
         </div>
       </div>
 
-      {/* Cost and Time Info */}
-      {/* Cost Comparison - Enhanced */}
+      {/* ✅ ADD: Safety Alert (if applicable) */}
+      {template.safetyWarning && (
+        <div className="mb-3">
+          <SafetyAlert warning={template.safetyWarning} />
+        </div>
+      )}
+
+      {/* Cost Comparison */}
       <div className="mb-4">
         <CostComparison
           typicalCostMin={template.typicalCostMin}
@@ -136,6 +140,7 @@ export function SeasonalTaskCard({ item, onTaskAdded, onTaskDismissed }: Seasona
           )}
         </div>
       )}
+
       {/* Quick Action Buttons - Always visible */}
       {(template.isDiyPossible || template.serviceCategory) && (
         <div className="mb-3">
@@ -148,6 +153,7 @@ export function SeasonalTaskCard({ item, onTaskAdded, onTaskDismissed }: Seasona
           />
         </div>
       )}
+
       {/* Action Buttons */}
       <div className="flex items-center space-x-2 mt-4">
         {!isAdded ? (
@@ -185,11 +191,13 @@ export function SeasonalTaskCard({ item, onTaskAdded, onTaskDismissed }: Seasona
                 </>
               )}
             </button>
+            {/* ✅ UPDATED: Better dismiss button */}
             <button
               onClick={handleDismiss}
-              className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 font-medium text-sm hover:bg-gray-50"
+              className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 font-medium text-sm hover:bg-gray-50 flex items-center gap-1"
             >
               <X className="w-4 h-4" />
+              <span className="text-xs">Not relevant</span>
             </button>
           </>
         ) : (

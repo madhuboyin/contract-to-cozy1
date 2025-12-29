@@ -32,7 +32,11 @@ export const ActionCenter: React.FC<Props> = ({
 }) => {
   const { toast } = useToast();
 
+  // 🔑 FIXED: Separate state for each category - backend already separates them
   const [actions, setActions] = useState<OrchestratedActionDTO[]>([]);
+  const [suppressedActions, setSuppressedActions] = useState<OrchestratedActionDTO[]>([]);
+  const [snoozedActions, setSnoozedActions] = useState<OrchestratedActionDTO[]>([]);
+  
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,46 +74,10 @@ export const ActionCenter: React.FC<Props> = ({
 
       const adapted = adaptOrchestrationSummary(summary);
 
-      // 🐛 EXPLICIT DEBUG LOG - NO OBJECTS
-      console.log('=== ACTIONS LOADED ===');
-      console.log('Total Active:', adapted.actions.length);
-      console.log('Total Suppressed:', adapted.suppressedActions.length);
-      
-      console.log('\n--- ACTIVE ACTIONS ---');
-      adapted.actions.forEach((a, i) => {
-        console.log(`[${i}] ${a.actionKey}`);
-        console.log(`    Title: ${a.title}`);
-        console.log(`    Source: ${a.source}`);
-        console.log(`    Suppressed: ${a.suppression?.suppressed}`);
-        console.log(`    SuppressionSource: ${a.suppression?.suppressionSource?.type || 'NONE'}`);
-      });
-      
-      console.log('\n--- SUPPRESSED ACTIONS ---');
-      adapted.suppressedActions.forEach((a, i) => {
-        console.log(`[${i}] ${a.actionKey}`);
-        console.log(`    Title: ${a.title}`);
-        console.log(`    Source: ${a.source}`);
-        console.log(`    Suppressed: ${a.suppression?.suppressed}`);
-        console.log(`    SuppressionSource: ${a.suppression?.suppressionSource?.type || 'NONE'}`);
-      });
-      
-      console.log('===================\n');
-      
+      // 🔑 FIXED: Set all three arrays directly from adapter - no filtering needed
       setActions(adapted.actions);
-
-      // 🐛 DEBUG LOG
-      console.log('📊 Actions loaded:', {
-        totalActions: adapted.actions.length,
-        totalSuppressed: adapted.suppressedActions.length,
-        actions: adapted.actions.map(a => ({
-          key: a.actionKey,
-          title: a.title,
-          suppressed: a.suppression?.suppressed,
-          sourceType: a.suppression?.suppressionSource?.type,
-        })),
-      });
-
-      setActions(adapted.actions);
+      setSuppressedActions(adapted.suppressedActions);
+      setSnoozedActions(adapted.snoozedActions);
 
       if (propertiesRes.success) {
         setProperties(propertiesRes.data.properties || []);
@@ -139,7 +107,7 @@ export const ActionCenter: React.FC<Props> = ({
     setActiveActionKey(action.actionKey);
   
     setTemplate({
-      id: `orchestration:${action.actionKey}`, // ✅ No change needed here - already correct
+      id: `orchestration:${action.actionKey}`,
       title: action.title,
       description: action.description ?? '',
       serviceCategory:
@@ -172,10 +140,9 @@ export const ActionCenter: React.FC<Props> = ({
     setTemplate(null);
     setActiveActionKey(null);
   
-    // 🔑 Reduced timeout - action stays active with hasRelatedChecklistItem = true
     setTimeout(() => {
       loadActions();
-    }, 500);  // Reduced from 1000ms or 2000ms
+    }, 500);
   };
 
   /* ------------------------------------------------------------------
@@ -218,6 +185,7 @@ export const ActionCenter: React.FC<Props> = ({
   const handleOpenDecisionTrace = useCallback((action: OrchestratedActionDTO) => {
     setTraceAction(action);
   }, []);
+  
   const handleSnoozeFromTrace = useCallback(() => {
     if (!traceAction) return;
     setIsSnoozeModalOpen(true);
@@ -321,23 +289,17 @@ export const ActionCenter: React.FC<Props> = ({
   
     return result.data.photo;
   }, [completionAction, propertyId]);
+
   /* ------------------------------------------------------------------
-     Derived Groups
+     Derived Groups - 🔑 FIXED: Only group by risk level, don't re-filter
   ------------------------------------------------------------------- */
 
-  const { active, suppressed, snoozed } = useMemo(() => {
-    return {
-      active: actions.filter(a => !a.suppression?.suppressed),
-      suppressed: actions.filter(a => a.suppression?.suppressed),
-      snoozed: actions.filter(a => a.snooze !== null),
-    };
-  }, [actions]);
-
-  const critical = active.filter(a => a.riskLevel === 'CRITICAL');
-  const high = active.filter(a => a.riskLevel === 'HIGH');
-  const other = active.filter(
+  // Group active actions by risk level for display
+  const critical = useMemo(() => actions.filter(a => a.riskLevel === 'CRITICAL'), [actions]);
+  const high = useMemo(() => actions.filter(a => a.riskLevel === 'HIGH'), [actions]);
+  const other = useMemo(() => actions.filter(
     a => a.riskLevel !== 'CRITICAL' && a.riskLevel !== 'HIGH'
-  );
+  ), [actions]);
 
   /* ------------------------------------------------------------------
      Render Group
@@ -358,16 +320,9 @@ export const ActionCenter: React.FC<Props> = ({
   
         <div className="space-y-3">
           {items.slice(0, maxItems).map(action => {
-            // 🔑 Check suppression status
             const isSuppressed = action.suppression?.suppressed;
-            
-            // 🔑 NEW: Check if task was created from this action
             const hasTaskCreated = action.hasRelatedChecklistItem === true;
-            
-            // 🔑 Check if currently being scheduled
             const isCurrentlyBeingScheduled = activeActionKey === action.actionKey;
-            
-            // 🔑 CHECKLIST actions
             const isChecklistAction = action.source === 'CHECKLIST';
   
             return (
@@ -376,17 +331,17 @@ export const ActionCenter: React.FC<Props> = ({
                 action={action}
                 onCtaClick={handleActionCta}
                 ctaDisabled={
-                  isSuppressed ||           // Suppressed actions
-                  hasTaskCreated ||         // 🔑 NEW: Task already created
-                  isCurrentlyBeingScheduled ||  // Currently being processed
-                  isModalOpen ||            // Modal is open
-                  isChecklistAction         // Checklist items always disabled
+                  isSuppressed ||
+                  hasTaskCreated ||
+                  isCurrentlyBeingScheduled ||
+                  isModalOpen ||
+                  isChecklistAction
                 }
                 ctaLabel={
                   isSuppressed
                     ? 'Suppressed'
                     : hasTaskCreated
-                      ? 'Already scheduled'  // 🔑 NEW: Show for created tasks
+                      ? 'Already scheduled'
                       : isChecklistAction
                         ? 'View in Maintenance'
                         : undefined
@@ -423,7 +378,7 @@ export const ActionCenter: React.FC<Props> = ({
     );
   }
 
-  if (!active.length && !suppressed.length) {
+  if (!actions.length && !suppressedActions.length && !snoozedActions.length) {
     return (
       <div className="rounded-lg border p-4 bg-white">
         <div className="text-sm text-muted-foreground">
@@ -440,7 +395,8 @@ export const ActionCenter: React.FC<Props> = ({
         {renderGroup('High Priority', high, 'text-amber-700')}
         {renderGroup('Other Actions', other, 'text-gray-700')}
 
-        {suppressed.length > 0 && (
+        {/* Suppressed Actions */}
+        {suppressedActions.length > 0 && (
           <div className="pt-2">
             <button
               type="button"
@@ -449,12 +405,12 @@ export const ActionCenter: React.FC<Props> = ({
             >
               {showSuppressed
                 ? 'Hide suppressed actions'
-                : `Show suppressed actions (${suppressed.length})`}
+                : `Show suppressed actions (${suppressedActions.length})`}
             </button>
 
             {showSuppressed && (
               <div className="mt-3 space-y-3">
-                {suppressed.map(action => (
+                {suppressedActions.map(action => (
                   <OrchestrationActionCard
                     key={action.actionKey}
                     action={action}
@@ -470,7 +426,7 @@ export const ActionCenter: React.FC<Props> = ({
         )}
 
         {/* Snoozed Actions */}
-        {snoozed.length > 0 && (
+        {snoozedActions.length > 0 && (
           <div className="pt-2">
             <button
               type="button"
@@ -479,12 +435,12 @@ export const ActionCenter: React.FC<Props> = ({
             >
               {showSnoozed
                 ? 'Hide snoozed actions'
-                : `Show snoozed actions (${snoozed.length})`}
+                : `Show snoozed actions (${snoozedActions.length})`}
             </button>
 
             {showSnoozed && (
               <div className="mt-3 space-y-3">
-                {snoozed.map(action => {
+                {snoozedActions.map(action => {
                   const snoozeInfo = action.snooze;
                   const snoozeLabel = snoozeInfo
                     ? `Snoozed for ${snoozeInfo.daysRemaining} more ${
@@ -502,7 +458,6 @@ export const ActionCenter: React.FC<Props> = ({
                         onOpenTrace={handleOpenDecisionTrace}
                       />
                       
-                      {/* Un-snooze Button */}
                       <div className="mt-2 flex gap-2">
                         <button
                           onClick={() => handleUnsnooze(action)}
@@ -535,7 +490,7 @@ export const ActionCenter: React.FC<Props> = ({
         template={template}
         properties={properties}
         selectedPropertyId={propertyId}
-        orchestrationActionKey={activeActionKey} // 🔑 CHANGED FROM orchestrationActionId
+        orchestrationActionKey={activeActionKey}
         onClose={() => {
           setIsModalOpen(false);
           setTemplate(null);
@@ -552,14 +507,14 @@ export const ActionCenter: React.FC<Props> = ({
           traceAction && 
           traceAction.source === 'RISK' && 
           !traceAction.suppression?.suppressed &&
-          !traceAction.snooze  // 🔑 Don't show if snoozed
+          !traceAction.snooze
             ? handleMarkCompletedFromTrace
             : undefined
         }
         onSnooze={
           traceAction &&
           traceAction.source === 'RISK' &&
-          !traceAction.suppression?.suppressed  // 🔑 NEW: Show for non-suppressed RISK
+          !traceAction.suppression?.suppressed
             ? handleSnoozeFromTrace
             : undefined
         }
