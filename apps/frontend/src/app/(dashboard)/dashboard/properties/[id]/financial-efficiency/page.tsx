@@ -77,47 +77,49 @@ const CostBreakdownTable = ({ report }: { report: FinancialEfficiencyReport }) =
                 <CardDescription>Comparison of your actual annual expenses versus the calculated market average for your area and property type.</CardDescription>
             </CardHeader>
             <CardContent>
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead className="w-[200px]">Cost Category</TableHead>
-                            <TableHead>Your Actual Annual Cost</TableHead>
-                            <TableHead>Market Average Annual Cost</TableHead>
-                            <TableHead>Status</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {dataRows.map((item, index) => {
-                            const isEfficient = item.actual <= item.average * 1.1; // 10% tolerance
-                            const badgeColor = isEfficient ? 'success' : 'destructive';
-                            const statusText = isEfficient ? 'Efficient' : 'Overspending';
-                            
-                            // Highlight row if significantly over average (more than 10% over market average)
-                            const highlightClass = item.actual > item.average * 1.1 ? 'bg-red-50/50 dark:bg-red-900/10' : '';
-                            
-                            return (
-                                <TableRow key={index} className={highlightClass}>
-                                    <TableCell className="font-medium">{item.name}</TableCell>
-                                    <TableCell className="font-bold text-gray-800">
-                                        {formatCurrency(item.actual)}
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground">
-                                        {formatCurrency(item.average)}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant={badgeColor as any}>{statusText}</Badge>
-                                    </TableCell>
-                                </TableRow>
-                            );
-                        })}
-                        <TableRow className="font-extrabold border-t-2">
-                            <TableCell>Total Annual Cost</TableCell>
-                            <TableCell className="text-lg">{formatCurrency(actualTotal)}</TableCell>
-                            <TableCell className="text-lg">{formatCurrency(report.marketAverageTotal)}</TableCell>
-                            <TableCell></TableCell>
-                        </TableRow>
-                    </TableBody>
-                </Table>
+                <div className="w-full overflow-x-auto">
+                    <Table className="w-full table-auto">
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="whitespace-nowrap">Cost Category</TableHead>
+                                <TableHead className="whitespace-nowrap">Your Actual Annual Cost</TableHead>
+                                <TableHead className="whitespace-nowrap">Market Average Annual Cost</TableHead>
+                                <TableHead className="whitespace-nowrap">Status</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {dataRows.map((item, index) => {
+                                const isEfficient = item.actual <= item.average * 1.1; // 10% tolerance
+                                const badgeColor = isEfficient ? 'success' : 'destructive';
+                                const statusText = isEfficient ? 'Efficient' : 'Overspending';
+                                
+                                // Highlight row if significantly over average (more than 10% over market average)
+                                const highlightClass = item.actual > item.average * 1.1 ? 'bg-red-50/50 dark:bg-red-900/10' : '';
+                                
+                                return (
+                                    <TableRow key={index} className={highlightClass}>
+                                        <TableCell className="font-medium whitespace-normal break-words">{item.name}</TableCell>
+                                        <TableCell className="font-bold text-gray-800 whitespace-nowrap">
+                                            {formatCurrency(item.actual)}
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground whitespace-nowrap">
+                                            {formatCurrency(item.average)}
+                                        </TableCell>
+                                        <TableCell className="whitespace-nowrap">
+                                            <Badge variant={badgeColor as any}>{statusText}</Badge>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                            <TableRow className="font-extrabold border-t-2">
+                                <TableCell className="whitespace-nowrap">Total Annual Cost</TableCell>
+                                <TableCell className="text-lg whitespace-nowrap">{formatCurrency(actualTotal)}</TableCell>
+                                <TableCell className="text-lg whitespace-nowrap">{formatCurrency(report.marketAverageTotal)}</TableCell>
+                                <TableCell></TableCell>
+                            </TableRow>
+                        </TableBody>
+                    </Table>
+                </div>
             </CardContent>
         </Card>
     );

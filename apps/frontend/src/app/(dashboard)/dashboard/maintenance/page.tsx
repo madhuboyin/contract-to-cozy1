@@ -533,22 +533,114 @@ export default function MaintenancePage() {
 
       {!isInitialLoading && maintenanceItems.length > 0 && (
         <>
+          <div className="space-y-4 md:hidden">
+            {maintenanceItems.map(item => {
+              const dueDateInfo = formatDueDate(item.nextDueDate);
+              const frequencyDisplay = item.serviceCategory === 'ADMIN'
+                ? 'One-Time Reminder'
+                : item.isRecurring 
+                  ? formatEnumString(item.frequency) 
+                  : 'One-Time Reminder';
+              const risk = isAssetDrivenTask(item, riskByAsset);
+
+              return (
+                <Card key={item.id} className={cn(dueDateInfo.isAlert ? 'border-orange-200 bg-orange-50/40' : '')}>
+                  <CardContent className="space-y-3 p-4">
+                    <div className="space-y-1">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Property</p>
+                      <p className="font-medium text-sm">{getPropertyName(item.propertyId)}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Task</p>
+                      <p className="font-semibold text-gray-900 break-words">{item.title}</p>
+                      <p className="text-xs text-muted-foreground break-words">
+                        {item.description || 'No description.'}
+                      </p>
+                      {risk && (
+                        <div className="text-xs text-gray-600 space-y-1">
+                          <div>
+                            <strong>Why:</strong>{' '}
+                            {formatEnumString(risk.category)} —{' '}
+                            {formatEnumString(risk.riskLevel)} risk (
+                            {risk.age}/{risk.expectedLife} yrs)
+                          </div>
+                          <div>
+                            <strong>Exposure:</strong>{' '}
+                            ${risk.replacementCost.toLocaleString()}
+                          </div>
+                          {risk.actionCta &&
+                            !(hasWarranty && risk.actionCta.toLowerCase().includes('warranty')) && (
+                              <div className="text-blue-600 font-medium">
+                                Recommended: {risk.actionCta}
+                              </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Category</p>
+                        <p>{formatCategory(item.serviceCategory)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Frequency</p>
+                        <p>{frequencyDisplay}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Last Done</p>
+                        <p className="text-gray-500">
+                          {item.lastCompletedDate ? format(parseISO(item.lastCompletedDate), 'MMM dd, yyyy') : 'Never'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Next Due</p>
+                        <p className={cn('font-medium', dueDateInfo.color)}>{dueDateInfo.text}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-gray-500 hover:text-green-600"
+                        onClick={() => handleMarkComplete.mutate(item)}
+                        title="Mark Complete"
+                        disabled={handleMarkComplete.isPending}
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-gray-500 hover:text-blue-600"
+                        onClick={() => handleOpenModal(item)}
+                        title="Edit Task"
+                        disabled={updateMutation.isPending || deleteMutation.isPending}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
           {/* Priority View Indicator */}
-          <div className="rounded-md border bg-white">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[150px]">Property</TableHead>
-                <TableHead className="w-[200px]">Task</TableHead>
-                <TableHead className="w-[120px]">Category</TableHead>
-                <TableHead className="w-[120px] hidden sm:table-cell">Frequency/Type</TableHead>
-                <TableHead className="w-[150px]">Last Done</TableHead>
-                <TableHead className="w-[150px] text-center">Next Due</TableHead>
-                <TableHead className="w-[150px] text-center">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {maintenanceItems.map(item => {
+          <div className="hidden rounded-md border bg-white md:block">
+            <div className="w-full overflow-x-auto">
+              <Table className="w-full table-auto">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="whitespace-nowrap">Property</TableHead>
+                    <TableHead className="whitespace-nowrap">Task</TableHead>
+                    <TableHead className="whitespace-nowrap">Category</TableHead>
+                    <TableHead className="hidden sm:table-cell whitespace-nowrap">Frequency/Type</TableHead>
+                    <TableHead className="whitespace-nowrap">Last Done</TableHead>
+                    <TableHead className="text-center whitespace-nowrap">Next Due</TableHead>
+                    <TableHead className="text-center whitespace-nowrap">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {maintenanceItems.map(item => {
 
                 const dueDateInfo = formatDueDate(item.nextDueDate);                
                 // FINAL FIX: Explicitly check for ADMIN and override the display based on the category,
@@ -565,14 +657,14 @@ export default function MaintenancePage() {
                     className={cn(dueDateInfo.isAlert ? 'bg-orange-50/50 hover:bg-orange-50' : 'hover:bg-gray-50')}
                   >
                     {/* FIX: Display Property Name */}
-                    <TableCell className="font-medium text-sm">
+                    <TableCell className="font-medium text-sm whitespace-normal break-words">
                         {getPropertyName(item.propertyId)}
                     </TableCell>
 
-                    <TableCell className="font-medium text-gray-900">
+                    <TableCell className="font-medium text-gray-900 whitespace-normal break-words">
                       {item.title}
 
-                      <div className="text-xs text-muted-foreground mt-0.5 max-w-xs truncate">
+                      <div className="text-xs text-muted-foreground mt-0.5 max-w-xs break-words">
                         {item.description || 'No description.'}
                       </div>
 
@@ -608,21 +700,21 @@ export default function MaintenancePage() {
                         );
                       })()}
                     </TableCell>
-                    <TableCell className="text-sm">
+                    <TableCell className="text-sm whitespace-nowrap">
                       {formatCategory(item.serviceCategory)}
                     </TableCell>
-                    <TableCell className="text-sm hidden sm:table-cell">
+                    <TableCell className="text-sm hidden sm:table-cell whitespace-nowrap">
                       {frequencyDisplay}
                     </TableCell>
-                    <TableCell className="text-sm text-gray-500">
+                    <TableCell className="text-sm text-gray-500 whitespace-nowrap">
                         {item.lastCompletedDate ? format(parseISO(item.lastCompletedDate), 'MMM dd, yyyy') : 'Never'}
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="text-center whitespace-nowrap">
                       <span className={cn('font-medium text-sm', dueDateInfo.color)}>
                           {dueDateInfo.text}
                       </span>
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="text-center whitespace-nowrap">
                       <div className="flex justify-center space-x-1">
                           <Button 
                             variant="ghost" 
@@ -649,8 +741,9 @@ export default function MaintenancePage() {
                   </TableRow>
                 );
               })}
-            </TableBody>
-          </Table>
+                </TableBody>
+              </Table>
+            </div>
         </div>
         </>
       )}
