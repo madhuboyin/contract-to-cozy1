@@ -99,7 +99,7 @@ export function MaintenanceNudgeCard({
                 <span className="text-[13px] text-gray-600 sm:ml-[30px]">
                     {consolidatedActionCount} unresolved property issues for {propertyName}
                 </span>
-                <Link href={destination} className="self-start w-full sm:w-auto sm:self-auto">
+                <Link href={destination} className="self-start sm:self-auto">
                     <button className={`
                         w-full px-3.5 py-1.5
                         text-[13px] font-semibold ${styles.buttonText}
