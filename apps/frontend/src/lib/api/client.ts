@@ -1851,8 +1851,16 @@ class APIClient {
   /**
    * Fetch all notifications for the current user
    */
-  async listNotifications(): Promise<APIResponse<any[]>> {
-    return this.request<any[]>('/api/notifications');
+  async listNotifications(
+    options?: { limit?: number }
+  ): Promise<APIResponse<any[]>> {
+    const params = new URLSearchParams();
+    if (options?.limit) {
+      params.set('limit', String(options.limit));
+    }
+    const query = params.toString();
+    const url = query ? `/api/notifications?${query}` : '/api/notifications';
+    return this.request<any[]>(url);
   }
 
   /**
