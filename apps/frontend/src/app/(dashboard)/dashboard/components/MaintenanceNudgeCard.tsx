@@ -66,7 +66,7 @@ export function MaintenanceNudgeCard({
 
     return (
         <div className={`
-            w-full h-[80px] 
+            w-full h-auto md:h-[80px] 
             ${styles.background}
             border-2 ${styles.border}
             border-l-4 ${styles.borderLeft}
@@ -77,7 +77,7 @@ export function MaintenanceNudgeCard({
             transition-all duration-150
         `}>
             {/* Line 1: Icon + Title + Badge */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2.5">
                     <AlertTriangle className={`h-5 w-5 ${styles.icon} flex-shrink-0`} />
                     <span className="text-[15px] font-semibold text-gray-900">
@@ -95,11 +95,11 @@ export function MaintenanceNudgeCard({
             </div>
 
             {/* Line 2: Description + Button */}
-            <div className="flex items-center justify-between">
-                <span className="text-[13px] text-gray-600 ml-[30px]">
+            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <span className="text-[13px] text-gray-600 sm:ml-[30px]">
                     {consolidatedActionCount} unresolved property issues for {propertyName}
                 </span>
-                    <Link href={destination}>
+                <Link href={destination} className="self-start sm:self-auto">
                     <button className={`
                         px-3.5 py-1.5
                         text-[13px] font-semibold ${styles.buttonText}
