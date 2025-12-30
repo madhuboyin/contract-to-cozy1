@@ -642,9 +642,9 @@ export default function WarrantiesPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Wrench className="w-7 h-7 text-blue-600" /> My Home Warranties
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2 sm:text-3xl">
+          <Wrench className="w-6 h-6 text-blue-600 sm:w-7 sm:h-7" /> My Home Warranties
         </h2>
         
         <Dialog open={isAddEditModalOpen} onOpenChange={closeAddEditModal}>
@@ -683,8 +683,8 @@ export default function WarrantiesPage() {
       )}
 
       {!isLoading && sortedWarranties.length > 0 && (
-        <div className="rounded-md border bg-white">
-          <Table>
+        <div className="rounded-md border bg-white overflow-x-auto">
+          <Table className="min-w-[960px]">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[150px]">Provider</TableHead>
