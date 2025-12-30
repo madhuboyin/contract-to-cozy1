@@ -774,19 +774,19 @@ export default function WarrantiesPage() {
             })}
           </div>
           <div className="hidden rounded-md border bg-white overflow-x-auto md:block">
-            <Table className="min-w-[960px]">
+            <Table className="w-full table-auto">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[150px]">Provider</TableHead>
-                <TableHead className="w-[150px]">Policy #</TableHead>
+                <TableHead>Provider</TableHead>
+                <TableHead>Policy #</TableHead>
                 {/* NEW TABLE HEADER: CATEGORY */}
-                <TableHead className="w-[120px]">Category</TableHead>
+                <TableHead>Category</TableHead>
                 <TableHead className="hidden lg:table-cell">Coverage Details</TableHead>
-                <TableHead className="w-[120px]">Property</TableHead>
-                <TableHead className="w-[150px]">Asset</TableHead>
-                <TableHead className="w-[120px] text-center">Expires</TableHead>
-                <TableHead className="w-[100px] text-center">Status</TableHead>
-                <TableHead className="w-[120px] text-center">Actions</TableHead>
+                <TableHead>Property</TableHead>
+                <TableHead>Asset</TableHead>
+                <TableHead className="text-center">Expires</TableHead>
+                <TableHead className="text-center">Status</TableHead>
+                <TableHead className="text-center">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
