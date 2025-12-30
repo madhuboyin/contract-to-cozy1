@@ -19,7 +19,14 @@ export class NotificationController {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const notifications = await NotificationService.listForUser(userId);
+    const limitParam = req.query.limit;
+    const parsedLimit =
+      typeof limitParam === 'string' ? Number.parseInt(limitParam, 10) : NaN;
+    const limit = Number.isFinite(parsedLimit)
+      ? Math.min(Math.max(parsedLimit, 1), 100)
+      : 30;
+
+    const notifications = await NotificationService.listForUser(userId, limit);
 
     return res.json({
       success: true,

@@ -46,20 +46,28 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     // Optimistic UI Update
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
     setUnreadCount(prev => Math.max(0, prev - 1));
-    
-    await api.markNotificationAsRead(id);
-    // Optional: full refresh to ensure sync
-    await refresh(); // Optional: full refresh to ensure sync
+
+    try {
+      await api.markNotificationAsRead(id);
+    } catch (err) {
+      console.error('Failed to mark notification as read', err);
+    } finally {
+      await refresh();
+    }
   };
 
   const markAllRead = async () => {
     // Optimistic UI Update
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
     setUnreadCount(0);
-    
-    await api.markAllNotificationsRead();
-    // Optional: full refresh to ensure sync
-    await refresh();
+
+    try {
+      await api.markAllNotificationsRead();
+    } catch (err) {
+      console.error('Failed to mark all notifications as read', err);
+    } finally {
+      await refresh();
+    }
   };
 
   useEffect(() => {
