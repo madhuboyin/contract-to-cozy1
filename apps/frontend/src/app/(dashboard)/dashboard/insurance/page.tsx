@@ -458,9 +458,9 @@ export default function InsurancePage() {
 
   return (
     <div className="space-y-6 pb-8">
-      <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Shield className="w-7 h-7 text-green-600" /> My Insurance Policies
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2 sm:text-3xl">
+          <Shield className="w-6 h-6 text-green-600 sm:w-7 sm:h-7" /> My Insurance Policies
         </h2>
         
         <Dialog open={isAddEditModalOpen} onOpenChange={closeAddEditModal}>
@@ -496,8 +496,91 @@ export default function InsurancePage() {
       )}
 
       {!isLoading && sortedPolicies.length > 0 && (
-        <div className="rounded-md border bg-white">
-          <Table>
+        <>
+          <div className="grid gap-4 md:hidden">
+            {sortedPolicies.map(policy => {
+              const expired = isPast(parseISO(policy.expiryDate));
+              const statusClass = expired ? 'text-red-600' : 'text-green-600';
+
+              return (
+                <Card key={policy.id} className={expired ? 'border-red-200' : undefined}>
+                  <CardContent className="space-y-4 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-semibold">{policy.carrierName}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {format(parseISO(policy.startDate), 'MMM dd, yyyy')}
+                        </div>
+                      </div>
+                      <span
+                        className={cn(
+                          "text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap",
+                          expired ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                        )}
+                      >
+                        {expired ? 'EXPIRED' : 'ACTIVE'}
+                      </span>
+                    </div>
+                    <div className="grid gap-3 text-sm text-muted-foreground">
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Policy #</span>
+                        <span>{policy.policyNumber || 'N/A'}</span>
+                      </div>
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Coverage Type</span>
+                        <span className="text-foreground">{policy.coverageType || 'N/A'}</span>
+                      </div>
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Property</span>
+                        <span className="text-foreground">{getPropertyInfo(policy.propertyId)}</span>
+                      </div>
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Premium</span>
+                        <span className="text-foreground">${policy.premiumAmount.toFixed(2)}</span>
+                      </div>
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Expires</span>
+                        <span className={statusClass}>
+                          {format(parseISO(policy.expiryDate), 'MMM dd, yyyy')}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-gray-500 hover:text-green-600"
+                        onClick={() => openUploadModal(policy.id)}
+                        title="Upload Document"
+                      >
+                        <Upload className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-gray-500 hover:text-blue-600"
+                        onClick={() => openAddEditModal(policy)}
+                        title="Edit Policy"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-gray-500 hover:text-red-600"
+                        onClick={() => handleDelete(policy.id)}
+                        title="Delete Policy"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+          <div className="hidden rounded-md border bg-white overflow-x-auto md:block">
+            <Table className="min-w-[880px]">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[150px]">Carrier</TableHead>
@@ -584,7 +667,8 @@ export default function InsurancePage() {
               })}
             </TableBody>
           </Table>
-        </div>
+          </div>
+        </>
       )}
       
       {/* Document Upload Dialog (for Insurance Policies) */}
