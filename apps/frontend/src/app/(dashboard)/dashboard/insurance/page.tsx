@@ -580,17 +580,17 @@ export default function InsurancePage() {
             })}
           </div>
           <div className="hidden rounded-md border bg-white overflow-x-auto md:block">
-            <Table className="min-w-[880px]">
+            <Table className="w-full table-auto">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[150px]">Carrier</TableHead>
-                <TableHead className="w-[120px]">Policy #</TableHead>
-                <TableHead className="hidden lg:table-cell w-[120px]">Coverage Type</TableHead>
-                <TableHead className="w-[100px]">Property</TableHead>
-                <TableHead className="w-[120px] text-right">Premium</TableHead>
-                <TableHead className="w-[120px] text-center">Expires</TableHead>
-                <TableHead className="w-[100px] text-center">Status</TableHead>
-                <TableHead className="w-[120px] text-center">Actions</TableHead>
+                <TableHead>Carrier</TableHead>
+                <TableHead>Policy #</TableHead>
+                <TableHead className="hidden lg:table-cell">Coverage Type</TableHead>
+                <TableHead>Property</TableHead>
+                <TableHead className="text-right">Premium</TableHead>
+                <TableHead className="text-center">Expires</TableHead>
+                <TableHead className="text-center">Status</TableHead>
+                <TableHead className="text-center">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

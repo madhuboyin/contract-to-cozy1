@@ -130,47 +130,51 @@ const AssetMatrixTable = ({ details }: { details: AssetRiskDetail[] }) => {
                 <CardDescription>A component-by-component breakdown of your home's risks, exposure, and potential actions.</CardDescription>
             </CardHeader>
             <CardContent>
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead className="w-[200px]">Asset</TableHead>
-                            <TableHead>Category</TableHead>
-                            <TableHead>Age / Expected Life</TableHead>
-                            <TableHead>Risk Level</TableHead>
-                            <TableHead>Out-of-Pocket Exposure</TableHead>
-                            <TableHead className="w-[150px]">Action</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {details.map((item, index) => (
-                            <TableRow key={index} className={item.riskLevel === 'HIGH' ? 'bg-red-50/50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20' : ''}>
-                                <TableCell className="font-medium">
-                                    {item.assetName.replace(/_/g, ' ')}
-                                    <div className="text-xs text-muted-foreground">{item.systemType.replace(/_/g, ' ')}</div>
-                                </TableCell>
-                                <TableCell className="text-sm text-muted-foreground">{item.category.replace(/_/g, ' ')}</TableCell>
-                                <TableCell>
-                                    <span className="font-semibold">{item.age} yrs</span> / {item.expectedLife} yrs
-                                    {item.age > item.expectedLife && <span className="text-red-500 text-xs ml-2">(Past Life)</span>}
-                                </TableCell>
-                                <TableCell>
-                                    {getRiskBadge(item.riskLevel)}
-                                </TableCell>
-                                <TableCell className="font-bold text-red-600">
-                                    {formatCurrency(item.outOfPocketCost)}
-                                    <div className="text-xs text-muted-foreground">P: {item.probability.toFixed(2)} / C: {(item.coverageFactor * 100).toFixed(0)}%</div>
-                                </TableCell>
-                                <TableCell>
-                                    {item.actionCta ? (
-                                        <Button size="sm" variant="secondary">{item.actionCta}</Button>
-                                    ) : (
-                                        <span className="text-muted-foreground text-sm">Review Maintenance</span>
-                                    )}
-                                </TableCell>
+                <div className="w-full overflow-x-auto">
+                    <Table className="w-full table-auto">
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="whitespace-nowrap">Asset</TableHead>
+                                <TableHead className="whitespace-nowrap">Category</TableHead>
+                                <TableHead className="whitespace-nowrap">Age / Expected Life</TableHead>
+                                <TableHead className="whitespace-nowrap">Risk Level</TableHead>
+                                <TableHead className="whitespace-nowrap">Out-of-Pocket Exposure</TableHead>
+                                <TableHead className="whitespace-nowrap">Action</TableHead>
                             </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
+                        </TableHeader>
+                        <TableBody>
+                            {details.map((item, index) => (
+                                <TableRow key={index} className={item.riskLevel === 'HIGH' ? 'bg-red-50/50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20' : ''}>
+                                    <TableCell className="font-medium whitespace-normal break-words">
+                                        {item.assetName.replace(/_/g, ' ')}
+                                        <div className="text-xs text-muted-foreground">{item.systemType.replace(/_/g, ' ')}</div>
+                                    </TableCell>
+                                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                                        {item.category.replace(/_/g, ' ')}
+                                    </TableCell>
+                                    <TableCell className="whitespace-nowrap">
+                                        <span className="font-semibold">{item.age} yrs</span> / {item.expectedLife} yrs
+                                        {item.age > item.expectedLife && <span className="text-red-500 text-xs ml-2">(Past Life)</span>}
+                                    </TableCell>
+                                    <TableCell className="whitespace-nowrap">
+                                        {getRiskBadge(item.riskLevel)}
+                                    </TableCell>
+                                    <TableCell className="font-bold text-red-600 whitespace-nowrap">
+                                        {formatCurrency(item.outOfPocketCost)}
+                                        <div className="text-xs text-muted-foreground whitespace-normal">P: {item.probability.toFixed(2)} / C: {(item.coverageFactor * 100).toFixed(0)}%</div>
+                                    </TableCell>
+                                    <TableCell className="whitespace-nowrap">
+                                        {item.actionCta ? (
+                                            <Button size="sm" variant="secondary">{item.actionCta}</Button>
+                                        ) : (
+                                            <span className="text-muted-foreground text-sm">Review Maintenance</span>
+                                        )}
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </div>
             </CardContent>
         </Card>
     );
