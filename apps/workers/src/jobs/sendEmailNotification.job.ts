@@ -2,7 +2,7 @@
 import { prisma } from '../lib/prisma';
 import { sendEmail } from '../email/email.service';
 import { DeliveryStatus, NotificationChannel } from '@prisma/client';
-import { buildDigestHtml } from '../email/buildDigestHtml';
+import { buildDigestHtml, escapeHtml } from '../email/buildDigestHtml';
 
 const MAX_NOTIFICATIONS_PER_EMAIL = 10;
 
@@ -62,6 +62,11 @@ export async function sendEmailNotificationJob(
   // 3️⃣ Build email HTML
   const cardsHtml = deliveries
     .map(({ notification }) => {
+      const safeTitle = escapeHtml(notification.title);
+      const safeMessage = escapeHtml(notification.message);
+      const safeUrl = notification.actionUrl
+        ? escapeHtml(notification.actionUrl)
+        : '';
       return `
         <tr>
           <td style="padding:12px 0;">
@@ -69,14 +74,14 @@ export async function sendEmailNotificationJob(
               <tr>
                 <td style="padding:14px;">
                   <h3 style="margin:0 0 6px;font-size:15px;color:#111;">
-                    ${notification.title}
+                    ${safeTitle}
                   </h3>
                   <p style="margin:0 0 10px;font-size:14px;color:#444;">
-                    ${notification.message}
+                    ${safeMessage}
                   </p>
                   ${
                     notification.actionUrl
-                      ? `<a href="${notification.actionUrl}"
+                      ? `<a href="${safeUrl}"
                            style="font-size:14px;color:#2e7d32;text-decoration:none;">
                           View details →
                         </a>`
@@ -245,4 +250,3 @@ async function sendUserDigest(userId: string) {
     `[DIGEST] Sent ${notifications.length} notifications to ${user.email}`
   );
 }
-
