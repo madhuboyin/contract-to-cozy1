@@ -1,6 +1,15 @@
 // apps/workers/src/email/buildDigestHtml.ts
 import { Notification } from '@prisma/client';
 
+export function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function buildDigestHtml(
   userName: string,
   notifications: Notification[]
@@ -14,17 +23,22 @@ export function buildDigestHtml(
       <ul style="padding-left: 16px;">
         ${notifications
           .map(
-            (n) => `
+            (n) => {
+              const safeTitle = escapeHtml(n.title);
+              const safeMessage = escapeHtml(n.message);
+              const safeUrl = n.actionUrl ? escapeHtml(n.actionUrl) : '';
+              return `
             <li style="margin-bottom: 12px;">
-              <strong>${n.title}</strong><br />
-              <span>${n.message}</span>
+              <strong>${safeTitle}</strong><br />
+              <span>${safeMessage}</span>
               ${
                 n.actionUrl
-                  ? `<br /><a href="${n.actionUrl}">View details</a>`
+                  ? `<br /><a href="${safeUrl}">View details</a>`
                   : ''
               }
             </li>
           `
+            }
           )
           .join('')}
       </ul>
