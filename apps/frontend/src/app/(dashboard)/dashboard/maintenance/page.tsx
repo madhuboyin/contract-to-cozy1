@@ -451,13 +451,14 @@ export default function MaintenancePage() {
 
   return (
     <div className="space-y-6 pb-8 max-w-7xl mx-auto px-4 md:px-8">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
           <Wrench className="w-7 h-7 text-blue-600" /> Home Tasks & Reminders
         </h2>
 
-        {priority && (
-          <div className="flex items-center gap-3 mt-2">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between md:flex-col md:items-end">
+          {priority && (
+            <div className="flex flex-wrap items-center gap-3">
             <span
               className="inline-flex items-center rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700"
               title="Showing only high-impact maintenance tasks affecting property health"
@@ -473,34 +474,35 @@ export default function MaintenancePage() {
             >
               Show all tasks
             </Link>
-          </div>
-        )}
-        {/* Priority View Toggle */}
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-gray-600">Priority view</span>
+            </div>
+          )}
+          {/* Priority View Toggle */}
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-gray-600">Priority view</span>
 
-          <button
-            onClick={() => togglePriorityView(!priority)}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              priority ? 'bg-orange-500' : 'bg-gray-300'
-            }`}
-            title={
-              priority
-                ? 'Showing only asset-related tasks affecting home health'
-                : 'Show only high-impact maintenance tasks'
-            }
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                priority ? 'translate-x-6' : 'translate-x-1'
+            <button
+              onClick={() => togglePriorityView(!priority)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                priority ? 'bg-orange-500' : 'bg-gray-300'
               }`}
-            />
-          </button>
+              title={
+                priority
+                  ? 'Showing only asset-related tasks affecting home health'
+                  : 'Show only high-impact maintenance tasks'
+              }
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  priority ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Link to the Setup Page to add new tasks */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         {/* Priority Toggle */}
         <Button
           size="sm"
