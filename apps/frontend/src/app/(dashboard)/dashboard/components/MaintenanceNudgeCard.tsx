@@ -88,7 +88,7 @@ export function MaintenanceNudgeCard({
                     ${styles.badge} text-white
                     text-[11px] font-bold uppercase tracking-wide
                     px-2.5 py-1 rounded-full
-                    flex-shrink-0
+                    flex-shrink-0 self-start sm:self-auto
                 `}>
                     {badgeText}
                 </div>
@@ -101,11 +101,11 @@ export function MaintenanceNudgeCard({
                 </span>
                 <Link href={destination} className="self-start sm:self-auto">
                     <button className={`
-                        px-3.5 py-1.5
+                        w-full px-3.5 py-1.5
                         text-[13px] font-semibold ${styles.buttonText}
                         bg-white border-[1.5px] ${styles.buttonBorder}
                         rounded-md
-                        inline-flex items-center gap-1
+                        inline-flex items-center justify-center gap-1 sm:w-auto
                         transition-all duration-150
                         hover:shadow-sm hover:-translate-y-px
                         flex-shrink-0
