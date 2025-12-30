@@ -683,8 +683,98 @@ export default function WarrantiesPage() {
       )}
 
       {!isLoading && sortedWarranties.length > 0 && (
-        <div className="rounded-md border bg-white overflow-x-auto">
-          <Table className="min-w-[960px]">
+        <>
+          <div className="grid gap-4 md:hidden">
+            {sortedWarranties.map(warranty => {
+              const expired = isPast(parseISO(warranty.expiryDate));
+              const statusClass = expired ? 'text-red-600' : 'text-green-600';
+
+              return (
+                <Card key={warranty.id} className={expired ? 'border-red-200' : undefined}>
+                  <CardContent className="space-y-4 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-semibold">{warranty.providerName}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {format(parseISO(warranty.startDate), 'MMM dd, yyyy')}
+                        </div>
+                      </div>
+                      <span
+                        className={cn(
+                          "text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap",
+                          expired ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                        )}
+                      >
+                        {expired ? 'EXPIRED' : 'ACTIVE'}
+                      </span>
+                    </div>
+                    <div className="grid gap-3 text-sm text-muted-foreground">
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Category</span>
+                        <span className="font-semibold text-foreground">
+                          {WARRANTY_CATEGORIES[warranty.category] || warranty.category}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Policy #</span>
+                        <span>{warranty.policyNumber || 'N/A'}</span>
+                      </div>
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Property</span>
+                        <span className="text-foreground">{getPropertyInfo(warranty)}</span>
+                      </div>
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Asset</span>
+                        <span>{getAssetInfo(warranty.homeAssetId)}</span>
+                      </div>
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Expires</span>
+                        <span className={statusClass}>
+                          {format(parseISO(warranty.expiryDate), 'MMM dd, yyyy')}
+                        </span>
+                      </div>
+                      {warranty.coverageDetails && (
+                        <div className="rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">
+                          {warranty.coverageDetails}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-gray-500 hover:text-blue-600"
+                        onClick={() => openUploadModal(warranty.id)}
+                        title="Upload Document"
+                      >
+                        <Upload className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-gray-500 hover:text-blue-600"
+                        onClick={() => openAddEditModal(warranty)}
+                        title="Edit Warranty"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-gray-500 hover:text-red-600"
+                        onClick={() => handleDelete(warranty.id)}
+                        title="Delete Warranty"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+          <div className="hidden rounded-md border bg-white overflow-x-auto md:block">
+            <Table className="min-w-[960px]">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[150px]">Provider</TableHead>
@@ -779,7 +869,8 @@ export default function WarrantiesPage() {
               })}
             </TableBody>
           </Table>
-        </div>
+          </div>
+        </>
       )}
       
       {/* Document Upload Dialog (for Warranties) */}
