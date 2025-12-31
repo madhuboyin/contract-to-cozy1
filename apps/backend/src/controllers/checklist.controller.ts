@@ -1,4 +1,17 @@
 // apps/backend/src/controllers/checklist.controller.ts
+
+/**
+ * Checklist Controller
+ * 
+ * @deprecated These endpoints are being phased out.
+ * 
+ * New Endpoints:
+ * - HOME_BUYER: /api/home-buyer-tasks/*
+ * - EXISTING_OWNER: /api/maintenance-tasks/*
+ * 
+ * See: homeBuyerTask.controller.ts, propertyMaintenanceTask.controller.ts
+ */
+
 import { Response, NextFunction } from 'express';
 import { ChecklistService } from '../services/checklist.service';
 import { AuthRequest } from '../types/auth.types';
@@ -6,7 +19,7 @@ import { ChecklistItemStatus } from '@prisma/client';
 
 /**
  * Gets the user's checklist.
- * If a checklist doesn't exist, one will be created.
+ * @deprecated Use GET /api/home-buyer-tasks/checklist or GET /api/maintenance-tasks/property/:propertyId
  */
 const handleGetChecklist = async (
   req: AuthRequest,
@@ -20,6 +33,12 @@ const handleGetChecklist = async (
     const userId = req.user.userId;
 
     const checklist = await ChecklistService.getOrCreateChecklist(userId);
+    
+    // Add deprecation headers
+    res.setHeader('X-API-Deprecated', 'true');
+    res.setHeader('X-API-Deprecation-Info', 'Use /api/home-buyer-tasks or /api/maintenance-tasks');
+    res.setHeader('X-API-Sunset-Date', '2025-12-31');
+    
     return res.status(200).json(checklist);
   } catch (error) {
     next(error);
@@ -28,6 +47,7 @@ const handleGetChecklist = async (
 
 /**
  * Updates the status of a single checklist item.
+ * @deprecated Use PATCH /api/home-buyer-tasks/tasks/:taskId/status or PATCH /api/maintenance-tasks/:taskId/status
  */
 const handleUpdateChecklistItem = async (
   req: AuthRequest,
@@ -43,7 +63,6 @@ const handleUpdateChecklistItem = async (
     const { itemId } = req.params;
     const { status } = req.body;
 
-    // Basic validation
     if (!status || !Object.values(ChecklistItemStatus).includes(status)) {
       return res.status(400).json({
         success: false,
@@ -56,6 +75,10 @@ const handleUpdateChecklistItem = async (
       itemId,
       status
     );
+
+    // Add deprecation headers
+    res.setHeader('X-API-Deprecated', 'true');
+    res.setHeader('X-API-Deprecation-Info', 'Use /api/home-buyer-tasks or /api/maintenance-tasks');
 
     return res.status(200).json({
       success: true,
@@ -76,7 +99,8 @@ const handleUpdateChecklistItem = async (
 };
 
 /**
- * Updates configuration of a single checklist item (PATCH).
+ * Updates configuration of a single checklist item.
+ * @deprecated Use PATCH /api/home-buyer-tasks/tasks/:taskId or PATCH /api/maintenance-tasks/:taskId
  */
 const handlePatchChecklistItem = async (
   req: AuthRequest,
@@ -98,6 +122,10 @@ const handlePatchChecklistItem = async (
       updateData
     );
 
+    // Add deprecation headers
+    res.setHeader('X-API-Deprecated', 'true');
+    res.setHeader('X-API-Deprecation-Info', 'Use /api/home-buyer-tasks or /api/maintenance-tasks');
+
     return res.status(200).json({
       success: true,
       data: updatedItem,
@@ -118,6 +146,7 @@ const handlePatchChecklistItem = async (
 
 /**
  * Deletes a single checklist item.
+ * @deprecated Use DELETE /api/home-buyer-tasks/tasks/:taskId or DELETE /api/maintenance-tasks/:taskId
  */
 const handleDeleteChecklistItem = async (
   req: AuthRequest,
@@ -133,6 +162,10 @@ const handleDeleteChecklistItem = async (
     const { itemId } = req.params;
 
     await ChecklistService.deleteChecklistItem(userId, itemId);
+
+    // Add deprecation headers
+    res.setHeader('X-API-Deprecated', 'true');
+    res.setHeader('X-API-Deprecation-Info', 'Use /api/home-buyer-tasks or /api/maintenance-tasks');
 
     return res.status(204).send();
   } catch (error) {
@@ -150,7 +183,8 @@ const handleDeleteChecklistItem = async (
 };
 
 /**
- * Creates new maintenance checklist items from a list of template IDs.
+ * Creates new maintenance checklist items from templates.
+ * @deprecated Use POST /api/maintenance-tasks/from-templates
  */
 const handleCreateMaintenanceItems = async (
   req: AuthRequest,
@@ -177,6 +211,10 @@ const handleCreateMaintenanceItems = async (
       propertyId
     );
 
+    // Add deprecation headers
+    res.setHeader('X-API-Deprecated', 'true');
+    res.setHeader('X-API-Deprecation-Info', 'Use POST /api/maintenance-tasks/from-templates');
+
     return res.status(201).json({
       success: true,
       message: `Added ${result.count} items.`,
@@ -189,12 +227,7 @@ const handleCreateMaintenanceItems = async (
 
 /**
  * Creates a single checklist item directly (used by orchestration/action center).
- * Idempotent: if an item already exists for (propertyId, orchestrationActionId),
- * returns the existing item instead of creating a duplicate.
- *
- * Response behavior:
- * - 201 Created when a new item is created
- * - 200 OK when an existing item is returned (deduped=true)
+ * @deprecated Backend will route automatically to segment-specific services
  */
 const handleCreateChecklistItem = async (
   req: AuthRequest,
@@ -216,19 +249,16 @@ const handleCreateChecklistItem = async (
       isRecurring,
       frequency,
       nextDueDate,
-      actionKey, // 🔑 CHANGED FROM orchestrationActionId
+      actionKey,
     } = req.body ?? {};
     
-    // ✅ Required fields for Action Center idempotency contract
     if (!title || !propertyId || !actionKey) {
       return res.status(400).json({
         success: false,
-        message:
-          'Missing required fields: title, propertyId, and actionKey are required.',
+        message: 'Missing required fields: title, propertyId, and actionKey are required.',
       });
     }
     
-    // Light validation to prevent silent bad writes
     if (typeof title !== 'string' || typeof propertyId !== 'string' || typeof actionKey !== 'string') {
       return res.status(400).json({
         success: false,
@@ -236,7 +266,6 @@ const handleCreateChecklistItem = async (
       });
     }
     
-    // nextDueDate is required
     if (!nextDueDate || typeof nextDueDate !== 'string') {
       return res.status(400).json({
         success: false,
@@ -252,19 +281,22 @@ const handleCreateChecklistItem = async (
       isRecurring: Boolean(isRecurring),
       frequency: frequency ?? null,
       nextDueDate,
-      actionKey, // 🔑 PASS actionKey
+      actionKey,
     });
-    // 🐛 DEBUG LOG
+    
     console.log('✅ Checklist item created/found:', {
       itemId: result.item.id,
       actionKey: result.item.actionKey,
       propertyId: result.item.propertyId,
       deduped: result.deduped,
     });
-    // If service returns { item, deduped }, honor status code accordingly.
-    // If your service currently returns just ChecklistItem, this still works safely by normalizing.
+    
     const deduped = (result as any)?.deduped === true;
     const item = (result as any)?.item ?? result;
+
+    // Add deprecation headers
+    res.setHeader('X-API-Deprecated', 'true');
+    res.setHeader('X-API-Deprecation-Info', 'Backend now routes to segment-specific services automatically');
 
     return res.status(deduped ? 200 : 201).json({
       success: true,

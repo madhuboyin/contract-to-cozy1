@@ -30,7 +30,7 @@ export interface AssetRiskDetail {
   coverageFactor: number;    // C (0.0 to 1.0)
   outOfPocketCost: number;   // Out-of-Pocket Cost * (1 - C)
   riskDollar: number;        // P * Out-of-Pocket Cost
-  riskLevel: 'LOW' | 'MODERATE' | 'ELEVATED' | 'HIGH';
+  riskLevel: 'LOW' | 'MODERATE' | 'ELEVATED' | 'HIGH' | 'CRITICAL';
   actionCta?: string;
 }
 

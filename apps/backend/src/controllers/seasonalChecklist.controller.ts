@@ -4,8 +4,12 @@ import { SeasonalChecklistService } from '../services/seasonalChecklist.service'
 import { ClimateZoneService } from '../services/climateZone.service';
 import { Season } from '@prisma/client';
 import { prisma } from '../config/database';
+// PHASE 2.5 INTEGRATION
+import { 
+  addSeasonalTaskToMaintenance, 
+  removeSeasonalTaskFromMaintenance 
+} from '../services/seasonalChecklistIntegration.service';
 
-// Extend Request type to include user
 interface AuthRequest extends Request {
   user?: {
     userId: string;
@@ -16,7 +20,6 @@ interface AuthRequest extends Request {
 export class SeasonalChecklistController {
   /**
    * GET /api/properties/:propertyId/seasonal-checklists
-   * Get all seasonal checklists for a property
    */
   static async getPropertyChecklists(
     req: AuthRequest,
@@ -62,7 +65,6 @@ export class SeasonalChecklistController {
 
   /**
    * GET /api/seasonal-checklists/:checklistId
-   * Get detailed seasonal checklist with tasks
    */
   static async getChecklistDetails(
     req: AuthRequest,
@@ -92,7 +94,6 @@ export class SeasonalChecklistController {
 
   /**
    * POST /api/seasonal-checklists/:checklistId/generate
-   * Generate seasonal checklist (admin/manual trigger)
    */
   static async generateChecklist(
     req: AuthRequest,
@@ -128,7 +129,6 @@ export class SeasonalChecklistController {
 
   /**
    * POST /api/seasonal-checklists/:checklistId/dismiss
-   * Dismiss entire seasonal checklist
    */
   static async dismissChecklist(
     req: AuthRequest,
@@ -151,7 +151,7 @@ export class SeasonalChecklistController {
 
   /**
    * POST /api/seasonal-checklist-items/:itemId/add-to-tasks
-   * Add seasonal task to user's regular checklist
+   * @deprecated Use addToMaintenance for EXISTING_OWNER
    */
   static async addTaskToChecklist(
     req: AuthRequest,
@@ -189,8 +189,108 @@ export class SeasonalChecklistController {
   }
 
   /**
+   * PHASE 2.5: POST /api/seasonal-checklist-items/:itemId/add-to-maintenance
+   * Add seasonal task to PropertyMaintenanceTask
+   */
+  static async addToMaintenance(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ 
+          success: false,
+          message: 'Authentication required' 
+        });
+        return;
+      }
+
+      const { itemId } = req.params;
+      const userId = req.user.userId;
+
+      const result = await addSeasonalTaskToMaintenance(userId, itemId);
+
+      res.status(result.success ? 201 : 200).json({
+        success: result.success,
+        message: result.message,
+        data: result.task,
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message.includes('not found')) {
+          res.status(404).json({
+            success: false,
+            message: error.message,
+          });
+          return;
+        }
+        if (error.message.includes('only available')) {
+          res.status(403).json({
+            success: false,
+            message: error.message,
+          });
+          return;
+        }
+        if (error.message.includes('does not have access')) {
+          res.status(403).json({
+            success: false,
+            message: error.message,
+          });
+          return;
+        }
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * PHASE 2.5: DELETE /api/seasonal-checklist-items/:itemId/remove-from-maintenance
+   * Remove link between seasonal item and maintenance task
+   */
+  static async removeFromMaintenance(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ 
+          success: false,
+          message: 'Authentication required' 
+        });
+        return;
+      }
+
+      const { itemId } = req.params;
+      const userId = req.user.userId;
+
+      const result = await removeSeasonalTaskFromMaintenance(userId, itemId);
+
+      res.status(200).json(result);
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message.includes('not found')) {
+          res.status(404).json({
+            success: false,
+            message: error.message,
+          });
+          return;
+        }
+        if (error.message.includes('does not have access')) {
+          res.status(403).json({
+            success: false,
+            message: error.message,
+          });
+          return;
+        }
+      }
+      next(error);
+    }
+  }
+
+  /**
    * POST /api/seasonal-checklist-items/:itemId/dismiss
-   * Dismiss individual seasonal task
    */
   static async dismissTask(
     req: AuthRequest,
@@ -213,7 +313,6 @@ export class SeasonalChecklistController {
 
   /**
    * POST /api/seasonal-checklist-items/:itemId/snooze
-   * Snooze task for specified days (default 7)
    */
   static async snoozeTask(
     req: AuthRequest,
@@ -240,7 +339,6 @@ export class SeasonalChecklistController {
 
   /**
    * POST /api/seasonal-checklists/:checklistId/add-all-critical
-   * Add all critical tasks to checklist
    */
   static async addAllCriticalTasks(
     req: AuthRequest,
@@ -263,7 +361,6 @@ export class SeasonalChecklistController {
 
   /**
    * GET /api/properties/:propertyId/climate
-   * Get climate zone info for property
    */
   static async getClimateInfo(
     req: AuthRequest,
@@ -293,7 +390,6 @@ export class SeasonalChecklistController {
 
   /**
    * PUT /api/properties/:propertyId/climate
-   * Update climate settings for property
    */
   static async updateClimateSettings(
     req: AuthRequest,

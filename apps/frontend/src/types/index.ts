@@ -1193,3 +1193,280 @@ export interface LocalUpdate {
   ctaText: string;
   ctaUrl?: string | null;
 }
+
+// -----------------------------------------------------------------------------
+// HOME BUYER TASK TYPES
+// -----------------------------------------------------------------------------
+
+export type HomeBuyerTaskStatus = 
+  | 'PENDING'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'NOT_NEEDED';
+
+export type HomeBuyerTaskServiceCategory =
+  | 'INSPECTION'
+  | 'MOVING'
+  | 'INSURANCE'
+  | 'ATTORNEY'
+  | 'CLEANING'
+  | 'LOCKSMITH'
+  | 'HVAC'
+  | 'PEST_CONTROL';
+
+export interface HomeBuyerTask {
+  id: string;
+  checklistId: string;
+  title: string;
+  description: string | null;
+  status: HomeBuyerTaskStatus;
+  serviceCategory: HomeBuyerTaskServiceCategory | null;
+  sortOrder: number;
+  bookingId: string | null;
+  completedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface HomeBuyerChecklist {
+  id: string;
+  homeownerProfileId: string;
+  tasks: HomeBuyerTask[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface HomeBuyerTaskStats {
+  total: number;
+  pending: number;
+  inProgress: number;
+  completed: number;
+  notNeeded: number;
+  progressPercentage: number;
+}
+
+export interface CreateHomeBuyerTaskInput {
+  title: string;
+  description?: string | null;
+  serviceCategory?: HomeBuyerTaskServiceCategory | null;
+}
+
+export interface UpdateHomeBuyerTaskInput {
+  title?: string;
+  description?: string | null;
+  serviceCategory?: HomeBuyerTaskServiceCategory | null;
+  sortOrder?: number;
+}
+
+// -----------------------------------------------------------------------------
+// PROPERTY MAINTENANCE TASK TYPES
+// -----------------------------------------------------------------------------
+
+export type MaintenanceTaskStatus =
+  | 'PENDING'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+export type MaintenanceTaskPriority =
+  | 'URGENT'
+  | 'HIGH'
+  | 'MEDIUM'
+  | 'LOW';
+
+export type MaintenanceTaskSource =
+  | 'USER_CREATED'
+  | 'ACTION_CENTER'
+  | 'SEASONAL'
+  | 'RISK_ASSESSMENT'
+  | 'WARRANTY_RENEWAL'
+  | 'TEMPLATE';
+
+export type MaintenanceTaskRiskLevel =
+  | 'CRITICAL'
+  | 'HIGH'
+  | 'ELEVATED'
+  | 'MODERATE'
+  | 'LOW';
+
+export type MaintenanceTaskFrequency =
+  | 'MONTHLY'
+  | 'QUARTERLY'
+  | 'SEMI_ANNUALLY'
+  | 'ANNUALLY';
+
+export type MaintenanceTaskServiceCategory =
+  | 'HVAC'
+  | 'PLUMBING'
+  | 'ELECTRICAL'
+  | 'HANDYMAN'
+  | 'LANDSCAPING'
+  | 'CLEANING'
+  | 'PEST_CONTROL'
+  | 'LOCKSMITH'
+  | 'ROOFING'
+  | 'APPLIANCE_REPAIR';
+
+export interface PropertyMaintenanceTask {
+  id: string;
+  propertyId: string;
+  title: string;
+  description: string | null;
+  status: MaintenanceTaskStatus;
+  priority: MaintenanceTaskPriority;
+  source: MaintenanceTaskSource;
+  
+  // Risk/Asset Information
+  assetType: string | null;
+  riskLevel: MaintenanceTaskRiskLevel | null;
+  
+  // Scheduling
+  nextDueDate: string | null;
+  isRecurring: boolean;
+  frequency: MaintenanceTaskFrequency | null;
+  lastCompletedDate: string | null;
+  
+  // Cost
+  estimatedCost: number | null;
+  actualCost: number | null;
+  
+  // Service
+  serviceCategory: MaintenanceTaskServiceCategory | null;
+  serviceProviderId: string | null;
+  bookingId: string | null;
+  
+  // Relationships
+  homeAssetId: string | null;
+  warrantyId: string | null;
+  seasonalChecklistItemId: string | null;
+  
+  // Action Center Integration
+  actionKey: string | null;
+  
+  // Metadata
+  createdAt: Date;
+  updatedAt: Date;
+  completedAt: Date | null;
+}
+
+export interface MaintenanceTaskStats {
+  total: number;
+  pending: number;
+  inProgress: number;
+  completed: number;
+  cancelled: number;
+  overdue: number;
+  dueThisWeek: number;
+  dueThisMonth: number;
+  
+  byPriority: {
+    urgent: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
+  
+  bySource: {
+    userCreated: number;
+    actionCenter: number;
+    seasonal: number;
+    riskAssessment: number;
+    warrantyRenewal: number;
+    template: number;
+  };
+  
+  totalEstimatedCost: number;
+  totalActualCost: number;
+}
+
+export interface MaintenanceTaskFilters {
+  status?: MaintenanceTaskStatus | MaintenanceTaskStatus[];
+  priority?: MaintenanceTaskPriority | MaintenanceTaskPriority[];
+  source?: MaintenanceTaskSource | MaintenanceTaskSource[];
+  serviceCategory?: MaintenanceTaskServiceCategory | MaintenanceTaskServiceCategory[];
+  isOverdue?: boolean;
+  isDueSoon?: boolean;
+  isRecurring?: boolean;
+  hasBooking?: boolean;
+  includeCompleted?: boolean;
+  search?: string;
+}
+
+export interface CreateMaintenanceTaskInput {
+  title: string;
+  description?: string | null;
+  priority?: MaintenanceTaskPriority;
+  assetType?: string | null;
+  estimatedCost?: number | null;
+  serviceCategory?: MaintenanceTaskServiceCategory | null;
+  isRecurring?: boolean;
+  frequency?: MaintenanceTaskFrequency | null;
+  nextDueDate?: string | null;
+  homeAssetId?: string | null;
+  warrantyId?: string | null;
+}
+
+export interface CreateMaintenanceTaskFromActionCenterInput {
+  propertyId: string;
+  title: string;
+  description?: string | null;
+  assetType: string;
+  priority: MaintenanceTaskPriority;
+  riskLevel?: MaintenanceTaskRiskLevel | null;
+  serviceCategory?: MaintenanceTaskServiceCategory | null;
+  estimatedCost?: number | null;
+  nextDueDate: string;
+}
+
+export interface CreateMaintenanceTasksFromTemplatesInput {
+  propertyId: string;
+  templateIds: string[];
+}
+
+export interface UpdateMaintenanceTaskInput {
+  title?: string;
+  description?: string | null;
+  priority?: MaintenanceTaskPriority;
+  estimatedCost?: number | null;
+  actualCost?: number | null;
+  serviceCategory?: MaintenanceTaskServiceCategory | null;
+  isRecurring?: boolean;
+  frequency?: MaintenanceTaskFrequency | null;
+  nextDueDate?: string | null;
+  serviceProviderId?: string | null;
+}
+
+// -----------------------------------------------------------------------------
+// SEASONAL MAINTENANCE INTEGRATION TYPES
+// -----------------------------------------------------------------------------
+
+export interface SeasonalMaintenanceResult {
+  success: boolean;
+  message: string;
+  task: PropertyMaintenanceTask;
+}
+
+export interface RemoveSeasonalMaintenanceResult {
+  success: boolean;
+  message: string;
+}
+
+// -----------------------------------------------------------------------------
+// BOOKING LINK TYPES
+// -----------------------------------------------------------------------------
+
+export interface LinkBookingInput {
+  bookingId: string;
+}
+
+export interface LinkBookingResponse {
+  success: boolean;
+  taskId: string;
+  bookingId: string;
+  message: string;
+}
+
+// =============================================================================
+// END PHASE 3 TYPES
+// =============================================================================
+

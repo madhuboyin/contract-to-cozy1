@@ -1,4 +1,17 @@
 // apps/backend/src/controllers/orchestration.controller.ts
+
+/**
+ * PHASE 2 INTEGRATION NOTE:
+ * ========================
+ * 
+ * Action Center task creation now routes to segment-specific services:
+ * - HOME_BUYER → HomeBuyerTaskService.createTask()
+ * - EXISTING_OWNER → PropertyMaintenanceTaskService.createFromActionCenter()
+ * 
+ * Integration happens in orchestration.service.ts when generating actions.
+ * See: orchestrationIntegration.service.ts for routing logic.
+ */
+
 import { Request, Response } from 'express';
 import { getOrchestrationSummary } from '../services/orchestration.service';
 import { AuthRequest } from '../types/auth.types';
@@ -102,7 +115,7 @@ export async function undoOrchestrationAction(
     },
   });
 
-  // 🔑 FIX: Record the undo event for audit trail and decision trace
+  // Record the undo event for audit trail and decision trace
   await recordOrchestrationEvent({
     propertyId,
     actionKey,
@@ -231,3 +244,39 @@ export async function unsnoozeOrchestrationAction(
 
   return res.json({ success: true });
 }
+
+/**
+ * INTEGRATION INSTRUCTIONS FOR orchestration.service.ts
+ * =====================================================
+ * 
+ * To complete Phase 2.3 integration, update orchestration.service.ts:
+ * 
+ * 1. Import the integration service:
+ *    import { createTaskFromActionCenter } from './orchestrationIntegration.service';
+ * 
+ * 2. Find where checklist items are created (likely in a function that handles
+ *    "Add to Checklist" action)
+ * 
+ * 3. Replace:
+ *    await ChecklistService.createDirectChecklistItem(...)
+ * 
+ *    With:
+ *    await createTaskFromActionCenter({
+ *      userId,
+ *      propertyId,
+ *      title,
+ *      description,
+ *      assetType,
+ *      priority,
+ *      riskLevel,
+ *      serviceCategory,
+ *      estimatedCost,
+ *      nextDueDate,
+ *      actionKey,
+ *    })
+ * 
+ * This automatically routes to:
+ * - HomeBuyerTaskService for HOME_BUYER
+ * - PropertyMaintenanceTaskService for EXISTING_OWNER
+ * - ChecklistService as fallback (deprecated)
+ */

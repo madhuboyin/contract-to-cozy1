@@ -4,18 +4,17 @@ import { Prisma, Property, RiskAssessmentReport, Warranty, InsurancePolicy } fro
 import { prisma } from '../lib/prisma'; 
 import { calculateAssetRisk, calculateTotalRiskScore, filterRelevantAssets, AssetRiskDetail } from '../utils/riskCalculator.util';
 import { RISK_ASSET_CONFIG } from '../config/risk-constants';
-// Import the singleton instance (the value) AND the named constant
 import JobQueueService, { propertyIntelligenceQueue } from './JobQueue.service'; 
-import { PropertyIntelligenceJobType, PropertyIntelligenceJobPayload } from '../config/risk-job-types'; // UPDATED IMPORT
+import { PropertyIntelligenceJobType, PropertyIntelligenceJobPayload } from '../config/risk-job-types';
+// PHASE 2.4 INTEGRATION
+import { createTasksFromRiskAssessment } from './riskAssessmentIntegration.service';
 
-// Extending Prisma types for complex queries
 interface PropertyWithRelations extends Property {
   warranties: Warranty[];
   insurancePolicies: InsurancePolicy[];
   riskReport: RiskAssessmentReport | null;
 }
 
-// [NEW TYPE] Lightweight return type for the dashboard summary
 export type RiskSummaryDto = {
   propertyId: string;
   propertyName: string | null;
@@ -31,10 +30,6 @@ class RiskAssessmentService {
     return JobQueueService; 
   }
 
-  /**
-   * Fetches an existing risk report. If it's missing or stale, a calculation job 
-   * is queued in the background and 'QUEUED' is returned as a status.
-   */
   async getOrCreateRiskReport(propertyId: string): Promise<RiskAssessmentReport | 'QUEUED'> {
     const property = await this.fetchPropertyDetails(propertyId);
     if (!property) {
@@ -43,26 +38,20 @@ class RiskAssessmentService {
 
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
 
-    // 1. Check if a recent report exists
     if (property.riskReport && property.riskReport.lastCalculatedAt.getTime() > thirtyMinutesAgo.getTime()) {
       return property.riskReport;
     }
 
-    // 2. Report is stale or missing - Queue calculation job for the worker
     const payload: PropertyIntelligenceJobPayload = {
       propertyId,
-      jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, // UPDATED USAGE
+      jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT,
     };
-    // Use the explicit jobType for the queue add and cast JobQueueService to any to resolve import/type issues
     await (this.jobQueueService as any).addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, payload); 
     
-    // 3. Return the stale report (if available) or the 'QUEUED' status for frontend handling
     return property.riskReport || 'QUEUED'; 
   }
 
-  // [NEW METHOD] Lightweight summary for the dashboard
   async getPrimaryPropertyRiskSummary(userId: string): Promise<RiskSummaryDto | null> {
-    // 1. Find the primary property for the user
     const primaryProperty = await prisma.property.findFirst({
       where: {
         homeownerProfile: {
@@ -84,7 +73,6 @@ class RiskAssessmentService {
     });
 
     if (!primaryProperty) {
-      // Return special status for frontend handling
       return {
         propertyId: '',
         propertyName: null,
@@ -100,7 +88,6 @@ class RiskAssessmentService {
     const propertyName = primaryProperty.name;
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
 
-    // Default values if no report exists (and we queue calculation)
     const baseResult: Omit<RiskSummaryDto, 'status'> = {
       riskScore: report?.riskScore || 0,
       financialExposureTotal: report?.financialExposureTotal || new Prisma.Decimal(0),
@@ -109,16 +96,12 @@ class RiskAssessmentService {
       propertyName,
     };
 
-
-    // 2. Check for missing report
     if (!report) {
-      // Queue calculation job for missing report
       await this.jobQueueService.addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, { 
         propertyId,
         jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT 
       });
       
-      // FIX 1: If report is entirely missing, return QUEUED status.
       return {
         ...baseResult,
         status: 'QUEUED',
@@ -128,13 +111,11 @@ class RiskAssessmentService {
     const jobName = PropertyIntelligenceJobType.CALCULATE_RISK_REPORT;
     const jobId = `${propertyId}-${jobName}`;
     
-    // FIX 2: Check if a job is actively running/queued for this property
     const jobStatus = await propertyIntelligenceQueue.getJob(jobId);
     
     if (jobStatus) {
         const state = await jobStatus.getState();
         if (['waiting', 'active', 'delayed', 'prioritized'].includes(state)) {
-            // If job is actively running/queued, ALWAYS show the QUEUED status on the card
             return {
                 ...baseResult,
                 status: 'QUEUED',
@@ -142,24 +123,18 @@ class RiskAssessmentService {
         }
     }
 
-
-    // 3. Check if report is stale (queue refresh)
     if (report.lastCalculatedAt.getTime() < thirtyMinutesAgo.getTime()) {
-      // Queue background refresh for stale report
       this.jobQueueService.addJob(PropertyIntelligenceJobType.CALCULATE_RISK_REPORT, { 
         propertyId,
         jobType: PropertyIntelligenceJobType.CALCULATE_RISK_REPORT 
       });
       
-      // FIX 3: If stale and no job is active, return CALCULATED. 
-      // This displays the old score, fixing the permanent "Calculating" screen.
       return {
         ...baseResult,
         status: 'CALCULATED',
       };
     }
 
-    // 4. Report is fresh - Return calculated report
     return {
       ...baseResult,
       status: 'CALCULATED',
@@ -167,8 +142,8 @@ class RiskAssessmentService {
   }
   
   /**
-   * Main logic for calculating the risk score for a property. 
-   * This is exclusively called by the background worker.
+   * Main logic for calculating the risk score for a property.
+   * PHASE 2.4 INTEGRATION: Now auto-creates maintenance tasks for HIGH/CRITICAL risks
    */
   async calculateAndSaveReport(
     propertyId: string,
@@ -178,9 +153,10 @@ class RiskAssessmentService {
     let fetchedProperty: PropertyWithRelations | null | undefined = property; 
     let reportData: any; 
     let finalError: any = null; 
+    let isBasicDataMissing: boolean = false;
 
     try {
-        // --- STEP 0: FETCH AND VALIDATE PROPERTY (MUST BE FIRST) ---
+        // --- STEP 0: FETCH AND VALIDATE PROPERTY ---
         if (!fetchedProperty) {
             fetchedProperty = await this.fetchPropertyDetails(propertyId);
             if (!fetchedProperty) {
@@ -190,13 +166,11 @@ class RiskAssessmentService {
         property = fetchedProperty;
 
         // --- STEP 1: CONDITIONAL CALCULATION START ---
-        // If essential data is missing, we must skip the crash-prone calculation logic
-        const isBasicDataMissing = !property.propertySize || !property.yearBuilt; 
+        isBasicDataMissing = !property.propertySize || !property.yearBuilt; 
 
         if (isBasicDataMissing) {
-             console.warn(`[RISK-CALC] Skipping full calculation for ${propertyId}: Basic property data missing (Size/Year Built). Persisting fallback report.`);
+             console.warn(`[RISK-CALC] Skipping full calculation for ${propertyId}: Basic property data missing.`);
              
-             // Setup fallback report data
              reportData = {
                 riskScore: 0,
                 financialExposureTotal: new Prisma.Decimal(0),
@@ -217,11 +191,10 @@ class RiskAssessmentService {
                 lastCalculatedAt: new Date(),
             };
         } else {
-            // --- STEP 2: Execute Complex Calculation (Will run if basic data exists) ---
+            // --- STEP 2: Execute Complex Calculation ---
             const currentYear = new Date().getFullYear();
             const assetRisks: AssetRiskDetail[] = [];
 
-            // === FIX: Filter assets to only those that exist on the property ===
             console.log(`[RISK-SERVICE] Filtering assets for property ${propertyId}...`);
             const relevantConfigs = filterRelevantAssets(property as PropertyWithRelations, RISK_ASSET_CONFIG);
             console.log(`[RISK-SERVICE] Filtered from ${RISK_ASSET_CONFIG.length} to ${relevantConfigs.length} relevant assets`);
@@ -248,11 +221,10 @@ class RiskAssessmentService {
             };
         }
 
-    } catch (error: any) { // Final catch for any unexpected errors during fetch/validation/calculation
-        console.error(`RISK CALCULATION FAILED (Fatal Error during Job) for property ${propertyId}:`, error);
-        finalError = error; // Flag that an error occurred
+    } catch (error: any) {
+        console.error(`RISK CALCULATION FAILED for property ${propertyId}:`, error);
+        finalError = error;
         
-        // --- DEFENSIVE FALLBACK ON FATAL FAILURE ---
         reportData = {
             riskScore: 0,
             financialExposureTotal: new Prisma.Decimal(0),
@@ -274,8 +246,7 @@ class RiskAssessmentService {
         };
     }
     
-    // --- STEP 3: PERSIST REPORT (Guaranteed job completion) ---
-    // Since this is the final persistence step, it guarantees the job is marked as done.
+    // --- STEP 3: PERSIST REPORT ---
     const updatedReport = await prisma.riskAssessmentReport.upsert({
       where: { propertyId: propertyId },
       update: {
@@ -293,24 +264,63 @@ class RiskAssessmentService {
       },
     });
 
-    // The persistence step marks the job as complete in the queue.
+    // --- PHASE 2.4 INTEGRATION: AUTO-CREATE MAINTENANCE TASKS ---
+    try {
+      // Get property with homeowner profile to get userId
+      const propertyWithProfile = await prisma.property.findUnique({
+        where: { id: propertyId },
+        include: {
+          homeownerProfile: true,
+        },
+      });
+
+      if (propertyWithProfile && !isBasicDataMissing && !finalError) {
+        // Extract HIGH/CRITICAL risk recommendations
+        const recommendations = (reportData.details as AssetRiskDetail[])
+          .filter((c: AssetRiskDetail) => c.riskLevel === 'HIGH' || c.riskLevel === 'CRITICAL')
+          .map((c: AssetRiskDetail) => ({
+            assetType: c.systemType,
+            systemType: c.systemType,
+            category: c.category,
+            title: `${c.riskLevel} Risk: ${c.assetName || c.systemType}`,
+            description: c.actionCta || `Maintenance required for ${c.systemType}`,
+            priority: (c.riskLevel === 'CRITICAL' ? 'URGENT' : 'HIGH') as 'URGENT' | 'HIGH' | 'MEDIUM' | 'LOW',
+            riskLevel: c.riskLevel as 'CRITICAL' | 'HIGH' | 'ELEVATED' | 'MODERATE' | 'LOW',
+            estimatedCost: Number(c.replacementCost || 0),
+            age: c.age,
+            expectedLife: c.expectedLife,
+            exposure: Number(c.outOfPocketCost || c.replacementCost || 0),
+          }));
+
+        if (recommendations.length > 0) {
+          console.log(`[RISK-SERVICE] Creating ${recommendations.length} maintenance tasks for HIGH/CRITICAL risks...`);
+          
+          const taskResult = await createTasksFromRiskAssessment(
+            propertyId,
+            propertyWithProfile.homeownerProfile.userId,
+            recommendations
+          );
+
+          console.log(`✅ Risk assessment tasks: ${taskResult.created} created, ${taskResult.skipped} skipped`);
+        } else {
+          console.log(`[RISK-SERVICE] No HIGH/CRITICAL risks found - no maintenance tasks created`);
+        }
+      }
+    } catch (taskError) {
+      // Don't fail the risk calculation if task creation fails
+      console.error('[RISK-SERVICE] Failed to create maintenance tasks:', taskError);
+    }
+
     return updatedReport;
   }
   
-  /**
-   * [NEW METHOD - PHASE 3.4] Placeholder for generating the PDF report.
-   */
   async generateRiskReportPdf(propertyId: string): Promise<Buffer> {
-    // 1. Fetch the data needed for the report
     const report = await this.getOrCreateRiskReport(propertyId);
 
     if (report === 'QUEUED') {
-        // Handle case where report is still calculating
         throw new Error("Risk assessment report is currently calculating. Please try again in a moment.");
     }
 
-    // 2. Mock PDF content (a simple 1x1 pixel GIF/PNG is often used for mock binary data)
-    // A simple 1x1 pixel transparent PNG buffer (100 bytes) is used here for safety.
     const mockPdfContent = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
       'base64'
@@ -321,9 +331,6 @@ class RiskAssessmentService {
     return mockPdfContent;
   }
 
-  /**
-   * Private helper to fetch property details with all required relations.
-   */
   private async fetchPropertyDetails(propertyId: string): Promise<PropertyWithRelations | null> {
     return prisma.property.findUnique({
       where: { id: propertyId },

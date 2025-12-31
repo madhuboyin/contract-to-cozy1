@@ -56,6 +56,24 @@ import {
   CompletionDataDTO,
   CompletionPhotoDTO,
 
+  HomeBuyerChecklist,
+  HomeBuyerTask,
+  HomeBuyerTaskStats,
+  HomeBuyerTaskStatus,
+  CreateHomeBuyerTaskInput,
+  UpdateHomeBuyerTaskInput,
+  PropertyMaintenanceTask,
+  MaintenanceTaskStats,
+  MaintenanceTaskStatus,
+  MaintenanceTaskFilters,
+  CreateMaintenanceTaskInput,
+  CreateMaintenanceTaskFromActionCenterInput,
+  CreateMaintenanceTasksFromTemplatesInput,
+  UpdateMaintenanceTaskInput,
+  SeasonalMaintenanceResult,
+  RemoveSeasonalMaintenanceResult,
+  LinkBookingResponse,
+
 } from '@/types';
 
 // REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
@@ -1903,6 +1921,427 @@ class APIClient {
       method: 'PATCH',
     });
   }
+
+  
+  /**
+   * Get or create HOME_BUYER checklist with 8 default tasks
+   * 
+   * @returns Checklist with default tasks (auto-created on first access)
+   */
+  async getHomeBuyerChecklist(): Promise<APIResponse<HomeBuyerChecklist>> {
+    return this.request<HomeBuyerChecklist>('/api/home-buyer-tasks/checklist', {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Get all HOME_BUYER tasks for authenticated user
+   * 
+   * @returns Array of tasks
+   */
+  async getHomeBuyerTasks(): Promise<APIResponse<HomeBuyerTask[]>> {
+    return this.request<HomeBuyerTask[]>('/api/home-buyer-tasks/tasks', {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Get single HOME_BUYER task by ID
+   * 
+   * @param taskId - Task ID
+   * @returns Single task
+   */
+  async getHomeBuyerTask(taskId: string): Promise<APIResponse<HomeBuyerTask>> {
+    return this.request<HomeBuyerTask>(`/api/home-buyer-tasks/tasks/${taskId}`, {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Get HOME_BUYER task statistics (progress, completion percentage)
+   * 
+   * @returns Task statistics
+   */
+  async getHomeBuyerTaskStats(): Promise<APIResponse<HomeBuyerTaskStats>> {
+    return this.request<HomeBuyerTaskStats>('/api/home-buyer-tasks/stats', {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Create custom HOME_BUYER task (in addition to 8 defaults)
+   * 
+   * @param data - Task data
+   * @returns Created task
+   */
+  async createHomeBuyerTask(
+    data: CreateHomeBuyerTaskInput
+  ): Promise<APIResponse<HomeBuyerTask>> {
+    return this.request<HomeBuyerTask>('/api/home-buyer-tasks/tasks', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Update HOME_BUYER task details (title, description, category, sort order)
+   * 
+   * @param taskId - Task ID
+   * @param data - Updated fields
+   * @returns Updated task
+   */
+  async updateHomeBuyerTask(
+    taskId: string,
+    data: UpdateHomeBuyerTaskInput
+  ): Promise<APIResponse<HomeBuyerTask>> {
+    return this.request<HomeBuyerTask>(`/api/home-buyer-tasks/tasks/${taskId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Update HOME_BUYER task status (PENDING → IN_PROGRESS → COMPLETED)
+   * 
+   * @param taskId - Task ID
+   * @param status - New status
+   * @returns Updated task
+   */
+  async updateHomeBuyerTaskStatus(
+    taskId: string,
+    status: HomeBuyerTaskStatus
+  ): Promise<APIResponse<HomeBuyerTask>> {
+    return this.request<HomeBuyerTask>(`/api/home-buyer-tasks/tasks/${taskId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+  }
+
+  /**
+   * Delete custom HOME_BUYER task (cannot delete 8 default tasks)
+   * 
+   * @param taskId - Task ID
+   */
+  async deleteHomeBuyerTask(taskId: string): Promise<APIResponse<void>> {
+    return this.request<void>(`/api/home-buyer-tasks/tasks/${taskId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * Link HOME_BUYER task to booking
+   * 
+   * @param taskId - Task ID
+   * @param bookingId - Booking ID
+   * @returns Link confirmation
+   */
+  async linkHomeBuyerTaskBooking(
+    taskId: string,
+    bookingId: string
+  ): Promise<APIResponse<LinkBookingResponse>> {
+    return this.request<LinkBookingResponse>(
+      `/api/home-buyer-tasks/tasks/${taskId}/link-booking`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ bookingId }),
+      }
+    );
+  }
+
+  // ============================================================================
+  // PROPERTY MAINTENANCE TASK ENDPOINTS (11 methods)
+  // ============================================================================
+
+  /**
+   * Get EXISTING_OWNER maintenance tasks for a property with optional filters
+   * 
+   * @param propertyId - Property ID
+   * @param filters - Optional filters (status, priority, source, etc.)
+   * @returns Filtered maintenance tasks
+   */
+  async getMaintenanceTasks(
+    propertyId: string,
+    filters?: MaintenanceTaskFilters
+  ): Promise<APIResponse<PropertyMaintenanceTask[]>> {
+    const queryParams = new URLSearchParams();
+    
+    if (filters) {
+      if (filters.status) {
+        const statuses = Array.isArray(filters.status) ? filters.status : [filters.status];
+        statuses.forEach(s => queryParams.append('status', s));
+      }
+      if (filters.priority) {
+        const priorities = Array.isArray(filters.priority) ? filters.priority : [filters.priority];
+        priorities.forEach(p => queryParams.append('priority', p));
+      }
+      if (filters.source) {
+        const sources = Array.isArray(filters.source) ? filters.source : [filters.source];
+        sources.forEach(s => queryParams.append('source', s));
+      }
+      if (filters.serviceCategory) {
+        const categories = Array.isArray(filters.serviceCategory) 
+          ? filters.serviceCategory 
+          : [filters.serviceCategory];
+        categories.forEach(c => queryParams.append('serviceCategory', c));
+      }
+      if (filters.isOverdue !== undefined) {
+        queryParams.append('isOverdue', filters.isOverdue.toString());
+      }
+      if (filters.isDueSoon !== undefined) {
+        queryParams.append('isDueSoon', filters.isDueSoon.toString());
+      }
+      if (filters.isRecurring !== undefined) {
+        queryParams.append('isRecurring', filters.isRecurring.toString());
+      }
+      if (filters.hasBooking !== undefined) {
+        queryParams.append('hasBooking', filters.hasBooking.toString());
+      }
+      if (filters.includeCompleted !== undefined) {
+        queryParams.append('includeCompleted', filters.includeCompleted.toString());
+      }
+      if (filters.search) {
+        queryParams.append('search', filters.search);
+      }
+    }
+    
+    const queryString = queryParams.toString();
+    const endpoint = `/api/maintenance-tasks/property/${propertyId}${queryString ? `?${queryString}` : ''}`;
+    
+    return this.request<PropertyMaintenanceTask[]>(endpoint, {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Get single maintenance task by ID
+   * 
+   * @param taskId - Task ID
+   * @returns Single maintenance task
+   */
+  async getMaintenanceTask(taskId: string): Promise<APIResponse<PropertyMaintenanceTask>> {
+    return this.request<PropertyMaintenanceTask>(`/api/maintenance-tasks/${taskId}`, {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Get maintenance task statistics for a property
+   * 
+   * @param propertyId - Property ID
+   * @returns Task statistics (counts by status, priority, source, costs)
+   */
+  async getMaintenanceTaskStats(
+    propertyId: string
+  ): Promise<APIResponse<MaintenanceTaskStats>> {
+    return this.request<MaintenanceTaskStats>(
+      `/api/maintenance-tasks/property/${propertyId}/stats`,
+      {
+        method: 'GET',
+      }
+    );
+  }
+
+  /**
+   * Create user-created maintenance task (source: USER_CREATED)
+   * 
+   * @param propertyId - Property ID
+   * @param data - Task data
+   * @returns Created maintenance task
+   */
+  async createMaintenanceTask(
+    propertyId: string,
+    data: CreateMaintenanceTaskInput
+  ): Promise<APIResponse<PropertyMaintenanceTask>> {
+    return this.request<PropertyMaintenanceTask>(
+      `/api/maintenance-tasks/property/${propertyId}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  /**
+   * Create maintenance task from Action Center (source: ACTION_CENTER)
+   * PHASE 2.3 INTEGRATION: Idempotent via actionKey
+   * 
+   * @param data - Task data from Action Center
+   * @returns Created/existing maintenance task
+   */
+  async createMaintenanceTaskFromActionCenter(
+    data: CreateMaintenanceTaskFromActionCenterInput
+  ): Promise<APIResponse<{ task: PropertyMaintenanceTask; deduped: boolean }>> {
+    return this.request<{ task: PropertyMaintenanceTask; deduped: boolean }>(
+      '/api/maintenance-tasks/from-action-center',
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  /**
+   * Create maintenance task from seasonal item (source: SEASONAL)
+   * PHASE 2.5 INTEGRATION
+   * 
+   * @param seasonalItemId - Seasonal checklist item ID
+   * @returns Created maintenance task
+   */
+  async createMaintenanceTaskFromSeasonal(
+    seasonalItemId: string
+  ): Promise<APIResponse<PropertyMaintenanceTask>> {
+    return this.request<PropertyMaintenanceTask>(
+      `/api/maintenance-tasks/from-seasonal/${seasonalItemId}`,
+      {
+        method: 'POST',
+      }
+    );
+  }
+
+  /**
+   * Create maintenance tasks from templates (source: TEMPLATE)
+   * 
+   * @param data - Property ID and template IDs
+   * @returns Created maintenance tasks
+   */
+  async createMaintenanceTasksFromTemplates(
+    data: CreateMaintenanceTasksFromTemplatesInput
+  ): Promise<APIResponse<{ tasks: PropertyMaintenanceTask[]; count: number }>> {
+    return this.request<{ tasks: PropertyMaintenanceTask[]; count: number }>(
+      '/api/maintenance-tasks/from-templates',
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  /**
+   * Update maintenance task details
+   * 
+   * @param taskId - Task ID
+   * @param data - Updated fields
+   * @returns Updated maintenance task
+   */
+  async updateMaintenanceTask(
+    taskId: string,
+    data: UpdateMaintenanceTaskInput
+  ): Promise<APIResponse<PropertyMaintenanceTask>> {
+    return this.request<PropertyMaintenanceTask>(`/api/maintenance-tasks/${taskId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Update maintenance task status
+   * 
+   * @param taskId - Task ID
+   * @param status - New status
+   * @returns Updated maintenance task
+   */
+  async updateMaintenanceTaskStatus(
+    taskId: string,
+    status: MaintenanceTaskStatus
+  ): Promise<APIResponse<PropertyMaintenanceTask>> {
+    return this.request<PropertyMaintenanceTask>(
+      `/api/maintenance-tasks/${taskId}/status`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      }
+    );
+  }
+
+  /**
+   * Delete maintenance task
+   * 
+   * @param taskId - Task ID
+   */
+  async deleteMaintenanceTask(taskId: string): Promise<APIResponse<void>> {
+    return this.request<void>(`/api/maintenance-tasks/${taskId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * Link maintenance task to booking
+   * 
+   * @param taskId - Task ID
+   * @param bookingId - Booking ID
+   * @returns Link confirmation
+   */
+  async linkMaintenanceTaskBooking(
+    taskId: string,
+    bookingId: string
+  ): Promise<APIResponse<LinkBookingResponse>> {
+    return this.request<LinkBookingResponse>(
+      `/api/maintenance-tasks/${taskId}/link-booking`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ bookingId }),
+      }
+    );
+  }
+
+  // ============================================================================
+  // SEASONAL MAINTENANCE INTEGRATION ENDPOINTS (2 methods)
+  // ============================================================================
+
+  /**
+   * Add seasonal checklist item to property maintenance
+   * PHASE 2.5 INTEGRATION
+   * 
+   * Creates PropertyMaintenanceTask with source=SEASONAL
+   * Links via seasonalChecklistItemId
+   * Updates seasonal item status to 'ADDED'
+   * 
+   * @param itemId - Seasonal checklist item ID
+   * @returns Created maintenance task
+   */
+  async addSeasonalTaskToMaintenance(
+    itemId: string
+  ): Promise<APIResponse<SeasonalMaintenanceResult>> {
+    return this.request<SeasonalMaintenanceResult>(
+      `/api/seasonal-checklist-items/${itemId}/add-to-maintenance`,
+      {
+        method: 'POST',
+      }
+    );
+  }
+
+  /**
+   * Remove seasonal checklist item from property maintenance
+   * PHASE 2.5 INTEGRATION
+   * 
+   * Unlinks seasonal item from maintenance task
+   * Updates seasonal item status to 'RECOMMENDED'
+   * Does NOT delete the maintenance task (user may have modified it)
+   * 
+   * @param itemId - Seasonal checklist item ID
+   * @returns Removal confirmation
+   */
+  async removeSeasonalTaskFromMaintenance(
+    itemId: string
+  ): Promise<APIResponse<RemoveSeasonalMaintenanceResult>> {
+    return this.request<RemoveSeasonalMaintenanceResult>(
+      `/api/seasonal-checklist-items/${itemId}/remove-from-maintenance`,
+      {
+        method: 'DELETE',
+      }
+    );
+  }
+
+  // ============================================================================
+  // DEPRECATED METHODS (Phase 2.6 - Keep with warnings until Phase 8)
+  // ============================================================================
+
+
+
+  // ============================================================================
+  // END OF PHASE 3 ADDITIONS
+  // ============================================================================
+
 
 }
 

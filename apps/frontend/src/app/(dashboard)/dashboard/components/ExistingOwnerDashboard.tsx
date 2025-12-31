@@ -1,28 +1,28 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/ExistingOwnerDashboard.tsx
-// UPDATED: Added seasonal card and providers in new row above activity cards
+// PHASE 5 UPDATED: Integrates new PropertyMaintenanceTask statistics with existing features
+
+'use client';
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Booking, ChecklistItem, ScoredProperty } from '@/types';
+import { Booking, ChecklistItem, ScoredProperty, MaintenanceTaskStats } from '@/types';
 import { UpcomingBookingsCard } from './UpcomingBookingsCard';
 import { RecurringMaintenanceCard } from './RecurringMaintenanceCard';
 import { UpcomingRenewalsCard } from './UpcomingRenewalsCard';
 import { FavoriteProvidersCard } from './FavoriteProvidersCard';
 import { SeasonalChecklistCard } from '@/app/(dashboard)/dashboard/components/SeasonalChecklistCard';
-import { ArrowRight } from 'lucide-react';
-import { Separator } from '@/components/ui/separator';
+import { ArrowRight, AlertTriangle, Calendar, DollarSign, Clock, CheckCircle2 } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-// NEW: Local Home Updates
+// Local Home Updates
 import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCarousel';
 import { LocalUpdate } from '@/types';
 import { ActionCenter } from '@/components/orchestration/ActionCenter';
-import { OrchestratedActionDTO } from '@/types';
 import { api } from '@/lib/api/client';
 
 // Existing CTA / Nudge
 import { MaintenanceNudgeCard } from './MaintenanceNudgeCard';
 
-// --- Props ---
 interface ExistingOwnerDashboardProps {
   bookings: Booking[];
   properties: ScoredProperty[];
@@ -30,7 +30,7 @@ interface ExistingOwnerDashboardProps {
   userFirstName: string;
   selectedPropertyId: string | undefined;
   consolidatedActionCount: number;
-  hasAssetDrivenActions: boolean; 
+  hasAssetDrivenActions: boolean;
 }
 
 export const ExistingOwnerDashboard = ({
@@ -41,14 +41,34 @@ export const ExistingOwnerDashboard = ({
   consolidatedActionCount,
   hasAssetDrivenActions,
 }: ExistingOwnerDashboardProps) => {
-  // ------------------------------
-  // Local Home Updates (NEW)
-  // ------------------------------
+  // PHASE 5: Fetch new PropertyMaintenanceTask statistics
+  const [stats, setStats] = useState<MaintenanceTaskStats | null>(null);
+
+  // Local Home Updates
   const [localUpdates, setLocalUpdates] = useState<LocalUpdate[]>([]);
 
+  // PHASE 5: Fetch statistics
   useEffect(() => {
     if (!selectedPropertyId) return;
-  
+
+    const fetchStats = async () => {
+      try {
+        const response = await api.getMaintenanceTaskStats(selectedPropertyId);
+        if (response.success) {
+          setStats(response.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch stats:', error);
+      }
+    };
+
+    fetchStats();
+  }, [selectedPropertyId]);
+
+  // Fetch local updates
+  useEffect(() => {
+    if (!selectedPropertyId) return;
+
     api
       .getLocalUpdates(selectedPropertyId)
       .then((res) => {
@@ -60,11 +80,7 @@ export const ExistingOwnerDashboard = ({
         // fail silently
       });
   }, [selectedPropertyId]);
-  console.log('localUpdates', localUpdates);    
-  
-  // ------------------------------
-  // Existing Logic (Unchanged)
-  // ------------------------------
+
   const defaultProperty = properties.find((p) => p.isPrimary) || properties[0];
   const selectedProperty = properties.find((p) => p.id === selectedPropertyId);
   const isMultiProperty = properties.length > 1;
@@ -111,12 +127,167 @@ export const ExistingOwnerDashboard = ({
     </div>
   ) : null;
 
+  // Calculate urgent tasks count
+  const urgentTasksCount = stats ? stats.byPriority.urgent + stats.byPriority.high : 0;
+
   return (
     <div className="space-y-6 pb-8">
+      {/* Header */}
+      <div>
+        <h2 className="text-3xl font-bold tracking-tight">
+          Welcome back! 🏡
+        </h2>
+        <p className="text-muted-foreground">
+          Here's what needs your attention today.
+        </p>
+      </div>
+
+      {/* PHASE 5: Overdue Alert Banner */}
+      {stats && stats.overdue > 0 && (
+        <Card className="border-2 border-red-300 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="flex-shrink-0">
+                <AlertTriangle className="h-8 w-8 text-red-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-red-900">
+                  {stats.overdue} {stats.overdue === 1 ? 'Task' : 'Tasks'} Overdue
+                </h3>
+                <p className="text-sm text-red-700">
+                  These tasks require immediate attention to prevent issues.
+                </p>
+              </div>
+              <Link href={`/dashboard/maintenance?propertyId=${selectedPropertyId}&filter=overdue`}>
+                <span className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 cursor-pointer font-medium">
+                  View Overdue
+                  <ArrowRight className="h-4 w-4 ml-2 inline" />
+                </span>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* PHASE 5: Main Statistics Cards */}
+      {stats && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Urgent Tasks
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="text-3xl font-bold text-red-600">
+                  {urgentTasksCount}
+                </div>
+                <AlertTriangle className="h-8 w-8 text-red-600 opacity-50" />
+              </div>
+              <p className="text-xs text-gray-600 mt-2">
+                {stats.byPriority.urgent} urgent + {stats.byPriority.high} high priority
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Due Soon
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="text-3xl font-bold text-orange-600">
+                  {stats.dueThisWeek}
+                </div>
+                <Calendar className="h-8 w-8 text-orange-600 opacity-50" />
+              </div>
+              <p className="text-xs text-gray-600 mt-2">
+                Due within the next 7 days
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Estimated Costs
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="text-3xl font-bold text-blue-600">
+                  ${stats.totalEstimatedCost.toLocaleString()}
+                </div>
+                <DollarSign className="h-8 w-8 text-blue-600 opacity-50" />
+              </div>
+              <p className="text-xs text-gray-600 mt-2">
+                For {stats.pending + stats.inProgress} active tasks
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* PHASE 5: Task Status Overview */}
+      {stats && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">Total Tasks</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                </div>
+                <Clock className="h-6 w-6 text-gray-400" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">Pending</p>
+                  <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
+                </div>
+                <Clock className="h-6 w-6 text-yellow-600" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">In Progress</p>
+                  <p className="text-2xl font-bold text-blue-600">{stats.inProgress}</p>
+                </div>
+                <Clock className="h-6 w-6 text-blue-600" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">Completed</p>
+                  <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
+                </div>
+                <CheckCircle2 className="h-6 w-6 text-green-600" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Maintenance Nudge Card */}
       {renderNudgeCard}
-      
-      {/* 🔔 Action Center (Top Actions) */}
+
+      {/* Action Center (Top Actions) */}
       {selectedPropertyId && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -137,7 +308,7 @@ export const ExistingOwnerDashboard = ({
         </div>
       )}
 
-      {/* 💡 Local Home Updates (Helpful Suggestions) */}
+      {/* Local Home Updates (Helpful Suggestions) */}
       {localUpdates.length > 0 && (
         <LocalUpdatesCarousel
           updates={localUpdates}
@@ -160,7 +331,7 @@ export const ExistingOwnerDashboard = ({
         <FavoriteProvidersCard />
       </div>
 
-      {/* Activity Cards (UNCHANGED - Original 3 cards) */}
+      {/* Activity Cards (Original 3 cards) */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <UpcomingBookingsCard propertyId={selectedPropertyId} />
 
