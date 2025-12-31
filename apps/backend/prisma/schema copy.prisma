@@ -160,49 +160,6 @@ enum TaskPriority {
   OPTIONAL
 }
 
-// ============================================================================
-// PHASE 1: NEW ENUMS FOR CHECKLIST SPLIT
-// ============================================================================
-
-enum HomeBuyerTaskStatus {
-  PENDING
-  IN_PROGRESS
-  COMPLETED
-  NOT_NEEDED
-}
-
-enum MaintenanceTaskStatus {
-  PENDING
-  IN_PROGRESS
-  COMPLETED
-  CANCELLED
-  NEEDS_REVIEW
-}
-
-enum MaintenanceTaskSource {
-  USER_CREATED
-  ACTION_CENTER
-  SEASONAL
-  RISK_ASSESSMENT
-  WARRANTY_RENEWAL
-  TEMPLATE
-}
-
-enum MaintenanceTaskPriority {
-  LOW
-  MEDIUM
-  HIGH
-  URGENT
-}
-
-enum RiskLevel {
-  LOW
-  MODERATE
-  ELEVATED
-  HIGH
-  CRITICAL
-}
-
 enum NotificationTiming {
   EARLY
   STANDARD
@@ -548,10 +505,6 @@ model HomeownerProfile {
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   properties  Property[]
   checklist   Checklist?
-  
-  // PHASE 1: NEW RELATION
-  homeBuyerChecklist HomeBuyerChecklist?
-  
   // NEW RELATIONS
   warranties  Warranty[]
   insurancePolicies InsurancePolicy[]
@@ -619,130 +572,6 @@ model ChecklistItem {
   @@index([isSeasonal, season])
   
   @@map("checklist_items")
-}
-
-// ============================================================================
-// PHASE 1: NEW MODELS - HOME BUYER CHECKLIST SYSTEM
-// ============================================================================
-
-model HomeBuyerChecklist {
-  id String @id @default(uuid())
-  
-  // User-scoped (NOT property-scoped)
-  homeownerProfileId String @unique
-  homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
-  
-  // Relations
-  tasks HomeBuyerTask[]
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  @@map("home_buyer_checklists")
-}
-
-model HomeBuyerTask {
-  id String @id @default(uuid())
-  checklistId String
-  
-  // Task details
-  title String
-  description String?
-  status HomeBuyerTaskStatus @default(PENDING)
-  
-  // Service integration
-  serviceCategory ServiceCategory?
-  
-  // Booking integration
-  bookingId String? @unique
-  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
-  
-  // Completion tracking
-  completedAt DateTime?
-  
-  // Display
-  sortOrder Int @default(0)
-  
-  // Relations
-  checklist HomeBuyerChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  @@index([checklistId])
-  @@index([status])
-  @@map("home_buyer_tasks")
-}
-
-// ============================================================================
-// PHASE 1: NEW MODELS - PROPERTY MAINTENANCE SYSTEM
-// ============================================================================
-
-model PropertyMaintenanceTask {
-  id String @id @default(uuid())
-  propertyId String
-  
-  // Task details
-  title String
-  description String?
-  status MaintenanceTaskStatus @default(PENDING)
-  
-  // Source tracking (WHO created this?)
-  source MaintenanceTaskSource
-  actionKey String? // Format: "propertyId:SOURCE:assetType"
-  
-  // Priority & Risk
-  priority MaintenanceTaskPriority @default(MEDIUM)
-  riskLevel RiskLevel?
-  
-  // Asset tracking (WHAT is this for?)
-  assetType String? // Links to risk assessment
-  category String? // System category (HVAC, Plumbing, etc.)
-  
-  // Service integration
-  serviceCategory ServiceCategory?
-  
-  // Recurring tasks
-  isRecurring Boolean @default(false)
-  frequency RecurrenceFrequency?
-  nextDueDate DateTime?
-  lastCompletedDate DateTime?
-  
-  // Cost tracking
-  estimatedCost Decimal? @db.Decimal(10, 2)
-  actualCost Decimal? @db.Decimal(10, 2)
-  
-  // Seasonal integration
-  isSeasonal Boolean @default(false)
-  season Season?
-  seasonalChecklistItemId String? @unique
-  seasonalChecklistItem SeasonalChecklistItem? @relation(fields: [seasonalChecklistItemId], references: [id], onDelete: SetNull)
-  
-  // Booking integration
-  bookingId String? @unique
-  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
-  
-  // Enhanced relationships
-  warrantyId String?
-  warranty Warranty? @relation(fields: [warrantyId], references: [id], onDelete: SetNull)
-  
-  homeAssetId String?
-  homeAsset HomeAsset? @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
-  
-  // Relations
-  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  @@unique([propertyId, actionKey])
-  @@index([propertyId])
-  @@index([status])
-  @@index([priority])
-  @@index([source])
-  @@index([nextDueDate])
-  @@index([assetType])
-  @@map("property_maintenance_tasks")
 }
 
 model Property {
@@ -814,9 +643,6 @@ model Property {
   insurancePolicies InsurancePolicy[]
   expenses         Expense[]
   checklistItems   ChecklistItem[]
-  
-  // PHASE 1: NEW RELATION
-  maintenanceTasks PropertyMaintenanceTask[]
  
   documents        Document[]
 
@@ -1039,14 +865,6 @@ model Booking {
   cancellationReason String?
   // Completion
   completedAt       DateTime?
-  
-  // PHASE 1: NEW RELATIONS - Task Integration
-  homeBuyerTaskId String? @unique
-  homeBuyerTask HomeBuyerTask?
-  
-  propertyMaintenanceTaskId String? @unique
-  propertyMaintenanceTask PropertyMaintenanceTask?
-  
   // Relations
   homeowner         User              @relation("BookingHomeowner", fields: [homeownerId], references: [id])
   provider          User              @relation("BookingProvider", fields: [providerId], references: [id])
@@ -1253,9 +1071,6 @@ model Warranty {
   documents          Document[]
   homeAsset          HomeAsset? @relation(fields: [homeAssetId], references: [id])
   
-  // PHASE 1: NEW RELATION
-  maintenanceTasks PropertyMaintenanceTask[]
-  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
@@ -1339,10 +1154,6 @@ model HomeAsset {
   lastServiced DateTime? 
   efficiencyRating String?
   warranties  Warranty[]
-  
-  // PHASE 1: NEW RELATION
-  maintenanceTasks PropertyMaintenanceTask[]
-  
   @@index([propertyId])
   @@unique([propertyId, assetType]) // Usually only one furnace per house
 }
@@ -1876,9 +1687,6 @@ model SeasonalChecklistItem {
   seasonalTaskTemplate     SeasonalTaskTemplate  @relation(fields: [seasonalTaskTemplateId], references: [id])
   property                 Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   checklistItem            ChecklistItem?        @relation(fields: [checklistItemId], references: [id], onDelete: SetNull)
-  
-  // PHASE 1: NEW RELATION
-  maintenanceTask PropertyMaintenanceTask?
   
   @@index([seasonalChecklistId])
   @@index([propertyId, status])
