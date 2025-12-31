@@ -45,6 +45,9 @@ import orchestrationRoutes from './routes/orchestration.routes';
 import { errorHandler } from './middleware/error.middleware';
 import notificationRoutes from './routes/notification.routes';
 import seasonalChecklistRoutes from './routes/seasonalChecklist.routes';
+import homeBuyerTaskRoutes from './routes/homeBuyerTask.routes';
+import propertyMaintenanceTaskRoutes from './routes/propertyMaintenanceTask.routes';
+
 
 dotenv.config();
 
@@ -273,6 +276,8 @@ app.use('/api/local-updates', localUpdatesRoutes);
 app.use('/api/orchestration', orchestrationRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api', seasonalChecklistRoutes);
+app.use('/api/home-buyer-tasks', homeBuyerTaskRoutes);
+app.use('/api/maintenance-tasks', propertyMaintenanceTaskRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
