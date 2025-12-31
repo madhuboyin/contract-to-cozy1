@@ -34,16 +34,183 @@ enum HomeownerSegment {
   EXISTING_OWNER   // Standard homeowner focused on maintenance
 }
 
-// ADD THIS NEW ENUM
 enum ChecklistItemStatus {
   PENDING
   COMPLETED
   NOT_NEEDED
 }
 
-// Add after the ChecklistItemStatus enum (around line 50)
+// ADDED 
+// ENUMS FOR PROPERTY DETAILS (Phase 1)
+enum PropertyType {
+  SINGLE_FAMILY
+  TOWNHOME
+  CONDO
+  APARTMENT
+  MULTI_UNIT
+  INVESTMENT_PROPERTY
+}
 
-// NEW: Service category configuration for segment targeting
+enum OwnershipType {
+  OWNER_OCCUPIED
+  RENTED_OUT
+}
+
+enum HeatingType {
+  HVAC
+  FURNACE
+  HEAT_PUMP
+  RADIATORS
+  UNKNOWN
+}
+
+enum CoolingType {
+  CENTRAL_AC
+  WINDOW_AC
+  UNKNOWN
+}
+
+enum WaterHeaterType {
+  TANK
+  TANKLESS
+  HEAT_PUMP
+  SOLAR
+  UNKNOWN
+}
+
+enum RoofType {
+  SHINGLE
+  TILE
+  FLAT
+  METAL
+  UNKNOWN
+}
+
+// ============================================================================
+// NEW ENUMS FOR RISK ASSESSMENT (PHASE 1)
+// ============================================================================
+
+enum RiskCategory {
+  STRUCTURE
+  SYSTEMS
+  SAFETY
+  FINANCIAL_GAP // Used to categorize non-physical risks like insurance shortfalls
+}
+
+// ============================================================================
+// NEW ENUM: WARRANTY CATEGORIES
+// This replaces any concept of a "General" or "Whole Property" category.
+// ============================================================================
+enum WarrantyCategory {
+  APPLIANCE
+  HVAC
+  ROOFING
+  PLUMBING
+  ELECTRICAL
+  STRUCTURAL
+  HOME_WARRANTY_PLAN // Explicitly for multi-system coverage (e.g., a service contract)
+  OTHER
+}
+
+enum LocalUpdateCategory {
+  INTERNET
+  INSURANCE
+  MAINTENANCE
+  ENERGY
+}
+
+enum LocalUpdateEventType {
+  IMPRESSION
+  CLICK
+}
+
+enum Season {
+  SPRING
+  SUMMER
+  FALL
+  WINTER
+}
+
+enum ClimateRegion {
+  VERY_COLD
+  COLD
+  MODERATE
+  WARM
+  TROPICAL
+}
+
+enum SeasonalChecklistStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  DISMISSED
+}
+
+enum SeasonalTaskStatus {
+  RECOMMENDED
+  ADDED
+  COMPLETED
+  DISMISSED
+  SNOOZED
+}
+
+enum TaskPriority {
+  CRITICAL
+  RECOMMENDED
+  OPTIONAL
+}
+
+// ============================================================================
+// PHASE 1: NEW ENUMS FOR CHECKLIST SPLIT
+// ============================================================================
+
+enum HomeBuyerTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  NOT_NEEDED
+}
+
+enum MaintenanceTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NEEDS_REVIEW
+}
+
+enum MaintenanceTaskSource {
+  USER_CREATED
+  ACTION_CENTER
+  SEASONAL
+  RISK_ASSESSMENT
+  WARRANTY_RENEWAL
+  TEMPLATE
+}
+
+enum MaintenanceTaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum RiskLevel {
+  LOW
+  MODERATE
+  ELEVATED
+  HIGH
+  CRITICAL
+}
+
+enum NotificationTiming {
+  EARLY
+  STANDARD
+  LATE
+}
+
+// NEW: Service 
+// category configuration for segment targeting
 model ServiceCategoryConfig {
   id            String          @id @default(uuid())
   category      ServiceCategory @unique
@@ -55,7 +222,7 @@ model ServiceCategoryConfig {
   // Display properties
   displayName   String
   description   String?
-  icon          String?         // Icon identifier for frontend
+  icon          String? // Icon identifier for frontend
   sortOrder     Int    @default(0)
   
   // Status
@@ -68,20 +235,130 @@ model ServiceCategoryConfig {
   @@map("service_category_config")
 }
 
-// Expand ServiceCategory enum with new categories
+// ============================================================================
+// RISK ASSESSMENT MANAGEMENT (PHASE 1)
+// ============================================================================
+
+// 1. New Model: SystemComponentConfig
+// Stores the static configuration data (lifespan, cost) used for the risk calculation.
+model SystemComponentConfig {
+  id                String         @id @default(uuid())
+  systemType        String         @unique // e.g., 'HVAC_FURNACE', 'ROOF_SHINGLE'
+  category          RiskCategory   
+  
+  // Financial Data
+  expectedLife      Int            // Years
+  replacementCost   Decimal        @db.Decimal(12, 2)
+  
+  // Warning Flags: Allows configuration of point-based penalties
+  warningFlags      Json? // e.g., { "hasDrainageIssues": 0.2 }
+  
+  // Status
+  isActive          Boolean        @default(true)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("system_component_configs")
+}
+
+// 2. New Model: RiskAssessmentReport
+// Caches the calculated risk score and detailed breakdown for a property.
+model RiskAssessmentReport {
+  id                       String    @id @default(uuid())
+  propertyId               String    @unique // MUST be unique for a 1:1 relation
+  
+  // Calculated Scores (Phase 2 output)
+  riskScore                Float     // 0.0 to 100.0
+  financialExposureTotal   Decimal   @db.Decimal(12, 2) // Total Risk Dollar Exposure
+  details                  Json      
+  
+  // Relations: ***FIX APPLIED: Added @relation(name: "PropertyRiskReport")***
+  property                 Property  @relation(name: "PropertyRiskReport", fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  // Timestamps
+  lastCalculatedAt DateTime @updatedAt 
+  createdAt DateTime @default(now())
+  
+  @@map("risk_assessment_reports")
+}
+
+// ============================================================================
+// FINANCIAL EFFICIENCY MANAGEMENT (PHASE 2)
+// ============================================================================
+
+// 1.1 New Model: FinancialEfficiencyConfig (Benchmark Data)
+// Stores the static configuration data (market averages) used for FES calculation.
+model FinancialEfficiencyConfig {
+  id                      String          @id @default(uuid())
+  
+  // Targeting fields to match a property
+  zipCode                 String?
+  propertyType            PropertyType?  // Uses existing enum
+  
+  // Benchmark Values (Annualized)
+  avgInsurancePremium     Decimal         @db.Decimal(12, 2)
+  avgUtilityCost          Decimal         @db.Decimal(12, 2) 
+  avgWarrantyCost         Decimal         @db.Decimal(12, 2)
+  
+  // Optional: Allows benchmarks to be set per sqft if data supports it
+  unitOfMeasure           String          @default("ANNUAL") 
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Ensures a combination of zipCode and propertyType is unique for a benchmark
+  @@unique([zipCode, propertyType])
+  @@map("financial_efficiency_configs")
+}
+
+// 1.2 New Model: FinancialEfficiencyReport (Report Cache)
+// Caches the calculated FES and detailed breakdown for a property.
+model FinancialEfficiencyReport {
+  id                        String    @id @default(uuid())
+  propertyId                String    @unique // MUST be unique for a 1:1 relation
+  
+  // Calculated Score
+  financialEfficiencyScore  Float     // 0.0 to 100.0+
+  
+  // Component Breakdown for transparency (Actual Costs vs Market Averages)
+  actualInsuranceCost       Decimal   @db.Decimal(12, 2)
+  actualUtilityCost         Decimal   @db.Decimal(12, 2)
+  actualWarrantyCost        Decimal   @db.Decimal(12, 2)
+  marketAverageTotal        Decimal   @db.Decimal(12, 2) 
+  
+  // Relation: Links back to the Property
+  property                  Property  @relation(name: "PropertyFinancialReport", fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  // Timestamps
+  lastCalculatedAt DateTime @updatedAt 
+  createdAt DateTime @default(now())
+  
+  @@map("financial_efficiency_reports")
+}
+
+
 enum ServiceCategory {
-  INSPECTION          // HOME_BUYER primary
+  INSPECTION    
+  // HOME_BUYER primary
   HANDYMAN           // Both segments
   PLUMBING           // EXISTING_OWNER primary
-  ELECTRICAL         // EXISTING_OWNER primary
+  ELECTRICAL       
+  // EXISTING_OWNER primary
   HVAC               // Both segments
   LANDSCAPING        // EXISTING_OWNER primary
-  CLEANING           // Both segments (move-in for buyers, maintenance for owners)
+  CLEANING           // Both segments (move-in for 
+  // buyers, maintenance for owners)
   MOVING             // HOME_BUYER primary
   PEST_CONTROL       // Both segments
   LOCKSMITH          // Both segments
+  
   INSURANCE
-  ATTORNEY 
+  ATTORNEY
+  FINANCE            // EXISTING_OWNER - Property tax renewals
+  WARRANTY           // EXISTING_OWNER - Warranty renewals
+  ADMIN           
+  // EXISTING_OWNER - Administrative reminders
 }
 
 enum InspectionType {
@@ -161,6 +438,18 @@ enum ProviderStatus {
   SUSPENDED
 }
 
+// NEW ENUM for tracking different types of homeowner expenses
+enum ExpenseCategory {
+  REPAIR_SERVICE
+  PROPERTY_TAX
+  HOA_FEE
+  UTILITY
+ 
+  APPLIANCE
+  MATERIALS
+  OTHER
+}
+
 // ============================================================================
 // USER MANAGEMENT
 // ============================================================================
@@ -201,6 +490,7 @@ model User {
   
   @@index([email])
   @@index([role])
+  
   @@index([status])
   @@map("users")
 }
@@ -236,38 +526,40 @@ model Address {
 model HomeownerProfile {
   id     String @id @default(uuid())
   userId String @unique
-  
+
   // NEW FIELD to identify the user's segment.
   // Defaults to EXISTING_OWNER for 100% backward compatibility.
   segment HomeownerSegment @default(EXISTING_OWNER)
-  
-  // Property Information
-  propertyType        String? // Single Family, Condo, Townhouse, etc.
-  propertySize        Int?    // Square footage
-  yearBuilt           Int?
-  bedrooms            Int?
-  bathrooms           Float?
-  
+
   // Purchase Information (for HOME_BUYER segment)
   closingDate         DateTime?
   purchasePrice       Decimal?  @db.Decimal(12, 2)
-  
+
   // Preferences
-  preferredContactMethod String? // email, phone, text
+  preferredContactMethod String?
+  // email, phone, text
   notificationPreferences Json?  // Flexible JSON for various notification settings
-  
+
   // Budget tracking
   totalBudget         Decimal? @db.Decimal(12, 2)
   spentAmount         Decimal   @default(0) @db.Decimal(12, 2)
-  
+
   // Relations
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   properties  Property[]
   checklist   Checklist?
   
+  // PHASE 1: NEW RELATION
+  homeBuyerChecklist HomeBuyerChecklist?
+  
+  // NEW RELATIONS
+  warranties  Warranty[]
+  insurancePolicies InsurancePolicy[]
+  expenses    Expense[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   @@map("homeowner_profiles")
 }
 
@@ -291,7 +583,7 @@ model Checklist {
 
 // Update ChecklistItem model - add these fields:
 model ChecklistItem {
-  id        String   @id @default(cuid())
+  id     String   @id @default(cuid())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -300,27 +592,165 @@ model ChecklistItem {
   status      ChecklistItemStatus @default(PENDING)
   
   serviceCategory String?
+  actionKey String?
+  orchestrationActionId String?
   
-  // NEW: Recurring task fields
   isRecurring        Boolean   @default(false)
   frequency          RecurrenceFrequency?
   nextDueDate        DateTime?
   lastCompletedDate  DateTime?
+  checklistId        String
+  propertyId         String?
 
-  checklistId String
+  seasonalChecklistItemId  String?    @map("seasonal_checklist_item_id")
+  isSeasonal               Boolean    @default(false) @map("is_seasonal")
+  season                   Season?
+  seasonalChecklistItem    SeasonalChecklistItem?   @relation
+  
   checklist   Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  property    Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  
   sortOrder   Int @default(0)
 
   @@index([checklistId])
+  @@index([actionKey])
+  @@unique([propertyId, actionKey])
+  @@unique([propertyId, orchestrationActionId])
+  @@index([isSeasonal, season])
+  
   @@map("checklist_items")
+}
+
+// ============================================================================
+// PHASE 1: NEW MODELS - HOME BUYER CHECKLIST SYSTEM
+// ============================================================================
+
+model HomeBuyerChecklist {
+  id String @id @default(uuid())
+  
+  // User-scoped (NOT property-scoped)
+  homeownerProfileId String @unique
+  homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  
+  // Relations
+  tasks HomeBuyerTask[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("home_buyer_checklists")
+}
+
+model HomeBuyerTask {
+  id String @id @default(uuid())
+  checklistId String
+  
+  // Task details
+  title String
+  description String?
+  status HomeBuyerTaskStatus @default(PENDING)
+  
+  // Service integration
+  serviceCategory ServiceCategory?
+  
+  // Booking integration
+  bookingId String? @unique
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  
+  // Completion tracking
+  completedAt DateTime?
+  
+  // Display
+  sortOrder Int @default(0)
+  
+  // Relations
+  checklist HomeBuyerChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([checklistId])
+  @@index([status])
+  @@map("home_buyer_tasks")
+}
+
+// ============================================================================
+// PHASE 1: NEW MODELS - PROPERTY MAINTENANCE SYSTEM
+// ============================================================================
+
+model PropertyMaintenanceTask {
+  id String @id @default(uuid())
+  propertyId String
+  
+  // Task details
+  title String
+  description String?
+  status MaintenanceTaskStatus @default(PENDING)
+  
+  // Source tracking (WHO created this?)
+  source MaintenanceTaskSource
+  actionKey String? // Format: "propertyId:SOURCE:assetType"
+  
+  // Priority & Risk
+  priority MaintenanceTaskPriority @default(MEDIUM)
+  riskLevel RiskLevel?
+  
+  // Asset tracking (WHAT is this for?)
+  assetType String? // Links to risk assessment
+  category String? // System category (HVAC, Plumbing, etc.)
+  
+  // Service integration
+  serviceCategory ServiceCategory?
+  
+  // Recurring tasks
+  isRecurring Boolean @default(false)
+  frequency RecurrenceFrequency?
+  nextDueDate DateTime?
+  lastCompletedDate DateTime?
+  
+  // Cost tracking
+  estimatedCost Decimal? @db.Decimal(10, 2)
+  actualCost Decimal? @db.Decimal(10, 2)
+  
+  // Seasonal integration
+  isSeasonal Boolean @default(false)
+  season Season?
+  seasonalChecklistItemId String? @unique
+  seasonalChecklistItem SeasonalChecklistItem? @relation(fields: [seasonalChecklistItemId], references: [id], onDelete: SetNull)
+  
+  // Booking integration
+  bookingId String? @unique
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  
+  // Enhanced relationships
+  warrantyId String?
+  warranty Warranty? @relation(fields: [warrantyId], references: [id], onDelete: SetNull)
+  
+  homeAssetId String?
+  homeAsset HomeAsset? @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
+  
+  // Relations
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([propertyId, actionKey])
+  @@index([propertyId])
+  @@index([status])
+  @@index([priority])
+  @@index([source])
+  @@index([nextDueDate])
+  @@index([assetType])
+  @@map("property_maintenance_tasks")
 }
 
 model Property {
   id                 String   @id @default(uuid())
   homeownerProfileId String
   
-  // Property details
-  name         String?  // e.g., "Main Home", "Investment Property"
+  // Address Details (Existing Fields)
+  name         String? // e.g., "Main Home", "Investment Property"
   address     String
   city        String
   state       String
@@ -328,10 +758,80 @@ model Property {
   
   isPrimary   Boolean  @default(true)
   
+  // ============================================================================
+  // NEW PROPERTY DETAILS (FROM HOMEOWNERPROFILE & NEW REQUIREMENTS) - PHASE 1 ADDITIONS
+  // ============================================================================
+  
+  // Migrated from HomeownerProfile (Layer 1 - Basic)
+  propertyType        PropertyType?
+  propertySize        Int?    // Square footage
+  yearBuilt           Int?
+  // Migrated from HomeownerProfile (Layer 2 - Advanced)
+  bedrooms            Int?
+  bathrooms           Float?
+  // New Basic/Advanced Fields
+  ownershipType       OwnershipType?
+  occupantsCount      Int? // Number of Occupants (Layer 2 - Usage/Wear Factor)
+  
+  // New Systems Snapshot (Layer 2 - Systems Factor)
+  heatingType         HeatingType?
+  coolingType         CoolingType?
+  waterHeaterType     WaterHeaterType?
+  // New Structure Snapshot (Layer 2 - Structure Factor)
+  roofType            RoofType?
+  // New Optional Fields (Layer 2 - Extra Score Details)
+  hvacInstallYear     Int?
+  waterHeaterInstallYear Int?
+  roofReplacementYear Int?
+  foundationType      String?
+  sidingType          String?
+  electricalPanelAge  Int?
+  
+  // Exterior & Utilities
+  lotSize             Float?
+  hasIrrigation       Boolean?
+  hasDrainageIssues   Boolean?
+  
+  // Safety
+  hasSmokeDetectors   Boolean?
+  hasCoDetectors      Boolean?
+  hasSecuritySystem   Boolean?
+  hasFireExtinguisher Boolean?
+  // Appliances
+  homeAssets          HomeAsset[]
+  movingPlans         MovingPlan[]  // Add this line
+
+  // ============================================================================
+  // END NEW PROPERTY DETAILS
+  // ============================================================================
+  
   // Relations
   homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
   bookings         Booking[]
+
+  // NEW RELATIONS
+  warranties       Warranty[]
+  insurancePolicies InsurancePolicy[]
+  expenses         Expense[]
+  checklistItems   ChecklistItem[]
   
+  // PHASE 1: NEW RELATION
+  maintenanceTasks PropertyMaintenanceTask[]
+ 
+  documents        Document[]
+
+
+  // NEW RELATION FOR RISK ASSESSMENT (Phase 1): ***FIX APPLIED: Added @relation(name: "PropertyRiskReport")***
+  riskReport       RiskAssessmentReport? @relation(name: "PropertyRiskReport")
+  
+  // 1.3 NEW RELATION FOR FINANCIAL EFFICIENCY (Phase 2):
+  financialReport  FinancialEfficiencyReport? @relation(name: "PropertyFinancialReport")
+  inspectionReports   InspectionReport[]
+
+  seasonalChecklists       SeasonalChecklist[]
+  seasonalChecklistItems   SeasonalChecklistItem[]
+  climateSetting           PropertyClimateSetting?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
@@ -350,9 +850,7 @@ model ProviderProfile {
   // Business Information
   businessName        String
   businessType        String? // LLC, Sole Proprietor, Corporation
-  taxId               String?
-  
-  // Service Information
+  taxId               String? // Service Information
   serviceCategories   ServiceCategory[]
   serviceRadius       Int      @default(25)  // Miles
   
@@ -367,7 +865,6 @@ model ProviderProfile {
   teamSize            Int?
   description         String?
   website             String?
-  
   // Ratings
   averageRating       Float    @default(0) @db.Real
   totalReviews        Int      @default(0)
@@ -387,6 +884,9 @@ model ProviderProfile {
   portfolioImages    ProviderPortfolio[]
   bookings           Booking[]
   availability       ProviderAvailability[]
+
+  // FIX: ADD THE INVERSE RELATION FIELD
+  favorites          Favorite[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -537,9 +1037,15 @@ model Booking {
   cancelledAt       DateTime?
   cancelledBy       String?         // userId
   cancellationReason String?
-  
   // Completion
   completedAt       DateTime?
+  
+  // PHASE 1: NEW RELATIONS - Task Integration
+  homeBuyerTaskId String? @unique
+  homeBuyerTask HomeBuyerTask?
+  
+  propertyMaintenanceTaskId String? @unique
+  propertyMaintenanceTask PropertyMaintenanceTask?
   
   // Relations
   homeowner         User              @relation("BookingHomeowner", fields: [homeownerId], references: [id])
@@ -552,6 +1058,9 @@ model Booking {
   messages          Message[]
   review            Review?
   timeline          BookingTimeline[]
+  expenses          Expense[] // NEW: Expense link
+  insightFactor     String?  // "Age Factor", "Roof Age", etc.
+  insightContext    String?  // Optional additional context
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -562,6 +1071,7 @@ model Booking {
   @@index([scheduledDate])
   @@index([category])
   @@map("bookings")
+  @@index([insightFactor])  // For fast lookups
 }
 
 model BookingTimeline {
@@ -608,7 +1118,6 @@ model Payment {
   // Refund
   refundedAmount Decimal? @db.Decimal(10, 2)
   refundedAt     DateTime?
-  
   // Relations
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   
@@ -627,6 +1136,10 @@ model Payment {
 model Document {
   id          String       @id @default(uuid())
   bookingId   String?
+  propertyId  String?      // NEW: Link to general home documents
+  warrantyId  String? // NEW: Link to a Warranty record
+  policyId    String? // NEW: Link to an InsurancePolicy record
+
   uploadedBy  String       // userId
   
   // Document Details
@@ -641,13 +1154,19 @@ model Document {
   metadata    Json? // Flexible storage for document-specific data
   
   // Relations
-  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  booking          Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  property         Property? @relation(fields: [propertyId], references: [id])
+  warranty         Warranty? @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
+  insurancePolicy  InsurancePolicy? @relation(fields: [policyId], references: [id], onDelete: Cascade)
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
   @@index([bookingId])
   @@index([type])
+  @@index([propertyId]) // NEW INDEX
+  @@index([warrantyId]) // NEW INDEX
+  @@index([policyId])   // NEW INDEX
   @@map("documents")
 }
 
@@ -669,7 +1188,6 @@ model Message {
   // Status
   isRead      Boolean     @default(false)
   readAt      DateTime?
-  
   // Relations
   booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   sender    User     @relation(fields: [senderId], references: [id])
@@ -710,159 +1228,138 @@ model MaintenanceTaskTemplate {
 }
 
 // ============================================================================
-// REVIEWS & RATINGS
+// WARRANTY MANAGEMENT
 // ============================================================================
 
-model Review {
-  id          String       @id @default(uuid())
-  bookingId   String       @unique
-  authorId    String
-  providerId  String
+model Warranty {
+  id                 String    @id @default(uuid())
+  homeownerProfileId String
+  category           WarrantyCategory @default(HOME_WARRANTY_PLAN)
+  propertyId         String? // Link to a specific property (e.g., HVAC unit warranty is for the main home)
+  homeAssetId        String?
+  // Policy Details
+  providerName       String
+  policyNumber       String?
+  coverageDetails    String?
+  cost               Decimal? @db.Decimal(12, 2)
   
-  // Rating (1-5)
-  rating      Int
-  
-  // Review Content
-  title       String?
-  content     String
-  
-  // Review Categories (1-5 each)
-  qualityRating      Int?
-  communicationRating Int?
-  valueRating        Int?
-  professionalismRating Int?
-  
-  // Moderation
-  status      ReviewStatus @default(PENDING)
-  moderatedAt DateTime?
-  moderatedBy String? // admin userId
-  
-  // Provider Response
-  response    String?
-  respondedAt DateTime?
+  // Dates
+  startDate          DateTime
+  expiryDate         DateTime
   
   // Relations
-  booking  Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  author   User    @relation("ReviewAuthor", fields: [authorId], references: [id])
-  provider User    @relation("ReviewProvider", fields: [providerId], references: [id])
+  homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property           Property? @relation(fields: [propertyId], references: [id])
+  documents          Document[]
+  homeAsset          HomeAsset? @relation(fields: [homeAssetId], references: [id])
+  
+  // PHASE 1: NEW RELATION
+  maintenanceTasks PropertyMaintenanceTask[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
-  @@index([providerId])
-  @@index([rating])
-  @@index([status])
-  @@map("reviews")
+  @@index([homeownerProfileId])
+  @@index([expiryDate])
+  @@index([homeAssetId])
+  @@map("warranties")
 }
 
 // ============================================================================
-// NOTIFICATIONS
+// INSURANCE MANAGEMENT
 // ============================================================================
 
-model Notification {
-  id       String  @id @default(uuid())
-  userId   String
+model InsurancePolicy {
+  id                 String    @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String? // Link to the insured property
   
-  // Notification Details
-  type     String  // booking_confirmed, payment_received, etc.
-  title    String
-  message  String
+  // Policy Details
+  carrierName        String
+  policyNumber       String
+  coverageType       String? // e.g., "Homeowner", "Landlord", "Flood"
+  premiumAmount      Decimal   @db.Decimal(12, 2)
   
-  // Action
-  actionUrl String?
-  
-  // Status
-  isRead   Boolean @default(false)
-  readAt   DateTime?
-  
-  // Metadata
-  metadata Json?
+  // Dates
+  startDate          DateTime
+  expiryDate         DateTime
   
   // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property           Property? @relation(fields: [propertyId], references: [id])
+  documents          Document[]
   
   createdAt DateTime @default(now())
-  
-  @@index([userId])
-  @@index([isRead])
-  @@index([createdAt])
-  @@map("notifications")
-}
-
-// ============================================================================
-// FAVORITES
-// ============================================================================
-
-model Favorite {
-  id                String   @id @default(uuid())
-  userId            String
-  providerProfileId String
-  
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  createdAt DateTime @default(now())
-  
-  @@unique([userId, providerProfileId])
-  @@index([userId])
-  @@map("favorites")
-}
-
-// ============================================================================
-// SYSTEM TABLES
-// ============================================================================
-
-model AuditLog {
-  id         String   @id @default(uuid())
-  
-  // Who & What
-  userId     String?
-  action     String   // created_booking, updated_payment, etc.
-  entityType String   // booking, payment, user, etc.
-  entityId   String
-  
-  // Changes
-  oldValues  Json?
-  newValues  Json?
-  
-  // Context
-  ipAddress  String?
-  userAgent  String?
-  
-  createdAt DateTime @default(now())
-  
-  @@index([userId])
-  @@index([entityType, entityId])
-  @@index([createdAt])
-  @@map("audit_logs")
-}
-
-model SystemSetting {
-  id    String @id @default(uuid())
-  key   String @unique
-  value Json
-  
-  description String?
   updatedAt DateTime @updatedAt
   
-  @@map("system_settings")
+  @@index([homeownerProfileId])
+  @@index([expiryDate])
+  @@map("insurance_policies")
 }
 
 // ============================================================================
-// COMMUNITY EVENTS
+// EXPENSE MANAGEMENT
 // ============================================================================
 
-model CityFeatureFlag {
-  id               String  @id @default(uuid())
-  city             String
-  state            String
-  eventsEnabled    Boolean @default(false)
-  servicesEnabled  Boolean @default(false)
-  alertsEnabled    Boolean @default(false)
+model Expense {
+  id                 String          @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String? // Link to a specific property
+  bookingId          String? // Optional link to a platform booking (e.g., a top-up payment)
   
-  @@unique([city, state])
-  @@index([city, state])
-  @@map("city_feature_flags")
+  // Expense Details
+  description        String
+  category           ExpenseCategory
+  amount             Decimal         @db.Decimal(12, 2)
+  transactionDate    DateTime
+  
+  // Relations
+  homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property           Property? @relation(fields: [propertyId], references: [id])
+  booking            Booking? @relation(fields: [bookingId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([homeownerProfileId])
+  @@index([category])
+  @@index([transactionDate])
+  @@map("expenses")
+}
+
+model HomeAsset {
+  id          String    @id @default(uuid())
+  propertyId  String
+  property    Property  @relation(fields: [propertyId], references: [id])
+  assetType   String    // e.g., "HVAC_FURNACE", "WATER_HEATER" - should map to an Enum
+  installationYear Int? // Year the user installed it (more accurate than age)
+  modelNumber String?
+  serialNumber String?
+  // Optional fields for Maintenance Readiness/Energy:
+  lastServiced DateTime? 
+  efficiencyRating String?
+  warranties  Warranty[]
+  
+  // PHASE 1: NEW RELATION
+  maintenanceTasks PropertyMaintenanceTask[]
+  
+  @@index([propertyId])
+  @@unique([propertyId, assetType]) // Usually only one furnace per house
+}
+
+model MovingPlan {
+  id              String   @id @default(uuid())
+  propertyId      String
+  closingDate     DateTime
+  planData        Json     // Full moving plan (timeline, costs, utilities, etc.)
+  completedTasks  String[] // Array of completed task IDs
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  @@index([propertyId])
+  @@map("moving_plans")
 }
 
 model CommunityEvent {
@@ -886,5 +1383,696 @@ model CommunityEvent {
   @@unique([source, externalEventId])
   @@index([city, state, startTime])
   @@index([isActive, startTime])
-  @@map("community_events")
+}
+
+model CityFeatureFlag {
+  id               String  @id @default(uuid())
+  city             String
+  state            String
+  eventsEnabled    Boolean @default(false)
+  servicesEnabled  Boolean @default(false)
+  alertsEnabled    Boolean @default(false)
+  providersEnabled Boolean @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([city, state])
+}
+
+model SellerPrepPlan {
+  id          String   @id @default(uuid())
+  userId      String
+  propertyId  String
+  preferences Json?    // ADD THIS LINE
+  createdAt   DateTime @default(now())
+
+  items       SellerPrepPlanItem[]
+  interviews  AgentInterview[]
+
+  @@index([userId, propertyId])
+}
+
+model SellerPrepPlanItem {
+  id          String   @id @default(uuid())
+  planId      String
+  code        String
+  title       String
+  priority    String
+  roiRange    String
+  costBucket  String
+  status      String   @default("PLANNED")
+  
+  // Timeline tracking
+  completedAt DateTime?
+  skippedAt   DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt  // ADD DEFAULT
+
+  plan        SellerPrepPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
+  @@index([status])
+}
+
+model SellerPrepLead {
+  id          String   @id @default(uuid())
+  userId      String
+  propertyId  String
+  leadType    String   // AGENT | CONTRACTOR | STAGER
+  context     String   // JSON string with task details
+  
+  // NEW FIELDS for contact info
+  fullName    String?
+  email       String?
+  phone       String?
+  contactMethod String? // email | phone | either
+  
+  createdAt   DateTime @default(now())
+
+  @@index([propertyId, leadType])
+}
+
+model SellerPrepFeedback {
+  id          String   @id @default(uuid())
+  userId      String
+  propertyId  String
+  rating      String   // "helpful" or "not-helpful"
+  comment     String?
+  page        String   @default("seller-prep")
+  createdAt   DateTime @default(now())
+
+  @@index([propertyId])
+  @@index([rating])
+  @@index([createdAt])
+}
+
+// NEW MODEL: Stores data for the Agent Interview Guide
+model AgentInterview {
+  id          String   @id @default(uuid())
+  planId      String
+  
+  agentName   String
+  isFavorite  Boolean  @default(false)
+  
+  // Structured Notes (Stored as JSON to handle dynamic interview questions)
+  // Format: { "Experience": "...", "Marketing": "...", "Pricing": "...", etc. }
+  notes       Json?
+  
+  totalScore  Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  plan        SellerPrepPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
+  @@map("agent_interviews")
+}
+
+// ============================================================================
+// INSPECTION REPORTS (HOME_BUYER FEATURE)
+// ============================================================================
+
+model InspectionReport {
+  id                  String   @id @default(uuid())
+  propertyId          String
+  userId              String
+  
+  // Report metadata
+  inspectionDate      DateTime?
+  inspectorName       String?
+  inspectorCompany    String?
+  reportType          String?
+  
+  // PDF storage
+  pdfUrl              String?
+  pdfFileName         String
+  
+  // AI Analysis Results
+  overallScore        Int      @default(0)
+  overallCondition    String   @default("FAIR")
+  
+  totalIssuesFound    Int      @default(0)
+  criticalIssues      Int      @default(0)
+  highPriorityIssues  Int      @default(0)
+  mediumIssues        Int      @default(0)
+  lowIssues           Int      @default(0)
+  cosmeticIssues      Int      @default(0)
+  
+  // Cost estimates
+  totalRepairCost     Decimal  @default(0) @db.Decimal(12, 2)
+  criticalRepairCost  Decimal  @default(0) @db.Decimal(12, 2)
+  recommendedRepairCost Decimal @default(0) @db.Decimal(12, 2)
+  
+  // Negotiation data
+  negotiationScript   String?  @db.Text
+  suggestedCredit     Decimal? @db.Decimal(12, 2)
+  negotiationPoints   Json?
+  
+  // Comparison data
+  comparableHomes     Json?
+  marketContext       String?  @db.Text
+  
+  // Status
+  analysisCompleted   Boolean  @default(false)
+  analysisError       String?
+  
+  // Relations
+  property            Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  issues              InspectionIssue[]
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  @@index([propertyId])
+  @@index([userId])
+  @@map("inspection_reports")
+}
+
+model InspectionIssue {
+  id                  String   @id @default(uuid())
+  reportId            String
+  
+  // Issue details
+  title               String
+  description         String   @db.Text
+  location            String
+  category            String
+  
+  // Severity & Priority
+  severity            String
+  urgency             String
+  isCritical          Boolean  @default(false)
+  
+  // Cost estimates
+  estimatedCost       Decimal  @db.Decimal(12, 2)
+  costRange           Json?
+  
+  // Inspector notes
+  inspectorNotes      String?  @db.Text
+  inspectorRecommendation String? @db.Text
+  
+  // Repair info
+  repairRecommendations String[]
+  preventativeMeasures  String[]
+  estimatedRepairTime   String?
+  
+  // Maintenance calendar
+  needsImmediateAction Boolean @default(false)
+  scheduledMaintenanceDate DateTime?
+  maintenanceFrequency String?
+  
+  // Relations
+  report              InspectionReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  @@index([reportId])
+  @@index([severity])
+  @@index([category])
+  @@map("inspection_issues")
+}
+
+model LocalUpdate {
+  id               String   @id @default(uuid())
+
+  title            String
+  shortDescription String
+
+  category         LocalUpdateCategory
+
+  sourceName       String
+  isSponsored      Boolean  @default(false)
+
+  ctaText          String
+  ctaUrl           String?
+
+  priority         Int      @default(3)
+
+  startDate        DateTime
+  endDate          DateTime
+
+  // Location targeting
+  zipCodes         String[]
+  cities           String[]
+  state            String?
+
+  // Eligibility
+  propertyTypes    PropertyType[]
+  ownerOnly        Boolean  @default(false)
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  dismissals       UserLocalUpdateDismissal[]
+  events           LocalUpdateEvent[]
+
+  @@index([startDate, endDate])
+}
+
+model UserLocalUpdateDismissal {
+  id             String   @id @default(uuid())
+
+  userId         String
+  localUpdateId  String
+
+  dismissedAt    DateTime @default(now())
+
+  localUpdate    LocalUpdate @relation(fields: [localUpdateId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, localUpdateId])
+  @@index([userId])
+}
+model LocalUpdateEvent {
+  id             String   @id @default(uuid())
+
+  userId         String?
+  localUpdateId  String
+
+  eventType      LocalUpdateEventType
+
+  createdAt      DateTime @default(now())
+
+  localUpdate    LocalUpdate @relation(fields: [localUpdateId], references: [id], onDelete: Cascade)
+
+  @@index([localUpdateId])
+}
+
+// ===============================
+// Orchestration Action Events
+// ===============================
+
+model OrchestrationActionEvent {
+  id            String   @id @default(cuid())
+
+  // Scope
+  propertyId    String
+  actionKey     String   // canonical identity (stable across recalculations)
+
+  // Event semantics
+  actionType    OrchestrationActionEventType
+  source        OrchestrationActionSource
+
+  // Metadata / audit
+  payload       Json?
+  createdBy     String?  // userId (nullable for system actions)
+  createdAt     DateTime @default(now())
+
+  // Performance + idempotency
+  @@index([propertyId])
+  @@index([propertyId, actionKey])
+  @@index([actionKey])
+
+  // Guarantees idempotency per action type
+  @@unique([propertyId, actionKey, actionType])
+}
+
+enum OrchestrationActionEventType {
+  USER_MARKED_COMPLETE
+  USER_UNMARKED_COMPLETE
+  USER_DISMISSED
+  SYSTEM_SUPPRESSED
+  SYSTEM_UNSUPPRESSED
+}
+
+enum OrchestrationActionSource {
+  USER
+  SYSTEM
+}
+
+model OrchestrationActionSnooze {
+  id            String   @id @default(uuid())
+  propertyId    String
+  actionKey     String
+  
+  snoozedAt     DateTime @default(now())
+  snoozeUntil   DateTime
+  snoozeReason  String?
+  
+  endedAt       DateTime?  // When un-snoozed or auto-expired
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([propertyId, actionKey])
+  @@index([snoozeUntil])
+  @@map("orchestration_action_snoozes")
+}
+
+model OrchestrationActionCompletion {
+  id            String   @id @default(uuid())
+  
+  // Scope
+  propertyId    String
+  actionKey     String   // Links to orchestration action
+  eventId       String   @unique // Links to USER_MARKED_COMPLETE event
+  
+  // Completion details
+  completedAt   DateTime
+  costAmount    Decimal? @db.Decimal(10, 2)
+  costCurrency  String   @default("USD")
+  didItMyself   Boolean  @default(false)
+  
+  serviceProviderName   String?
+  serviceProviderRating Int? // 1-5
+  
+  notes         String?  @db.Text
+  photoCount    Int      @default(0)
+  
+  // Metadata
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdBy     String?  // userId
+  undoneAt      DateTime? // If user undoes completion
+  
+  // Relations
+  photos        OrchestrationActionCompletionPhoto[]
+  
+  @@index([propertyId, actionKey])
+  @@index([propertyId, completedAt])
+  @@index([serviceProviderName])
+  @@map("orchestration_action_completions")
+}
+
+model OrchestrationActionCompletionPhoto {
+  id            String   @id @default(uuid())
+  
+  completionId  String?
+  propertyId    String
+  
+  // File metadata
+  fileName      String
+  fileSizeBytes Int
+  mimeType      String
+  
+  // URLs (PLACEHOLDER - will store S3 URLs when image processing is implemented)
+  originalUrl   String
+  thumbnailUrl  String
+  
+  // Dimensions
+  width         Int?
+  height        Int?
+  
+  orderIndex    Int      @default(0)
+  uploadedAt    DateTime @default(now())
+  
+  // Relations
+  completion    OrchestrationActionCompletion? @relation(fields: [completionId], references: [id], onDelete: Cascade)
+  @@index([completionId])
+  @@index([propertyId])
+  @@map("orchestration_action_completion_photos")
+}
+
+// =============================================================================
+// SEASONAL MAINTENANCE MODELS
+// =============================================================================
+
+model SeasonalTaskTemplate {
+  id                    String           @id @default(cuid())
+  taskKey               String           @unique @map("task_key")
+  season                Season
+  title                 String
+  description           String?
+  whyItMatters          String?          @map("why_it_matters")
+  typicalCostMin        Decimal?         @map("typical_cost_min") @db.Decimal(10, 2)
+  typicalCostMax        Decimal?         @map("typical_cost_max") @db.Decimal(10, 2)
+  isDiyPossible         Boolean          @default(false) @map("is_diy_possible")
+  diyDifficulty         String?          @default("MODERATE") @map("diy_difficulty")
+  tutorialUrl           String?          @map("tutorial_url")
+  materialsList         String?          @map("materials_list")
+  safetyWarning         String?          @map("safety_warning")
+  estimatedHours        Decimal?         @map("estimated_hours") @db.Decimal(4, 1)
+  priority              TaskPriority     @default(RECOMMENDED)
+  serviceCategory       String?          @map("service_category")
+  climateRegions        ClimateRegion[]  @map("climate_regions")
+  requiredAssetType     String?          @map("required_asset_type")
+  requiredAssetCheck    String?          @map("required_asset_check")
+  timingOffsetDays      Int              @default(-14) @map("timing_offset_days")
+  recurrencePattern     String           @default("ANNUAL") @map("recurrence_pattern")
+  isActive              Boolean          @default(true) @map("is_active")
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @updatedAt @map("updated_at")
+  
+  // Relations
+  seasonalChecklistItems SeasonalChecklistItem[]
+  
+  @@index([season])
+  @@index([isActive, priority])
+  @@map("seasonal_task_templates")
+}
+
+model SeasonalChecklist {
+  id                   String                  @id @default(cuid())
+  propertyId           String                  @map("property_id")
+  season               Season
+  year                 Int
+  climateRegion        ClimateRegion           @map("climate_region")
+  seasonStartDate      DateTime                @map("season_start_date") @db.Date
+  seasonEndDate        DateTime                @map("season_end_date") @db.Date
+  status               SeasonalChecklistStatus @default(PENDING)
+  totalTasks           Int                     @default(0) @map("total_tasks")
+  tasksAdded           Int                     @default(0) @map("tasks_added")
+  tasksCompleted       Int                     @default(0) @map("tasks_completed")
+  generatedAt          DateTime                @default(now()) @map("generated_at")
+  firstViewedAt        DateTime?               @map("first_viewed_at")
+  notificationSentAt   DateTime?               @map("notification_sent_at")
+  dismissedAt          DateTime?               @map("dismissed_at")
+  createdAt            DateTime                @default(now()) @map("created_at")
+  updatedAt            DateTime                @updatedAt @map("updated_at")
+  
+  // Relations
+  property             Property                @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  items                SeasonalChecklistItem[]
+  
+  @@unique([propertyId, season, year])
+  @@index([propertyId])
+  @@index([status, seasonStartDate])
+  @@map("seasonal_checklists")
+}
+
+model SeasonalChecklistItem {
+  id                       String                @id @default(cuid())
+  seasonalChecklistId      String                @map("seasonal_checklist_id")
+  seasonalTaskTemplateId   String                @map("seasonal_task_template_id")
+  propertyId               String                @map("property_id")
+  checklistItemId          String?               @unique @map("checklist_item_id")
+  taskKey                  String                @map("task_key")
+  title                    String
+  description              String?
+  priority                 TaskPriority          @default(RECOMMENDED)
+  status                   SeasonalTaskStatus    @default(RECOMMENDED)
+  recommendedDate          DateTime?             @map("recommended_date") @db.Date
+  addedAt                  DateTime?             @map("added_at")
+  completedAt              DateTime?             @map("completed_at")
+  dismissedAt              DateTime?             @map("dismissed_at")
+  snoozedUntil             DateTime?             @map("snoozed_until")
+  createdAt                DateTime              @default(now()) @map("created_at")
+  updatedAt                DateTime              @updatedAt @map("updated_at")
+  
+  // Relations
+  seasonalChecklist        SeasonalChecklist     @relation(fields: [seasonalChecklistId], references: [id], onDelete: Cascade)
+  seasonalTaskTemplate     SeasonalTaskTemplate  @relation(fields: [seasonalTaskTemplateId], references: [id])
+  property                 Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  checklistItem            ChecklistItem?        @relation(fields: [checklistItemId], references: [id], onDelete: SetNull)
+  
+  // PHASE 1: NEW RELATION
+  maintenanceTask PropertyMaintenanceTask?
+  
+  @@index([seasonalChecklistId])
+  @@index([propertyId, status])
+  @@index([checklistItemId])
+  @@map("seasonal_checklist_items")
+}
+
+model PropertyClimateSetting {
+  id                      String              @id @default(cuid())
+  propertyId              String              @unique @map("property_id")
+  climateRegion           ClimateRegion       @map("climate_region")
+  climateRegionSource     String              @default("AUTO_DETECTED") @map("climate_region_source")
+  notificationTiming      NotificationTiming  @default(STANDARD) @map("notification_timing")
+  notificationEnabled     Boolean             @default(true) @map("notification_enabled")
+  autoGenerateChecklists  Boolean             @default(true) @map("auto_generate_checklists")
+  customSeasonDates       Json?               @map("custom_season_dates")
+  excludedTaskKeys        String[]            @default([]) @map("excluded_task_keys")
+  createdAt               DateTime            @default(now()) @map("created_at")
+  updatedAt               DateTime            @updatedAt @map("updated_at")
+  
+  // Relations
+  property                Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  @@index([propertyId])
+  @@index([climateRegion])
+  @@map("property_climate_settings")
+}
+// ============================================================================
+// REVIEWS & RATINGS
+// ============================================================================
+
+model Review {
+  id          String       @id @default(uuid())
+  bookingId   String       @unique
+  authorId    String
+  providerId  String
+  
+  // Rating (1-5)
+  rating      Int
+  
+  // Review Content
+  title       String?
+  content     String
+  
+  // Review Categories (1-5 each)
+  qualityRating      Int?
+  communicationRating Int?
+  valueRating        Int?
+  professionalismRating Int?
+  // Moderation
+  status      ReviewStatus @default(PENDING)
+  moderatedAt DateTime?
+  moderatedBy String? // admin userId
+  
+  // Provider Response
+  response    String?
+  respondedAt DateTime?
+  // Relations
+  booking  Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  author   User    @relation("ReviewAuthor", fields: [authorId], references: [id])
+  provider User    @relation("ReviewProvider", fields: [providerId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([providerId])
+  @@index([rating])
+  @@index([status])
+  @@map("reviews")
+}
+
+// ============================================================================
+// NOTIFICATIONS
+// ============================================================================
+
+model Notification {
+  id          String   @id @default(uuid())
+  userId      String
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type        String
+  title       String
+  message     String
+  actionUrl   String?
+
+  entityType  String?
+  entityId    String?
+
+  isRead      Boolean  @default(false)
+  readAt      DateTime?
+
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  deliveries  NotificationDelivery[]
+
+  @@index([userId, createdAt])
+  @@index([userId, isRead])
+  @@index([entityType, entityId])
+}
+
+
+model NotificationDelivery {
+  id                 String   @id @default(uuid())
+  notificationId     String
+  channel            NotificationChannel
+
+  status             DeliveryStatus @default(PENDING)
+  sentAt             DateTime?
+  failureReason      String?
+  digestId           String?
+  providerMessageId  String?
+
+  createdAt          DateTime @default(now())
+
+  notification       Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, channel])
+  @@index([channel, status])
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  PUSH
+  SMS
+  WHATSAPP
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+// ============================================================================
+// FAVORITES
+// ============================================================================
+
+model Favorite {
+  id                String   @id @default(uuid())
+  userId            String
+  providerProfileId String
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // FIX: ADDED MISSING RELATION FIELD TO ProviderProfile
+  providerProfile ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  
+  @@unique([userId, providerProfileId])
+  @@index([userId])
+  @@map("favorites")
+}
+
+// 
+// ============================================================================
+// SYSTEM TABLES
+// ============================================================================
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  
+  // Who & What
+  userId     String?
+  action     String   // created_booking, updated_payment, etc.
+  entityType String   // booking, payment, user, etc.
+  entityId   String
+  
+  // Changes
+  oldValues  Json?
+  newValues  Json?
+  
+  // Context
+  ipAddress  String?
+  userAgent  String?
+  createdAt DateTime @default(now())
+  
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model SystemSetting {
+  id    String @id @default(uuid())
+  key   String @unique
+  value Json
+  
+  description String?
+  updatedAt DateTime @updatedAt
+  
+  @@map("system_settings")
 }
