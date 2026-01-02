@@ -5,6 +5,15 @@ import { ChecklistItemStatus } from '@prisma/client';
 
 export type SuppressionSource =
   | {
+      type: 'PROPERTY_MAINTENANCE_TASK';
+      task: {
+        id: string;
+        title: string;
+        nextDueDate: Date | null;
+        status: string;
+      };
+    }
+  | {
       type: 'CHECKLIST_ITEM';
       checklistItem: {
         id: string;
@@ -27,15 +36,9 @@ export class OrchestrationSuppressionService {
    *
    * Precedence:
    * 1. Latest USER_EVENT (MARK / UNMARK)
-   * 2. Checklist-backed suppression
+   * 2. PropertyMaintenanceTask (new system)
+   * 3. Checklist-backed suppression (legacy system)
    */
-/**
- * Canonical suppression resolution.
- *
- * Precedence:
- * 1. Latest USER_EVENT (MARK / UNMARK)
- * 2. Checklist-backed suppression (via actionKey)
- */
   static async resolveSuppressionSource(params: {
     propertyId: string;
     actionKey: string;
@@ -74,8 +77,37 @@ export class OrchestrationSuppressionService {
     }
 
     /* --------------------------------------------
-    * 2️⃣ CHECKLIST ITEM SUPPRESSION (via actionKey)
-    * ✅ DIRECT LOOKUP - NO FALLBACKS NEEDED
+    * 2️⃣ PROPERTY MAINTENANCE TASK (new system)
+    * ✅ CHECK THIS FIRST BEFORE LEGACY
+    * ------------------------------------------ */
+    const maintenanceTask = await prisma.propertyMaintenanceTask.findFirst({
+      where: {
+        propertyId,
+        actionKey,
+      },
+      select: {
+        id: true,
+        title: true,
+        nextDueDate: true,
+        status: true,
+      },
+    });
+
+    if (maintenanceTask) {
+      console.log('✅ Found suppression via PropertyMaintenanceTask:', {
+        actionKey,
+        taskId: maintenanceTask.id,
+        title: maintenanceTask.title,
+      });
+
+      return {
+        type: 'PROPERTY_MAINTENANCE_TASK',
+        task: maintenanceTask,
+      };
+    }
+
+    /* --------------------------------------------
+    * 3️⃣ CHECKLIST ITEM SUPPRESSION (legacy)
     * ------------------------------------------ */
     const checklistItem = await prisma.checklistItem.findFirst({
       where: {
@@ -91,13 +123,19 @@ export class OrchestrationSuppressionService {
       },
     });
 
-    if (!checklistItem) {
-      return null;
+    if (checklistItem) {
+      console.log('⚠️  Found suppression via LEGACY ChecklistItem:', {
+        actionKey,
+        itemId: checklistItem.id,
+        title: checklistItem.title,
+      });
+
+      return {
+        type: 'CHECKLIST_ITEM',
+        checklistItem,
+      };
     }
 
-    return {
-      type: 'CHECKLIST_ITEM',
-      checklistItem,
-    };
+    return null;
   }
 }

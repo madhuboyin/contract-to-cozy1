@@ -991,7 +991,7 @@ export interface SuppressionReasonEntryDTO {
   reason: SuppressionReason;
   message: string;
   relatedId?: string | null;
-  relatedType?: 'BOOKING' | 'WARRANTY' | 'INSURANCE' | null;
+  relatedType?: 'BOOKING' | 'WARRANTY' | 'INSURANCE' | 'CHECKLIST' | 'MAINTENANCE_TASK' | null;
 }
 
 /**

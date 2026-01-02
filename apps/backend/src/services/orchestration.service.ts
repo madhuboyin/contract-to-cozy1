@@ -42,12 +42,12 @@ export type SuppressionReason =
   | 'USER_UNMARKED_COMPLETE'
   | 'UNKNOWN';
 
-type SuppressionReasonEntry = {
-  reason: SuppressionReason;
-  message: string;
-  relatedId?: string | null;
-  relatedType?: 'BOOKING' | 'WARRANTY' | 'INSURANCE' | 'CHECKLIST' | null;
-};
+  type SuppressionReasonEntry = {
+    reason: SuppressionReason;
+    message: string;
+    relatedId?: string | null;
+    relatedType?: 'BOOKING' | 'WARRANTY' | 'INSURANCE' | 'CHECKLIST' | 'MAINTENANCE_TASK' | null;
+  };
 
 export type CoverageInfo = {
   hasCoverage: boolean;
@@ -526,10 +526,18 @@ async function mapRiskDetailToAction(params: {
         relatedId: null,
       });
     }
+  } else if (suppressionSource?.type === 'PROPERTY_MAINTENANCE_TASK') {
+    // 🔑 NEW: Handle PropertyMaintenanceTask suppression
+    reasons.push({
+      reason: 'CHECKLIST_TRACKED',
+      message: `Already scheduled: "${suppressionSource.task.title}"`,
+      relatedType: 'MAINTENANCE_TASK',
+      relatedId: suppressionSource.task.id,
+    });
   } else if (suppressionSource?.type === 'CHECKLIST_ITEM') {
     reasons.push({
       reason: 'CHECKLIST_TRACKED',
-      message: 'This action is tracked in checklist',
+      message: `Already covered by "${suppressionSource.checklistItem.title}"`,
       relatedType: 'CHECKLIST',
       relatedId: suppressionSource.checklistItem.id,
     });

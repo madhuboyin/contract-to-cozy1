@@ -157,9 +157,8 @@ export const ActionCenter: React.FC<Props> = ({
     setTemplate(null);
     setActiveActionKey(null);
   
-    setTimeout(() => {
-      loadActions();
-    }, 500);
+    // 🔑 FIX: Reload immediately to show suppression
+    loadActions();
   };
 
   /* ------------------------------------------------------------------
