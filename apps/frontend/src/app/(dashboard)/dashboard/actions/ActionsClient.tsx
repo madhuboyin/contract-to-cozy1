@@ -106,9 +106,23 @@ export function ActionsClient() {
       return;
     }
 
-    setActiveActionId(action.id);
+    // 🔑 FIX: Store actionKey instead of id
+    setActiveActionId(action.actionKey); // Changed from action.id
+
+    // 🔑 FIX: Map riskLevel to priority
+    const priorityMap: Record<string, string> = {
+      'CRITICAL': 'URGENT',
+      'HIGH': 'HIGH',
+      'ELEVATED': 'MEDIUM',
+      'MODERATE': 'MEDIUM',
+      'LOW': 'LOW',
+    };
+    const derivedPriority = action.riskLevel 
+      ? priorityMap[action.riskLevel.toUpperCase()] || 'MEDIUM'
+      : 'MEDIUM';
+
     setTemplate({
-      id: `orchestration:${action.id}`,
+      id: `orchestration:${action.actionKey}`,
       title: action.title,
       description: action.description ?? '',
       serviceCategory:
@@ -117,7 +131,12 @@ export function ActionsClient() {
         'INSPECTION',
       defaultFrequency: RecurrenceFrequency.ANNUALLY,
       sortOrder: 0,
-    });
+      // 🔑 FIX: Add orchestration fields
+      assetType: action.systemType,
+      priority: derivedPriority,
+      riskLevel: action.riskLevel,
+      estimatedCost: action.exposure,
+    } as any);
 
     setIsModalOpen(true);
   };
@@ -489,7 +508,6 @@ export function ActionsClient() {
           </>
         )}
       </div>
-
       {/* Modal */}
       <MaintenanceConfigModal
         isOpen={isModalOpen}
@@ -497,6 +515,7 @@ export function ActionsClient() {
         template={template}
         properties={properties}
         selectedPropertyId={propertyId}
+        orchestrationActionKey={activeActionId} // 🔑 FIX: Pass the actionKey
         onClose={() => {
           setIsModalOpen(false);
           setTemplate(null);

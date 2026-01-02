@@ -159,6 +159,10 @@ import {
      * Create a task from Action Center (idempotent).
      * Uses actionKey to prevent duplicates.
      */
+/**
+   * Create a task from Action Center (idempotent).
+   * Uses actionKey to prevent duplicates.
+   */
     static async createFromActionCenter(
       userId: string,
       propertyId: string,
@@ -171,14 +175,15 @@ import {
         serviceCategory?: ServiceCategory;
         estimatedCost?: number;
         nextDueDate: string;
+        actionKey?: string; // 🔑 ADD: Accept actionKey from caller
       }
     ): Promise<{ task: PropertyMaintenanceTask; deduped: boolean }> {
       // Verify property ownership
       await this.verifyPropertyOwnership(userId, propertyId);
-  
-      // Generate actionKey for idempotency
-      const actionKey = `${propertyId}:ACTION_CENTER:${data.assetType}`;
-  
+
+      // 🔑 FIX: Use provided actionKey OR fallback to generated one
+      const actionKey = data.actionKey || `${propertyId}:ACTION_CENTER:${data.assetType}`;
+
       // Check if task already exists
       const existing = await prisma.propertyMaintenanceTask.findUnique({
         where: {
@@ -188,16 +193,20 @@ import {
           },
         },
       });
-  
+
       if (existing) {
+        console.log('✅ Task already exists (deduped):', {
+          actionKey,
+          taskId: existing.id,
+        });
         return { task: existing, deduped: true };
       }
-  
+
       // Validate serviceCategory if provided
       if (data.serviceCategory) {
         await this.validateServiceCategory(data.serviceCategory);
       }
-  
+
       // Create new task
       try {
         const task = await prisma.propertyMaintenanceTask.create({
@@ -207,7 +216,7 @@ import {
             description: data.description ?? null,
             status: 'PENDING',
             source: 'ACTION_CENTER',
-            actionKey,
+            actionKey, // Use the correct actionKey
             assetType: data.assetType,
             priority: data.priority,
             riskLevel: data.riskLevel ?? null,
@@ -216,7 +225,13 @@ import {
             nextDueDate: new Date(data.nextDueDate),
           },
         });
-  
+
+        console.log('✅ Created PropertyMaintenanceTask with actionKey:', {
+          actionKey,
+          taskId: task.id,
+          title: task.title,
+        });
+
         return { task, deduped: false };
       } catch (err: any) {
         // Handle unique constraint race condition
@@ -229,7 +244,7 @@ import {
               },
             },
           });
-  
+
           if (fallback) {
             return { task: fallback, deduped: true };
           }

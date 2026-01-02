@@ -341,8 +341,7 @@ export function MaintenanceConfigModal({
             return;
           }
 
-          // 🔑 FIX: Map ServiceCategory to MaintenanceTaskServiceCategory
-          // Filter out categories that aren't valid for maintenance tasks
+          // 🔑 Map category if valid
           const validMaintenanceCategories = [
             'HVAC', 'PLUMBING', 'ELECTRICAL', 'HANDYMAN', 
             'LANDSCAPING', 'CLEANING', 'PEST_CONTROL', 
@@ -350,7 +349,7 @@ export function MaintenanceConfigModal({
           ];
           
           const mappedCategory = category && validMaintenanceCategories.includes(category)
-            ? (category as any) // Safe to cast since we verified it's in the list
+            ? (category as any)
             : undefined;
 
           console.log('🔍 Orchestration Mode - Creating PropertyMaintenanceTask:', {
@@ -362,6 +361,7 @@ export function MaintenanceConfigModal({
             estimatedCost: (template as any)?.estimatedCost,
             serviceCategory: mappedCategory,
             nextDueDate: finalNextDueDateString,
+            actionKey: orchestrationActionKey, // 🔑 CRITICAL: Pass the original actionKey
           });
 
           await api.createMaintenanceTaskFromActionCenter({
@@ -374,6 +374,7 @@ export function MaintenanceConfigModal({
             serviceCategory: mappedCategory,
             estimatedCost: (template as any)?.estimatedCost,
             nextDueDate: finalNextDueDateString,
+            actionKey: orchestrationActionKey, // 🔑 CRITICAL: Use original actionKey
           });
 
           onSuccess?.(1);

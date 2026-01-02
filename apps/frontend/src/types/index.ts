@@ -1416,6 +1416,7 @@ export interface CreateMaintenanceTaskFromActionCenterInput {
   serviceCategory?: MaintenanceTaskServiceCategory | null;
   estimatedCost?: number | null;
   nextDueDate: string;
+  actionKey?: string; // 🔑 ADD: Optional actionKey from orchestration
 }
 
 export interface CreateMaintenanceTasksFromTemplatesInput {
