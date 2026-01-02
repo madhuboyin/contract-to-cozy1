@@ -1,11 +1,10 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/ExistingOwnerDashboard.tsx
-// PHASE 5 UPDATED: Integrates new PropertyMaintenanceTask statistics with existing features
 
 'use client';
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Booking, ChecklistItem, ScoredProperty, MaintenanceTaskStats } from '@/types';
+import { Booking, ChecklistItem, ScoredProperty, MaintenanceTaskStats, PropertyMaintenanceTask } from '@/types';
 import { UpcomingBookingsCard } from './UpcomingBookingsCard';
 import { RecurringMaintenanceCard } from './RecurringMaintenanceCard';
 import { UpcomingRenewalsCard } from './UpcomingRenewalsCard';
@@ -43,26 +42,40 @@ export const ExistingOwnerDashboard = ({
 }: ExistingOwnerDashboardProps) => {
   // PHASE 5: Fetch new PropertyMaintenanceTask statistics
   const [stats, setStats] = useState<MaintenanceTaskStats | null>(null);
+  
+  // 🔑 NEW: Fetch actual PropertyMaintenanceTask data
+  const [maintenanceTasks, setMaintenanceTasks] = useState<PropertyMaintenanceTask[]>([]);
 
   // Local Home Updates
   const [localUpdates, setLocalUpdates] = useState<LocalUpdate[]>([]);
 
-  // PHASE 5: Fetch statistics
+  // PHASE 5: Fetch statistics AND tasks
   useEffect(() => {
     if (!selectedPropertyId) return;
 
-    const fetchStats = async () => {
+    const fetchMaintenanceData = async () => {
       try {
-        const response = await api.getMaintenanceTaskStats(selectedPropertyId);
-        if (response.success) {
-          setStats(response.data);
+        // Fetch both stats and tasks in parallel
+        const [statsResponse, tasksResponse] = await Promise.all([
+          api.getMaintenanceTaskStats(selectedPropertyId),
+          api.getMaintenanceTasks(selectedPropertyId, {
+            includeCompleted: false,
+          }),
+        ]);
+
+        if (statsResponse.success) {
+          setStats(statsResponse.data);
+        }
+
+        if (tasksResponse.success) {
+          setMaintenanceTasks(tasksResponse.data);
         }
       } catch (error) {
-        console.error('Failed to fetch stats:', error);
+        console.error('Failed to fetch maintenance data:', error);
       }
     };
 
-    fetchStats();
+    fetchMaintenanceData();
   }, [selectedPropertyId]);
 
   // Fetch local updates
@@ -85,37 +98,6 @@ export const ExistingOwnerDashboard = ({
   const selectedProperty = properties.find((p) => p.id === selectedPropertyId);
   const isMultiProperty = properties.length > 1;
   const isPropertySelected = !!selectedProperty;
-
-  const RENEWAL_CATEGORIES = ['INSURANCE', 'WARRANTY', 'FINANCE', 'ADMIN', 'ATTORNEY'];
-  const ACTIVE_TASK_STATUSES = [
-    'PENDING',
-    'SCHEDULED',
-    'IN_PROGRESS',
-    'NEEDS_REVIEW',
-    'OVERDUE',
-  ];
-
-  const propertyChecklistItems = selectedPropertyId
-    ? checklistItems.filter((item) => {
-        const belongsToSelectedProperty = item.propertyId === selectedPropertyId;
-        const isLegacyItem =
-          !item.propertyId &&
-          !isMultiProperty &&
-          selectedPropertyId === defaultProperty?.id;
-
-        return belongsToSelectedProperty || isLegacyItem;
-      })
-    : [];
-
-  const activeChecklistItems = propertyChecklistItems.filter((item) =>
-    ACTIVE_TASK_STATUSES.includes(item.status)
-  );
-
-  const upcomingMaintenance = activeChecklistItems.filter(
-    (item) =>
-      !item.serviceCategory ||
-      !RENEWAL_CATEGORIES.includes(item.serviceCategory as string)
-  );
 
   const renderNudgeCard = selectedProperty ? (
     <div className="mt-4">
@@ -335,8 +317,9 @@ export const ExistingOwnerDashboard = ({
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <UpcomingBookingsCard propertyId={selectedPropertyId} />
 
+        {/* 🔑 FIXED: Pass actual PropertyMaintenanceTask[] data */}
         <RecurringMaintenanceCard
-          maintenance={upcomingMaintenance as any}
+          maintenance={maintenanceTasks}
           isPropertySelected={isPropertySelected}
           selectedPropertyId={selectedPropertyId}
         />
