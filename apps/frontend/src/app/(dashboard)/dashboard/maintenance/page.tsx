@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { ArrowLeft } from 'lucide-react';
 
 // --- Helper Functions ---
 
@@ -75,6 +76,9 @@ export default function MaintenancePage() {
   
   const selectedPropertyId = searchParams.get('propertyId');
   const priority = searchParams.get('priority') === 'true';
+  const fromRiskAssessment = searchParams.get('from') === 'risk-assessment';
+  const propertyId = searchParams.get('propertyId');
+
 
   const togglePriorityView = useCallback(
     (enabled: boolean) => {
@@ -330,6 +334,18 @@ export default function MaintenancePage() {
 
   return (
     <div className="space-y-6 pb-8 max-w-7xl mx-auto px-4 md:px-8">
+      {/* 🔑 NEW: Add back link here */}
+      {fromRiskAssessment && propertyId && (
+        <Button 
+          variant="ghost" 
+          size="sm"
+          onClick={() => router.push(`/dashboard/properties/${propertyId}/risk-assessment`)}
+          className="gap-2"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Risk Assessment
+        </Button>
+      )}
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
           <Wrench className="w-7 h-7 text-blue-600" /> Home Tasks & Reminders

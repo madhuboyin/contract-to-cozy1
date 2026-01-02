@@ -95,10 +95,24 @@ const RiskCategorySummaryCard = ({
 
     const topRiskAsset = relevantAssets.sort((a, b) => b.riskDollar - a.riskDollar)[0];
     
-    // 🔑 Check for booking first (priority), then task
-    const insightFactor = topRiskAsset ? topRiskAsset.assetName.replace(/_/g, ' ') : '';
-    const existingBooking = topRiskAsset ? bookingsByInsightFactor.get(insightFactor) : undefined;
-    const existingTask = topRiskAsset ? tasksBySystemType.get(topRiskAsset.systemType) : undefined;
+    // 🔑 Check for booking/task across ALL relevant assets (not just top risk)
+    let existingBooking: any = undefined;
+    let existingTask: PropertyMaintenanceTask | undefined = undefined;
+    
+    // Check all relevant assets for any booking or task
+    for (const asset of relevantAssets) {
+        const assetInsightFactor = asset.assetName.replace(/_/g, ' ');
+        const booking = bookingsByInsightFactor.get(assetInsightFactor);
+        if (booking) {
+            existingBooking = booking;
+            break; // Found a booking
+        }
+        const task = tasksBySystemType.get(asset.systemType);
+        if (task && !existingTask) {
+            existingTask = task; // Keep looking for bookings (higher priority)
+        }
+    }
+    
     const hasBooking = !!existingBooking;
     const hasTask = !!existingTask;
     
@@ -132,7 +146,16 @@ const RiskCategorySummaryCard = ({
     } else if (relevantAssets.length > 0) {
         title = `${category.replace(/_/g, ' ')} Health`;
         description = `All components are currently low risk. Exposure: ${formattedExposure}.`;
-        ctaText = 'Add Inspection';
+        
+        // 🔑 Check if any asset has booking or task even in low risk
+        if (hasBooking) {
+            ctaText = 'View Booking';
+        } else if (hasTask) {
+            ctaText = 'View Task';
+        } else {
+            ctaText = 'Add Inspection';
+        }
+        
         ctaVariant = 'secondary';
         badgeStatus = 'GOOD';
         badgeColor = 'success';
@@ -145,14 +168,45 @@ const RiskCategorySummaryCard = ({
         badgeColor = 'default';
     }
     
-    // 🔑 Handle button click - Priority: Booking > Task > Schedule
+    // 🔑 Handle button click - Priority: Booking > Task > Schedule > Generic Actions
     const handleClick = () => {
         if (hasBooking && existingBooking) {
+            // Has active booking - view it
             onViewBooking(existingBooking);
         } else if (hasTask && existingTask) {
+            // Has scheduled task - view it
             onViewTask(existingTask);
         } else if (topRiskAsset) {
+            // Has specific risk asset - schedule for it
             onScheduleInspection(topRiskAsset);
+        } else if (relevantAssets.length > 0) {
+            // Low risk, but can add inspection - navigate to provider search
+            // Map category to service category
+            let serviceCategory = 'INSPECTION';
+            if (category === 'SYSTEMS') {
+                serviceCategory = 'HVAC';
+            } else if (category === 'STRUCTURE') {
+                serviceCategory = 'ROOFING';
+            } else if (category === 'SAFETY') {
+                serviceCategory = 'HANDYMAN';
+            }
+            
+            // Get first asset for context
+            const firstAsset = relevantAssets[0];
+            const params = new URLSearchParams({
+                category: serviceCategory,
+                insightFactor: category.replace(/_/g, ' ') + ' Inspection',
+                propertyId: firstAsset ? String((firstAsset as any).propertyId || '') : '',
+                from: 'risk-assessment',
+            });
+            window.location.href = `/dashboard/providers?${params.toString()}`;
+        } else {
+            // No data - update property info
+            // Navigate to property edit page
+            // Get propertyId from URL
+            const pathParts = window.location.pathname.split('/');
+            const propertyId = pathParts[pathParts.indexOf('properties') + 1];
+            window.location.href = `/dashboard/properties/${propertyId}/edit`;
         }
     };
     
@@ -173,7 +227,6 @@ const RiskCategorySummaryCard = ({
                         variant={(hasBooking || hasTask) ? 'outline' : ctaVariant} 
                         size="sm"
                         onClick={handleClick}
-                        disabled={!topRiskAsset && relevantAssets.length === 0}
                     >
                         {ctaText}
                     </Button>
@@ -670,7 +723,7 @@ export default function RiskAssessmentPage() {
 
     // 🔑 NEW: Handle viewing existing task
     const handleViewTask = (task: PropertyMaintenanceTask) => {
-        router.push(`/dashboard/maintenance?propertyId=${propertyId}`);
+        router.push(`/dashboard/maintenance?propertyId=${propertyId}&from=risk-assessment`);
     };
 
     // 🔑 NEW: Handle successful task creation
