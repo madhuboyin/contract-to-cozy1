@@ -408,35 +408,46 @@ export default function RiskAssessmentPage() {
         queryKey: ['bookings', propertyId],
         enabled: !!propertyId,
         queryFn: async () => {
-            const response = await api.listBookings({ propertyId });
-            if (response.success) {
-                // Filter for active bookings only (PENDING, CONFIRMED, IN_PROGRESS)
-                return response.data.bookings.filter((b: any) => 
-                    ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(b.status)
-                );
+            try {
+                const response = await api.listBookings({ propertyId });
+                if (response.success && response.data?.bookings) {
+                    const bookings = response.data.bookings;
+                    if (Array.isArray(bookings)) {
+                        return bookings.filter((b: any) => 
+                            ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(b.status)
+                        );
+                    }
+                }
+                return [];
+            } catch (error) {
+                console.error('Error fetching bookings:', error);
+                return [];
             }
-            return [];
         },
     });
 
-    const maintenanceTasks = maintenanceTasksData || [];
-    const activeBookings = bookingsData || [];
-
-    // 🔑 NEW: Create lookup map: systemType -> task
+    const maintenanceTasks = Array.isArray(maintenanceTasksData) ? maintenanceTasksData : [];
+    const activeBookings = Array.isArray(bookingsData) ? bookingsData : [];
+    
+    // 🔑 Create lookup map: systemType -> task
     const tasksBySystemType = new Map<string, PropertyMaintenanceTask>();
-    maintenanceTasks.forEach(task => {
-        if (task.assetType) {
-            tasksBySystemType.set(task.assetType, task);
-        }
-    });
-
-    // 🔑 NEW: Create lookup map: insightFactor -> booking
+    if (Array.isArray(maintenanceTasks)) {
+        maintenanceTasks.forEach(task => {
+            if (task.assetType) {
+                tasksBySystemType.set(task.assetType, task);
+            }
+        });
+    }
+    
+    // 🔑 Create lookup map: insightFactor -> booking
     const bookingsByInsightFactor = new Map<string, any>();
-    activeBookings.forEach((booking: any) => {
-        if (booking.insightFactor) {
-            bookingsByInsightFactor.set(booking.insightFactor, booking);
-        }
-    });
+    if (Array.isArray(activeBookings)) {
+        activeBookings.forEach((booking: any) => {
+            if (booking.insightFactor) {
+                bookingsByInsightFactor.set(booking.insightFactor, booking);
+            }
+        });
+    }
     
     // 🔑 NEW: Check for return from warranty/booking creation and refetch data
     React.useEffect(() => {
