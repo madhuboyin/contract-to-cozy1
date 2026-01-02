@@ -487,6 +487,10 @@ async function mapRiskDetailToAction(params: {
   const systemType = String(d.systemType ?? d.assetName ?? 'Unknown');
   const category = String(d.category ?? 'SAFETY');
   const riskLevel = String(d.riskLevel ?? 'MODERATE');
+  const age = typeof d.age === 'number' ? d.age : undefined;
+  const expectedLife = typeof d.expectedLife === 'number' ? d.expectedLife : undefined;
+  const exposure = toNumberSafe(d.exposure ?? d.outOfPocketCost ?? d.replacementCost);
+  const coverage: CoverageInfo = { hasCoverage: false, type: 'NONE', expiresOn: null };
 
   const actionKey = computeActionKey({
     propertyId,
@@ -549,21 +553,65 @@ async function mapRiskDetailToAction(params: {
     suppressionSource: suppressionSource || undefined,
   };
 
+  // Build decision trace steps
   const steps: DecisionTraceStep[] = [];
-  steps.push({ rule: 'RISK_ACTIONABLE', outcome: 'APPLIED' });
-  
-  // 🔑 ADD: Detailed suppression trace
+    
+  // Step 1: Always show why this is actionable
+  steps.push({ 
+    rule: 'RISK_ACTIONABLE', 
+    outcome: 'APPLIED',
+    details: {
+      systemType,
+      age: age || 'unknown',
+      expectedLife: expectedLife || 'unknown',
+      riskLevel,
+      exposure: exposure || 0,
+    },
+  });
+
+  // Step 2: Risk assessment details
+  if (age && expectedLife) {
+    const remainingLife = expectedLife - age;
+    steps.push({
+      rule: 'AGE_EVALUATION',
+      outcome: 'APPLIED',
+      details: {
+        currentAge: age,
+        expectedLife: expectedLife,
+        remainingLife: remainingLife,
+        percentUsed: Math.round((age / expectedLife) * 100),
+        message: remainingLife <= 0 
+          ? `System has exceeded expected lifespan by ${Math.abs(remainingLife)} years`
+          : `System has ${remainingLife} years remaining in expected lifespan`,
+      },
+    });
+  }
+
+  // Step 3: Coverage check
+  steps.push({
+    rule: 'COVERAGE_CHECK',
+    outcome: coverage.hasCoverage ? 'APPLIED' : 'SKIPPED',
+    details: {
+      hasCoverage: coverage.hasCoverage,
+      coverageType: coverage.type,
+      message: coverage.hasCoverage 
+        ? `Covered by ${coverage.type}` 
+        : 'No coverage found',
+    },
+  });
+
+  // Step 4: Suppression check
   if (suppression.suppressed) {
     steps.push({ rule: 'SUPPRESSION_CHECK', outcome: 'APPLIED' });
     
     if (suppressionSource?.type === 'PROPERTY_MAINTENANCE_TASK') {
       steps.push({ 
-        rule: 'TASK_EXISTS', 
+        rule: 'TASK_ALREADY_SCHEDULED', 
         outcome: 'APPLIED',
         details: {
           taskId: suppressionSource.task.id,
           taskTitle: suppressionSource.task.title,
-          reason: 'This action is already covered by a maintenance task',
+          message: `Already scheduled: "${suppressionSource.task.title}"`,
         },
       });
     } else if (suppressionSource?.type === 'CHECKLIST_ITEM') {
@@ -573,25 +621,47 @@ async function mapRiskDetailToAction(params: {
         details: {
           itemId: suppressionSource.checklistItem.id,
           itemTitle: suppressionSource.checklistItem.title,
-          reason: 'This action is already in your checklist',
+          message: `Already in checklist: "${suppressionSource.checklistItem.title}"`,
         },
       });
     } else if (suppressionSource?.type === 'USER_EVENT') {
       steps.push({ 
-        rule: 'USER_ACTION', 
+        rule: 'USER_COMPLETED', 
         outcome: 'APPLIED',
         details: {
           eventType: suppressionSource.eventType,
-          reason: suppressionSource.eventType === 'USER_MARKED_COMPLETE' 
+          message: suppressionSource.eventType === 'USER_MARKED_COMPLETE' 
             ? 'You marked this as complete'
             : 'You unmarked this action',
         },
       });
     }
+  } else {
+    // Step 5: Not suppressed - action is required
+    steps.push({
+      rule: 'ACTION_REQUIRED',
+      outcome: 'APPLIED',
+      details: {
+        message: 'This item requires scheduling or attention',
+      },
+    });
+  }
+
+  // Step 6: Snooze status (if applicable)
+  if (snooze) {
+    steps.push({
+      rule: 'SNOOZED',
+      outcome: 'APPLIED',
+      details: {
+        snoozedUntil: snooze.snoozeUntil,
+        daysRemaining: snooze.daysRemaining,
+        reason: snooze.snoozeReason,
+        message: `Snoozed for ${snooze.daysRemaining} more days`,
+      },
+    });
   }
 
   const priority = riskLevel === 'CRITICAL' ? 100 : riskLevel === 'HIGH' ? 80 : 50;
-  const exposure = toNumberSafe(d.exposure ?? d.outOfPocketCost ?? d.replacementCost);
 
   const confidenceRaw = computeConfidence({
     source: 'RISK',

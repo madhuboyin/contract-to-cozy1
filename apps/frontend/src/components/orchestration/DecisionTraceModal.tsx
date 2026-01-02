@@ -119,7 +119,7 @@ export const DecisionTraceModal: React.FC<Props> = ({
               </Button>
             )}
 
-            {/* 🔑 NEW: View Task button when suppressed by PropertyMaintenanceTask */}
+            {/* 🔑 View Task button when suppressed by PropertyMaintenanceTask */}
             {onViewTask && (
               <Button
                 onClick={() => {
@@ -150,72 +150,162 @@ export const DecisionTraceModal: React.FC<Props> = ({
 };
 
 /* ------------------------------------------------------------------
-   Helpers — same language as DecisionTracePanel
+   Helpers — Humanize rule names and details
 ------------------------------------------------------------------- */
 
-function humanizeRule(rule: string) {
-  switch (rule) {
-    case 'RISK_ACTIONABLE':
-      return 'This issue requires attention';
-    case 'USER_SNOOZED': 
-      return 'You snoozed this recommendation';
-    case 'RISK_INFER_ASSET_KEY':
-      return 'We identified the part of your home involved';
-    case 'COVERAGE_MATCHING':
-      return 'We checked your warranties and insurance';
-    case 'COVERAGE_AWARE_CTA':
-      return 'Your coverage affected the recommendation';
-    case 'BOOKING_SUPPRESSION':
-      return 'We checked for existing scheduled work';
-    case 'SUPPRESSION_FINAL':
-      return 'Final decision made';
-    case 'USER_MARKED_COMPLETE':
-      return 'You marked this recommendation as completed';
-    case 'CHECKLIST_SUPPRESSION':
-    case 'CHECKLIST_SUPPRESSION_AUTHORITATIVE':
-      return 'This is already tracked in your maintenance checklist';
-    case 'CHECKLIST_ACTIONABLE':
-      return 'This maintenance task needs attention';
-    default:
-      return rule.replace(/_/g, ' ');
-  }
+function humanizeRule(rule: string): string {
+  const labels: Record<string, string> = {
+    // Core actionable rules
+    RISK_ACTIONABLE: 'This issue requires attention',
+    CHECKLIST_ACTIONABLE: 'Maintenance task requires action',
+    
+    // Age and system evaluation
+    AGE_EVALUATION: 'System age evaluated',
+    RISK_INFER_ASSET_KEY: 'System identified',
+    
+    // Coverage checks
+    COVERAGE_CHECK: 'Coverage evaluation',
+    COVERAGE_MATCHING: 'Coverage matching',
+    COVERAGE_AWARE_CTA: 'Coverage affects recommendation',
+    
+    // Suppression checks
+    SUPPRESSION_CHECK: 'Checking if already handled',
+    TASK_ALREADY_SCHEDULED: 'Task already scheduled',
+    TASK_EXISTS: 'Task exists',
+    CHECKLIST_TRACKED: 'Already in checklist',
+    CHECKLIST_ITEM_TRACKED: 'Tracked in maintenance schedule',
+    CHECKLIST_SUPPRESSION: 'Already tracked in checklist',
+    CHECKLIST_SUPPRESSION_AUTHORITATIVE: 'Already tracked in checklist',
+    BOOKING_SUPPRESSION: 'Booking check',
+    SUPPRESSION_FINAL: 'Final suppression decision',
+    
+    // User actions
+    USER_COMPLETED: 'User action recorded',
+    USER_MARKED_COMPLETE: 'You marked as completed',
+    USER_SNOOZED: 'You snoozed this',
+    
+    // Action state
+    ACTION_REQUIRED: 'Action is required',
+    SNOOZED: 'Currently snoozed',
+  };
+
+  return labels[rule] || rule.replace(/_/g, ' ');
 }
 
-function humanizeDetails(step: DecisionTraceStepDTO) {
+function humanizeDetails(step: DecisionTraceStepDTO): string | null {
   if (!step.details) return null;
 
+  // Age evaluation details
+  if (step.rule === 'AGE_EVALUATION') {
+    if (step.details.message) {
+      return step.details.message as string;
+    }
+    if (step.details.remainingLife !== undefined) {
+      const remaining = step.details.remainingLife as number;
+      const percentUsed = step.details.percentUsed as number;
+      return remaining <= 0
+        ? `System has exceeded expected lifespan (${percentUsed}% used)`
+        : `System has ${remaining} years remaining (${percentUsed}% used)`;
+    }
+  }
+
+  // Coverage check details
+  if (step.rule === 'COVERAGE_CHECK' || step.rule === 'COVERAGE_MATCHING') {
+    if (step.details.message) {
+      return step.details.message as string;
+    }
+    const hasCoverage = step.details.hasCoverage;
+    if (hasCoverage === false) {
+      return 'No active coverage found for this issue';
+    }
+    if (hasCoverage === true) {
+      const type = step.details.coverageType || step.details.type;
+      return type ? `Covered by ${type}` : 'Active coverage found';
+    }
+  }
+
+  // Task already scheduled
+  if (step.rule === 'TASK_ALREADY_SCHEDULED' || step.rule === 'TASK_EXISTS') {
+    if (step.details.message) {
+      return step.details.message as string;
+    }
+    if (step.details.taskTitle) {
+      return `Already scheduled: "${step.details.taskTitle}"`;
+    }
+    return 'This action is already covered by a maintenance task';
+  }
+
+  // Checklist tracked
+  if (step.rule === 'CHECKLIST_TRACKED' || step.rule === 'CHECKLIST_ITEM_TRACKED') {
+    if (step.details.message) {
+      return step.details.message as string;
+    }
+    if (step.details.itemTitle || step.details.title) {
+      const title = step.details.itemTitle || step.details.title;
+      return `Tracked in your maintenance schedule as "${title}"`;
+    }
+    return 'Tracked in your maintenance schedule';
+  }
+
+  // User completed
+  if (step.rule === 'USER_COMPLETED' || step.rule === 'USER_MARKED_COMPLETE') {
+    if (step.details.message) {
+      return step.details.message as string;
+    }
+    return 'You marked this as complete';
+  }
+
+  // Snoozed
+  if (step.rule === 'SNOOZED' || step.rule === 'USER_SNOOZED') {
+    if (step.details.message) {
+      return step.details.message as string;
+    }
+    
+    const daysRemaining = step.details.daysRemaining;
+    const snoozeUntil = step.details.snoozedUntil || step.details.snoozeUntil;
+    const reason = step.details.reason || step.details.snoozeReason;
+    
+    let message = '';
+    
+    if (daysRemaining !== undefined) {
+      message = `Snoozed for ${daysRemaining} more ${daysRemaining === 1 ? 'day' : 'days'}`;
+    } else if (snoozeUntil) {
+      const date = new Date(snoozeUntil).toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      });
+      message = `Snoozed until ${date}`;
+    } else {
+      message = 'Currently snoozed';
+    }
+    
+    if (reason) {
+      message += `. Reason: ${reason}`;
+    }
+    
+    return message;
+  }
+
+  // Action required
+  if (step.rule === 'ACTION_REQUIRED') {
+    if (step.details.message) {
+      return step.details.message as string;
+    }
+    return 'This item requires scheduling or attention';
+  }
+
+  // Booking suppression
   if (step.rule === 'BOOKING_SUPPRESSION') {
     return step.outcome === 'APPLIED'
-      ? 'Related work is already scheduled.'
-      : 'No related work is currently scheduled.';
-  }
-  
-  if (step.rule === 'USER_SNOOZED') {
-    const snoozeUntil = step.details?.snoozeUntil 
-      ? new Date(step.details.snoozeUntil).toLocaleDateString('en-US', {
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric',
-        })
-      : 'a future date';
-    
-    const reason = step.details?.reason;
-    
-    return `Snoozed until ${snoozeUntil}${reason ? `. Reason: ${reason}` : ''}`;
+      ? 'Related work is already scheduled'
+      : 'No related work is currently scheduled';
   }
 
-  if (step.rule === 'COVERAGE_MATCHING') {
-    return step.details?.type === 'NONE'
-      ? 'No active coverage was found for this issue.'
-      : 'Active coverage was found.';
+  // Default: show generic message if details exist
+  if (step.details.message) {
+    return step.details.message as string;
   }
 
-  // 🔑 NEW: Handle CHECKLIST_ITEM_TRACKED
-  if (step.rule === 'CHECKLIST_ITEM_TRACKED') {
-    return step.details?.title 
-      ? `Tracked in your maintenance schedule as "${step.details.title}".`
-      : 'Tracked in your maintenance schedule.';
-  }
-
-  return 'Additional context was evaluated.';
+  return 'Additional context was evaluated';
 }
