@@ -493,8 +493,23 @@ export default function RiskAssessmentPage() {
         }
     };
     
-    // 🔑 NEW: Handle CTA click - open modal to create task
+    // 🔑 NEW: Handle CTA click - route to warranty page or open maintenance modal
     const handleScheduleInspection = (asset: AssetRiskDetail) => {
+        // Check if the action is to add a home warranty
+        if (asset.actionCta === 'Add Home Warranty') {
+            // Navigate to warranties page with auto-open modal and asset context
+            const params = new URLSearchParams({
+                action: 'new',
+                propertyId: propertyId,
+                from: 'risk-assessment',
+                systemType: asset.systemType, // Pass system type for pre-linking
+                assetName: asset.assetName,
+            });
+            router.push(`/dashboard/warranties?${params.toString()}`);
+            return;
+        }
+        
+        // Otherwise, open maintenance modal for scheduling tasks
         setSelectedAsset(asset);
         setIsModalOpen(true);
     };
