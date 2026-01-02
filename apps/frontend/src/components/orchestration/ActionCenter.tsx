@@ -313,9 +313,9 @@ export const ActionCenter: React.FC<Props> = ({
   const handleViewTaskFromTrace = useCallback(() => {
     if (!traceAction) return;
     
-    // Navigate to maintenance page
-    router.push('/dashboard/maintenance');
-  }, [traceAction, router]);
+    // 🔑 FIX: Navigate with propertyId parameter
+    router.push(`/dashboard/maintenance?propertyId=${propertyId}`);
+  }, [traceAction, propertyId, router]);
 
   /* ------------------------------------------------------------------
      Derived Groups - 🔑 FIXED: Only group by risk level, don't re-filter

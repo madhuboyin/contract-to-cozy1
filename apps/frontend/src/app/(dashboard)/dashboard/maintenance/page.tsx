@@ -98,16 +98,8 @@ export default function MaintenancePage() {
   // Fetch PropertyMaintenanceTasks
   const { data: mainData, isLoading: isInitialLoading } = useQuery({
     queryKey: ['maintenance-tasks', selectedPropertyId],
-    enabled: !!selectedPropertyId,
     queryFn: async () => {
-      if (!selectedPropertyId) {
-        throw new Error('No property selected');
-      }
-
-      const [tasksRes, propertiesRes] = await Promise.all([
-        api.getMaintenanceTasks(selectedPropertyId, {
-          includeCompleted: false,
-        }),
+      const [propertiesRes] = await Promise.all([
         api.getProperties(),
       ]);
 
@@ -117,6 +109,24 @@ export default function MaintenancePage() {
       
       const propertiesMap = new Map<string, Property>();
       propertiesRes.data.properties.forEach(p => propertiesMap.set(p.id, p));
+
+      // 🔑 If no propertyId, use primary or first property
+      let propertyId = selectedPropertyId;
+      if (!propertyId && propertiesRes.data.properties.length > 0) {
+        const primaryProperty = propertiesRes.data.properties.find(p => p.isPrimary);
+        propertyId = primaryProperty?.id || propertiesRes.data.properties[0].id;
+      }
+
+      if (!propertyId) {
+        return {
+          maintenanceTasks: [],
+          propertiesMap: propertiesMap,
+        };
+      }
+
+      const tasksRes = await api.getMaintenanceTasks(propertyId, {
+        includeCompleted: false,
+      });
 
       const tasks = tasksRes.success ? tasksRes.data : [];
 
