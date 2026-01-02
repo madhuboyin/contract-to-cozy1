@@ -153,6 +153,9 @@ const ProviderList = ({ providers, targetPropertyId, insightContext, category }:
         if (insightContext) queryParams.append('insightFactor', insightContext);
         if (category) queryParams.append('category', category);
         
+        const fromParam = useSearchParams().get('from');
+        if (fromParam) queryParams.append('from', fromParam);
+        
         const profileLink = queryParams.toString() 
           ? `/dashboard/providers/${provider.id}?${queryParams.toString()}`
           : `/dashboard/providers/${provider.id}`;

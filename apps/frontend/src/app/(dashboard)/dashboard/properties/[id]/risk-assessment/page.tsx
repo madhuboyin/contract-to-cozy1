@@ -72,16 +72,20 @@ const RiskCategorySummaryCard = ({
     category, 
     details, 
     riskIcon: RiskIcon,
-    onScheduleInspection, // 🔑 NEW: Add handler
-    onViewTask, // 🔑 NEW: Add handler
-    tasksBySystemType, // 🔑 NEW: Add task lookup
+    onScheduleInspection,
+    onViewTask,
+    onViewBooking, // 🔑 NEW
+    tasksBySystemType,
+    bookingsByInsightFactor, // 🔑 NEW
 }: { 
     category: RiskCategory; 
     details: AssetRiskDetail[]; 
     riskIcon: React.ElementType;
-    onScheduleInspection: (asset: AssetRiskDetail) => void; // 🔑 NEW
-    onViewTask: (task: PropertyMaintenanceTask) => void; // 🔑 NEW
-    tasksBySystemType: Map<string, PropertyMaintenanceTask>; // 🔑 NEW
+    onScheduleInspection: (asset: AssetRiskDetail) => void;
+    onViewTask: (task: PropertyMaintenanceTask) => void;
+    onViewBooking: (booking: any) => void; // 🔑 NEW
+    tasksBySystemType: Map<string, PropertyMaintenanceTask>;
+    bookingsByInsightFactor: Map<string, any>; // 🔑 NEW
 }) => {
     
     const relevantAssets = details.filter(item => item.category === category);
@@ -91,9 +95,12 @@ const RiskCategorySummaryCard = ({
 
     const topRiskAsset = relevantAssets.sort((a, b) => b.riskDollar - a.riskDollar)[0];
     
-    // 🔑 NEW: Check if top risk asset has scheduled task
+    // 🔑 Check for booking first (priority), then task
+    const insightFactor = topRiskAsset ? topRiskAsset.assetName.replace(/_/g, ' ') : '';
+    const existingBooking = topRiskAsset ? bookingsByInsightFactor.get(insightFactor) : undefined;
     const existingTask = topRiskAsset ? tasksBySystemType.get(topRiskAsset.systemType) : undefined;
-    const isScheduled = !!existingTask;
+    const hasBooking = !!existingBooking;
+    const hasTask = !!existingTask;
     
     let title: string = `${category.replace(/_/g, ' ')} Risk`;
     let description: string;
@@ -106,13 +113,15 @@ const RiskCategorySummaryCard = ({
         title = topRiskAsset.assetName.replace(/_/g, ' ');
         description = `Top risk: ${topRiskAsset.actionCta || `Requires attention due to age/condition.`}`;
         
-        // 🔑 FIXED: Shorten CTA text for bottom cards
-        if (isScheduled) {
+        // 🔑 Priority: Booking > Task > CTA
+        if (hasBooking) {
+            ctaText = 'View Booking';
+        } else if (hasTask) {
             ctaText = 'View Task';
         } else if (topRiskAsset.actionCta === 'Add Home Warranty') {
             ctaText = 'Add Home Warranty';
         } else if (topRiskAsset.actionCta?.includes('Inspection')) {
-            ctaText = 'Schedule Inspection'; // 🔑 SHORTENED from "Schedule Inspection/Replacement"
+            ctaText = 'Schedule Inspection';
         } else {
             ctaText = topRiskAsset.actionCta || 'Find Service';
         }
@@ -136,14 +145,15 @@ const RiskCategorySummaryCard = ({
         badgeColor = 'default';
     }
     
-    // 🔑 NEW: Handle button click
+    // 🔑 Handle button click - Priority: Booking > Task > Schedule
     const handleClick = () => {
-        if (isScheduled && existingTask) {
+        if (hasBooking && existingBooking) {
+            onViewBooking(existingBooking);
+        } else if (hasTask && existingTask) {
             onViewTask(existingTask);
         } else if (topRiskAsset) {
             onScheduleInspection(topRiskAsset);
         }
-        // For other cases (low risk, missing data), could navigate elsewhere
     };
     
     return (
@@ -160,10 +170,10 @@ const RiskCategorySummaryCard = ({
             <CardContent>
                 <div className="flex items-center justify-between mt-2">
                     <Button 
-                        variant={isScheduled ? 'outline' : ctaVariant} 
+                        variant={(hasBooking || hasTask) ? 'outline' : ctaVariant} 
                         size="sm"
-                        onClick={handleClick} // 🔑 NEW: Make button functional
-                        disabled={!topRiskAsset && relevantAssets.length === 0} // Disable if no data
+                        onClick={handleClick}
+                        disabled={!topRiskAsset && relevantAssets.length === 0}
                     >
                         {ctaText}
                     </Button>
@@ -179,14 +189,18 @@ const RiskCategorySummaryCard = ({
 // --- Component for Phase 3.2: Detailed Asset Matrix Table ---
 const AssetMatrixTable = ({ 
     details, 
-    tasksBySystemType, 
+    tasksBySystemType,
+    bookingsByInsightFactor, // 🔑 NEW
     onScheduleInspection, 
-    onViewTask 
+    onViewTask,
+    onViewBooking, // 🔑 NEW
 }: { 
     details: AssetRiskDetail[];
     tasksBySystemType: Map<string, PropertyMaintenanceTask>;
+    bookingsByInsightFactor: Map<string, any>; // 🔑 NEW
     onScheduleInspection: (asset: AssetRiskDetail) => void;
     onViewTask: (task: PropertyMaintenanceTask) => void;
+    onViewBooking: (booking: any) => void; // 🔑 NEW
 }) => {
     const getRiskBadge = (level: AssetRiskDetail['riskLevel']) => {
         if (level === 'LOW') return <Badge variant="secondary" className="bg-green-500/20 text-green-700 hover:bg-green-500/30 border-green-500">Low</Badge>;
@@ -217,9 +231,14 @@ const AssetMatrixTable = ({
                         </TableHeader>
                         <TableBody>
                             {details.map((item, index) => {
-                                // 🔑 NEW: Check if task exists for this asset
+                                // 🔑 Check if booking exists for this asset
+                                const insightFactor = item.assetName.replace(/_/g, ' ');
+                                const existingBooking = bookingsByInsightFactor.get(insightFactor);
+                                const hasBooking = !!existingBooking;
+                                
+                                // 🔑 Check if task exists for this asset
                                 const existingTask = tasksBySystemType.get(item.systemType);
-                                const isScheduled = !!existingTask;
+                                const hasTask = !!existingTask;
 
                                 return (
                                     <TableRow key={index} className={item.riskLevel === 'HIGH' ? 'bg-red-50/50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20' : ''}>
@@ -229,8 +248,14 @@ const AssetMatrixTable = ({
                                                     {item.assetName.replace(/_/g, ' ')}
                                                     <div className="text-xs text-muted-foreground">{item.systemType.replace(/_/g, ' ')}</div>
                                                 </div>
-                                                {/* 🔑 NEW: Show scheduled badge */}
-                                                {isScheduled && <ScheduledBadge task={existingTask} />}
+                                                {/* 🔑 Show booking badge first, then task badge */}
+                                                {hasBooking && (
+                                                    <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-50 border border-blue-200">
+                                                        <Calendar className="h-3 w-3 text-blue-600" />
+                                                        <span className="text-xs font-medium text-blue-700">Booked</span>
+                                                    </div>
+                                                )}
+                                                {!hasBooking && hasTask && <ScheduledBadge task={existingTask} />}
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
@@ -248,8 +273,18 @@ const AssetMatrixTable = ({
                                             <div className="text-xs text-muted-foreground whitespace-normal">P: {item.probability.toFixed(2)} / C: {(item.coverageFactor * 100).toFixed(0)}%</div>
                                         </TableCell>
                                         <TableCell className="whitespace-nowrap">
-                                            {/* 🔑 NEW: Context-aware action buttons */}
-                                            {isScheduled ? (
+                                            {/* 🔑 Priority: Booking > Task > CTA */}
+                                            {hasBooking ? (
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="outline"
+                                                    onClick={() => onViewBooking(existingBooking)}
+                                                    className="gap-1"
+                                                >
+                                                    <Calendar className="h-3 w-3" />
+                                                    View Booking
+                                                </Button>
+                                            ) : hasTask ? (
                                                 <Button 
                                                     size="sm" 
                                                     variant="outline"
@@ -315,7 +350,24 @@ export default function RiskAssessmentPage() {
         },
     });
 
+    // 🔑 NEW: Fetch existing bookings for this property
+    const { data: bookingsData, refetch: refetchBookings } = useQuery({
+        queryKey: ['bookings', propertyId],
+        enabled: !!propertyId,
+        queryFn: async () => {
+            const response = await api.listBookings({ propertyId });
+            if (response.success) {
+                // Filter for active bookings only (PENDING, CONFIRMED, IN_PROGRESS)
+                return response.data.bookings.filter((b: any) => 
+                    ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(b.status)
+                );
+            }
+            return [];
+        },
+    });
+
     const maintenanceTasks = maintenanceTasksData || [];
+    const activeBookings = bookingsData || [];
 
     // 🔑 NEW: Create lookup map: systemType -> task
     const tasksBySystemType = new Map<string, PropertyMaintenanceTask>();
@@ -324,16 +376,24 @@ export default function RiskAssessmentPage() {
             tasksBySystemType.set(task.assetType, task);
         }
     });
+
+    // 🔑 NEW: Create lookup map: insightFactor -> booking
+    const bookingsByInsightFactor = new Map<string, any>();
+    activeBookings.forEach((booking: any) => {
+        if (booking.insightFactor) {
+            bookingsByInsightFactor.set(booking.insightFactor, booking);
+        }
+    });
     
-    // 🔑 NEW: Check for return from warranty creation and refetch risk data
+    // 🔑 NEW: Check for return from warranty/booking creation and refetch data
     React.useEffect(() => {
-        // If we're returning from warranty page, invalidate risk query to get updated CTAs
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('refreshed') === 'true') {
-            console.log('🔄 Returned from warranty creation, refreshing risk data...');
-            // Invalidate risk query to refetch with updated warranty status
+            console.log('🔄 Returned from booking/warranty creation, refreshing data...');
+            // Invalidate queries to refetch with updated data
             queryClient.invalidateQueries({ queryKey: ['riskReport', propertyId] });
             queryClient.invalidateQueries({ queryKey: ['maintenance-tasks', propertyId] });
+            queryClient.invalidateQueries({ queryKey: ['bookings', propertyId] });
             
             // Clean up URL parameter
             const newUrl = window.location.pathname + window.location.search.replace(/[?&]refreshed=true/, '');
@@ -546,8 +606,18 @@ export default function RiskAssessmentPage() {
         }
     };
     
-    // 🔑 Handle CTA click - route based on action type
+    // 🔑 Handle CTA click - route based on action type and existing bookings/tasks
     const handleScheduleInspection = (asset: AssetRiskDetail) => {
+        // Check if booking already exists for this asset
+        const insightFactor = asset.assetName.replace(/_/g, ' ');
+        const existingBooking = bookingsByInsightFactor.get(insightFactor);
+        
+        if (existingBooking) {
+            // Navigate to booking detail page
+            router.push(`/dashboard/bookings/${existingBooking.id}`);
+            return;
+        }
+        
         // 1. Home Warranty → Warranties page
         if (asset.actionCta === 'Add Home Warranty') {
             const params = new URLSearchParams({
@@ -577,11 +647,12 @@ export default function RiskAssessmentPage() {
                 category = 'HANDYMAN';
             }
             
-            // Navigate to provider search with context
+            // Navigate to provider search with context AND from parameter
             const params = new URLSearchParams({
                 category: category,
-                insightFactor: asset.assetName.replace(/_/g, ' '),
+                insightFactor: insightFactor,
                 propertyId: propertyId,
+                from: 'risk-assessment', // 🔑 NEW: Track navigation source
             });
             router.push(`/dashboard/providers?${params.toString()}`);
             return;
@@ -590,6 +661,11 @@ export default function RiskAssessmentPage() {
         // 3. Fallback: Open maintenance modal for creating reminders
         setSelectedAsset(asset);
         setIsModalOpen(true);
+    };
+
+    // 🔑 NEW: Handle viewing existing booking
+    const handleViewBooking = (booking: any) => {
+        router.push(`/dashboard/bookings/${booking.id}`);
     };
 
     // 🔑 NEW: Handle viewing existing task
@@ -634,8 +710,10 @@ export default function RiskAssessmentPage() {
                     <AssetMatrixTable 
                         details={report.details} 
                         tasksBySystemType={tasksBySystemType}
+                        bookingsByInsightFactor={bookingsByInsightFactor}
                         onScheduleInspection={handleScheduleInspection}
                         onViewTask={handleViewTask}
+                        onViewBooking={handleViewBooking}
                     />
                     
                     <div className="grid gap-4 md:grid-cols-4">
@@ -645,7 +723,9 @@ export default function RiskAssessmentPage() {
                             riskIcon={Home}
                             onScheduleInspection={handleScheduleInspection}
                             onViewTask={handleViewTask}
+                            onViewBooking={handleViewBooking}
                             tasksBySystemType={tasksBySystemType}
+                            bookingsByInsightFactor={bookingsByInsightFactor}
                         />
                         <RiskCategorySummaryCard 
                             category={'SYSTEMS'} 
@@ -653,7 +733,9 @@ export default function RiskAssessmentPage() {
                             riskIcon={ZapIcon}
                             onScheduleInspection={handleScheduleInspection}
                             onViewTask={handleViewTask}
+                            onViewBooking={handleViewBooking}
                             tasksBySystemType={tasksBySystemType}
+                            bookingsByInsightFactor={bookingsByInsightFactor}
                         />
                         <RiskCategorySummaryCard 
                             category={'SAFETY'} 
@@ -661,7 +743,9 @@ export default function RiskAssessmentPage() {
                             riskIcon={Siren}
                             onScheduleInspection={handleScheduleInspection}
                             onViewTask={handleViewTask}
+                            onViewBooking={handleViewBooking}
                             tasksBySystemType={tasksBySystemType}
+                            bookingsByInsightFactor={bookingsByInsightFactor}
                         />
                         <RiskCategorySummaryCard 
                             category={'FINANCIAL_GAP'} 
@@ -669,7 +753,9 @@ export default function RiskAssessmentPage() {
                             riskIcon={DollarSign}
                             onScheduleInspection={handleScheduleInspection}
                             onViewTask={handleViewTask}
+                            onViewBooking={handleViewBooking}
                             tasksBySystemType={tasksBySystemType}
+                            bookingsByInsightFactor={bookingsByInsightFactor}
                         />
                     </div>
                 </React.Fragment>

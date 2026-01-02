@@ -176,17 +176,27 @@ export default function BookProviderPage() {
       if (response.success) {
         // Invalidate caches to force re-fetch of updated data
         await Promise.all([
-          // Invalidate bookings cache (for Upcoming Bookings card)
-          queryClient.invalidateQueries({ queryKey: ['bookings'] }),
-          // Invalidate properties cache (for health scores and insights)
-          queryClient.invalidateQueries({ queryKey: ['properties'] }),
-          // Invalidate specific property if we know the ID
-          queryClient.invalidateQueries({ queryKey: ['property', selectedPropertyId] }),
+            // Invalidate bookings cache (for Upcoming Bookings card)
+            queryClient.invalidateQueries({ queryKey: ['bookings'] }),
+            // Invalidate properties cache (for health scores and insights)
+            queryClient.invalidateQueries({ queryKey: ['properties'] }),
+            // Invalidate specific property if we know the ID
+            queryClient.invalidateQueries({ queryKey: ['property', selectedPropertyId] }),
         ]);
       
         alert('Booking created successfully!');
-        router.push('/dashboard/bookings');
-      } else {
+        
+        // 🔑 Check if we came from risk assessment page
+        const fromParam = searchParams.get('from');
+        
+        if (fromParam === 'risk-assessment' && selectedPropertyId) {
+            // Navigate back to risk assessment with refresh flag
+            router.push(`/dashboard/properties/${selectedPropertyId}/risk-assessment?refreshed=true`);
+        } else {
+            // Default: Navigate to bookings page
+            router.push('/dashboard/bookings');
+        }
+    } else {
         setError(response.message || 'Failed to create booking');
         console.error('Booking error:', response);
       }

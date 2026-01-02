@@ -262,6 +262,10 @@ export default function ProviderDetailPage() {
     if (insightFactor) queryParams.append('insightFactor', insightFactor);
     if (category) queryParams.append('category', category);
     
+    // 🔑 NEW: Pass through 'from' parameter
+    const fromParam = searchParams.get('from');
+    if (fromParam) queryParams.append('from', fromParam);
+    
     const baseUrl = `/dashboard/providers/${providerId}/book`;
     return queryParams.toString() ? `${baseUrl}?${queryParams.toString()}` : baseUrl;
   })();
