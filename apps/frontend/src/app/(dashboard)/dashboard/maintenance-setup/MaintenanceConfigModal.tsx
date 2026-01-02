@@ -326,49 +326,56 @@ export function MaintenanceConfigModal({
     setServerError(null);
 
     try {
-              // ============================================================
-        // 🟢 ORCHESTRATION MODE (NO TEMPLATE)
+// ============================================================
+        // 🟢 ORCHESTRATION MODE (Action Center Integration)
         // ============================================================
         if (orchestrationMode) {
           if (!orchestrationActionKey) {
             setServerError('Missing orchestration context. Please refresh and try again.');
             return;
           }
-          
-                    // 🐛 DEBUG LOGGING
-          console.log('🔍 Orchestration Mode - Submitting with:', {
-            title,
-            description: description || null,
-            serviceCategory: category,
-            propertyId: propertyIdToUse,
-            actionKey: orchestrationActionKey,
-            isRecurring,
-            frequency: isRecurring ? frequency : null,
-            nextDueDate: finalNextDueDateString,
-          });
 
-          // 🔴 VALIDATION CHECK
-          if (!title || !propertyIdToUse || !orchestrationActionKey) {
-            setServerError(
-              `Missing required fields: ${!title ? 'title ' : ''}${!propertyIdToUse ? 'propertyId ' : ''}${!orchestrationActionKey ? 'actionKey' : ''}`
-            );
+          // Validation
+          if (!title || !propertyIdToUse) {
+            setServerError('Missing required fields: title and property');
             return;
           }
 
-          await api.createChecklistItem({
-            title,
-            description: description || null,
-            serviceCategory: category!,
+          // 🔑 FIX: Map ServiceCategory to MaintenanceTaskServiceCategory
+          // Filter out categories that aren't valid for maintenance tasks
+          const validMaintenanceCategories = [
+            'HVAC', 'PLUMBING', 'ELECTRICAL', 'HANDYMAN', 
+            'LANDSCAPING', 'CLEANING', 'PEST_CONTROL', 
+            'LOCKSMITH', 'ROOFING', 'APPLIANCE_REPAIR'
+          ];
+          
+          const mappedCategory = category && validMaintenanceCategories.includes(category)
+            ? (category as any) // Safe to cast since we verified it's in the list
+            : undefined;
+
+          console.log('🔍 Orchestration Mode - Creating PropertyMaintenanceTask:', {
             propertyId: propertyIdToUse,
-        
-            // 🔑 REQUIRED — THIS FIXES EVERYTHING
-            actionKey: orchestrationActionKey,
-        
-            isRecurring,
-            frequency: isRecurring ? frequency : null,
+            title,
+            assetType: (template as any)?.assetType,
+            priority: (template as any)?.priority,
+            riskLevel: (template as any)?.riskLevel,
+            estimatedCost: (template as any)?.estimatedCost,
+            serviceCategory: mappedCategory,
             nextDueDate: finalNextDueDateString,
           });
-        
+
+          await api.createMaintenanceTaskFromActionCenter({
+            propertyId: propertyIdToUse,
+            title,
+            description: description || undefined,
+            assetType: (template as any)?.assetType || 'UNKNOWN',
+            priority: (template as any)?.priority || 'MEDIUM',
+            riskLevel: (template as any)?.riskLevel,
+            serviceCategory: mappedCategory,
+            estimatedCost: (template as any)?.estimatedCost,
+            nextDueDate: finalNextDueDateString,
+          });
+
           onSuccess?.(1);
           onClose();
           return;

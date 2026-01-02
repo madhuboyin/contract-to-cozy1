@@ -106,6 +106,18 @@ export const ActionCenter: React.FC<Props> = ({
   
     setActiveActionKey(action.actionKey);
   
+    // 🔑 FIX: Map riskLevel to priority (same as backend does)
+    const priorityMap: Record<string, string> = {
+      'CRITICAL': 'URGENT',
+      'HIGH': 'HIGH',
+      'ELEVATED': 'MEDIUM',
+      'MODERATE': 'MEDIUM',
+      'LOW': 'LOW',
+    };
+    const derivedPriority = action.riskLevel 
+      ? priorityMap[action.riskLevel.toUpperCase()] || 'MEDIUM'
+      : 'MEDIUM';
+  
     setTemplate({
       id: `orchestration:${action.actionKey}`,
       title: action.title,
@@ -116,7 +128,12 @@ export const ActionCenter: React.FC<Props> = ({
         'INSPECTION',
       defaultFrequency: RecurrenceFrequency.ANNUALLY,
       sortOrder: 0,
-    });
+      // 🔑 FIX: Use correct field names from DTO
+      assetType: action.systemType,        // systemType → assetType
+      priority: derivedPriority,            // Derived from riskLevel
+      riskLevel: action.riskLevel,
+      estimatedCost: action.exposure,       // exposure → estimatedCost
+    } as any);
   
     setIsModalOpen(true);
   };
