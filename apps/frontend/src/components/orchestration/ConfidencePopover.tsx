@@ -11,7 +11,7 @@ import {
 
 type Props = {
   level: 'HIGH' | 'MEDIUM' | 'LOW';
-  score: number;
+  score: number; // 0 → 100 (already a percentage from backend)
   explanation?: string[];
 };
 
@@ -20,6 +20,9 @@ export const ConfidencePopover: React.FC<Props> = ({
   score,
   explanation = [],
 }) => {
+  // 🔑 FIX: Score is already 0-100, don't multiply by 100
+  const percent = Math.round(score);
+
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -38,7 +41,7 @@ export const ConfidencePopover: React.FC<Props> = ({
             Confidence: {level}
           </div>
           <div className="text-xs text-muted-foreground">
-            Score: {(score * 100).toFixed(0)}%
+            Score: {percent}%
           </div>
         </div>
 

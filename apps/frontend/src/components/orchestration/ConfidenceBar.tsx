@@ -4,7 +4,7 @@
 import React from 'react';
 
 type Props = {
-  score: number; // 0 → 1
+  score: number; // 0 → 100 (already a percentage from backend)
   level: 'HIGH' | 'MEDIUM' | 'LOW';
 };
 
@@ -20,7 +20,9 @@ export const ConfidenceBar: React.FC<Props> = ({ score, level }) => {
       </div>
     );
   }
-  const percent = Math.round(score * 100);
+  
+  // 🔑 FIX: Score is already 0-100, don't multiply by 100
+  const percent = Math.round(score);
 
   const color =
     level === 'HIGH'
