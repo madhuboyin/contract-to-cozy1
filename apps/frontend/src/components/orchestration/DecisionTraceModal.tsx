@@ -20,6 +20,7 @@ type Props = {
   onMarkCompleted?: () => void;
   onUndo?: () => void;
   onSnooze?: () => void;
+  onViewTask?: () => void;
 };
 
 export const DecisionTraceModal: React.FC<Props> = ({
@@ -29,6 +30,7 @@ export const DecisionTraceModal: React.FC<Props> = ({
   onMarkCompleted,
   onUndo,
   onSnooze,
+  onViewTask,
 }) => {
   return (
     <Dialog
@@ -94,14 +96,11 @@ export const DecisionTraceModal: React.FC<Props> = ({
         {/* ================= Footer ================= */}
         <DialogFooter className="flex justify-between gap-2">
           <div className="flex gap-2">
-          {onSnooze && (
+            {onSnooze && (
               <Button
                 variant="outline"
                 onClick={() => {
-                  console.log('🔍 DECISION TRACE: Snooze button onClick fired');
-                  console.log('🔍 DECISION TRACE: Calling onSnooze prop');
                   onSnooze();
-                  console.log('🔍 DECISION TRACE: onSnooze prop called');
                 }}
               >
                 <Clock className="mr-2 h-4 w-4" />
@@ -112,14 +111,23 @@ export const DecisionTraceModal: React.FC<Props> = ({
             {onMarkCompleted && (
               <Button
                 onClick={() => {
-                  // Instead of calling onMarkCompleted directly, we need to signal
-                  // that we want to open the completion modal
-                  // The parent component (ActionCenter/ActionsClient) will handle this
-                  onClose(); // Close decision trace
-                  onMarkCompleted(); // This will now trigger opening CompletionModal
+                  onClose();
+                  onMarkCompleted();
                 }}
               >
                 Mark as completed
+              </Button>
+            )}
+
+            {/* 🔑 NEW: View Task button when suppressed by PropertyMaintenanceTask */}
+            {onViewTask && (
+              <Button
+                onClick={() => {
+                  onViewTask();
+                  onClose();
+                }}
+              >
+                View Task in Maintenance
               </Button>
             )}
           </div>
@@ -127,7 +135,7 @@ export const DecisionTraceModal: React.FC<Props> = ({
           <div className="flex gap-2">
             {onUndo && (
               <Button variant="outline" onClick={onUndo}>
-                Undo
+                Undo Completion
               </Button>
             )}
 

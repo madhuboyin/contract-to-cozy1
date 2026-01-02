@@ -1112,13 +1112,22 @@ export interface OrchestrationSummaryDTO {
 
 export type SuppressionSourceDTO =
   | {
+      type: 'PROPERTY_MAINTENANCE_TASK';
+      task: {
+        id: string;
+        title: string;
+        nextDueDate: string | null;
+        status: string;
+      };
+    }
+  | {
       type: 'CHECKLIST_ITEM';
       checklistItem: {
         id: string;
         title: string;
         frequency?: string | null;
         nextDueDate?: string | null;
-        status: ChecklistItemStatus;
+        status: string;
       };
     }
   | {
@@ -1126,7 +1135,7 @@ export type SuppressionSourceDTO =
       eventType: 'USER_MARKED_COMPLETE' | 'USER_UNMARKED_COMPLETE';
       createdAt: string;
     }
-  | null;
+  | undefined;
 
   // Completion types
 export interface CompletionDataDTO {

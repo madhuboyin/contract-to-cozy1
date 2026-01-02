@@ -19,6 +19,7 @@ import { useRecentAction } from '@/hooks/useRecentAction';
 import { DecisionTraceModal } from './DecisionTraceModal';
 import { SnoozeModal } from './SnoozeModal';
 import { CompletionModal } from './CompletionModal';
+import { useRouter } from 'next/navigation';
 
 type Props = {
   propertyId: string;
@@ -57,6 +58,8 @@ export const ActionCenter: React.FC<Props> = ({
 
   const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false);
   const [completionAction, setCompletionAction] = useState<OrchestratedActionDTO | null>(null);
+
+  const router = useRouter();
 
   /* ------------------------------------------------------------------
      Load Actions
@@ -306,6 +309,14 @@ export const ActionCenter: React.FC<Props> = ({
     return result.data.photo;
   }, [completionAction, propertyId]);
 
+  // Add this with other handlers (around line 100)
+  const handleViewTaskFromTrace = useCallback(() => {
+    if (!traceAction) return;
+    
+    // Navigate to maintenance page
+    router.push('/dashboard/maintenance');
+  }, [traceAction, router]);
+
   /* ------------------------------------------------------------------
      Derived Groups - 🔑 FIXED: Only group by risk level, don't re-filter
   ------------------------------------------------------------------- */
@@ -540,6 +551,12 @@ export const ActionCenter: React.FC<Props> = ({
           traceAction.suppression?.suppressionSource?.type === 'USER_EVENT' &&
           traceAction.suppression?.suppressionSource?.eventType === 'USER_MARKED_COMPLETE'
             ? handleUndoCompletedFromTrace
+            : undefined
+        }
+        onViewTask={
+          traceAction &&
+          traceAction.suppression?.suppressionSource?.type === 'PROPERTY_MAINTENANCE_TASK'
+            ? handleViewTaskFromTrace
             : undefined
         }
       />

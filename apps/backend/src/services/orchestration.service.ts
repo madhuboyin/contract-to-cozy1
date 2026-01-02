@@ -551,8 +551,43 @@ async function mapRiskDetailToAction(params: {
 
   const steps: DecisionTraceStep[] = [];
   steps.push({ rule: 'RISK_ACTIONABLE', outcome: 'APPLIED' });
+  
+  // 🔑 ADD: Detailed suppression trace
   if (suppression.suppressed) {
     steps.push({ rule: 'SUPPRESSION_CHECK', outcome: 'APPLIED' });
+    
+    if (suppressionSource?.type === 'PROPERTY_MAINTENANCE_TASK') {
+      steps.push({ 
+        rule: 'TASK_EXISTS', 
+        outcome: 'APPLIED',
+        details: {
+          taskId: suppressionSource.task.id,
+          taskTitle: suppressionSource.task.title,
+          reason: 'This action is already covered by a maintenance task',
+        },
+      });
+    } else if (suppressionSource?.type === 'CHECKLIST_ITEM') {
+      steps.push({ 
+        rule: 'CHECKLIST_TRACKED', 
+        outcome: 'APPLIED',
+        details: {
+          itemId: suppressionSource.checklistItem.id,
+          itemTitle: suppressionSource.checklistItem.title,
+          reason: 'This action is already in your checklist',
+        },
+      });
+    } else if (suppressionSource?.type === 'USER_EVENT') {
+      steps.push({ 
+        rule: 'USER_ACTION', 
+        outcome: 'APPLIED',
+        details: {
+          eventType: suppressionSource.eventType,
+          reason: suppressionSource.eventType === 'USER_MARKED_COMPLETE' 
+            ? 'You marked this as complete'
+            : 'You unmarked this action',
+        },
+      });
+    }
   }
 
   const priority = riskLevel === 'CRITICAL' ? 100 : riskLevel === 'HIGH' ? 80 : 50;
