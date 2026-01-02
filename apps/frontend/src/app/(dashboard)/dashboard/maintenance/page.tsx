@@ -95,6 +95,14 @@ export default function MaintenancePage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<PropertyMaintenanceTask | null>(null);
 
+  // 🔑 FIX 1: Invalidate cache when propertyId changes (prevents stale cache on navigation)
+  useEffect(() => {
+    if (selectedPropertyId) {
+      console.log('🔄 PropertyId changed, invalidating cache:', selectedPropertyId);
+      queryClient.invalidateQueries({ queryKey: ['maintenance-tasks', selectedPropertyId] });
+    }
+  }, [selectedPropertyId, queryClient]);
+
   // Fetch PropertyMaintenanceTasks
   const { data: mainData, isLoading: isInitialLoading } = useQuery({
     queryKey: ['maintenance-tasks', selectedPropertyId],
@@ -115,17 +123,25 @@ export default function MaintenancePage() {
       if (!propertyId && propertiesRes.data.properties.length > 0) {
         const primaryProperty = propertiesRes.data.properties.find(p => p.isPrimary);
         propertyId = primaryProperty?.id || propertiesRes.data.properties[0].id;
+        console.log('📌 No propertyId in URL, using:', propertyId);
       }
 
       if (!propertyId) {
+        console.warn('❌ No propertyId available');
         return {
           maintenanceTasks: [],
           propertiesMap: propertiesMap,
         };
       }
 
+      console.log('📡 Fetching tasks for propertyId:', propertyId);
       const tasksRes = await api.getMaintenanceTasks(propertyId, {
         includeCompleted: false,
+      });
+
+      console.log('📥 Tasks Response:', {
+        success: tasksRes.success,
+        count: tasksRes.success ? tasksRes.data.length : 0
       });
 
       const tasks = tasksRes.success ? tasksRes.data : [];
@@ -135,12 +151,24 @@ export default function MaintenancePage() {
         propertiesMap: propertiesMap,
       };
     },
-    staleTime: 5 * 60 * 1000,
+    // 🔑 FIX 2: Force fresh data on navigation to prevent stale cache issues
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
   });
 
-  const allMaintenanceTasks = mainData?.maintenanceTasks || [];
+  // 🔑 FIX 3: Defensive array handling - ensure we always have an array
+  const allMaintenanceTasks = Array.isArray(mainData?.maintenanceTasks) 
+    ? mainData.maintenanceTasks 
+    : [];
   
   const maintenanceItems = useMemo(() => {
+    // 🔑 FIX 4: Double-check array before operations
+    if (!Array.isArray(allMaintenanceTasks)) {
+      console.warn('⚠️ allMaintenanceTasks is not an array:', allMaintenanceTasks);
+      return [];
+    }
+
     let items = allMaintenanceTasks;
   
     // Filter out completed/cancelled
@@ -169,6 +197,20 @@ export default function MaintenancePage() {
       return new Date(a.nextDueDate).getTime() - new Date(b.nextDueDate).getTime();
     });
   }, [allMaintenanceTasks, priority]);
+
+  // 🔑 FIX 5: Debug logging to track state (can be removed after verification)
+  useEffect(() => {
+    console.group('🔍 MAINTENANCE PAGE STATE');
+    console.log('1. Selected PropertyId:', selectedPropertyId);
+    console.log('2. Is Loading:', isInitialLoading);
+    console.log('3. Main Data:', mainData);
+    console.log('4. All Tasks (raw):', mainData?.maintenanceTasks);
+    console.log('5. All Tasks (safe):', allMaintenanceTasks);
+    console.log('6. All Tasks Length:', allMaintenanceTasks.length);
+    console.log('7. Filtered Items Length:', maintenanceItems.length);
+    console.log('8. Priority Mode:', priority);
+    console.groupEnd();
+  }, [selectedPropertyId, isInitialLoading, mainData, allMaintenanceTasks, maintenanceItems, priority]);
 
   // Modal handlers
   const handleOpenModal = (task: PropertyMaintenanceTask) => {
