@@ -2237,18 +2237,18 @@ class APIClient {
    * Update maintenance task status
    * 
    * @param taskId - Task ID
-   * @param status - New status
+   * @param data - Status update data (status and optional actualCost)
    * @returns Updated maintenance task
    */
   async updateMaintenanceTaskStatus(
     taskId: string,
-    status: MaintenanceTaskStatus
+    data: { status: MaintenanceTaskStatus; actualCost?: number }
   ): Promise<APIResponse<PropertyMaintenanceTask>> {
     return this.request<PropertyMaintenanceTask>(
       `/api/maintenance-tasks/${taskId}/status`,
       {
         method: 'PATCH',
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(data),
       }
     );
   }

@@ -76,7 +76,7 @@ export function PropertyMaintenanceList({
       taskId: string;
       status: MaintenanceTaskStatus;
     }) => {
-      return await api.updateMaintenanceTaskStatus(taskId, status);
+      return await api.updateMaintenanceTaskStatus(taskId, { status });
     },
     onMutate: async ({ taskId, status }) => {
       // Cancel outgoing refetches
