@@ -523,28 +523,45 @@ export default function WarrantiesPage() {
     }
 
     const res = editingWarranty
-      ? await api.updateWarranty(editingWarranty.id, dataToSend as UpdateWarrantyInput)
-      : await api.createWarranty(dataToSend as CreateWarrantyInput);
+        ? await api.updateWarranty(editingWarranty.id, dataToSend as UpdateWarrantyInput)
+        : await api.createWarranty(dataToSend as CreateWarrantyInput);
 
     if (res.success) {
-      toast({
-        title: editingWarranty ? 'Warranty Updated' : 'Warranty Created',
-        description: `${res.data.providerName}'s policy was saved successfully.`,
-      });
-      
-      // NEW: Conditional redirection after successful creation
-      if (!editingWarranty && openedFromSetup) {
-          router.push('/dashboard/maintenance-setup'); // Navigate back to setup page
-      } else {
-          await fetchDependencies(); // Refresh list to show new/updated item
-          closeAddEditModal();
-      }
+        toast({
+            title: editingWarranty ? 'Warranty Updated' : 'Warranty Created',
+            description: `${res.data.providerName}'s policy was saved successfully.`,
+        });
+        
+        // ============================================================================
+        // 🔑 NEW: Conditional redirection based on navigation source
+        // ============================================================================
+        const from = searchParams.get('from');
+        const propertyId = searchParams.get('propertyId');
+        
+        // If created from risk assessment page, navigate back with refresh flag
+        if (!editingWarranty && from === 'risk-assessment' && propertyId) {
+            console.log('📍 Navigating back to risk assessment with refresh...');
+            router.push(`/dashboard/properties/${propertyId}/risk-assessment?refreshed=true`);
+        }
+        // If opened from maintenance-setup, navigate back there
+        else if (!editingWarranty && openedFromSetup) {
+            console.log('📍 Navigating back to maintenance setup...');
+            router.push('/dashboard/maintenance-setup');
+        }
+        // Otherwise, refresh the warranties list and close modal
+        else {
+            console.log('📍 Staying on warranties page, refreshing list...');
+            await fetchDependencies();
+            closeAddEditModal();
+        }
+        // ============================================================================
+        
     } else {
-      toast({
-        title: 'Operation Failed',
-        description: (res as APIError).message,
-        variant: 'destructive',
-      });
+        toast({
+            title: 'Operation Failed',
+            description: (res as APIError).message,
+            variant: 'destructive',
+        });
     }
     setIsSubmitting(false);
   };

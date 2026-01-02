@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { Property, RiskAssessmentReport, AssetRiskDetail, RiskCategory, PropertyMaintenanceTask, RecurrenceFrequency, MaintenanceTaskServiceCategory } from "@/types"; 
 import { api } from "@/lib/api/client";
@@ -71,11 +71,17 @@ const ScheduledBadge: React.FC<{ task: PropertyMaintenanceTask }> = ({ task }) =
 const RiskCategorySummaryCard = ({ 
     category, 
     details, 
-    riskIcon: RiskIcon 
+    riskIcon: RiskIcon,
+    onScheduleInspection, // 🔑 NEW: Add handler
+    onViewTask, // 🔑 NEW: Add handler
+    tasksBySystemType, // 🔑 NEW: Add task lookup
 }: { 
     category: RiskCategory; 
     details: AssetRiskDetail[]; 
-    riskIcon: React.ElementType; 
+    riskIcon: React.ElementType;
+    onScheduleInspection: (asset: AssetRiskDetail) => void; // 🔑 NEW
+    onViewTask: (task: PropertyMaintenanceTask) => void; // 🔑 NEW
+    tasksBySystemType: Map<string, PropertyMaintenanceTask>; // 🔑 NEW
 }) => {
     
     const relevantAssets = details.filter(item => item.category === category);
@@ -84,6 +90,10 @@ const RiskCategorySummaryCard = ({
     const formattedExposure = formatCurrency(totalExposure);
 
     const topRiskAsset = relevantAssets.sort((a, b) => b.riskDollar - a.riskDollar)[0];
+    
+    // 🔑 NEW: Check if top risk asset has scheduled task
+    const existingTask = topRiskAsset ? tasksBySystemType.get(topRiskAsset.systemType) : undefined;
+    const isScheduled = !!existingTask;
     
     let title: string = `${category.replace(/_/g, ' ')} Risk`;
     let description: string;
@@ -95,7 +105,18 @@ const RiskCategorySummaryCard = ({
     if (topRiskAsset && topRiskAsset.riskDollar > 500) {
         title = topRiskAsset.assetName.replace(/_/g, ' ');
         description = `Top risk: ${topRiskAsset.actionCta || `Requires attention due to age/condition.`}`;
-        ctaText = topRiskAsset.actionCta || `Find Service`;
+        
+        // 🔑 FIXED: Shorten CTA text for bottom cards
+        if (isScheduled) {
+            ctaText = 'View Task';
+        } else if (topRiskAsset.actionCta === 'Add Home Warranty') {
+            ctaText = 'Add Home Warranty';
+        } else if (topRiskAsset.actionCta?.includes('Inspection')) {
+            ctaText = 'Schedule Inspection'; // 🔑 SHORTENED from "Schedule Inspection/Replacement"
+        } else {
+            ctaText = topRiskAsset.actionCta || 'Find Service';
+        }
+        
         ctaVariant = topRiskAsset.riskLevel === 'HIGH' ? 'destructive' : 'default';
         badgeStatus = topRiskAsset.riskLevel;
         badgeColor = topRiskAsset.riskLevel === 'HIGH' ? 'destructive' : topRiskAsset.riskLevel === 'MODERATE' ? 'warning' : 'default';
@@ -115,6 +136,16 @@ const RiskCategorySummaryCard = ({
         badgeColor = 'default';
     }
     
+    // 🔑 NEW: Handle button click
+    const handleClick = () => {
+        if (isScheduled && existingTask) {
+            onViewTask(existingTask);
+        } else if (topRiskAsset) {
+            onScheduleInspection(topRiskAsset);
+        }
+        // For other cases (low risk, missing data), could navigate elsewhere
+    };
+    
     return (
         <Card className="flex flex-col justify-between">
             <CardHeader className="pb-2">
@@ -128,7 +159,12 @@ const RiskCategorySummaryCard = ({
             </CardHeader>
             <CardContent>
                 <div className="flex items-center justify-between mt-2">
-                    <Button variant={ctaVariant} size="sm">
+                    <Button 
+                        variant={isScheduled ? 'outline' : ctaVariant} 
+                        size="sm"
+                        onClick={handleClick} // 🔑 NEW: Make button functional
+                        disabled={!topRiskAsset && relevantAssets.length === 0} // Disable if no data
+                    >
                         {ctaText}
                     </Button>
                     <Badge variant={badgeColor as any}>
@@ -234,7 +270,7 @@ const AssetMatrixTable = ({
                                             ) : (
                                                 <Button 
                                                     size="sm" 
-                                                    variant="ghost"
+                                                    variant={item.riskLevel === 'HIGH' ? 'destructive' : 'secondary'}
                                                     onClick={() => onScheduleInspection(item)}
                                                 >
                                                     Schedule Maintenance
@@ -256,6 +292,7 @@ const AssetMatrixTable = ({
 export default function RiskAssessmentPage() {
     const params = useParams();
     const router = useRouter();
+    const queryClient = useQueryClient(); // 🔑 NEW: For invalidating queries
     const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
     const { user } = useAuth(); 
 
@@ -286,7 +323,23 @@ export default function RiskAssessmentPage() {
         if (task.assetType) {
             tasksBySystemType.set(task.assetType, task);
         }
-    }); 
+    });
+    
+    // 🔑 NEW: Check for return from warranty creation and refetch risk data
+    React.useEffect(() => {
+        // If we're returning from warranty page, invalidate risk query to get updated CTAs
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('refreshed') === 'true') {
+            console.log('🔄 Returned from warranty creation, refreshing risk data...');
+            // Invalidate risk query to refetch with updated warranty status
+            queryClient.invalidateQueries({ queryKey: ['riskReport', propertyId] });
+            queryClient.invalidateQueries({ queryKey: ['maintenance-tasks', propertyId] });
+            
+            // Clean up URL parameter
+            const newUrl = window.location.pathname + window.location.search.replace(/[?&]refreshed=true/, '');
+            window.history.replaceState({}, '', newUrl);
+        }
+    }, [propertyId, queryClient]); 
 
     // 1. Fetch Property Details (to get name/address for header)
     const { data: property, isLoading: isLoadingProperty } = useQuery({
@@ -565,21 +618,33 @@ export default function RiskAssessmentPage() {
                             category={'STRUCTURE'} 
                             details={report.details} 
                             riskIcon={Home}
+                            onScheduleInspection={handleScheduleInspection}
+                            onViewTask={handleViewTask}
+                            tasksBySystemType={tasksBySystemType}
                         />
                         <RiskCategorySummaryCard 
                             category={'SYSTEMS'} 
                             details={report.details} 
                             riskIcon={ZapIcon}
+                            onScheduleInspection={handleScheduleInspection}
+                            onViewTask={handleViewTask}
+                            tasksBySystemType={tasksBySystemType}
                         />
                         <RiskCategorySummaryCard 
                             category={'SAFETY'} 
                             details={report.details} 
                             riskIcon={Siren}
+                            onScheduleInspection={handleScheduleInspection}
+                            onViewTask={handleViewTask}
+                            tasksBySystemType={tasksBySystemType}
                         />
                         <RiskCategorySummaryCard 
                             category={'FINANCIAL_GAP'} 
                             details={report.details} 
                             riskIcon={DollarSign}
+                            onScheduleInspection={handleScheduleInspection}
+                            onViewTask={handleViewTask}
+                            tasksBySystemType={tasksBySystemType}
                         />
                     </div>
                 </React.Fragment>
