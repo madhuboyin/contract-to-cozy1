@@ -3,21 +3,22 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "next/navigation";
-import { Property, RiskAssessmentReport, AssetRiskDetail, RiskCategory } from "@/types"; 
+import { useParams, useRouter } from "next/navigation";
+import { Property, RiskAssessmentReport, AssetRiskDetail, RiskCategory, PropertyMaintenanceTask, RecurrenceFrequency, MaintenanceTaskServiceCategory } from "@/types"; 
 import { api } from "@/lib/api/client";
 import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading } from "@/components/page-header";
 import { toast } from "@/components/ui/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Zap, Shield, Loader2, DollarSign, Download, ArrowLeft, Home, Zap as ZapIcon, Siren } from "lucide-react";
+import { Zap, Shield, Loader2, DollarSign, Download, ArrowLeft, Home, Zap as ZapIcon, Siren, CheckCircle, Calendar } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import React from "react";
-import { useAuth } from "@/lib/auth/AuthContext"; 
+import React, { useState } from "react";
+import { useAuth } from "@/lib/auth/AuthContext";
+import { MaintenanceConfigModal } from "../../../maintenance-setup/MaintenanceConfigModal"; 
 
 // --- Types for Query Data ---
 type RiskReportFull = RiskAssessmentReport; 
@@ -38,6 +39,32 @@ const getRiskDetails = (score: number) => {
     if (score >= 40) return { level: "ELEVATED", color: "text-orange-500", progressClass: "bg-orange-500", badgeVariant: "destructive" };
     return { level: "HIGH", color: "text-red-500", progressClass: "bg-red-500", badgeVariant: "destructive" };
 };
+
+// 🔑 NEW: Map system types to maintenance service categories
+const getServiceCategoryForAsset = (systemType: string): MaintenanceTaskServiceCategory => {
+    const categoryMap: Record<string, MaintenanceTaskServiceCategory> = {
+        'HVAC_FURNACE': 'HVAC',
+        'HVAC_HEAT_PUMP': 'HVAC',
+        'WATER_HEATER_TANK': 'PLUMBING',
+        'WATER_HEATER_TANKLESS': 'PLUMBING',
+        'ROOF_SHINGLE': 'ROOFING',
+        'ROOF_TILE_METAL': 'ROOFING',
+        'ELECTRICAL_PANEL_MODERN': 'ELECTRICAL',
+        'ELECTRICAL_PANEL_OLD': 'ELECTRICAL',
+        'SAFETY_SMOKE_CO_DETECTORS': 'HANDYMAN',
+        'MAJOR_APPLIANCE_FRIDGE': 'APPLIANCE_REPAIR',
+        'MAJOR_APPLIANCE_DISHWASHER': 'APPLIANCE_REPAIR',
+    };
+    return categoryMap[systemType] || 'HANDYMAN';
+};
+
+// 🔑 NEW: Component to show scheduled status
+const ScheduledBadge: React.FC<{ task: PropertyMaintenanceTask }> = ({ task }) => (
+    <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-green-50 border border-green-200">
+        <CheckCircle className="h-3 w-3 text-green-600" />
+        <span className="text-xs font-medium text-green-700">Scheduled</span>
+    </div>
+);
 
 
 // --- Component for Phase 3.3: Risk Category Summary Card ---
@@ -114,7 +141,17 @@ const RiskCategorySummaryCard = ({
 }
 
 // --- Component for Phase 3.2: Detailed Asset Matrix Table ---
-const AssetMatrixTable = ({ details }: { details: AssetRiskDetail[] }) => {
+const AssetMatrixTable = ({ 
+    details, 
+    tasksBySystemType, 
+    onScheduleInspection, 
+    onViewTask 
+}: { 
+    details: AssetRiskDetail[];
+    tasksBySystemType: Map<string, PropertyMaintenanceTask>;
+    onScheduleInspection: (asset: AssetRiskDetail) => void;
+    onViewTask: (task: PropertyMaintenanceTask) => void;
+}) => {
     const getRiskBadge = (level: AssetRiskDetail['riskLevel']) => {
         if (level === 'LOW') return <Badge variant="secondary" className="bg-green-500/20 text-green-700 hover:bg-green-500/30 border-green-500">Low</Badge>;
         if (level === 'MODERATE') return <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-700 hover:bg-yellow-500/30 border-yellow-500">Moderate</Badge>;
@@ -143,35 +180,70 @@ const AssetMatrixTable = ({ details }: { details: AssetRiskDetail[] }) => {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {details.map((item, index) => (
-                                <TableRow key={index} className={item.riskLevel === 'HIGH' ? 'bg-red-50/50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20' : ''}>
-                                    <TableCell className="font-medium whitespace-normal break-words">
-                                        {item.assetName.replace(/_/g, ' ')}
-                                        <div className="text-xs text-muted-foreground">{item.systemType.replace(/_/g, ' ')}</div>
-                                    </TableCell>
-                                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                                        {item.category.replace(/_/g, ' ')}
-                                    </TableCell>
-                                    <TableCell className="whitespace-nowrap">
-                                        <span className="font-semibold">{item.age} yrs</span> / {item.expectedLife} yrs
-                                        {item.age > item.expectedLife && <span className="text-red-500 text-xs ml-2">(Past Life)</span>}
-                                    </TableCell>
-                                    <TableCell className="whitespace-nowrap">
-                                        {getRiskBadge(item.riskLevel)}
-                                    </TableCell>
-                                    <TableCell className="font-bold text-red-600 whitespace-nowrap">
-                                        {formatCurrency(item.outOfPocketCost)}
-                                        <div className="text-xs text-muted-foreground whitespace-normal">P: {item.probability.toFixed(2)} / C: {(item.coverageFactor * 100).toFixed(0)}%</div>
-                                    </TableCell>
-                                    <TableCell className="whitespace-nowrap">
-                                        {item.actionCta ? (
-                                            <Button size="sm" variant="secondary">{item.actionCta}</Button>
-                                        ) : (
-                                            <span className="text-muted-foreground text-sm">Review Maintenance</span>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            ))}
+                            {details.map((item, index) => {
+                                // 🔑 NEW: Check if task exists for this asset
+                                const existingTask = tasksBySystemType.get(item.systemType);
+                                const isScheduled = !!existingTask;
+
+                                return (
+                                    <TableRow key={index} className={item.riskLevel === 'HIGH' ? 'bg-red-50/50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20' : ''}>
+                                        <TableCell className="font-medium whitespace-normal break-words">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <div>
+                                                    {item.assetName.replace(/_/g, ' ')}
+                                                    <div className="text-xs text-muted-foreground">{item.systemType.replace(/_/g, ' ')}</div>
+                                                </div>
+                                                {/* 🔑 NEW: Show scheduled badge */}
+                                                {isScheduled && <ScheduledBadge task={existingTask} />}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                                            {item.category.replace(/_/g, ' ')}
+                                        </TableCell>
+                                        <TableCell className="whitespace-nowrap">
+                                            <span className="font-semibold">{item.age} yrs</span> / {item.expectedLife} yrs
+                                            {item.age > item.expectedLife && <span className="text-red-500 text-xs ml-2">(Past Life)</span>}
+                                        </TableCell>
+                                        <TableCell className="whitespace-nowrap">
+                                            {getRiskBadge(item.riskLevel)}
+                                        </TableCell>
+                                        <TableCell className="font-bold text-red-600 whitespace-nowrap">
+                                            {formatCurrency(item.outOfPocketCost)}
+                                            <div className="text-xs text-muted-foreground whitespace-normal">P: {item.probability.toFixed(2)} / C: {(item.coverageFactor * 100).toFixed(0)}%</div>
+                                        </TableCell>
+                                        <TableCell className="whitespace-nowrap">
+                                            {/* 🔑 NEW: Context-aware action buttons */}
+                                            {isScheduled ? (
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="outline"
+                                                    onClick={() => onViewTask(existingTask)}
+                                                    className="gap-1"
+                                                >
+                                                    <Calendar className="h-3 w-3" />
+                                                    View Task
+                                                </Button>
+                                            ) : item.actionCta ? (
+                                                <Button 
+                                                    size="sm" 
+                                                    variant={item.riskLevel === 'HIGH' ? 'destructive' : 'secondary'}
+                                                    onClick={() => onScheduleInspection(item)}
+                                                >
+                                                    {item.actionCta}
+                                                </Button>
+                                            ) : (
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="ghost"
+                                                    onClick={() => onScheduleInspection(item)}
+                                                >
+                                                    Schedule Maintenance
+                                                </Button>
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
                         </TableBody>
                     </Table>
                 </div>
@@ -183,11 +255,38 @@ const AssetMatrixTable = ({ details }: { details: AssetRiskDetail[] }) => {
 // --- Main Page Component ---
 export default function RiskAssessmentPage() {
     const params = useParams();
+    const router = useRouter();
     const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
     const { user } = useAuth(); 
 
     // Mock Premium Check (REPLACE with actual logic)
-    const isPremium = user?.role === 'ADMIN'; 
+    const isPremium = user?.role === 'ADMIN';
+    
+    // 🔑 NEW: Modal state for creating tasks
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [selectedAsset, setSelectedAsset] = useState<AssetRiskDetail | null>(null);
+
+    // 🔑 NEW: Fetch existing maintenance tasks for this property
+    const { data: maintenanceTasksData, refetch: refetchTasks } = useQuery({
+        queryKey: ['maintenance-tasks', propertyId],
+        enabled: !!propertyId,
+        queryFn: async () => {
+            const response = await api.getMaintenanceTasks(propertyId, {
+                includeCompleted: false,
+            });
+            return response.success ? response.data : [];
+        },
+    });
+
+    const maintenanceTasks = maintenanceTasksData || [];
+
+    // 🔑 NEW: Create lookup map: systemType -> task
+    const tasksBySystemType = new Map<string, PropertyMaintenanceTask>();
+    maintenanceTasks.forEach(task => {
+        if (task.assetType) {
+            tasksBySystemType.set(task.assetType, task);
+        }
+    }); 
 
     // 1. Fetch Property Details (to get name/address for header)
     const { data: property, isLoading: isLoadingProperty } = useQuery({
@@ -394,6 +493,29 @@ export default function RiskAssessmentPage() {
         }
     };
     
+    // 🔑 NEW: Handle CTA click - open modal to create task
+    const handleScheduleInspection = (asset: AssetRiskDetail) => {
+        setSelectedAsset(asset);
+        setIsModalOpen(true);
+    };
+
+    // 🔑 NEW: Handle viewing existing task
+    const handleViewTask = (task: PropertyMaintenanceTask) => {
+        router.push(`/dashboard/maintenance?propertyId=${propertyId}`);
+    };
+
+    // 🔑 NEW: Handle successful task creation
+    const handleTaskCreated = () => {
+        toast({
+            title: 'Task Created',
+            description: 'Maintenance task added to your schedule.',
+        });
+        setIsModalOpen(false);
+        setSelectedAsset(null);
+        // Refetch maintenance tasks to update indicators
+        refetchTasks();
+    };
+    
     // --- Detailed Section Rendering Logic ---
     const renderDetailedSections = () => {
         if (isCalculating || isQueued) {
@@ -412,7 +534,12 @@ export default function RiskAssessmentPage() {
         if (report && Array.isArray(report.details) && report.details.length > 0) {
             return (
                 <React.Fragment>
-                    <AssetMatrixTable details={report.details} />
+                    <AssetMatrixTable 
+                        details={report.details} 
+                        tasksBySystemType={tasksBySystemType}
+                        onScheduleInspection={handleScheduleInspection}
+                        onViewTask={handleViewTask}
+                    />
                     
                     <div className="grid gap-4 md:grid-cols-4">
                         <RiskCategorySummaryCard 
@@ -584,6 +711,38 @@ export default function RiskAssessmentPage() {
                 {/* --- Detailed Section Content --- */}
                 {renderDetailedSections()}
             </div>
+
+            {/* 🔑 NEW: Modal for creating maintenance tasks */}
+            {selectedAsset && (
+                <MaintenanceConfigModal
+                    isOpen={isModalOpen}
+                    onClose={() => {
+                        setIsModalOpen(false);
+                        setSelectedAsset(null);
+                    }}
+                    template={{
+                        id: `risk:${selectedAsset.systemType}`,
+                        title: selectedAsset.assetName.replace(/_/g, ' '),
+                        description: selectedAsset.actionCta || 'Schedule Inspection/Replacement',
+                        serviceCategory: getServiceCategoryForAsset(selectedAsset.systemType) as any,
+                        defaultFrequency: RecurrenceFrequency.ANNUALLY,
+                        sortOrder: 0,
+                    }}
+                    properties={[]}
+                    selectedPropertyId={propertyId}
+                    onSuccess={handleTaskCreated}
+                    existingConfig={{
+                        templateId: `risk:${selectedAsset.systemType}`,
+                        title: selectedAsset.assetName.replace(/_/g, ' '),
+                        description: selectedAsset.actionCta || 'Schedule Inspection/Replacement',
+                        isRecurring: false,
+                        frequency: null,
+                        nextDueDate: new Date(),
+                        serviceCategory: getServiceCategoryForAsset(selectedAsset.systemType) as any,
+                        propertyId: propertyId,
+                    }}
+                />
+            )}
             
         </DashboardShell>
     );
