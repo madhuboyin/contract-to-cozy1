@@ -523,9 +523,13 @@ export default function RiskAssessmentPage() {
                 <Card className="md:col-span-3">
                     <CardHeader className="flex flex-row items-center justify-start space-y-0 pb-2">
                         <Loader2 className="h-5 w-5 animate-spin mr-3 text-primary" />
-                        <CardTitle>Awaiting Detailed Risk Report</CardTitle>
+                        <CardTitle>Calculating Risks...</CardTitle>
                     </CardHeader>
-                    <CardContent><CardDescription>{isQueued ? 'The risk calculation job is currently queued and will start shortly.' : 'Fetching detailed report breakdown...'}</CardDescription></CardContent>
+                    <CardContent>
+                        <CardDescription>
+                            {isQueued ? 'Your report is in the queue. We will update automatically.' : 'Fetching report details...'}
+                        </CardDescription>
+                    </CardContent>
                 </Card>
             );
         }
