@@ -546,23 +546,48 @@ export default function RiskAssessmentPage() {
         }
     };
     
-    // 🔑 NEW: Handle CTA click - route to warranty page or open maintenance modal
+    // 🔑 Handle CTA click - route based on action type
     const handleScheduleInspection = (asset: AssetRiskDetail) => {
-        // Check if the action is to add a home warranty
+        // 1. Home Warranty → Warranties page
         if (asset.actionCta === 'Add Home Warranty') {
-            // Navigate to warranties page with auto-open modal and asset context
             const params = new URLSearchParams({
                 action: 'new',
                 propertyId: propertyId,
                 from: 'risk-assessment',
-                systemType: asset.systemType, // Pass system type for pre-linking
+                systemType: asset.systemType,
                 assetName: asset.assetName,
             });
             router.push(`/dashboard/warranties?${params.toString()}`);
             return;
         }
         
-        // Otherwise, open maintenance modal for scheduling tasks
+        // 2. Schedule Inspection/Maintenance → Provider Search (for booking services)
+        if (asset.actionCta?.includes('Schedule') || asset.actionCta?.includes('Book')) {
+            // Map systemType to service category
+            let category = 'INSPECTION'; // default
+            if (asset.systemType.includes('HVAC')) {
+                category = 'HVAC';
+            } else if (asset.systemType.includes('WATER_HEATER')) {
+                category = 'PLUMBING';
+            } else if (asset.systemType.includes('ROOF')) {
+                category = 'ROOFING';
+            } else if (asset.systemType.includes('ELECTRICAL')) {
+                category = 'ELECTRICAL';
+            } else if (asset.systemType.includes('SAFETY')) {
+                category = 'HANDYMAN';
+            }
+            
+            // Navigate to provider search with context
+            const params = new URLSearchParams({
+                category: category,
+                insightFactor: asset.assetName.replace(/_/g, ' '),
+                propertyId: propertyId,
+            });
+            router.push(`/dashboard/providers?${params.toString()}`);
+            return;
+        }
+        
+        // 3. Fallback: Open maintenance modal for creating reminders
         setSelectedAsset(asset);
         setIsModalOpen(true);
     };
