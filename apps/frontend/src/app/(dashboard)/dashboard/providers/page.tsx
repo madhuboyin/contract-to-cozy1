@@ -138,23 +138,27 @@ const ServiceFilter = React.memo(({ onFilterChange, defaultCategory, isHomeBuyer
 ServiceFilter.displayName = 'ServiceFilter';
 
 
-const ProviderList = ({ providers, targetPropertyId, insightContext, category }: { 
+const ProviderList = ({ 
+  providers, 
+  targetPropertyId, 
+  insightContext, 
+  category,
+  fromSource  // ✅ Add as prop
+}: { 
   providers: Provider[]; 
   targetPropertyId?: string;
   insightContext?: string;
   category?: string;
+  fromSource?: string;  // ✅ Add type
 }) => {
   return (
     <div className="grid gap-6 md:grid-cols-2">
       {providers.map((provider) => {
-        // Build profile link with optional parameters (propertyId, insightFactor, category)
         const queryParams = new URLSearchParams();
         if (targetPropertyId) queryParams.append('propertyId', targetPropertyId);
         if (insightContext) queryParams.append('insightFactor', insightContext);
         if (category) queryParams.append('category', category);
-        
-        const fromParam = useSearchParams().get('from');
-        if (fromParam) queryParams.append('from', fromParam);
+        if (fromSource) queryParams.append('from', fromSource);  // ✅ Use prop
         
         const profileLink = queryParams.toString() 
           ? `/dashboard/providers/${provider.id}?${queryParams.toString()}`
@@ -307,6 +311,9 @@ export default function ProvidersPage() {
     fetchProviders(updatedFilters);
   }, [fetchProviders]);
 
+  // 🔑 Extract 'from' parameter from URL (if any)
+  const fromSource = searchParams.get('from') || undefined;
+
   // Fetch providers on initial load only (not on every filter change)
   useEffect(() => {
     // Only fetch once on mount if we have a category from URL
@@ -389,6 +396,7 @@ export default function ProvidersPage() {
           targetPropertyId={targetPropertyId}
           insightContext={insightContext}
           category={defaultCategory}
+          fromSource={fromSource}
         />
       ) : (
         <div className="text-center p-8 bg-gray-50 border rounded-lg">
