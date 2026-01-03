@@ -60,14 +60,19 @@ const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 8080;
 
-const SWAGGER_USER = process.env.SWAGGER_USER || 'admin';
-const SWAGGER_PASSWORD = process.env.SWAGGER_PASSWORD;
+// 1. PUBLIC Spec Endpoint (Move this ABOVE basicAuth)
+app.get('/api/docs/swagger.json', (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
+});
 
-// Apply Basic Auth to the docs route if a password is provided
-if (SWAGGER_PASSWORD) {
+// 2. PROTECTED UI Access
+if (process.env.NODE_ENV === 'production' && process.env.SWAGGER_PASSWORD) {
   app.use('/api/docs', basicAuth({
-    users: { [SWAGGER_USER]: SWAGGER_PASSWORD },
-    challenge: true, // This triggers the browser login popup
+    users: { 
+      'admin': process.env.SWAGGER_PASSWORD 
+    },
+    challenge: true,
     realm: 'Contract to Cozy API Documentation'
   }));
 }
@@ -75,8 +80,9 @@ if (SWAGGER_PASSWORD) {
 // 3. Mount Swagger UI (Keep your existing config)
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(null, {
   swaggerOptions: {
-    url: '/api/docs/swagger.json',
-    persistAuthorization: true, // This keeps the JWT token saved even after refresh
+    // Use a relative path to ensure it works behind Cloudflare/Proxies
+    url: './docs/swagger.json',  
+    persistAuthorization: true,
   },
   customCss: '.swagger-ui .topbar { display: none }',
   customSiteTitle: 'Contract to Cozy API Documentation',
@@ -87,17 +93,16 @@ app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(null, {
 // =============================================================================
 
 app.use(helmet({
-  contentSecurityPolicy: false, // Allow Swagger UI inline scripts
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      "script-src": ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+      "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      "img-src": ["'self'", "data:", "https://api.contracttocozy.com"],
+    },
+  },
 }));
-app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'https://contracttocozy.com',
-    'https://www.contracttocozy.com',
-    'https://docs.contracttocozy.com'
-  ],
-  credentials: true,
-}));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
