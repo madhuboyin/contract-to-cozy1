@@ -366,6 +366,9 @@ const AssetMatrixTable = ({
                                                         onViewBooking(existingBooking);
                                                     } else if (hasTask) {
                                                         onViewTask(existingTask);
+                                                    } else if (ctaText === 'Add Home Warranty') {
+                                                        // Navigate to warranties page with action=new
+                                                        window.location.href = `/dashboard/warranties?action=new&from=risk-assessment`;
                                                     } else {
                                                         onScheduleInspection(item);
                                                     }

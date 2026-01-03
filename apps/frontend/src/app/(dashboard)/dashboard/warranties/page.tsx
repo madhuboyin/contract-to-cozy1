@@ -488,21 +488,21 @@ export default function WarrantiesPage() {
     setIsLoading(false);
   }, [toast]); 
 
-  // NEW: Handle initial load based on query parameters
-  useEffect(() => {
-    fetchDependencies();
+    // NEW: Handle initial load based on query parameters
+    useEffect(() => {
+      fetchDependencies();
 
-    const action = searchParams.get('action');
-    const from = searchParams.get('from');
-    
-    if (action === 'new' && !isAddEditModalOpen) {
-        openAddEditModal(undefined);
-        
-        // Check if navigation originated from the maintenance setup page
-        if (from === 'maintenance-setup') {
-            setOpenedFromSetup(true);
-        }
-    }
+      const action = searchParams.get('action');
+      const from = searchParams.get('from');
+      
+      if (action === 'new' && !isAddEditModalOpen) {
+          openAddEditModal(undefined);
+          
+          // Check if navigation originated from maintenance-setup OR risk-assessment
+          if (from === 'maintenance-setup' || from === 'risk-assessment') {
+              setOpenedFromSetup(true);
+          }
+      }
 
   }, [fetchDependencies, searchParams]);
 
@@ -545,8 +545,15 @@ export default function WarrantiesPage() {
         }
         // If opened from maintenance-setup, navigate back there
         else if (!editingWarranty && openedFromSetup) {
-            console.log('📍 Navigating back to maintenance setup...');
-            router.push('/dashboard/maintenance-setup');
+          if (from === 'risk-assessment' && dataToSend.propertyId) {
+              // Navigate back to risk assessment with refresh parameter
+              router.push(`/dashboard/properties/${dataToSend.propertyId}/risk-assessment?refreshed=true`);
+          } else if (from === 'maintenance-setup') {
+              router.push('/dashboard/maintenance-setup');
+          } else {
+              await fetchDependencies();
+              closeAddEditModal();
+          }
         }
         // Otherwise, refresh the warranties list and close modal
         else {
@@ -592,16 +599,22 @@ export default function WarrantiesPage() {
   
   const closeAddEditModal = () => {
     const wasOpenedFromSetup = openedFromSetup;
+    const from = searchParams.get('from');
     setIsAddEditModalOpen(false);
     setEditingWarranty(undefined);
     setOpenedFromSetup(false);
     
     if (wasOpenedFromSetup) {
-        // If canceled after being opened from maintenance-setup, navigate back.
-        router.push('/dashboard/maintenance-setup');
-    } else if (searchParams.has('action') || searchParams.has('from')) {
-        // Otherwise, clean up the URL without navigating away from the current page.
-        router.replace('/dashboard/warranties', { scroll: false });
+      if (from === 'risk-assessment') {
+          const propertyId = properties.length > 0 ? properties[0].id : null;
+          if (propertyId) {
+              router.push(`/dashboard/properties/${propertyId}/risk-assessment`);
+          } else {
+              router.push('/dashboard/warranties');
+          }
+      } else if (from === 'maintenance-setup') {
+          router.push('/dashboard/maintenance-setup');
+      }
     }
   };
 
