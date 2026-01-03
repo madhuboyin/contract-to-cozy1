@@ -227,6 +227,7 @@ const AssetMatrixTable = ({
     tasksBySystemType,
     bookingsByInsightFactor,
     warrantiesBySystemType, // 🔑 NEW
+    propertyId, // 🔑 NEW
     onScheduleInspection, 
     onViewTask,
     onViewBooking,
@@ -235,6 +236,7 @@ const AssetMatrixTable = ({
     tasksBySystemType: Map<string, PropertyMaintenanceTask>;
     bookingsByInsightFactor: Map<string, any>;
     warrantiesBySystemType: Map<string, any>; // 🔑 NEW
+    propertyId: string; // 🔑 NEW
     onScheduleInspection: (asset: AssetRiskDetail) => void;
     onViewTask: (task: PropertyMaintenanceTask) => void;
     onViewBooking: (booking: any) => void;
@@ -370,9 +372,15 @@ const AssetMatrixTable = ({
                                                         // Navigate to warranties page
                                                         window.location.href = `/dashboard/warranties?action=new&from=risk-assessment`;
                                                     } else if (ctaText === 'Schedule Inspection' || ctaText === 'Schedule Replacement') {
-                                                        // Navigate to provider search with category filter
+                                                        // Navigate to providers page with category filter
                                                         const serviceCategory = getServiceCategoryForAsset(item.systemType);
-                                                        window.location.href = `/dashboard/find-services?category=${serviceCategory}`;
+                                                        const insightFactor = item.assetName.replace(/_/g, ' ');
+                                                        const params = new URLSearchParams({
+                                                            category: serviceCategory,
+                                                            insightFactor: insightFactor,
+                                                            propertyId: propertyId
+                                                        });
+                                                        window.location.href = `/dashboard/providers?${params.toString()}`;
                                                     } else {
                                                         // Default: open maintenance modal
                                                         onScheduleInspection(item);
@@ -870,6 +878,7 @@ export default function RiskAssessmentPage() {
                         tasksBySystemType={tasksBySystemType}
                         bookingsByInsightFactor={bookingsByInsightFactor}
                         warrantiesBySystemType={warrantiesBySystemType}
+                        propertyId={propertyId}
                         onScheduleInspection={handleScheduleInspection}
                         onViewTask={handleViewTask}
                         onViewBooking={handleViewBooking}
