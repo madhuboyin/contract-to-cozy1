@@ -8,6 +8,7 @@ import {
 } from '../types'; 
 
 import { prisma } from '../lib/prisma';
+import JobQueueService from './JobQueue.service';
 
 // Helper interface for safe Decimal conversion (the object must have a toNumber method)
 interface DecimalLike {
@@ -218,12 +219,8 @@ export async function createWarranty(
       data: {
         homeownerProfile: { connect: { id: homeownerProfileId } },
         property: data.propertyId && data.propertyId !== "" ? { connect: { id: data.propertyId } } : undefined,
-        
-        // --- ADDED NEW REQUIRED FIELDS ---
         category: data.category, 
         homeAsset: data.homeAssetId && data.homeAssetId !== "" ? { connect: { id: data.homeAssetId } } : undefined,
-        // --- END ADDED FIELDS ---
-
         providerName: data.providerName,
         policyNumber: data.policyNumber,
         coverageDetails: data.coverageDetails,
@@ -233,23 +230,22 @@ export async function createWarranty(
       } as Prisma.WarrantyCreateInput,
     });
 
+    // 🔑 ADD THIS SECTION - Trigger risk report regeneration
+    if (data.propertyId) {
+      try {
+        console.log(`[WARRANTY-SERVICE] Triggering risk update for property ${data.propertyId}`);
+        await JobQueueService.enqueuePropertyIntelligenceJobs(data.propertyId);
+      } catch (error) {
+        console.error(`[WARRANTY-SERVICE] Failed to enqueue risk update job:`, error);
+      }
+    }
+    // 🔑 END NEW SECTION
+
     return mapRawWarrantyToWarranty(rawWarranty);
   } catch (error) {
     console.error('FATAL ERROR (POST /warranties): Prisma operation failed.', error); 
     throw error;
   }
-}
-
-export async function listWarranties(homeownerProfileId: string): Promise<Warranty[]> {
-  const rawWarranties = await prisma.warranty.findMany({
-    where: { homeownerProfileId },
-    orderBy: { expiryDate: 'asc' },
-    include: {
-      documents: true
-    }
-  });
-
-  return rawWarranties.map(mapRawWarrantyToWarranty);
 }
 
 export async function updateWarranty(
@@ -261,12 +257,22 @@ export async function updateWarranty(
     where: { id: warrantyId, homeownerProfileId },
     data: {
       ...data,
-      // Data spread includes category and homeAssetId if present in DTO
       ...(data.startDate && { startDate: new Date(data.startDate) }),
       ...(data.expiryDate && { expiryDate: new Date(data.expiryDate) }),
     } as Prisma.WarrantyUpdateInput,
     include: { documents: true }
   });
+
+  // 🔑 ADD THIS SECTION - Trigger risk report regeneration
+  if (rawUpdatedWarranty.propertyId) {
+    try {
+      console.log(`[WARRANTY-SERVICE] Triggering risk update for property ${rawUpdatedWarranty.propertyId}`);
+      await JobQueueService.enqueuePropertyIntelligenceJobs(rawUpdatedWarranty.propertyId);
+    } catch (error) {
+      console.error(`[WARRANTY-SERVICE] Failed to enqueue risk update job:`, error);
+    }
+  }
+  // 🔑 END NEW SECTION
 
   return mapRawWarrantyToWarranty(rawUpdatedWarranty);
 }
@@ -275,9 +281,32 @@ export async function deleteWarranty(
   warrantyId: string, 
   homeownerProfileId: string
 ): Promise<Warranty> {
+  // 🔑 ADD THIS - Get warranty before deletion to access propertyId
+  const warrantyToDelete = await prisma.warranty.findUnique({
+    where: { id: warrantyId, homeownerProfileId },
+  });
+
+  if (!warrantyToDelete) {
+    throw new Error('Warranty not found');
+  }
+
+  const propertyId = warrantyToDelete.propertyId;
+  // 🔑 END NEW SECTION
+
   const rawDeletedWarranty = await prisma.warranty.delete({
     where: { id: warrantyId, homeownerProfileId },
   });
+
+  // 🔑 ADD THIS SECTION - Trigger risk report regeneration after deletion
+  if (propertyId) {
+    try {
+      console.log(`[WARRANTY-SERVICE] Triggering risk update for property ${propertyId} after deletion`);
+      await JobQueueService.enqueuePropertyIntelligenceJobs(propertyId);
+    } catch (error) {
+      console.error(`[WARRANTY-SERVICE] Failed to enqueue risk update job:`, error);
+    }
+  }
+  // 🔑 END NEW SECTION
 
   return mapRawWarrantyToWarranty(rawDeletedWarranty);
 }

@@ -112,19 +112,19 @@ const RiskCategorySummaryCard = ({
         } else if (highExposureAssets.length === 0) {
             // Great coverage!
             title = 'FINANCIAL GAP Analysis';
-            description = 'All major systems have good warranty/insurance coverage.';
+            description = 'Good warranty and insurance coverage detected.';
             badgeStatus = 'GOOD';
             badgeColor = 'success';
         } else if (highExposureAssets.length >= 3 || totalGapExposure > 5000) {
             // High exposure - multiple items or high dollar amount
             title = 'FINANCIAL GAP Analysis';
-            description = `${highExposureAssets.length} items with insufficient coverage. Unprotected exposure: ${formattedGapExposure}.`;
+            description = `High unprotected exposure detected. Consider comprehensive warranty coverage.`;
             badgeStatus = 'HIGH';
             badgeColor = 'destructive';
         } else {
             // Moderate exposure
             title = 'FINANCIAL GAP Analysis';
-            description = `${highExposureAssets.length} ${highExposureAssets.length === 1 ? 'item' : 'items'} with limited coverage. Exposure: ${formattedGapExposure}.`;
+            description = `Some items lack adequate coverage. Review warranty options.`;
             badgeStatus = 'MODERATE';
             badgeColor = 'warning';
         }
@@ -225,17 +225,19 @@ const RiskCategorySummaryCard = ({
 const AssetMatrixTable = ({ 
     details, 
     tasksBySystemType,
-    bookingsByInsightFactor, // 🔑 NEW
+    bookingsByInsightFactor,
+    warrantiesBySystemType, // 🔑 NEW
     onScheduleInspection, 
     onViewTask,
-    onViewBooking, // 🔑 NEW
+    onViewBooking,
 }: { 
     details: AssetRiskDetail[];
     tasksBySystemType: Map<string, PropertyMaintenanceTask>;
-    bookingsByInsightFactor: Map<string, any>; // 🔑 NEW
+    bookingsByInsightFactor: Map<string, any>;
+    warrantiesBySystemType: Map<string, any>; // 🔑 NEW
     onScheduleInspection: (asset: AssetRiskDetail) => void;
     onViewTask: (task: PropertyMaintenanceTask) => void;
-    onViewBooking: (booking: any) => void; // 🔑 NEW
+    onViewBooking: (booking: any) => void;
 }) => {
     const getRiskBadge = (level: AssetRiskDetail['riskLevel']) => {
         if (level === 'LOW') return <Badge variant="secondary" className="bg-green-500/20 text-green-700 hover:bg-green-500/30 border-green-500">Low</Badge>;
@@ -275,6 +277,44 @@ const AssetMatrixTable = ({
                                 const existingTask = tasksBySystemType.get(item.systemType);
                                 const hasTask = !!existingTask;
 
+                                // 🔑 NEW: Check if warranty exists for this asset
+                                const existingWarranty = warrantiesBySystemType.get(item.systemType);
+                                const hasWarranty = !!existingWarranty;
+                                const isPastLife = item.age > item.expectedLife;
+                                
+                                // 🔑 NEW: Determine CTA based on warranty status
+                                let ctaText = '';
+                                let ctaVariant: 'default' | 'secondary' | 'destructive' | 'outline' = 'secondary';
+                                
+                                if (hasBooking) {
+                                    ctaText = 'View Booking';
+                                    ctaVariant = 'outline';
+                                } else if (hasTask) {
+                                    ctaText = 'View Task';
+                                    ctaVariant = 'outline';
+                                } else if (hasWarranty) {
+                                    // Has warranty
+                                    if (isPastLife) {
+                                        ctaText = 'Schedule Replacement';
+                                        ctaVariant = item.riskLevel === 'HIGH' ? 'destructive' : 'default';
+                                    } else {
+                                        ctaText = 'Schedule Inspection';
+                                        ctaVariant = 'secondary';
+                                    }
+                                } else {
+                                    // No warranty
+                                    if (item.riskLevel === 'HIGH' && item.outOfPocketCost > 1000) {
+                                        ctaText = 'Add Home Warranty';
+                                        ctaVariant = 'destructive';
+                                    } else if (item.actionCta) {
+                                        ctaText = item.actionCta;
+                                        ctaVariant = item.riskLevel === 'HIGH' ? 'destructive' : 'secondary';
+                                    } else {
+                                        ctaText = 'Schedule Maintenance';
+                                        ctaVariant = item.riskLevel === 'HIGH' ? 'destructive' : 'secondary';
+                                    }
+                                }
+
                                 return (
                                     <TableRow key={index} className={item.riskLevel === 'HIGH' ? 'bg-red-50/50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20' : ''}>
                                         <TableCell className="font-medium whitespace-normal break-words">
@@ -283,14 +323,24 @@ const AssetMatrixTable = ({
                                                     {item.assetName.replace(/_/g, ' ')}
                                                     <div className="text-xs text-muted-foreground">{item.systemType.replace(/_/g, ' ')}</div>
                                                 </div>
-                                                {/* 🔑 Show booking badge first, then task badge */}
+                                                {/* 🔑 Badge priority: Booking > Warranty > Task */}
                                                 {hasBooking && (
                                                     <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-50 border border-blue-200">
                                                         <Calendar className="h-3 w-3 text-blue-600" />
                                                         <span className="text-xs font-medium text-blue-700">Booked</span>
                                                     </div>
                                                 )}
-                                                {!hasBooking && hasTask && <ScheduledBadge task={existingTask} />}
+                                                {!hasBooking && hasWarranty && (
+                                                    <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-purple-50 border border-purple-200">
+                                                        <svg className="h-3 w-3 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                                        </svg>
+                                                        <span className="text-xs font-medium text-purple-700">
+                                                            Warranty{isPastLife ? ' (won\'t cover)' : ''}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {!hasBooking && !hasWarranty && hasTask && <ScheduledBadge task={existingTask} />}
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
@@ -298,7 +348,7 @@ const AssetMatrixTable = ({
                                         </TableCell>
                                         <TableCell className="whitespace-nowrap">
                                             <span className="font-semibold">{item.age} yrs</span> / {item.expectedLife} yrs
-                                            {item.age > item.expectedLife && <span className="text-red-500 text-xs ml-2">(Past Life)</span>}
+                                            {isPastLife && <span className="text-red-500 text-xs ml-2">(Past Life)</span>}
                                         </TableCell>
                                         <TableCell className="whitespace-nowrap">
                                             {getRiskBadge(item.riskLevel)}
@@ -308,44 +358,23 @@ const AssetMatrixTable = ({
                                             <div className="text-xs text-muted-foreground whitespace-normal">P: {item.probability.toFixed(2)} / C: {(item.coverageFactor * 100).toFixed(0)}%</div>
                                         </TableCell>
                                         <TableCell className="whitespace-nowrap">
-                                            {/* 🔑 Priority: Booking > Task > CTA */}
-                                            {hasBooking ? (
-                                                <Button 
-                                                    size="sm" 
-                                                    variant="outline"
-                                                    onClick={() => onViewBooking(existingBooking)}
-                                                    className="gap-1"
-                                                >
-                                                    <Calendar className="h-3 w-3" />
-                                                    View Booking
-                                                </Button>
-                                            ) : hasTask ? (
-                                                <Button 
-                                                    size="sm" 
-                                                    variant="outline"
-                                                    onClick={() => onViewTask(existingTask)}
-                                                    className="gap-1"
-                                                >
-                                                    <Calendar className="h-3 w-3" />
-                                                    View Task
-                                                </Button>
-                                            ) : item.actionCta ? (
-                                                <Button 
-                                                    size="sm" 
-                                                    variant={item.riskLevel === 'HIGH' ? 'destructive' : 'secondary'}
-                                                    onClick={() => onScheduleInspection(item)}
-                                                >
-                                                    {item.actionCta}
-                                                </Button>
-                                            ) : (
-                                                <Button 
-                                                    size="sm" 
-                                                    variant={item.riskLevel === 'HIGH' ? 'destructive' : 'secondary'}
-                                                    onClick={() => onScheduleInspection(item)}
-                                                >
-                                                    Schedule Maintenance
-                                                </Button>
-                                            )}
+                                            <Button 
+                                                size="sm" 
+                                                variant={ctaVariant}
+                                                onClick={() => {
+                                                    if (hasBooking) {
+                                                        onViewBooking(existingBooking);
+                                                    } else if (hasTask) {
+                                                        onViewTask(existingTask);
+                                                    } else {
+                                                        onScheduleInspection(item);
+                                                    }
+                                                }}
+                                                className="gap-1"
+                                            >
+                                                {(hasBooking || hasTask) && <Calendar className="h-3 w-3" />}
+                                                {ctaText}
+                                            </Button>
                                         </TableCell>
                                     </TableRow>
                                 );
@@ -385,42 +414,113 @@ export default function RiskAssessmentPage() {
         },
     });
 
-    // 🔑 NEW: Fetch existing bookings for this property
+    // 🔑 Fetch existing bookings for this property
     const { data: bookingsData, refetch: refetchBookings } = useQuery({
         queryKey: ['bookings', propertyId],
         enabled: !!propertyId,
         queryFn: async () => {
-            const response = await api.listBookings({ propertyId });
-            if (response.success) {
-                // Filter for active bookings only (PENDING, CONFIRMED, IN_PROGRESS)
-                return response.data.bookings.filter((b: any) => 
-                    ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(b.status)
-                );
+            try {
+                const response = await api.listBookings({ propertyId });
+                if (response.success && response.data?.bookings) {
+                    const bookings = response.data.bookings;
+                    if (Array.isArray(bookings)) {
+                        return bookings.filter((b: any) => 
+                            ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(b.status)
+                        );
+                    }
+                }
+                return [];
+            } catch (error) {
+                console.error('Error fetching bookings:', error);
+                return [];
             }
-            return [];
         },
     });
 
-    const maintenanceTasks = maintenanceTasksData || [];
-    const activeBookings = bookingsData || [];
+    // 🔑 NEW: Fetch warranties for this property
+    const { data: warrantiesData, refetch: refetchWarranties } = useQuery({
+        queryKey: ['warranties', propertyId],
+        enabled: !!propertyId,
+        queryFn: async () => {
+            try {
+                const response = await api.listWarranties(propertyId);
+                if (response.success && response.data?.warranties) {
+                    const warranties = response.data.warranties;
+                    if (Array.isArray(warranties)) {
+                        // Filter for active warranties only
+                        const now = new Date();
+                        return warranties.filter((w: any) => {
+                            const expiryDate = new Date(w.expiryDate);
+                            return expiryDate > now && w.status === 'ACTIVE';
+                        });
+                    }
+                }
+                return [];
+            } catch (error) {
+                console.error('Error fetching warranties:', error);
+                return [];
+            }
+        },
+    });
 
-    // 🔑 NEW: Create lookup map: systemType -> task
+    const maintenanceTasks = Array.isArray(maintenanceTasksData) ? maintenanceTasksData : [];
+    const activeBookings = Array.isArray(bookingsData) ? bookingsData : [];
+    const activeWarranties = Array.isArray(warrantiesData) ? warrantiesData : [];
+
+    // 🔑 Create lookup map: systemType -> task
     const tasksBySystemType = new Map<string, PropertyMaintenanceTask>();
-    maintenanceTasks.forEach(task => {
-        if (task.assetType) {
-            tasksBySystemType.set(task.assetType, task);
-        }
-    });
+    if (Array.isArray(maintenanceTasks)) {
+        maintenanceTasks.forEach(task => {
+            if (task.assetType) {
+                tasksBySystemType.set(task.assetType, task);
+            }
+        });
+    }
 
-    // 🔑 NEW: Create lookup map: insightFactor -> booking
+    // 🔑 Create lookup map: insightFactor -> booking
     const bookingsByInsightFactor = new Map<string, any>();
-    activeBookings.forEach((booking: any) => {
-        if (booking.insightFactor) {
-            bookingsByInsightFactor.set(booking.insightFactor, booking);
-        }
-    });
+    if (Array.isArray(activeBookings)) {
+        activeBookings.forEach((booking: any) => {
+            if (booking.insightFactor) {
+                bookingsByInsightFactor.set(booking.insightFactor, booking);
+            }
+        });
+    }
+
+    // 🔑 NEW: Create lookup map: systemType -> warranty (for badge display)
+    const warrantiesBySystemType = new Map<string, any>();
+    if (Array.isArray(activeWarranties)) {
+        activeWarranties.forEach((warranty: any) => {
+            // Map warranty category to system types
+            if (warranty.category === 'HVAC') {
+                warrantiesBySystemType.set('HVAC_FURNACE', warranty);
+                warrantiesBySystemType.set('HVAC_HEAT_PUMP', warranty);
+            } else if (warranty.category === 'PLUMBING') {
+                warrantiesBySystemType.set('WATER_HEATER_TANK', warranty);
+                warrantiesBySystemType.set('WATER_HEATER_TANKLESS', warranty);
+            } else if (warranty.category === 'ELECTRICAL') {
+                warrantiesBySystemType.set('ELECTRICAL_PANEL', warranty);
+            } else if (warranty.category === 'APPLIANCES') {
+                // Home warranty plans typically cover all appliances
+                warrantiesBySystemType.set('APPLIANCE', warranty);
+            } else if (warranty.category === 'HOME_WARRANTY') {
+                // Comprehensive home warranty - covers multiple systems
+                warrantiesBySystemType.set('HVAC_FURNACE', warranty);
+                warrantiesBySystemType.set('HVAC_HEAT_PUMP', warranty);
+                warrantiesBySystemType.set('WATER_HEATER_TANK', warranty);
+                warrantiesBySystemType.set('WATER_HEATER_TANKLESS', warranty);
+                warrantiesBySystemType.set('ELECTRICAL_PANEL', warranty);
+            }
+            
+            // If warranty is linked to specific asset, add that too
+            if (warranty.linkedAssetId && warranty.linkedAsset?.assetType) {
+                warrantiesBySystemType.set(warranty.linkedAsset.assetType, warranty);
+            }
+        });
+    }
     
-    // 🔑 NEW: Check for return from warranty/booking creation and refetch data
+    
+    // 🔑 Check for return from warranty/booking creation and refetch data
     React.useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('refreshed') === 'true') {
@@ -429,6 +529,7 @@ export default function RiskAssessmentPage() {
             queryClient.invalidateQueries({ queryKey: ['riskReport', propertyId] });
             queryClient.invalidateQueries({ queryKey: ['maintenance-tasks', propertyId] });
             queryClient.invalidateQueries({ queryKey: ['bookings', propertyId] });
+            queryClient.invalidateQueries({ queryKey: ['warranties', propertyId] });
             
             // Clean up URL parameter
             const newUrl = window.location.pathname + window.location.search.replace(/[?&]refreshed=true/, '');
@@ -746,6 +847,7 @@ export default function RiskAssessmentPage() {
                         details={report.details} 
                         tasksBySystemType={tasksBySystemType}
                         bookingsByInsightFactor={bookingsByInsightFactor}
+                        warrantiesBySystemType={warrantiesBySystemType}
                         onScheduleInspection={handleScheduleInspection}
                         onViewTask={handleViewTask}
                         onViewBooking={handleViewBooking}
