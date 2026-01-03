@@ -60,6 +60,28 @@ const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 8080;
 
+const SWAGGER_USER = process.env.SWAGGER_USER || 'admin';
+const SWAGGER_PASSWORD = process.env.SWAGGER_PASSWORD;
+
+// Apply Basic Auth to the docs route if a password is provided
+if (SWAGGER_PASSWORD) {
+  app.use('/api/docs', basicAuth({
+    users: { [SWAGGER_USER]: SWAGGER_PASSWORD },
+    challenge: true, // This triggers the browser login popup
+    realm: 'Contract to Cozy API Documentation'
+  }));
+}
+
+// 3. Mount Swagger UI (Keep your existing config)
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(null, {
+  swaggerOptions: {
+    url: '/api/docs/swagger.json',
+    persistAuthorization: true, // This keeps the JWT token saved even after refresh
+  },
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Contract to Cozy API Documentation',
+}));
+
 // =============================================================================
 // MIDDLEWARE
 // =============================================================================
