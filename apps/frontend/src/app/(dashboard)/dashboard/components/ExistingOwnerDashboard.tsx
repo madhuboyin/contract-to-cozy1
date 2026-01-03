@@ -43,24 +43,28 @@ export const ExistingOwnerDashboard = ({
   // PHASE 5: Fetch new PropertyMaintenanceTask statistics
   const [stats, setStats] = useState<MaintenanceTaskStats | null>(null);
   
-  // 🔑 NEW: Fetch actual PropertyMaintenanceTask data
+  // 🔑 Fetch actual PropertyMaintenanceTask data
   const [maintenanceTasks, setMaintenanceTasks] = useState<PropertyMaintenanceTask[]>([]);
+  
+  // 🔑 NEW: Fetch actual Booking data for selected property
+  const [propertyBookings, setPropertyBookings] = useState<Booking[]>([]);
 
   // Local Home Updates
   const [localUpdates, setLocalUpdates] = useState<LocalUpdate[]>([]);
 
-  // PHASE 5: Fetch statistics AND tasks
+  // PHASE 5: Fetch statistics, tasks, AND bookings
   useEffect(() => {
     if (!selectedPropertyId) return;
 
     const fetchMaintenanceData = async () => {
       try {
-        // Fetch both stats and tasks in parallel
-        const [statsResponse, tasksResponse] = await Promise.all([
+        // Fetch stats, tasks, and bookings in parallel
+        const [statsResponse, tasksResponse, bookingsResponse] = await Promise.all([
           api.getMaintenanceTaskStats(selectedPropertyId),
           api.getMaintenanceTasks(selectedPropertyId, {
             includeCompleted: false,
           }),
+          api.listBookings({ propertyId: selectedPropertyId }),
         ]);
 
         if (statsResponse.success) {
@@ -69,6 +73,13 @@ export const ExistingOwnerDashboard = ({
 
         if (tasksResponse.success) {
           setMaintenanceTasks(tasksResponse.data);
+        }
+
+        // 🔑 NEW: Set bookings
+        if (bookingsResponse.success && bookingsResponse.data?.bookings) {
+          setPropertyBookings(Array.isArray(bookingsResponse.data.bookings) 
+            ? bookingsResponse.data.bookings 
+            : []);
         }
       } catch (error) {
         console.error('Failed to fetch maintenance data:', error);
@@ -315,7 +326,12 @@ export const ExistingOwnerDashboard = ({
 
       {/* Activity Cards (Original 3 cards) */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <UpcomingBookingsCard propertyId={selectedPropertyId} />
+        {/* 🔑 UPDATED: Pass bookings data as prop */}
+        <UpcomingBookingsCard 
+          bookings={propertyBookings}
+          isPropertySelected={isPropertySelected}
+          selectedPropertyId={selectedPropertyId}
+        />
 
         {/* 🔑 FIXED: Pass actual PropertyMaintenanceTask[] data */}
         <RecurringMaintenanceCard

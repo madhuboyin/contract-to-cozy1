@@ -5,8 +5,6 @@ import * as React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/api/client';
 import { Booking } from '@/types';
 import { format, isPast } from 'date-fns';
 import Link from 'next/link';
@@ -26,34 +24,26 @@ const getStatusBadge = (status: string) => {
 };
 
 interface UpcomingBookingsCardProps {
-    propertyId?: string;
+  bookings: Booking[];
+  isPropertySelected: boolean;
+  selectedPropertyId?: string;
 }
 
-export const UpcomingBookingsCard: React.FC<UpcomingBookingsCardProps> = ({ propertyId }) => {
-  const { data, isLoading } = useQuery({
-    queryKey: ['upcoming-bookings', propertyId],
-    queryFn: () => api.listBookings({
-        propertyId: propertyId, 
-        sortBy: 'scheduledDate',
-        sortOrder: 'asc',
-    }),
-    enabled: !!propertyId, 
-  });
-
-  const rawBookings = data?.success ? data.data.bookings : [];
-
+export const UpcomingBookingsCard: React.FC<UpcomingBookingsCardProps> = ({ 
+  bookings,
+  isPropertySelected,
+  selectedPropertyId 
+}) => {
+  
   const upcomingBookings = React.useMemo(() => {
-    if (isLoading || !rawBookings || !propertyId) return [];
-    
     const nonUpcomingStatuses = ['COMPLETED', 'CANCELLED', 'DRAFT'];
 
-    return rawBookings
-      .filter(b => b.property?.id === propertyId) 
+    return bookings
       .filter(b => b.scheduledDate) 
       .filter(b => !isPast(new Date(b.scheduledDate!))) 
       .filter(b => !nonUpcomingStatuses.includes(b.status)) 
       .sort((a, b) => new Date(a.scheduledDate || 0).getTime() - new Date(b.scheduledDate || 0).getTime());
-  }, [rawBookings, isLoading, propertyId]);
+  }, [bookings]);
 
   const displayBookings = upcomingBookings.slice(0, 3);
   const totalUpcoming = upcomingBookings.length;
@@ -74,13 +64,7 @@ export const UpcomingBookingsCard: React.FC<UpcomingBookingsCardProps> = ({ prop
 
         {/* Items List */}
         <div className="flex-1 overflow-hidden">
-          {isLoading && propertyId ? (
-            <div className="space-y-3">
-              <div className="h-16 rounded-lg bg-gray-100 animate-pulse" />
-              <div className="h-16 rounded-lg bg-gray-100 animate-pulse" />
-              <div className="h-16 rounded-lg bg-gray-100 animate-pulse" />
-            </div>
-          ) : !propertyId ? (
+          {!isPropertySelected ? (
             <div className="flex flex-col items-center justify-center h-full">
               <span className="text-4xl mb-3">🏠</span>
               <p className="text-sm text-gray-600 mb-4">Select a property</p>
@@ -94,7 +78,7 @@ export const UpcomingBookingsCard: React.FC<UpcomingBookingsCardProps> = ({ prop
             <div className="flex flex-col items-center justify-center h-full">
               <span className="text-4xl mb-3">🎉</span>
               <p className="text-sm text-gray-600 mb-4">No upcoming bookings</p>
-              <Link href="/dashboard/bookings/new">
+              <Link href="/dashboard/providers">
                 <Button variant="outline" size="sm" className="gap-2">
                   Book Service <ArrowRight className="h-4 w-4" />
                 </Button>
