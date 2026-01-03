@@ -367,9 +367,14 @@ const AssetMatrixTable = ({
                                                     } else if (hasTask) {
                                                         onViewTask(existingTask);
                                                     } else if (ctaText === 'Add Home Warranty') {
-                                                        // Navigate to warranties page with action=new
+                                                        // Navigate to warranties page
                                                         window.location.href = `/dashboard/warranties?action=new&from=risk-assessment`;
+                                                    } else if (ctaText === 'Schedule Inspection' || ctaText === 'Schedule Replacement') {
+                                                        // Navigate to provider search with category filter
+                                                        const serviceCategory = getServiceCategoryForAsset(item.systemType);
+                                                        window.location.href = `/dashboard/find-services?category=${serviceCategory}`;
                                                     } else {
+                                                        // Default: open maintenance modal
                                                         onScheduleInspection(item);
                                                     }
                                                 }}
