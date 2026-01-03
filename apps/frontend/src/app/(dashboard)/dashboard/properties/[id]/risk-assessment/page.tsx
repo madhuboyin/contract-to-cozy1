@@ -360,37 +360,45 @@ const AssetMatrixTable = ({
                                             <div className="text-xs text-muted-foreground whitespace-normal">P: {item.probability.toFixed(2)} / C: {(item.coverageFactor * 100).toFixed(0)}%</div>
                                         </TableCell>
                                         <TableCell className="whitespace-nowrap">
-                                            <Button 
-                                                size="sm" 
-                                                variant={ctaVariant}
-                                                onClick={() => {
-                                                    if (hasBooking) {
-                                                        onViewBooking(existingBooking);
-                                                    } else if (hasTask) {
-                                                        onViewTask(existingTask);
-                                                    } else if (ctaText === 'Add Home Warranty') {
-                                                        // Navigate to warranties page
-                                                        window.location.href = `/dashboard/warranties?action=new&from=risk-assessment`;
-                                                    } else if (ctaText === 'Schedule Inspection' || ctaText === 'Schedule Replacement') {
-                                                        // Navigate to providers page with category filter
-                                                        const serviceCategory = getServiceCategoryForAsset(item.systemType);
-                                                        const insightFactor = item.assetName.replace(/_/g, ' ');
-                                                        const params = new URLSearchParams({
-                                                            category: serviceCategory,
-                                                            insightFactor: insightFactor,
+                                            {(ctaText === 'Schedule Inspection' || ctaText === 'Schedule Replacement') ? (
+                                                <Button 
+                                                    size="sm" 
+                                                    variant={ctaVariant}
+                                                    asChild
+                                                    className="gap-1"
+                                                >
+                                                    <Link href={{
+                                                        pathname: '/dashboard/providers',
+                                                        query: {
+                                                            category: getServiceCategoryForAsset(item.systemType),
+                                                            insightFactor: item.assetName.replace(/_/g, ' '),
                                                             propertyId: propertyId
-                                                        });
-                                                        window.location.href = `/dashboard/providers?${params.toString()}`;
-                                                    } else {
-                                                        // Default: open maintenance modal
-                                                        onScheduleInspection(item);
-                                                    }
-                                                }}
-                                                className="gap-1"
-                                            >
-                                                {(hasBooking || hasTask) && <Calendar className="h-3 w-3" />}
-                                                {ctaText}
-                                            </Button>
+                                                        }
+                                                    }}>
+                                                        {ctaText}
+                                                    </Link>
+                                                </Button>
+                                            ) : (
+                                                <Button 
+                                                    size="sm" 
+                                                    variant={ctaVariant}
+                                                    onClick={() => {
+                                                        if (hasBooking) {
+                                                            onViewBooking(existingBooking);
+                                                        } else if (hasTask) {
+                                                            onViewTask(existingTask);
+                                                        } else if (ctaText === 'Add Home Warranty') {
+                                                            window.location.href = `/dashboard/warranties?action=new&from=risk-assessment`;
+                                                        } else {
+                                                            onScheduleInspection(item);
+                                                        }
+                                                    }}
+                                                    className="gap-1"
+                                                >
+                                                    {(hasBooking || hasTask) && <Calendar className="h-3 w-3" />}
+                                                    {ctaText}
+                                                </Button>
+                                            )}
                                         </TableCell>
                                     </TableRow>
                                 );
