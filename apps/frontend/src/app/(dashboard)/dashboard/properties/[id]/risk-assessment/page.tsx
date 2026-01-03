@@ -83,6 +83,78 @@ const RiskCategorySummaryCard = ({
     riskIcon: React.ElementType;
 }) => {
     
+    // 🔑 SPECIAL HANDLING: FINANCIAL_GAP is cross-category analysis
+    if (category === 'FINANCIAL_GAP') {
+        // Analyze coverage gaps across ALL categories
+        const allAssets = details; // All assets regardless of category
+        
+        // Assets with coverage factor < 0.5 (less than 50% covered) or high out-of-pocket costs
+        const highExposureAssets = allAssets.filter(asset => {
+            // High exposure = coverage factor is low (closer to 0) OR out-of-pocket > $500
+            return asset.coverageFactor < 0.5 || asset.outOfPocketCost > 500;
+        });
+        
+        // Calculate total unprotected exposure
+        const totalGapExposure = highExposureAssets.reduce((sum, asset) => sum + asset.outOfPocketCost, 0);
+        const formattedGapExposure = formatCurrency(totalGapExposure);
+        
+        let title: string;
+        let description: string;
+        let badgeStatus: string;
+        let badgeColor: 'default' | 'success' | 'warning' | 'destructive' = 'default';
+        
+        if (allAssets.length === 0) {
+            // No assets at all - need property data
+            title = 'FINANCIAL GAP Data Missing';
+            description = 'Add property details to analyze coverage gaps.';
+            badgeStatus = 'INFO';
+            badgeColor = 'default';
+        } else if (highExposureAssets.length === 0) {
+            // Great coverage!
+            title = 'FINANCIAL GAP Analysis';
+            description = 'All major systems have good warranty/insurance coverage.';
+            badgeStatus = 'GOOD';
+            badgeColor = 'success';
+        } else if (highExposureAssets.length >= 3 || totalGapExposure > 5000) {
+            // High exposure - multiple items or high dollar amount
+            title = 'FINANCIAL GAP Analysis';
+            description = `${highExposureAssets.length} items with insufficient coverage. Unprotected exposure: ${formattedGapExposure}.`;
+            badgeStatus = 'HIGH';
+            badgeColor = 'destructive';
+        } else {
+            // Moderate exposure
+            title = 'FINANCIAL GAP Analysis';
+            description = `${highExposureAssets.length} ${highExposureAssets.length === 1 ? 'item' : 'items'} with limited coverage. Exposure: ${formattedGapExposure}.`;
+            badgeStatus = 'MODERATE';
+            badgeColor = 'warning';
+        }
+        
+        return (
+            <Card className="flex flex-col justify-between">
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-base font-semibold flex justify-between items-start">
+                        {title}
+                        <RiskIcon className="h-5 w-5 text-muted-foreground ml-2" />
+                    </CardTitle>
+                    <CardDescription className="text-xs min-h-[30px]">
+                        {description}
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center justify-between mt-2">
+                        <span className="text-sm text-muted-foreground">
+                            {allAssets.length} {allAssets.length === 1 ? 'item' : 'items'} analyzed
+                        </span>
+                        <Badge variant={badgeColor as any}>
+                            {badgeStatus.toUpperCase()}
+                        </Badge>
+                    </div>
+                </CardContent>
+            </Card>
+        );
+    }
+    
+    // 🔑 STANDARD CATEGORY LOGIC: STRUCTURE, SYSTEMS, SAFETY
     const relevantAssets = details.filter(item => item.category === category);
     
     const totalExposure = relevantAssets.reduce((sum, item) => sum + item.riskDollar, 0);
