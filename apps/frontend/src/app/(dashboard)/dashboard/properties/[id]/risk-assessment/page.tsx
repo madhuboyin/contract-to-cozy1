@@ -450,11 +450,12 @@ export default function RiskAssessmentPage() {
                 if (response.success && response.data?.warranties) {
                     const warranties = response.data.warranties;
                     if (Array.isArray(warranties)) {
-                        // Filter for active warranties only
+                        // Filter for active warranties only (check expiry date)
                         const now = new Date();
                         return warranties.filter((w: any) => {
                             const expiryDate = new Date(w.expiryDate);
-                            return expiryDate > now && w.status === 'ACTIVE';
+                            // Only filter by expiry date - status field may not exist in DB
+                            return expiryDate > now;
                         });
                     }
                 }
