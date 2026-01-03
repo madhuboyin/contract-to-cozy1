@@ -95,8 +95,12 @@ export default function BookProviderPage() {
 
       if (propertiesRes.success && propertiesRes.data.properties.length > 0) {
         setProperties(propertiesRes.data.properties);
-        const primaryProperty = propertiesRes.data.properties.find(p => p.isPrimary);
-        setSelectedPropertyId(primaryProperty?.id || propertiesRes.data.properties[0].id);
+        
+        // 🔑 FIX: Only set default property if not already provided via URL
+        if (!preSelectedPropertyId) {
+          const primaryProperty = propertiesRes.data.properties.find(p => p.isPrimary);
+          setSelectedPropertyId(primaryProperty?.id || propertiesRes.data.properties[0].id);
+        }
       }
     } catch (error) {
       console.error('Failed to load data:', error);

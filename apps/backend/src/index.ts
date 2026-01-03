@@ -60,7 +60,7 @@ const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 8080;
 
-// 1. PUBLIC Spec Endpoint (Move this ABOVE basicAuth)
+// 1. PUBLIC Spec Endpoint
 app.get('/api/docs/swagger.json', (req: Request, res: Response) => {
   res.setHeader('Content-Type', 'application/json');
   res.send(swaggerSpec);
@@ -68,20 +68,21 @@ app.get('/api/docs/swagger.json', (req: Request, res: Response) => {
 
 // 2. PROTECTED UI Access
 if (process.env.NODE_ENV === 'production' && process.env.SWAGGER_PASSWORD) {
-  app.use('/api/docs', basicAuth({
-    users: { 
-      'admin': process.env.SWAGGER_PASSWORD 
-    },
-    challenge: true,
-    realm: 'Contract to Cozy API Documentation'
+  app.use('/api/docs', (req, res, next) => {
+    // This helper ensures the header is set even if the proxy tries to strip it
+    res.set('WWW-Authenticate', 'Basic realm="ContractToCozyDocs"');
+    next();
+  }, basicAuth({
+    users: { 'admin': process.env.SWAGGER_PASSWORD },
+    challenge: true, // This MUST be true for the popup to show
+    realm: 'Contract to Cozy API Documentation',
   }));
 }
 
-// 3. Mount Swagger UI (Keep your existing config)
+// 3. MOUNT Swagger UI
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(null, {
   swaggerOptions: {
-    // Use a relative path to ensure it works behind Cloudflare/Proxies
-    url: './docs/swagger.json',  
+    url: './docs/swagger.json', 
     persistAuthorization: true,
   },
   customCss: '.swagger-ui .topbar { display: none }',
