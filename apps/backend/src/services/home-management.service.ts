@@ -248,6 +248,17 @@ export async function createWarranty(
   }
 }
 
+export async function listWarranties(homeownerProfileId: string): Promise<Warranty[]> {
+  const rawWarranties = await prisma.warranty.findMany({
+    where: { homeownerProfileId },
+    orderBy: { expiryDate: 'asc' },
+    include: {
+      documents: true
+    }
+  });
+
+  return rawWarranties.map(mapRawWarrantyToWarranty);
+}
 export async function updateWarranty(
   warrantyId: string, 
   homeownerProfileId: string, 
