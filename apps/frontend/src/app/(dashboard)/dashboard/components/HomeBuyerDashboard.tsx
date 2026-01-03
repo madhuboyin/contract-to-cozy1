@@ -145,7 +145,11 @@ export const HomeBuyerDashboard = ({
         <PropertyRiskScoreCard propertyId={primaryPropertyId} />
         
         <div className="md:col-span-1">
-          <UpcomingBookingsCard propertyId={primaryPropertyId} />
+          <UpcomingBookingsCard 
+            bookings={bookings}
+            isPropertySelected={!!primaryPropertyId}
+            selectedPropertyId={primaryPropertyId}
+          />
         </div>
         
         <div className="md:col-span-1">
