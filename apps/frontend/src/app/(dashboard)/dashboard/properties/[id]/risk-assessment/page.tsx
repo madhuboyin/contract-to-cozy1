@@ -68,147 +68,61 @@ const ScheduledBadge: React.FC<{ task: PropertyMaintenanceTask }> = ({ task }) =
 
 
 // --- Component for Phase 3.3: Risk Category Summary Card ---
+/**
+ * Category Health Summary Card
+ * Shows overall risk status for a category (STRUCTURE, SYSTEMS, SAFETY, FINANCIAL_GAP)
+ * No CTAs - this is a summary card only. Actions are in the table above.
+ */
 const RiskCategorySummaryCard = ({ 
     category, 
     details, 
     riskIcon: RiskIcon,
-    onScheduleInspection,
-    onViewTask,
-    onViewBooking, // 🔑 NEW
-    tasksBySystemType,
-    bookingsByInsightFactor, // 🔑 NEW
 }: { 
     category: RiskCategory; 
     details: AssetRiskDetail[]; 
     riskIcon: React.ElementType;
-    onScheduleInspection: (asset: AssetRiskDetail) => void;
-    onViewTask: (task: PropertyMaintenanceTask) => void;
-    onViewBooking: (booking: any) => void; // 🔑 NEW
-    tasksBySystemType: Map<string, PropertyMaintenanceTask>;
-    bookingsByInsightFactor: Map<string, any>; // 🔑 NEW
 }) => {
     
     const relevantAssets = details.filter(item => item.category === category);
     
     const totalExposure = relevantAssets.reduce((sum, item) => sum + item.riskDollar, 0);
     const formattedExposure = formatCurrency(totalExposure);
+    const itemCount = relevantAssets.length;
 
-    const topRiskAsset = relevantAssets.sort((a, b) => b.riskDollar - a.riskDollar)[0];
+    // Determine overall category risk level
+    const highRiskCount = relevantAssets.filter(a => a.riskLevel === 'HIGH').length;
+    const moderateRiskCount = relevantAssets.filter(a => a.riskLevel === 'MODERATE' || a.riskLevel === 'ELEVATED').length;
     
-    // 🔑 Check for booking/task across ALL relevant assets (not just top risk)
-    let existingBooking: any = undefined;
-    let existingTask: PropertyMaintenanceTask | undefined = undefined;
-    
-    // Check all relevant assets for any booking or task
-    for (const asset of relevantAssets) {
-        const assetInsightFactor = asset.assetName.replace(/_/g, ' ');
-        const booking = bookingsByInsightFactor.get(assetInsightFactor);
-        if (booking) {
-            existingBooking = booking;
-            break; // Found a booking
-        }
-        const task = tasksBySystemType.get(asset.systemType);
-        if (task && !existingTask) {
-            existingTask = task; // Keep looking for bookings (higher priority)
-        }
-    }
-    
-    const hasBooking = !!existingBooking;
-    const hasTask = !!existingTask;
-    
-    let title: string = `${category.replace(/_/g, ' ')} Risk`;
+    let title: string;
     let description: string;
-    let ctaText: string = 'View Details';
-    let ctaVariant: 'default' | 'secondary' | 'destructive' | 'outline' = 'outline';
-    let badgeStatus: string = 'INFO';
+    let badgeStatus: string;
     let badgeColor: 'default' | 'success' | 'warning' | 'destructive' = 'default';
 
-    if (topRiskAsset && topRiskAsset.riskDollar > 500) {
-        title = topRiskAsset.assetName.replace(/_/g, ' ');
-        description = `Top risk: ${topRiskAsset.actionCta || `Requires attention due to age/condition.`}`;
-        
-        // 🔑 Priority: Booking > Task > CTA
-        if (hasBooking) {
-            ctaText = 'View Booking';
-        } else if (hasTask) {
-            ctaText = 'View Task';
-        } else if (topRiskAsset.actionCta === 'Add Home Warranty') {
-            ctaText = 'Add Home Warranty';
-        } else if (topRiskAsset.actionCta?.includes('Inspection')) {
-            ctaText = 'Schedule Inspection';
-        } else {
-            ctaText = topRiskAsset.actionCta || 'Find Service';
-        }
-        
-        ctaVariant = topRiskAsset.riskLevel === 'HIGH' ? 'destructive' : 'default';
-        badgeStatus = topRiskAsset.riskLevel;
-        badgeColor = topRiskAsset.riskLevel === 'HIGH' ? 'destructive' : topRiskAsset.riskLevel === 'MODERATE' ? 'warning' : 'default';
-    } else if (relevantAssets.length > 0) {
-        title = `${category.replace(/_/g, ' ')} Health`;
-        description = `All components are currently low risk. Exposure: ${formattedExposure}.`;
-        
-        // 🔑 Check if any asset has booking or task even in low risk
-        if (hasBooking) {
-            ctaText = 'View Booking';
-        } else if (hasTask) {
-            ctaText = 'View Task';
-        } else {
-            ctaText = 'Add Inspection';
-        }
-        
-        ctaVariant = 'secondary';
-        badgeStatus = 'GOOD';
-        badgeColor = 'success';
-    } else {
+    if (relevantAssets.length === 0) {
+        // No data available
         title = `${category.replace(/_/g, ' ')} Data Missing`;
-        description = `No component data available for this category. Please add property details.`;
-        ctaText = 'Update Property Info';
-        ctaVariant = 'outline';
+        description = `No component data available for this category.`;
         badgeStatus = 'INFO';
         badgeColor = 'default';
+    } else if (highRiskCount > 0) {
+        // Has high risk items
+        title = `${category.replace(/_/g, ' ')} Risk`;
+        description = `${highRiskCount} ${highRiskCount === 1 ? 'item requires' : 'items require'} attention. Total exposure: ${formattedExposure}.`;
+        badgeStatus = 'HIGH';
+        badgeColor = 'destructive';
+    } else if (moderateRiskCount > 0) {
+        // Has moderate risk items
+        title = `${category.replace(/_/g, ' ')} Risk`;
+        description = `${moderateRiskCount} ${moderateRiskCount === 1 ? 'item' : 'items'} with moderate risk. Total exposure: ${formattedExposure}.`;
+        badgeStatus = 'MODERATE';
+        badgeColor = 'warning';
+    } else {
+        // All low risk
+        title = `${category.replace(/_/g, ' ')} Health`;
+        description = `All components are currently low risk. Exposure: ${formattedExposure}.`;
+        badgeStatus = 'GOOD';
+        badgeColor = 'success';
     }
-    
-    // 🔑 Handle button click - Priority: Booking > Task > Schedule > Generic Actions
-    const handleClick = () => {
-        if (hasBooking && existingBooking) {
-            // Has active booking - view it
-            onViewBooking(existingBooking);
-        } else if (hasTask && existingTask) {
-            // Has scheduled task - view it
-            onViewTask(existingTask);
-        } else if (topRiskAsset) {
-            // Has specific risk asset - schedule for it
-            onScheduleInspection(topRiskAsset);
-        } else if (relevantAssets.length > 0) {
-            // Low risk, but can add inspection - navigate to provider search
-            // Map category to service category
-            let serviceCategory = 'INSPECTION';
-            if (category === 'SYSTEMS') {
-                serviceCategory = 'HVAC';
-            } else if (category === 'STRUCTURE') {
-                serviceCategory = 'ROOFING';
-            } else if (category === 'SAFETY') {
-                serviceCategory = 'HANDYMAN';
-            }
-            
-            // Get first asset for context
-            const firstAsset = relevantAssets[0];
-            const params = new URLSearchParams({
-                category: serviceCategory,
-                insightFactor: category.replace(/_/g, ' ') + ' Inspection',
-                propertyId: firstAsset ? String((firstAsset as any).propertyId || '') : '',
-                from: 'risk-assessment',
-            });
-            window.location.href = `/dashboard/providers?${params.toString()}`;
-        } else {
-            // No data - update property info
-            // Navigate to property edit page
-            // Get propertyId from URL
-            const pathParts = window.location.pathname.split('/');
-            const propertyId = pathParts[pathParts.indexOf('properties') + 1];
-            window.location.href = `/dashboard/properties/${propertyId}/edit`;
-        }
-    };
     
     return (
         <Card className="flex flex-col justify-between">
@@ -223,13 +137,9 @@ const RiskCategorySummaryCard = ({
             </CardHeader>
             <CardContent>
                 <div className="flex items-center justify-between mt-2">
-                    <Button 
-                        variant={(hasBooking || hasTask) ? 'outline' : ctaVariant} 
-                        size="sm"
-                        onClick={handleClick}
-                    >
-                        {ctaText}
-                    </Button>
+                    <span className="text-sm text-muted-foreground">
+                        {itemCount} {itemCount === 1 ? 'item' : 'items'} monitored
+                    </span>
                     <Badge variant={badgeColor as any}>
                         {badgeStatus.toUpperCase()}
                     </Badge>
@@ -408,46 +318,35 @@ export default function RiskAssessmentPage() {
         queryKey: ['bookings', propertyId],
         enabled: !!propertyId,
         queryFn: async () => {
-            try {
-                const response = await api.listBookings({ propertyId });
-                if (response.success && response.data?.bookings) {
-                    const bookings = response.data.bookings;
-                    if (Array.isArray(bookings)) {
-                        return bookings.filter((b: any) => 
-                            ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(b.status)
-                        );
-                    }
-                }
-                return [];
-            } catch (error) {
-                console.error('Error fetching bookings:', error);
-                return [];
+            const response = await api.listBookings({ propertyId });
+            if (response.success) {
+                // Filter for active bookings only (PENDING, CONFIRMED, IN_PROGRESS)
+                return response.data.bookings.filter((b: any) => 
+                    ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(b.status)
+                );
             }
+            return [];
         },
     });
 
-    const maintenanceTasks = Array.isArray(maintenanceTasksData) ? maintenanceTasksData : [];
-    const activeBookings = Array.isArray(bookingsData) ? bookingsData : [];
-    
-    // 🔑 Create lookup map: systemType -> task
+    const maintenanceTasks = maintenanceTasksData || [];
+    const activeBookings = bookingsData || [];
+
+    // 🔑 NEW: Create lookup map: systemType -> task
     const tasksBySystemType = new Map<string, PropertyMaintenanceTask>();
-    if (Array.isArray(maintenanceTasks)) {
-        maintenanceTasks.forEach(task => {
-            if (task.assetType) {
-                tasksBySystemType.set(task.assetType, task);
-            }
-        });
-    }
-    
-    // 🔑 Create lookup map: insightFactor -> booking
+    maintenanceTasks.forEach(task => {
+        if (task.assetType) {
+            tasksBySystemType.set(task.assetType, task);
+        }
+    });
+
+    // 🔑 NEW: Create lookup map: insightFactor -> booking
     const bookingsByInsightFactor = new Map<string, any>();
-    if (Array.isArray(activeBookings)) {
-        activeBookings.forEach((booking: any) => {
-            if (booking.insightFactor) {
-                bookingsByInsightFactor.set(booking.insightFactor, booking);
-            }
-        });
-    }
+    activeBookings.forEach((booking: any) => {
+        if (booking.insightFactor) {
+            bookingsByInsightFactor.set(booking.insightFactor, booking);
+        }
+    });
     
     // 🔑 NEW: Check for return from warranty/booking creation and refetch data
     React.useEffect(() => {
@@ -785,41 +684,21 @@ export default function RiskAssessmentPage() {
                             category={'STRUCTURE'} 
                             details={report.details} 
                             riskIcon={Home}
-                            onScheduleInspection={handleScheduleInspection}
-                            onViewTask={handleViewTask}
-                            onViewBooking={handleViewBooking}
-                            tasksBySystemType={tasksBySystemType}
-                            bookingsByInsightFactor={bookingsByInsightFactor}
                         />
                         <RiskCategorySummaryCard 
                             category={'SYSTEMS'} 
                             details={report.details} 
                             riskIcon={ZapIcon}
-                            onScheduleInspection={handleScheduleInspection}
-                            onViewTask={handleViewTask}
-                            onViewBooking={handleViewBooking}
-                            tasksBySystemType={tasksBySystemType}
-                            bookingsByInsightFactor={bookingsByInsightFactor}
                         />
                         <RiskCategorySummaryCard 
                             category={'SAFETY'} 
                             details={report.details} 
                             riskIcon={Siren}
-                            onScheduleInspection={handleScheduleInspection}
-                            onViewTask={handleViewTask}
-                            onViewBooking={handleViewBooking}
-                            tasksBySystemType={tasksBySystemType}
-                            bookingsByInsightFactor={bookingsByInsightFactor}
                         />
                         <RiskCategorySummaryCard 
                             category={'FINANCIAL_GAP'} 
                             details={report.details} 
                             riskIcon={DollarSign}
-                            onScheduleInspection={handleScheduleInspection}
-                            onViewTask={handleViewTask}
-                            onViewBooking={handleViewBooking}
-                            tasksBySystemType={tasksBySystemType}
-                            bookingsByInsightFactor={bookingsByInsightFactor}
                         />
                     </div>
                 </React.Fragment>
