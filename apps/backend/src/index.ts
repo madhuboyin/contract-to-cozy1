@@ -60,30 +60,23 @@ const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 8080;
 
-// 1. PUBLIC Spec Endpoint
-app.get('/api/docs/swagger.json', (req: Request, res: Response) => {
-  res.setHeader('Content-Type', 'application/json');
-  res.send(swaggerSpec);
-});
+const SWAGGER_USER = process.env.SWAGGER_USER || 'admin';
+const SWAGGER_PASSWORD = process.env.SWAGGER_PASSWORD;
 
-// 2. PROTECTED UI Access
-if (process.env.NODE_ENV === 'production' && process.env.SWAGGER_PASSWORD) {
-  app.use('/api/docs', (req, res, next) => {
-    // This helper ensures the header is set even if the proxy tries to strip it
-    res.set('WWW-Authenticate', 'Basic realm="ContractToCozyDocs"');
-    next();
-  }, basicAuth({
-    users: { 'admin': process.env.SWAGGER_PASSWORD },
-    challenge: true, // This MUST be true for the popup to show
-    realm: 'Contract to Cozy API Documentation',
+// Apply Basic Auth to the docs route if a password is provided
+if (SWAGGER_PASSWORD) {
+  app.use('/api/docs', basicAuth({
+    users: { [SWAGGER_USER]: SWAGGER_PASSWORD },
+    challenge: true, // This triggers the browser login popup
+    realm: 'Contract to Cozy API Documentation'
   }));
 }
 
-// 3. MOUNT Swagger UI
+// 3. Mount Swagger UI (Keep your existing config)
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(null, {
   swaggerOptions: {
-    url: './docs/swagger.json', 
-    persistAuthorization: true,
+    url: '/api/docs/swagger.json',
+    persistAuthorization: true, // This keeps the JWT token saved even after refresh
   },
   customCss: '.swagger-ui .topbar { display: none }',
   customSiteTitle: 'Contract to Cozy API Documentation',
@@ -94,16 +87,17 @@ app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(null, {
 // =============================================================================
 
 app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-      "script-src": ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-      "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      "img-src": ["'self'", "data:", "https://api.contracttocozy.com"],
-    },
-  },
+  contentSecurityPolicy: false, // Allow Swagger UI inline scripts
 }));
-
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'https://contracttocozy.com',
+    'https://www.contracttocozy.com',
+    'https://docs.contracttocozy.com'
+  ],
+  credentials: true,
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
