@@ -503,16 +503,29 @@ export default function RiskAssessmentPage() {
                 warrantiesBySystemType.set('WATER_HEATER_TANKLESS', warranty);
             } else if (warranty.category === 'ELECTRICAL') {
                 warrantiesBySystemType.set('ELECTRICAL_PANEL', warranty);
+            } else if (warranty.category === 'ROOFING') {
+                warrantiesBySystemType.set('ROOF_SHINGLE', warranty);
+                warrantiesBySystemType.set('ROOF_TILE_METAL', warranty);
             } else if (warranty.category === 'APPLIANCES') {
                 // Home warranty plans typically cover all appliances
                 warrantiesBySystemType.set('APPLIANCE', warranty);
-            } else if (warranty.category === 'HOME_WARRANTY') {
-                // Comprehensive home warranty - covers multiple systems
+            } else if (warranty.category === 'HOME_WARRANTY_PLAN' || warranty.category === 'HOME_WARRANTY') {
+                // Comprehensive home warranty - covers ALL major systems
+                // HVAC Systems
                 warrantiesBySystemType.set('HVAC_FURNACE', warranty);
                 warrantiesBySystemType.set('HVAC_HEAT_PUMP', warranty);
+                // Plumbing
                 warrantiesBySystemType.set('WATER_HEATER_TANK', warranty);
                 warrantiesBySystemType.set('WATER_HEATER_TANKLESS', warranty);
+                // Electrical
                 warrantiesBySystemType.set('ELECTRICAL_PANEL', warranty);
+                // Roofing (typically with additional coverage)
+                warrantiesBySystemType.set('ROOF_SHINGLE', warranty);
+                warrantiesBySystemType.set('ROOF_TILE_METAL', warranty);
+                // Appliances
+                warrantiesBySystemType.set('APPLIANCE', warranty);
+                // Safety
+                warrantiesBySystemType.set('SAFETY_SMOKE_CO_DETECTORS', warranty);
             }
             
             // If warranty is linked to specific asset, add that too
