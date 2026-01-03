@@ -8,7 +8,9 @@ import {
   MaintenanceTaskTemplate,
   RecurrenceFrequency,
   ServiceCategory,
-  Property, // Import Property type
+  Property,
+  MaintenanceTaskPriority,
+  MaintenanceTaskServiceCategory, // Add service category type for API
 } from '@/types';
 import { Button } from '@/components/ui/button';
 import {
@@ -386,10 +388,39 @@ export function MaintenanceConfigModal({
             // EDITING FLOW: Calls parent's onSave 
             onSave(configForEdit);
         } else if (isCreation && onSuccess) {
-            // CREATION FLOW: Handles API call internally, passing the explicitly formatted DTO
-            const response = await api.createCustomMaintenanceItems({ tasks: [configForApi as any] }); 
-            if (response.success && response.data?.count) {
-              onSuccess(response.data.count);
+            // 🔑 FIX: Use correct API endpoint for PropertyMaintenanceTask table
+            if (!propertyIdToUse) {
+              throw new Error('Property selection required');
+            }
+            
+            // Format data for PropertyMaintenanceTask API
+            // 🔑 Map ServiceCategory to MaintenanceTaskServiceCategory
+            // Only certain categories are valid for PropertyMaintenanceTask
+            const validMaintenanceCategories: MaintenanceTaskServiceCategory[] = [
+              'HVAC', 'PLUMBING', 'ELECTRICAL', 'HANDYMAN', 
+              'LANDSCAPING', 'CLEANING', 'PEST_CONTROL', 
+              'LOCKSMITH', 'ROOFING', 'APPLIANCE_REPAIR'
+            ];
+            
+            const mappedCategory = category && validMaintenanceCategories.includes(category as MaintenanceTaskServiceCategory)
+              ? (category as MaintenanceTaskServiceCategory)
+              : undefined;
+            
+            const createTaskData = {
+              title: title.trim(),
+              description: (description || '').trim(),
+              serviceCategory: mappedCategory,
+              isRecurring: finalIsRecurring,
+              frequency: finalIsRecurring ? finalFrequency : null,
+              nextDueDate: datePart, // Use yyyy-MM-dd format
+              priority: 'MEDIUM' as MaintenanceTaskPriority,
+              estimatedCost: 0,
+            };
+            
+            const response = await api.createMaintenanceTask(propertyIdToUse, createTaskData);
+            
+            if (response.success && response.data) {
+              onSuccess(1); // Created 1 task
               
               // Post-creation routing for Management Config Tasks (FINANCE/ADMIN)
               if (isConfigRedirectTask) {
