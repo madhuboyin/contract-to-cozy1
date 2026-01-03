@@ -173,7 +173,7 @@ export class BookingService {
     userRole: UserRole,
     query: ListBookingsQuery
   ): Promise<BookingListResponse> {
-    const { page, limit, status, category, fromDate, toDate, sortBy, sortOrder } = query;
+    const { page, limit, status, category, fromDate, toDate, sortBy, sortOrder, propertyId } = query;
     const skip = (page - 1) * limit;
 
     // Build where clause based on user role
@@ -195,6 +195,10 @@ export class BookingService {
       where.category = category;
     }
 
+    if (propertyId) {
+      where.propertyId = propertyId;
+    }
+    
     if (fromDate || toDate) {
       where.scheduledDate = {
         ...(fromDate && { gte: new Date(fromDate) }),
