@@ -352,7 +352,7 @@ export default function MaintenancePage() {
         </h2>
         
         <Button asChild>
-          <Link href="/dashboard/maintenance-setup">
+          <Link href={`/dashboard/maintenance-setup${propertyId ? `?propertyId=${propertyId}` : ''}`}>
             <Plus className="w-4 h-4 mr-2" /> Add New Tasks
           </Link>
         </Button>
@@ -377,7 +377,7 @@ export default function MaintenancePage() {
           <FileText className="w-10 h-10 text-gray-400 mx-auto mb-3" />
           <CardTitle>No Active Tasks Found</CardTitle>
           <CardDescription>
-            Visit <Link href="/dashboard/maintenance-setup" className="text-blue-600 hover:underline">Task Setup</Link> to add maintenance tasks.
+            Visit <Link href={`/dashboard/maintenance-setup${propertyId ? `?propertyId=${propertyId}` : ''}`} className="text-blue-600 hover:underline">Task Setup</Link> to add maintenance tasks.
           </CardDescription>
         </Card>
       )}

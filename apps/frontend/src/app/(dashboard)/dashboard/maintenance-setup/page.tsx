@@ -15,6 +15,7 @@ import { Zap, Wrench, ChevronRight, Home, Loader2 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { MaintenanceConfigModal } from './MaintenanceConfigModal';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 export default function MaintenanceSetupPage() {
   const router = useRouter();
@@ -39,14 +40,23 @@ export default function MaintenanceSetupPage() {
   });
   
   const properties = propertiesData?.success ? propertiesData.data.properties : [];
+  const searchParams = useSearchParams();
+  const urlPropertyId = searchParams.get('propertyId');
   
   // 3. Set default property ID (Primary or first) on load
   React.useEffect(() => {
     if (!selectedPropertyId && properties.length > 0) {
-      const defaultProp = properties.find(p => p.isPrimary) || properties[0];
-      setSelectedPropertyId(defaultProp.id);
+      // 🔧 FIX: Check URL parameter first, then fallback to primary/first
+      if (urlPropertyId && properties.some(p => p.id === urlPropertyId)) {
+        // Use property from URL if valid
+        setSelectedPropertyId(urlPropertyId);
+      } else {
+        // Otherwise use primary or first property
+        const defaultProp = properties.find(p => p.isPrimary) || properties[0];
+        setSelectedPropertyId(defaultProp.id);
+      }
     }
-  }, [properties, selectedPropertyId]);
+  }, [properties, selectedPropertyId, urlPropertyId]); // 🔧 Add urlPropertyId dependency
 
   // --- End Property and Selection State ---
   
