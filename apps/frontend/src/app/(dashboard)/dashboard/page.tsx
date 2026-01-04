@@ -35,6 +35,7 @@ import { TrendingUp } from 'lucide-react';
 import { Camera } from 'lucide-react';
 import { Scale } from 'lucide-react';
 import { Truck } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { SeasonalBanner } from '@/components/seasonal/SeasonalBanner';
 import { SeasonalWidget } from '@/components/seasonal/SeasonalWidget';
 import { useHomeownerSegment } from '@/lib/hooks/useHomeownerSegment';
@@ -418,9 +419,7 @@ export default function DashboardPage() {
   // Existing Owner Dashboard (now incorporates the scorecard grid at the top level)
   return (
     <>
-      {/* WelcomeSection is placed here so it can break out to full screen width.
-         It will use the negative margins defined in its component to hit the edges.
-      */}
+      {/* 1. WELCOME SECTION - FULL WIDTH */}
       {selectedProperty && properties.length > 0 && (
         <WelcomeSection
           userName={user?.firstName || 'there'}
@@ -429,6 +428,77 @@ export default function DashboardPage() {
           onPropertyChange={setSelectedPropertyId}
         />
       )}
+
+      {/* 2. CONSTRAINED WIDTH AREA (Aligns with other cards) */}
+      <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
+        
+        {/* PROPERTY INTELLIGENCE SCORES - IMMEDIATELY BELOW WELCOME */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mt-6 mb-8">
+          {selectedProperty ? (
+            <PropertyHealthScoreCard property={selectedProperty} /> 
+          ) : (
+            <PropertyHealthScoreCard property={{} as any} />
+          )}
+          <PropertyRiskScoreCard propertyId={selectedPropertyId} />
+          <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
+        </div>
+
+        {/* HORIZONTAL SEPARATOR */}
+        <div className="w-full border-t border-gray-200 mb-8" />
+
+        {/* 3. AI CARDS CAROUSEL */}
+        <section className="mb-10">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <Sparkles className="w-5 h-5 text-purple-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">AI Property Intelligence</h2>
+                <p className="text-sm text-gray-500">Smart tools for your home</p>
+              </div>
+            </div>
+            {/* Scroll Indicator Icon */}
+            <div className="flex items-center text-gray-400 text-sm font-medium gap-1 animate-pulse">
+              Scroll <ChevronRight className="w-4 h-4" />
+            </div>
+          </div>
+
+          {/* CAROUSEL CONTAINER: Horizontal Scroll */}
+          <div className="flex gap-4 overflow-x-auto pb-6 no-scrollbar snap-x">
+            
+            {/* AI CARD REUSABLE STYLE */}
+            {[
+              { href: 'emergency', icon: AlertTriangle, color: 'text-red-600', title: 'Emergency Help', desc: 'Instant AI guidance' },
+              { href: 'documents', icon: FileText, color: 'text-purple-600', title: 'Document Vault', desc: 'Smart analysis' },
+              { href: 'oracle', icon: Zap, color: 'text-purple-600', title: 'Appliance Oracle', desc: 'Predict failures' },
+              { href: 'budget', icon: DollarSign, color: 'text-blue-600', title: 'Budget Planner', desc: '12-month predictions' },
+              { href: 'climate', icon: Cloud, color: 'text-sky-600', title: 'Climate Risk', desc: 'Risk analysis' },
+              { href: 'modifications', icon: Home, color: 'text-indigo-600', title: 'Home Upgrades', desc: 'AI recommendations' },
+              { href: 'appreciation', icon: TrendingUp, color: 'text-green-600', title: 'Value Tracker', desc: 'Track market trends' },
+              { href: 'energy', icon: Zap, color: 'text-yellow-600', title: 'Energy Audit', desc: 'Energy-saving tips' },
+              { href: 'visual-inspector', icon: Camera, color: 'text-purple-600', title: 'Visual Inspector', desc: 'AI image analysis' },
+              { href: 'tax-appeal', icon: Scale, color: 'text-blue-700', title: 'Tax Appeals', desc: 'AI appeal analysis' },
+            ].map((card, idx) => (
+              <Link 
+                key={idx} 
+                href={`/dashboard/${card.href}?propertyId=${selectedPropertyId}`}
+                className="snap-start min-w-[280px] md:min-w-[calc(25%-12px)] flex-shrink-0"
+              >
+                <div className="flex items-start p-5 bg-white border border-gray-200 rounded-xl hover:border-teal-500 hover:shadow-lg transition-all cursor-pointer h-full">
+                  <div className="flex-shrink-0 mr-4">
+                    <card.icon className={`h-10 w-10 ${card.color}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-base font-bold text-gray-900 leading-tight mb-1">{card.title}</h3>
+                    <p className="text-xs text-gray-500">{card.desc}</p>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      </div>
 
       <DashboardShell>
       {/* ========================================= */}
