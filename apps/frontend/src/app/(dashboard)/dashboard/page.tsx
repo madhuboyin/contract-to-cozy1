@@ -1,11 +1,11 @@
 // apps/frontend/src/app/(dashboard)/dashboard/page.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
-import { Loader2, DollarSign } from 'lucide-react';
+import { Loader2, DollarSign, ChevronLeft } from 'lucide-react';
 import { Booking, Property, User, ChecklistItem, Warranty, InsurancePolicy } from '@/types'; 
 import { ScoredProperty } from './types'; 
 import { differenceInDays, isPast, parseISO } from 'date-fns'; 
@@ -213,6 +213,24 @@ export default function DashboardPage() {
   
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   const { data: homeownerSegment } = useHomeownerSegment(); // Get user segment for conditional features
+  
+  // Carousel ref and scroll function
+  const carouselRef = useRef<HTMLDivElement>(null);
+  
+  const scrollCarousel = (direction: 'left' | 'right') => {
+    if (!carouselRef.current) return;
+    
+    const scrollAmount = 300; // pixels to scroll
+    const currentScroll = carouselRef.current.scrollLeft;
+    const newScroll = direction === 'left' 
+      ? currentScroll - scrollAmount 
+      : currentScroll + scrollAmount;
+    
+    carouselRef.current.scrollTo({
+      left: newScroll,
+      behavior: 'smooth'
+    });
+  };
 
   // --- DATA FETCHING LOGIC (unchanged) ---
   const fetchDashboardData = useCallback(async () => {
@@ -446,8 +464,8 @@ export default function DashboardPage() {
         {/* HORIZONTAL SEPARATOR */}
         <div className="w-full border-t border-gray-200 mb-8" />
 
-        {/* 3. AI CARDS CAROUSEL */}
-        <section className="mb-10">
+          {/* 3. AI CARDS CAROUSEL */}
+          <section className="mb-10">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-purple-100 rounded-lg">
@@ -458,16 +476,32 @@ export default function DashboardPage() {
                 <p className="text-sm text-gray-500">Smart tools for your home</p>
               </div>
             </div>
-            {/* Scroll Indicator Icon */}
-            <div className="flex items-center text-gray-400 text-sm font-medium gap-1 animate-pulse">
-              Scroll <ChevronRight className="w-4 h-4" />
+
+            {/* FUNCTIONAL SCROLL BUTTONS */}
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => scrollCarousel('left')}
+                className="p-2 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors shadow-sm"
+                aria-label="Scroll Left"
+              >
+                <ChevronLeft className="w-4 h-4" /> 
+              </button>
+              <button 
+                onClick={() => scrollCarousel('right')}
+                className="p-2 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors shadow-sm"
+                aria-label="Scroll Right"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
 
-          {/* CAROUSEL CONTAINER: Horizontal Scroll */}
-          <div className="flex gap-4 overflow-x-auto pb-6 no-scrollbar snap-x">
-            
-            {/* AI CARD REUSABLE STYLE */}
+          {/* CAROUSEL CONTAINER: Linked with carouselRef */}
+          <div 
+            ref={carouselRef}
+            className="flex gap-4 overflow-x-auto pb-6 no-scrollbar snap-x scroll-smooth"
+          >
+            {/* AI CARDS (Remains same as your previous working version) */}
             {[
               { href: 'emergency', icon: AlertTriangle, color: 'text-red-600', title: 'Emergency Help', desc: 'Instant AI guidance' },
               { href: 'documents', icon: FileText, color: 'text-purple-600', title: 'Document Vault', desc: 'Smart analysis' },
