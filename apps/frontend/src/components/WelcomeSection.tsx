@@ -1,4 +1,5 @@
 // apps/frontend/src/components/WelcomeSection.tsx
+// VERSION: Full-width with balanced grid (keeps negative margins approach)
 'use client';
 
 import React from 'react';
@@ -27,10 +28,12 @@ export function WelcomeSection({
 }: WelcomeSectionProps) {
   return (
     <div className="w-screen bg-gradient-to-b from-teal-50 to-white py-3 md:py-4 -mx-4 sm:-mx-6 lg:-mx-8">
-      <div className="w-full px-8 sm:px-12 lg:px-16">
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-center">
-          {/* Left Column - 60% */}
-          <div className="lg:col-span-3 space-y-1.5">
+      <div className="max-w-7xl mx-auto px-8 sm:px-12 lg:px-16">
+        {/* CHANGED: lg:grid-cols-2 for 50/50 balance instead of lg:grid-cols-5 */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+          
+          {/* Left Column - Text and Dropdown - 50% */}
+          <div className="space-y-1.5">
             {/* Welcome Heading */}
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight">
               Welcome, {userName}! Property Intelligence Dashboard
@@ -62,10 +65,10 @@ export function WelcomeSection({
             </div>
           </div>
           
-          {/* Right Column - 40% with SMALLER Home Illustration */}
-          <div className="lg:col-span-2 relative flex justify-center lg:justify-end">
-            {/* ✨ FIXED: Changed from "w-full max-w-md" to "w-56" for compact height */}
-            <div className="w-56 h-auto">
+          {/* Right Column - Home Illustration - 50% */}
+          <div className="flex justify-center lg:justify-end">
+            {/* CHANGED: Responsive max-widths instead of fixed w-56 */}
+            <div className="w-full max-w-[200px] sm:max-w-[240px] lg:max-w-[260px]">
               <Image 
                 src="/images/home-cozy-illustration.png" 
                 alt="Cozy Home" 
@@ -76,6 +79,7 @@ export function WelcomeSection({
               />
             </div>
           </div>
+          
         </div>
       </div>
     </div>
