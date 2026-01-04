@@ -451,6 +451,18 @@ export default function DashboardPage() {
       <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
         
         {/* PROPERTY INTELLIGENCE SCORES - IMMEDIATELY BELOW WELCOME */}
+        {/* ========================================= */}
+        {/* SCORE CARDS SECTION */}
+        {/* ========================================= */}
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 bg-blue-100 rounded-lg">
+            <TrendingUp className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">Property Intelligence Scores</h2>
+            <p className="text-sm text-gray-500">Real-time health, risk, and financial analysis</p>
+          </div>
+        </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mt-6 mb-8">
           {selectedProperty ? (
             <PropertyHealthScoreCard property={selectedProperty} /> 
@@ -599,48 +611,7 @@ export default function DashboardPage() {
       {/* ========================================= */}
       {/* END AI FEATURES SECTION */}
       {/* ========================================= */}
-
-      {/* ========================================= */}
-      {/* SCORE CARDS SECTION */}
-      {/* ========================================= */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 bg-blue-100 rounded-lg">
-          <TrendingUp className="w-5 h-5 text-blue-600" />
-        </div>
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">Property Intelligence Scores</h2>
-          <p className="text-sm text-gray-500">Real-time health, risk, and financial analysis</p>
-        </div>
-      </div>
-
-      {/* Scorecards Grid (Existing Non-AI Scores) */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        
-        {/* 1. Property Health Score: Uses selectedPropertyId */}
-        {selectedProperty ? (
-          <div className="md:col-span-1">
-            <PropertyHealthScoreCard property={selectedProperty} /> 
-          </div>
-        ) : (
-           <div className="md:col-span-1">
-            <PropertyHealthScoreCard property={{} as ScoredProperty} />
-           </div>
-        )}
-        
-        {/* 2. Risk Assessment Score: Uses selectedPropertyId */}
-        <div className="md:col-span-1">
-            <PropertyRiskScoreCard propertyId={selectedPropertyId} />
-        </div>
-        
-        {/* 3. Financial Efficiency Score: Uses selectedPropertyId */}
-        <div className="md:col-span-1">
-            <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
-        </div>
-        
-      </div>
-      
-
-      
+            
       {/* Filter data by selected property before passing to child components */}
       {/* This ensures the red banner and other components show data for the currently selected property only */}
       {(() => {
