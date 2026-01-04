@@ -27,35 +27,38 @@ export function WelcomeSection({
 }: WelcomeSectionProps) {
   return (
     /* OUTER WRAPPER: 
-       - Background spans 100% viewport width.
-       - py-6 slightly increases the height for better visual balance.
+       - py-7 provides the slight height increase requested.
+       - Full viewport width background.
     */
-    <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen bg-gradient-to-b from-teal-50 to-white border-b border-gray-100 py-6 mb-8">
+    <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen bg-gradient-to-b from-teal-50 to-white border-b border-gray-100 py-7 mb-8">
       
-      {/* INNER CONTENT WRAPPER:
-          - Uses EXACT same max-w and px as DashboardShell (max-w-7xl px-4 md:px-6) to ensure alignment.
-      */}
+      {/* INNER CONTENT WRAPPER: Aligns with DashboardShell (max-w-7xl px-4 md:px-6) */}
       <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
         <div className="flex items-center justify-between gap-6">
           
-          {/* Left Column: Text & Selector */}
+          {/* Left Column: Welcome Text & Refined Selector */}
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl md:text-2xl font-bold text-gray-900 tracking-tight truncate">
-              Welcome, {userName}! <span className="text-gray-500 font-medium text-lg md:text-xl hidden sm:inline ml-1">Property Intelligence Dashboard</span>
+            <h1 className="text-xl md:text-2xl font-bold text-gray-900 tracking-tight">
+              Welcome, {userName}! <span className="text-gray-500 font-medium">Property Intelligence Dashboard</span>
             </h1>
             
-            <div className="flex items-center gap-2 mt-3">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+            <div className="flex items-center gap-2 mt-4">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                 Viewing:
-              </label>
-              <div className="bg-white rounded-md shadow-sm px-2 py-1 border border-gray-200 min-w-[280px]">
+              </span>
+              
+              {/* FIXED SELECTOR: 
+                  Removed the outer 'bg-white rounded-md shadow-sm px-2 py-1 border' 
+                  wrapper that was causing the double-border look.
+              */}
+              <div className="min-w-[300px]">
                 <Select value={selectedPropertyId || ''} onValueChange={onPropertyChange}>
-                  <SelectTrigger className="border-0 font-semibold text-xs text-gray-900 h-6 p-0 focus:ring-0">
+                  <SelectTrigger className="bg-white border-gray-200 shadow-sm font-semibold text-xs text-gray-900 h-9 px-3 focus:ring-1 focus:ring-teal-500/20">
                     <SelectValue placeholder="Select a property" />
                   </SelectTrigger>
                   <SelectContent>
                     {properties.map((property) => (
-                      <SelectItem key={property.id} value={property.id} className="text-xs">
+                      <SelectItem key={property.id} value={property.id} className="text-xs font-medium">
                         {formatPropertyDisplay(property)}
                       </SelectItem>
                     ))}
@@ -65,9 +68,9 @@ export function WelcomeSection({
             </div>
           </div>
           
-          {/* Right Column: Increased image size for better visibility */}
+          {/* Right Column: Prominent Illustration */}
           <div className="hidden md:flex justify-end shrink-0">
-            <div className="relative w-40 h-28">
+            <div className="relative w-48 h-32"> {/* Increased from w-40 h-28 */}
               <Image 
                 src="/images/home-cozy-illustration.png" 
                 alt="Cozy Home" 
