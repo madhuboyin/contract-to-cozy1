@@ -27,8 +27,8 @@ export function WelcomeSection({
   onPropertyChange 
 }: WelcomeSectionProps) {
   return (
-    <div className="w-screen bg-gradient-to-b from-teal-50 to-white py-3 md:py-4 -mx-4 sm:-mx-6 lg:-mx-8">
-      <div className="max-w-7xl mx-auto px-6">
+    <div className="w-full bg-gradient-to-b from-teal-50 to-white py-3 md:py-4 -mx-4 md:-mx-8">
+      <div className="max-w-7xl mx-auto px-4 md:px-6">
         {/* CHANGED: lg:grid-cols-2 for 50/50 balance instead of lg:grid-cols-5 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
           
