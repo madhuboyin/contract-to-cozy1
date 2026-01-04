@@ -26,22 +26,22 @@ export function WelcomeSection({
   onPropertyChange 
 }: WelcomeSectionProps) {
   return (
-    <div className="w-full bg-gradient-to-b from-teal-50 to-white py-4 md:py-6">
-      <div className="w-full px-6 sm:px-8 lg:px-12">
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-center max-w-7xl mx-auto">
+    <div className="w-screen bg-gradient-to-b from-teal-50 to-white py-3 md:py-4 -mx-4 sm:-mx-6 lg:-mx-8">
+      <div className="w-full px-8 sm:px-12 lg:px-16">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-center">
           {/* Left Column - 60% */}
-          <div className="lg:col-span-3 space-y-2">
-            {/* Welcome Heading - ORIGINAL MESSAGE - Reduced font size */}
+          <div className="lg:col-span-3 space-y-1.5">
+            {/* Welcome Heading */}
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight">
               Welcome, {userName}! Property Intelligence Dashboard
             </h1>
             
             {/* Property Selection */}
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               <label className="text-xs text-gray-600 block font-medium">
                 Property
               </label>
-              <div className="bg-white rounded-lg shadow-sm p-2 max-w-md border border-gray-100">
+              <div className="bg-white rounded-lg shadow-sm p-1.5 max-w-md border border-gray-100">
                 <Select value={selectedPropertyId || ''} onValueChange={onPropertyChange}>
                   <SelectTrigger className="border-0 font-semibold text-gray-900 h-auto p-0 focus:ring-0">
                     <SelectValue placeholder="Select a property" />
@@ -62,9 +62,10 @@ export function WelcomeSection({
             </div>
           </div>
           
-          {/* Right Column - 40% with Detailed Home Illustration */}
+          {/* Right Column - 40% with SMALLER Home Illustration */}
           <div className="lg:col-span-2 relative flex justify-center lg:justify-end">
-            <div className="w-full max-w-md h-auto">
+            {/* ✨ FIXED: Changed from "w-full max-w-md" to "w-56" for compact height */}
+            <div className="w-56 h-auto">
               <Image 
                 src="/images/home-cozy-illustration.png" 
                 alt="Cozy Home" 
