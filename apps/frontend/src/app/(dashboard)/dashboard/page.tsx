@@ -418,7 +418,9 @@ export default function DashboardPage() {
   // Existing Owner Dashboard (now incorporates the scorecard grid at the top level)
   return (
     <>
-      {/* Welcome Section - Full Width (Outside the Shell) */}
+      {/* WelcomeSection is placed here so it can break out to full screen width.
+         It will use the negative margins defined in its component to hit the edges.
+      */}
       {selectedProperty && properties.length > 0 && (
         <WelcomeSection
           userName={user?.firstName || 'there'}

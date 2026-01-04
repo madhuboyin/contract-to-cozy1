@@ -26,27 +26,30 @@ export function WelcomeSection({
   onPropertyChange 
 }: WelcomeSectionProps) {
   return (
-    /* Logic: The layout has md:p-8 (2rem). 
-       We use -mx-8 to pull the background to the edge 
-       and w-[calc(100%+4rem)] to fill the gap.
+    /* 1. Outer Container: Background spans full screen width.
+       -mx-4 and -mx-8 counteract the md:p-8 from layout.tsx.
     */
-    <div className="relative -mx-4 md:-mx-8 w-[calc(100%+2rem)] md:w-[calc(100%+4rem)] bg-gradient-to-b from-teal-50 to-white py-4 md:py-6 border-b border-gray-100 mb-6">
-      <div className="px-4 md:px-8"> 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+    <div className="relative -mx-4 md:-mx-8 bg-gradient-to-b from-teal-50 to-white border-b border-gray-100 py-6 md:py-8 mb-8">
+      
+      {/* 2. Inner Content Wrapper: Centered and constrained to align with dashboard cards.
+          max-w-7xl matches the standard DashboardShell width.
+      */}
+      <div className="max-w-7xl mx-auto px-4 md:px-6">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
           
-          {/* Left Column */}
-          <div className="space-y-1">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight">
-              Welcome, {userName}! Property Intelligence Dashboard
+          {/* Left Column - Text and Dropdown (Aligns with left edge of cards) */}
+          <div className="flex-1 space-y-4">
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 leading-tight tracking-tight">
+              Welcome, {userName}! <span className="block text-gray-500 text-2xl md:text-3xl font-medium mt-1">Property Intelligence Dashboard</span>
             </h1>
             
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-1">
-              <label className="text-sm font-medium text-gray-500 uppercase tracking-wider">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <label className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
                 Viewing intelligence for:
               </label>
-              <div className="bg-white rounded-lg shadow-sm p-1.5 max-w-md border border-gray-100">
+              <div className="bg-white rounded-xl shadow-sm p-2 min-w-[300px] border border-gray-200">
                 <Select value={selectedPropertyId || ''} onValueChange={onPropertyChange}>
-                  <SelectTrigger className="border-0 font-semibold text-gray-900 h-auto p-0 focus:ring-0">
+                  <SelectTrigger className="border-0 font-bold text-gray-900 h-auto p-1 focus:ring-0">
                     <SelectValue placeholder="Select a property" />
                   </SelectTrigger>
                   <SelectContent>
@@ -61,15 +64,14 @@ export function WelcomeSection({
             </div>
           </div>
           
-          {/* Right Column */}
+          {/* Right Column - Illustration (Aligns with right edge of cards) */}
           <div className="flex justify-center lg:justify-end">
-            <div className="w-full max-w-[180px] sm:max-w-[200px] lg:max-w-[220px]">
+            <div className="relative w-48 h-48 md:w-64 md:h-64">
               <Image 
                 src="/images/home-cozy-illustration.png" 
                 alt="Cozy Home" 
-                width={500}
-                height={375}
-                className="w-full h-auto"
+                fill
+                className="object-contain"
                 priority
               />
             </div>
