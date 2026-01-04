@@ -3,7 +3,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { FinancialEfficiencyReport, Property } from "@/types"; 
 import { api } from "@/lib/api/client";
 import { DashboardShell } from "@/components/DashboardShell";
@@ -130,7 +130,7 @@ const CostBreakdownTable = ({ report }: { report: FinancialEfficiencyReport }) =
 export default function FinancialEfficiencyPage() {
     const params = useParams();
     const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
-
+    const router = useRouter();
     // 1. Fetch Property Details (to get name/address for header)
     const { data: property, isLoading: isLoadingProperty } = useQuery({
         queryKey: ["property", propertyId],
@@ -254,11 +254,13 @@ export default function FinancialEfficiencyPage() {
     return (
         <DashboardShell>
             <PageHeader>
-                <Link href={`/dashboard/properties/${propertyId}`} passHref>
-                    <Button variant="link" className="p-0 h-auto mb-2 text-sm text-muted-foreground">
-                        <ArrowLeft className="h-4 w-4 mr-1" /> Back to {property?.name || 'Property'} Overview
-                    </Button>
-                </Link>
+                <Button 
+                    variant="link" 
+                    className="p-0 h-auto mb-2 text-sm text-muted-foreground"
+                    onClick={() => router.back()}
+                >
+                    <ArrowLeft className="h-4 w-4 mr-1" /> Back
+                </Button>
                 <PageHeaderHeading className="flex items-center gap-2">
                     <ScoreIcon className="h-8 w-8 text-primary" /> Financial Efficiency Report
                 </PageHeaderHeading>

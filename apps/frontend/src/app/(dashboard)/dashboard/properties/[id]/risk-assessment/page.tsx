@@ -930,11 +930,13 @@ export default function RiskAssessmentPage() {
     return (
         <DashboardShell>
             <PageHeader>
-                <Link href={`/dashboard/properties/${propertyId}`} passHref>
-                    <Button variant="link" className="p-0 h-auto mb-2 text-sm text-muted-foreground">
-                        <ArrowLeft className="h-4 w-4 mr-1" /> Back to {property?.name || 'Property'} Overview
-                    </Button>
-                </Link>
+                <Button 
+                    variant="link" 
+                    className="p-0 h-auto mb-2 text-sm text-muted-foreground"
+                    onClick={() => router.back()}
+                >
+                    <ArrowLeft className="h-4 w-4 mr-1" /> Back
+                </Button>
                 <PageHeaderHeading className="flex items-center gap-2">
                     <Zap className="h-8 w-8 text-primary" /> Property Risk Report
                 </PageHeaderHeading>

@@ -451,9 +451,6 @@ export default function DashboardPage() {
       <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
         
         {/* PROPERTY INTELLIGENCE SCORES - IMMEDIATELY BELOW WELCOME */}
-        {/* ========================================= */}
-        {/* SCORE CARDS SECTION */}
-        {/* ========================================= */}
         <div className="flex items-center gap-3 mb-6">
           <div className="p-2 bg-blue-100 rounded-lg">
             <TrendingUp className="w-5 h-5 text-blue-600" />
@@ -554,12 +551,7 @@ export default function DashboardPage() {
         <SeasonalBanner propertyId={selectedPropertyId} />
       )}
 
-      {/* ========================================= */}
-      {/* AI FEATURES SECTION */}
-      {/* ========================================= */}
       <section className="mb-8">
-
-        {/* AI Cards Grid - Angi Style: All 12 cards, shortened titles */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           
           {/* Inspection Report Intelligence - HOME_BUYER ONLY */}
@@ -607,11 +599,7 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
-      </section>
-      {/* ========================================= */}
-      {/* END AI FEATURES SECTION */}
-      {/* ========================================= */}
-            
+      </section>            
       {/* Filter data by selected property before passing to child components */}
       {/* This ensures the red banner and other components show data for the currently selected property only */}
       {(() => {
