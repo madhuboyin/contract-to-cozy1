@@ -1,3 +1,6 @@
+// apps/backend/src/middleware/error.middleware.ts
+// FIX: Add proper logging for Prisma validation errors
+
 import { Request, Response, NextFunction } from 'express';
 import { Prisma } from '@prisma/client';
 
@@ -40,8 +43,7 @@ export const errorHandler = (
     method: req.method,
   });
 
-  // --- START: CRITICAL ADDITION FOR SERIALIZATION/PRISMA CRASH ---
-  // Handle Serialization Crash (The most likely cause of generic 500s on Home Management)
+  // Handle Serialization Crash
   if (
     error instanceof TypeError && 
     (error.message.includes('BigInt') || error.message.includes('Decimal'))
@@ -49,9 +51,8 @@ export const errorHandler = (
     statusCode = 500;
     message = 'Data serialization failed. Unconverted Decimal/BigInt type detected.';
     errorCode = 'JSON_SERIALIZATION_CRASH';
-    console.error('FATAL JSON SERIALIZATION CRASH: Error in home-management due to unconverted Decimal/BigInt type.', error);
+    console.error('FATAL JSON SERIALIZATION CRASH:', error);
   }
-  // --- END: CRITICAL ADDITION FOR SERIALIZATION/PRISMA CRASH ---
 
   // Handle custom API errors
   if (error instanceof APIError) {
@@ -92,12 +93,12 @@ export const errorHandler = (
       return;
     }
     
-    // Other known Prisma errors (e.g., P2025 - not found)
+    // Record not found
     if (error.code === 'P2025') {
         res.status(404).json({
           success: false,
           error: {
-            message: 'Record not found.',
+            message: 'Record not found',
             code: 'NOT_FOUND',
           },
         });
@@ -105,13 +106,28 @@ export const errorHandler = (
     }
   }
 
-  // Handle Prisma validation errors
+  // 🔧 FIX: Handle Prisma validation errors with proper logging
   if (error instanceof Prisma.PrismaClientValidationError) {
+    // Log the FULL error details for debugging
+    console.error('❌ PRISMA VALIDATION ERROR DETAILS:', {
+      errorMessage: error.message,
+      errorStack: error.stack,
+      requestPath: req.path,
+      requestMethod: req.method,
+      requestBody: req.body,
+      requestParams: req.params,
+    });
+    
     res.status(400).json({
       success: false,
       error: {
         message: 'Invalid data provided',
         code: 'VALIDATION_ERROR',
+        // 🔧 Include actual error message in development mode
+        ...(process.env.NODE_ENV === 'development' && { 
+          details: error.message,
+          hint: 'Check server logs for full error details'
+        }),
       },
     });
     return;
@@ -146,7 +162,7 @@ export const errorHandler = (
     error: {
       message: process.env.NODE_ENV === 'production' 
         ? 'An unexpected error occurred' 
-        : message, // Use the extracted/default message
+        : message,
       code: errorCode,
       ...(process.env.NODE_ENV === 'development' && { stack: error.stack }),
     },

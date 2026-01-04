@@ -256,37 +256,70 @@ import {
     /**
      * Create tasks from seasonal checklist items.
      */
-    static async createFromSeasonalItem(
-      userId: string,
-      propertyId: string,
-      seasonalItemId: string
-    ): Promise<PropertyMaintenanceTask> {
-      // Verify property ownership
-      await this.verifyPropertyOwnership(userId, propertyId);
-  
-      // Get seasonal item
-      const seasonalItem = await prisma.seasonalChecklistItem.findUnique({
-        where: { id: seasonalItemId },
-        include: {
-          seasonalTaskTemplate: true,
-          seasonalChecklist: true,
-          maintenanceTask: true,
-        },
-      });
-  
-      if (!seasonalItem) {
-        throw new Error('Seasonal checklist item not found.');
+  static async createFromSeasonalItem(
+    userId: string,
+    propertyId: string,
+    seasonalItemId: string
+  ): Promise<PropertyMaintenanceTask> {
+    // Verify property ownership
+    await this.verifyPropertyOwnership(userId, propertyId);
+
+    // Get seasonal item with all relations
+    const seasonalItem = await prisma.seasonalChecklistItem.findUnique({
+      where: { id: seasonalItemId },
+      include: {
+        seasonalTaskTemplate: true,
+        seasonalChecklist: true,
+        maintenanceTask: true,
+      },
+    });
+
+    if (!seasonalItem) {
+      throw new Error('Seasonal checklist item not found.');
+    }
+
+    if (seasonalItem.propertyId !== propertyId) {
+      throw new Error('Seasonal item does not belong to this property.');
+    }
+
+    // Check if task already exists
+    if (seasonalItem.maintenanceTask) {
+      throw new Error('Task already created for this seasonal item.');
+    }
+
+    // 🔧 FIX: Validate and safely handle serviceCategory
+    let validServiceCategory: ServiceCategory | null = null;
+    
+    if (seasonalItem.seasonalTaskTemplate?.serviceCategory) {
+      const category = seasonalItem.seasonalTaskTemplate.serviceCategory as string;
+      
+      // Only validate if category exists
+      try {
+        await this.validateServiceCategory(category as ServiceCategory);
+        validServiceCategory = category as ServiceCategory;
+      } catch (error) {
+        // Log but don't fail - just set to null
+        console.warn(
+          `[SEASONAL] Invalid serviceCategory "${category}" for item ${seasonalItemId}, setting to null:`,
+          error
+        );
+        validServiceCategory = null;
       }
-  
-      if (seasonalItem.propertyId !== propertyId) {
-        throw new Error('Seasonal item does not belong to this property.');
-      }
-  
-      // Check if task already exists
-      if (seasonalItem.maintenanceTask) {
-        throw new Error('Task already created for this seasonal item.');
-      }
-  
+    }
+
+    // 🔧 FIX: Add detailed logging before create
+    console.log('[SEASONAL] Creating PropertyMaintenanceTask:', {
+      propertyId,
+      title: seasonalItem.title,
+      status: 'PENDING',
+      source: 'SEASONAL',
+      priority: this.mapTaskPriorityToMaintenance(seasonalItem.priority),
+      serviceCategory: validServiceCategory,
+      isSeasonal: true,
+      season: seasonalItem.seasonalChecklist.season,
+    });
+
+    try {
       const task = await prisma.propertyMaintenanceTask.create({
         data: {
           propertyId,
@@ -298,11 +331,13 @@ import {
           isSeasonal: true,
           season: seasonalItem.seasonalChecklist.season,
           seasonalChecklistItemId: seasonalItem.id,
-          nextDueDate: seasonalItem.recommendedDate,
-          serviceCategory: seasonalItem.seasonalTaskTemplate.serviceCategory as ServiceCategory | null,
+          nextDueDate: seasonalItem.recommendedDate ?? null, // 🔧 FIX: Handle null
+          serviceCategory: validServiceCategory,
         },
       });
-  
+
+      console.log('[SEASONAL] Successfully created PropertyMaintenanceTask:', task.id);
+
       // Update seasonal item to mark as added
       await prisma.seasonalChecklistItem.update({
         where: { id: seasonalItemId },
@@ -311,9 +346,19 @@ import {
           addedAt: new Date(),
         },
       });
-  
+
       return task;
+    } catch (error) {
+      // 🔧 FIX: Better error logging
+      console.error('[SEASONAL] Failed to create PropertyMaintenanceTask:', {
+        error,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        seasonalItemId,
+        propertyId,
+      });
+      throw error;
     }
+  }
   
     /**
      * Create tasks from templates.
