@@ -428,7 +428,6 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* Main Dashboard Content */}
       <DashboardShell>
         {/* Quick Link to Properties */}
         {selectedProperty && (
