@@ -1,6 +1,4 @@
 // apps/frontend/src/app/(dashboard)/dashboard/bookings/page.tsx
-// Homeowner bookings page with EDIT and CANCEL functionality
-// ✅ FIXED: Uses global Booking type from @/types
 
 'use client';
 
@@ -9,6 +7,13 @@ import Link from 'next/link';
 import { api } from '@/lib/api/client';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { Booking, BookingStatus } from '@/types';
+import { MoreVertical, Calendar, MapPin, DollarSign } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface EditFormData {
   scheduledDate: string;
@@ -16,16 +21,72 @@ interface EditFormData {
   specialRequests: string;
 }
 
-// ✅ NEW HELPER: Converts ISO string to the local date/time format required by <input type="datetime-local">
 const toLocalDatetimeInput = (isoString: string | null): string => {
   if (!isoString) return '';
   const date = new Date(isoString);
-  // Get time zone offset in minutes
   const offset = date.getTimezoneOffset() * 60000;
-  // Adjust to local time
   const localTime = new Date(date.getTime() - offset);
-  // Return in YYYY-MM-DDTHH:MM format
   return localTime.toISOString().slice(0, 16);
+};
+
+// Status dot component
+// Fix the StatusDot component in the bookings page
+
+const StatusDot = ({ status }: { status: BookingStatus }) => {
+  const colors: Record<BookingStatus, string> = {
+    DRAFT: 'bg-gray-400',
+    PENDING: 'bg-yellow-500',
+    CONFIRMED: 'bg-green-500',
+    IN_PROGRESS: 'bg-blue-500',
+    COMPLETED: 'bg-gray-500',
+    CANCELLED: 'bg-red-500',
+    DISPUTED: 'bg-orange-500',
+  };
+
+  const labels: Record<BookingStatus, string> = {
+    DRAFT: 'Draft',
+    PENDING: 'Pending',
+    CONFIRMED: 'Confirmed',
+    IN_PROGRESS: 'In Progress',
+    COMPLETED: 'Completed',
+    CANCELLED: 'Cancelled',
+    DISPUTED: 'Disputed',
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className={`w-2 h-2 rounded-full ${colors[status]}`} />
+      <span className="text-sm text-gray-700">{labels[status]}</span>
+    </div>
+  );
+};
+
+// Format date compactly
+const formatDate = (dateString: string | null) => {
+  if (!dateString) return 'Not scheduled';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric',
+    year: 'numeric'
+  });
+};
+
+const formatTime = (dateString: string | null) => {
+  if (!dateString) return '-';
+  const date = new Date(dateString);
+  return date.toLocaleTimeString('en-US', { 
+    hour: 'numeric', 
+    minute: '2-digit',
+    hour12: true 
+  });
+};
+
+// Shorten property address
+const formatProperty = (property: any) => {
+  if (!property) return 'N/A';
+  const parts = [property.address, property.city, property.state];
+  return parts.filter(Boolean).join(', ');
 };
 
 export default function HomeownerBookingsPage() {
@@ -60,7 +121,6 @@ export default function HomeownerBookingsPage() {
     try {
       setLoading(true);
       setError(null);
-      // ✅ FIXED: Changed from api.getBookings() to api.listBookings()
       const response = await api.listBookings({});
       
       if (response.success) {
@@ -78,39 +138,19 @@ export default function HomeownerBookingsPage() {
     ? bookings 
     : bookings.filter(b => b.status === filter);
 
-  const getStatusColor = (status: BookingStatus) => {
-    switch (status) {
-      case 'DRAFT':
-        return 'bg-gray-100 text-gray-800';
-      case 'PENDING':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'CONFIRMED':
-        return 'bg-blue-100 text-blue-800';
-      case 'IN_PROGRESS':
-        return 'bg-purple-100 text-purple-800';
-      case 'COMPLETED':
-        return 'bg-green-100 text-green-800';
-      case 'CANCELLED':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
   const canEditBooking = (status: BookingStatus) => {
-    return ['DRAFT', 'PENDING', 'CONFIRMED'].includes(status);
+    return status === 'PENDING' || status === 'CONFIRMED';
   };
 
   const canCancelBooking = (status: BookingStatus) => {
-    return ['DRAFT', 'PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(status);
+    return status === 'PENDING' || status === 'CONFIRMED' || status === 'IN_PROGRESS';
   };
 
   const handleEditClick = (booking: Booking) => {
     setEditingBooking(booking);
     setEditFormData({
-      // ✅ FIX: Use new helper for correct date/time input format initialization
       scheduledDate: toLocalDatetimeInput(booking.scheduledDate),
-      description: booking.description,
+      description: booking.description || '',
       specialRequests: booking.specialRequests || '',
     });
     setShowEditModal(true);
@@ -118,14 +158,7 @@ export default function HomeownerBookingsPage() {
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!editingBooking) return;
-
-    // Validation
-    if (editFormData.description.length < 10) {
-      setError('Description must be at least 10 characters');
-      return;
-    }
 
     try {
       setSaving(true);
@@ -136,7 +169,6 @@ export default function HomeownerBookingsPage() {
       };
 
       if (editFormData.scheduledDate) {
-        // This converts the local datetime string back to an ISO UTC string for the backend
         updates.scheduledDate = new Date(editFormData.scheduledDate).toISOString();
       }
 
@@ -150,7 +182,7 @@ export default function HomeownerBookingsPage() {
         setSuccess('Booking updated successfully');
         setShowEditModal(false);
         setEditingBooking(null);
-        fetchBookings(); // Refresh list
+        fetchBookings();
         setTimeout(() => setSuccess(null), 3000);
       }
     } catch (err: any) {
@@ -172,7 +204,6 @@ export default function HomeownerBookingsPage() {
 
     if (!cancellingBooking) return;
 
-    // Validation
     if (cancelReason.length < 10) {
       setError('Cancellation reason must be at least 10 characters');
       return;
@@ -189,7 +220,7 @@ export default function HomeownerBookingsPage() {
         setShowCancelModal(false);
         setCancellingBooking(null);
         setCancelReason('');
-        fetchBookings(); // Refresh list
+        fetchBookings();
         setTimeout(() => setSuccess(null), 3000);
       }
     } catch (err: any) {
@@ -237,7 +268,7 @@ export default function HomeownerBookingsPage() {
           >
             All
           </button>
-          {(['PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as BookingStatus[]).map((status) => (
+          {(['DRAFT', 'PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as BookingStatus[]).map((status) => (
             <button
               key={status}
               onClick={() => setFilter(status)}
@@ -252,135 +283,129 @@ export default function HomeownerBookingsPage() {
           ))}
         </div>
 
-        {/* Bookings List */}
+        {/* Bookings Table */}
         {loading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
             <p className="mt-4 text-gray-600">Loading bookings...</p>
           </div>
         ) : filteredBookings.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg shadow-sm">
-            <p className="text-gray-600">No bookings found</p>
+          <div className="bg-white rounded-lg shadow p-12 text-center">
+            <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No bookings found</h3>
+            <p className="text-gray-600 mb-6">
+              {filter === 'all' 
+                ? "You haven't made any bookings yet." 
+                : `No ${filter.toLowerCase().replace('_', ' ')} bookings.`}
+            </p>
             <Link
-              href="/dashboard/providers"
-              className="mt-4 inline-block text-blue-600 hover:text-blue-700"
+              href="/dashboard/find-services"
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
-              Book a service
+              Find Services
             </Link>
           </div>
         ) : (
-          <div className="space-y-4">
-            {filteredBookings.map((booking) => (
-              <div
-                key={booking.id}
-                className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
-              >
-                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between">
-                  {/* Booking Details */}
-                  <div className="flex-1">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="flex items-center space-x-3">
-                          <h3 className="text-lg font-semibold text-gray-900">
-                            {booking.service.name}
-                          </h3>
-                          <span
-                            className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(
-                              booking.status
-                            )}`}
-                          >
-                            {booking.status.replace('_', ' ')}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-sm text-gray-500">
-                          Booking #{booking.bookingNumber}
-                        </p>
-                      </div>
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            {/* Table Header */}
+            <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <div className="col-span-3">Service</div>
+              <div className="col-span-2">Date & Time</div>
+              <div className="col-span-3">Property</div>
+              <div className="col-span-2">Status</div>
+              <div className="col-span-2 text-right">Actions</div>
+            </div>
+
+            {/* Table Rows */}
+            <div className="divide-y divide-gray-100">
+              {filteredBookings.map((booking) => (
+                <div
+                  key={booking.id}
+                  className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-gray-50 transition-colors items-center"
+                >
+                  {/* Service Column */}
+                  <div className="col-span-3">
+                    <div className="font-medium text-gray-900 text-sm">
+                      {booking.service?.name || 'Service'}
                     </div>
-
-                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Provider</p>
-                        <p className="mt-1 text-sm text-gray-900">
-                          {booking.provider.businessName || 
-                           `${booking.provider.firstName} ${booking.provider.lastName}`}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Property</p>
-                        <p className="mt-1 text-sm text-gray-900">
-                          {booking.property.address}, {booking.property.city}, {booking.property.state}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Scheduled Date</p>
-                        <p className="mt-1 text-sm text-gray-900">
-                          {booking.scheduledDate
-                            ? new Date(booking.scheduledDate).toLocaleString()
-                            : 'Not scheduled'}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Price</p>
-                        <p className="mt-1 text-sm text-gray-900">
-                          ${parseFloat(booking.estimatedPrice).toFixed(2)}
-                        </p>
-                      </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {booking.provider?.businessName || 'Provider'}
                     </div>
-
-                    {booking.description && (
-                      <div className="mt-4">
-                        <p className="text-sm font-medium text-gray-500">Description</p>
-                        <p className="mt-1 text-sm text-gray-700">{booking.description}</p>
-                      </div>
-                    )}
-
-                    {booking.specialRequests && (
-                      <div className="mt-4">
-                        <p className="text-sm font-medium text-gray-500">Special Requests</p>
-                        <p className="mt-1 text-sm text-gray-700">{booking.specialRequests}</p>
-                      </div>
-                    )}
+                    <div className="text-xs text-gray-400 mt-1">
+                      #{booking.bookingNumber}
+                    </div>
                   </div>
 
-                  {/* Action Buttons */}
-                  <div className="mt-4 lg:mt-0 lg:ml-6 flex flex-col space-y-2">
-                    <Link
-                      href={`/dashboard/bookings/${booking.id}`}
-                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-center text-sm font-medium"
-                    >
-                      View Details
-                    </Link>
-                    
-                    {canEditBooking(booking.status) && (
-                      <button
-                        onClick={() => handleEditClick(booking)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
-                      >
-                        Edit Booking
-                      </button>
-                    )}
-                    
-                    {canCancelBooking(booking.status) && (
-                      <button
-                        onClick={() => handleCancelClick(booking)}
-                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium"
-                      >
-                        Cancel Booking
-                      </button>
-                    )}
+                  {/* Date & Time Column */}
+                  <div className="col-span-2">
+                    <div className="text-sm text-gray-900">
+                      {formatDate(booking.scheduledDate)}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {formatTime(booking.scheduledDate)}
+                    </div>
+                    <div className="text-xs text-gray-900 font-medium mt-1">
+                      ${parseFloat(booking.estimatedPrice).toFixed(2)}
+                    </div>
+                  </div>
+
+                  {/* Property Column */}
+                  <div className="col-span-3">
+                    <div className="text-sm text-gray-900 truncate">
+                      {booking.property?.address || 'N/A'}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1 truncate">
+                      {booking.property?.city && booking.property?.state
+                        ? `${booking.property.city}, ${booking.property.state}`
+                        : ''}
+                    </div>
+                  </div>
+
+                  {/* Status Column */}
+                  <div className="col-span-2">
+                    <StatusDot status={booking.status} />
+                  </div>
+
+                  {/* Actions Column */}
+                  <div className="col-span-2 text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                          <MoreVertical className="w-5 h-5 text-gray-500" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem asChild>
+                          <Link href={`/dashboard/bookings/${booking.id}`} className="w-full cursor-pointer">
+                            View Details
+                          </Link>
+                        </DropdownMenuItem>
+                        
+                        {canEditBooking(booking.status) && (
+                          <DropdownMenuItem onClick={() => handleEditClick(booking)}>
+                            Edit Booking
+                          </DropdownMenuItem>
+                        )}
+                        
+                        {canCancelBooking(booking.status) && (
+                          <DropdownMenuItem 
+                            onClick={() => handleCancelClick(booking)}
+                            className="text-red-600 focus:text-red-600"
+                          >
+                            Cancel Booking
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
       </div>
 
-      {/* Edit Modal */}
+      {/* Edit Modal - Keep existing modal code */}
       {showEditModal && editingBooking && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -398,83 +423,62 @@ export default function HomeownerBookingsPage() {
               </div>
 
               <form onSubmit={handleEditSubmit}>
-                {/* Service Info (Read-only) */}
                 <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                  <p className="text-sm font-medium text-gray-500">Service</p>
-                  <p className="mt-1 text-base font-semibold text-gray-900">
-                    {editingBooking.service.name}
-                  </p>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Booking #{editingBooking.bookingNumber}
-                  </p>
+                  <p className="text-sm font-medium text-gray-700">Service</p>
+                  <p className="text-lg text-gray-900">{editingBooking.service?.name}</p>
+                  <p className="text-sm text-gray-600 mt-1">{editingBooking.provider?.businessName}</p>
                 </div>
 
-                {/* Scheduled Date */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Scheduled Date *
-                  </label>
-                  {/* FIX: Simplified value prop now that initialization sets the correct format */}
-                  <input
-                    type="datetime-local"
-                    value={editFormData.scheduledDate}
-                    onChange={(e) => setEditFormData({ ...editFormData, scheduledDate: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                  />
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Scheduled Date & Time
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={editFormData.scheduledDate}
+                      onChange={(e) => setEditFormData(prev => ({ ...prev, scheduledDate: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Description
+                    </label>
+                    <textarea
+                      value={editFormData.description}
+                      onChange={(e) => setEditFormData(prev => ({ ...prev, description: e.target.value }))}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Special Requests
+                    </label>
+                    <textarea
+                      value={editFormData.specialRequests}
+                      onChange={(e) => setEditFormData(prev => ({ ...prev, specialRequests: e.target.value }))}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
                 </div>
 
-                {/* Description */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Description *
-                  </label>
-                  <textarea
-                    value={editFormData.description}
-                    onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
-                    rows={4}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Describe what you need..."
-                    required
-                    minLength={10}
-                  />
-                  <p className="mt-1 text-sm text-gray-500">
-                    Minimum 10 characters ({editFormData.description.length}/10)
-                  </p>
-                </div>
-
-                {/* Special Requests */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Special Requests (Optional)
-                  </label>
-                  <textarea
-                    value={editFormData.specialRequests}
-                    onChange={(e) => setEditFormData({ ...editFormData, specialRequests: e.target.value })}
-                    rows={3}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Any special instructions or requirements..."
-                    maxLength={500}
-                  />
-                  <p className="mt-1 text-sm text-gray-500">
-                    {editFormData.specialRequests.length}/500 characters
-                  </p>
-                </div>
-
-                {/* Buttons */}
-                <div className="flex space-x-4">
+                <div className="mt-6 flex justify-end space-x-3">
                   <button
                     type="button"
                     onClick={() => setShowEditModal(false)}
-                    className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
-                    disabled={saving}
+                    className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={saving}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                   >
                     {saving ? 'Saving...' : 'Save Changes'}
                   </button>
@@ -485,63 +489,59 @@ export default function HomeownerBookingsPage() {
         </div>
       )}
 
-      {/* Cancel Modal */}
+      {/* Cancel Modal - Keep existing modal code */}
       {showCancelModal && cancellingBooking && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-md w-full">
             <div className="p-6">
-              <div className="flex items-center justify-center mb-4">
-                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                  <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Cancel Booking</h2>
+                <button
+                  onClick={() => setShowCancelModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                </div>
+                </button>
               </div>
 
-              <h2 className="text-xl font-bold text-gray-900 text-center mb-2">
-                Cancel Booking
-              </h2>
-              
-              <p className="text-sm text-gray-600 text-center mb-4">
-                Booking #{cancellingBooking.bookingNumber}
-              </p>
-              
-              <p className="text-sm text-gray-700 text-center mb-6">
-                {cancellingBooking.service.name}
-              </p>
-
               <form onSubmit={handleCancelSubmit}>
-                <div className="mb-6">
+                <div className="mb-4">
+                  <p className="text-sm text-gray-600">
+                    You are about to cancel your booking for:
+                  </p>
+                  <p className="text-lg font-medium text-gray-900 mt-2">
+                    {cancellingBooking.service?.name}
+                  </p>
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Cancellation Reason *
+                    Reason for cancellation <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     value={cancelReason}
                     onChange={(e) => setCancelReason(e.target.value)}
                     rows={4}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                    placeholder="Please provide a reason for cancellation..."
                     required
-                    minLength={10}
+                    placeholder="Please provide a reason (minimum 10 characters)"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <p className="mt-1 text-sm text-gray-500">
-                    Minimum 10 characters ({cancelReason.length}/10)
-                  </p>
                 </div>
 
-                <div className="flex space-x-4">
+                <div className="mt-6 flex justify-end space-x-3">
                   <button
                     type="button"
                     onClick={() => setShowCancelModal(false)}
-                    className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
-                    disabled={cancelling}
+                    className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
                   >
                     Keep Booking
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={cancelling}
+                    disabled={cancelling || cancelReason.length < 10}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
                   >
                     {cancelling ? 'Cancelling...' : 'Cancel Booking'}
                   </button>
@@ -554,6 +554,3 @@ export default function HomeownerBookingsPage() {
     </div>
   );
 }
-
-// Full code for bookings/[id]/page.tsx is not strictly required for this specific review 
-// but is provided in the prompt for context.
