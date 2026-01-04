@@ -26,15 +26,15 @@ export function WelcomeSection({
   onPropertyChange 
 }: WelcomeSectionProps) {
   return (
-    // The outer div spans full screen width with the background gradient
-    <div className="w-full bg-gradient-to-b from-teal-50 to-white py-3 md:py-4 border-b border-gray-100">
-      {/* Removed the restrictive padding here so content can reach the edges 
-          matching the top nav bar's alignment 
-      */}
-      <div className="w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center px-4 md:px-8">
+    /* Logic: The layout has md:p-8 (2rem). 
+       We use -mx-8 to pull the background to the edge 
+       and w-[calc(100%+4rem)] to fill the gap.
+    */
+    <div className="relative -mx-4 md:-mx-8 w-[calc(100%+2rem)] md:w-[calc(100%+4rem)] bg-gradient-to-b from-teal-50 to-white py-4 md:py-6 border-b border-gray-100 mb-6">
+      <div className="px-4 md:px-8"> 
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
           
-          {/* Left Column - Text and Dropdown */}
+          {/* Left Column */}
           <div className="space-y-1">
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight">
               Welcome, {userName}! Property Intelligence Dashboard
@@ -51,11 +51,7 @@ export function WelcomeSection({
                   </SelectTrigger>
                   <SelectContent>
                     {properties.map((property) => (
-                      <SelectItem 
-                        key={property.id} 
-                        value={property.id}
-                        className="font-medium"
-                      >
+                      <SelectItem key={property.id} value={property.id} className="font-medium">
                         {formatPropertyDisplay(property)}
                       </SelectItem>
                     ))}
@@ -65,7 +61,7 @@ export function WelcomeSection({
             </div>
           </div>
           
-          {/* Right Column - Home Illustration */}
+          {/* Right Column */}
           <div className="flex justify-center lg:justify-end">
             <div className="w-full max-w-[180px] sm:max-w-[200px] lg:max-w-[220px]">
               <Image 
