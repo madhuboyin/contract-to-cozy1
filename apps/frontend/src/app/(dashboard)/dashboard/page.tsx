@@ -418,7 +418,7 @@ export default function DashboardPage() {
   // Existing Owner Dashboard (now incorporates the scorecard grid at the top level)
   return (
     <>
-      {/* Welcome Section - Full Width */}
+      {/* Welcome Section - Fits Full Screen Width */}
       {selectedProperty && properties.length > 0 && (
         <WelcomeSection
           userName={user?.firstName || 'there'}
@@ -429,18 +429,6 @@ export default function DashboardPage() {
       )}
 
       <DashboardShell>
-        {/* Quick Link to Properties */}
-        {selectedProperty && (
-          <div className="mb-6">
-            <Link 
-              href="/dashboard/properties" 
-              className="text-sm text-teal-600 hover:text-teal-700 hover:underline inline-flex items-center"
-            >
-              {isMultiProperty ? 'Manage all properties →' : 'View property details →'}
-            </Link>
-          </div>
-        )}
-
       {/* ========================================= */}
       {/* SEASONAL MAINTENANCE BANNER - EXISTING_OWNER ONLY */}
       {/* ========================================= */}
