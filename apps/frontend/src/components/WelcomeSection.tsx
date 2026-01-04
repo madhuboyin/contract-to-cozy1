@@ -26,31 +26,37 @@ export function WelcomeSection({
   onPropertyChange 
 }: WelcomeSectionProps) {
   return (
-    /* Background spans 100% of the parent container */
-    <div className="w-full bg-gradient-to-b from-teal-50 to-white border-b border-gray-200 py-8 md:py-10">
-      {/* This inner div ensures content aligns with the dashboard grid below */}
+    /* OUTER CONTAINER: 
+       - Counteracts parent padding (md:p-8 from layout) using negative margins.
+       - bg-gradient spans the full screen width.
+    */
+    <div className="relative -mx-4 md:-mx-8 w-[calc(100%+2rem)] md:w-[calc(100%+4rem)] bg-gradient-to-b from-teal-50 to-white border-b border-gray-100 py-4 mb-6">
+      
+      {/* INNER CONTAINER: 
+          - Aligns content with the DashboardShell (max-w-7xl).
+          - px-4/6 ensures the left text and right image don't hit the screen edge.
+      */}
       <div className="max-w-7xl mx-auto px-4 md:px-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
+        <div className="flex items-center justify-between">
           
-          {/* Left Side: Welcome Text and Property Selector */}
-          <div className="flex-1 space-y-4">
-            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight">
-              Welcome, {userName}! <br className="hidden md:block" />
-              <span className="text-gray-500 font-medium text-2xl md:text-3xl">Property Intelligence Dashboard</span>
+          {/* Left Side: Welcome Message & Selector */}
+          <div className="flex-1">
+            <h1 className="text-xl md:text-2xl font-bold text-gray-900 tracking-tight">
+              Welcome, {userName}! <span className="text-gray-500 font-medium hidden sm:inline">Property Intelligence Dashboard</span>
             </h1>
             
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
                 Viewing:
               </span>
-              <div className="bg-white rounded-lg shadow-sm px-3 py-2 border border-gray-200 min-w-[320px]">
+              <div className="bg-white rounded-md shadow-sm px-2 py-0.5 border border-gray-200 min-w-[240px]">
                 <Select value={selectedPropertyId || ''} onValueChange={onPropertyChange}>
-                  <SelectTrigger className="border-0 font-bold text-gray-900 h-auto p-0 focus:ring-0">
+                  <SelectTrigger className="border-0 font-semibold text-xs text-gray-900 h-6 p-0 focus:ring-0">
                     <SelectValue placeholder="Select a property" />
                   </SelectTrigger>
                   <SelectContent>
                     {properties.map((property) => (
-                      <SelectItem key={property.id} value={property.id} className="font-medium">
+                      <SelectItem key={property.id} value={property.id} className="text-xs">
                         {formatPropertyDisplay(property)}
                       </SelectItem>
                     ))}
@@ -60,9 +66,9 @@ export function WelcomeSection({
             </div>
           </div>
           
-          {/* Right Side: Illustration aligned to the right-hand side of dashboard cards */}
-          <div className="flex justify-start md:justify-end">
-            <div className="relative w-48 h-36 md:w-64 md:h-48">
+          {/* Right Side: Small Illustration (Aligned to right of cards) */}
+          <div className="hidden sm:block">
+            <div className="relative w-28 h-20">
               <Image 
                 src="/images/home-cozy-illustration.png" 
                 alt="Cozy Home" 
