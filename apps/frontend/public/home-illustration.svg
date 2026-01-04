@@ -1,0 +1,73 @@
+<svg width="320" height="240" viewBox="0 0 320 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Sky gradient background -->
+  <defs>
+    <linearGradient id="skyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#CCFBF1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#99F6E4;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Sky -->
+  <rect width="320" height="240" fill="url(#skyGradient)"/>
+  
+  <!-- Clouds -->
+  <ellipse cx="50" cy="40" rx="20" ry="12" fill="#FFFFFF" opacity="0.8"/>
+  <ellipse cx="65" cy="38" rx="18" ry="10" fill="#FFFFFF" opacity="0.8"/>
+  <ellipse cx="80" cy="42" rx="22" ry="14" fill="#FFFFFF" opacity="0.8"/>
+  
+  <ellipse cx="220" cy="60" rx="25" ry="15" fill="#FFFFFF" opacity="0.7"/>
+  <ellipse cx="240" cy="58" rx="20" ry="12" fill="#FFFFFF" opacity="0.7"/>
+  <ellipse cx="255" cy="62" rx="18" ry="10" fill="#FFFFFF" opacity="0.7"/>
+  
+  <!-- Rolling hills in background -->
+  <ellipse cx="160" cy="220" rx="180" ry="80" fill="#7DD3C0" opacity="0.3"/>
+  <ellipse cx="260" cy="240" rx="140" ry="60" fill="#5EEAD4" opacity="0.3"/>
+  
+  <!-- Ground/Grass -->
+  <ellipse cx="160" cy="260" rx="200" ry="60" fill="#22C55E"/>
+  <path d="M 0 200 Q 80 180, 160 200 T 320 200 L 320 240 L 0 240 Z" fill="#16A34A"/>
+  
+  <!-- Left Tree (Orange) -->
+  <ellipse cx="60" cy="170" rx="25" ry="28" fill="#FB923C"/>
+  <ellipse cx="50" cy="165" rx="20" ry="24" fill="#F97316"/>
+  <ellipse cx="70" cy="168" rx="22" ry="26" fill="#FDBA74"/>
+  <rect x="56" y="185" width="8" height="25" rx="2" fill="#92400E"/>
+  
+  <!-- Right Tree (Orange) -->
+  <ellipse cx="270" cy="175" rx="28" ry="30" fill="#FB923C"/>
+  <ellipse cx="260" cy="172" rx="24" ry="28" fill="#F97316"/>
+  <ellipse cx="280" cy="178" rx="26" ry="28" fill="#FDBA74"/>
+  <rect x="266" y="190" width="8" height="25" rx="2" fill="#92400E"/>
+  
+  <!-- House Base - Teal/Green -->
+  <rect x="120" y="130" width="100" height="80" rx="4" fill="#14B8A6"/>
+  
+  <!-- Roof - Darker Teal -->
+  <path d="M 110 130 L 170 95 L 230 130 Z" fill="#0D9488"/>
+  <path d="M 110 130 L 170 95 L 230 130 L 220 130 L 170 100 L 120 130 Z" fill="#14B8A6"/>
+  
+  <!-- Chimney -->
+  <rect x="190" y="105" width="16" height="30" rx="2" fill="#7C2D12"/>
+  <rect x="188" y="103" width="20" height="6" rx="1" fill="#991B1B"/>
+  
+  <!-- Door -->
+  <rect x="155" y="160" width="30" height="50" rx="3" fill="#1F2937"/>
+  <circle cx="178" cy="185" r="2" fill="#FCD34D"/>
+  
+  <!-- Windows - Light teal -->
+  <rect x="135" y="145" width="20" height="20" rx="2" fill="#99F6E4"/>
+  <line x1="135" y1="155" x2="155" y2="155" stroke="#14B8A6" stroke-width="2"/>
+  <line x1="145" y1="145" x2="145" y2="165" stroke="#14B8A6" stroke-width="2"/>
+  
+  <rect x="185" y="145" width="20" height="20" rx="2" fill="#99F6E4"/>
+  <line x1="185" y1="155" x2="205" y2="155" stroke="#14B8A6" stroke-width="2"/>
+  <line x1="195" y1="145" x2="195" y2="165" stroke="#14B8A6" stroke-width="2"/>
+  
+  <!-- Grass details -->
+  <path d="M 100 205 Q 105 200, 110 205" stroke="#15803D" stroke-width="2" fill="none"/>
+  <path d="M 150 210 Q 155 205, 160 210" stroke="#15803D" stroke-width="2" fill="none"/>
+  <path d="M 200 208 Q 205 203, 210 208" stroke="#15803D" stroke-width="2" fill="none"/>
+  
+  <!-- Pathway -->
+  <path d="M 170 210 L 175 190 L 185 190 L 190 210 Z" fill="#94A3B8"/>
+  <ellipse cx="182.5" cy="210" rx="10" ry="3" fill="#64748B"/>

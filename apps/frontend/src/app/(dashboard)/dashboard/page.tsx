@@ -38,6 +38,7 @@ import { Truck } from 'lucide-react';
 import { SeasonalBanner } from '@/components/seasonal/SeasonalBanner';
 import { SeasonalWidget } from '@/components/seasonal/SeasonalWidget';
 import { useHomeownerSegment } from '@/lib/hooks/useHomeownerSegment';
+import { WelcomeSection } from '@/components/WelcomeSection';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -416,46 +417,30 @@ export default function DashboardPage() {
 
   // Existing Owner Dashboard (now incorporates the scorecard grid at the top level)
   return (
-    <DashboardShell>
-      <PageHeader className="pt-2 pb-2 gap-1">
-        {/* Welcome message */}
-        <PageHeaderHeading>Welcome, {user.firstName}! Property Intelligence Dashboard</PageHeaderHeading>
-      </PageHeader>
-      
-      {/* --- Property Selection Row --- */}
-      {selectedProperty && (
-          <div className="flex items-center space-x-3 mb-6"> 
-              {!isMultiProperty ? (
-                  // Scenario 1: Single Property
-                  <p className="text-lg font-medium text-gray-700">
-                      {selectedProperty.name || 'Your Home'}: {formatAddress(selectedProperty)}
-                  </p>
-              ) : (
-                  // Scenario 2: Multiple Properties - Show Dropdown
-                  <div className="flex items-center space-x-2">
-                      <Select 
-                          value={selectedPropertyId} 
-                          onValueChange={setSelectedPropertyId}
-                      >
-                          <SelectTrigger className="w-[300px] text-lg font-medium">
-                              <SelectValue placeholder="Select a property" />
-                          </SelectTrigger>
-                          <SelectContent>
-                              {properties.map((property) => (
-                                  <SelectItem key={property.id} value={property.id}>
-                                      {property.name ? `${property.name} - ${formatAddress(property)}` : formatAddress(property)}
-                                  </SelectItem>
-                              ))}
-                          </SelectContent>
-                      </Select>
-                  </div>
-              )}
-              <Link href="/dashboard/properties" className="text-sm text-blue-500 hover:underline">
-                  {isMultiProperty ? 'Manage Properties' : 'View Details'}
-              </Link>
-          </div>
+    <>
+      {/* Welcome Section - Full Width */}
+      {selectedProperty && properties.length > 0 && (
+        <WelcomeSection
+          userName={user?.firstName || 'there'}
+          properties={properties}
+          selectedPropertyId={selectedPropertyId}
+          onPropertyChange={setSelectedPropertyId}
+        />
       )}
-      {/* --- END Property Selection Row --- */}
+
+      {/* Main Dashboard Content */}
+      <DashboardShell>
+        {/* Quick Link to Properties */}
+        {selectedProperty && (
+          <div className="mb-6">
+            <Link 
+              href="/dashboard/properties" 
+              className="text-sm text-teal-600 hover:text-teal-700 hover:underline inline-flex items-center"
+            >
+              {isMultiProperty ? 'Manage all properties →' : 'View property details →'}
+            </Link>
+          </div>
+        )}
 
       {/* ========================================= */}
       {/* SEASONAL MAINTENANCE BANNER - EXISTING_OWNER ONLY */}
@@ -779,6 +764,7 @@ export default function DashboardPage() {
           />
         );
       })()}
-    </DashboardShell>
+      </DashboardShell>
+    </>
   );
 }
