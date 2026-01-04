@@ -3,7 +3,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api/client";
 import { Property } from "@/types"; // Base Property type
 import { DashboardShell } from "@/components/DashboardShell";
@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import Link from "next/link";
 import { Edit, Zap, Shield, FileText, ArrowLeft, Home, Calendar, Ruler, DollarSign, Wrench, Settings, ShieldAlert, ArrowRight, TrendingUp } from "lucide-react"; 
 import { toast } from "@/components/ui/use-toast";
+
 
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
@@ -549,7 +550,7 @@ const DocumentsTab = ({ propertyId }: { propertyId: string }) => (
 export default function PropertyDetailPage() {
   const params = useParams();
   const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
-  
+  const router = useRouter();
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab');
   
@@ -607,13 +608,13 @@ export default function PropertyDetailPage() {
     <DashboardShell className="gap-2">
       {/* UPDATED: Back Navigation - Reduced to mb-2 for tighter spacing */}
       <div className="mb-2">
-        <Link 
-          href="/dashboard/properties" 
-          className="font-body text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center transition-colors"
+        <button 
+          onClick={() => router.back()}
+          className="font-body text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center transition-colors bg-transparent border-none p-0 cursor-pointer"
         >
           <ArrowLeft className="h-4 w-4 mr-1.5" />
-          Back to Properties
-        </Link>
+          Back
+        </button>
       </div>
       
       {/* UPDATED: PageHeader with Edit button in top-right */}
