@@ -139,6 +139,8 @@ export default function InventoryItemDrawer(props: {
         replacementCostCents: replacementCost ? dollarsToCents(replacementCost) : null,
         currency: 'USD',
         tags: [],
+        warrantyId: warrantyId || null,
+        insurancePolicyId: insurancePolicyId || null,
       };
 
       if (isEdit && props.initialItem) {
@@ -146,14 +148,14 @@ export default function InventoryItemDrawer(props: {
       } else {
         await createInventoryItem(props.propertyId, payload);
       }
-      if (warrantyId) payload.warrantyId = warrantyId;
-      if (insurancePolicyId) payload.insurancePolicyId = insurancePolicyId;
 
       if (isEdit) {
         // make sure drawer shows latest docs if any other changes happened
         await refreshItemDocs();
       }
       props.onSaved();
+    } catch (error) {
+      console.error("Failed to save inventory item:", error);
     } finally {
       setSaving(false);
     }
