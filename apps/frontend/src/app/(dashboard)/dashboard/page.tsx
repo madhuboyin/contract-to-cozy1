@@ -474,7 +474,7 @@ export default function DashboardPage() {
         <div className="w-full border-t border-gray-200 mb-8" />
 
           {/* 3. AI CARDS CAROUSEL */}
-          <section className="mb-6">
+          <section className="mb-4">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-purple-100 rounded-lg">

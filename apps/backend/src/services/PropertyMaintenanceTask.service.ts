@@ -566,10 +566,16 @@ import {
     static async getPropertyStats(userId: string, propertyId: string) {
       // Verify property ownership
       await this.verifyPropertyOwnership(userId, propertyId);
-  
-      const tasks = await prisma.propertyMaintenanceTask.findMany({
+    
+      // 🔑 FIX: Fetch only non-completed/cancelled tasks for stats
+      const allTasks = await prisma.propertyMaintenanceTask.findMany({
         where: { propertyId },
       });
+    
+      // Filter to active tasks only (exclude COMPLETED and CANCELLED)
+      const tasks = allTasks.filter(
+        (t) => t.status !== 'COMPLETED' && t.status !== 'CANCELLED'
+      );
   
       const total = tasks.length;
       const byStatus = {
