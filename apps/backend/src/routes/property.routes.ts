@@ -392,4 +392,50 @@ router.get('/:id/seasonal-checklist/current', authenticate, async (req: AuthRequ
   }
 });
 
+/**
+ * @swagger
+ * /api/properties/{id}/warranties:
+ * get:
+ * summary: List warranties for a specific property
+ * tags: [Properties]
+ */
+router.get('/:id/warranties', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { id: propertyId } = req.params;
+    const { prisma } = await import('../lib/prisma');
+
+    const warranties = await prisma.warranty.findMany({
+      where: { propertyId },
+      orderBy: { expiryDate: 'asc' }
+    });
+
+    return res.json({ success: true, data: { warranties } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: 'Failed to fetch warranties' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/properties/{id}/insurance:
+ * get:
+ * summary: List insurance policies for a specific property
+ * tags: [Properties]
+ */
+router.get('/:id/insurance', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { id: propertyId } = req.params;
+    const { prisma } = await import('../lib/prisma');
+
+    const policies = await prisma.insurancePolicy.findMany({
+      where: { propertyId },
+      orderBy: { expiryDate: 'asc' }
+    });
+
+    return res.json({ success: true, data: { policies } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: 'Failed to fetch insurance policies' });
+  }
+});
+
 export default router;
