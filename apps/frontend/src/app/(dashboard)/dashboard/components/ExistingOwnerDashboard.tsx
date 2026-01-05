@@ -124,12 +124,12 @@ export const ExistingOwnerDashboard = ({
   const urgentTasksCount = stats ? stats.byPriority.urgent + stats.byPriority.high : 0;
 
   return (
-    <div className="space-y-6 pb-8">
+    <div className="space-y-4 pb-8">
       {/* Header */}
-      <div>
-        <p className="text-muted-foreground">
-          Here's what needs your attention today.
-        </p>
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-1">
+          Here's what needs your attention today
+        </h2>
       </div>
 
 {/* PHASE 5: Main Statistics Cards */}
@@ -187,7 +187,7 @@ export const ExistingOwnerDashboard = ({
                 <DollarSign className="h-8 w-8 text-blue-600 opacity-50" />
               </div>
               <p className="text-xs text-gray-600 mt-2">
-                For {stats.pending + stats.inProgress} active tasks
+                For {(stats.pending || 0) + (stats.inProgress || 0)} active tasks
               </p>
             </CardContent>
           </Card>
@@ -202,7 +202,9 @@ export const ExistingOwnerDashboard = ({
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Active Tasks</p>
-                  <p className="text-2xl font-bold text-blue-600">{stats.pending + stats.inProgress}</p>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {(stats.pending || 0) + (stats.inProgress || 0)}
+                  </p>
                 </div>
                 <Clock className="h-6 w-6 text-blue-600" />
               </div>
