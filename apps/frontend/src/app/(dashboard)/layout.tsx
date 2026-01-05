@@ -28,7 +28,8 @@ import {
   DollarSign,
   FileText,
   Globe,
-  AlertTriangle
+  AlertTriangle,
+  Box
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { User } from '@/types';
@@ -233,6 +234,7 @@ function DesktopNav({ user }: { user: User | null }) {
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Actions', href: '/dashboard/actions', icon: AlertTriangle },
     { name: 'Properties', href: '/dashboard/properties', icon: Building },
+    { name: 'Inventory', href: '/dashboard/inventory', icon: Box },
     { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
     { name: 'Find Services', href: '/dashboard/providers', icon: Search },
     { name: 'Checklist', href: '/dashboard/checklist', icon: ListChecks },
@@ -285,6 +287,7 @@ function SidebarNav({ user }: { user: User | null }) {
   const allLinks: NavLink[] = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Properties', href: '/dashboard/properties', icon: Building },
+    { name: 'Inventory', href: '/dashboard/inventory', icon: Box },
     { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
     { name: 'Find Services', href: '/dashboard/providers', icon: Search },
     { name: 'Checklist', href: '/dashboard/checklist', icon: ListChecks },
