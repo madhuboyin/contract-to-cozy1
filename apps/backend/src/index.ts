@@ -47,6 +47,8 @@ import notificationRoutes from './routes/notification.routes';
 import seasonalChecklistRoutes from './routes/seasonalChecklist.routes';
 import homeBuyerTaskRoutes from './routes/homeBuyerTask.routes';
 import propertyMaintenanceTaskRoutes from './routes/propertyMaintenanceTask.routes';
+import inventoryRoutes from './routes/inventory.routes';
+import { insuranceQuoteRouter } from './routes/insuranceQuote.routes';
 
 
 dotenv.config();
@@ -300,7 +302,9 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api', seasonalChecklistRoutes);
 app.use('/api/home-buyer-tasks', homeBuyerTaskRoutes);
 app.use('/api/maintenance-tasks', propertyMaintenanceTaskRoutes);
-
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api', inventoryRoutes);
+app.use('/api', insuranceQuoteRouter);
 // 404 handler
 app.use((req: Request, res: Response) => {
   res.status(404).json({
@@ -327,6 +331,7 @@ app.use((req: Request, res: Response) => {
       'GET /api/community/alerts',
       'GET /api/community/trash',
       'GET /api/v1/community/events',
+      'GET /api/inventory',
     ],
   });
 });
@@ -366,6 +371,7 @@ app.listen(PORT, () => {
   console.log(`   - GET  /api/community/alerts`);
   console.log(`   - GET  /api/community/trash`);
   console.log(`   - GET  /api/v1/community/events`);
+  console.log(`   - GET  /api/inventory`);
 });
 
 export default app;

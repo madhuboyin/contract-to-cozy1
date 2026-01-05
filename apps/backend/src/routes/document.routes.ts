@@ -222,6 +222,327 @@ router.get('/', authenticate, async (req: CustomRequest, res: Response) => {
   }
 });
 
+// ============================================================================
+// WARRANTY + INSURANCE LISTING (for dropdowns)
+// ============================================================================
+
+router.get('/warranties', authenticate, async (req: CustomRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+
+    const homeownerProfile = await prisma.homeownerProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!homeownerProfile) {
+      return res.status(404).json({ success: false, message: 'Homeowner profile not found' });
+    }
+
+    const propertyId = (req.query.propertyId as string) || undefined;
+
+    const warranties = await prisma.warranty.findMany({
+      where: {
+        homeownerProfileId: homeownerProfile.id,
+        ...(propertyId ? { propertyId } : {}),
+      },
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        id: true,
+        propertyId: true,
+        providerName: true,
+        policyNumber: true,
+        startDate: true,
+        expiryDate: true,
+        cost: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return res.json({ success: true, data: { warranties } });
+  } catch (err: any) {
+    console.error('[DOCUMENTS] list warranties failed:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to list warranties' });
+  }
+});
+
+router.get('/insurance-policies', authenticate, async (req: CustomRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+
+    const homeownerProfile = await prisma.homeownerProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!homeownerProfile) {
+      return res.status(404).json({ success: false, message: 'Homeowner profile not found' });
+    }
+
+    const propertyId = (req.query.propertyId as string) || undefined;
+
+    const policies = await prisma.insurancePolicy.findMany({
+      where: {
+        homeownerProfileId: homeownerProfile.id,
+        ...(propertyId ? { propertyId } : {}),
+      },
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        id: true,
+        propertyId: true,
+        carrierName: true,
+        policyNumber: true,
+        coverageType: true,
+        premiumAmount: true,
+        startDate: true,
+        expiryDate: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return res.json({ success: true, data: { policies } });
+  } catch (err: any) {
+    console.error('[DOCUMENTS] list insurance policies failed:', err);
+    return res.status(500).json({ success: false, message: err?.message || 'Failed to list insurance policies' });
+  }
+});
+
+
+router.get(
+  '/:id/asset-suggestions',
+  authenticate,
+  async (req: CustomRequest, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const documentId = req.params.id;
+      const propertyIdQuery = (req.query.propertyId as string) || undefined;
+
+      const homeownerProfile = await prisma.homeownerProfile.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+
+      if (!homeownerProfile) {
+        return res.status(404).json({ success: false, message: 'Homeowner profile not found' });
+      }
+
+      const document = await prisma.document.findFirst({
+        where: {
+          id: documentId,
+          uploadedBy: homeownerProfile.id, // matches your existing docs pattern
+        },
+        select: {
+          id: true,
+          propertyId: true,
+          metadata: true,
+          name: true,
+          type: true,
+          createdAt: true,
+        },
+      });
+
+      if (!document) {
+        return res.status(404).json({ success: false, message: 'Document not found' });
+      }
+
+      const effectivePropertyId = propertyIdQuery || document.propertyId || undefined;
+      if (!effectivePropertyId) {
+        return res.json({
+          success: true,
+          data: {
+            document,
+            extractedData: {},
+            inventoryItemSuggestions: [],
+            homeAssetSuggestions: [],
+            reason: 'Document has no propertyId (and none provided)',
+          },
+        });
+      }
+
+      // Your analyze flow stores: metadata: insights as any
+      const md: any = document.metadata || {};
+      const extracted: any = md.extractedData || md.extracted || {};
+
+      const productName = String(extracted.productName || extracted.itemName || extracted.name || '');
+      const brand = String(extracted.brand || extracted.manufacturer || extracted.vendor || '');
+      const model = String(extracted.modelNumber || extracted.model || '');
+      const serialNo = String(extracted.serialNumber || extracted.serial || extracted.serialNo || '');
+      const category = String(extracted.category || '');
+
+      const norm = (s: string) =>
+        s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+      const includes = (hay: string, needle: string) =>
+        !!needle && hay.includes(needle);
+
+      function scoreInventoryItem(it: any) {
+        const reasons: string[] = [];
+        let score = 0;
+
+        const itName = norm(it.name || '');
+        const itBrand = norm(it.brand || '');
+        const itModel = norm(it.model || '');
+        const itSerial = norm(it.serialNo || '');
+        const itTags = (it.tags || []).map((t: string) => norm(t)).join(' ');
+
+        const pn = norm(productName);
+        const br = norm(brand);
+        const mn = norm(model);
+        const sn = norm(serialNo);
+        const cat = norm(category);
+
+        // Strong
+        if (sn && itSerial && sn === itSerial) {
+          score += 60;
+          reasons.push('Serial number exact match');
+        }
+        if (mn && itModel && mn === itModel) {
+          score += 35;
+          reasons.push('Model exact match');
+        }
+
+        // Medium
+        if (pn && (includes(itName, pn) || includes(pn, itName))) {
+          score += 20;
+          reasons.push('Name similar to extracted product name');
+        }
+        if (br && (includes(itBrand, br) || includes(br, itBrand))) {
+          score += 12;
+          reasons.push('Brand/vendor match');
+        }
+
+        // Light
+        if (cat && (includes(itName, cat) || includes(itTags, cat))) {
+          score += 6;
+          reasons.push('Category/tag overlap');
+        }
+        if (pn && includes(itTags, pn)) {
+          score += 6;
+          reasons.push('Tag contains product name');
+        }
+
+        return { score, reasons };
+      }
+
+      // Candidates
+      const [items, assets] = await Promise.all([
+        prisma.inventoryItem.findMany({
+          where: { propertyId: effectivePropertyId },
+          select: {
+            id: true,
+            propertyId: true,
+            roomId: true,
+            name: true,
+            category: true,
+            brand: true,
+            model: true,
+            serialNo: true,
+            tags: true,
+            homeAssetId: true,
+          },
+          take: 80,
+        }),
+        prisma.homeAsset.findMany({
+          where: { propertyId: effectivePropertyId },
+          // adjust if your HomeAsset field names differ
+          select: {
+            id: true,
+            propertyId: true,
+            assetType: true,
+            modelNumber: true,
+            serialNumber: true,
+          },
+          take: 80,
+        }),
+      ]);
+
+      const inventoryItemSuggestions = items
+        .map((it) => {
+          const s = scoreInventoryItem(it);
+          return { ...it, score: s.score, reasons: s.reasons };
+        })
+        .filter((x) => x.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 10);
+
+      // HomeAsset scoring (best-effort; align if your fields differ)
+      const homeAssetSuggestions = assets
+      .map((a: any) => {
+        let score = 0;
+        const reasons: string[] = [];
+    
+        const aType = norm(a.assetType || '');
+        const aModel = norm(a.modelNumber || '');
+        const aSerial = norm(a.serialNumber || '');
+    
+        const pn = norm(productName);
+        const br = norm(brand);
+        const mn = norm(model);
+        const sn = norm(serialNo);
+        const cat = norm(category);
+    
+        // STRONG
+        if (sn && aSerial && sn === aSerial) {
+          score += 60;
+          reasons.push('Serial number exact match');
+        }
+    
+        if (mn && aModel && mn === aModel) {
+          score += 35;
+          reasons.push('Model exact match');
+        }
+    
+        // MEDIUM
+        if (pn && includes(aType, pn)) {
+          score += 20;
+          reasons.push('Asset type matches product name');
+        }
+    
+        if (cat && includes(aType, cat)) {
+          score += 15;
+          reasons.push('Asset type matches document category');
+        }
+    
+        // LIGHT
+        if (br && includes(aType, br)) {
+          score += 8;
+          reasons.push('Brand hint in asset type');
+        }
+    
+        return { ...a, score, reasons };
+      })
+      .filter((x: any) => x.score > 0)
+      .sort((a: any, b: any) => b.score - a.score)
+      .slice(0, 10);
+    
+
+      return res.json({
+        success: true,
+        data: {
+          document: {
+            id: document.id,
+            name: document.name,
+            type: document.type,
+            propertyId: effectivePropertyId,
+            createdAt: document.createdAt,
+          },
+          extractedData: { productName, brand, model, serialNo, category, raw: extracted },
+          inventoryItemSuggestions,
+          homeAssetSuggestions,
+        },
+      });
+    } catch (error: any) {
+      console.error('[DOCUMENTS] asset-suggestions failed:', error);
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to get asset suggestions',
+      });
+    }
+  }
+);
+
 /**
  * @swagger
  * /api/documents/{id}:

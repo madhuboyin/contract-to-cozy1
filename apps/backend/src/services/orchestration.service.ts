@@ -24,6 +24,8 @@ import { ServiceCategory, BookingStatus } from '@prisma/client';
 import { OrchestrationSuppressionService, SuppressionSource } from './orchestrationSuppression.service';
 import { computeActionKey } from './orchestrationActionKey';
 import { getPropertySnoozes, ActiveSnooze } from './orchestrationSnooze.service';
+import { detectCoverageGaps } from './coverageGap.service';
+
 
 // PHASE 2.3 INTEGRATION
 import { createTaskFromActionCenter } from './orchestrationIntegration.service';
@@ -70,7 +72,7 @@ export type DecisionTraceStep = {
 export type OrchestratedAction = {
   id: string;
   actionKey: string;
-  source: 'RISK' | 'CHECKLIST';
+  source: 'RISK' | 'CHECKLIST' | 'COVERAGE_GAP';
   propertyId: string;
 
   title: string;
@@ -111,6 +113,11 @@ export type OrchestratedAction = {
     suppressionSource?: SuppressionSource;
   };
   hasRelatedChecklistItem?: boolean;
+
+  relatedEntity?: {
+    type: 'INVENTORY_ITEM' | 'HOME_ASSET' | 'BOOKING' | 'WARRANTY' | 'INSURANCE' | 'CHECKLIST';
+    id: string;
+  } | null;
 
   relatedChecklistItem?: {
     id: string;
@@ -965,6 +972,94 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
     ...candidateChecklistActions,
   ];
     
+    // 4.5) Coverage Gap Detector → add candidate actions
+  // NOTE: OrchestratedAction.source currently supports only 'RISK' | 'CHECKLIST'
+  // So we set source='RISK' for now, and use actionKey prefix for identification.
+  const gaps = await detectCoverageGaps(propertyId);
+
+  for (const gap of gaps) {
+    const actionKey = `COVERAGE_GAP::${gap.inventoryItemId}`;
+
+    // Optional: attach snooze if present for this actionKey
+    const snooze = snoozeMap.get(actionKey);
+
+    const confidenceRaw = computeConfidence({
+      source: 'RISK',
+      riskLevel: gap.gapType === 'NO_COVERAGE' ? 'HIGH' : 'MODERATE',
+      exposure: gap.exposureCents ? gap.exposureCents / 100 : undefined,
+      suppressed: false,
+    });
+
+    const steps: DecisionTraceStep[] = [
+      {
+        rule: 'COVERAGE_GAP_DETECTOR',
+        outcome: 'APPLIED',
+        details: {
+          gapType: gap.gapType,
+          exposureCents: gap.exposureCents,
+          reasons: gap.reasons,
+          message: 'Derived from inventory coverage linkage + expiry checks',
+        },
+      },
+    ];
+
+    candidates.push({
+      id: `coverage-gap:${propertyId}:${gap.inventoryItemId}`,
+      actionKey,
+      source: 'RISK', // keep as 'RISK' for V1 to avoid widening the union
+      propertyId,
+
+      title: gap.gapType === 'NO_COVERAGE'
+        ? 'No coverage for high-value item'
+        : 'Coverage gap detected',
+
+      description: gap.reasons.join('. '),
+
+      // keep these empty; this is not a risk-report system item
+      systemType: null,
+      category: 'INSURANCE',
+      riskLevel: gap.gapType === 'NO_COVERAGE' ? 'HIGH' : 'MODERATE',
+      exposure: gap.exposureCents ? gap.exposureCents / 100 : null,
+
+      // This enables your UI to know what to link to
+      // (Your UI already uses related entity patterns elsewhere)
+      // If you don't have a typed field for this, keep it in decisionTrace.details or extend type later.
+      // @ts-ignore
+      relatedEntity: { type: 'INVENTORY_ITEM', id: gap.inventoryItemId },
+      
+
+      coverage: { hasCoverage: false, type: 'NONE', expiresOn: null },
+
+      cta: {
+        show: true,
+        label: gap.gapType === 'NO_COVERAGE' ? 'Get insurance quotes' : 'Review coverage',
+        reason: 'ACTION_REQUIRED',
+      },
+
+      confidence: withDefaultConfidence(confidenceRaw),
+
+      suppression: {
+        suppressed: false,
+        reasons: [],
+      },
+
+      snooze: snooze
+        ? {
+            snoozedAt: snooze.snoozedAt.toISOString(),
+            snoozeUntil: snooze.snoozeUntil.toISOString(),
+            snoozeReason: snooze.snoozeReason,
+            daysRemaining: snooze.daysRemaining,
+          }
+        : undefined,
+
+      decisionTrace: { steps },
+
+      priority: gap.gapType === 'NO_COVERAGE' ? 85 : 65,
+      overdue: false,
+      createdAt: null,
+    });
+  }
+
   // Resolve authoritative suppression for legacy data
   for (const action of candidates) {
     if (

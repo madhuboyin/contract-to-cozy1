@@ -61,6 +61,82 @@ export type ServiceCategory =
   | 'INSURANCE'
   | 'MAINTENANCE'
   | 'ENERGY';  
+
+// ---- Inventory Types ----
+
+export type InventoryItemCategory =
+  | 'APPLIANCE'
+  | 'HVAC'
+  | 'PLUMBING'
+  | 'ELECTRICAL'
+  | 'ROOF_EXTERIOR'
+  | 'SAFETY'
+  | 'SMART_HOME'
+  | 'FURNITURE'
+  | 'ELECTRONICS'
+  | 'OTHER';
+
+export type InventoryItemCondition = 'NEW' | 'GOOD' | 'FAIR' | 'POOR' | 'UNKNOWN';
+
+export type InventoryRoom = {
+  id: string;
+  propertyId: string;
+  name: string;
+  floorLevel: number | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type InventoryItem = {
+  id: string;
+  propertyId: string;
+  roomId: string | null;
+
+  homeAssetId: string | null;
+  warrantyId: string | null;
+  insurancePolicyId: string | null;
+
+  name: string;
+  category: InventoryItemCategory;
+  condition: InventoryItemCondition;
+
+  brand: string | null;
+  model: string | null;
+  serialNo: string | null;
+
+  installedOn: string | null;
+  purchasedOn: string | null;
+  lastServicedOn: string | null;
+
+  purchaseCostCents: number | null;
+  replacementCostCents: number | null;
+  currency: string;
+
+  notes: string | null;
+  tags: string[];
+
+  createdAt: string;
+  updatedAt: string;
+
+  room?: InventoryRoom | null;
+
+  // If your backend includes these (it does in our code)
+  warranty?: any | null;
+  insurancePolicy?: any | null;
+  homeAsset?: any | null;
+
+  documents?: any[]; // Document type exists already in your project; you can replace later
+};
+
+export type ApiResponse<T> = {
+  success: boolean;
+  data: T;
+  message?: string;
+  code?: string;
+};
+
+
 /**
  * Recurrence Frequency Enum
  */
