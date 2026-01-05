@@ -209,6 +209,111 @@ enum NotificationTiming {
   LATE
 }
 
+
+enum InventoryItemCategory {
+  APPLIANCE
+  HVAC
+  PLUMBING
+  ELECTRICAL
+  ROOF_EXTERIOR
+  SAFETY
+  SMART_HOME
+  FURNITURE
+  ELECTRONICS
+  OTHER
+}
+
+enum InventoryItemCondition {
+  NEW
+  GOOD
+  FAIR
+  POOR
+  UNKNOWN
+}
+
+model InventoryRoom {
+  id         String   @id @default(uuid())
+  propertyId String
+
+  name       String
+  floorLevel Int?
+  sortOrder  Int      @default(0)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  property   Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  items      InventoryItem[]
+
+  @@index([propertyId])
+  @@unique([propertyId, name])
+  @@map("inventory_rooms")
+}
+
+model InventoryItem {
+  id          String   @id @default(uuid())
+  propertyId  String
+  roomId      String?
+
+  // Optional mapping to your existing "system asset" model
+  homeAssetId String?
+
+  // Optional linkage to existing coverage models
+  warrantyId        String?
+  insurancePolicyId String?
+
+  // Core fields
+  name       String
+  category   InventoryItemCategory  @default(OTHER)
+  condition  InventoryItemCondition @default(UNKNOWN)
+
+  // Optional identity fields
+  brand      String?
+  model      String?
+  serialNo   String?
+
+  // Dates
+  installedOn     DateTime?
+  purchasedOn     DateTime?
+  lastServicedOn  DateTime?
+
+  // Costs (use Int cents for consistency; your schema also uses Decimal in places)
+  purchaseCostCents     Int?
+  replacementCostCents  Int?
+  currency              String @default("USD")
+
+  // Notes + tags
+  notes     String?
+  tags      String[] @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  property        Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  room            InventoryRoom?  @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  homeAsset       HomeAsset?      @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
+  warranty        Warranty?       @relation(fields: [warrantyId], references: [id], onDelete: SetNull)
+  insurancePolicy InsurancePolicy? @relation(fields: [insurancePolicyId], references: [id], onDelete: SetNull)
+
+  // Reuse your existing Document table for receipts/photos/manuals
+  documents        Document[]
+
+  @@index([propertyId])
+  @@index([roomId])
+  @@index([homeAssetId])
+  @@index([warrantyId])
+  @@index([insurancePolicyId])
+
+  // Filter-friendly composite indexes
+  @@index([propertyId, category])
+  @@index([propertyId, roomId])
+
+  @@map("inventory_items")
+}
+
+
 // NEW: Service 
 // category configuration for segment targeting
 model ServiceCategoryConfig {
@@ -832,6 +937,10 @@ model Property {
   seasonalChecklistItems   SeasonalChecklistItem[]
   climateSetting           PropertyClimateSetting?
 
+  inventoryRooms InventoryRoom[]
+  inventoryItems InventoryItem[]
+
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
@@ -1158,6 +1267,8 @@ model Document {
   property         Property? @relation(fields: [propertyId], references: [id])
   warranty         Warranty? @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
   insurancePolicy  InsurancePolicy? @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  inventoryItemId  String? // NEW: Link to an InventoryItem record
+  inventoryItem    InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1167,6 +1278,7 @@ model Document {
   @@index([propertyId]) // NEW INDEX
   @@index([warrantyId]) // NEW INDEX
   @@index([policyId])   // NEW INDEX
+  @@index([inventoryItemId]) // NEW INDEX
   @@map("documents")
 }
 
@@ -1255,6 +1367,7 @@ model Warranty {
   
   // PHASE 1: NEW RELATION
   maintenanceTasks PropertyMaintenanceTask[]
+  inventoryItems    InventoryItem[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1288,6 +1401,7 @@ model InsurancePolicy {
   homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
   property           Property? @relation(fields: [propertyId], references: [id])
   documents          Document[]
+  inventoryItems     InventoryItem[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1342,6 +1456,7 @@ model HomeAsset {
   
   // PHASE 1: NEW RELATION
   maintenanceTasks PropertyMaintenanceTask[]
+  inventoryItems InventoryItem[]
   
   @@index([propertyId])
   @@unique([propertyId, assetType]) // Usually only one furnace per house
