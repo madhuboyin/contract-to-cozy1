@@ -299,6 +299,7 @@ model InventoryItem {
 
   // Reuse your existing Document table for receipts/photos/manuals
   documents        Document[]
+  insuranceQuoteRequests InsuranceQuoteRequest[]
 
   @@index([propertyId])
   @@index([roomId])
@@ -707,6 +708,7 @@ model HomeownerProfile {
   warranties  Warranty[]
   insurancePolicies InsurancePolicy[]
   expenses    Expense[]
+  insuranceQuoteRequests InsuranceQuoteRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -985,7 +987,7 @@ model Property {
 
   inventoryRooms InventoryRoom[]
   inventoryItems InventoryItem[]
-
+  insuranceQuoteRequests InsuranceQuoteRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
