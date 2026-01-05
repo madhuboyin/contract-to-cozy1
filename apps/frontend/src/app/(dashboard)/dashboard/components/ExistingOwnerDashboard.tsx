@@ -127,43 +127,13 @@ export const ExistingOwnerDashboard = ({
     <div className="space-y-6 pb-8">
       {/* Header */}
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">
-          Welcome back! 🏡
-        </h2>
         <p className="text-muted-foreground">
           Here's what needs your attention today.
         </p>
       </div>
 
-      {/* PHASE 5: Overdue Alert Banner */}
-      {stats && stats.overdue > 0 && (
-        <Card className="border-2 border-red-300 bg-red-50">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="flex-shrink-0">
-                <AlertTriangle className="h-8 w-8 text-red-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-red-900">
-                  {stats.overdue} {stats.overdue === 1 ? 'Task' : 'Tasks'} Overdue
-                </h3>
-                <p className="text-sm text-red-700">
-                  These tasks require immediate attention to prevent issues.
-                </p>
-              </div>
-              <Link href={`/dashboard/maintenance?propertyId=${selectedPropertyId}&filter=overdue`}>
-                <span className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 cursor-pointer font-medium">
-                  View Overdue
-                  <ArrowRight className="h-4 w-4 ml-2 inline" />
-                </span>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* PHASE 5: Main Statistics Cards */}
-      {stats && (
+{/* PHASE 5: Main Statistics Cards */}
+{stats && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card>
             <CardHeader className="pb-2">
@@ -224,42 +194,21 @@ export const ExistingOwnerDashboard = ({
         </div>
       )}
 
-      {/* PHASE 5: Task Status Overview */}
-      {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+{/* Task Status Overview */}
+{stats && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Total Tasks</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-                </div>
-                <Clock className="h-6 w-6 text-gray-400" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Pending</p>
-                  <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
-                </div>
-                <Clock className="h-6 w-6 text-yellow-600" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">In Progress</p>
-                  <p className="text-2xl font-bold text-blue-600">{stats.inProgress}</p>
+                  <p className="text-sm text-gray-600">Active Tasks</p>
+                  <p className="text-2xl font-bold text-blue-600">{stats.pending + stats.inProgress}</p>
                 </div>
                 <Clock className="h-6 w-6 text-blue-600" />
               </div>
+              <p className="text-xs text-gray-500 mt-2">
+                {stats.pending} pending, {stats.inProgress} in progress
+              </p>
             </CardContent>
           </Card>
 
@@ -274,11 +223,50 @@ export const ExistingOwnerDashboard = ({
               </div>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">Total Tasks</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                </div>
+                <Clock className="h-6 w-6 text-gray-400" />
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
       {/* Maintenance Nudge Card */}
       {renderNudgeCard}
+
+      {/* Overdue Alert Banner */}
+      {stats && stats.overdue > 0 && (
+        <Card className="border-2 border-red-300 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="flex-shrink-0">
+                <AlertTriangle className="h-8 w-8 text-red-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-red-900">
+                  {stats.overdue} {stats.overdue === 1 ? 'Task' : 'Tasks'} Overdue
+                </h3>
+                <p className="text-sm text-red-700">
+                  These tasks require immediate attention to prevent issues.
+                </p>
+              </div>
+              <Link href={`/dashboard/maintenance?propertyId=${selectedPropertyId}&filter=overdue`}>
+                <span className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 cursor-pointer font-medium">
+                  View Overdue
+                  <ArrowRight className="h-4 w-4 ml-2 inline" />
+                </span>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Action Center (Top Actions) */}
       {selectedPropertyId && (
