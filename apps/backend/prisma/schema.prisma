@@ -313,6 +313,52 @@ model InventoryItem {
   @@map("inventory_items")
 }
 
+enum QuoteRequestStatus {
+  NEW
+  SUBMITTED
+  IN_PROGRESS
+  CLOSED
+}
+
+enum QuoteRequestSource {
+  COVERAGE_GAP
+  MANUAL
+}
+
+model InsuranceQuoteRequest {
+  id                 String   @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String
+  inventoryItemId    String?
+
+  // Context
+  source             QuoteRequestSource @default(COVERAGE_GAP)
+  gapType            String?
+  exposureCents      Int?
+  currency           String   @default("USD")
+
+  // User input
+  preferredContact   String?  // "EMAIL" | "SMS" | "PHONE" (keep string to avoid churn)
+  contactEmail       String?
+  contactPhone       String?
+  zipCode            String?
+  notes              String?
+
+  status             QuoteRequestStatus @default(NEW)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  inventoryItem    InventoryItem?   @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+
+  @@index([homeownerProfileId])
+  @@index([propertyId])
+  @@index([status])
+  @@map("insurance_quote_requests")
+}
+
 
 // NEW: Service 
 // category configuration for segment targeting
