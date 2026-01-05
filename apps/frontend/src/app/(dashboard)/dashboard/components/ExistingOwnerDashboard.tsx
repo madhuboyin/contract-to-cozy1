@@ -124,7 +124,7 @@ export const ExistingOwnerDashboard = ({
   const urgentTasksCount = stats ? stats.byPriority.urgent + stats.byPriority.high : 0;
 
   return (
-    <div className="space-y-4 pb-8">
+    <div className="space-y-2 pb-8">
       {/* Header */}
       <div className="mb-4">
         <h2 className="text-xl font-semibold text-gray-900 mb-1">
