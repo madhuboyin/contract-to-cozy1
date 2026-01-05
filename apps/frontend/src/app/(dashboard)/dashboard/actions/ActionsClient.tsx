@@ -97,12 +97,8 @@ export function ActionsClient() {
   };
 
   useEffect(() => {
-    // 2. If we have an ID in the URL but not in context, sync them
-    if (urlPropertyId && urlPropertyId !== selectedPropertyId) {
-      setSelectedPropertyId(urlPropertyId);
-    }
     loadActions();
-  }, [urlPropertyId, selectedPropertyId, setSelectedPropertyId, loadActions]);
+  }, [propertyId]);
 
   // CTA handler - opens modal
   const handleActionCta = (action: OrchestratedActionDTO) => {

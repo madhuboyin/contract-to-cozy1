@@ -3,12 +3,15 @@
 
 import React from 'react';
 import Link from 'next/link';
+// 1. Import the unified API client
+import { api } from '@/lib/api/client'; 
 import { SectionHeader } from '../../../../components/SectionHeader';
 import InsuranceQuoteModal from '@/app/(dashboard)/dashboard/components/coverage/InsuranceQuoteModal';
 import WhatsCoveredModal from '@/app/(dashboard)/dashboard/components/coverage/WhatsCoveredModal';
 
 export default function CoverageClient({ propertyId }: { propertyId: string }) {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+  // Use the standard API URL from the client
+  const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
   const [loading, setLoading] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
@@ -25,15 +28,16 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
         setLoading(true);
         setErr(null);
 
-        const res = await fetch(
-          `${apiBase}/api/properties/${propertyId}/inventory/coverage-gaps`,
-          { credentials: 'include', cache: 'no-store' }
-        );
-        const json = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(json?.message || `Failed (${res.status})`);
-
-        if (!cancelled) setData(json.data);
+        // 2. REFACTORED: Use the api client instead of native fetch
+        // The client automatically attaches the Authorization header and handles base URLs
+        const response = await api.get(`/api/properties/${propertyId}/inventory/coverage-gaps`);
+        
+        if (!cancelled) {
+          // The api.get helper returns { data: T } on success
+          setData(response.data);
+        }
       } catch (e: any) {
+        // The api client throws APIError with a clear message
         if (!cancelled) setErr(e?.message || 'Failed to load coverage summary');
       } finally {
         if (!cancelled) setLoading(false);
@@ -41,7 +45,7 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
     })();
 
     return () => { cancelled = true; };
-  }, [apiBase, propertyId]);
+  }, [propertyId]); // Removed apiBase dependency as it's now internal to the client
 
   const gaps = data?.gaps || [];
   const counts = data?.counts || {};
