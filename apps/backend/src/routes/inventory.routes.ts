@@ -7,6 +7,7 @@ import { validateBody } from '../middleware/validate.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { CustomRequest } from '../types';
 import { prisma } from '../lib/prisma';
+import { detectCoverageGaps } from '../services/coverageGap.service';
 
 import {
   listRooms,
@@ -241,6 +242,34 @@ router.get(
     } catch (err: any) {
       console.error('[INVENTORY] coverage-summary failed', err);
       return res.status(500).json({ success: false, message: err.message || 'Failed to load coverage summary' });
+    }
+  }
+);
+
+export const inventoryRouter = Router();
+
+inventoryRouter.get(
+  '/properties/:propertyId/inventory/coverage-gaps',
+  authenticate,
+  propertyAuthMiddleware,
+  async (req: CustomRequest, res: Response) => {
+    try {
+      const { propertyId } = req.params;
+      const gaps = await detectCoverageGaps(propertyId);
+
+      const counts = gaps.reduce(
+        (acc, g) => {
+          acc.total += 1;
+          acc[g.gapType] = (acc[g.gapType] || 0) + 1;
+          return acc;
+        },
+        { total: 0 } as Record<string, number>
+      );
+
+      return res.json({ success: true, data: { counts, gaps } });
+    } catch (err: any) {
+      console.error('[INVENTORY] coverage-gaps failed', err);
+      return res.status(500).json({ success: false, message: err.message || 'Failed to compute coverage gaps' });
     }
   }
 );

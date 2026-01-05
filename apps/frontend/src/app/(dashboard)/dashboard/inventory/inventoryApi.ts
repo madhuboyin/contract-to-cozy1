@@ -178,3 +178,22 @@ export async function listPropertyInsurancePolicies(propertyId: string) {
   
   return res.data.policies;
 }
+
+export async function downloadInventoryExport(propertyId: string) {
+  // Use the standard api client which includes the Authorization header automatically
+  const res = await api.get<Blob>(`/api/properties/${propertyId}/inventory/export?format=csv`, {
+    responseType: 'blob' // Tells the client to return binary data
+  });
+
+  // Create a blob URL and trigger download
+  const url = window.URL.createObjectURL(res.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `inventory-${propertyId}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  
+  // Cleanup
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}

@@ -5,13 +5,19 @@ const HIGH_VALUE_THRESHOLD_CENTS = 150000;
 export type CoverageGapResult = {
   inventoryItemId: string;
   propertyId: string;
+
+  itemName: string;
+  roomName?: string | null;
+
   gapType:
     | 'NO_COVERAGE'
     | 'WARRANTY_ONLY'
     | 'INSURANCE_ONLY'
     | 'EXPIRED_WARRANTY'
     | 'EXPIRED_INSURANCE';
+
   exposureCents: number;
+  currency: string;
   reasons: string[];
 };
 
@@ -21,15 +27,15 @@ export async function detectCoverageGaps(propertyId: string): Promise<CoverageGa
   const items = await prisma.inventoryItem.findMany({
     where: {
       propertyId,
-      replacementCostCents: {
-        gte: HIGH_VALUE_THRESHOLD_CENTS,
-      },
+      replacementCostCents: { gte: HIGH_VALUE_THRESHOLD_CENTS },
     },
     include: {
+      room: { select: { name: true } },
       warranty: true,
       insurancePolicy: true,
     },
   });
+  
 
   const results: CoverageGapResult[] = [];
 
@@ -49,10 +55,14 @@ export async function detectCoverageGaps(propertyId: string): Promise<CoverageGa
       results.push({
         inventoryItemId: item.id,
         propertyId,
+        itemName: item.name,
+        roomName: item.room?.name ?? null,
         gapType: 'NO_COVERAGE',
         exposureCents: item.replacementCostCents!,
+        currency: item.currency || 'USD',
         reasons: ['No warranty or insurance coverage found'],
       });
+      
       continue;
     }
 
@@ -68,10 +78,14 @@ export async function detectCoverageGaps(propertyId: string): Promise<CoverageGa
       results.push({
         inventoryItemId: item.id,
         propertyId,
-        gapType: 'WARRANTY_ONLY',
+        itemName: item.name,
+        roomName: item.room?.name ?? null,
+        gapType: 'NO_COVERAGE',
         exposureCents: item.replacementCostCents!,
-        reasons: ['Warranty exists but no insurance coverage'],
+        currency: item.currency || 'USD',
+        reasons: ['No warranty or insurance coverage found'],
       });
+      
       continue;
     }
 
@@ -79,10 +93,14 @@ export async function detectCoverageGaps(propertyId: string): Promise<CoverageGa
       results.push({
         inventoryItemId: item.id,
         propertyId,
-        gapType: 'INSURANCE_ONLY',
+        itemName: item.name,
+        roomName: item.room?.name ?? null,
+        gapType: 'NO_COVERAGE',
         exposureCents: item.replacementCostCents!,
-        reasons: ['Insurance exists but no warranty coverage'],
+        currency: item.currency || 'USD',
+        reasons: ['No warranty or insurance coverage found'],
       });
+      
       continue;
     }
 
@@ -90,10 +108,13 @@ export async function detectCoverageGaps(propertyId: string): Promise<CoverageGa
       results.push({
         inventoryItemId: item.id,
         propertyId,
+        itemName: item.name,
+        roomName: item.room?.name ?? null,
         gapType: !warrantyActive
           ? 'EXPIRED_WARRANTY'
           : 'EXPIRED_INSURANCE',
         exposureCents: item.replacementCostCents!,
+        currency: item.currency || 'USD',
         reasons,
       });
     }

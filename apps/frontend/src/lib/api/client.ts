@@ -441,10 +441,32 @@ class APIClient {
   /**
    * Generic GET request
    */
-  async get<T = any>(endpoint: string, options?: { params?: Record<string, any> }): Promise<{ data: T }> {
+  async get<T = any>(endpoint: string, options?: { params?: Record<string, any>; responseType?: 'blob' }): Promise<{ data: T }> {
     const url = options?.params 
       ? `${endpoint}?${new URLSearchParams(options.params).toString()}`
       : endpoint;
+    
+    // Handle blob responses separately
+    if (options?.responseType === 'blob') {
+      const token = this.getToken();
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch(`${this.baseURL}${url}`, {
+        method: 'GET',
+        headers,
+      });
+      
+      if (!response.ok) {
+        throw new APIError(`Request failed (${response.status})`, response.status);
+      }
+      
+      const blob = await response.blob();
+      return { data: blob as T };
+    }
+    
     const response = await this.request<T>(url, { method: 'GET' });
     // request() throws on error, so response is always APISuccess<T>
     return { data: (response as APISuccess<T>).data };
