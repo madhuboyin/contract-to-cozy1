@@ -246,9 +246,7 @@ router.get(
   }
 );
 
-export const inventoryRouter = Router();
-
-inventoryRouter.get(
+router.get(
   '/properties/:propertyId/inventory/coverage-gaps',
   authenticate,
   propertyAuthMiddleware,
