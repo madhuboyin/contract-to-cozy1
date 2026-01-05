@@ -3,11 +3,16 @@ import { ApiResponse, InventoryItem, InventoryRoom, InventoryItemCategory } from
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL; // must already exist in your app
 async function apiFetch<T>(url: string, options: RequestInit = {}): Promise<T> {
+  // 1. Retrieve the token from localStorage
+  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+
   const res = await fetch(url, {
     ...options,
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
+      // 2. Attach the Authorization header if the token exists
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
     cache: 'no-store',
