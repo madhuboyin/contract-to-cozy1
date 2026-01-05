@@ -51,7 +51,21 @@ export async function listInventoryItems(
   propertyId: string, 
   params: { q?: string; roomId?: string; category?: InventoryItemCategory; hasDocuments?: boolean }
 ) {
-  const res = await api.get<{ items: InventoryItem[] }>(`/api/properties/${propertyId}/inventory/items`, { params });
+  // Create a clean copy of parameters
+  const cleanParams: any = { ...params };
+
+  // If roomId is 'ALL', undefined, or an empty string, remove it 
+  // so the backend returns all items for the property regardless of room.
+  if (!cleanParams.roomId || cleanParams.roomId === 'ALL') {
+    delete cleanParams.roomId;
+  }
+
+  // Use the cleaned params for the API call
+  const res = await api.get<{ items: InventoryItem[] }>(
+    `/api/properties/${propertyId}/inventory/items`, 
+    { params: cleanParams }
+  );
+  
   return res.data.items;
 }
 

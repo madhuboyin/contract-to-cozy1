@@ -109,7 +109,13 @@ export default function InventoryClient() {
         q={q}
         onQChange={setQ}
         roomId={roomId}
-        onRoomChange={(val) => setRoomId(val === 'ALL' ? undefined : val)}
+        onRoomChange={(val) => {
+          if (val === 'ALL') {
+            setRoomId(undefined);
+          } else {
+            setRoomId(val);
+          }
+        }}
         category={category}
         onCategoryChange={setCategory}
         hasDocuments={hasDocuments}
