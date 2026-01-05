@@ -49,7 +49,10 @@ temp/
 *.tmp
 
 # Testing
-coverage/
+# Ignore test coverage reports (but not source code coverage folders)
+**/coverage/
+!**/src/**/coverage/
+!**/app/**/coverage/
 .nyc_output/
 
 # Docker

@@ -70,7 +70,7 @@ cat <<EOF | kubectl apply -f -
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: migrate-enum-$(date +%s)
+  name: migrate-local-schema-$(date +%s)
   namespace: production
 spec:
   ttlSecondsAfterFinished: 600
@@ -79,25 +79,22 @@ spec:
       restartPolicy: Never
       containers:
       - name: migrate
-        image: node:20-alpine
+        image: ghcr.io/madhuboyin/contract-to-cozy/backend:latest
         command:
           - sh
           - -c
           - |
-            apk add --no-cache openssl openssl-dev
-            npm install -g prisma@5.22.0
-            mkdir -p /app/prisma
-            cp /config/schema.prisma /app/prisma/schema.prisma
-            cd /app
-            npx prisma db push --accept-data-loss --skip-generate
+            echo "Applying LOCAL schema from ConfigMap..."
+            # Point prisma directly to the mounted ConfigMap schema
+            npx prisma db push --accept-data-loss --skip-generate --schema=/config/schema.prisma
         env:
         - name: DATABASE_URL
           value: "postgresql://postgres:${PASSWORD}@postgres.production.svc.cluster.local:5432/contracttocozy?schema=public"
         volumeMounts:
-        - name: schema
+        - name: schema-volume
           mountPath: /config
       volumes:
-      - name: schema
+      - name: schema-volume
         configMap:
           name: prisma-schema
 EOF
@@ -359,3 +356,7 @@ kubectl delete configmap -n production prisma-schema
 
 **Last Updated:** January 2025
 **Tested On:** Kubernetes v1.28, PostgreSQL 15, Prisma 5.22
+
+
+
+

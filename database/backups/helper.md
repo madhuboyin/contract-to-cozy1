@@ -40,6 +40,10 @@ kubectl get pods -n production -l app=frontend
 # Workers
 
 docker build -t ghcr.io/madhuboyin/contract-to-cozy/workers:latest -f ../../infrastructure/docker/workers/Dockerfile .
+
+docker build -t ghcr.io/madhuboyin/contract-to-cozy/workers:latest   -f infrastructure/docker/workers/Dockerfile   .
+
+docker build --no-cache -t ghcr.io/madhuboyin/contract-to-cozy/workers:latest -f infrastructure/docker/workers/Dockerfile   .
 docker push ghcr.io/madhuboyin/contract-to-cozy/workers:latest
 
 kubectl -n production rollout restart deploy/worker-deployment
@@ -52,3 +56,17 @@ kubectl get pods -n production -l app=worker
 nano /tmp/kubectl-edit-243034315.yaml
 kubectl apply -f /tmp/kubectl-edit-243034315.yaml
 kubectl -n production rollout restart deploy/cloudflared
+
+
+Loki
+
+kubectl rollout restart daemonset/promtail -n monitoring
+kubectl get pods -n monitoring -l app.kubernetes.io/name=promtail
+
+kubectl get secret promtail -n monitoring -o yaml
+kubectl get secret promtail -n monitoring -o jsonpath="{.data['promtail\.yaml']}" | base64 --decode
+
+Prometheus
+
+kubectl --namespace monitoring get pods -l "release=prometheus"
+kubectl rollout restart daemonset/prometheus-prometheus-node-exporter -n monitoring
