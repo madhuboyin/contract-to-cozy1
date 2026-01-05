@@ -1,214 +1,167 @@
 // apps/frontend/src/app/(dashboard)/dashboard/inventory/inventoryApi.ts
-import { ApiResponse, InventoryItem, InventoryRoom, InventoryItemCategory } from '@/types';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL; // must already exist in your app
-async function apiFetch<T>(url: string, options: RequestInit = {}): Promise<T> {
-  // 1. Retrieve the token from localStorage
-  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-
-  const res = await fetch(url, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      // 2. Attach the Authorization header if the token exists
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-    cache: 'no-store',
-  });
-
-  const text = await res.text();
-  let json: any = null;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    // ignore
-  }
-
-  if (!res.ok) {
-    const msg = json?.message || `Request failed (${res.status})`;
-    throw new Error(msg);
-  }
-
-  return json as T;
-}
+import { api } from '@/lib/api/client';
+import { InventoryItem, InventoryRoom, InventoryItemCategory } from '@/types';
 
 // -------- Rooms --------
+
+/**
+ * Fetches all rooms for a specific property.
+ */
 export async function listInventoryRooms(propertyId: string) {
-  const url = `${API_BASE}/api/properties/${propertyId}/inventory/rooms`;
-  const res = await apiFetch<ApiResponse<{ rooms: InventoryRoom[] }>>(url);
+  const res = await api.get<{ rooms: InventoryRoom[] }>(`/api/properties/${propertyId}/inventory/rooms`);
   return res.data.rooms;
 }
 
+/**
+ * Creates a new room in the inventory.
+ */
 export async function createInventoryRoom(
   propertyId: string,
   body: { name: string; floorLevel?: number | null; sortOrder?: number }
 ) {
-  const url = `${API_BASE}/api/properties/${propertyId}/inventory/rooms`;
-  const res = await apiFetch<ApiResponse<{ room: InventoryRoom }>>(url, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
+  const res = await api.post<{ room: InventoryRoom }>(`/api/properties/${propertyId}/inventory/rooms`, body);
   return res.data.room;
 }
 
+/**
+ * Updates an existing room's details.
+ */
 export async function updateInventoryRoom(
   propertyId: string,
   roomId: string,
   body: { name?: string; floorLevel?: number | null; sortOrder?: number }
 ) {
-  const url = `${API_BASE}/api/properties/${propertyId}/inventory/rooms/${roomId}`;
-  const res = await apiFetch<ApiResponse<{ room: InventoryRoom }>>(url, {
-    method: 'PATCH',
-    body: JSON.stringify(body),
-  });
+  const res = await api.patch<{ room: InventoryRoom }>(`/api/properties/${propertyId}/inventory/rooms/${roomId}`, body);
   return res.data.room;
 }
 
+/**
+ * Deletes a room from the inventory.
+ */
 export async function deleteInventoryRoom(propertyId: string, roomId: string) {
-  const url = `${API_BASE}/api/properties/${propertyId}/inventory/rooms/${roomId}`;
-  await apiFetch(url, { method: 'DELETE' });
+  await api.delete(`/api/properties/${propertyId}/inventory/rooms/${roomId}`);
 }
 
 // -------- Items --------
-export async function listInventoryItems(propertyId: string, params: { q?: string; roomId?: string; category?: InventoryItemCategory; hasDocuments?: boolean }) {
-  const sp = new URLSearchParams();
-  if (params.q) sp.set('q', params.q);
-  if (params.roomId) sp.set('roomId', params.roomId);
-  if (params.category) sp.set('category', params.category);
-  if (params.hasDocuments !== undefined) sp.set('hasDocuments', String(params.hasDocuments));
 
-  const url = `${API_BASE}/api/properties/${propertyId}/inventory/items?${sp.toString()}`;
-  const res = await apiFetch<ApiResponse<{ items: InventoryItem[] }>>(url);
+/**
+ * Lists inventory items based on filters.
+ */
+export async function listInventoryItems(
+  propertyId: string, 
+  params: { q?: string; roomId?: string; category?: InventoryItemCategory; hasDocuments?: boolean }
+) {
+  const res = await api.get<{ items: InventoryItem[] }>(`/api/properties/${propertyId}/inventory/items`, { params });
   return res.data.items;
 }
+
+/**
+ * Creates a new inventory item.
+ */
 export async function createInventoryItem(propertyId: string, body: any) {
-  const url = `${API_BASE}/api/properties/${propertyId}/inventory/items`;
-  const res = await apiFetch<ApiResponse<{ item: InventoryItem }>>(url, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
+  const res = await api.post<{ item: InventoryItem }>(`/api/properties/${propertyId}/inventory/items`, body);
   return res.data.item;
-}
-export async function updateInventoryItem(propertyId: string, itemId: string, body: any) {
-  const url = `${API_BASE}/api/properties/${propertyId}/inventory/items/${itemId}`;
-  const res = await apiFetch<ApiResponse<{ item: InventoryItem }>>(url, {
-    method: 'PATCH',
-    body: JSON.stringify(body),
-  });
-  return res.data.item;
-}
-export async function deleteInventoryItem(propertyId: string, itemId: string) {
-  const url = `${API_BASE}/api/properties/${propertyId}/inventory/items/${itemId}`;
-  await apiFetch(url, { method: 'DELETE' });
 }
 
-// Documents linking
+/**
+ * Updates an inventory item's details.
+ */
+export async function updateInventoryItem(propertyId: string, itemId: string, body: any) {
+  const res = await api.patch<{ item: InventoryItem }>(`/api/properties/${propertyId}/inventory/items/${itemId}`, body);
+  return res.data.item;
+}
+
+/**
+ * Deletes an item from the inventory.
+ */
+export async function deleteInventoryItem(propertyId: string, itemId: string) {
+  await api.delete(`/api/properties/${propertyId}/inventory/items/${itemId}`);
+}
+
+/**
+ * Fetches a single inventory item.
+ */
+export async function getInventoryItem(propertyId: string, itemId: string) {
+  const res = await api.get<{ item: InventoryItem }>(`/api/properties/${propertyId}/inventory/items/${itemId}`);
+  return res.data.item;
+}
+
+// -------- Documents & Linking --------
+
+/**
+ * Links an existing document to an inventory item.
+ */
 export async function linkDocumentToInventoryItem(propertyId: string, itemId: string, documentId: string) {
-  const url = `${API_BASE}/api/properties/${propertyId}/inventory/items/${itemId}/documents`;
-  const res = await apiFetch<ApiResponse<{ document: any }>>(url, {
-    method: 'POST',
-    body: JSON.stringify({ documentId }),
-  });
+  const res = await api.post<any>(`/api/properties/${propertyId}/inventory/items/${itemId}/documents`, { documentId });
   return res.data.document;
 }
+
+/**
+ * Unlinks a document from an inventory item.
+ */
 export async function unlinkDocumentFromInventoryItem(propertyId: string, itemId: string, documentId: string) {
-  const url = `${API_BASE}/api/properties/${propertyId}/inventory/items/${itemId}/documents/${documentId}`;
-  await apiFetch(url, { method: 'DELETE' });
-}
-export async function getInventoryItem(propertyId: string, itemId: string) {
-  const url = `${API_BASE}/api/properties/${propertyId}/inventory/items/${itemId}`;
-  const res = await apiFetch<ApiResponse<{ item: InventoryItem }>>(url);
-  return res.data.item;
+  await api.delete(`/api/properties/${propertyId}/inventory/items/${itemId}/documents/${documentId}`);
 }
 
 /**
- * List documents available for a property (for picker).
- * Adjust this URL to match your existing documents API.
+ * Lists documents available for a specific property.
  */
 export async function listPropertyDocuments(propertyId: string, q?: string) {
-  const sp = new URLSearchParams();
-  if (q) sp.set('q', q);
-
-  // ✅ CHANGE THIS if your documents listing endpoint differs.
-  const url = `${API_BASE}/api/properties/${propertyId}/documents?${sp.toString()}`;
-
-  const res = await apiFetch<ApiResponse<{ documents: any[] }>>(url);
-  return res.data.documents;
-}
-
-export async function listUserDocuments() {
-  const url = `${API_BASE}/api/documents`;
-  const res = await apiFetch<ApiResponse<{ documents: any[] }>>(url);
+  const res = await api.get<{ documents: any[] }>(`/api/properties/${propertyId}/documents`, { params: { q } });
   return res.data.documents;
 }
 
 /**
- * Uploads a document using your existing backend:
- * POST /api/documents/analyze (multipart form-data)
- * fields:
- *  - file (binary)
- *  - propertyId (string, optional)
- *  - autoCreateWarranty (boolean-as-string, optional)
+ * Lists all documents for the current user.
  */
-type AnalyzeResponse = ApiResponse<{
-  document: any;
-  insights: any;
-  warranty: any | null;
-}>;
+export async function listUserDocuments() {
+  const res = await api.get<{ documents: any[] }>('/api/documents');
+  return res.data.documents;
+}
+
+/**
+ * Uploads a document and analyzes it using AI.
+ */
 export async function uploadAndAnalyzeDocument(args: {
   file: File;
-  propertyId?: string;
+  propertyId: string;
   autoCreateWarranty?: boolean;
 }) {
-  const url = `${API_BASE}/api/documents/analyze`;
-  const fd = new FormData();
-  fd.append('file', args.file);
-  if (args.propertyId) fd.append('propertyId', args.propertyId);
-  fd.append('autoCreateWarranty', args.autoCreateWarranty ? 'true' : 'false');
-
-  const res = await fetch(url, {
-    method: 'POST',
-    credentials: 'include',
-    body: fd,
-    cache: 'no-store',
-  });
-
-  const json = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(json?.message || `Upload failed (${res.status})`);
-
-  return (json as AnalyzeResponse).data;
-}
-async function tryFetch<T>(url: string): Promise<T | null> {
-  try {
-    return await apiFetch<T>(url);
-  } catch {
-    return null;
+  const res = await api.analyzeDocument(args.file, args.propertyId, args.autoCreateWarranty);
+  if (!res.success) {
+    throw new Error(res.message || 'Failed to analyze document');
   }
-}
-
-// These endpoints may differ in your backend.
-// We try a couple common patterns and return [] if none work.
-export async function listPropertyWarranties(propertyId: string) {
-  const res = await apiFetch<ApiResponse<{ warranties: any[] }>>(
-    `${API_BASE}/api/documents/warranties?propertyId=${propertyId}`
-  );
-  return res.data.warranties;
-}
-
-export async function listPropertyInsurancePolicies(propertyId: string) {
-  const res = await apiFetch<ApiResponse<{ policies: any[] }>>(
-    `${API_BASE}/api/documents/insurance-policies?propertyId=${propertyId}`
-  );
-  return res.data.policies;
-}
-
-export async function getDocumentAssetSuggestions(documentId: string, propertyId: string) {
-  const res = await apiFetch<ApiResponse<any>>(
-    `${API_BASE}/api/documents/${documentId}/asset-suggestions?propertyId=${propertyId}`
-  );
   return res.data;
 }
 
+/**
+ * Fetches AI-powered asset suggestions from a specific document.
+ */
+export async function getDocumentAssetSuggestions(documentId: string, propertyId: string) {
+  const res = await api.get<{ suggestions: any[] }>(`/api/documents/${documentId}/asset-suggestions`, { params: { propertyId } });
+  return res.data;
+}
 
+// -------- Additional Helpers --------
+
+/**
+ * Lists all warranties associated with a property.
+ */
+export async function listPropertyWarranties(propertyId: string) {
+  const res = await api.listWarranties(propertyId);
+  if (!res.success) {
+    throw new Error(res.message || 'Failed to list warranties');
+  }
+  return res.data.warranties;
+}
+
+/**
+ * Lists all insurance policies associated with a property.
+ */
+export async function listPropertyInsurancePolicies(propertyId: string) {
+  const res = await api.listInsurancePolicies(propertyId);
+  if (!res.success) {
+    throw new Error(res.message || 'Failed to list insurance policies');
+  }
+  return res.data.policies;
+}
