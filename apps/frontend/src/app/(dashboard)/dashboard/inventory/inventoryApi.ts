@@ -157,25 +157,24 @@ export async function getDocumentAssetSuggestions(documentId: string, propertyId
 }
 
 // -------- Additional Helpers --------
-
 /**
- * Lists all warranties associated with a property.
+ * Lists all warranties associated ONLY with the specific property.
  */
 export async function listPropertyWarranties(propertyId: string) {
-  const res = await api.listWarranties(propertyId);
-  if (!res.success) {
-    throw new Error(res.message || 'Failed to list warranties');
-  }
+  // Directly targeting the property-nested endpoint to ensure backend filtering
+  const res = await api.get<{ warranties: any[] }>(`/api/properties/${propertyId}/warranties`);
+  
+  // The central API client handles 'success' checks, 
+  // so we can return the data directly.
   return res.data.warranties;
 }
 
 /**
- * Lists all insurance policies associated with a property.
+ * Lists all insurance policies associated ONLY with the specific property.
  */
 export async function listPropertyInsurancePolicies(propertyId: string) {
-  const res = await api.listInsurancePolicies(propertyId);
-  if (!res.success) {
-    throw new Error(res.message || 'Failed to list insurance policies');
-  }
+  // Directly targeting the property-nested endpoint to ensure backend filtering
+  const res = await api.get<{ policies: any[] }>(`/api/properties/${propertyId}/insurance`);
+  
   return res.data.policies;
 }
