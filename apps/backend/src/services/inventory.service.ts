@@ -110,32 +110,43 @@ export class InventoryService {
   }
 
   async createItem(propertyId: string, data: any) {
-    // Validate ownership/containment for foreign keys
+    // 1. Validate ownership/containment for all foreign keys before proceeding
+    // This ensures the selected room, warranty, or policy actually belongs to this property.
     await this.assertRoomBelongs(propertyId, data.roomId);
     await this.assertWarrantyBelongs(propertyId, data.warrantyId);
     await this.assertInsuranceBelongs(propertyId, data.insurancePolicyId);
     await this.assertHomeAssetBelongs(propertyId, data.homeAssetId);
-
-    const normalized = {
-      ...data,
-      roomId: data.roomId ?? null,
-      warrantyId: data.warrantyId ?? null,
-      insurancePolicyId: data.insurancePolicyId ?? null,
-      homeAssetId: data.homeAssetId ?? null,
-      brand: data.brand ?? null,
-      model: data.model ?? null,
-      serialNo: data.serialNo ?? null,
-      notes: data.notes ?? null,
-
-      installedOn: data.installedOn ? new Date(data.installedOn) : null,
-      purchasedOn: data.purchasedOn ? new Date(data.purchasedOn) : null,
-      lastServicedOn: data.lastServicedOn ? new Date(data.lastServicedOn) : null,
-    };
-
+  
+    // 2. Explicitly map fields to ensure database compatibility
     return prisma.inventoryItem.create({
       data: {
         propertyId,
-        ...normalized,
+        name: data.name,
+        category: data.category,
+        condition: data.condition || 'UNKNOWN',
+        
+        // Relationship IDs - Explicitly set to null if missing to clear any defaults
+        roomId: data.roomId || null,
+        warrantyId: data.warrantyId || null,
+        insurancePolicyId: data.insurancePolicyId || null,
+        homeAssetId: data.homeAssetId || null,
+  
+        // Metadata
+        brand: data.brand || null,
+        model: data.model || null,
+        serialNo: data.serialNo || null,
+        notes: data.notes || null,
+        tags: data.tags || [],
+  
+        // Financials
+        purchaseCostCents: data.purchaseCostCents || null,
+        replacementCostCents: data.replacementCostCents || null,
+        currency: data.currency || 'USD',
+  
+        // Date conversion
+        installedOn: data.installedOn ? new Date(data.installedOn) : null,
+        purchasedOn: data.purchasedOn ? new Date(data.purchasedOn) : null,
+        lastServicedOn: data.lastServicedOn ? new Date(data.lastServicedOn) : null,
       },
       include: {
         room: true,
@@ -163,29 +174,36 @@ export class InventoryService {
   }
 
   async updateItem(propertyId: string, itemId: string, patch: any) {
+    // 1. Verify the item exists and belongs to the property
     const existing = await prisma.inventoryItem.findFirst({
       where: { id: itemId, propertyId },
       select: { id: true },
     });
     if (!existing) throw new APIError('Inventory item not found', 404, 'ITEM_NOT_FOUND');
-
-    // Validate containment if relationships are being changed
+  
+    // 2. Validate containment ONLY for fields present in the patch
     if ('roomId' in patch) await this.assertRoomBelongs(propertyId, patch.roomId);
     if ('warrantyId' in patch) await this.assertWarrantyBelongs(propertyId, patch.warrantyId);
     if ('insurancePolicyId' in patch) await this.assertInsuranceBelongs(propertyId, patch.insurancePolicyId);
     if ('homeAssetId' in patch) await this.assertHomeAssetBelongs(propertyId, patch.homeAssetId);
-
-    const normalized = {
-      ...patch,
-    };
-
-    if ('installedOn' in patch) normalized.installedOn = patch.installedOn ? new Date(patch.installedOn) : null;
-    if ('purchasedOn' in patch) normalized.purchasedOn = patch.purchasedOn ? new Date(patch.purchasedOn) : null;
-    if ('lastServicedOn' in patch) normalized.lastServicedOn = patch.lastServicedOn ? new Date(patch.lastServicedOn) : null;
-
+  
+    // 3. Prepare the update data object
+    const updateData: any = { ...patch };
+  
+    // 4. Handle specialized date logic if they are being updated
+    if ('installedOn' in patch) updateData.installedOn = patch.installedOn ? new Date(patch.installedOn) : null;
+    if ('purchasedOn' in patch) updateData.purchasedOn = patch.purchasedOn ? new Date(patch.purchasedOn) : null;
+    if ('lastServicedOn' in patch) updateData.lastServicedOn = patch.lastServicedOn ? new Date(patch.lastServicedOn) : null;
+  
+    // 5. Explicitly ensure relationship IDs are treated as IDs, not nested objects
+    // This handles the "not saving" issue by ensuring the key is explicitly assigned.
+    if ('warrantyId' in patch) updateData.warrantyId = patch.warrantyId || null;
+    if ('insurancePolicyId' in patch) updateData.insurancePolicyId = patch.insurancePolicyId || null;
+    if ('roomId' in patch) updateData.roomId = patch.roomId || null;
+  
     return prisma.inventoryItem.update({
       where: { id: itemId },
-      data: normalized,
+      data: updateData,
       include: {
         room: true,
         warranty: true,
