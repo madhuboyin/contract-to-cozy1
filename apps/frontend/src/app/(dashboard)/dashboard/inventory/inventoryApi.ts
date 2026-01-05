@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/inventory/inventoryApi.ts
 import { ApiResponse, InventoryItem, InventoryRoom, InventoryItemCategory } from '@/types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL; // must already exist in your app
+const API_BASE = process.env.NEXT_PUBLIC_API_URL; // must already exist in your app
 async function apiFetch<T>(url: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(url, {
     ...options,
