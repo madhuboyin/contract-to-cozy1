@@ -208,7 +208,7 @@ export default function InventoryClient() {
             </button>
 
             <a
-              href={`/dashboard/actions?filter=coverage-gaps`}
+              href={`/dashboard/actions?propertyId=${propertyId}&filter=coverage-gaps`}
               className="text-sm underline opacity-80 hover:opacity-100"
             >
               View in Actions

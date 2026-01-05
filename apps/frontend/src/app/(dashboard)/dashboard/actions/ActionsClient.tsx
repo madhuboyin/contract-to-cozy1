@@ -19,10 +19,18 @@ import { DecisionTraceModal } from '@/components/orchestration/DecisionTraceModa
 import { useCallback } from 'react';
 import { SnoozeModal } from '@/components/orchestration/SnoozeModal';
 import { CompletionModal } from '@/components/orchestration/CompletionModal';
+import { useSearchParams } from 'next/navigation';
 
 export function ActionsClient() {
-  const { selectedPropertyId } = usePropertyContext();
-  const propertyId = selectedPropertyId;
+  const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
+  const searchParams = useSearchParams();
+  
+  // 1. Prioritize URL parameter, fallback to context
+  const urlPropertyId = searchParams.get('propertyId');
+  const propertyId = urlPropertyId || selectedPropertyId;
+  console.log('🔍 ActionsClient propertyId:', propertyId);
+  console.log('🔍 URL propertyId:', urlPropertyId);
+  console.log('🔍 selectedPropertyId:', selectedPropertyId);
   const { toast } = useToast();
 
   const [actions, setActions] = useState<OrchestratedActionDTO[]>([]);
@@ -89,8 +97,12 @@ export function ActionsClient() {
   };
 
   useEffect(() => {
+    // 2. If we have an ID in the URL but not in context, sync them
+    if (urlPropertyId && urlPropertyId !== selectedPropertyId) {
+      setSelectedPropertyId(urlPropertyId);
+    }
     loadActions();
-  }, [propertyId]);
+  }, [urlPropertyId, selectedPropertyId, setSelectedPropertyId, loadActions]);
 
   // CTA handler - opens modal
   const handleActionCta = (action: OrchestratedActionDTO) => {
