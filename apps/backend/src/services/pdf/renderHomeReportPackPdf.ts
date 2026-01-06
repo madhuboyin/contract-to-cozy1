@@ -17,7 +17,7 @@ export async function renderHomeReportPackPdf(
   const propertyLabel =
     opts.propertyLabel ||
     snapshot?.meta?.propertyLabel ||
-    snapshot?.property?.addressLine1 ||
+    snapshot?.property?.address ||
     'Home Report';
 
   const browser = await chromium.launch();

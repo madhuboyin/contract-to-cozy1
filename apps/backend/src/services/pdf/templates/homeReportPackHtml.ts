@@ -23,7 +23,7 @@ export function buildHomeReportPackHtml(snapshot: any) {
   const meta = snapshot.meta ?? {};
   const p = snapshot.property ?? {};
 
-  const address = [p.addressLine1, p.addressLine2, `${p.city ?? ''} ${p.state ?? ''} ${p.zipCode ?? ''}`]
+  const address = [p.address, `${p.city ?? ''} ${p.state ?? ''} ${p.zipCode ?? ''}`]
     .filter(Boolean)
     .join(', ');
 
