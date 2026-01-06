@@ -335,6 +335,7 @@ app.use((req: Request, res: Response) => {
       'GET /api/community/trash',
       'GET /api/v1/community/events',
       'GET /api/inventory',
+
     ],
   });
 });
