@@ -20,10 +20,22 @@ export async function renderHomeReportPackPdf(
     snapshot?.property?.address ||
     'Home Report';
 
-    const browser = await chromium.launch({
-      executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium',
-      args: ['--no-sandbox', '--disable-dev-shm-usage'],
-    });
+  const executablePath =
+  process.env.CHROMIUM_PATH && process.env.CHROMIUM_PATH.trim().length > 0
+    ? process.env.CHROMIUM_PATH
+    : chromium.executablePath();
+  
+  console.log('NODE_ENV', process.env.NODE_ENV);
+  console.log('CHROMIUM_PATH', process.env.CHROMIUM_PATH);
+  console.log('PLAYWRIGHT_BROWSERS_PATH', process.env.PLAYWRIGHT_BROWSERS_PATH);
+  console.log('executablePath', executablePath);
+  console.log('chromium.executablePath()', chromium.executablePath());
+  
+  const browser = await chromium.launch({
+    executablePath,
+    args: ['--no-sandbox', '--disable-dev-shm-usage'],
+  });
+  
     console.log('CHROMIUM_PATH', process.env.CHROMIUM_PATH);
     console.log('args', ['--no-sandbox', '--disable-dev-shm-usage']);
   try {
