@@ -566,6 +566,7 @@ enum DocumentType {
   VIDEO
   INSURANCE_CERTIFICATE
   LICENSE
+  HOME_REPORT_PDF
   OTHER
 }
 
@@ -988,6 +989,7 @@ model Property {
   inventoryRooms InventoryRoom[]
   inventoryItems InventoryItem[]
   insuranceQuoteRequests InsuranceQuoteRequest[]
+  homeReportExports HomeReportExport[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2178,6 +2180,100 @@ enum DeliveryStatus {
   FAILED
   SKIPPED
 }
+
+// ============================================================================
+// PDF REPORTS
+// ============================================================================
+
+enum HomeReportExportType {
+  HOME_SUMMARY
+  INVENTORY
+  MAINTENANCE_HISTORY
+  COVERAGE_SNAPSHOT
+  HOME_REPORT_PACK
+}
+
+enum HomeReportExportStatus {
+  PENDING
+  GENERATING
+  READY
+  FAILED
+  EXPIRED
+}
+
+enum HomeReportExportEventType {
+  CREATED
+  GENERATION_STARTED
+  GENERATED
+  DOWNLOADED
+  SHARED
+  SHARE_REVOKED
+  FAILED
+  EXPIRED
+}
+
+model HomeReportExport {
+  id         String @id @default(uuid())
+  userId     String
+  propertyId String
+
+  type       HomeReportExportType
+  status     HomeReportExportStatus @default(PENDING)
+
+  // Section toggles / configuration for report-pack
+  sections   Json?
+
+  // Reproducibility (prevents “why did this change later?”)
+  templateVersion Int @default(1)
+  dataVersion     Int @default(1)
+  snapshot        Json? // store the final computed DTO used to render
+
+  // Optional: store generated PDF as a Document row (recommended)
+  documentId String?
+  document   Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  // Shareable link support (no second table needed)
+  shareToken     String?   @unique
+  shareExpiresAt DateTime?
+  shareRevokedAt DateTime?
+
+  // Lifecycle
+  requestedAt DateTime @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  errorMessage String?
+
+  // Useful metadata
+  locale   String?
+  timezone String?
+
+  // Relations
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  events   HomeReportExportEvent[]
+
+  @@index([userId, requestedAt])
+  @@index([propertyId, requestedAt])
+  @@index([status, requestedAt])
+  @@index([shareToken])
+
+  @@map("home_report_exports")
+}
+
+model HomeReportExportEvent {
+  id        String @id @default(uuid())
+  reportId  String
+  type      HomeReportExportEventType
+  createdAt DateTime @default(now())
+  meta      Json?
+
+  report HomeReportExport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId, createdAt])
+  @@map("home_report_export_events")
+}
+
+
 
 // ============================================================================
 // FAVORITES
