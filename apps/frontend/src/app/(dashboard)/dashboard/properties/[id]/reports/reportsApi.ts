@@ -31,6 +31,8 @@ type CreateExportResponse = { exportId: string; status: HomeReportExportStatus }
 type ListExportsResponse = { exports: HomeReportExportDTO[] };
 type DownloadResponse = { url: string };
 type ShareResponse = { shareToken: string; shareExpiresAt: string | null; shareRevokedAt?: string | null };
+type RegenerateResponse = { exportId: string; status: HomeReportExportStatus };
+type DeleteResponse = { ok: boolean };
 
 /** POST /api/properties/:propertyId/reports/exports */
 export async function createHomeReportExport(propertyId: string, body?: { type?: HomeReportExportType; sections?: any }) {
@@ -68,29 +70,18 @@ export async function revokeShareLink(exportId: string) {
   return response.data;
 }
 
+/** POST /api/reports/exports/:exportId/regenerate -> { exportId, status } */
 export async function regenerateHomeReportExport(exportId: string) {
-  const res = await fetch(`/api/reports/exports/${exportId}/regenerate`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-  });
-
-  const json = await res.json();
-  if (!res.ok || !json?.success) {
-    throw new Error(json?.message || 'Failed to regenerate report');
-  }
-  return json.data; // { exportId, status } (or whatever backend returns)
+  const response = await api.post<RegenerateResponse>(
+    `/api/reports/exports/${exportId}/regenerate`,
+    {} // POST body optional; keep {} to avoid some clients sending null
+  );
+  return response.data;
 }
 
+/** DELETE /api/reports/exports/:exportId -> { ok: true } */
 export async function deleteHomeReportExport(exportId: string) {
-  const res = await fetch(`/api/reports/exports/${exportId}`, {
-    method: 'DELETE',
-    credentials: 'include',
-  });
-
-  const json = await res.json();
-  if (!res.ok || !json?.success) {
-    throw new Error(json?.message || 'Failed to delete report');
-  }
-  return json.data; // { ok: true }
+  const response = await api.delete<DeleteResponse>(`/api/reports/exports/${exportId}`);
+  return response.data;
 }
+
