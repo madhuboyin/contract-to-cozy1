@@ -14,7 +14,6 @@ export async function createHomeReportExport(req: Request, res: Response) {
 
     const { type = 'HOME_REPORT_PACK', sections } = req.body ?? {};
 
-    // Create export row as PENDING; workers will pick it up
     const exp = await prisma.homeReportExport.create({
       data: {
         userId,
@@ -34,13 +33,20 @@ export async function createHomeReportExport(req: Request, res: Response) {
       data: { reportId: exp.id, type: 'CREATED' },
     });
 
+    // ✅ FIX: Return standard format
     return res.status(202).json({
-      exportId: exp.id,
-      status: exp.status,
+      success: true,
+      data: {
+        exportId: exp.id,
+        status: exp.status,
+      }
     });
   } catch (error: any) {
     console.error('[createHomeReportExport] Error:', error);
-    return res.status(500).json({ message: error.message || 'Failed to create export' });
+    return res.status(500).json({ 
+      success: false,
+      message: error.message || 'Failed to create export' 
+    });
   }
 }
 
@@ -58,10 +64,17 @@ export async function listHomeReportExportsForProperty(req: Request, res: Respon
       take: 50,
     });
 
-    return res.json({ exports });
+    // ✅ FIX: Return standard format
+    return res.json({ 
+      success: true,
+      data: { exports } 
+    });
   } catch (error: any) {
     console.error('[listHomeReportExportsForProperty] Error:', error);
-    return res.status(500).json({ message: error.message || 'Failed to list exports' });
+    return res.status(500).json({ 
+      success: false,
+      message: error.message || 'Failed to list exports' 
+    });
   }
 }
 
@@ -72,10 +85,25 @@ export async function downloadHomeReportExport(req: Request, res: Response) {
 
     const exp = await prisma.homeReportExport.findUnique({ where: { id: exportId } });
 
-    if (!exp) return res.status(404).json({ message: 'Report export not found' });
-    if (exp.userId !== userId) return res.status(403).json({ message: 'Forbidden' });
+    if (!exp) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Report export not found' 
+      });
+    }
+    
+    if (exp.userId !== userId) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Forbidden' 
+      });
+    }
+    
     if (exp.status !== 'READY' || !exp.storageBucket || !exp.storageKey) {
-      return res.status(409).json({ message: 'Report not ready' });
+      return res.status(409).json({ 
+        success: false,
+        message: 'Report not ready' 
+      });
     }
 
     await prisma.homeReportExportEvent.create({
@@ -88,10 +116,17 @@ export async function downloadHomeReportExport(req: Request, res: Response) {
       expiresInSeconds: 60,
     });
 
-    return res.json({ url });
+    // ✅ FIX: Return standard format
+    return res.json({ 
+      success: true,
+      data: { url } 
+    });
   } catch (error: any) {
     console.error('[downloadHomeReportExport] Error:', error);
-    return res.status(500).json({ message: error.message || 'Failed to download' });
+    return res.status(500).json({ 
+      success: false,
+      message: error.message || 'Failed to download' 
+    });
   }
 } 
 
@@ -104,8 +139,19 @@ export async function createShareLinkForReport(req: Request, res: Response) {
       where: { id: exportId },
     });
 
-    if (!exp) return res.status(404).json({ message: 'Report export not found' });
-    if (exp.userId !== userId) return res.status(403).json({ message: 'Forbidden' });
+    if (!exp) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Report export not found' 
+      });
+    }
+    
+    if (exp.userId !== userId) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Forbidden' 
+      });
+    }
 
     const { expiresInDays = 14 } = req.body ?? {};
     const token = buildShareToken();
@@ -127,13 +173,20 @@ export async function createShareLinkForReport(req: Request, res: Response) {
       },
     });
 
+    // ✅ FIX: Return standard format
     return res.json({
-      shareToken: updated.shareToken,
-      shareExpiresAt: updated.shareExpiresAt,
+      success: true,
+      data: {
+        shareToken: updated.shareToken,
+        shareExpiresAt: updated.shareExpiresAt,
+      }
     });
   } catch (error: any) {
     console.error('[createShareLinkForReport] Error:', error);
-    return res.status(500).json({ message: error.message || 'Failed to create share link' });
+    return res.status(500).json({ 
+      success: false,
+      message: error.message || 'Failed to create share link' 
+    });
   }
 }
 
@@ -146,8 +199,19 @@ export async function revokeShareLinkForReport(req: Request, res: Response) {
       where: { id: exportId },
     });
 
-    if (!exp) return res.status(404).json({ message: 'Report export not found' });
-    if (exp.userId !== userId) return res.status(403).json({ message: 'Forbidden' });
+    if (!exp) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Report export not found' 
+      });
+    }
+    
+    if (exp.userId !== userId) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Forbidden' 
+      });
+    }
 
     await prisma.homeReportExport.update({
       where: { id: exportId },
@@ -158,10 +222,17 @@ export async function revokeShareLinkForReport(req: Request, res: Response) {
       data: { reportId: exportId, type: 'SHARE_REVOKED' },
     });
 
-    return res.json({ ok: true });
+    // ✅ FIX: Return standard format
+    return res.json({ 
+      success: true,
+      data: { ok: true } 
+    });
   } catch (error: any) {
     console.error('[revokeShareLinkForReport] Error:', error);
-    return res.status(500).json({ message: error.message || 'Failed to revoke share link' });
+    return res.status(500).json({ 
+      success: false,
+      message: error.message || 'Failed to revoke share link' 
+    });
   }
 }
 
@@ -173,13 +244,32 @@ export async function downloadHomeReportByShareToken(req: Request, res: Response
       where: { shareToken: token },
     });
 
-    if (!exp) return res.status(404).json({ message: 'Share link not found' });
-    if (exp.shareRevokedAt) return res.status(410).json({ message: 'Share link revoked' });
-    if (exp.shareExpiresAt && new Date() > exp.shareExpiresAt) {
-      return res.status(410).json({ message: 'Share link expired' });
+    if (!exp) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Share link not found' 
+      });
     }
+    
+    if (exp.shareRevokedAt) {
+      return res.status(410).json({ 
+        success: false,
+        message: 'Share link revoked' 
+      });
+    }
+    
+    if (exp.shareExpiresAt && new Date() > exp.shareExpiresAt) {
+      return res.status(410).json({ 
+        success: false,
+        message: 'Share link expired' 
+      });
+    }
+    
     if (exp.status !== 'READY' || !exp.storageBucket || !exp.storageKey) {
-      return res.status(409).json({ message: 'Report not ready' });
+      return res.status(409).json({ 
+        success: false,
+        message: 'Report not ready' 
+      });
     }
 
     await prisma.homeReportExportEvent.create({
@@ -192,9 +282,16 @@ export async function downloadHomeReportByShareToken(req: Request, res: Response
       expiresInSeconds: 60,
     });
 
-    return res.json({ url });
+    // ✅ FIX: Return standard format
+    return res.json({ 
+      success: true,
+      data: { url } 
+    });
   } catch (error: any) {
     console.error('[downloadHomeReportByShareToken] Error:', error);
-    return res.status(500).json({ message: error.message || 'Failed to download via share token' });
+    return res.status(500).json({ 
+      success: false,
+      message: error.message || 'Failed to download via share token' 
+    });
   }
 }
