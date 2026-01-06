@@ -160,20 +160,19 @@ async function buildReportSnapshot(args: { userId: string; propertyId: string; s
     meta: {
       generatedAt: new Date().toISOString(),
       propertyId,
-      templateVersion: 1,
+      templateVersion: 2,
       dataVersion: 1,
     },
     property: {
       id: property.id,
       nickname: (property as any).nickname ?? null,
-      addressLine1: (property as any).addressLine1 ?? null,
-      addressLine2: (property as any).addressLine2 ?? null,
+      addressLine1: (property as any).address ?? null,
       city: (property as any).city ?? null,
       state: (property as any).state ?? null,
       zipCode: (property as any).zipCode ?? null,
       propertyType: (property as any).propertyType ?? null,
       yearBuilt: (property as any).yearBuilt ?? null,
-      livingAreaSqft: (property as any).livingAreaSqft ?? null,
+      livingAreaSqft: (property as any).propertySize ?? null,
     },
     inventory: {
       rooms: property.inventoryRooms?.map((r: any) => ({

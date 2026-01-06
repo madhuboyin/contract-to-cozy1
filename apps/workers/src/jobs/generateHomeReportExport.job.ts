@@ -22,8 +22,7 @@ async function buildReportSnapshot(propertyId: string) {
   if (!property) throw new Error('Property not found');
 
   // Adjust field names below if your Property model differs (addressLine1 vs street1, zip vs zipCode, etc.)
-  const addressLine1 = (property as any).addressLine1 ?? null;
-  const addressLine2 = (property as any).addressLine2 ?? null;
+  const addressLine1 = (property as any).address ?? null;
   const city = (property as any).city ?? null;
   const state = (property as any).state ?? null;
   const zipCode = (property as any).zipCode ?? (property as any).zip ?? null;
@@ -43,13 +42,12 @@ async function buildReportSnapshot(propertyId: string) {
       id: property.id,
       nickname: (property as any).nickname ?? null,
       addressLine1,
-      addressLine2,
       city,
       state,
       zipCode,
       propertyType: (property as any).propertyType ?? null,
       yearBuilt: (property as any).yearBuilt ?? null,
-      livingAreaSqft: (property as any).livingAreaSqft ?? null,
+      livingAreaSqft: (property as any).propertySize ?? null,
     },
 
     inventory: {
