@@ -641,7 +641,8 @@ model User {
   notifications    Notification[]
   favorites        Favorite[]
   homeReportExports HomeReportExport[]
-  claimsCreated Claim[]
+  claimsCreated        Claim[]
+  claimTimelineEvents  ClaimTimelineEvent[]
   
   @@index([email])
   @@index([role])
@@ -994,6 +995,7 @@ model Property {
   homeReportExports HomeReportExport[]
 
   claims Claim[]
+  claimTimelineEvents ClaimTimelineEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1324,6 +1326,7 @@ model Document {
   inventoryItemId  String? // NEW: Link to an InventoryItem record
   inventoryItem    InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
   homeReportExports HomeReportExport[]
+  claimDocuments ClaimDocument[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2456,6 +2459,7 @@ model ClaimDocument {
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   checklistPrimaryFor ClaimChecklistItem[] @relation("ClaimChecklistPrimaryDoc")
+  timelineEvents ClaimTimelineEvent[]
 
   @@unique([claimId, documentId])
   @@index([claimId, type])
