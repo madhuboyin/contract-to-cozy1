@@ -2456,6 +2456,7 @@ model ClaimDocument {
   claim      Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
+  // FIX: Add the relation name here to match ClaimChecklistItem
   checklistPrimaryFor ClaimChecklistItem[] @relation("ClaimChecklistPrimaryDoc")
 
   @@unique([claimId, documentId])
