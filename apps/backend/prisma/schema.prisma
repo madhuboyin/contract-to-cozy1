@@ -2413,28 +2413,26 @@ model Claim {
 }
 
 model ClaimChecklistItem {
-  id          String @id @default(uuid())
-  claimId     String
-
-  orderIndex  Int
-  title       String
-  description String?
-  required    Boolean @default(false)
-
-  status      ClaimChecklistStatus @default(OPEN)
-  completedAt DateTime?
-  completedBy String? // userId
-
-  // Optional: link to a ClaimDocument that satisfies this item
+  id                     String               @id @default(uuid())
+  claimId                String
+  orderIndex             Int
+  title                  String
+  description            String?
+  required               Boolean              @default(false)
+  status                 ClaimChecklistStatus @default(OPEN)
+  completedAt            DateTime?
+  completedBy            String?
+  
+  // 1. Ensure the ID field exists
   primaryClaimDocumentId String?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
 
-  claim       Claim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  claim                  Claim                @relation(fields: [claimId], references: [id], onDelete: Cascade)
 
-  primaryClaimDocument ClaimDocument?
-    @relation("ClaimChecklistPrimaryDoc", fields: [primaryClaimDocumentId], references: [id], onDelete: SetNull)
+  // 2. Ensure the relation name and fields/references match perfectly
+  primaryClaimDocument   ClaimDocument?       @relation("ClaimChecklistPrimaryDoc", fields: [primaryClaimDocumentId], references: [id], onDelete: SetNull)
 
   @@unique([claimId, orderIndex])
   @@index([claimId, status])
@@ -2442,21 +2440,19 @@ model ClaimChecklistItem {
 }
 
 model ClaimDocument {
-  id         String @id @default(uuid())
-  claimId    String
-  documentId String
+  id                  String               @id @default(uuid())
+  claimId             String
+  documentId          String
+  type                ClaimDocumentType    @default(OTHER)
+  title               String?
+  notes               String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
-  type       ClaimDocumentType @default(OTHER)
-  title      String?
-  notes      String?
+  claim               Claim                @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  document            Document             @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  claim      Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-
-  // FIX: Add the relation name here to match ClaimChecklistItem
+  // 3. This back-relation MUST have the exact same name string
   checklistPrimaryFor ClaimChecklistItem[] @relation("ClaimChecklistPrimaryDoc")
 
   @@unique([claimId, documentId])
