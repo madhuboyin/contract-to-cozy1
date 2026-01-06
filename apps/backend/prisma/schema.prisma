@@ -640,6 +640,7 @@ model User {
   messages         Message[]
   notifications    Notification[]
   favorites        Favorite[]
+  homeReportExports HomeReportExport[]
   
   @@index([email])
   @@index([role])
@@ -1319,6 +1320,7 @@ model Document {
   insurancePolicy  InsurancePolicy? @relation(fields: [policyId], references: [id], onDelete: Cascade)
   inventoryItemId  String? // NEW: Link to an InventoryItem record
   inventoryItem    InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  homeReportExports HomeReportExport[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
