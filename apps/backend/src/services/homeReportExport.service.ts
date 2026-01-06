@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { renderHomeReportPackPdf } from './pdf/renderHomeReportPackPdf';
 import { uploadPdfBuffer } from './storage/reportStorage';
+import { presignGetObject } from './storage/presign';
 
 type CreateExportArgs = {
   userId: string;
@@ -70,6 +71,13 @@ export async function createExportAndGeneratePdf(args: CreateExportArgs) {
       userId,
     });
 
+    // Generate presigned URL for document record
+    const fileUrl = await presignGetObject({
+      bucket: uploaded.bucket,
+      key: uploaded.key,
+      expiresInSeconds: 7 * 24 * 60 * 60, // 7 days
+    });
+
     // 6) create Document row
     const doc = await prisma.document.create({
       data: {
@@ -78,7 +86,7 @@ export async function createExportAndGeneratePdf(args: CreateExportArgs) {
         type: 'HOME_REPORT_PDF',
         name: fileName,
         description: `Generated home report (${type})`,
-        fileUrl: uploaded.fileUrl,
+        fileUrl,
         fileSize: uploaded.fileSizeBytes,
         mimeType: 'application/pdf',
       },
@@ -103,7 +111,7 @@ export async function createExportAndGeneratePdf(args: CreateExportArgs) {
       exportId: exp.id,
       status: 'READY',
       documentId: doc.id,
-      fileUrl: uploaded.fileUrl,
+      fileUrl,
     };
   } catch (err: any) {
     await prisma.homeReportExport.update({
