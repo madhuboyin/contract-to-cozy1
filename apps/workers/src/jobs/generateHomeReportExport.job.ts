@@ -43,7 +43,7 @@ async function buildReportSnapshot(propertyId: string) {
     property: {
       id: property.id,
       nickname: (property as any).nickname ?? null,
-      addressLine1,
+      address: (property as any).address ?? null,
       city,
       state,
       zipCode,
