@@ -14,6 +14,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import Link from "next/link";
 import { Edit, Zap, Shield, FileText, ArrowLeft, Home, Calendar, Ruler, DollarSign, Wrench, Settings, ShieldAlert, ArrowRight, TrendingUp } from "lucide-react"; 
 import { toast } from "@/components/ui/use-toast";
+import { FileDown } from "lucide-react";
+import ReportsClient from "./reports/ReportsClient";
 
 
 
@@ -546,6 +548,32 @@ const DocumentsTab = ({ propertyId }: { propertyId: string }) => (
   </Card>
 );
 
+const ReportsTab = ({ propertyId }: { propertyId: string }) => (
+  <Card>
+    <CardHeader className="p-4">
+      <CardTitle className="font-heading text-xl flex items-center gap-2">
+        <FileText className="h-5 w-5 text-blue-600" />
+        Home Reports (PDF)
+      </CardTitle>
+      <CardDescription className="font-body text-sm">
+        Generate printable/shareable PDFs for insurance, claims, resale, and lender/HOA requests.
+      </CardDescription>
+    </CardHeader>
+
+    <CardContent className="p-4 pt-0 space-y-3">
+      <p className="font-body text-base text-gray-700">
+        Create a Home Report Pack including summary, inventory replacement values, maintenance outlook, and coverage snapshot.
+      </p>
+
+      <Link href={`/dashboard/properties/${propertyId}/reports`} passHref>
+        <Button variant="default">
+          <FileText className="mr-2 h-4 w-4" />
+          Open Reports
+        </Button>
+      </Link>
+    </CardContent>
+  </Card>
+);
 
 export default function PropertyDetailPage() {
   const params = useParams();
@@ -555,7 +583,7 @@ export default function PropertyDetailPage() {
   const initialTab = searchParams.get('tab');
   
   // Updated defaultTab logic to include the new 'financial-efficiency' tab
-  const defaultTab = initialTab && ['overview', 'maintenance', 'risk-protection', 'financial-efficiency', 'documents'].includes(initialTab) 
+  const defaultTab = initialTab && ['overview', 'maintenance', 'risk-protection', 'financial-efficiency', 'documents', 'reports'].includes(initialTab) 
     ? initialTab 
     : 'overview';
 
@@ -659,6 +687,9 @@ export default function PropertyDetailPage() {
             <TabsTrigger value="documents" className="flex items-center gap-2">
               <FileText className="h-4 w-4" /> Documents
             </TabsTrigger>
+            <TabsTrigger value="reports" className="flex items-center gap-2">
+              <FileDown className="h-4 w-4" /> Reports
+            </TabsTrigger>
           </TabsList>
           
           {/* UPDATED: Reduced tab content spacing from mt-6 to mt-4 */}
@@ -682,6 +713,10 @@ export default function PropertyDetailPage() {
           
           <TabsContent value="documents" className="mt-4">
             <DocumentsTab propertyId={property.id} />
+          </TabsContent>
+
+          <TabsContent value="reports" className="mt-4">
+            <ReportsTab propertyId={property.id} />
           </TabsContent>
         </Tabs>
       </DashboardShell>
