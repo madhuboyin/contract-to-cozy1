@@ -1,3 +1,4 @@
+// apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/reports/ReportsClient.tsx
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';

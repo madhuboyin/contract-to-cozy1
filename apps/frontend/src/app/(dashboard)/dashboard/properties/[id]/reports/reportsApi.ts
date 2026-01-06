@@ -1,5 +1,8 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/reports/reportsApi.ts
 
+// ✅ FIXED: Import the main API client which handles base URL and auth
+import { api } from '@/lib/api/client';
+
 export type HomeReportExportStatus = 'PENDING' | 'GENERATING' | 'READY' | 'FAILED' | 'EXPIRED';
 export type HomeReportExportType =
   | 'HOME_SUMMARY'
@@ -29,52 +32,38 @@ type ListExportsResponse = { exports: HomeReportExportDTO[] };
 type DownloadResponse = { url: string };
 type ShareResponse = { shareToken: string; shareExpiresAt: string | null; shareRevokedAt?: string | null };
 
-async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options?.headers || {}),
-    },
-    credentials: 'include',
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `Request failed: ${res.status}`);
-  }
-  return res.json() as Promise<T>;
-}
-
 /** POST /api/properties/:propertyId/reports/exports */
 export async function createHomeReportExport(propertyId: string, body?: { type?: HomeReportExportType; sections?: any }) {
-  return fetchJSON<CreateExportResponse>(`/api/properties/${propertyId}/reports/exports`, {
-    method: 'POST',
-    body: JSON.stringify(body ?? { type: 'HOME_REPORT_PACK' }),
-  });
+  const response = await api.post<CreateExportResponse>(
+    `/api/properties/${propertyId}/reports/exports`, 
+    body ?? { type: 'HOME_REPORT_PACK' }
+  );
+  return response.data;
 }
 
 /** GET /api/properties/:propertyId/reports/exports */
 export async function listHomeReportExports(propertyId: string) {
-  return fetchJSON<ListExportsResponse>(`/api/properties/${propertyId}/reports/exports`, { method: 'GET' });
+  const response = await api.get<ListExportsResponse>(`/api/properties/${propertyId}/reports/exports`);
+  return response.data;
 }
 
 /** GET /api/reports/exports/:exportId/download  -> { url } */
 export async function getDownloadUrl(exportId: string) {
-  return fetchJSON<DownloadResponse>(`/api/reports/exports/${exportId}/download`, { method: 'GET' });
+  const response = await api.get<DownloadResponse>(`/api/reports/exports/${exportId}/download`);
+  return response.data;
 }
 
 /** POST /api/reports/exports/:exportId/share */
 export async function createShareLink(exportId: string, expiresInDays = 14) {
-  return fetchJSON<ShareResponse>(`/api/reports/exports/${exportId}/share`, {
-    method: 'POST',
-    body: JSON.stringify({ expiresInDays }),
-  });
+  const response = await api.post<ShareResponse>(
+    `/api/reports/exports/${exportId}/share`,
+    { expiresInDays }
+  );
+  return response.data;
 }
 
 /** POST /api/reports/exports/:exportId/share/revoke */
 export async function revokeShareLink(exportId: string) {
-  return fetchJSON<{ ok: boolean }>(`/api/reports/exports/${exportId}/share/revoke`, {
-    method: 'POST',
-  });
+  const response = await api.post<{ ok: boolean }>(`/api/reports/exports/${exportId}/share/revoke`);
+  return response.data;
 }
