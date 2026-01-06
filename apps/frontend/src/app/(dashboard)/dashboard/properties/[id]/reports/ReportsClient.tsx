@@ -106,7 +106,7 @@ export default function ReportsClient() {
     setError(null);
     try {
       const { url } = await getDownloadUrl(exportId);
-      window.location.href = url;
+      window.open(url, '_blank', 'noopener,noreferrer');
     } catch (e: any) {
       setError(e?.message || 'Failed to download');
     }
