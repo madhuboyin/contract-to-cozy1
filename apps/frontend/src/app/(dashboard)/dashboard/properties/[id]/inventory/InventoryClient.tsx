@@ -1,6 +1,6 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/inventory/InventoryClient.tsx
 'use client';
-
+import { api } from '@/lib/api/client';
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -28,7 +28,6 @@ export default function InventoryClient() {
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL; // must already exist in your app
 
   const [gapLoading, setGapLoading] = React.useState(false);
   const [gapError, setGapError] = React.useState<string | null>(null);
@@ -43,29 +42,30 @@ export default function InventoryClient() {
         setGapLoading(true);
         setGapError(null);
   
-        const res = await fetch(
-          `${API_BASE}/api/properties/${propertyId}/inventory/coverage-gaps`,
-          { credentials: 'include', cache: 'no-store' }
-        );
-        const json = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(json?.message || `Failed (${res.status})`);
-  
-        const gaps = json?.data?.gaps || [];
-        const ids = new Set<string>(gaps.map((g: any) => g.inventoryItemId));
+        // 2. REPLACE the native fetch with the api client
+        // Note: use api.get() which handles headers and base URLs automatically
+        const response = await api.get(`/api/properties/${propertyId}/inventory/coverage-gaps`);
   
         if (!cancelled) {
+          // The api client returns the data object directly on success
+          const gaps = response.data?.gaps || [];
+          const ids = new Set<string>(gaps.map((g: any) => g.inventoryItemId));
+          
           setGapIds(ids);
-          setGapCounts(json?.data?.counts || null);
+          setGapCounts(response.data?.counts || null);
         }
       } catch (e: any) {
-        if (!cancelled) setGapError(e?.message || 'Failed to load coverage gaps');
+        if (!cancelled) {
+          // The api client throws an APIError with a clear message
+          setGapError(e?.message || 'Failed to load coverage gaps');
+        }
       } finally {
         if (!cancelled) setGapLoading(false);
       }
     })();
   
     return () => { cancelled = true; };
-  }, [API_BASE, propertyId]);
+  }, [propertyId]); 
 
   async function refreshAll() {
     if (!propertyId) return;
