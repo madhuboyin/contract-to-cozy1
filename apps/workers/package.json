@@ -9,6 +9,7 @@
     "postinstall": "npx prisma generate && cp -r ../backend/node_modules/@prisma/client node_modules/ && mkdir -p node_modules/.prisma && cp -r ../backend/node_modules/.prisma/client node_modules/.prisma/ || true"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.962.0",
     "@prisma/client": "^5.22.0",
     "bullmq": "^5.65.0",
     "dotenv": "^16.3.1",

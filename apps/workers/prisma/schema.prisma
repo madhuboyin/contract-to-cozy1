@@ -209,6 +209,158 @@ enum NotificationTiming {
   LATE
 }
 
+
+enum InventoryItemCategory {
+  APPLIANCE
+  HVAC
+  PLUMBING
+  ELECTRICAL
+  ROOF_EXTERIOR
+  SAFETY
+  SMART_HOME
+  FURNITURE
+  ELECTRONICS
+  OTHER
+}
+
+enum InventoryItemCondition {
+  NEW
+  GOOD
+  FAIR
+  POOR
+  UNKNOWN
+}
+
+model InventoryRoom {
+  id         String   @id @default(uuid())
+  propertyId String
+
+  name       String
+  floorLevel Int?
+  sortOrder  Int      @default(0)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  property   Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  items      InventoryItem[]
+
+  @@index([propertyId])
+  @@unique([propertyId, name])
+  @@map("inventory_rooms")
+}
+
+model InventoryItem {
+  id          String   @id @default(uuid())
+  propertyId  String
+  roomId      String?
+
+  // Optional mapping to your existing "system asset" model
+  homeAssetId String?
+
+  // Optional linkage to existing coverage models
+  warrantyId        String?
+  insurancePolicyId String?
+
+  // Core fields
+  name       String
+  category   InventoryItemCategory  @default(OTHER)
+  condition  InventoryItemCondition @default(UNKNOWN)
+
+  // Optional identity fields
+  brand      String?
+  model      String?
+  serialNo   String?
+
+  // Dates
+  installedOn     DateTime?
+  purchasedOn     DateTime?
+  lastServicedOn  DateTime?
+
+  // Costs (use Int cents for consistency; your schema also uses Decimal in places)
+  purchaseCostCents     Int?
+  replacementCostCents  Int?
+  currency              String @default("USD")
+
+  // Notes + tags
+  notes     String?
+  tags      String[] @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  property        Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  room            InventoryRoom?  @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  homeAsset       HomeAsset?      @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
+  warranty        Warranty?       @relation(fields: [warrantyId], references: [id], onDelete: SetNull)
+  insurancePolicy InsurancePolicy? @relation(fields: [insurancePolicyId], references: [id], onDelete: SetNull)
+
+  // Reuse your existing Document table for receipts/photos/manuals
+  documents        Document[]
+  insuranceQuoteRequests InsuranceQuoteRequest[]
+
+  @@index([propertyId])
+  @@index([roomId])
+  @@index([homeAssetId])
+  @@index([warrantyId])
+  @@index([insurancePolicyId])
+
+  // Filter-friendly composite indexes
+  @@index([propertyId, category])
+  @@index([propertyId, roomId])
+
+  @@map("inventory_items")
+}
+
+enum QuoteRequestStatus {
+  NEW
+  SUBMITTED
+  IN_PROGRESS
+  CLOSED
+}
+
+enum QuoteRequestSource {
+  COVERAGE_GAP
+  MANUAL
+}
+
+model InsuranceQuoteRequest {
+  id                 String   @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String
+  inventoryItemId    String?
+
+  // Context
+  source             QuoteRequestSource @default(COVERAGE_GAP)
+  gapType            String?
+  exposureCents      Int?
+  currency           String   @default("USD")
+
+  // User input
+  preferredContact   String?  // "EMAIL" | "SMS" | "PHONE" (keep string to avoid churn)
+  contactEmail       String?
+  contactPhone       String?
+  zipCode            String?
+  notes              String?
+
+  status             QuoteRequestStatus @default(NEW)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  inventoryItem    InventoryItem?   @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+
+  @@index([homeownerProfileId])
+  @@index([propertyId])
+  @@index([status])
+  @@map("insurance_quote_requests")
+}
+
+
 // NEW: Service 
 // category configuration for segment targeting
 model ServiceCategoryConfig {
@@ -414,6 +566,7 @@ enum DocumentType {
   VIDEO
   INSURANCE_CERTIFICATE
   LICENSE
+  HOME_REPORT_PDF
   OTHER
 }
 
@@ -487,6 +640,7 @@ model User {
   messages         Message[]
   notifications    Notification[]
   favorites        Favorite[]
+  homeReportExports HomeReportExport[]
   
   @@index([email])
   @@index([role])
@@ -556,6 +710,7 @@ model HomeownerProfile {
   warranties  Warranty[]
   insurancePolicies InsurancePolicy[]
   expenses    Expense[]
+  insuranceQuoteRequests InsuranceQuoteRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -831,6 +986,11 @@ model Property {
   seasonalChecklists       SeasonalChecklist[]
   seasonalChecklistItems   SeasonalChecklistItem[]
   climateSetting           PropertyClimateSetting?
+
+  inventoryRooms InventoryRoom[]
+  inventoryItems InventoryItem[]
+  insuranceQuoteRequests InsuranceQuoteRequest[]
+  homeReportExports HomeReportExport[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1158,6 +1318,9 @@ model Document {
   property         Property? @relation(fields: [propertyId], references: [id])
   warranty         Warranty? @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
   insurancePolicy  InsurancePolicy? @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  inventoryItemId  String? // NEW: Link to an InventoryItem record
+  inventoryItem    InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  homeReportExports HomeReportExport[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1167,6 +1330,7 @@ model Document {
   @@index([propertyId]) // NEW INDEX
   @@index([warrantyId]) // NEW INDEX
   @@index([policyId])   // NEW INDEX
+  @@index([inventoryItemId]) // NEW INDEX
   @@map("documents")
 }
 
@@ -1255,6 +1419,7 @@ model Warranty {
   
   // PHASE 1: NEW RELATION
   maintenanceTasks PropertyMaintenanceTask[]
+  inventoryItems    InventoryItem[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1288,6 +1453,7 @@ model InsurancePolicy {
   homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
   property           Property? @relation(fields: [propertyId], references: [id])
   documents          Document[]
+  inventoryItems     InventoryItem[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1342,6 +1508,7 @@ model HomeAsset {
   
   // PHASE 1: NEW RELATION
   maintenanceTasks PropertyMaintenanceTask[]
+  inventoryItems InventoryItem[]
   
   @@index([propertyId])
   @@unique([propertyId, assetType]) // Usually only one furnace per house
@@ -2015,6 +2182,105 @@ enum DeliveryStatus {
   FAILED
   SKIPPED
 }
+
+// ============================================================================
+// PDF REPORTS
+// ============================================================================
+
+enum HomeReportExportType {
+  HOME_SUMMARY
+  INVENTORY
+  MAINTENANCE_HISTORY
+  COVERAGE_SNAPSHOT
+  HOME_REPORT_PACK
+}
+
+enum HomeReportExportStatus {
+  PENDING
+  GENERATING
+  READY
+  FAILED
+  EXPIRED
+}
+
+enum HomeReportExportEventType {
+  CREATED
+  GENERATION_STARTED
+  GENERATED
+  DOWNLOADED
+  SHARED
+  SHARE_REVOKED
+  FAILED
+  EXPIRED
+}
+
+model HomeReportExport {
+  id         String @id @default(uuid())
+  userId     String
+  propertyId String
+
+  type       HomeReportExportType
+  status     HomeReportExportStatus @default(PENDING)
+
+  // Section toggles / configuration for report-pack
+  sections   Json?
+
+  // Reproducibility (prevents “why did this change later?”)
+  templateVersion Int @default(1)
+  dataVersion     Int @default(1)
+  snapshot        Json? // store the final computed DTO used to render
+
+  // Optional: store generated PDF as a Document row (recommended)
+  documentId String?
+  document   Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  // Shareable link support (no second table needed)
+  shareToken     String?   @unique
+  shareExpiresAt DateTime?
+  shareRevokedAt DateTime?
+
+  storageBucket String?
+  storageKey    String?  @unique
+  expiresAt     DateTime?
+
+
+  // Lifecycle
+  requestedAt DateTime @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  errorMessage String?
+
+  // Useful metadata
+  locale   String?
+  timezone String?
+
+  // Relations
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  events   HomeReportExportEvent[]
+
+  @@index([userId, requestedAt])
+  @@index([propertyId, requestedAt])
+  @@index([status, requestedAt])
+  @@index([shareToken])
+
+  @@map("home_report_exports")
+}
+
+model HomeReportExportEvent {
+  id        String @id @default(uuid())
+  reportId  String
+  type      HomeReportExportEventType
+  createdAt DateTime @default(now())
+  meta      Json?
+
+  report HomeReportExport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId, createdAt])
+  @@map("home_report_export_events")
+}
+
+
 
 // ============================================================================
 // FAVORITES
