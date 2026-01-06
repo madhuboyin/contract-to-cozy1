@@ -2254,6 +2254,10 @@ model HomeReportExport {
   locale   String?
   timezone String?
 
+  deletedAt       DateTime?
+  deletedByUserId String?
+  regeneratedFromId String?
+
   // Relations
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
