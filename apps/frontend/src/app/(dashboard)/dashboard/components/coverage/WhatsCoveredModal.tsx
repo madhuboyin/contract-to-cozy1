@@ -1,12 +1,12 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/coverage/WhatsCoveredModal.tsx
 'use client';
-
+import { api } from '@/lib/api/client';
 import React, { useEffect, useState } from 'react';
 
 export default function WhatsCoveredModal(props: {
   open: boolean;
   onClose: () => void;
-  apiBase: string;
+  apiBase: string; // Keep for prop compatibility, though internal client handles base URL
   propertyId: string;
   itemId: string;
 }) {
@@ -15,25 +15,37 @@ export default function WhatsCoveredModal(props: {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!props.open) return;
+    if (!props.open || !props.itemId || !props.propertyId) return;
+
+    let cancelled = false;
+
     (async () => {
-      setLoading(true);
-      setErr(null);
       try {
-        const res = await fetch(
-          `${props.apiBase}/api/properties/${props.propertyId}/inventory/items/${props.itemId}/coverage-summary`,
-          { credentials: 'include', cache: 'no-store' }
+        setLoading(true);
+        setErr(null);
+
+        // 2. REFACTORED: Use the api client instead of native fetch
+        // The client handles Authorization headers and base URLs automatically
+        const response = await api.get(
+          `/api/properties/${props.propertyId}/inventory/items/${props.itemId}/coverage-summary`
         );
-        const json = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(json?.message || `Failed (${res.status})`);
-        setData(json.data);
+
+        if (!cancelled) {
+          // The api.get helper returns the 'data' property from the JSON response
+          setData(response.data);
+        }
       } catch (e: any) {
-        setErr(e?.message || 'Failed to load');
+        if (!cancelled) {
+          // The api client throws APIError with standardized error messages
+          setErr(e?.message || 'Failed to load coverage summary');
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
-  }, [props.open, props.apiBase, props.propertyId, props.itemId]);
+
+    return () => { cancelled = true; };
+  }, [props.open, props.propertyId, props.itemId])
 
   if (!props.open) return null;
 
