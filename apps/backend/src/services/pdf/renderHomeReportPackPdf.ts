@@ -20,7 +20,12 @@ export async function renderHomeReportPackPdf(
     snapshot?.property?.address ||
     'Home Report';
 
-  const browser = await chromium.launch();
+    const browser = await chromium.launch({
+      executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium',
+      args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    });
+    console.log('CHROMIUM_PATH', process.env.CHROMIUM_PATH);
+    console.log('args', ['--no-sandbox', '--disable-dev-shm-usage']);
   try {
     const page = await browser.newPage();
 

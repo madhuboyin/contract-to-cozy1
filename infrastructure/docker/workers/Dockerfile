@@ -1,43 +1,67 @@
 # ============================================================================
-# Stage 1: Builder - Install dependencies and compile TypeScript
+# Stage 1: Builder - Install deps (including dev), generate Prisma, compile TS
 # ============================================================================
 FROM node:20-bullseye-slim AS builder
 WORKDIR /app
 
-# Install build dependencies (OpenSSL for Prisma)
-RUN apt-get update && \
-    apt-get install -y openssl && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Build deps (openssl for prisma)
+RUN apt-get update && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
 
-# Copy package files for both workers and backend
+# Copy package files for both workers and backend (for prisma client)
 COPY apps/workers/package*.json ./apps/workers/
 COPY apps/backend/package*.json ./apps/backend/
 COPY apps/backend/prisma ./apps/backend/prisma
 
-# Install workers dependencies
-WORKDIR /app/apps/workers
-RUN npm ci
-
-# Install backend dependencies and generate Prisma client
+# Install backend deps + generate prisma client
 WORKDIR /app/apps/backend
 RUN npm ci
 RUN npx prisma generate
 
-# ============================================================================
-# Stage 2: Runner - Production image with Playwright/Chromium support
-# ============================================================================
-FROM node:20-bullseye-slim
+# Install worker deps (dev deps included so TS build works)
+WORKDIR /app/apps/workers
+RUN npm ci
 
-# Set WORKDIR to the worker's root directory
+# Copy shared backend source files into worker source tree
+RUN mkdir -p src/shared/backend/utils src/shared/backend/config src/shared/backend/services/storage src/shared/backend/services/pdf/templates
+COPY apps/backend/src/utils/riskCalculator.util.ts src/shared/backend/utils/
+COPY apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils/
+COPY apps/backend/src/config/risk-constants.ts src/shared/backend/config/
+COPY apps/backend/src/services/storage/reportStorage.ts src/shared/backend/services/storage/
+COPY apps/backend/src/services/storage/s3Client.ts src/shared/backend/services/storage/
+COPY apps/backend/src/services/pdf/renderHomeReportPackPdf.ts src/shared/backend/services/pdf/
+COPY apps/backend/src/services/pdf/templates/homeReportPackHtml.ts src/shared/backend/services/pdf/templates/
+
+# Copy worker source code + TS config
+COPY apps/workers/src ./src
+COPY apps/workers/tsconfig.json ./tsconfig.json
+
+# Rewrite import paths (same as you had, but do it in builder)
+RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/backend\/utils\/riskCalculator\.util/g' src/worker.ts && \
+    sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/FinancialCalculator\.util/\.\/shared\/backend\/utils\/FinancialCalculator\.util/g' src/worker.ts && \
+    sed -i 's/\.\.\/\.\.\/backend\/src\/config\/risk-constants/\.\/shared\/backend\/config\/risk-constants/g' src/worker.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/storage\/reportStorage/\.\.\/shared\/backend\/services\/storage\/reportStorage/g' src/jobs/generateHomeReportExport.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/pdf\/renderHomeReportPackPdf/\.\.\/shared\/backend\/services\/pdf\/renderHomeReportPackPdf/g' src/jobs/generateHomeReportExport.job.ts
+
+# Compile TS -> dist/
+RUN npx tsc --project ./tsconfig.json
+
+# Prune to production dependencies
+RUN npm prune --omit=dev
+
+
+# ============================================================================
+# Stage 2: Runtime - Small image with system Chromium + prod deps + dist
+# ============================================================================
+FROM node:20-bullseye-slim AS runner
 WORKDIR /app/apps/workers
 
-# Install runtime dependencies including Playwright/Chromium requirements
-RUN apt-get update && \
-    apt-get install -y \
-    # OpenSSL for Prisma
+# Install only runtime libs + Chromium (NO playwright browser downloads)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl \
-    # Playwright/Chromium dependencies
+    chromium \
+    ca-certificates \
+    fonts-liberation \
     libnss3 \
     libnspr4 \
     libatk1.0-0 \
@@ -54,62 +78,23 @@ RUN apt-get update && \
     libcairo2 \
     libasound2 \
     libatspi2.0-0 \
-    # Additional tools
-    wget \
-    curl \
-    fonts-liberation \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/*
 
-# Copy package files and install production dependencies
-COPY apps/workers/package*.json ./
-RUN npm ci --only=production
+ENV NODE_ENV=production
 
-# Copy Prisma client from builder
+# Critical: prevent Playwright from downloading browsers at runtime
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV CHROMIUM_PATH=/usr/bin/chromium
+
+# Copy prod node_modules + dist from builder
+COPY --from=builder /app/apps/workers/package*.json ./
+COPY --from=builder /app/apps/workers/node_modules ./node_modules
 COPY --from=builder /app/apps/backend/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/apps/backend/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/apps/workers/dist ./dist
 
-# Copy shared backend source files into worker's source tree
-RUN mkdir -p src/shared/backend/utils src/shared/backend/config src/shared/backend/services/storage src/shared/backend/services/pdf/templates
-COPY apps/backend/src/utils/riskCalculator.util.ts src/shared/backend/utils/
-COPY apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils/
-COPY apps/backend/src/config/risk-constants.ts src/shared/backend/config/
-COPY apps/backend/src/services/storage/reportStorage.ts src/shared/backend/services/storage/
-COPY apps/backend/src/services/storage/s3Client.ts src/shared/backend/services/storage/
-COPY apps/backend/src/services/pdf/renderHomeReportPackPdf.ts src/shared/backend/services/pdf/
-COPY apps/backend/src/services/pdf/templates/homeReportPackHtml.ts src/shared/backend/services/pdf/templates/
-
-# Copy worker source code and TypeScript config
-COPY apps/workers/src ./src
-COPY apps/workers/tsconfig.json ./tsconfig.json 
-
-# Install TypeScript and type definitions for compilation
-RUN npm install --save-dev typescript @types/node @types/node-cron
-
-# Rewrite import paths to use local shared directory
-RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/backend\/utils\/riskCalculator\.util/g' src/worker.ts && \
-    sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/FinancialCalculator\.util/\.\/shared\/backend\/utils\/FinancialCalculator\.util/g' src/worker.ts && \
-    sed -i 's/\.\.\/\.\.\/backend\/src\/config\/risk-constants/\.\/shared\/backend\/config\/risk-constants/g' src/worker.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/storage\/reportStorage/\.\.\/shared\/backend\/services\/storage\/reportStorage/g' src/jobs/generateHomeReportExport.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/pdf\/renderHomeReportPackPdf/\.\.\/shared\/backend\/services\/pdf\/renderHomeReportPackPdf/g' src/jobs/generateHomeReportExport.job.ts
-
-# Compile TypeScript to JavaScript
-RUN npx tsc --project ./tsconfig.json \
-    2>&1 | tee /tmp/tsc-output.log || (cat /tmp/tsc-output.log && exit 1)
-
-# Install Playwright browsers (as root before switching to non-root user)
-RUN npx playwright install chromium --with-deps
-
-# Clean up development dependencies
-RUN npm prune --production
-
-# Set production environment
-ENV NODE_ENV=production
-ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
-
-# Health check for worker process
+# Health check (same as before)
 HEALTHCHECK --interval=60s --timeout=3s --start-period=60s --retries=3 \
   CMD pgrep -f "node dist/worker.js" || exit 1
 
-# Run the worker
 CMD ["node", "dist/worker.js"]
