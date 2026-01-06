@@ -59,15 +59,18 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
           description="Review high-value items missing warranty or insurance coverage."
         />
 
-        {/* Tabs */}
-        <div className="flex items-center gap-2">
+        {/* Modern Segmented Control for Coverage Page */}
+        <div className="inline-flex items-center p-1 bg-black/5 rounded-xl mt-1 border border-black/5">
+          {/* Inactive State (Link) */}
           <Link
             href={`/dashboard/properties/${propertyId}/inventory`}
-            className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+            className="px-4 py-1.5 text-sm font-medium text-black/50 hover:text-black transition-colors duration-200"
           >
             Items
           </Link>
-          <div className="rounded-xl px-3 py-2 text-sm border border-black/10 bg-black/5">
+          
+          {/* Active State (Static Div) */}
+          <div className="px-4 py-1.5 text-sm font-medium bg-white text-black shadow-sm rounded-lg border border-black/5">
             Coverage
           </div>
         </div>
