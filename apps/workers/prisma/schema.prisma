@@ -2201,6 +2201,7 @@ enum HomeReportExportStatus {
   READY
   FAILED
   EXPIRED
+  DELETED
 }
 
 enum HomeReportExportEventType {
@@ -2212,6 +2213,7 @@ enum HomeReportExportEventType {
   SHARE_REVOKED
   FAILED
   EXPIRED
+  DELETED
 }
 
 model HomeReportExport {
@@ -2253,6 +2255,10 @@ model HomeReportExport {
   // Useful metadata
   locale   String?
   timezone String?
+
+  deletedAt       DateTime?
+  deletedByUserId String?
+  regeneratedFromId String?
 
   // Relations
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)

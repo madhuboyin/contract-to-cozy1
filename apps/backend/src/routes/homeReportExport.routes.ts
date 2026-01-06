@@ -1,3 +1,4 @@
+// apps/backend/src/routes/homeReportExport.routes.ts
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
@@ -8,6 +9,8 @@ import {
   downloadHomeReportByShareToken,
   createShareLinkForReport,
   revokeShareLinkForReport,
+  regenerateHomeReportExport,
+  deleteHomeReportExport,
 } from '../controllers/homeReportExport.controller';
 
 
@@ -72,6 +75,26 @@ router.post(
 router.get(
   '/reports/share/:token/download',
   downloadHomeReportByShareToken
+);
+
+/**
+ * Regenerate export by id (owner only)
+ * POST /api/reports/exports/:exportId/regenerate
+ */
+router.post(
+  '/reports/exports/:exportId/regenerate',
+  authenticate,
+  regenerateHomeReportExport
+);
+
+/**
+ * Delete export by id (owner only)
+ * DELETE /api/reports/exports/:exportId
+ */
+router.delete(
+  '/reports/exports/:exportId',
+  authenticate,
+  deleteHomeReportExport
 );
 
 export default router;

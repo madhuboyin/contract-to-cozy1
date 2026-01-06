@@ -3,7 +3,7 @@
 // ✅ FIXED: Import the main API client which handles base URL and auth
 import { api } from '@/lib/api/client';
 
-export type HomeReportExportStatus = 'PENDING' | 'GENERATING' | 'READY' | 'FAILED' | 'EXPIRED';
+export type HomeReportExportStatus = 'PENDING' | 'GENERATING' | 'READY' | 'FAILED' | 'EXPIRED' | 'DELETED';
 export type HomeReportExportType =
   | 'HOME_SUMMARY'
   | 'INVENTORY'
@@ -66,4 +66,31 @@ export async function createShareLink(exportId: string, expiresInDays = 14) {
 export async function revokeShareLink(exportId: string) {
   const response = await api.post<{ ok: boolean }>(`/api/reports/exports/${exportId}/share/revoke`);
   return response.data;
+}
+
+export async function regenerateHomeReportExport(exportId: string) {
+  const res = await fetch(`/api/reports/exports/${exportId}/regenerate`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  const json = await res.json();
+  if (!res.ok || !json?.success) {
+    throw new Error(json?.message || 'Failed to regenerate report');
+  }
+  return json.data; // { exportId, status } (or whatever backend returns)
+}
+
+export async function deleteHomeReportExport(exportId: string) {
+  const res = await fetch(`/api/reports/exports/${exportId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+
+  const json = await res.json();
+  if (!res.ok || !json?.success) {
+    throw new Error(json?.message || 'Failed to delete report');
+  }
+  return json.data; // { ok: true }
 }

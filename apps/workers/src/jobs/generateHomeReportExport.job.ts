@@ -1,7 +1,9 @@
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
+import { HomeReportExportStatus } from '@prisma/client';
 import { uploadPdfBuffer } from '../../../backend/src/services/storage/reportStorage';
 import { renderHomeReportPackPdf } from '../../../backend/src/services/pdf/renderHomeReportPackPdf';
+import { deleteObject } from '../storage/deleteObject';
 
 function sha256(buf: Buffer) {
   return crypto.createHash('sha256').update(buf).digest('hex');
@@ -131,27 +133,44 @@ async function buildReportSnapshot(propertyId: string) {
 
 
 export async function generateHomeReportExportJob(exportId: string) {
-  const exp = await prisma.homeReportExport.findUnique({ where: { id: exportId } });
+  const exp = await prisma.homeReportExport.findUnique({
+    where: { id: exportId },
+  });
+
   if (!exp) return;
 
-  if (exp.status !== 'PENDING') return;
+  // ✅ ADD THIS FIRST
+  if (exp.status === HomeReportExportStatus.DELETED) {
+    return;
+  }
+
+  // Existing guard (keep it)
+  if (exp.status !== HomeReportExportStatus.PENDING) {
+    return;
+  }
 
   await prisma.homeReportExport.update({
     where: { id: exportId },
-    data: { status: 'GENERATING', startedAt: new Date() },
+      data: {
+        status: HomeReportExportStatus.GENERATING,
+        startedAt: new Date(),
+      },
   });
 
   await prisma.homeReportExportEvent.create({
-    data: { reportId: exportId, type: 'GENERATION_STARTED' },
+    data: {
+      reportId: exportId,
+      type: 'GENERATION_STARTED',
+    },
   });
 
   try {
     const snapshot = await buildReportSnapshot(exp.propertyId);
+
     const pdfBuffer = await renderHomeReportPackPdf(snapshot, {
       generatedAtIso: snapshot.meta.generatedAt,
       propertyLabel: snapshot.meta.propertyLabel,
     });
-    
 
     const checksum = sha256(pdfBuffer);
     const fileName = `home-report-${exp.propertyId}-${new Date().toISOString().slice(0, 10)}.pdf`;
@@ -164,10 +183,23 @@ export async function generateHomeReportExportJob(exportId: string) {
       userId: exp.userId,
     });
 
+    // ⚠️ Optional extra safety: re-check before marking READY
+    const latest = await prisma.homeReportExport.findUnique({
+      where: { id: exportId },
+    });
+
+    if (!latest || latest.status === HomeReportExportStatus.DELETED) {
+      // Best-effort cleanup if it was deleted mid-generation
+      try {
+        await deleteObject(uploaded.bucket, uploaded.key);
+      } catch {}
+      return;
+    }
+
     await prisma.homeReportExport.update({
       where: { id: exportId },
       data: {
-        status: 'READY',
+        status: HomeReportExportStatus.READY,
         completedAt: new Date(),
         snapshot,
         storageBucket: uploaded.bucket,
@@ -179,21 +211,39 @@ export async function generateHomeReportExportJob(exportId: string) {
       data: {
         reportId: exportId,
         type: 'GENERATED',
-        meta: { fileName, checksum, bucket: uploaded.bucket, key: uploaded.key },
+        meta: {
+          fileName,
+          checksum,
+          bucket: uploaded.bucket,
+          key: uploaded.key,
+        },
       },
     });
   } catch (err: any) {
+    // ❗ If deleted mid-generation, do NOT overwrite status to FAILED
+    const latest = await prisma.homeReportExport.findUnique({
+      where: { id: exportId },
+    });
+
+    if (!latest || latest.status === HomeReportExportStatus.DELETED) {
+      return;
+    }
+
     await prisma.homeReportExport.update({
       where: { id: exportId },
       data: {
-        status: 'FAILED',
+        status: HomeReportExportStatus.FAILED,
         completedAt: new Date(),
         errorMessage: (err?.message || 'Unknown error').slice(0, 1000),
       },
     });
 
     await prisma.homeReportExportEvent.create({
-      data: { reportId: exportId, type: 'FAILED', meta: { message: err?.message } },
+      data: {
+        reportId: exportId,
+        type: 'FAILED',
+        meta: { message: err?.message },
+      },
     });
 
     throw err;

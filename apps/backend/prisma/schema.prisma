@@ -2213,6 +2213,7 @@ enum HomeReportExportEventType {
   SHARE_REVOKED
   FAILED
   EXPIRED
+  DELETED
 }
 
 model HomeReportExport {

@@ -12,6 +12,8 @@ import {
   getDownloadUrl,
   createShareLink,
   revokeShareLink,
+  regenerateHomeReportExport,
+  deleteHomeReportExport,
 } from './reportsApi';
 
 function fmt(dt?: string | null) {
@@ -33,10 +35,13 @@ function statusBadge(status: HomeReportExportDTO['status']) {
       return `${base} bg-amber-50 text-amber-700`;
     case 'EXPIRED':
       return `${base} bg-gray-100 text-gray-700`;
+    case 'DELETED':
+      return `${base} bg-gray-50 text-gray-400`;
     default:
       return `${base} bg-gray-100 text-gray-700`;
   }
 }
+
 
 function typeLabel(t: HomeReportExportDTO['type']) {
   switch (t) {
@@ -130,6 +135,31 @@ export default function ReportsClient() {
     }
   }
 
+  async function onRegenerate(exportId: string) {
+    setError(null);
+    try {
+      await regenerateHomeReportExport(exportId);
+      await refresh();
+    } catch (e: any) {
+      setError(e?.message || 'Failed to regenerate report');
+    }
+  }
+  
+  async function onDelete(exportId: string) {
+    setError(null);
+    const ok = window.confirm(
+      'Delete this report? This will remove the PDF and revoke any share links.'
+    );
+    if (!ok) return;
+  
+    try {
+      await deleteHomeReportExport(exportId);
+      await refresh();
+    } catch (e: any) {
+      setError(e?.message || 'Failed to delete report');
+    }
+  }
+  
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -197,6 +227,12 @@ export default function ReportsClient() {
             <div className="p-4 text-sm text-gray-600">No reports yet. Generate your first report pack.</div>
           ) : (
             exports.map((exp) => {
+              const isDeleted = exp.status === 'DELETED';
+              const canDownload = exp.status === 'READY' && !isDeleted;
+              const canShare = exp.status === 'READY' && !isDeleted;
+              const canRegenerate = !isDeleted && (exp.status === 'READY' || exp.status === 'FAILED' || exp.status === 'EXPIRED');
+              const canDelete = !isDeleted; // optionally also block when PENDING/GENERATING if you want
+
               const shareActive =
                 !!exp.shareToken && !exp.shareRevokedAt && (!exp.shareExpiresAt || new Date(exp.shareExpiresAt) > new Date());
 
@@ -239,7 +275,7 @@ export default function ReportsClient() {
                     <div className="flex flex-wrap gap-2">
                       <button
                         className="rounded-lg border px-3 py-1.5 text-sm font-medium disabled:opacity-60"
-                        disabled={exp.status !== 'READY'}
+                        disabled={!canDownload}
                         onClick={() => onDownload(exp.id)}
                       >
                         Download
@@ -247,7 +283,7 @@ export default function ReportsClient() {
 
                       <button
                         className="rounded-lg border px-3 py-1.5 text-sm font-medium disabled:opacity-60"
-                        disabled={exp.status !== 'READY'}
+                        disabled={!canShare}
                         onClick={() => onShare(exp.id)}
                         title="Creates a share link and copies it to clipboard"
                       >
@@ -256,10 +292,28 @@ export default function ReportsClient() {
 
                       <button
                         className="rounded-lg border px-3 py-1.5 text-sm font-medium disabled:opacity-60"
-                        disabled={!shareActive}
+                        disabled={!shareActive || isDeleted}
                         onClick={() => onRevoke(exp.id)}
                       >
                         Revoke
+                      </button>
+
+                      <button
+                        className="rounded-lg border px-3 py-1.5 text-sm font-medium disabled:opacity-60"
+                        disabled={!canRegenerate}
+                        onClick={() => onRegenerate(exp.id)}
+                        title="Creates a new export and re-runs generation"
+                      >
+                        Regenerate
+                      </button>
+
+                      <button
+                        className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-medium text-rose-700 disabled:opacity-60"
+                        disabled={!canDelete}
+                        onClick={() => onDelete(exp.id)}
+                        title="Deletes the report and revokes share links"
+                      >
+                        Delete
                       </button>
                     </div>
                   </div>
