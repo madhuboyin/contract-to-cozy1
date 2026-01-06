@@ -641,6 +641,7 @@ model User {
   notifications    Notification[]
   favorites        Favorite[]
   homeReportExports HomeReportExport[]
+  claimsCreated Claim[]
   
   @@index([email])
   @@index([role])
@@ -991,6 +992,8 @@ model Property {
   inventoryItems InventoryItem[]
   insuranceQuoteRequests InsuranceQuoteRequest[]
   homeReportExports HomeReportExport[]
+
+  claims Claim[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1420,6 +1423,7 @@ model Warranty {
   // PHASE 1: NEW RELATION
   maintenanceTasks PropertyMaintenanceTask[]
   inventoryItems    InventoryItem[]
+  claims Claim[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1454,6 +1458,7 @@ model InsurancePolicy {
   property           Property? @relation(fields: [propertyId], references: [id])
   documents          Document[]
   inventoryItems     InventoryItem[]
+  claims Claim[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2284,6 +2289,209 @@ model HomeReportExportEvent {
 
   @@index([reportId, createdAt])
   @@map("home_report_export_events")
+}
+
+// ============================================================================
+// CLAIMS
+// ============================================================================
+
+enum ClaimStatus {
+  DRAFT
+  IN_PROGRESS
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  DENIED
+  CLOSED
+}
+
+enum ClaimType {
+  WATER_DAMAGE
+  FIRE_SMOKE
+  STORM_WIND_HAIL
+  THEFT_VANDALISM
+  LIABILITY
+  HVAC
+  PLUMBING
+  ELECTRICAL
+  APPLIANCE
+  OTHER
+}
+
+enum ClaimSourceType {
+  INSURANCE
+  HOME_WARRANTY
+  MANUFACTURER_WARRANTY
+  OUT_OF_POCKET
+  UNKNOWN
+}
+
+enum ClaimChecklistStatus {
+  OPEN
+  DONE
+  NOT_APPLICABLE
+}
+
+enum ClaimDocumentType {
+  PHOTO
+  VIDEO
+  INVOICE
+  ESTIMATE
+  REPORT
+  POLICY
+  COMMUNICATION
+  RECEIPT
+  OTHER
+}
+
+enum ClaimTimelineEventType {
+  CREATED
+  CHECKLIST_GENERATED
+  DOCUMENT_ADDED
+  SUBMITTED
+  INSPECTION_SCHEDULED
+  INSPECTION_COMPLETED
+  ESTIMATE_RECEIVED
+  FOLLOW_UP
+  APPROVED
+  DENIED
+  SETTLEMENT_ISSUED
+  CLOSED
+  NOTE
+  OTHER
+}
+
+model Claim {
+  id          String @id @default(uuid())
+  propertyId  String
+  createdBy   String // userId
+
+  title       String
+  description String?
+  type        ClaimType
+  status      ClaimStatus @default(DRAFT)
+
+  sourceType   ClaimSourceType @default(UNKNOWN)
+  providerName String?
+  claimNumber  String?
+  externalUrl  String?
+
+  // Coverage references (optional)
+  insurancePolicyId String?
+  warrantyId        String?
+
+  incidentAt   DateTime?
+  openedAt     DateTime?
+  submittedAt  DateTime?
+  closedAt     DateTime?
+
+  deductibleAmount     Decimal? @db.Decimal(12, 2)
+  estimatedLossAmount  Decimal? @db.Decimal(12, 2)
+  settlementAmount     Decimal? @db.Decimal(12, 2)
+
+  checklistCompletionPct Int? @default(0)
+  lastActivityAt         DateTime @default(now())
+  nextFollowUpAt         DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  creator        User     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  insurancePolicy InsurancePolicy? @relation(fields: [insurancePolicyId], references: [id], onDelete: SetNull)
+  warranty        Warranty?        @relation(fields: [warrantyId], references: [id], onDelete: SetNull)
+
+  checklistItems ClaimChecklistItem[]
+  documents      ClaimDocument[]
+  timelineEvents ClaimTimelineEvent[]
+
+  @@index([propertyId, status])
+  @@index([createdBy, status])
+  @@index([propertyId, lastActivityAt])
+  @@map("claims")
+}
+
+model ClaimChecklistItem {
+  id          String @id @default(uuid())
+  claimId     String
+
+  orderIndex  Int
+  title       String
+  description String?
+  required    Boolean @default(false)
+
+  status      ClaimChecklistStatus @default(OPEN)
+  completedAt DateTime?
+  completedBy String? // userId
+
+  // Optional: link to a ClaimDocument that satisfies this item
+  primaryClaimDocumentId String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  claim       Claim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  primaryClaimDocument ClaimDocument?
+    @relation("ClaimChecklistPrimaryDoc", fields: [primaryClaimDocumentId], references: [id], onDelete: SetNull)
+
+  @@unique([claimId, orderIndex])
+  @@index([claimId, status])
+  @@map("claim_checklist_items")
+}
+
+model ClaimDocument {
+  id         String @id @default(uuid())
+  claimId    String
+  documentId String
+
+  type       ClaimDocumentType @default(OTHER)
+  title      String?
+  notes      String?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  claim      Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  checklistPrimaryFor ClaimChecklistItem[] @relation("ClaimChecklistPrimaryDoc")
+
+  @@unique([claimId, documentId])
+  @@index([claimId, type])
+  @@index([documentId])
+  @@map("claim_documents")
+}
+
+model ClaimTimelineEvent {
+  id          String @id @default(uuid())
+  claimId     String
+  propertyId  String
+  createdBy   String // userId
+
+  type        ClaimTimelineEventType
+  title       String?
+  description String?
+
+  occurredAt  DateTime @default(now())
+  meta        Json?
+
+  // Optional attachment
+  claimDocumentId String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  claim       Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  creator     User     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  claimDocument ClaimDocument? @relation(fields: [claimDocumentId], references: [id], onDelete: SetNull)
+
+  @@index([claimId, occurredAt])
+  @@index([propertyId, occurredAt])
+  @@map("claim_timeline_events")
 }
 
 
