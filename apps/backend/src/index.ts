@@ -15,6 +15,7 @@ import { swaggerSpec } from './config/swagger.config';
 import authRoutes from './routes/auth.routes';
 import providerRoutes from './routes/provider.routes';
 import bookingRoutes from './routes/booking.routes';
+import homeReportExportRoutes from './routes/homeReportExport.routes';
 import propertyRoutes from './routes/property.routes';
 import userRoutes from './routes/user.routes';
 import checklistRoutes from './routes/checklist.routes';
@@ -49,7 +50,6 @@ import homeBuyerTaskRoutes from './routes/homeBuyerTask.routes';
 import propertyMaintenanceTaskRoutes from './routes/propertyMaintenanceTask.routes';
 import inventoryRoutes from './routes/inventory.routes';
 import { insuranceQuoteRouter } from './routes/insuranceQuote.routes';
-import homeReportExportRoutes from './routes/homeReportExport.routes';
 
 
 dotenv.config();
@@ -267,6 +267,7 @@ app.get('/', (req: Request, res: Response) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/providers', providerRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api', homeReportExportRoutes);
 app.use('/api/properties', propertyRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/checklist', checklistRoutes);
@@ -306,7 +307,6 @@ app.use('/api/maintenance-tasks', propertyMaintenanceTaskRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api', inventoryRoutes);
 app.use('/api', insuranceQuoteRouter);
-app.use('/api', homeReportExportRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
