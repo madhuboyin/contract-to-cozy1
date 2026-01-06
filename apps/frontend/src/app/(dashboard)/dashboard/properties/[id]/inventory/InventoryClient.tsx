@@ -135,14 +135,16 @@ export default function InventoryClient() {
             description="Track appliances, systems, and valuables with receipts and replacement values."
           />
 
-          <div className="flex items-center gap-2 mt-1">
-            <div className="rounded-xl px-3 py-2 text-sm border border-black/10 bg-black/5">
+          <div className="inline-flex items-center p-1 bg-black/5 rounded-xl mt-1 border border-black/5">
+            {/* Active State (Static Div) */}
+            <div className="px-4 py-1.5 text-sm font-medium bg-white text-black shadow-sm rounded-lg border border-black/5">
               Items
             </div>
-
+            
+            {/* Inactive State (Link) */}
             <Link
               href={`/dashboard/properties/${propertyId}/inventory/coverage`}
-              className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+              className="px-4 py-1.5 text-sm font-medium text-black/50 hover:text-black transition-colors duration-200"
             >
               Coverage
             </Link>
