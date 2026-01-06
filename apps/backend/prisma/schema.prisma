@@ -2239,6 +2239,11 @@ model HomeReportExport {
   shareExpiresAt DateTime?
   shareRevokedAt DateTime?
 
+  storageBucket String?
+  storageKey    String?  @unique
+  expiresAt     DateTime?
+
+
   // Lifecycle
   requestedAt DateTime @default(now())
   startedAt   DateTime?
