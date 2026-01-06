@@ -20,6 +20,8 @@ import { sendSmsNotificationJob } from './jobs/sendSmsNotification.job';
 import { generateSeasonalChecklists } from './jobs/seasonalChecklistGeneration.job';
 import { sendSeasonalNotifications } from './jobs/seasonalNotification.job';
 import { expireSeasonalChecklists } from './jobs/seasonalChecklistExpiration.job';
+import { runHomeReportExportPoller } from './runners/homeReportExport.poller';
+import { runReportExportCleanup } from './runners/reportExport.cleanup';
 
 
 const prisma = new PrismaClient();
@@ -559,5 +561,14 @@ function startWorker() {
   sendMaintenanceReminders();
 }
 
+runHomeReportExportPoller().catch((e) => {
+  console.error('Report export poller crashed', e);
+  process.exit(1);
+});
+
+runReportExportCleanup().catch((e) => {
+  console.error('Report export cleanup crashed', e);
+  process.exit(1);
+});
 // Start the worker
 startWorker();
