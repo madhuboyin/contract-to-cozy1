@@ -2364,6 +2364,18 @@ enum ClaimTimelineEventType {
   OTHER
 }
 
+enum DomainEventType {
+  CLAIM_SUBMITTED
+  CLAIM_CLOSED
+}
+
+enum DomainEventStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
 model Claim {
   id          String @id @default(uuid())
   propertyId  String
@@ -2497,7 +2509,32 @@ model ClaimTimelineEvent {
   @@map("claim_timeline_events")
 }
 
+model DomainEvent {
+  id          String @id @default(uuid())
+  type        DomainEventType
+  status      DomainEventStatus @default(PENDING)
 
+  // Scope / routing
+  propertyId  String?
+  userId      String?
+
+  // Optional idempotency key to prevent duplicates
+  idempotencyKey String? @unique
+
+  // Payload for consumers (workers/notifications)
+  payload     Json
+
+  attempts    Int @default(0)
+  lastError   String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  processedAt DateTime?
+
+  @@index([status, createdAt])
+  @@index([type, status])
+  @@map("domain_events")
+}
 
 // ============================================================================
 // FAVORITES
