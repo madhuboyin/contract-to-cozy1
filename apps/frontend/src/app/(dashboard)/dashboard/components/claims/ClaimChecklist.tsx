@@ -2,10 +2,10 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import type { ClaimDTO, ChecklistItemStatus, ClaimChecklistItem } from '../../properties/[id]/claims/claimsApi';
-import { updateChecklistItem } from '../../properties/[id]/claims/claimsApi';
+import type { ClaimDTO, ClaimChecklistStatus, ClaimChecklistItemDTO } from '../../properties/[id]/claims/claimsApi';
+import { updateClaimChecklistItem } from '../../properties/[id]/claims/claimsApi';
 
-function statusLabel(s: ChecklistItemStatus) {
+function statusLabel(s: ClaimChecklistStatus) {
   if (s === 'DONE') return 'Done';
   if (s === 'NOT_APPLICABLE') return 'N/A';
   return 'Open';
@@ -24,10 +24,10 @@ export default function ClaimChecklist({
 
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  async function setItemStatus(item: ClaimChecklistItem, status: ChecklistItemStatus) {
+  async function setItemStatus(item: ClaimChecklistItemDTO, status: ClaimChecklistStatus) {
     setBusyId(item.id);
     try {
-      await updateChecklistItem(propertyId, claim.id, item.id, { status });
+      await updateClaimChecklistItem(propertyId, claim.id, item.id, { status });
       await onChanged();
     } finally {
       setBusyId(null);
@@ -68,7 +68,7 @@ export default function ClaimChecklist({
                 className="rounded-lg border px-2 py-1 text-sm"
                 value={it.status}
                 disabled={busyId === it.id}
-                onChange={(e) => setItemStatus(it, e.target.value as ChecklistItemStatus)}
+                onChange={(e) => setItemStatus(it, e.target.value as ClaimChecklistStatus)}
               >
                 <option value="OPEN">{statusLabel('OPEN')}</option>
                 <option value="DONE">{statusLabel('DONE')}</option>

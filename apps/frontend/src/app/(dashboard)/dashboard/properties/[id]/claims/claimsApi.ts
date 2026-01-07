@@ -19,6 +19,14 @@ export type { ClaimDTO } from '@/types/claims.types';
 export type { ClaimDocumentDTO } from '@/types/claims.types';
 export type { ClaimTimelineEventDTO } from '@/types/claims.types';
 export type { ClaimChecklistItemDTO } from '@/types/claims.types';
+export type { 
+  ClaimType, 
+  ClaimStatus, 
+  ClaimSourceType, 
+  ClaimDocumentType, 
+  ClaimTimelineEventType, 
+  ClaimChecklistStatus 
+} from '@/types/claims.types';
 
 // -----------------------
 // Claims

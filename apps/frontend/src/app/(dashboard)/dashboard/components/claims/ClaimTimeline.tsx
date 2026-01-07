@@ -2,8 +2,8 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import type { ClaimDTO, ClaimTimelineEvent } from '../../properties/[id]/claims/claimsApi';
-import { addTimelineEvent } from '../../properties/[id]/claims/claimsApi';
+import type { ClaimDTO, ClaimTimelineEventDTO } from '../../properties/[id]/claims/claimsApi';
+import { addClaimTimelineEvent } from '../../properties/[id]/claims/claimsApi';
 
 function fmt(ts?: string | null) {
   if (!ts) return '';
@@ -30,7 +30,7 @@ export default function ClaimTimeline({
     if (!text) return;
     setBusy(true);
     try {
-      await addTimelineEvent(propertyId, claim.id, {
+      await addClaimTimelineEvent(propertyId, claim.id, {
         type: 'NOTE',
         title: 'Note',
         description: text,
@@ -69,7 +69,7 @@ export default function ClaimTimeline({
         <div className="text-sm text-gray-600">No timeline events yet.</div>
       ) : (
         <div className="space-y-2">
-          {events.map((ev: ClaimTimelineEvent) => (
+          {events.map((ev: ClaimTimelineEventDTO) => (
             <div key={ev.id} className="rounded-lg border p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -79,16 +79,11 @@ export default function ClaimTimeline({
                   {ev.description ? (
                     <div className="mt-1 text-sm text-gray-700">{ev.description}</div>
                   ) : null}
-                  {ev.claimDocument?.document?.fileUrl ? (
+                  {ev.claimDocumentId ? (
                     <div className="mt-2">
-                      <a
-                        className="text-sm text-emerald-700 hover:underline"
-                        href={ev.claimDocument.document.fileUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        View document →
-                      </a>
+                      <div className="text-xs text-gray-500">
+                        Document ID: {ev.claimDocumentId}
+                      </div>
                     </div>
                   ) : null}
                 </div>
