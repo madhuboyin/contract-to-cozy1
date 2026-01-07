@@ -2497,6 +2497,7 @@ model ClaimDocument {
 
   checklistPrimaryFor ClaimChecklistItem[] @relation("ClaimChecklistPrimaryDoc")
   timelineEvents ClaimTimelineEvent[]
+  itemDocuments   ClaimChecklistItemDocument[]
 
   @@unique([claimId, documentId])
   @@index([claimId, type])
