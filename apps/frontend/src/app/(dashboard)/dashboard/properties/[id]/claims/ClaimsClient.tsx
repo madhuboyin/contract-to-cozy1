@@ -151,18 +151,22 @@ export default function ClaimsClient() {
         onClose={() => setCreateOpen(false)}
         propertyId={propertyId}
         onCreated={(newClaim) => {
-          // 1. Update the underlying data state
+          // Defensive: avoid crashing if modal returns something unexpected
+          if (!newClaim || !newClaim.id) {
+            console.error('ClaimCreateModal returned invalid claim:', newClaim);
+            return;
+          }
           setClaims((prev) => {
-            // Prevent duplicates if the API or refresh logic already added it
-            if (prev.some(c => c.id === newClaim.id)) return prev;
-            return [newClaim, ...prev];
+            const safePrev = (prev ?? []).filter((c): c is any => !!c && !!c.id);
+
+            // Prevent duplicates
+            if (safePrev.some((c) => c.id === newClaim.id)) return safePrev;
+
+            return [newClaim, ...safePrev];
           });
-          
-          // 2. Close the modal
+
           setCreateOpen(false);
-          
-          // 3. Optional: Clear any search query to make sure the new claim is visible
-          setQ(''); 
+          setQ('');
         }}
       />
     </div>

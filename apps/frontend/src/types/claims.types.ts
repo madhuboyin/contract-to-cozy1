@@ -243,13 +243,17 @@ export type CreateClaimInput = {
   export interface ClaimDocumentDTO {
     id: string;
     documentId: string;
-  
-    claimDocumentType?: ClaimDocumentType | null; // ✅ backend naming
+    type?: ClaimDocumentType | null;
     title?: string | null;
     notes?: string | null;
-  
     createdAt: string;
   
-    // ✅ because backend includes { document: true }
-    document?: ClaimNestedDocumentDTO | null;
+    // add this to match backend include
+    document?: {
+      id: string;
+      name?: string | null;
+      mimeType?: string | null;
+      fileUrl?: string | null;
+    } | null;
   }
+  
