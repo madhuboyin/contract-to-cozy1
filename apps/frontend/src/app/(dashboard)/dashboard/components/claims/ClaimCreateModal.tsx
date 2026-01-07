@@ -64,8 +64,9 @@ export default function ClaimCreateModal({
 
       // 2. Pass the fresh claim object to the parent
       if (claim) {
-        onCreated(claim);
+        onCreated(claim as ClaimDTO);
         
+        onClose();
         // 3. Reset local state only after successful creation
         setTitle('');
         setDesc('');
