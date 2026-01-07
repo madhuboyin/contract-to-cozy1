@@ -338,3 +338,302 @@ Insurance carrier APIs
 Home warranty providers
 
 Contractor marketplace tie-in
+
+
+COMPLETED CHANGES (THIS SESSION)
+1️⃣ Claims Timeline Enhancements (Backend)
+✅ STATUS_CHANGE timeline events (CRITICAL)
+
+Implemented first-class STATUS_CHANGE events on real claim status transitions
+
+Emitted only when:
+
+requestedStatus !== currentStatus
+
+Transition is valid (via assertValidTransition)
+
+Ensures idempotency (no duplicate events for same status)
+
+Event details
+
+type: STATUS_CHANGE
+title: "Status changed"
+description: "FROM → TO"
+meta: {
+  fromStatus,
+  toStatus,
+  autoTimestamps: { openedAt, submittedAt, closedAt, nextFollowUpAt }
+}
+
+
+Impact
+
+Enables accurate SLA calculations
+
+Improves auditability
+
+Powers timeline UI and insights logic
+
+2️⃣ DOCUMENT_ADDED Timeline Events (Bulk + Inline Uploads)
+
+Added DOCUMENT_ADDED timeline events for bulk uploads
+
+Includes:
+
+claimDocumentId
+
+meta.checklistItemId
+
+meta.bulk = true
+
+Optional metadata added (recommended)
+
+meta: {
+  kind: 'DOCUMENT_ADDED',
+  checklistItemId,
+  bulk: true,
+  claimDocumentType,
+  fileName
+}
+
+
+Impact
+
+Timeline shows document additions
+
+Enables future automations (doc classification, reminders)
+
+3️⃣ Claim Insights — SLA Accuracy (Backend)
+✅ Switched SLA source-of-truth to Timeline
+
+getClaimInsights now:
+
+Queries latest STATUS_CHANGE event
+
+Uses occurredAt as status start time
+
+Validates meta.toStatus === claim.status before trusting it
+
+Falls back to timestamps (openedAt, submittedAt) if missing
+
+Fixes
+
+SLA is no longer inferred
+
+Handles older claims safely
+
+Prevents incorrect SLA breach warnings
+
+4️⃣ Follow-up Risk Scoring (Backend)
+
+Implemented followUp.risk:
+
+Score: 0–100
+
+Levels: LOW | MEDIUM | HIGH
+
+Signals:
+
+Overdue follow-ups
+
+Days since last activity
+
+Missing activity history
+
+Returned as:
+
+followUp: {
+  isOverdue,
+  nextFollowUpAt,
+  risk: { score, level, reasons }
+}
+
+5️⃣ SLA Breach Warnings (Backend)
+
+Implemented sla object:
+
+sla: {
+  maxDays,
+  daysInStatus,
+  isAtRisk,
+  isBreach,
+  message
+}
+
+
+Uses status-specific SLA thresholds
+
+Differentiates:
+
+Approaching SLA
+
+SLA breached
+
+6️⃣ Settlement vs Estimate Insights (Backend)
+
+Implemented financial comparison:
+
+financial: {
+  estimatedLossAmount,
+  settlementAmount,
+  settlementVsEstimate,
+  settlementRatio,
+  visual: { label, direction }
+}
+
+
+Handles missing values gracefully
+
+No DB changes required
+
+7️⃣ Claim Health Score (Backend)
+
+Computed health score:
+
+Range: 0–100
+
+Levels: GOOD | FAIR | POOR
+
+Factors:
+
+Follow-up risk
+
+SLA breach / risk
+
+Checklist completion
+
+Activity staleness
+
+Returned as:
+
+health: {
+  score,
+  level,
+  reasons
+}
+
+8️⃣ Insights UI Enhancements (Frontend)
+
+Updated ClaimDetailClient.tsx to render:
+
+SLA warning banner (amber / red)
+
+Follow-up risk card
+
+Claim health progress bar
+
+Settlement vs estimate section
+
+Existing recommendation preserved
+
+UX fixes
+
+Avoided double submit confirmation
+
+Centralized submit blocking via ClaimQuickActions
+
+Cleared stale blocking state on refresh/checklist updates
+
+9️⃣ Timeline UI Improvements (Frontend)
+
+Updated ClaimTimeline.tsx:
+
+Event type badges (NOTE, STATUS_CHANGE, DOCUMENT_ADDED)
+
+Clickable “View document” links (when backend includes nested document)
+
+Keyboard shortcut: Cmd/Ctrl + Enter to add note
+
+Removed raw “Document ID” display
+
+Defensive timestamp formatting
+
+🗂️ FILES TOUCHED / UPDATED
+Backend
+
+apps/backend/src/services/claims/claims.service.ts
+
+updateClaim → emits STATUS_CHANGE
+
+getClaimInsights → SLA, risk, health, financials
+
+apps/backend/src/services/claims/claims.transitions.ts (used as-is)
+
+Prisma enum already contained STATUS_CHANGE (no schema change needed)
+
+Frontend
+
+ClaimDetailClient.tsx
+
+ClaimTimeline.tsx
+
+ClaimQuickActions.tsx (submit flow coordination)
+
+ClaimChecklist.tsx (unchanged, but integrated with blocking flow)
+
+⏳ PENDING / NOT YET DONE
+UX / UI Enhancements
+
+Checklist item doc count progress (e.g. 1 / 2 uploaded)
+
+Inline tooltips instead of text blocks for errors
+
+Visual differentiation for SLA breach vs follow-up risk severity
+
+Timeline Enhancements
+
+Show creator name on timeline events (requires DTO include)
+
+Render STATUS_CHANGE meta (from → to) more visually
+
+Group bulk document uploads into a single expandable event (optional)
+
+Automation (Future)
+
+Auto-create FOLLOW_UP timeline events when overdue
+
+Auto-reminder jobs based on SLA breach / risk
+
+Auto-classification of uploaded documents
+
+Testing
+
+Unit tests for:
+
+computeFollowUpRisk
+
+computeSla
+
+computeHealth
+
+Integration test:
+
+Status change → timeline event → SLA update
+
+🔒 STABILITY / SAFETY NOTES
+
+All changes are backward compatible
+
+Older claims without STATUS_CHANGE events still work (fallback logic)
+
+No DB schema changes required in this session
+
+No breaking API changes to frontend consumers
+
+▶️ NEXT SESSION RECOMMENDED START POINT
+
+When you resume, the highest-ROI next step is:
+
+Finish UX polish on checklist requirements
+
+Doc count progress
+
+Inline tooltips
+
+Visual clarity on why submit is blocked
+
+Followed by:
+
+Timeline creator display
+
+Optional automation hooks

@@ -206,10 +206,19 @@ export default function ClaimDetailClient() {
               />
             </div>
           </div>
+          <div className="rounded-xl border bg-white p-4">
+            <div className="text-sm font-semibold text-gray-900">Timeline</div>
+            <div className="mt-1 text-sm text-gray-600">
+              Keep notes and milestones in one place.
+            </div>
+            <div className="mt-3">
+              <ClaimTimeline propertyId={propertyId} claim={claim} onChanged={refresh} />
+            </div>
+          </div>
         </div>
 
         {insights ? (
-          <div className="rounded-xl border bg-white p-4">
+          <div className="lg:sticky lg:top-4 h-fit rounded-xl border bg-white p-4">
             <div className="text-sm font-semibold text-gray-900">Insights</div>
 
             {/* SLA banner */}
@@ -356,18 +365,6 @@ export default function ClaimDetailClient() {
             </div>
           </div>
         ) : null}
-
-        <div className="space-y-4">
-          <div className="rounded-xl border bg-white p-4">
-            <div className="text-sm font-semibold text-gray-900">Timeline</div>
-            <div className="mt-1 text-sm text-gray-600">
-              Keep notes and milestones in one place.
-            </div>
-            <div className="mt-3">
-              <ClaimTimeline propertyId={propertyId} claim={claim} onChanged={refresh} />
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
