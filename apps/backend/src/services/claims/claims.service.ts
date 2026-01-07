@@ -15,6 +15,7 @@ import { ClaimStatus } from '../../types/claims.types';
 
 import { ClaimDocumentType, ClaimTimelineEventType} from '@prisma/client';
 
+
 type UploadAndAttachArgs = {
   propertyId: string;
   claimId: string;
@@ -617,29 +618,31 @@ export class ClaimsService {
       },
     });
   
-    // Timeline entry only when a real status change happened
-    if (requestedStatus && isTransitioning) {
-      await prisma.claimTimelineEvent.create({
-        data: {
-          claimId,
-          propertyId,
-          createdBy: userId,
-          type: 'NOTE',
-          title: 'Status updated',
-          description: `Status changed from ${claim.status} to ${requestedStatus}`,
-          occurredAt: now,
-          meta: {
-            from: claim.status,
-            to: requestedStatus,
-            autoTimestamps: {
-              openedAt: shouldSetOpenedAt || undefined,
-              submittedAt: shouldSetSubmittedAt || undefined,
-              closedAt: shouldSetClosedAt || undefined,
-            },
+    // Timeline entry only when a real status change happened// Timeline entry only when a real status change happened
+  if (requestedStatus && isTransitioning) {
+    await prisma.claimTimelineEvent.create({
+      data: {
+        claimId: updated.id,
+        propertyId: updated.propertyId, // safer than trusting input param
+        createdBy: userId,
+        type: 'STATUS_CHANGE',
+        title: 'Status changed',
+        description: `${claim.status} → ${requestedStatus}`,
+        occurredAt: now,
+        meta: {
+          fromStatus: claim.status,
+          toStatus: requestedStatus,
+          autoTimestamps: {
+            openedAt: shouldSetOpenedAt || undefined,
+            submittedAt: shouldSetSubmittedAt || undefined,
+            closedAt: shouldSetClosedAt || undefined,
+            nextFollowUpAt: shouldAutoSetNextFollowUp || undefined,
           },
         },
-      });
-    }
+      },
+    });
+  }
+
   
     async function validateCanSubmitClaim(propertyId: string, claimId: string) {
       const claim = await prisma.claim.findFirst({
@@ -955,7 +958,7 @@ export class ClaimsService {
 
   static async getClaimInsights(propertyId: string, claimId: string) {
     const now = new Date();
-    
+  
     const claim = await prisma.claim.findFirst({
       where: { id: claimId, propertyId },
       select: {
@@ -972,6 +975,12 @@ export class ClaimsService {
         lastActivityAt: true,
         insurancePolicyId: true,
         warrantyId: true,
+        timelineEvents: {
+          where: { type: 'STATUS_CHANGE' },
+          orderBy: { occurredAt: 'desc' },
+          take: 1,
+          select: { occurredAt: true, meta: true },
+        },
         _count: {
           select: {
             documents: true,
@@ -981,36 +990,305 @@ export class ClaimsService {
         },
       },
     });
-
+  
     if (!claim) throw new Error('Claim not found');
-
+  
+    // -------------------------
+    // Helpers
+    // -------------------------
+    function clamp(n: number, min: number, max: number) {
+      return Math.max(min, Math.min(max, n));
+    }
+  
+    function safeNumber(n: any): number | null {
+      if (n === null || n === undefined) return null;
+      const x = Number(n);
+      return Number.isFinite(x) ? x : null;
+    }
+  
+    const SLA = {
+      followUpDaysByStatus: {
+        DRAFT: 7,
+        IN_PROGRESS: 7,
+        SUBMITTED: 5,
+        UNDER_REVIEW: 5,
+        APPROVED: 7,
+        DENIED: 7,
+        CLOSED: 9999,
+      } as Record<string, number>,
+  
+      statusMaxDays: {
+        DRAFT: 14,
+        IN_PROGRESS: 30,
+        SUBMITTED: 14,
+        UNDER_REVIEW: 21,
+        APPROVED: 14,
+        DENIED: 14,
+        CLOSED: 9999,
+      } as Record<string, number>,
+    };
+  
+    function computeFinancial(estimated: number | null, settlement: number | null) {
+      if (!estimated || estimated <= 0 || settlement === null || settlement === undefined) {
+        return {
+          estimatedLossAmount: estimated,
+          settlementAmount: settlement,
+          settlementVsEstimate: null as number | null,
+          settlementRatio: null as number | null,
+          visual: null as null | { label: string; direction: 'UP' | 'DOWN' | 'FLAT' },
+        };
+      }
+  
+      const diff = settlement - estimated;
+      const ratio = settlement / estimated;
+  
+      let direction: 'UP' | 'DOWN' | 'FLAT' = 'FLAT';
+      if (ratio >= 1.1) direction = 'UP';
+      else if (ratio <= 0.9) direction = 'DOWN';
+  
+      const label =
+        direction === 'FLAT'
+          ? 'Settlement roughly matches estimate'
+          : `Settlement is ${(ratio * 100).toFixed(0)}% of estimate`;
+  
+      return {
+        estimatedLossAmount: estimated,
+        settlementAmount: settlement,
+        settlementVsEstimate: diff,
+        settlementRatio: ratio,
+        visual: { label, direction },
+      };
+    }
+  
+    function computeFollowUpRisk(params: {
+      nextFollowUpAt: Date | null;
+      lastActivityAt: Date | null;
+      status: string;
+    }) {
+      const { nextFollowUpAt, lastActivityAt, status } = params;
+  
+      const followUpSlaDays = SLA.followUpDaysByStatus[status] ?? 7;
+  
+      const daysSinceActivity =
+        lastActivityAt ? daysBetween(lastActivityAt, now) : 999;
+  
+      const isOverdue = Boolean(nextFollowUpAt && nextFollowUpAt <= now);
+      const overdueDays =
+        isOverdue && nextFollowUpAt ? daysBetween(nextFollowUpAt, now) : 0;
+  
+      let risk = 25;
+  
+      if (isOverdue) {
+        risk += clamp((overdueDays ?? 0) * 10, 20, 70);
+      } else {
+        if ((daysSinceActivity ?? 0) > followUpSlaDays) {
+          risk += clamp(((daysSinceActivity ?? 0) - followUpSlaDays) * 4, 0, 30);
+        }
+      }
+  
+      if (!lastActivityAt) risk += 25;
+  
+      risk = clamp(risk, 0, 100);
+      const level = risk >= 75 ? 'HIGH' : risk >= 45 ? 'MEDIUM' : 'LOW';
+  
+      const reasons: string[] = [];
+      if (isOverdue) reasons.push(`Follow-up overdue by ${overdueDays} day(s).`);
+      if (!lastActivityAt) reasons.push('No activity recorded yet.');
+      if (lastActivityAt && (daysSinceActivity ?? 0) > followUpSlaDays) {
+        reasons.push(
+          `No activity for ${daysSinceActivity} day(s) (cadence ~${followUpSlaDays}d).`
+        );
+      }
+  
+      return {
+        score: risk,
+        level,
+        isOverdue,
+        overdueDays: isOverdue ? overdueDays : 0,
+        daysSinceActivity,
+        reasons,
+      };
+    }
+  
+    function computeSla(params: {
+      status: string;
+      openedAt: Date | null;
+      submittedAt: Date | null;
+      createdAt: Date;
+      statusStartFromTimeline: Date | null;
+    }) {
+      const { status, openedAt, submittedAt, createdAt, statusStartFromTimeline } = params;
+  
+      const maxDays = SLA.statusMaxDays[status] ?? 30;
+      const statusStart =
+      statusStartFromTimeline ??
+      (status === 'SUBMITTED' || status === 'UNDER_REVIEW' || status === 'APPROVED' || status === 'DENIED'
+        ? (submittedAt ?? openedAt ?? createdAt)
+        : (openedAt ?? createdAt));
+  
+      const daysInStatus = daysBetween(statusStart, now);
+      const isBreach = daysInStatus > maxDays;
+  
+      const warnAt = Math.floor(maxDays * 0.8);
+      const isAtRisk = !isBreach && daysInStatus >= warnAt;
+  
+      const message = isBreach
+        ? `SLA breached: ${daysInStatus} day(s) in ${status} (max ${maxDays}).`
+        : isAtRisk
+        ? `Approaching SLA: ${daysInStatus} day(s) in ${status} (max ${maxDays}).`
+        : null;
+  
+      return { maxDays, daysInStatus, isAtRisk, isBreach, message };
+    }
+  
+    function computeHealth(params: {
+      checklistCompletionPct: number;
+      followUpRiskScore: number;
+      sla: { isAtRisk: boolean; isBreach: boolean };
+      daysSinceLastActivity: number;
+    }) {
+      const { checklistCompletionPct, followUpRiskScore, sla, daysSinceLastActivity } = params;
+  
+      let score = 100;
+  
+      // risk reduces health
+      score -= Math.round(followUpRiskScore * 0.45); // up to -45
+  
+      // SLA penalties
+      if (sla.isAtRisk) score -= 10;
+      if (sla.isBreach) score -= 25;
+  
+      // stale activity penalties
+      if (daysSinceLastActivity >= 14) score -= 10;
+      if (daysSinceLastActivity >= 30) score -= 10;
+  
+      // checklist completion improves health
+      score += Math.round((checklistCompletionPct / 100) * 15); // up to +15
+  
+      score = clamp(score, 0, 100);
+  
+      const level = score >= 80 ? 'GOOD' : score >= 55 ? 'FAIR' : 'POOR';
+  
+      const reasons: string[] = [];
+      reasons.push(`Checklist completion: ${Math.round(checklistCompletionPct)}%.`);
+      if (followUpRiskScore >= 75) reasons.push('High follow-up risk.');
+      if (sla.isBreach) reasons.push('SLA breached.');
+      if (sla.isAtRisk && !sla.isBreach) reasons.push('Approaching SLA.');
+      if (daysSinceLastActivity >= 14) reasons.push(`Activity is stale (${daysSinceLastActivity}d).`);
+  
+      return { score, level, reasons };
+    }
+  
+    // -------------------------
+    // Base metrics (existing)
+    // -------------------------
     const startDate = claim.openedAt ?? claim.createdAt;
     const agingDays = daysBetween(startDate, now);
-    const isOverdue = claim.nextFollowUpAt && claim.nextFollowUpAt <= now;
-
+  
+    const daysSinceLastActivity = claim.lastActivityAt
+      ? daysBetween(claim.lastActivityAt, now)
+      : null;
+  
+    const daysSinceSubmitted = claim.submittedAt
+      ? daysBetween(claim.submittedAt, now)
+      : null;
+  
+    const isOverdue = Boolean(claim.nextFollowUpAt && claim.nextFollowUpAt <= now);
+  
+    // -------------------------
+    // NEW: Enhancements
+    // -------------------------
+    const checklistCompletionPct = Number(claim.checklistCompletionPct ?? 0);
+  
+    const followUpRisk = computeFollowUpRisk({
+      nextFollowUpAt: claim.nextFollowUpAt ?? null,
+      lastActivityAt: claim.lastActivityAt ?? null,
+      status: claim.status,
+    });
+  
+    const latestStatusChange = claim.timelineEvents?.[0] ?? null;
+    const latestMeta = (latestStatusChange?.meta as any) ?? null;
+    const latestToStatus = latestMeta?.toStatus ?? latestMeta?.to ?? null;
+  
+    const statusStartFromTimeline =
+      latestStatusChange && latestToStatus === claim.status
+        ? latestStatusChange.occurredAt
+        : null;
+  
+    const sla = computeSla({
+      status: claim.status,
+      openedAt: claim.openedAt ?? null,
+      submittedAt: claim.submittedAt ?? null,
+      createdAt: claim.createdAt,
+      statusStartFromTimeline,
+    });
+  
+    const financial = computeFinancial(
+      safeNumber(claim.estimatedLossAmount),
+      safeNumber(claim.settlementAmount)
+    );
+  
+    const health = computeHealth({
+      checklistCompletionPct,
+      followUpRiskScore: followUpRisk.score,
+      sla: { isAtRisk: sla.isAtRisk, isBreach: sla.isBreach },
+      daysSinceLastActivity: daysSinceLastActivity ?? 999,
+    });
+  
+    // recommendation: keep your current behavior but enhance with risk/sla
+    const recommendationDecision =
+      sla.isBreach || followUpRisk.level === 'HIGH'
+        ? 'FOLLOW_UP_NOW'
+        : isOverdue
+        ? 'FOLLOW_UP_NOW'
+        : sla.isAtRisk || followUpRisk.level === 'MEDIUM'
+        ? 'FOLLOW_UP_SOON'
+        : 'ON_TRACK';
+  
+    const recommendationConfidence =
+      recommendationDecision === 'FOLLOW_UP_NOW' ? 0.8 :
+      recommendationDecision === 'FOLLOW_UP_SOON' ? 0.7 :
+      0.6;
+  
+    const reasons: string[] = [
+      ...(sla.isBreach ? [sla.message as string] : sla.isAtRisk ? [sla.message as string] : []),
+      ...(followUpRisk.reasons ?? []).slice(0, 2),
+      `Checklist completion is ${checklistCompletionPct}%.`,
+      `Documents uploaded: ${claim._count.documents}.`,
+    ].filter(Boolean);
+  
     return {
       claimId: claim.id,
       status: claim.status,
-    
+  
       agingDays,
-      daysSinceLastActivity: claim.lastActivityAt ? daysBetween(claim.lastActivityAt, now) : null,
-      daysSinceSubmitted: claim.submittedAt ? daysBetween(claim.submittedAt, now) : null,
-    
-      recommendation: {
-        decision: isOverdue ? 'FOLLOW_UP_NOW' : 'ON_TRACK',
-        confidence: isOverdue ? 0.75 : 0.6,
-        reasons: [
-          ...(isOverdue ? ['Follow-up date is overdue.'] : ['No overdue follow-ups detected.']),
-          `Checklist completion is ${claim.checklistCompletionPct ?? 0}%.`,
-          `Documents uploaded: ${claim._count.documents}.`,
-        ],
+      daysSinceLastActivity,
+      daysSinceSubmitted,
+  
+      // NEW SECTIONS
+      followUp: {
+        nextFollowUpAt: claim.nextFollowUpAt ?? null,
+        isOverdue,
+        risk: followUpRisk,
       },
-    
+  
+      sla,
+  
+      financial,
+  
+      health,
+  
+      recommendation: {
+        decision: recommendationDecision,
+        confidence: recommendationConfidence,
+        reasons,
+      },
+  
       coverage: {
-        coverageGap: !claim.insurancePolicyId && !claim.warrantyId, // adjust if you want smarter logic
+        coverageGap: !claim.insurancePolicyId && !claim.warrantyId,
       },
     };
-  }
+  }  
 
   /**
    * Bulk upload claim-level documents (NOT tied to a checklist item).
@@ -1244,10 +1522,17 @@ export class ClaimsService {
             title: 'Document added',
             description: it.title ?? it.file.originalname,
             claimDocumentId: claimDoc.id,
-            meta: { checklistItemId: it.itemId, bulk: true },
+            meta: {
+              kind: 'DOCUMENT_ADDED',
+              checklistItemId: it.itemId,
+              bulk: true,
+              claimDocumentType: it.claimDocumentType ?? 'OTHER',
+              fileName: it.file.originalname,
+            },
             occurredAt: now,
           },
         });
+        
 
         results.push({
           itemId: it.itemId,

@@ -6,7 +6,6 @@ import type { ClaimDTO, ClaimStatus, ClaimType } from '@/types/claims.types';
 import { regenerateChecklist } from '@/app/(dashboard)/dashboard/properties/[id]/claims/claimsApi';
 import { toast } from '@/components/ui/use-toast';
 
-
 const STATUS_OPTIONS: ClaimStatus[] = [
   'DRAFT',
   'IN_PROGRESS',
@@ -47,10 +46,12 @@ export default function ClaimQuickActions({
   claim,
   busy,
   onPatch,
+  onSubmitBlocked,
 }: {
   claim: ClaimDTO;
   busy: boolean;
   onPatch: (patch: any) => Promise<void>;
+  onSubmitBlocked?: (blocking: any[]) => void;
 }) {
   const [status, setStatus] = useState<ClaimStatus>(claim.status);
   const [type, setType] = useState<ClaimType>(claim.type);
@@ -60,12 +61,20 @@ export default function ClaimQuickActions({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [regenBusy, setRegenBusy] = useState(false);
 
+  // NEW: submit confirmation modal
+  const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
+  const [submitBusy, setSubmitBusy] = useState(false);
+  const [submitBlockedCount, setSubmitBlockedCount] = useState<number>(0);
+
   // ✅ Keep local form state in sync when claim prop changes (e.g., after refresh)
   useEffect(() => {
     setStatus(claim.status);
     setType(claim.type);
     setProviderName(claim.providerName ?? '');
     setClaimNumber(claim.claimNumber ?? '');
+
+    // when claim updates, clear any previous submit-block state
+    setSubmitBlockedCount(0);
   }, [claim.id, claim.status, claim.type, claim.providerName, claim.claimNumber]);
 
   const dirty = useMemo(() => {
@@ -78,18 +87,35 @@ export default function ClaimQuickActions({
 
   const typeDirty = type !== claim.type;
 
-  async function save() {
+  const isSubmittingTransition =
+    status === 'SUBMITTED' && claim.status !== 'SUBMITTED';
+
+  const patchToSave = useMemo(() => {
+    return {
+      status,
+      providerName: providerName || null,
+      claimNumber: claimNumber || null,
+    };
+  }, [status, providerName, claimNumber]);
+
+  async function doPatch(patch: any) {
     try {
-      await onPatch({
-        status,
-        providerName: providerName || null,
-        claimNumber: claimNumber || null,
-      });
+      await onPatch(patch);
+      // success => close submit confirm if open
+      setSubmitConfirmOpen(false);
+      setSubmitBlockedCount(0);
     } catch (e: any) {
       const payload = e?.payload;
       if (e?.status === 409 && payload?.code === 'CLAIM_SUBMIT_BLOCKED') {
         const blocking = payload?.blocking ?? [];
         const first = blocking[0];
+
+        // Notify parent so ClaimChecklist can highlight items
+        onSubmitBlocked?.(blocking);
+
+        // Keep modal open, show blocked count inside it
+        setSubmitBlockedCount(blocking.length);
+
         toast({
           title: 'Cannot submit yet',
           description: first
@@ -99,7 +125,7 @@ export default function ClaimQuickActions({
         });
         return;
       }
-  
+
       toast({
         title: 'Save failed',
         description: e?.message || 'Please try again.',
@@ -108,13 +134,32 @@ export default function ClaimQuickActions({
       throw e;
     }
   }
-  
+
+  async function save() {
+    // If user is transitioning to SUBMITTED, force confirmation
+    if (isSubmittingTransition) {
+      setSubmitConfirmOpen(true);
+      return;
+    }
+
+    await doPatch(patchToSave);
+  }
+
+  async function confirmSubmit() {
+    setSubmitBusy(true);
+    try {
+      await doPatch(patchToSave);
+    } finally {
+      setSubmitBusy(false);
+    }
+  }
 
   function resetForm() {
     setStatus(claim.status);
     setType(claim.type);
     setProviderName(claim.providerName ?? '');
     setClaimNumber(claim.claimNumber ?? '');
+    setSubmitBlockedCount(0);
   }
 
   async function confirmTypeChangeAndRegenerate() {
@@ -125,8 +170,6 @@ export default function ClaimQuickActions({
         replaceExisting: true,
       });
 
-      // ✅ If parent uses "onPatch" to refresh claim data, keep your pattern:
-      // (Many pages do a refresh in onPatch.finally(), so a {} patch triggers it.)
       await onPatch({});
     } finally {
       setRegenBusy(false);
@@ -146,7 +189,7 @@ export default function ClaimQuickActions({
               className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
               value={status}
               onChange={(e) => setStatus(e.target.value as ClaimStatus)}
-              disabled={busy || regenBusy}
+              disabled={busy || regenBusy || submitBusy}
             >
               {STATUS_OPTIONS.map((s) => (
                 <option key={s} value={s}>
@@ -165,7 +208,7 @@ export default function ClaimQuickActions({
               className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
               value={type}
               onChange={(e) => setType(e.target.value as ClaimType)}
-              disabled={busy || regenBusy}
+              disabled={busy || regenBusy || submitBusy}
             >
               {TYPE_OPTIONS.map((t) => (
                 <option key={t} value={t}>
@@ -184,7 +227,7 @@ export default function ClaimQuickActions({
               className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
               value={providerName}
               onChange={(e) => setProviderName(e.target.value)}
-              disabled={busy || regenBusy}
+              disabled={busy || regenBusy || submitBusy}
               placeholder="e.g., State Farm"
             />
           </div>
@@ -195,7 +238,7 @@ export default function ClaimQuickActions({
               className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
               value={claimNumber}
               onChange={(e) => setClaimNumber(e.target.value)}
-              disabled={busy || regenBusy}
+              disabled={busy || regenBusy || submitBusy}
               placeholder="Optional"
             />
           </div>
@@ -205,7 +248,7 @@ export default function ClaimQuickActions({
               <button
                 className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
                 onClick={() => setConfirmOpen(true)}
-                disabled={busy || regenBusy}
+                disabled={busy || regenBusy || submitBusy}
                 title="This will reset checklist progress using the selected type template."
               >
                 Change type + regenerate
@@ -215,7 +258,7 @@ export default function ClaimQuickActions({
             <button
               className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
               onClick={resetForm}
-              disabled={busy || regenBusy || (!dirty && !typeDirty)}
+              disabled={busy || regenBusy || submitBusy || (!dirty && !typeDirty)}
             >
               Reset
             </button>
@@ -223,7 +266,7 @@ export default function ClaimQuickActions({
             <button
               className="rounded-lg bg-emerald-700 px-3 py-2 text-sm text-white hover:bg-emerald-800"
               onClick={save}
-              disabled={busy || regenBusy || !dirty}
+              disabled={busy || regenBusy || submitBusy || !dirty}
             >
               Save
             </button>
@@ -231,6 +274,7 @@ export default function ClaimQuickActions({
         </div>
       </div>
 
+      {/* Existing: Type regen confirm */}
       {confirmOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl">
@@ -282,6 +326,68 @@ export default function ClaimQuickActions({
                 disabled={regenBusy}
               >
                 {regenBusy ? 'Regenerating…' : 'Regenerate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* NEW: Submit confirm */}
+      {submitConfirmOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-lg font-semibold text-gray-900">Submit claim?</div>
+                <div className="mt-1 text-sm text-gray-600">
+                  You’re about to move this claim to{' '}
+                  <span className="font-semibold">SUBMITTED</span>.
+                </div>
+              </div>
+              <button
+                onClick={() => setSubmitConfirmOpen(false)}
+                className="rounded-lg border px-2 py-1 text-sm hover:bg-gray-50"
+                disabled={submitBusy}
+              >
+                Close
+              </button>
+            </div>
+
+            {submitBlockedCount > 0 ? (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                <div className="font-semibold">Cannot submit yet</div>
+                <div className="mt-1 text-xs text-amber-800">
+                  {submitBlockedCount} blocking requirement(s). Fix items marked with ⚠ in the checklist, then try again.
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 rounded-lg border bg-gray-50 p-3 text-sm text-gray-700">
+                <div className="font-semibold">Confirm submission</div>
+                <div className="mt-1 text-xs text-gray-600">
+                  Submission gating will run. If anything is missing, we’ll tell you what to fix.
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
+                onClick={() => setSubmitConfirmOpen(false)}
+                disabled={submitBusy}
+              >
+                Cancel
+              </button>
+              <button
+                className={[
+                  'rounded-lg px-3 py-2 text-sm text-white',
+                  submitBlockedCount > 0
+                    ? 'bg-emerald-200 cursor-not-allowed'
+                    : 'bg-emerald-700 hover:bg-emerald-800',
+                ].join(' ')}
+                onClick={confirmSubmit}
+                disabled={submitBusy || submitBlockedCount > 0}
+              >
+                {submitBusy ? 'Submitting…' : 'Confirm submit'}
               </button>
             </div>
           </div>

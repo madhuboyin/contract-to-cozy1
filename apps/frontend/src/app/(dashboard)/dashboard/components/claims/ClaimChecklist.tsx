@@ -31,9 +31,9 @@ function statusLabel(s: ClaimChecklistStatus) {
 
 function docReqLabel(types?: ClaimDocumentType[], min?: number) {
   const m = min ?? 0;
-  if (m <= 0) return null;
+  if (m <= 0 && !(types?.length ?? 0)) return null;
   const t = (types ?? []).length ? (types ?? []).join(', ') : 'Any';
-  return `Requires ${m} doc(s) (${t})`;
+  return m > 0 ? `Requires ${m} doc(s) (${t})` : `Accepted doc type(s): ${t}`;
 }
 
 function blockingReasonText(b: BlockingEntry) {
@@ -45,6 +45,57 @@ function blockingReasonText(b: BlockingEntry) {
     parts.push(`Upload ${b.missingDocs} more doc(s)${min ? ` (min ${min})` : ''}${types}`);
   }
   return parts.length ? parts.join(' • ') : 'Incomplete requirements';
+}
+
+function normalizeDocType(t?: string | null) {
+  return (t || '').trim().toUpperCase();
+}
+
+function computeDocProgress(
+  item: ClaimChecklistItemDTO,
+  docs: any[]
+): {
+  min: number;
+  totalUploaded: number;
+  satisfied: boolean;
+  pct: number;
+  requiredTypes: string[];
+  requiredByType: { type: string; count: number }[];
+} {
+  const min = item.requiredDocMinCount ?? 0;
+
+  const requiredTypes: string[] = Array.isArray(item.requiredDocTypes)
+    ? (item.requiredDocTypes as any[]).map((t) => normalizeDocType(String(t))).filter(Boolean)
+    : [];
+
+  // docs appear to be ClaimChecklistItemDocument-ish:
+  // d.claimDocumentType might exist, or d.document?.type, or d.documentType
+  const docTypes = (docs ?? [])
+    .map((d: any) =>
+      normalizeDocType(
+        d?.claimDocumentType ??
+          d?.documentType ??
+          d?.document?.type ??
+          d?.document?.documentType ??
+          d?.type
+      )
+    )
+    .filter(Boolean);
+
+  const totalUploaded = docTypes.length;
+
+  const byType: Record<string, number> = {};
+  for (const t of docTypes) byType[t] = (byType[t] || 0) + 1;
+
+  const requiredByType = requiredTypes.map((t) => ({
+    type: t,
+    count: byType[t] || 0,
+  }));
+
+  const satisfied = min <= 0 ? true : totalUploaded >= min;
+  const pct = min <= 0 ? 100 : Math.min(100, Math.round((totalUploaded / min) * 100));
+
+  return { min, totalUploaded, satisfied, pct, requiredTypes, requiredByType };
 }
 
 export default function ClaimChecklist({
@@ -145,9 +196,15 @@ export default function ClaimChecklist({
 
       {items.map((it) => {
         const reqText = docReqLabel(it.requiredDocTypes, it.requiredDocMinCount);
-        const docs = it.documents ?? [];
+        const docs = (it as any).documents ?? [];
         const block = blockingByItemId.get(it.id);
         const isBlocked = Boolean(block);
+
+        const progress = computeDocProgress(it, docs);
+        const shouldShowDocProgress =
+          (it.requiredDocMinCount ?? 0) > 0 || (it.requiredDocTypes?.length ?? 0) > 0;
+
+        const blockingTooltip = block ? blockingReasonText(block as BlockingEntry) : '';
 
         return (
           <div
@@ -174,9 +231,14 @@ export default function ClaimChecklist({
                     </span>
                   )}
 
+                  {/* Replace big amber text block with inline tooltip icon */}
                   {isBlocked ? (
-                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
-                      Needs attention
+                    <span
+                      className="inline-flex h-5 w-5 items-center justify-center rounded bg-amber-100 text-xs font-semibold text-amber-900"
+                      title={blockingTooltip}
+                      aria-label="Needs attention"
+                    >
+                      ⚠
                     </span>
                   ) : null}
                 </div>
@@ -189,9 +251,45 @@ export default function ClaimChecklist({
                   <div className="mt-1 text-xs font-medium text-amber-700">{reqText}</div>
                 ) : null}
 
-                {isBlocked ? (
-                  <div className="mt-2 text-xs font-semibold text-amber-800">
-                    {blockingReasonText(block as BlockingEntry)}
+                {/* Doc progress (x/y + mini progress bar + required type counters) */}
+                {shouldShowDocProgress ? (
+                  <div className="mt-2 space-y-1">
+                    <div className="flex items-center justify-between text-xs text-gray-700">
+                      <span className="opacity-80">Docs</span>
+                      {progress.min > 0 ? (
+                        <span className={progress.satisfied ? 'opacity-80' : 'font-semibold'}>
+                          {progress.totalUploaded}/{progress.min} uploaded
+                        </span>
+                      ) : (
+                        <span className="opacity-80">{progress.totalUploaded} uploaded</span>
+                      )}
+                    </div>
+
+                    {progress.min > 0 ? (
+                      <div className="h-2 w-full rounded bg-black/10">
+                        <div
+                          className="h-2 rounded bg-black/40"
+                          style={{ width: `${progress.pct}%` }}
+                        />
+                      </div>
+                    ) : null}
+
+                    {progress.requiredTypes.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {progress.requiredByType.map((rt) => (
+                          <span
+                            key={rt.type}
+                            className={[
+                              'rounded px-2 py-0.5 text-[11px]',
+                              rt.count > 0 ? 'bg-black/10' : 'bg-black/5 opacity-70',
+                            ].join(' ')}
+                            title={`${rt.type}: ${rt.count} uploaded`}
+                          >
+                            {rt.type}: {rt.count}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

@@ -9,7 +9,6 @@ import { SectionHeader } from '../../../../components/SectionHeader';
 import {
   ClaimDTO,
   getClaim,
-  listClaims,
   regenerateChecklist,
   updateClaim,
 } from '../claimsApi';
@@ -21,9 +20,6 @@ import ClaimQuickActions from '@/app/(dashboard)/dashboard/components/claims/Cla
 import { getClaimInsights } from '../claimsApi';
 import ClaimProgressBar from '@/app/(dashboard)/dashboard/components/claims/ClaimProgressBar';
 
-
-
-
 export default function ClaimDetailClient() {
   const params = useParams<{ id: string; claimId: string }>();
   const propertyId = params.id;
@@ -34,7 +30,6 @@ export default function ClaimDetailClient() {
   const [busy, setBusy] = useState<string | null>(null);
   const [insights, setInsights] = useState<any | null>(null);
   const [blocking, setBlocking] = useState<any[] | null>(null);
-
 
   useEffect(() => {
     refresh();
@@ -50,24 +45,25 @@ export default function ClaimDetailClient() {
       setClaim((prev: ClaimDTO | null) => ({ ...(prev as ClaimDTO), ...updated }));
       await refresh();
     } catch (e: any) {
+      // ClaimQuickActions will also handle submit-blocking toast + pass blocking via onSubmitBlocked
       if (e?.status === 409 && e?.payload?.code === 'CLAIM_SUBMIT_BLOCKED') {
         setBlocking(e.payload.blocking);
-        return; // stop here so UI doesn’t show generic error
+        return;
       }
       throw e;
     } finally {
       setBusy(null);
     }
-  }  
+  }
 
   async function onRegenerateChecklist() {
     setBusy('regen');
     try {
       const updated = await regenerateChecklist(propertyId, claimId, {
-        // default backend behavior: replace existing
         replaceExisting: true,
       });
       setClaim(updated);
+      setBlocking(null);
       await refresh();
     } finally {
       setBusy(null);
@@ -83,6 +79,8 @@ export default function ClaimDetailClient() {
       ]);
       setClaim(claimData);
       setInsights(insightsData);
+      // Clear old submit-blocking state; it should be re-set on next blocked submit attempt
+      setBlocking(null);
     } finally {
       setLoading(false);
     }
@@ -107,6 +105,13 @@ export default function ClaimDetailClient() {
       </div>
     );
   }
+
+  const slaMsg = insights?.sla?.message;
+  const slaIsBreach = Boolean(insights?.sla?.isBreach);
+
+  const followUpRisk = insights?.followUp?.risk;
+  const health = insights?.health;
+  const financial = insights?.financial;
 
   return (
     <div className="space-y-4">
@@ -165,7 +170,9 @@ export default function ClaimDetailClient() {
         claim={claim}
         busy={busy !== null}
         onPatch={onUpdate}
+        onSubmitBlocked={(b) => setBlocking(b)}
       />
+
       <ClaimProgressBar
         percent={claim.checklistCompletionPct ?? 0}
         label="Checklist"
@@ -178,6 +185,7 @@ export default function ClaimDetailClient() {
         }
         muted={Boolean(insights?.followUp?.isOverdue)}
       />
+
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-4">
           <div className="rounded-xl border bg-white p-4">
@@ -186,13 +194,16 @@ export default function ClaimDetailClient() {
               Mark items done. Your completion updates automatically.
             </div>
             <div className="mt-3">
-            <ClaimChecklist
-              propertyId={propertyId}
-              claim={claim}
-              onChanged={refresh}
-              busy={busy !== null}
-              blocking={blocking ?? undefined}
-            />
+              <ClaimChecklist
+                propertyId={propertyId}
+                claim={claim}
+                onChanged={async () => {
+                  setBlocking(null);
+                  await refresh();
+                }}
+                busy={busy !== null}
+                blocking={blocking ?? undefined}
+              />
             </div>
           </div>
         </div>
@@ -201,13 +212,125 @@ export default function ClaimDetailClient() {
           <div className="rounded-xl border bg-white p-4">
             <div className="text-sm font-semibold text-gray-900">Insights</div>
 
+            {/* SLA banner */}
+            {slaMsg ? (
+              <div
+                className={[
+                  'mt-2 rounded-lg border p-2 text-xs',
+                  slaIsBreach
+                    ? 'border-rose-200 bg-rose-50 text-rose-800'
+                    : 'border-amber-200 bg-amber-50 text-amber-800',
+                ].join(' ')}
+              >
+                {slaMsg}
+              </div>
+            ) : null}
+
             <div className="mt-2 grid gap-2 text-sm text-gray-700">
-              <div><span className="text-gray-500">Aging:</span> {insights.agingDays} days</div>
-              <div><span className="text-gray-500">Last activity:</span> {insights.daysSinceLastActivity} days ago</div>
+              <div>
+                <span className="text-gray-500">Aging:</span> {insights.agingDays} days
+              </div>
+              <div>
+                <span className="text-gray-500">Last activity:</span>{' '}
+                {insights.daysSinceLastActivity === null ? '—' : `${insights.daysSinceLastActivity} days ago`}
+              </div>
               {insights.daysSinceSubmitted !== null ? (
-                <div><span className="text-gray-500">Since submitted:</span> {insights.daysSinceSubmitted} days</div>
+                <div>
+                  <span className="text-gray-500">Since submitted:</span> {insights.daysSinceSubmitted} days
+                </div>
               ) : null}
 
+              {/* Follow-up risk */}
+              {followUpRisk ? (
+                <div className="mt-2 rounded-lg border bg-white p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-semibold text-gray-700">Follow-up risk</div>
+                    <span className="rounded-full border px-2 py-0.5 text-xs">
+                      {followUpRisk.level} • {followUpRisk.score}/100
+                    </span>
+                  </div>
+                  {(followUpRisk.reasons ?? []).length ? (
+                    <ul className="mt-2 list-disc pl-5 text-xs text-gray-600">
+                      {(followUpRisk.reasons ?? []).slice(0, 2).map((r: string, i: number) => (
+                        <li key={i}>{r}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {/* Claim health */}
+              {health ? (
+                <div className="mt-2 rounded-lg border bg-white p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-semibold text-gray-700">Claim health</div>
+                    <span className="rounded-full border px-2 py-0.5 text-xs">
+                      {health.level} • {health.score}/100
+                    </span>
+                  </div>
+
+                  <div className="mt-2 h-2 w-full rounded bg-black/10">
+                    <div
+                      className="h-2 rounded bg-black/40"
+                      style={{ width: `${health.score}%` }}
+                    />
+                  </div>
+
+                  {(health.reasons ?? []).length ? (
+                    <ul className="mt-2 list-disc pl-5 text-xs text-gray-600">
+                      {(health.reasons ?? []).slice(0, 3).map((r: string, i: number) => (
+                        <li key={i}>{r}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {/* Settlement vs estimate */}
+              {financial ? (
+                <div className="mt-2 rounded-lg border bg-white p-3">
+                  <div className="text-xs font-semibold text-gray-700">Settlement vs estimate</div>
+
+                  <div className="mt-2 grid gap-1 text-xs text-gray-700">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">Estimate</span>
+                      <span className="font-medium">
+                        {financial.estimatedLossAmount !== null
+                          ? `$${Number(financial.estimatedLossAmount).toLocaleString()}`
+                          : '—'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-500">Settlement</span>
+                      <span className="font-medium">
+                        {financial.settlementAmount !== null
+                          ? `$${Number(financial.settlementAmount).toLocaleString()}`
+                          : '—'}
+                      </span>
+                    </div>
+
+                    {financial.settlementRatio !== null ? (
+                      <>
+                        <div className="mt-1 text-xs text-gray-600">{financial.visual?.label}</div>
+                        <div className="text-xs text-gray-600">
+                          Difference:{' '}
+                          <span className="font-medium">
+                            {Number(financial.settlementVsEstimate) >= 0 ? '+' : ''}
+                            ${Number(financial.settlementVsEstimate).toLocaleString()}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="mt-1 text-xs text-gray-500">
+                        Add estimate & settlement amounts to see comparison.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Existing recommendation */}
               <div className="mt-2">
                 <div className="text-xs font-semibold text-gray-700">Recommendation</div>
                 <div className="mt-1">
@@ -241,11 +364,7 @@ export default function ClaimDetailClient() {
               Keep notes and milestones in one place.
             </div>
             <div className="mt-3">
-              <ClaimTimeline
-                propertyId={propertyId}
-                claim={claim}
-                onChanged={refresh}
-              />
+              <ClaimTimeline propertyId={propertyId} claim={claim} onChanged={refresh} />
             </div>
           </div>
         </div>
