@@ -186,6 +186,7 @@ enum MaintenanceTaskSource {
   RISK_ASSESSMENT
   WARRANTY_RENEWAL
   TEMPLATE
+  RECALL_ALERT 
 }
 
 enum MaintenanceTaskPriority {
@@ -300,6 +301,23 @@ model InventoryItem {
   // Reuse your existing Document table for receipts/photos/manuals
   documents        Document[]
   insuranceQuoteRequests InsuranceQuoteRequest[]
+
+  // Recall matching fields (NEW)
+  manufacturer   String?
+  modelNumber    String?
+  serialNumber   String?
+  upc            String?
+  sku            String?
+
+  // Optional normalized versions to improve matching & indexing
+  manufacturerNorm String?
+  modelNumberNorm  String?
+
+  // relations (NEW)
+  recallMatches  RecallMatch[]
+
+  @@index([manufacturerNorm, modelNumberNorm])
+  @@index([upc])
 
   @@index([propertyId])
   @@index([roomId])
@@ -889,9 +907,13 @@ model PropertyMaintenanceTask {
   // Relations
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   
+  recallMatchId String? @unique
+  recallMatch   RecallMatch?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
+  @@index([recallMatchId])
   @@unique([propertyId, actionKey])
   @@index([propertyId])
   @@index([status])
@@ -996,6 +1018,7 @@ model Property {
 
   claims Claim[]
   claimTimelineEvents ClaimTimelineEvent[]
+  recallMatches      RecallMatch[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1517,6 +1540,15 @@ model HomeAsset {
   // PHASE 1: NEW RELATION
   maintenanceTasks PropertyMaintenanceTask[]
   inventoryItems InventoryItem[]
+
+  manufacturer    String?
+  brand           String?
+  manufacturerNorm String?
+  modelNumberNorm  String?
+
+  recallMatches   RecallMatch[]
+
+  @@index([manufacturerNorm, modelNumberNorm])
   
   @@index([propertyId])
   @@unique([propertyId, assetType]) // Usually only one furnace per house
@@ -2150,6 +2182,11 @@ model Notification {
   createdAt   DateTime @default(now())
 
   deliveries  NotificationDelivery[]
+  
+  recallMatchId String?
+  recallMatch   RecallMatch? @relation(fields: [recallMatchId], references: [id], onDelete: SetNull)
+
+  @@index([recallMatchId])
 
   @@index([userId, createdAt])
   @@index([userId, isRead])
@@ -2364,6 +2401,7 @@ enum ClaimTimelineEventType {
   SETTLEMENT_ISSUED
   CLOSED
   NOTE
+  STATUS_CHANGE
   OTHER
 }
 
@@ -2561,6 +2599,160 @@ model DomainEvent {
   @@index([type, status])
   @@map("domain_events")
 }
+
+// ============================================================================
+// RECALL
+// ============================================================================
+
+enum RecallSource {
+  CPSC        // US Consumer Product Safety Commission (v1)
+  NHTSA       // Vehicle recalls (future)
+  MANUFACTURER
+  USER_REPORTED
+}
+
+enum RecallStatus {
+  ACTIVE
+  ENDED
+  UNKNOWN
+}
+
+enum RecallSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+  UNKNOWN
+}
+
+enum RecallMatchStatus {
+  OPEN                  // active alert (confirmed or high-confidence)
+  NEEDS_CONFIRMATION     // medium confidence - user confirmation required
+  DISMISSED              // user said "not my model"
+  RESOLVED               // user handled recall / fixed / replaced
+}
+
+enum RecallResolutionType {
+  FIXED
+  REPLACED
+  REFUNDED
+  NOT_APPLICABLE
+  IGNORED
+  OTHER
+}
+
+enum RecallMatchMethod {
+  MAKE_MODEL
+  SERIAL
+  UPC
+  SKU
+  TEXT_FUZZY
+}
+
+model RecallRecord {
+  id            String       @id @default(uuid())
+
+  source        RecallSource
+  externalId    String       // e.g., CPSC recall ID / release ID
+  status        RecallStatus @default(ACTIVE)
+  severity      RecallSeverity @default(UNKNOWN)
+
+  title         String
+  summary       String?
+  hazard        String?       // e.g., "Fire hazard"
+  remedy        String?       // e.g., "Stop use and contact manufacturer"
+  remedyUrl     String?
+  recallUrl     String?
+
+  recalledAt    DateTime?     // date recall announced
+  lastSeenAt    DateTime      @default(now()) // ingestion heartbeat
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // optional structured fields
+  affectedUnits String?
+  countryCodes  String[]      @default(["US"])
+  raw           Json?         // store raw payload for traceability/debug
+
+  // relations
+  products      RecallProduct[]
+  matches       RecallMatch[]
+
+  @@unique([source, externalId])
+  @@index([source, status])
+  @@index([recalledAt])
+}
+
+model RecallProduct {
+  id            String   @id @default(uuid())
+  recallId      String
+  recall        RecallRecord @relation(fields: [recallId], references: [id], onDelete: Cascade)
+
+  // normalized matching fields
+  manufacturer  String?  // "Whirlpool"
+  brand         String?  // "KitchenAid"
+  model         String?  // "KDTM404KPS"
+  modelRange    String?  // optional range patterns (future)
+  upc           String?
+  sku           String?
+  serialPrefix  String?
+
+  category      InventoryItemCategory? // leverage your existing enum
+  notes         String?
+
+  createdAt     DateTime @default(now())
+
+  @@index([recallId])
+  @@index([manufacturer, model])
+  @@index([upc])
+}
+
+model RecallMatch {
+  id              String   @id @default(uuid())
+
+  propertyId      String
+  inventoryItemId String?
+  homeAssetId     String?
+
+  recallId        String
+  recall          RecallRecord @relation(fields: [recallId], references: [id], onDelete: Cascade)
+
+  method          RecallMatchMethod @default(MAKE_MODEL)
+  confidencePct   Int       @default(0)  // 0-100
+  status          RecallMatchStatus @default(OPEN)
+
+  // optional details for explainability / audit
+  matchedOn       Json?     // store fields used (manufacturer/model etc)
+  rationale       String?   // human-readable explanation
+
+  // user workflow fields
+  confirmedAt     DateTime?
+  dismissedAt     DateTime?
+  resolvedAt      DateTime?
+  resolutionType  RecallResolutionType?
+  resolutionNotes String?
+
+  // linking to generated follow-ups
+  maintenanceTaskId String? @unique
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // relations
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  homeAsset       HomeAsset? @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
+  maintenanceTask PropertyMaintenanceTask? @relation(fields: [maintenanceTaskId], references: [id], onDelete: SetNull)
+  notifications   Notification[]
+
+  @@index([propertyId, status])
+  @@index([inventoryItemId])
+  @@index([homeAssetId])
+  @@index([recallId])
+  // Prevent duplicates for same recall+asset within a property (important for idempotency)
+  @@unique([propertyId, recallId, inventoryItemId])
+  @@unique([propertyId, recallId, homeAssetId])
+}
+
 
 // ============================================================================
 // FAVORITES
