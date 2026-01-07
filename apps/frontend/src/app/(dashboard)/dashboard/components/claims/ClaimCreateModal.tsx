@@ -49,10 +49,9 @@ export default function ClaimCreateModal({
   async function submit() {
     const t = title.trim();
     if (!t) return;
-
+  
     setBusy(true);
     try {
-      // 1. Await the API response
       const claim = await createClaim(propertyId, {
         title: t,
         description: desc.trim() || null,
@@ -61,20 +60,21 @@ export default function ClaimCreateModal({
         claimNumber: claimNumber.trim() || null,
         generateChecklist: true,
       });
-
-      // 2. Pass the fresh claim object to the parent
-      if (claim) {
-        onCreated(claim as ClaimDTO);
-        
-        onClose();
-        // 3. Reset local state only after successful creation
-        setTitle('');
-        setDesc('');
-        setProviderName('');
-        setClaimNumber('');
-      }
-    } catch (err) {
-      console.error("Failed to create claim:", err);
+  
+      // 1. Success! Call the parent callback
+      onCreated(claim);
+      
+      // 2. IMPORTANT: Explicitly close the modal here
+      onClose();
+  
+      // 3. Reset state
+      setTitle('');
+      setDesc('');
+      setProviderName('');
+      setClaimNumber('');
+    } catch (error) {
+      // If onCreated crashes, this will catch it and allow the modal to reset
+      console.error("Submission failed:", error);
     } finally {
       setBusy(false);
     }

@@ -37,24 +37,20 @@ export default function ClaimsClient() {
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
     if (!query) return claims;
-    
+  
     return claims.filter((c) => {
-      // FIX: Added nullish coalescing (|| '') to ensure .toLowerCase() 
-      // is never called on null values from the API.
-      const title = (c.title || '').toLowerCase();
-      const status = (c.status || '').toLowerCase();
-      const type = (c.type || '').toLowerCase();
-      const provider = (c.providerName || '').toLowerCase();
-      const claimNum = (c.claimNumber || '').toLowerCase();
-      const description = (c.description || '').toLowerCase();
-
-      return (
-        title.includes(query) ||
-        status.includes(query) ||
-        type.includes(query) ||
-        provider.includes(query) ||
-        claimNum.includes(query) ||
-        description.includes(query)
+      // FIX: Safely handle null values from the API response
+      const searchFields = [
+        c.title,
+        c.status,
+        c.type,
+        c.providerName,
+        c.claimNumber,
+        c.description
+      ];
+  
+      return searchFields.some(field => 
+        (field || '').toLowerCase().includes(query)
       );
     });
   }, [claims, q]);
