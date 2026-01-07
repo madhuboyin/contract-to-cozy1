@@ -1,7 +1,7 @@
 import { prisma } from '../lib/prisma';
 
 type DomainEventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED';
-type DomainEventType = 'CLAIM_SUBMITTED' | 'CLAIM_CLOSED';
+type DomainEventType = 'CLAIM_SUBMITTED' | 'CLAIM_CLOSED' | 'FOLLOW_UP_DUE';
 
 function computeBackoffMinutes(attempts: number) {
   if (attempts <= 0) return 0;
@@ -255,4 +255,14 @@ export async function processDomainEventsJob(opts?: { batchSize?: number }) {
   }
 
   return { processed };
+}
+
+async function getEmailEnabled(userId: string): Promise<boolean> {
+  const homeownerProfile = await prisma.homeownerProfile.findFirst({
+    where: { userId },
+    select: { notificationPreferences: true },
+  });
+
+  const preferences = homeownerProfile?.notificationPreferences as { emailEnabled?: boolean } | null;
+  return preferences?.emailEnabled !== false;
 }

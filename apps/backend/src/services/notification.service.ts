@@ -27,6 +27,10 @@ const IMPORTANT_TYPES = new Set<string>([
   'BOOKING_CREATED',
   'BOOKING_CANCELLED',
   'BOOKING_CONFIRMED',
+  // Claims
+  'CLAIM_SUBMITTED',
+  'CLAIM_CLOSED',
+  'FOLLOW_UP_DUE',
 ]);
 
 export class NotificationService {

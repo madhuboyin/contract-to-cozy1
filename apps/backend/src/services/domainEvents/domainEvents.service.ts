@@ -2,12 +2,13 @@
 import { prisma } from '../../lib/prisma';
 
 export type EmitDomainEventInput = {
-  type: 'CLAIM_SUBMITTED' | 'CLAIM_CLOSED';
+  type: 'CLAIM_SUBMITTED' | 'CLAIM_CLOSED' | 'FOLLOW_UP_DUE';
   propertyId?: string | null;
   userId?: string | null;
   idempotencyKey?: string | null;
   payload: any;
 };
+
 
 export class DomainEventsService {
   static async emit(input: EmitDomainEventInput) {

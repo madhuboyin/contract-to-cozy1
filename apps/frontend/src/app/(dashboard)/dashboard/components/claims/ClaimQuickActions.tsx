@@ -1,8 +1,11 @@
+// apps/frontend/src/app/(dashboard)/dashboard/components/claims/ClaimQuickActions.tsx
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
 import type { ClaimDTO, ClaimStatus, ClaimType } from '@/types/claims.types';
 import { regenerateChecklist } from '@/app/(dashboard)/dashboard/properties/[id]/claims/claimsApi';
+import { toast } from '@/components/ui/use-toast';
+
 
 const STATUS_OPTIONS: ClaimStatus[] = [
   'DRAFT',
@@ -76,12 +79,36 @@ export default function ClaimQuickActions({
   const typeDirty = type !== claim.type;
 
   async function save() {
-    await onPatch({
-      status,
-      providerName: providerName || null,
-      claimNumber: claimNumber || null,
-    });
+    try {
+      await onPatch({
+        status,
+        providerName: providerName || null,
+        claimNumber: claimNumber || null,
+      });
+    } catch (e: any) {
+      const payload = e?.payload;
+      if (e?.status === 409 && payload?.code === 'CLAIM_SUBMIT_BLOCKED') {
+        const blocking = payload?.blocking ?? [];
+        const first = blocking[0];
+        toast({
+          title: 'Cannot submit yet',
+          description: first
+            ? `Blocked by: ${first.title} (${first.missingDocs ? `missing ${first.missingDocs} doc(s)` : 'status incomplete'})`
+            : 'Checklist requirements are incomplete.',
+          variant: 'destructive',
+        });
+        return;
+      }
+  
+      toast({
+        title: 'Save failed',
+        description: e?.message || 'Please try again.',
+        variant: 'destructive',
+      });
+      throw e;
+    }
   }
+  
 
   function resetForm() {
     setStatus(claim.status);

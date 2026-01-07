@@ -65,16 +65,21 @@ export type ClaimTimelineEventType =
 // CORE MODELS (DTOs)
 // ==============================
 
-export interface ClaimChecklistItemDTO {
+export type ClaimChecklistItemDTO = {
   id: string;
+  orderIndex: number;
   title: string;
   description?: string | null;
   required: boolean;
   status: ClaimChecklistStatus;
-  orderIndex: number;
-  completedAt?: string | null;
-  primaryClaimDocumentId?: string | null;
-}
+
+  // ✅ NEW
+  requiredDocTypes?: ClaimDocumentType[];
+  requiredDocMinCount?: number;
+
+  // ✅ NEW: item-attached docs (from join table)
+  documents?: ClaimDocumentDTO[];
+};
 
 export interface ClaimTimelineEventDTO {
   id: string;

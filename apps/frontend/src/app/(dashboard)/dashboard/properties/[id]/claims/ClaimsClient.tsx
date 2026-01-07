@@ -9,6 +9,7 @@ import { SectionHeader } from '../../../components/SectionHeader';
 import { ClaimDTO, listClaims } from './claimsApi';
 import ClaimStatusBadge from '@/app/(dashboard)/dashboard/components/claims/ClaimStatusBadge';
 import ClaimCreateModal from '@/app/(dashboard)/dashboard/components/claims/ClaimCreateModal';
+import { getClaimsSummary } from './claimsApi';
 
 export default function ClaimsClient() {
   const params = useParams<{ id: string }>();
@@ -18,16 +19,24 @@ export default function ClaimsClient() {
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
+  const [summary, setSummary] = useState<any | null>(null);
 
   async function refresh() {
     setLoading(true);
     try {
-      const data = await listClaims(propertyId);
-      setClaims(data || []);
+      const claimsData = await listClaims(propertyId);
+      setClaims(claimsData || []);
+  
+      try {
+        const summaryData = await getClaimsSummary(propertyId);
+        setSummary(summaryData || null);
+      } catch {
+        setSummary(null);
+      }
     } finally {
       setLoading(false);
     }
-  }
+  }  
 
   useEffect(() => {
     refresh();
@@ -79,6 +88,28 @@ export default function ClaimsClient() {
           </div>
         }
       />
+      {summary ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl border bg-white p-4">
+            <div className="text-xs text-gray-600">Open claims</div>
+            <div className="mt-1 text-2xl font-semibold text-gray-900">{summary.counts.open}</div>
+          </div>
+          <div className="rounded-xl border bg-white p-4">
+            <div className="text-xs text-gray-600">Overdue follow-ups</div>
+            <div className="mt-1 text-2xl font-semibold text-gray-900">{summary.counts.overdueFollowUps}</div>
+          </div>
+          <div className="rounded-xl border bg-white p-4">
+            <div className="text-xs text-gray-600">Avg aging (open)</div>
+            <div className="mt-1 text-2xl font-semibold text-gray-900">{summary.aging.avgAgingDaysOpen}d</div>
+          </div>
+          <div className="rounded-xl border bg-white p-4">
+            <div className="text-xs text-gray-600">Est. loss (open)</div>
+            <div className="mt-1 text-2xl font-semibold text-gray-900">
+              ${Number(summary.money.totalEstimatedLossOpen ?? 0).toLocaleString()}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="flex items-center gap-2">
         <input

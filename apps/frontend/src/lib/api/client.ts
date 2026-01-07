@@ -79,8 +79,13 @@ import {
 // REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
 
 // FIX 1: Define a custom Error class to carry API error messages and status
+
 class APIError extends Error {
-  constructor(message: string, public status: number | string = 'API_ERROR') {
+  constructor(
+    message: string,
+    public status: number | string = 'API_ERROR',
+    public payload?: any
+  ) {
     super(message);
     this.name = 'APIError';
   }
@@ -269,7 +274,7 @@ class APIClient {
         }
         
         const errorMessage = typeof rawError === 'string' ? rawError : 'An unexpected error occurred';
-        throw new APIError(errorMessage, response.status);
+        throw new APIError(errorMessage, response.status, data);
       }
 
       // --- SUCCESS HANDLING ---
@@ -316,7 +321,7 @@ class APIClient {
         if (!response.ok || data.success === false) {
           const errorMessage = (data && data.error) || (data && data.message) || `HTTP Error: ${response.status}`;
           // FIX: Throw error
-          throw new APIError(errorMessage, response.status);
+          throw new APIError(errorMessage, response.status, data);
         }
 
         return data; // This is the APIResponse
@@ -1229,14 +1234,18 @@ class APIClient {
 
     if (!response.ok) {
         let errorMessage = 'Failed to download PDF.';
+        let errorData: any = null;
         try {
             // Attempt to read error message if provided as JSON, otherwise rely on status text
-            const errorData = await response.json();
+            errorData = await response.json();
             errorMessage = errorData.message || response.statusText;
         } catch {
             errorMessage = response.statusText;
         }
-        throw new APIError(errorMessage, response.status);
+        const err: any = new APIError(errorMessage, response.status);
+        err.payload = errorData;          // ✅ attach backend JSON
+        err.status = response.status; // ✅ normalize
+        throw err;
     }
 
     // Return the response body as a Blob

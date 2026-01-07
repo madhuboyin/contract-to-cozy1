@@ -1,12 +1,20 @@
 // apps/backend/src/services/claims/claims.templates.ts
 
 import { ClaimType } from '../../types/claims.types';
+import type { ClaimDocumentType } from '@prisma/client';
+
+export type ChecklistDocRequirement = {
+  docTypes: ClaimDocumentType[];
+  minCount: number;
+};
 
 export type ChecklistTemplateItem = {
   title: string;
   description?: string;
   required?: boolean;
+  docRequirement?: ChecklistDocRequirement; // ✅ NEW
 };
+
 
 export const CLAIM_CHECKLIST_TEMPLATES: Record<ClaimType, ChecklistTemplateItem[]> = {
   WATER_DAMAGE: [

@@ -24,6 +24,7 @@ import { runHomeReportExportPoller } from './runners/homeReportExport.poller';
 import { runReportExportCleanup } from './runners/reportExport.cleanup';
 import { startDomainEventsPoller } from './runners/domainEvents.poller';
 import { startHighPriorityEmailEnqueuePoller } from './runners/highPriorityEmailEnqueue.poller';
+import { startClaimFollowUpDuePoller } from './runners/claimFollowUpDue.poller';
 
 
 const prisma = new PrismaClient();
@@ -584,5 +585,9 @@ startDomainEventsPoller({
   batchSize: 25,
 });
 
+startClaimFollowUpDuePoller({
+  intervalMs: 60_000,
+  batchSize: 50,
+});
 // Start the worker
 startWorker();

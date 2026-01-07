@@ -13,6 +13,260 @@ import { assertValidTransition } from './claims.transitions';
 import { DomainEventsService } from '../domainEvents/domainEvents.service';
 import { ClaimStatus } from '../../types/claims.types';
 
+import { ClaimDocumentType, ClaimTimelineEventType} from '@prisma/client';
+
+type UploadAndAttachArgs = {
+  propertyId: string;
+  claimId: string;
+  itemId: string;
+  userId: string;
+  file: Express.Multer.File;
+
+  claimDocumentType?: ClaimDocumentType;
+  title: string | null;
+  notes: string | null;
+};
+
+type BulkUploadClaimDocumentInput = {
+  file: Express.Multer.File;
+  claimDocumentType?: ClaimDocumentType; // claim doc type enum
+  title?: string | null;
+  notes?: string | null;
+
+  // Optional: if you want claim docs also visible on policy/warranty
+  attachToPolicy?: boolean;
+  attachToWarranty?: boolean;
+};
+
+type BulkUploadChecklistItemDocumentInput = {
+  itemId: string;
+  file: Express.Multer.File;
+
+  claimDocumentType?: ClaimDocumentType;
+  title?: string | null;
+  notes?: string | null;
+
+  // Optional: set as primary document if item has none
+  setAsPrimaryIfEmpty?: boolean;
+};
+
+export type ClaimsSummaryDTO = {
+  propertyId: string;
+
+  counts: {
+    total: number;
+    open: number;
+    overdueFollowUps: number;
+  };
+
+  money: {
+    totalEstimatedLossOpen: number; // sum estimatedLossAmount for open claims
+  };
+
+  aging: {
+    avgAgingDaysOpen: number; // average days since openedAt/createdAt
+  };
+};
+export async function uploadAndAttachChecklistItemDocument(args: UploadAndAttachArgs) {
+  const { propertyId, claimId, itemId, userId, file } = args;
+
+  // 1) Validate claim + item ownership under property (IDOR safety)
+  const claim = await prisma.claim.findFirst({
+    where: { id: claimId, propertyId },
+    select: { id: true, propertyId: true, createdBy: true },
+  });
+  if (!claim) {
+    const err: any = new Error('Claim not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const item = await prisma.claimChecklistItem.findFirst({
+    where: { id: itemId, claimId },
+    select: { id: true, claimId: true, primaryClaimDocumentId: true },
+  });
+  if (!item) {
+    const err: any = new Error('Checklist item not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  // 2) Upload the binary to storage -> get fileUrl
+  const uploaded = await uploadFileToStorage({
+    buffer: file.buffer,
+    mimeType: file.mimetype,
+    originalName: file.originalname,
+    propertyId,
+    claimId,
+  });
+
+  // 3) Create Document row
+  // IMPORTANT: Your Document model uses DocumentType (not provided in this batch).
+  // We keep it safe: set type = OTHER (or map from mimetype if you want).
+  const document = await prisma.document.create({
+    data: {
+      uploadedBy: userId,
+      propertyId,
+      type: 'OTHER' as any, // ⬅️ map to your DocumentType enum if desired
+      name: uploaded.name,
+      description: null,
+      fileUrl: uploaded.fileUrl,
+      fileSize: uploaded.fileSize,
+      mimeType: uploaded.mimeType,
+      metadata: uploaded.metadata ?? null,
+    },
+    select: { id: true, fileUrl: true, name: true, mimeType: true },
+  });
+
+  // 4) Create or reuse ClaimDocument join row (unique claimId+documentId exists)
+  const claimDoc = await prisma.claimDocument.upsert({
+    where: { claimId_documentId: { claimId, documentId: document.id } },
+    update: {
+      type: args.claimDocumentType ?? ClaimDocumentType.OTHER,
+      title: args.title,
+      notes: args.notes,
+    },
+    create: {
+      claimId,
+      documentId: document.id,
+      type: args.claimDocumentType ?? ClaimDocumentType.OTHER,
+      title: args.title,
+      notes: args.notes,
+    },
+    select: { id: true },
+  });
+
+  // 5) Link to checklist item (many-to-many)
+  await prisma.claimChecklistItemDocument.upsert({
+    where: {
+      claimChecklistItemId_claimDocumentId: {
+        claimChecklistItemId: itemId,
+        claimDocumentId: claimDoc.id,
+      },
+    },
+    update: {},
+    create: {
+      claimChecklistItemId: itemId,
+      claimDocumentId: claimDoc.id,
+    },
+  });
+
+  // 6) Set primary doc if empty (nice UX)
+  if (!item.primaryClaimDocumentId) {
+    await prisma.claimChecklistItem.update({
+      where: { id: itemId },
+      data: { primaryClaimDocumentId: claimDoc.id },
+    });
+  }
+
+  // 7) Timeline event
+  await prisma.claimTimelineEvent.create({
+    data: {
+      claimId,
+      propertyId,
+      createdBy: userId,
+      type: ClaimTimelineEventType.DOCUMENT_ADDED,
+      title: 'Document added',
+      description: args.title || file.originalname,
+      claimDocumentId: claimDoc.id,
+      meta: { checklistItemId: itemId },
+      occurredAt: new Date(),
+    },
+  });
+
+  // 8) Update claim lastActivityAt
+  await prisma.claim.update({
+    where: { id: claimId },
+    data: { lastActivityAt: new Date() },
+  });
+
+  // Return updated claim (recommended) so UI can refresh cheaply.
+  // If your existing pattern is “return claim”, keep consistent.
+  return prisma.claim.findFirst({
+    where: { id: claimId, propertyId },
+    include: buildClaimIncludesForDetail(), // see helper below
+  });
+}
+
+/**
+ * ✅ Storage adapter: wire this to your real storage (S3/R2/local).
+ * Returns a URL that the frontend can open.
+ */
+async function uploadFileToStorage(args: {
+  buffer: Buffer;
+  mimeType: string;
+  originalName: string;
+  propertyId: string;
+  claimId: string;
+}): Promise<{
+  name: string;
+  fileUrl: string;
+  fileSize: number;
+  mimeType: string;
+  metadata?: any;
+}> {
+  const { PutObjectCommand } = await import('@aws-sdk/client-s3');
+  const { getS3Client } = await import('../storage/s3Client');
+  const { presignGetObject } = await import('../storage/presign');
+
+  const bucket = process.env.S3_BUCKET;
+  if (!bucket) throw new Error('S3_BUCKET is not set');
+
+  const client = getS3Client();
+  const key = `claims/${args.propertyId}/${args.claimId}/${Date.now()}-${args.originalName}`
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9._-]/g, '');
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: args.buffer,
+      ContentType: args.mimeType,
+      Metadata: {
+        propertyid: args.propertyId,
+        claimid: args.claimId,
+        originalname: args.originalName,
+      },
+    })
+  );
+
+  const fileUrl = await presignGetObject({
+    bucket,
+    key,
+    expiresInSeconds: 60 * 60 * 24 * 7, // 7 days
+  });
+
+  return {
+    name: args.originalName,
+    fileUrl,
+    fileSize: args.buffer.length,
+    mimeType: args.mimeType,
+    metadata: {
+      bucket,
+      key,
+      propertyId: args.propertyId,
+      claimId: args.claimId,
+    },
+  };
+}
+
+function buildClaimIncludesForDetail() {
+  return {
+    checklistItems: {
+      orderBy: { orderIndex: 'asc' as const },
+      include: {
+        itemDocuments: {
+          include: {
+            claimDocument: { include: { document: true } },
+          },
+        },
+      },
+    },
+    documents: { include: { document: true } },
+    timelineEvents: { orderBy: { occurredAt: 'desc' as const } },
+  };
+}
 
 function mustHave(value: any, message: string) {
   if (!value) throw new Error(message);
@@ -66,16 +320,58 @@ export class ClaimsService {
     const claim = await prisma.claim.findFirst({
       where: { id: claimId, propertyId },
       include: {
-        checklistItems: { orderBy: { orderIndex: 'asc' } },
-        documents: { orderBy: { createdAt: 'desc' }, include: { document: true } },
-        timelineEvents: { orderBy: { occurredAt: 'desc' }, include: { claimDocument: true } },
+        checklistItems: {
+          orderBy: { orderIndex: 'asc' },
+          include: {
+            itemDocuments: {
+              include: {
+                claimDocument: {
+                  include: {
+                    document: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+  
+        documents: {
+          orderBy: { createdAt: 'desc' },
+          include: { document: true },
+        },
+  
+        timelineEvents: {
+          orderBy: { occurredAt: 'desc' },
+          include: {
+            claimDocument: {
+              include: { document: true },
+            },
+          },
+        },
+  
         insurancePolicy: true,
         warranty: true,
       },
     });
+  
     if (!claim) throw new Error('Claim not found');
-    return claim;
-  }
+  
+    // ✅ Normalize checklistItems → expose `documents[]`
+    const normalized = {
+      ...claim,
+      checklistItems: claim.checklistItems.map((it) => ({
+        ...it,
+  
+        // Flatten join table → frontend-friendly shape
+        documents: (it.itemDocuments ?? []).map((r) => r.claimDocument),
+  
+        // Optional: hide join table from response
+        itemDocuments: undefined,
+      })),
+    };
+  
+    return normalized;
+  }  
 
   static async regenerateChecklist(
     propertyId: string,
@@ -262,6 +558,12 @@ export class ClaimsService {
       nextStatus === 'CLOSED' &&
       !claim.closedAt &&
       input.closedAt === undefined;
+
+    const shouldAutoSetNextFollowUp =
+      isTransitioning &&
+      requestedStatus === 'SUBMITTED' &&
+      !claim.nextFollowUpAt &&
+      input.nextFollowUpAt === undefined;
   
     // If it's a duplicate status update (SUBMITTED again), do nothing for status
     // but still allow updating other fields (providerName, claimNumber, etc.)
@@ -303,8 +605,13 @@ export class ClaimsService {
         deductibleAmount: input.deductibleAmount ?? undefined,
         estimatedLossAmount: input.estimatedLossAmount ?? undefined,
         settlementAmount: input.settlementAmount ?? undefined,
-  
-        nextFollowUpAt: input.nextFollowUpAt !== undefined ? isoToDateOrNull(input.nextFollowUpAt) : undefined,
+        
+        nextFollowUpAt:
+        input.nextFollowUpAt !== undefined
+          ? isoToDateOrNull(input.nextFollowUpAt)
+          : shouldAutoSetNextFollowUp
+            ? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+            : undefined,
   
         lastActivityAt: now,
       },
@@ -334,6 +641,90 @@ export class ClaimsService {
       });
     }
   
+    async function validateCanSubmitClaim(propertyId: string, claimId: string) {
+      const claim = await prisma.claim.findFirst({
+        where: { id: claimId, propertyId },
+        include: {
+          checklistItems: {
+            include: {
+              itemDocuments: {
+                include: {
+                  claimDocument: true,
+                },
+              },
+            },
+          },
+        },
+      });
+    
+      if (!claim) {
+        const err: any = new Error('Claim not found');
+        err.statusCode = 404;
+        throw err;
+      }
+    
+      const blocking: Array<any> = [];
+    
+      for (const it of claim.checklistItems ?? []) {
+        // Required status rule
+        const requiredStatusOk =
+          !it.required || it.status === 'DONE' || it.status === 'NOT_APPLICABLE';
+    
+        // Required docs rule
+        const min = it.requiredDocMinCount ?? 0;
+        const requiredTypes = it.requiredDocTypes ?? [];
+    
+        // Backward compat: count primary doc even if join missing
+        const itemDocRows = it.itemDocuments ?? [];
+        const attachedClaimDocs = itemDocRows.map((r: any) => r.claimDocument);
+    
+        // include primary doc if present and not already counted
+        if (it.primaryClaimDocumentId) {
+          const already = attachedClaimDocs.some((d: any) => d.id === it.primaryClaimDocumentId);
+          if (!already) {
+            const primary = await prisma.claimDocument.findUnique({
+              where: { id: it.primaryClaimDocumentId },
+            });
+            if (primary) attachedClaimDocs.push(primary as any);
+          }
+        }
+    
+        let docCountOk = true;
+        let missingDocs = 0;
+    
+        if (min > 0) {
+          const matching =
+            requiredTypes.length === 0
+              ? attachedClaimDocs
+              : attachedClaimDocs.filter((d: any) => requiredTypes.includes(d.type));
+    
+          docCountOk = matching.length >= min;
+          missingDocs = Math.max(0, min - matching.length);
+        }
+    
+        if (!requiredStatusOk || !docCountOk) {
+          blocking.push({
+            itemId: it.id,
+            title: it.title,
+            required: it.required,
+            status: it.status,
+            missingStatus: !requiredStatusOk,
+            missingDocs,
+            requiredDocTypes: requiredTypes,
+            requiredDocMinCount: min,
+          });
+        }
+      }
+    
+      if (blocking.length > 0) {
+        const err: any = new Error('Claim cannot be submitted. Checklist requirements are incomplete.');
+        err.statusCode = 409;
+        err.code = 'CLAIM_SUBMIT_BLOCKED';
+        err.details = { blocking };
+        throw err;
+      }
+    }
+    
     // ✅ Emit domain events (outbox) only for real transitions
     if (requestedStatus && isTransitioning) {
       if (requestedStatus === 'SUBMITTED') {
@@ -371,7 +762,10 @@ export class ClaimsService {
         });
       }
     }
-  
+    
+    if (nextStatus === 'SUBMITTED') {
+      await validateCanSubmitClaim(propertyId, claimId);
+    }
     return updated;
   }
      
@@ -507,6 +901,527 @@ export class ClaimsService {
 
     return prisma.claimChecklistItem.findUnique({ where: { id: itemId } });
   }
+
+  static async getClaimsSummary(propertyId: string): Promise<ClaimsSummaryDTO> {
+    const now = new Date();
+
+    const claims = await prisma.claim.findMany({
+      where: { propertyId },
+      select: {
+        id: true,
+        status: true,
+        createdAt: true,
+        openedAt: true,
+        nextFollowUpAt: true,
+        estimatedLossAmount: true,
+      },
+    });
+
+    const isOpen = (s: ClaimStatus) => s !== 'CLOSED';
+
+    const openClaims = claims.filter((c) => isOpen(c.status as ClaimStatus));
+    const overdue = openClaims.filter((c) => c.nextFollowUpAt && c.nextFollowUpAt <= now);
+
+    const totalEstimatedLossOpen = openClaims.reduce((sum, c) => {
+      const v = decToNumber(c.estimatedLossAmount);
+      return sum + (v ?? 0);
+    }, 0);
+
+    const avgAgingDaysOpen =
+      openClaims.length === 0
+        ? 0
+        : Math.round(
+            openClaims.reduce((sum, c) => {
+              const start = c.openedAt ?? c.createdAt;
+              return sum + daysBetween(start, now);
+            }, 0) / openClaims.length
+          );
+
+    return {
+      propertyId,
+      counts: {
+        total: claims.length,
+        open: openClaims.length,
+        overdueFollowUps: overdue.length,
+      },
+      money: {
+        totalEstimatedLossOpen,
+      },
+      aging: {
+        avgAgingDaysOpen,
+      },
+    };
+  }
+
+  static async getClaimInsights(propertyId: string, claimId: string) {
+    const now = new Date();
+    
+    const claim = await prisma.claim.findFirst({
+      where: { id: claimId, propertyId },
+      select: {
+        id: true,
+        status: true,
+        createdAt: true,
+        openedAt: true,
+        submittedAt: true,
+        closedAt: true,
+        nextFollowUpAt: true,
+        estimatedLossAmount: true,
+        settlementAmount: true,
+        checklistCompletionPct: true,
+        lastActivityAt: true,
+        insurancePolicyId: true,
+        warrantyId: true,
+        _count: {
+          select: {
+            documents: true,
+            timelineEvents: true,
+            checklistItems: true,
+          },
+        },
+      },
+    });
+
+    if (!claim) throw new Error('Claim not found');
+
+    const startDate = claim.openedAt ?? claim.createdAt;
+    const agingDays = daysBetween(startDate, now);
+    const isOverdue = claim.nextFollowUpAt && claim.nextFollowUpAt <= now;
+
+    return {
+      claimId: claim.id,
+      status: claim.status,
+    
+      agingDays,
+      daysSinceLastActivity: claim.lastActivityAt ? daysBetween(claim.lastActivityAt, now) : null,
+      daysSinceSubmitted: claim.submittedAt ? daysBetween(claim.submittedAt, now) : null,
+    
+      recommendation: {
+        decision: isOverdue ? 'FOLLOW_UP_NOW' : 'ON_TRACK',
+        confidence: isOverdue ? 0.75 : 0.6,
+        reasons: [
+          ...(isOverdue ? ['Follow-up date is overdue.'] : ['No overdue follow-ups detected.']),
+          `Checklist completion is ${claim.checklistCompletionPct ?? 0}%.`,
+          `Documents uploaded: ${claim._count.documents}.`,
+        ],
+      },
+    
+      coverage: {
+        coverageGap: !claim.insurancePolicyId && !claim.warrantyId, // adjust if you want smarter logic
+      },
+    };
+  }
+
+  /**
+   * Bulk upload claim-level documents (NOT tied to a checklist item).
+   * Creates Document + ClaimDocument + Timeline events, updates claim.lastActivityAt.
+   */
+  static async bulkUploadClaimDocuments(
+    propertyId: string,
+    claimId: string,
+    userId: string,
+    inputs: BulkUploadClaimDocumentInput[]
+  ) {
+    if (!inputs?.length) return [];
+
+    // IDOR safety
+    const claim = await prisma.claim.findFirst({
+      where: { id: claimId, propertyId },
+      select: { id: true, propertyId: true, insurancePolicyId: true, warrantyId: true },
+    });
+    if (!claim) {
+      const err: any = new Error('Claim not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const now = new Date();
+
+    const created = await prisma.$transaction(async (tx) => {
+      const results: any[] = [];
+
+      for (const it of inputs) {
+        if (!it?.file) continue;
+
+        // 1) Upload binary
+        const uploaded = await uploadFileToStorage({
+          buffer: it.file.buffer,
+          mimeType: it.file.mimetype,
+          originalName: it.file.originalname,
+          propertyId,
+          claimId,
+        });
+
+        // 2) Create Document row
+        const doc = await tx.document.create({
+          data: {
+            propertyId,
+            uploadedBy: userId,
+            type: 'OTHER' as any, // map if you have a real DocumentType enum
+            name: uploaded.name,
+            description: null,
+            fileUrl: uploaded.fileUrl,
+            fileSize: uploaded.fileSize,
+            mimeType: uploaded.mimeType,
+            metadata: uploaded.metadata ?? null,
+
+            // Optional: attach to policy/warranty if requested and exists
+            policyId: it.attachToPolicy ? (claim.insurancePolicyId ?? null) : null,
+            warrantyId: it.attachToWarranty ? (claim.warrantyId ?? null) : null,
+          },
+        });
+
+        // 3) Create ClaimDocument row
+        const claimDoc = await tx.claimDocument.create({
+          data: {
+            claimId,
+            documentId: doc.id,
+            type: (it.claimDocumentType ?? ClaimDocumentType.OTHER) as any,
+            title: it.title ?? null,
+            notes: it.notes ?? null,
+          },
+          include: { document: true },
+        });
+
+        // 4) Timeline event
+        await tx.claimTimelineEvent.create({
+          data: {
+            claimId,
+            propertyId,
+            createdBy: userId,
+            type: ClaimTimelineEventType.DOCUMENT_ADDED,
+            title: 'Document added',
+            description: it.title ?? it.file.originalname,
+            claimDocumentId: claimDoc.id,
+            meta: { bulk: true },
+            occurredAt: now,
+          },
+        });
+
+        results.push(claimDoc);
+      }
+
+      // 5) bump claim lastActivityAt once
+      await tx.claim.update({
+        where: { id: claimId },
+        data: { lastActivityAt: now },
+      });
+
+      return results;
+    });
+
+    return created;
+  }
+
+  /**
+   * Bulk upload documents tied to checklist items.
+   * Creates Document + ClaimDocument + join table ClaimChecklistItemDocument.
+   * Creates timeline events and updates claim.lastActivityAt.
+   */
+  static async bulkUploadChecklistItemDocuments(
+    propertyId: string,
+    claimId: string,
+    userId: string,
+    inputs: BulkUploadChecklistItemDocumentInput[]
+  ) {
+    if (!inputs?.length) return [];
+
+    // IDOR safety
+    const claim = await prisma.claim.findFirst({
+      where: { id: claimId, propertyId },
+      select: { id: true, propertyId: true },
+    });
+    if (!claim) {
+      const err: any = new Error('Claim not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    // Validate all itemIds belong to claimId (avoid partial IDOR)
+    const itemIds = Array.from(new Set(inputs.map((x) => x.itemId).filter(Boolean)));
+    const items = await prisma.claimChecklistItem.findMany({
+      where: { claimId, id: { in: itemIds } },
+      select: { id: true, primaryClaimDocumentId: true },
+    });
+
+    const itemMap = new Map(items.map((i) => [i.id, i]));
+    const missing = itemIds.filter((id) => !itemMap.has(id));
+    if (missing.length) {
+      const err: any = new Error(`Checklist item not found: ${missing[0]}`);
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const now = new Date();
+
+    const created = await prisma.$transaction(async (tx) => {
+      const results: Array<{
+        itemId: string;
+        claimDocumentId: string;
+        documentId: string;
+        fileUrl: string;
+        name: string;
+      }> = [];
+
+      for (const it of inputs) {
+        if (!it?.file) continue;
+
+        const item = itemMap.get(it.itemId)!;
+
+        // 1) Upload binary
+        const uploaded = await uploadFileToStorage({
+          buffer: it.file.buffer,
+          mimeType: it.file.mimetype,
+          originalName: it.file.originalname,
+          propertyId,
+          claimId,
+        });
+
+        // 2) Create Document row
+        const doc = await tx.document.create({
+          data: {
+            propertyId,
+            uploadedBy: userId,
+            type: 'OTHER' as any,
+            name: uploaded.name,
+            description: null,
+            fileUrl: uploaded.fileUrl,
+            fileSize: uploaded.fileSize,
+            mimeType: uploaded.mimeType,
+            metadata: uploaded.metadata ?? null,
+          },
+          select: { id: true, fileUrl: true, name: true },
+        });
+
+        // 3) Create ClaimDocument row (unique claimId+documentId constraint exists in your other function,
+        // but here it's always new doc => safe to create)
+        const claimDoc = await tx.claimDocument.create({
+          data: {
+            claimId,
+            documentId: doc.id,
+            type: (it.claimDocumentType ?? ClaimDocumentType.OTHER) as any,
+            title: it.title ?? null,
+            notes: it.notes ?? null,
+          },
+          select: { id: true },
+        });
+
+        // 4) Join to checklist item
+        await tx.claimChecklistItemDocument.upsert({
+          where: {
+            claimChecklistItemId_claimDocumentId: {
+              claimChecklistItemId: it.itemId,
+              claimDocumentId: claimDoc.id,
+            },
+          },
+          update: {},
+          create: {
+            claimChecklistItemId: it.itemId,
+            claimDocumentId: claimDoc.id,
+          },
+        });
+
+        // 5) Set primary doc if empty (optional behavior)
+        const wantsPrimary = it.setAsPrimaryIfEmpty !== false; // default true
+        if (wantsPrimary && !item.primaryClaimDocumentId) {
+          await tx.claimChecklistItem.update({
+            where: { id: it.itemId },
+            data: { primaryClaimDocumentId: claimDoc.id },
+          });
+
+          // Update our cached map (so later uploads don’t re-update)
+          item.primaryClaimDocumentId = claimDoc.id as any;
+          itemMap.set(it.itemId, item as any);
+        }
+
+        // 6) Timeline event
+        await tx.claimTimelineEvent.create({
+          data: {
+            claimId,
+            propertyId,
+            createdBy: userId,
+            type: ClaimTimelineEventType.DOCUMENT_ADDED,
+            title: 'Document added',
+            description: it.title ?? it.file.originalname,
+            claimDocumentId: claimDoc.id,
+            meta: { checklistItemId: it.itemId, bulk: true },
+            occurredAt: now,
+          },
+        });
+
+        results.push({
+          itemId: it.itemId,
+          claimDocumentId: claimDoc.id,
+          documentId: doc.id,
+          fileUrl: doc.fileUrl,
+          name: doc.name,
+        });
+      }
+
+      await tx.claim.update({
+        where: { id: claimId },
+        data: { lastActivityAt: now },
+      });
+
+      return results;
+    });
+
+    // Optional: if you want checklist % to reflect doc rules quickly,
+    // you can recompute here (cheap) or leave it for when user marks DONE.
+    // await recomputeChecklistCompletionPct(claimId);
+
+    return created;
+  }
+  
+  static async exportClaimsCsv(propertyId: string): Promise<string> {
+    const now = new Date();
+
+    const claims = await prisma.claim.findMany({
+      where: { propertyId },
+      orderBy: { lastActivityAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        type: true,
+        providerName: true,
+        claimNumber: true,
+
+        createdAt: true,
+        openedAt: true,
+        submittedAt: true,
+        closedAt: true,
+        nextFollowUpAt: true,
+        lastActivityAt: true,
+
+        checklistCompletionPct: true,
+        estimatedLossAmount: true,
+        settlementAmount: true,
+
+        insurancePolicyId: true,
+        warrantyId: true,
+
+        _count: {
+          select: {
+            documents: true,
+            timelineEvents: true,
+            checklistItems: true,
+          },
+        },
+      },
+    });
+
+    const header = [
+      'claimId',
+      'title',
+      'status',
+      'type',
+      'providerName',
+      'claimNumber',
+
+      // "Insights-style" computed fields
+      'agingDays',
+      'daysSinceLastActivity',
+      'daysSinceSubmitted',
+      'recommendationDecision',
+      'recommendationConfidence',
+      'recommendationReasons',
+      'coverageGap',
+
+      // Counts
+      'documentsCount',
+      'timelineEventsCount',
+      'checklistItemsCount',
+
+      // Progress & money
+      'checklistCompletionPct',
+      'estimatedLossAmount',
+      'settlementAmount',
+
+      // Milestone dates
+      'createdAt',
+      'openedAt',
+      'submittedAt',
+      'closedAt',
+      'nextFollowUpAt',
+      'lastActivityAt',
+    ];
+
+    const rows = claims.map((c) => {
+      const startDate = c.openedAt ?? c.createdAt;
+      const agingDays = daysBetween(startDate, now);
+
+      const daysSinceLastActivity = c.lastActivityAt
+        ? daysBetween(c.lastActivityAt, now)
+        : '';
+
+      const daysSinceSubmitted = c.submittedAt
+        ? daysBetween(c.submittedAt, now)
+        : '';
+
+      const isOverdue = Boolean(c.nextFollowUpAt && c.nextFollowUpAt <= now);
+
+      // same logic as getClaimInsights
+      const decision = isOverdue ? 'FOLLOW_UP_NOW' : 'ON_TRACK';
+      const confidence = isOverdue ? 0.75 : 0.6;
+
+      const reasons = [
+        ...(isOverdue ? ['Follow-up date is overdue.'] : ['No overdue follow-ups detected.']),
+        `Checklist completion is ${c.checklistCompletionPct ?? 0}%.`,
+        `Documents uploaded: ${c._count.documents}.`,
+      ];
+
+      const coverageGap = !c.insurancePolicyId && !c.warrantyId;
+
+      return [
+        csv(c.id),
+        csv(c.title ?? ''),
+        csv(String(c.status ?? '')),
+        csv(String(c.type ?? '')),
+        csv(c.providerName ?? ''),
+        csv(c.claimNumber ?? ''),
+
+        csv(String(agingDays)),
+        csv(String(daysSinceLastActivity)),
+        csv(String(daysSinceSubmitted)),
+        csv(decision),
+        csv(String(confidence)),
+        csv(reasons.join(' | ')),
+        csv(coverageGap ? 'true' : 'false'),
+
+        csv(String(c._count.documents ?? 0)),
+        csv(String(c._count.timelineEvents ?? 0)),
+        csv(String(c._count.checklistItems ?? 0)),
+
+        csv(String(c.checklistCompletionPct ?? 0)),
+        csv(decToNumber(c.estimatedLossAmount) ?? ''),
+        csv(decToNumber(c.settlementAmount) ?? ''),
+
+        csv(toIso(c.createdAt)),
+        csv(toIso(c.openedAt)),
+        csv(toIso(c.submittedAt)),
+        csv(toIso(c.closedAt)),
+        csv(toIso(c.nextFollowUpAt)),
+        csv(toIso(c.lastActivityAt)),
+      ].join(',');
+    });
+
+    return [header.join(','), ...rows].join('\n');
+  }
+}
+
+function decToNumber(dec: any): number | null {
+  if (!dec) return null;
+  if (typeof dec === 'number') return dec;
+  if (typeof dec === 'string') return parseFloat(dec);
+  // Prisma Decimal type
+  if (dec && typeof dec.toString === 'function') return parseFloat(dec.toString());
+  return null;
+}
+
+function daysBetween(start: Date, end: Date): number {
+  const diff = end.getTime() - start.getTime();
+  return Math.floor(diff / (1000 * 60 * 60 * 24));
 }
 
 async function generateChecklistForClaim(claimId: string, claimType: ClaimType) {
@@ -527,3 +1442,14 @@ async function generateChecklistForClaim(claimId: string, claimType: ClaimType) 
   await recomputeChecklistCompletionPct(claimId);
 }
 
+// helpers local to this file (safe to add near other helper funcs)
+function csv(v: any) {
+  const s = String(v ?? '');
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
+function toIso(d: any) {
+  if (!d) return '';
+  const dt = new Date(d);
+  return Number.isNaN(dt.getTime()) ? '' : dt.toISOString();
+}

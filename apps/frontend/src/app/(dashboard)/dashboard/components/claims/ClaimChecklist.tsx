@@ -1,13 +1,27 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/claims/ClaimChecklist.tsx
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import type {
   ClaimDTO,
   ClaimChecklistStatus,
   ClaimChecklistItemDTO,
+  ClaimDocumentType,
 } from '@/types/claims.types';
-import { updateClaimChecklistItem } from '@/app/(dashboard)/dashboard/properties/[id]/claims/claimsApi';
+import {
+  updateClaimChecklistItem,
+  uploadChecklistItemDocument,
+} from '@/app/(dashboard)/dashboard/properties/[id]/claims/claimsApi';
+import { toast } from '@/components/ui/use-toast';
+
+type BlockingEntry = {
+  itemId: string;
+  title?: string;
+  missingStatus?: boolean;
+  missingDocs?: number;
+  requiredDocTypes?: string[];
+  requiredDocMinCount?: number;
+};
 
 function statusLabel(s: ClaimChecklistStatus) {
   if (s === 'DONE') return 'Done';
@@ -15,16 +29,36 @@ function statusLabel(s: ClaimChecklistStatus) {
   return 'Open';
 }
 
+function docReqLabel(types?: ClaimDocumentType[], min?: number) {
+  const m = min ?? 0;
+  if (m <= 0) return null;
+  const t = (types ?? []).length ? (types ?? []).join(', ') : 'Any';
+  return `Requires ${m} doc(s) (${t})`;
+}
+
+function blockingReasonText(b: BlockingEntry) {
+  const parts: string[] = [];
+  if (b.missingStatus) parts.push('Mark as Done or N/A');
+  if ((b.missingDocs ?? 0) > 0) {
+    const types = (b.requiredDocTypes ?? []).length ? ` (${b.requiredDocTypes?.join(', ')})` : '';
+    const min = b.requiredDocMinCount ?? undefined;
+    parts.push(`Upload ${b.missingDocs} more doc(s)${min ? ` (min ${min})` : ''}${types}`);
+  }
+  return parts.length ? parts.join(' • ') : 'Incomplete requirements';
+}
+
 export default function ClaimChecklist({
   propertyId,
   claim,
   onChanged,
   busy = false,
+  blocking = [],
 }: {
   propertyId: string;
   claim: ClaimDTO;
   onChanged: () => Promise<void>;
   busy?: boolean;
+  blocking?: BlockingEntry[];
 }) {
   const items = useMemo(
     () =>
@@ -34,16 +68,58 @@ export default function ClaimChecklist({
     [claim.checklistItems]
   );
 
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const blockingByItemId = useMemo(() => {
+    const map = new Map<string, BlockingEntry>();
+    (blocking ?? []).forEach((b) => {
+      if (b?.itemId) map.set(b.itemId, b);
+    });
+    return map;
+  }, [blocking]);
 
-  async function setItemStatus(
-    item: ClaimChecklistItemDTO,
-    status: ClaimChecklistStatus
-  ) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [uploadForItemId, setUploadForItemId] = useState<string | null>(null);
+
+  async function setItemStatus(item: ClaimChecklistItemDTO, status: ClaimChecklistStatus) {
     setBusyId(item.id);
     try {
       await updateClaimChecklistItem(propertyId, claim.id, item.id, { status });
       await onChanged();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function openUpload(itemId: string) {
+    setUploadForItemId(itemId);
+    setTimeout(() => fileRef.current?.click(), 0);
+  }
+
+  async function onFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    const itemId = uploadForItemId;
+    e.target.value = '';
+    setUploadForItemId(null);
+
+    if (!itemId || files.length === 0) return;
+
+    setBusyId(itemId);
+    try {
+      for (const f of files) {
+        await uploadChecklistItemDocument(propertyId, claim.id, itemId, {
+          file: f,
+          claimDocumentType: 'OTHER',
+          title: f.name,
+        });
+      }
+      toast({ title: 'Uploaded', description: `${files.length} file(s) attached.` });
+      await onChanged();
+    } catch (err: any) {
+      toast({
+        title: 'Upload failed',
+        description: err?.message || 'Please try again.',
+        variant: 'destructive',
+      });
     } finally {
       setBusyId(null);
     }
@@ -55,54 +131,127 @@ export default function ClaimChecklist({
 
   return (
     <div className="space-y-2">
-      {items.map((it) => (
-        <div key={it.id} className="rounded-lg border bg-white p-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-semibold text-gray-900">
-                  {it.orderIndex + 1}. {it.title}
+      <input ref={fileRef} type="file" className="hidden" multiple onChange={onFilesSelected} />
+
+      {/* Blocking summary (shown after failed submit) */}
+      {(blocking?.length ?? 0) > 0 ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <div className="font-semibold">Submission blocked</div>
+          <div className="mt-1 text-xs text-amber-800">
+            Complete the highlighted checklist requirements below, then submit again.
+          </div>
+        </div>
+      ) : null}
+
+      {items.map((it) => {
+        const reqText = docReqLabel(it.requiredDocTypes, it.requiredDocMinCount);
+        const docs = it.documents ?? [];
+        const block = blockingByItemId.get(it.id);
+        const isBlocked = Boolean(block);
+
+        return (
+          <div
+            key={it.id}
+            className={[
+              'rounded-lg border bg-white p-3',
+              isBlocked ? 'border-amber-300 bg-amber-50/30' : '',
+            ].join(' ')}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <div className="text-sm font-semibold text-gray-900">
+                    {it.orderIndex + 1}. {it.title}
+                  </div>
+
+                  {it.required ? (
+                    <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">
+                      Required
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-700">
+                      Optional
+                    </span>
+                  )}
+
+                  {isBlocked ? (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                      Needs attention
+                    </span>
+                  ) : null}
                 </div>
 
-                {it.required ? (
-                  <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">
-                    Required
-                  </span>
-                ) : (
-                  <span className="rounded-full bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-700">
-                    Optional
-                  </span>
-                )}
+                {it.description ? (
+                  <div className="mt-1 text-sm text-gray-600">{it.description}</div>
+                ) : null}
+
+                {reqText ? (
+                  <div className="mt-1 text-xs font-medium text-amber-700">{reqText}</div>
+                ) : null}
+
+                {isBlocked ? (
+                  <div className="mt-2 text-xs font-semibold text-amber-800">
+                    {blockingReasonText(block as BlockingEntry)}
+                  </div>
+                ) : null}
               </div>
 
-              {it.description ? (
-                <div className="mt-1 text-sm text-gray-600">{it.description}</div>
-              ) : null}
+              <div className="shrink-0 flex items-center gap-2">
+                <button
+                  className="rounded-lg border px-2 py-1 text-xs hover:bg-gray-50"
+                  onClick={() => openUpload(it.id)}
+                  disabled={busy || busyId === it.id}
+                  title="Upload and attach documents to this checklist item"
+                >
+                  Upload
+                </button>
+
+                <select
+                  className="rounded-lg border px-2 py-1 text-sm"
+                  value={it.status}
+                  disabled={busy || busyId === it.id}
+                  onChange={(e) => setItemStatus(it, e.target.value as ClaimChecklistStatus)}
+                >
+                  <option value="OPEN">{statusLabel('OPEN')}</option>
+                  <option value="DONE">{statusLabel('DONE')}</option>
+                  <option value="NOT_APPLICABLE">{statusLabel('NOT_APPLICABLE')}</option>
+                </select>
+              </div>
             </div>
 
-            <div className="shrink-0">
-              <select
-                className="rounded-lg border px-2 py-1 text-sm"
-                value={it.status}
-                disabled={busy || busyId === it.id}
-                onChange={(e) =>
-                  setItemStatus(it, e.target.value as ClaimChecklistStatus)
-                }
-              >
-                <option value="OPEN">{statusLabel('OPEN')}</option>
-                <option value="DONE">{statusLabel('DONE')}</option>
-                <option value="NOT_APPLICABLE">
-                  {statusLabel('NOT_APPLICABLE')}
-                </option>
-              </select>
-            </div>
+            {busyId === it.id ? (
+              <div className="mt-2 text-xs text-gray-500">Updating…</div>
+            ) : null}
+
+            {docs.length > 0 ? (
+              <div className="mt-3 rounded-lg border bg-gray-50 p-2">
+                <div className="text-xs font-semibold text-gray-700">Documents</div>
+                <div className="mt-2 space-y-1">
+                  {docs.map((d: any) => {
+                    const url = d.document?.fileUrl;
+                    const label = d.title || d.document?.name || 'Document';
+                    return (
+                      <div key={d.id} className="flex items-center justify-between gap-2">
+                        <div className="truncate text-xs text-gray-700">{label}</div>
+                        {url ? (
+                          <a
+                            className="shrink-0 text-xs font-medium text-emerald-700 hover:underline"
+                            href={url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            View
+                          </a>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
           </div>
-
-          {busyId === it.id ? (
-            <div className="mt-2 text-xs text-gray-500">Updating…</div>
-          ) : null}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
