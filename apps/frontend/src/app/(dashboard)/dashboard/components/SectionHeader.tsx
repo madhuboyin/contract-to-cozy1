@@ -5,7 +5,7 @@ import * as React from 'react';
 interface SectionHeaderProps {
   icon: string;
   title: string;
-  description?: string;
+  description?: string | React.ReactNode;
   action?: React.ReactNode;
 }
 
@@ -19,7 +19,7 @@ export function SectionHeader({ icon, title, description, action }: SectionHeade
         <div>
           <h2 className="text-xl font-bold text-gray-900">{title}</h2>
           {description && (
-            <p className="text-sm text-gray-600 mt-1">{description}</p>
+            <div className="text-sm text-gray-600 mt-1">{description}</div>
           )}
         </div>
       </div>

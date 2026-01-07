@@ -22,9 +22,12 @@ export async function sendEmailNotificationJob(
   if (!seedDelivery) return;
   if (seedDelivery.status !== DeliveryStatus.PENDING) return;
   
+  const md = seedDelivery.notification.metadata;
   const priority =
-  (seedDelivery.notification.metadata as { priority?: string } | null)
-    ?.priority;
+    md && typeof md === 'object' && !Array.isArray(md)
+      ? (md as any).priority
+      : undefined;
+  
 
   if (priority !== 'HIGH') {
     return; // let daily digest handle it

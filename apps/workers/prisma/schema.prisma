@@ -2168,12 +2168,15 @@ model NotificationDelivery {
   digestId           String?
   providerMessageId  String?
 
+  enqueuedAt         DateTime?
+
   createdAt          DateTime @default(now())
 
   notification       Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
 
   @@unique([notificationId, channel])
   @@index([channel, status])
+  @@index([channel, status, enqueuedAt])
 }
 
 enum NotificationChannel {

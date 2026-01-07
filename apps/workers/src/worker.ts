@@ -22,6 +22,8 @@ import { sendSeasonalNotifications } from './jobs/seasonalNotification.job';
 import { expireSeasonalChecklists } from './jobs/seasonalChecklistExpiration.job';
 import { runHomeReportExportPoller } from './runners/homeReportExport.poller';
 import { runReportExportCleanup } from './runners/reportExport.cleanup';
+import { startDomainEventsPoller } from './runners/domainEvents.poller';
+import { startHighPriorityEmailEnqueuePoller } from './runners/highPriorityEmailEnqueue.poller';
 
 
 const prisma = new PrismaClient();
@@ -570,5 +572,17 @@ runReportExportCleanup().catch((e) => {
   console.error('Report export cleanup crashed', e);
   process.exit(1);
 });
+
+startHighPriorityEmailEnqueuePoller({
+  intervalMs: 10_000,
+  batchSize: 50,
+  redisConnection,
+});
+
+startDomainEventsPoller({
+  intervalMs: 30_000,
+  batchSize: 25,
+});
+
 // Start the worker
 startWorker();
