@@ -304,7 +304,6 @@ model InventoryItem {
 
   // Recall matching fields (NEW)
   manufacturer   String?
-  brand          String?
   modelNumber    String?
   serialNumber   String?
   upc            String?
