@@ -1018,6 +1018,7 @@ model Property {
 
   claims Claim[]
   claimTimelineEvents ClaimTimelineEvent[]
+  recallMatches      RecallMatch[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2741,6 +2742,7 @@ model RecallMatch {
   inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
   homeAsset       HomeAsset? @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
   maintenanceTask PropertyMaintenanceTask? @relation(fields: [maintenanceTaskId], references: [id], onDelete: SetNull)
+  notifications   Notification[]
 
   @@index([propertyId, status])
   @@index([inventoryItemId])
