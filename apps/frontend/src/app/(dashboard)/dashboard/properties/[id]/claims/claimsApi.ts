@@ -14,6 +14,12 @@ import type {
   ClaimChecklistItemDTO,
 } from '@/types/claims.types';
 
+// Re-export types for convenience
+export type { ClaimDTO } from '@/types/claims.types';
+export type { ClaimDocumentDTO } from '@/types/claims.types';
+export type { ClaimTimelineEventDTO } from '@/types/claims.types';
+export type { ClaimChecklistItemDTO } from '@/types/claims.types';
+
 // -----------------------
 // Claims
 // -----------------------

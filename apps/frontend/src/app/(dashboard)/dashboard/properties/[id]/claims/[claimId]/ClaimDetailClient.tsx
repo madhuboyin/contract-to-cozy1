@@ -48,7 +48,7 @@ export default function ClaimDetailClient() {
     setBusy('update');
     try {
       const updated = await updateClaim(propertyId, claimId, patch);
-      setClaim((prev) => ({ ...(prev as any), ...(updated as any) }));
+      setClaim((prev: ClaimDTO | null) => ({ ...(prev as ClaimDTO), ...updated }));
       // reload to get timeline/doc/checklist updates if backend includes them
       await refresh();
     } finally {

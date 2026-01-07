@@ -138,6 +138,10 @@ export interface ClaimDTO {
   checklistItems?: ClaimChecklistItemDTO[];
   timelineEvents?: ClaimTimelineEventDTO[];
   documents?: ClaimDocumentDTO[];
+
+  // Computed fields
+  checklistCompletionPct?: number | null;
+  lastActivityAt?: string | null;
 }
 
 // ==============================
