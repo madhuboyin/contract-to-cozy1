@@ -151,22 +151,34 @@ export default function ClaimsClient() {
         onClose={() => setCreateOpen(false)}
         propertyId={propertyId}
         onCreated={(newClaim) => {
-          // Defensive: avoid crashing if modal returns something unexpected
-          if (!newClaim || !newClaim.id) {
-            console.error('ClaimCreateModal returned invalid claim:', newClaim);
-            return;
+          try {
+            console.log('onCreated called with:', newClaim);
+            
+            if (!newClaim || !newClaim.id) {
+              console.error('Invalid claim:', newClaim);
+              return;
+            }
+            
+            setClaims((prev) => {
+              console.log('Current claims:', prev);
+              const safePrev = (prev ?? []).filter((c): c is any => !!c && !!c.id);
+              
+              if (safePrev.some((c) => c.id === newClaim.id)) {
+                console.warn('Duplicate claim ID detected, skipping');
+                return safePrev;
+              }
+              
+              const updated = [newClaim, ...safePrev];
+              console.log('Updated claims:', updated);
+              return updated;
+            });
+        
+            setCreateOpen(false);
+            setQ('');
+          } catch (error) {
+            console.error('Error in onCreated:', error);
+            throw error; // Re-throw so modal can handle it
           }
-          setClaims((prev) => {
-            const safePrev = (prev ?? []).filter((c): c is any => !!c && !!c.id);
-
-            // Prevent duplicates
-            if (safePrev.some((c) => c.id === newClaim.id)) return safePrev;
-
-            return [newClaim, ...safePrev];
-          });
-
-          setCreateOpen(false);
-          setQ('');
         }}
       />
     </div>

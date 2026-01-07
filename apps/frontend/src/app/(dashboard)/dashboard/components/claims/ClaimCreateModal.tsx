@@ -61,20 +61,33 @@ export default function ClaimCreateModal({
         generateChecklist: true,
       });
   
-      // 1. Success! Call the parent callback
-      onCreated(claim);
-      
-      // 2. IMPORTANT: Explicitly close the modal here
+      // Reset form and close modal first
+      resetForm();
       onClose();
-  
-      // 3. Reset state
-      setTitle('');
-      setDesc('');
-      setProviderName('');
-      setClaimNumber('');
+      
+      // Call parent callback AFTER modal closes
+      // Let errors bubble up to see them in console
+      try {
+        onCreated(claim);
+        toast({
+          title: 'Success',
+          description: 'Claim created successfully',
+        });
+      } catch (error) {
+        console.error("Parent onCreated failed:", error);
+        toast({
+          title: 'Warning',
+          description: 'Claim created but list may not have updated. Try refreshing.',
+          variant: 'destructive',
+        });
+      }
     } catch (error) {
-      // If onCreated crashes, this will catch it and allow the modal to reset
-      console.error("Submission failed:", error);
+      console.error("Failed to create claim:", error);
+      toast({
+        title: 'Error', 
+        description: error instanceof Error ? error.message : 'Failed to create claim',
+        variant: 'destructive',
+      });
     } finally {
       setBusy(false);
     }
