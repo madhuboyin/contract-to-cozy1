@@ -2370,6 +2370,7 @@ enum ClaimTimelineEventType {
 enum DomainEventType {
   CLAIM_SUBMITTED
   CLAIM_CLOSED
+  FOLLOW_UP_DUE
 }
 
 enum DomainEventStatus {
@@ -2427,6 +2428,7 @@ model Claim {
   @@index([propertyId, status])
   @@index([createdBy, status])
   @@index([propertyId, lastActivityAt])
+  @@index([nextFollowUpAt])
   @@map("claims")
 }
 
@@ -2445,6 +2447,9 @@ model ClaimChecklistItem {
 
   primaryClaimDocumentId String?
 
+  requiredDocTypes     ClaimDocumentType[] @default([])
+  requiredDocMinCount  Int @default(0)
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -2452,9 +2457,26 @@ model ClaimChecklistItem {
 
   primaryClaimDocument ClaimDocument? @relation("ClaimChecklistPrimaryDoc", fields: [primaryClaimDocumentId], references: [id], onDelete: SetNull)
 
+  itemDocuments ClaimChecklistItemDocument[]
+
   @@unique([claimId, orderIndex])
   @@index([claimId, status])
   @@map("claim_checklist_items")
+}
+
+model ClaimChecklistItemDocument {
+  id                  String @id @default(uuid())
+  claimChecklistItemId String
+  claimDocumentId      String
+  createdAt            DateTime @default(now())
+
+  item         ClaimChecklistItem @relation(fields: [claimChecklistItemId], references: [id], onDelete: Cascade)
+  claimDocument ClaimDocument      @relation(fields: [claimDocumentId], references: [id], onDelete: Cascade)
+
+  @@unique([claimChecklistItemId, claimDocumentId])
+  @@index([claimChecklistItemId])
+  @@index([claimDocumentId])
+  @@map("claim_checklist_item_documents")
 }
 
 
@@ -2475,6 +2497,7 @@ model ClaimDocument {
 
   checklistPrimaryFor ClaimChecklistItem[] @relation("ClaimChecklistPrimaryDoc")
   timelineEvents ClaimTimelineEvent[]
+  itemDocuments   ClaimChecklistItemDocument[]
 
   @@unique([claimId, documentId])
   @@index([claimId, type])
