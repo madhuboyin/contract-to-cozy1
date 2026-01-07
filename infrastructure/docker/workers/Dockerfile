@@ -23,7 +23,7 @@ WORKDIR /app/apps/workers
 RUN npm ci
 
 # Copy shared backend source files into worker source tree
-RUN mkdir -p src/shared/backend/utils src/shared/backend/config src/shared/backend/services/storage src/shared/backend/services/pdf/templates src/shared/backend/services/domainEvents
+RUN mkdir -p src/shared/backend/utils src/shared/backend/config src/shared/backend/services/storage src/shared/backend/services/pdf/templates src/shared/backend/services/domainEvents src/shared/backend/lib
 COPY apps/backend/src/utils/riskCalculator.util.ts src/shared/backend/utils/
 COPY apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils/
 COPY apps/backend/src/config/risk-constants.ts src/shared/backend/config/
@@ -43,8 +43,8 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/backend\/src\/config\/risk-constants/\.\/shared\/backend\/config\/risk-constants/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/storage\/reportStorage/\.\.\/shared\/backend\/services\/storage\/reportStorage/g' src/jobs/generateHomeReportExport.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/pdf\/renderHomeReportPackPdf/\.\.\/shared\/backend\/services\/pdf\/renderHomeReportPackPdf/g' src/jobs/generateHomeReportExport.job.ts && \
-    sed -i 's/\.\.\/\.\.\/backend\/src\/services\/domainEvents\/domainEvents\.service/\.\/shared\/backend\/services\/domainEvents\/domainEvents\.service/g' src/runners/claimFollowUpDue.poller.ts
-
+    sed -i 's/\.\.\/\.\.\/backend\/src\/services\/domainEvents\/domainEvents\.service/\.\/shared\/backend\/services\/domainEvents\/domainEvents\.service/g' src/runners/claimFollowUpDue.poller.ts && \
+    sed -i 's/\.\.\/\.\.\/lib\/prisma/\.\.\/\.\.\/lib\/prisma/g' src/shared/backend/services/domainEvents/domainEvents.service.ts
 # Compile TS -> dist/
 RUN npx tsc --project ./tsconfig.json
 
