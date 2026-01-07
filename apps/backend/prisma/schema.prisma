@@ -2364,6 +2364,7 @@ enum ClaimTimelineEventType {
   SETTLEMENT_ISSUED
   CLOSED
   NOTE
+  STATUS_CHANGE
   OTHER
 }
 
