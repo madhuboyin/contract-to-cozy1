@@ -37,13 +37,24 @@ export default function ClaimsClient() {
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
     if (!query) return claims;
+    
     return claims.filter((c) => {
+      // FIX: Added nullish coalescing (|| '') to ensure .toLowerCase() 
+      // is never called on null values from the API.
+      const title = (c.title || '').toLowerCase();
+      const status = (c.status || '').toLowerCase();
+      const type = (c.type || '').toLowerCase();
+      const provider = (c.providerName || '').toLowerCase();
+      const claimNum = (c.claimNumber || '').toLowerCase();
+      const description = (c.description || '').toLowerCase();
+
       return (
-        c.title?.toLowerCase().includes(query) ||
-        c.status?.toLowerCase().includes(query) ||
-        c.type?.toLowerCase().includes(query) ||
-        (c.providerName || '').toLowerCase().includes(query) ||
-        (c.claimNumber || '').toLowerCase().includes(query)
+        title.includes(query) ||
+        status.includes(query) ||
+        type.includes(query) ||
+        provider.includes(query) ||
+        claimNum.includes(query) ||
+        description.includes(query)
       );
     });
   }, [claims, q]);
@@ -146,7 +157,12 @@ export default function ClaimsClient() {
         propertyId={propertyId}
         onCreated={(claim) => {
           setCreateOpen(false);
-          setClaims((prev) => [claim, ...prev]);
+          // FIX: Added a safety check to ensure the claim object is valid before updating state
+          if (claim && claim.id) {
+            setClaims((prev) => [claim, ...prev]);
+          } else {
+            refresh(); // Fallback to a full refresh if the returned object is incomplete
+          }
         }}
       />
     </div>
