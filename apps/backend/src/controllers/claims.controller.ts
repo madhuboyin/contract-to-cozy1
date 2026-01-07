@@ -30,7 +30,7 @@ export class ClaimsController {
     try {
       const { propertyId } = req.params;
       const data = await ClaimsService.listClaims(propertyId);
-      return res.json(data);
+      return res.json({ success: true, data });
     } catch (e: any) {
       return res.status(400).json({ message: e.message || 'Failed to list claims' });
     }
@@ -40,7 +40,7 @@ export class ClaimsController {
     try {
       const { propertyId, claimId } = req.params;
       const data = await ClaimsService.getClaim(propertyId, claimId);
-      return res.json(data);
+      return res.json({ success: true, data });
     } catch (e: any) {
       return res.status(404).json({ message: e.message || 'Claim not found' });
     }
@@ -53,7 +53,7 @@ export class ClaimsController {
       const userId = getUserId(req);
       const input = CreateClaimSchema.parse(req.body);
       const data = await ClaimsService.createClaim(propertyId, userId, input);
-      return res.status(201).json(data);
+      return res.status(201).json({ success: true, data });
     } catch (e: any) {
       return res.status(400).json({ message: e.message || 'Failed to create claim' });
     }
@@ -72,7 +72,7 @@ export class ClaimsController {
         input
       );
   
-      return res.json(data);
+      return res.json({ success: true, data });
     } catch (e: any) {
       return res.status(400).json({
         message: e.message || 'Failed to update claim',
@@ -87,7 +87,7 @@ export class ClaimsController {
       const userId = getUserId(req);
       const input = AddClaimDocumentSchema.parse(req.body);
       const data = await ClaimsService.addClaimDocument(propertyId, claimId, userId, input);
-      return res.status(201).json(data);
+      return res.status(201).json({ success: true, data });
     } catch (e: any) {
       return res.status(400).json({ message: e.message || 'Failed to add claim document' });
     }
@@ -99,7 +99,7 @@ export class ClaimsController {
       const userId = getUserId(req);
       const input = AddTimelineEventSchema.parse(req.body);
       const data = await ClaimsService.addTimelineEvent(propertyId, claimId, userId, input);
-      return res.status(201).json(data);
+      return res.status(201).json({ success: true, data });
     } catch (e: any) {
       return res.status(400).json({ message: e.message || 'Failed to add timeline event' });
     }
@@ -111,7 +111,7 @@ export class ClaimsController {
       const userId = getUserId(req);
       const input = UpdateChecklistItemSchema.parse(req.body);
       const data = await ClaimsService.updateChecklistItem(propertyId, claimId, itemId, userId, input);
-      return res.json(data);
+      return res.json({ success: true, data });
     } catch (e: any) {
       return res.status(400).json({ message: e.message || 'Failed to update checklist item' });
     }
@@ -128,7 +128,7 @@ export class ClaimsController {
         replaceExisting: input.replaceExisting,
       });
   
-      return res.json(data);
+      return res.json({ success: true, data });
     } catch (e: any) {
       return res.status(400).json({ message: e.message || 'Failed to regenerate checklist' });
     }
