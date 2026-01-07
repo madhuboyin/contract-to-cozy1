@@ -52,6 +52,7 @@ export default function ClaimCreateModal({
 
     setBusy(true);
     try {
+      // 1. Await the API response
       const claim = await createClaim(propertyId, {
         title: t,
         description: desc.trim() || null,
@@ -61,15 +62,18 @@ export default function ClaimCreateModal({
         generateChecklist: true,
       });
 
-      onCreated(claim);
-      resetForm();
-      onClose(); // ✅ close modal on success
-    } catch (e: any) {
-      toast({
-        title: 'Failed to create claim',
-        description: e?.message || 'Please try again.',
-        variant: 'destructive',
-      });
+      // 2. Pass the fresh claim object to the parent
+      if (claim) {
+        onCreated(claim);
+        
+        // 3. Reset local state only after successful creation
+        setTitle('');
+        setDesc('');
+        setProviderName('');
+        setClaimNumber('');
+      }
+    } catch (err) {
+      console.error("Failed to create claim:", err);
     } finally {
       setBusy(false);
     }
