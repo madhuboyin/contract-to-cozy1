@@ -1,5 +1,4 @@
 // apps/frontend/src/app/(dashboard)/properties/[id]/claims/claimsApi.ts
-
 import { api } from '@/lib/api/client';
 import type {
   ClaimDTO,
@@ -14,100 +13,53 @@ import type {
   ClaimChecklistItemDTO,
 } from '@/types/claims.types';
 
-// Re-export types for convenience
-export type { ClaimDTO } from '@/types/claims.types';
-export type { ClaimDocumentDTO } from '@/types/claims.types';
-export type { ClaimTimelineEventDTO } from '@/types/claims.types';
-export type { ClaimChecklistItemDTO } from '@/types/claims.types';
-export type { 
-  ClaimType, 
-  ClaimStatus, 
-  ClaimSourceType, 
-  ClaimDocumentType, 
-  ClaimTimelineEventType, 
-  ClaimChecklistStatus 
-} from '@/types/claims.types';
+export type * from '@/types/claims.types';
 
-// -----------------------
+const base = (propertyId: string) => `/api/properties/${propertyId}/claims`;
+const claim = (propertyId: string, claimId: string) => `${base(propertyId)}/${claimId}`;
+
 // Claims
-// -----------------------
-
 export async function listClaims(propertyId: string): Promise<ClaimDTO[]> {
-  const res = await api.get<ClaimDTO[]>(
-    `/api/properties/${propertyId}/claims`
-  );
+  const res = await api.get<ClaimDTO[]>(base(propertyId));
   return res.data;
 }
 
-export async function getClaim(
-  propertyId: string,
-  claimId: string
-): Promise<ClaimDTO> {
-  const res = await api.get<ClaimDTO>(
-    `/api/properties/${propertyId}/claims/${claimId}`
-  );
+export async function getClaim(propertyId: string, claimId: string): Promise<ClaimDTO> {
+  const res = await api.get<ClaimDTO>(claim(propertyId, claimId));
   return res.data;
 }
 
-export async function createClaim(
-  propertyId: string,
-  input: CreateClaimInput
-): Promise<ClaimDTO> {
-  const res = await api.post<ClaimDTO>(
-    `/api/properties/${propertyId}/claims`,
-    input
-  );
+export async function createClaim(propertyId: string, input: CreateClaimInput): Promise<ClaimDTO> {
+  const res = await api.post<ClaimDTO>(base(propertyId), input);
   return res.data;
 }
 
-export async function updateClaim(
-  propertyId: string,
-  claimId: string,
-  input: UpdateClaimInput
-): Promise<ClaimDTO> {
-  const res = await api.patch<ClaimDTO>(
-    `/api/properties/${propertyId}/claims/${claimId}`,
-    input
-  );
+export async function updateClaim(propertyId: string, claimId: string, input: UpdateClaimInput): Promise<ClaimDTO> {
+  const res = await api.patch<ClaimDTO>(claim(propertyId, claimId), input);
   return res.data;
 }
 
-// -----------------------
 // Documents
-// -----------------------
-
 export async function addClaimDocument(
   propertyId: string,
   claimId: string,
   input: AddClaimDocumentInput
 ): Promise<ClaimDocumentDTO> {
-  const res = await api.post<ClaimDocumentDTO>(
-    `/api/properties/${propertyId}/claims/${claimId}/documents`,
-    input
-  );
+  const res = await api.post<ClaimDocumentDTO>(`${claim(propertyId, claimId)}/documents`, input);
   return res.data;
 }
 
-// -----------------------
 // Timeline
-// -----------------------
-
 export async function addClaimTimelineEvent(
   propertyId: string,
   claimId: string,
   input: AddTimelineEventInput
 ): Promise<ClaimTimelineEventDTO> {
-  const res = await api.post<ClaimTimelineEventDTO>(
-    `/api/properties/${propertyId}/claims/${claimId}/timeline`,
-    input
-  );
+  const res = await api.post<ClaimTimelineEventDTO>(`${claim(propertyId, claimId)}/timeline`, input);
   return res.data;
 }
 
-// -----------------------
 // Checklist
-// -----------------------
-
 export async function updateClaimChecklistItem(
   propertyId: string,
   claimId: string,
@@ -115,7 +67,7 @@ export async function updateClaimChecklistItem(
   input: UpdateClaimChecklistItemInput
 ): Promise<ClaimChecklistItemDTO> {
   const res = await api.patch<ClaimChecklistItemDTO>(
-    `/api/properties/${propertyId}/claims/${claimId}/checklist/${itemId}`,
+    `${claim(propertyId, claimId)}/checklist/${itemId}`,
     input
   );
   return res.data;
@@ -126,9 +78,6 @@ export async function regenerateChecklist(
   claimId: string,
   input: RegenerateChecklistInput
 ): Promise<ClaimDTO> {
-  const res = await api.post<ClaimDTO>(
-    `/api/properties/${propertyId}/claims/${claimId}/regenerate-checklist`,
-    input
-  );
+  const res = await api.post<ClaimDTO>(`${claim(propertyId, claimId)}/regenerate-checklist`, input);
   return res.data;
 }

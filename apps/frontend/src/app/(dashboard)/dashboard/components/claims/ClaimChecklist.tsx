@@ -2,8 +2,12 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import type { ClaimDTO, ClaimChecklistStatus, ClaimChecklistItemDTO } from '../../properties/[id]/claims/claimsApi';
-import { updateClaimChecklistItem } from '../../properties/[id]/claims/claimsApi';
+import type {
+  ClaimDTO,
+  ClaimChecklistStatus,
+  ClaimChecklistItemDTO,
+} from '@/types/claims.types';
+import { updateClaimChecklistItem } from '@/app/(dashboard)/dashboard/properties/[id]/claims/claimsApi';
 
 function statusLabel(s: ClaimChecklistStatus) {
   if (s === 'DONE') return 'Done';
@@ -15,16 +19,27 @@ export default function ClaimChecklist({
   propertyId,
   claim,
   onChanged,
+  busy = false,
 }: {
   propertyId: string;
   claim: ClaimDTO;
   onChanged: () => Promise<void>;
+  busy?: boolean;
 }) {
-  const items = useMemo(() => (claim.checklistItems ?? []).slice().sort((a, b) => a.orderIndex - b.orderIndex), [claim]);
+  const items = useMemo(
+    () =>
+      (claim.checklistItems ?? [])
+        .slice()
+        .sort((a, b) => a.orderIndex - b.orderIndex),
+    [claim.checklistItems]
+  );
 
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  async function setItemStatus(item: ClaimChecklistItemDTO, status: ClaimChecklistStatus) {
+  async function setItemStatus(
+    item: ClaimChecklistItemDTO,
+    status: ClaimChecklistStatus
+  ) {
     setBusyId(item.id);
     try {
       await updateClaimChecklistItem(propertyId, claim.id, item.id, { status });
@@ -41,13 +56,14 @@ export default function ClaimChecklist({
   return (
     <div className="space-y-2">
       {items.map((it) => (
-        <div key={it.id} className="rounded-lg border p-3">
+        <div key={it.id} className="rounded-lg border bg-white p-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <div className="text-sm font-semibold text-gray-900">
-                  {it.orderIndex}. {it.title}
+                  {it.orderIndex + 1}. {it.title}
                 </div>
+
                 {it.required ? (
                   <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">
                     Required
@@ -58,6 +74,7 @@ export default function ClaimChecklist({
                   </span>
                 )}
               </div>
+
               {it.description ? (
                 <div className="mt-1 text-sm text-gray-600">{it.description}</div>
               ) : null}
@@ -67,12 +84,16 @@ export default function ClaimChecklist({
               <select
                 className="rounded-lg border px-2 py-1 text-sm"
                 value={it.status}
-                disabled={busyId === it.id}
-                onChange={(e) => setItemStatus(it, e.target.value as ClaimChecklistStatus)}
+                disabled={busy || busyId === it.id}
+                onChange={(e) =>
+                  setItemStatus(it, e.target.value as ClaimChecklistStatus)
+                }
               >
                 <option value="OPEN">{statusLabel('OPEN')}</option>
                 <option value="DONE">{statusLabel('DONE')}</option>
-                <option value="NOT_APPLICABLE">{statusLabel('NOT_APPLICABLE')}</option>
+                <option value="NOT_APPLICABLE">
+                  {statusLabel('NOT_APPLICABLE')}
+                </option>
               </select>
             </div>
           </div>

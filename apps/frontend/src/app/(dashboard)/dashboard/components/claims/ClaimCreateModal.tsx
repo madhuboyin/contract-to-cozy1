@@ -1,9 +1,9 @@
-// apps/frontend/src/app/(dashboard)/dashboard/components/claims/ClaimCreateModal.tsx
 'use client';
 
 import React, { useState } from 'react';
-import type { ClaimDTO, ClaimType } from '../../properties/[id]/claims/claimsApi';
-import { createClaim } from '../../properties/[id]/claims/claimsApi';
+import type { ClaimDTO, ClaimType } from '@/types/claims.types';
+import { createClaim } from '@/app/(dashboard)/dashboard/properties/[id]/claims/claimsApi';
+import { toast } from '@/components/ui/use-toast';
 
 const TYPE_OPTIONS: ClaimType[] = [
   'WATER_DAMAGE',
@@ -38,6 +38,14 @@ export default function ClaimCreateModal({
 
   if (!open) return null;
 
+  function resetForm() {
+    setTitle('');
+    setType('WATER_DAMAGE');
+    setDesc('');
+    setProviderName('');
+    setClaimNumber('');
+  }
+
   async function submit() {
     const t = title.trim();
     if (!t) return;
@@ -52,14 +60,25 @@ export default function ClaimCreateModal({
         claimNumber: claimNumber.trim() || null,
         generateChecklist: true,
       });
+
       onCreated(claim);
-      setTitle('');
-      setDesc('');
-      setProviderName('');
-      setClaimNumber('');
+      resetForm();
+      onClose(); // ✅ close modal on success
+    } catch (e: any) {
+      toast({
+        title: 'Failed to create claim',
+        description: e?.message || 'Please try again.',
+        variant: 'destructive',
+      });
     } finally {
       setBusy(false);
     }
+  }
+
+  function handleClose() {
+    if (busy) return;
+    resetForm(); // optional: keep if you want clean reopen
+    onClose();
   }
 
   return (
@@ -73,7 +92,7 @@ export default function ClaimCreateModal({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="rounded-lg border px-2 py-1 text-sm hover:bg-gray-50"
             disabled={busy}
           >
@@ -156,7 +175,7 @@ export default function ClaimCreateModal({
           <div className="flex justify-end gap-2 pt-2">
             <button
               className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
-              onClick={onClose}
+              onClick={handleClose}
               disabled={busy}
             >
               Cancel
