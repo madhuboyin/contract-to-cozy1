@@ -8,7 +8,7 @@ import {
 import cron from 'node-cron';
 import * as dotenv from 'dotenv';
 dotenv.config();
-import { Worker } from 'bullmq';
+import { Worker, Queue } from 'bullmq';
 
 // Import shared utilities from backend - ADDED filterRelevantAssets
 import { calculateAssetRisk, calculateTotalRiskScore, filterRelevantAssets, AssetRiskDetail } from '../../backend/src/utils/riskCalculator.util';
@@ -25,6 +25,8 @@ import { runReportExportCleanup } from './runners/reportExport.cleanup';
 import { startDomainEventsPoller } from './runners/domainEvents.poller';
 import { startHighPriorityEmailEnqueuePoller } from './runners/highPriorityEmailEnqueue.poller';
 import { startClaimFollowUpDuePoller } from './runners/claimFollowUpDue.poller';
+import { recallIngestJob, RECALL_INGEST_JOB } from './jobs/recallIngest.job';
+import { recallMatchJob, RECALL_MATCH_JOB } from './jobs/recallMatch.job';
 
 
 const prisma = new PrismaClient();
@@ -589,5 +591,55 @@ startClaimFollowUpDuePoller({
   intervalMs: 60_000,
   batchSize: 50,
 });
+
+// =============================================================================
+// RECALL JOBS: Worker and Queue setup
+// =============================================================================
+const RECALL_QUEUE_NAME = 'recall-jobs-queue';
+
+const recallQueue = new Queue(RECALL_QUEUE_NAME, { connection: redisConnection });
+
+const recallWorker = new Worker(
+  RECALL_QUEUE_NAME,
+  async (job) => {
+    if (job.name === RECALL_INGEST_JOB) {
+      await recallIngestJob();
+    } else if (job.name === RECALL_MATCH_JOB) {
+      await recallMatchJob();
+    }
+  },
+  { connection: redisConnection }
+);
+
+recallWorker.on('ready', () => {
+  console.log(`[RECALL-WORKER] Worker connected and ready for queue: ${RECALL_QUEUE_NAME}`);
+});
+
+recallWorker.on('completed', (job) => {
+  console.log(`[RECALL-WORKER] Job ${job.id} (${job.name}) completed successfully.`);
+});
+
+recallWorker.on('failed', (job, err) => {
+  console.error(`[RECALL-WORKER] Job ${job?.id} (${job?.name}) failed:`, err);
+});
+
+// Enqueue recall jobs on startup
+recallQueue.add(RECALL_INGEST_JOB, {}, { jobId: 'recall-ingest-startup' });
+recallQueue.add(RECALL_MATCH_JOB, {}, { jobId: 'recall-match-startup' });
+
+// Schedule recall jobs to run daily at 3 AM
+cron.schedule(
+  '0 3 * * *',
+  async () => {
+    console.log('[RECALL] Running scheduled recall jobs...');
+    await recallQueue.add(RECALL_INGEST_JOB, {}, { jobId: `recall-ingest-${Date.now()}` });
+    await recallQueue.add(RECALL_MATCH_JOB, {}, { jobId: `recall-match-${Date.now()}` });
+  },
+  { timezone: 'America/New_York' }
+);
+
+console.log(`[RECALL-WORKER] Recall Worker started for queue: ${RECALL_QUEUE_NAME}`);
+console.log('[RECALL] Scheduled daily jobs at 3:00 AM EST');
+
 // Start the worker
 startWorker();

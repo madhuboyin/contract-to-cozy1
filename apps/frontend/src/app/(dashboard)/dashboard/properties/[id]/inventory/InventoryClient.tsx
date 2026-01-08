@@ -4,7 +4,9 @@ import { api } from '@/lib/api/client';
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
+import { listInventoryItemRecalls } from '../recalls/recallsApi';
 import { InventoryItem, InventoryItemCategory, InventoryRoom } from '@/types';
 import { listInventoryItems, listInventoryRooms, downloadInventoryExport } from '../../../inventory/inventoryApi';
 import InventoryItemDrawer from '../../../components/inventory/InventoryItemDrawer';
@@ -16,6 +18,10 @@ import { SectionHeader } from '../../../components/SectionHeader';
 export default function InventoryClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
+
+  const searchParams = useSearchParams();
+  const openItemId = searchParams.get('openItemId');
+  const highlightRecallMatchId = searchParams.get('highlightRecallMatchId');
 
   const [rooms, setRooms] = useState<InventoryRoom[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -34,6 +40,8 @@ export default function InventoryClient() {
   const [gapIds, setGapIds] = React.useState<Set<string>>(new Set());
   const [gapCounts, setGapCounts] = React.useState<any>(null);
   const [showOnlyGaps, setShowOnlyGaps] = React.useState(false);
+  const [hasRecallAlerts, setHasRecallAlerts] = useState<boolean | undefined>(undefined);
+  const [autoOpenedFromUrl, setAutoOpenedFromUrl] = useState(false);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -73,7 +81,8 @@ export default function InventoryClient() {
     try {
       const [r, it] = await Promise.all([
         listInventoryRooms(propertyId),
-        listInventoryItems(propertyId, { q, roomId, category, hasDocuments }),
+        listInventoryItems(propertyId, { q, roomId, category, hasDocuments, hasRecallAlerts}),
+        
       ]);
       setRooms(r);
       setItems(it);
@@ -97,9 +106,23 @@ export default function InventoryClient() {
   }, [propertyId]);
 
   useEffect(() => {
+    if (autoOpenedFromUrl) return;
+    if (!openItemId || items.length === 0) return;
+  
+    const existing = items.find((it) => it.id === openItemId);
+    if (existing) {
+      setEditingItem(existing);
+      setDrawerOpen(true);
+      setAutoOpenedFromUrl(true);
+    }
+  }, [openItemId, items, autoOpenedFromUrl]);
+  
+  
+
+  useEffect(() => {
     refreshAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, roomId, category, hasDocuments]);
+  }, [q, roomId, category, hasDocuments, hasRecallAlerts]);
 
   const roomOptions = useMemo(
     () => [{ id: 'ALL', name: 'All Rooms' }, ...rooms.map((r) => ({ id: r.id, name: r.name }))],
@@ -234,6 +257,8 @@ export default function InventoryClient() {
         onCategoryChange={setCategory}
         hasDocuments={hasDocuments}
         onHasDocumentsChange={setHasDocuments}
+        hasRecallAlerts={hasRecallAlerts}
+        onHasRecallAlertsChange={setHasRecallAlerts}
         rooms={roomOptions}
       />
 
@@ -293,6 +318,7 @@ export default function InventoryClient() {
         propertyId={propertyId}
         rooms={rooms}
         initialItem={editingItem}
+        highlightRecallMatchId={highlightRecallMatchId}
         onSaved={async () => {
           setDrawerOpen(false);
           await refreshAll();

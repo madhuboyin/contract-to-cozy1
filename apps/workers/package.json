@@ -14,6 +14,7 @@
     "bullmq": "^5.65.0",
     "dotenv": "^16.3.1",
     "node-cron": "^3.0.3",
+    "node-fetch": "^2.7.0",
     "nodemailer": "^6.9.8",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^1.1.1",
@@ -22,6 +23,7 @@
   "devDependencies": {
     "@types/node": "^20.10.5",
     "@types/node-cron": "^3.0.11",
+    "@types/node-fetch": "^2.6.11",
     "@types/nodemailer": "^6.4.14",
     "nodemon": "^3.0.2",
     "prisma": "^5.22.0",

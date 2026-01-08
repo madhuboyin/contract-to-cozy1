@@ -17,6 +17,8 @@ import {
 } from '../../inventory/inventoryApi';
 
 import { listPropertyWarranties, listPropertyInsurancePolicies } from '../../inventory/inventoryApi';
+import InventoryItemRecallPanel from './InventoryItemRecallPanel';
+
 
 const CATEGORIES: InventoryItemCategory[] = [
   'APPLIANCE','HVAC','PLUMBING','ELECTRICAL','ROOF_EXTERIOR','SAFETY','SMART_HOME','FURNITURE','ELECTRONICS','OTHER'
@@ -39,6 +41,7 @@ export default function InventoryItemDrawer(props: {
   propertyId: string;
   rooms: InventoryRoom[];
   initialItem: InventoryItem | null;
+  highlightRecallMatchId?: string | null;
   onSaved: () => void;
 }) {
   const isEdit = !!props.initialItem;
@@ -313,7 +316,18 @@ export default function InventoryItemDrawer(props: {
               </div>
             </div>
           </div>
-
+          {isEdit && props.initialItem ? (
+            <InventoryItemRecallPanel
+              open={props.open}
+              propertyId={props.propertyId}
+              inventoryItemId={props.initialItem.id}
+            />
+          ) : (
+            <div className="rounded-2xl border border-black/10 p-4">
+              <div className="text-sm font-medium">Safety / Recall Alerts</div>
+              <div className="text-xs opacity-70 mt-1">Save this item first to enable recall scanning.</div>
+            </div>
+          )}
           <div className="rounded-2xl border border-black/10 p-4">
             <div className="text-sm font-medium">Costs</div>
             <div className="grid grid-cols-2 gap-3 mt-3">

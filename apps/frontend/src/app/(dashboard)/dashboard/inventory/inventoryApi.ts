@@ -49,7 +49,7 @@ export async function deleteInventoryRoom(propertyId: string, roomId: string) {
  */
 export async function listInventoryItems(
   propertyId: string, 
-  params: { q?: string; roomId?: string; category?: InventoryItemCategory; hasDocuments?: boolean }
+  params: { q?: string; roomId?: string; category?: InventoryItemCategory; hasDocuments?: boolean; hasRecallAlerts?: boolean }
 ) {
   // Create a clean copy of parameters
   const cleanParams: any = { ...params };

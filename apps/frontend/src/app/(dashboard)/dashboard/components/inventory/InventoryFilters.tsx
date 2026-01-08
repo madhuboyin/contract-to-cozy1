@@ -20,12 +20,20 @@ const CATEGORIES: { value: InventoryItemCategory; label: string }[] = [
 export default function InventoryFilters(props: {
   q: string;
   onQChange: (v: string) => void;
+
   roomId?: string;
   onRoomChange: (v: string) => void;
+
   category?: InventoryItemCategory;
   onCategoryChange: (v: InventoryItemCategory | undefined) => void;
+
   hasDocuments?: boolean;
   onHasDocumentsChange: (v: boolean | undefined) => void;
+
+  // ✅ NEW
+  hasRecallAlerts?: boolean;
+  onHasRecallAlertsChange: (v: boolean | undefined) => void;
+
   rooms: { id: string; name: string }[];
 }) {
   return (
@@ -74,6 +82,21 @@ export default function InventoryFilters(props: {
         <option value="">Docs: Any</option>
         <option value="true">Has docs</option>
         <option value="false">No docs</option>
+      </select>
+
+      {/* ✅ NEW */}
+      <select
+        value={props.hasRecallAlerts === undefined ? '' : props.hasRecallAlerts ? 'true' : 'false'}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === '') props.onHasRecallAlertsChange(undefined);
+          else props.onHasRecallAlertsChange(v === 'true');
+        }}
+        className="rounded-xl border border-black/10 px-3 py-2 text-sm"
+      >
+        <option value="">Recalls: Any</option>
+        <option value="true">Has recall alerts</option>
+        <option value="false">No recall alerts</option>
       </select>
     </div>
   );
