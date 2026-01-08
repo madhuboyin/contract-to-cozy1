@@ -19,11 +19,23 @@ export type CpscRecallItem = {
 
 const DEFAULT_URL =
   process.env.CPSC_RECALL_FEED_URL ||
-  'https://www.cpsc.gov/api/recalls'; // replace via env in production
+  'https://www.saferproducts.gov/RestWebServices/Recall?format=json';
 
 export async function fetchCpscRecalls(): Promise<CpscRecallItem[]> {
-  const res = await fetch(DEFAULT_URL);
-  if (!res.ok) throw new Error(`CPSC fetch failed ${res.status} ${res.statusText}`);
+  const res = await fetch(DEFAULT_URL, {
+    headers: {
+      // 2. IMPORTANT: Add a real User-Agent to bypass bot detection/404s
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'application/json'
+    }
+  });
+
+  if (!res.ok) {
+     // Log the URL to verify which one is actually being hit (check your env vars!)
+     console.error(`Attempting fetch from: ${DEFAULT_URL}`);
+     throw new Error(`CPSC fetch failed ${res.status} ${res.statusText}`);
+  }
+  
   const text = await res.text();
 
   // Try JSON first
