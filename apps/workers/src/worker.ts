@@ -651,7 +651,7 @@ async function setupScheduledJobs() {
     RECALL_INGEST_JOB, 
     {}, 
     { 
-      repeat: { pattern: '*/5 * * * *' }, // Cron handled by BullMQ (better than node-cron)
+      repeat: { pattern: '* 3 * * *' }, // 3 minutes past every hour
       jobId: 'recall-ingest-singleton' 
     }
   );
@@ -661,7 +661,7 @@ async function setupScheduledJobs() {
     RECALL_MATCH_JOB, 
     {}, 
     { 
-      repeat: { pattern: '7 */1 * * *' }, // 7 minutes past every hour
+      repeat: { pattern: '* 3 * * *' }, // 7 minutes past every hour
       jobId: 'recall-match-singleton' 
     }
   );
