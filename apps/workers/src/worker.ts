@@ -597,18 +597,35 @@ startClaimFollowUpDuePoller({
 // =============================================================================
 const RECALL_QUEUE_NAME = 'recall-jobs-queue';
 
-const recallQueue = new Queue(RECALL_QUEUE_NAME, { connection: redisConnection });
+const recallQueue = new Queue(RECALL_QUEUE_NAME, { 
+  connection: redisConnection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 1000 },
+    removeOnComplete: true, // Clean up to save Redis memory
+    removeOnFail: 1000
+  }
+});
 
 const recallWorker = new Worker(
   RECALL_QUEUE_NAME,
   async (job) => {
+    // BullMQ workers need a "heartbeat" for long-running jobs.
+    // If recallIngestJob or recallMatchJob takes > 30s, the lock expires.
+    
     if (job.name === RECALL_INGEST_JOB) {
       await recallIngestJob();
     } else if (job.name === RECALL_MATCH_JOB) {
       await recallMatchJob();
     }
   },
-  { connection: redisConnection }
+  { 
+    connection: redisConnection,
+    // FIX: Increase lock duration for heavy processing (default is 30s)
+    lockDuration: 60000, // 60 seconds
+    lockRenewTime: 20000, // Renew every 20 seconds
+    concurrency: 1        // Ensure we don't ingest and match at the exact same time on one worker
+  }
 );
 
 recallWorker.on('ready', () => {
@@ -623,24 +640,36 @@ recallWorker.on('failed', (job, err) => {
   console.error(`[RECALL-WORKER] Job ${job?.id} (${job?.name}) failed:`, err);
 });
 
-// Enqueue recall jobs on startup
-recallQueue.add(RECALL_INGEST_JOB, {}, { jobId: 'recall-ingest-startup' });
-recallQueue.add(RECALL_MATCH_JOB, {}, { jobId: 'recall-match-startup' });
+// Enqueue recall jobs on startup (using repeatable logic instead of manual IDs)
+// This ensures only ONE instance of this job exists in the queue at a time.
+async function setupScheduledJobs() {
+  // Clear old manual jobs to prevent backlog
+  await recallQueue.drain();
 
-// Schedule recall jobs to run daily at 3 AM
-cron.schedule(
-  //'0 3 * * *',
-  '*/5 * * * *',
-  async () => {
-    console.log('[RECALL] Running scheduled recall jobs...');
-    await recallQueue.add(RECALL_INGEST_JOB, {}, { jobId: `recall-ingest-${Date.now()}` });
-    await recallQueue.add(RECALL_MATCH_JOB, {}, { jobId: `recall-match-${Date.now()}` });
-  },
-  { timezone: 'America/New_York' }
-);
+  // Ingest: Every 5 minutes (for testing) or 3 AM
+  await recallQueue.add(
+    RECALL_INGEST_JOB, 
+    {}, 
+    { 
+      repeat: { pattern: '*/5 * * * *' }, // Cron handled by BullMQ (better than node-cron)
+      jobId: 'recall-ingest-singleton' 
+    }
+  );
+
+  // Match: Runs shortly after ingest
+  await recallQueue.add(
+    RECALL_MATCH_JOB, 
+    {}, 
+    { 
+      repeat: { pattern: '7 */1 * * *' }, // 7 minutes past every hour
+      jobId: 'recall-match-singleton' 
+    }
+  );
+}
+
+setupScheduledJobs().catch(console.error);
 
 console.log(`[RECALL-WORKER] Recall Worker started for queue: ${RECALL_QUEUE_NAME}`);
-console.log('[RECALL] Scheduled daily jobs at 3:00 AM EST');
 
 // Start the worker
 startWorker();

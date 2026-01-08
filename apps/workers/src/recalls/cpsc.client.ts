@@ -48,7 +48,10 @@ export async function fetchCpscRecalls(): Promise<CpscRecallItem[]> {
 }
 
 function mapJson(json: any): CpscRecallItem[] {
-  const items = Array.isArray(json?.items) ? json.items : Array.isArray(json) ? json : [];
+  let items = Array.isArray(json?.items) ? json.items : Array.isArray(json) ? json : [];
+  // LIMIT the items to avoid locking the event loop for too long
+  // Federal feeds can be massive.
+  items = items.slice(0, 100);
   return items
     .map((it: any) => {
       const externalId = String(it?.id || it?.recallId || it?.guid || it?.link || '');
