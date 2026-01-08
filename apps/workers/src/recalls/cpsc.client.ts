@@ -41,38 +41,84 @@ export async function fetchCpscRecalls(): Promise<CpscRecallItem[]> {
   // Try JSON first
   try {
     const json = JSON.parse(text);
-    return mapJson(json);
+    const mapped = mapJson(json);
+    console.log('[CPSC-FETCH] items:', Array.isArray(json) ? json.length : json?.items?.length, 'mapped:', mapped.length);
+    return mapped;
   } catch {
     return mapRssXml(text);
   }
 }
 
 function mapJson(json: any): CpscRecallItem[] {
-  let items = Array.isArray(json?.items) ? json.items : Array.isArray(json) ? json : [];
-  // LIMIT the items to avoid locking the event loop for too long
-  // Federal feeds can be massive.
-  items = items.slice(0, 100);
+  // CPSC saferproducts returns a top-level array
+  // Some endpoints may return { items: [...] }, so support both.
+  let items: any[] = Array.isArray(json) ? json : Array.isArray(json?.items) ? json.items : [];
+
+  // Keep the safety cap for v1 to avoid event-loop lock.
+  // Later we’ll switch to date-window ingestion instead of slicing.
+  items = items.slice(0, 200);
+
   return items
     .map((it: any) => {
-      const externalId = String(it?.id || it?.recallId || it?.guid || it?.link || '');
+      // ✅ CPSC keys (confirmed from your pod fetch)
+      const externalId = String(it?.RecallID ?? it?.RecallNumber ?? it?.RecallNo ?? '');
       if (!externalId) return null;
+
+      const title =
+        it?.Title ||
+        it?.ProductName ||
+        (typeof it?.Description === 'string' ? it.Description.slice(0, 120) : '') ||
+        `CPSC Recall ${it?.RecallNumber ?? externalId}`;
+
+      const summary = it?.Description || it?.Summary || it?.ConsumerContact || undefined;
+
+      // Some useful fields commonly present (best-effort)
+      const hazard = it?.Hazard || it?.HazardDescription || undefined;
+      const remedy = it?.Remedy || it?.RemedyDescription || undefined;
+
+      const recallUrl =
+        it?.URL ||
+        it?.RecallURL ||
+        it?.RecallUrl ||
+        it?.Link ||
+        it?.link ||
+        undefined;
+
+      const remedyUrl =
+        it?.RemedyURL ||
+        it?.RemedyUrl ||
+        it?.RemedyURLText ||
+        undefined;
+
+      const recalledAt = it?.RecallDate || it?.LastPublishDate || it?.RecallDateText || undefined;
+
+      const affectedUnits =
+        it?.Units ||
+        it?.NumberOfUnits ||
+        it?.UnitsAffected ||
+        undefined;
+
+      // Best-effort extraction from description (works with CPSC Description text)
+      const { manufacturers, models } = extractMakeModel(String(summary || ''));
+
       return {
         externalId,
-        title: it?.title || 'Recall',
-        summary: it?.summary || it?.description,
-        hazard: it?.hazard,
-        remedy: it?.remedy,
-        recallUrl: it?.url || it?.link,
-        remedyUrl: it?.remedyUrl,
-        recalledAt: it?.date || it?.recalledAt || it?.pubDate,
-        affectedUnits: it?.affectedUnits,
-        manufacturers: toStringArray(it?.manufacturers),
-        models: toStringArray(it?.models),
+        title,
+        summary,
+        hazard,
+        remedy,
+        recallUrl,
+        remedyUrl,
+        recalledAt,
+        affectedUnits,
+        manufacturers,
+        models,
         raw: it,
       } as CpscRecallItem;
     })
     .filter(Boolean) as CpscRecallItem[];
 }
+
 
 function mapRssXml(xml: string): CpscRecallItem[] {
   const chunks = xml.split('<item>').slice(1);

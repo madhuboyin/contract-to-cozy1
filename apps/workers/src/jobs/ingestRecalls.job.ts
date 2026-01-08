@@ -23,6 +23,7 @@ export async function ingestRecallsJob() {
       },
       update: {
         title: item.title,
+        severity: deriveSeverity(item.hazard, item.summary),
         summary: item.summary,
         hazard: item.hazard,
         remedy: item.remedy,
