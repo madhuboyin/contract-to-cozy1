@@ -19,7 +19,7 @@ export type CpscRecallItem = {
 
 const DEFAULT_URL =
   process.env.CPSC_RECALL_FEED_URL ||
-  'https://www.cpsc.gov/Recalls/rss'; // replace via env in production
+  'https://www.cpsc.gov/api/recalls'; // replace via env in production
 
 export async function fetchCpscRecalls(): Promise<CpscRecallItem[]> {
   const res = await fetch(DEFAULT_URL);
