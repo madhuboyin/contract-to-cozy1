@@ -2,7 +2,9 @@
 import { ingestRecallsJob } from './ingestRecalls.job';
 
 export const RECALL_INGEST_JOB = 'recall.ingest';
-
 export async function recallIngestJob() {
-  return ingestRecallsJob();
+  const result = await ingestRecallsJob();
+  console.log('[RECALL-INGEST] result:', result);
+  return result;
 }
+

@@ -5,6 +5,6 @@ import { createFollowupsForOpenMatches } from '../recalls/recallFollowups.servic
 export async function matchRecallsJob() {
   const scan = await runRecallMatchingScan();
   const followups = await createFollowupsForOpenMatches();
-
+  console.log('[RECALL-MATCH] scan:', scan, 'followups:', followups);
   return { scan, followups };
 }
