@@ -52,6 +52,11 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: EMAIL_FROM
+            - name: CPSC_RECALL_FEED_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: CPSC_RECALL_FEED_URL
             - name: SMTP_HOST
               value: smtp-relay.brevo.com
             - name: SMTP_PORT
