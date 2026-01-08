@@ -629,7 +629,8 @@ recallQueue.add(RECALL_MATCH_JOB, {}, { jobId: 'recall-match-startup' });
 
 // Schedule recall jobs to run daily at 3 AM
 cron.schedule(
-  '0 3 * * *',
+  //'0 3 * * *',
+  '*/5 * * * *',
   async () => {
     console.log('[RECALL] Running scheduled recall jobs...');
     await recallQueue.add(RECALL_INGEST_JOB, {}, { jobId: `recall-ingest-${Date.now()}` });
