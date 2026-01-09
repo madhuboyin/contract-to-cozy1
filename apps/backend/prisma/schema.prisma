@@ -2873,6 +2873,11 @@ model Incident {
   events           IncidentEvent[]
   snapshots        IncidentScoreSnapshot[]
 
+  severityBreakdown  Json?
+  decisionTrace      Json?
+  lastEvaluatedAt    DateTime?
+  nextReevalAt       DateTime?
+
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 
@@ -2913,6 +2918,9 @@ model IncidentAction {
   type       IncidentActionType
   status     IncidentActionStatus @default(PROPOSED)
 
+  actionKey   String?
+  decisionTrace Json?
+
   entityType String?
   entityId   String?
 
@@ -2927,6 +2935,8 @@ model IncidentAction {
 
   @@index([incidentId, type, status])
   @@index([entityType, entityId])
+  @@index([incidentId])
+  @@unique([actionKey])
 }
 
 model IncidentSuppressionRule {
