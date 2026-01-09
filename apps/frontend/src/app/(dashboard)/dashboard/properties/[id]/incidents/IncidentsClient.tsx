@@ -28,6 +28,15 @@ export default function IncidentsClient() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // ✅ Keep filters consistent:
+  // - If user selects "Suppressed", we must include suppressed or list will appear empty.
+  useEffect(() => {
+    if (status === 'SUPPRESSED' && !includeSuppressed) {
+      setIncludeSuppressed(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
+
   async function load() {
     setErr(null);
     setLoading(true);
@@ -88,20 +97,30 @@ export default function IncidentsClient() {
 
   return (
     <div className="space-y-4">
-      <SectionHeader icon="⚠️" title="Incidents" action={headerRight} />
+      <SectionHeader
+        icon="⚠️"
+        title="Incidents"
+        description={items.length ? `${items.length} shown` : undefined}
+        action={headerRight}
+      />
 
-      {err ? <div className="rounded-xl border bg-red-50 p-3 text-sm text-red-700">{err}</div> : null}
+      {err ? (
+        <div className="rounded-xl border bg-red-50 p-3 text-sm text-red-700">{err}</div>
+      ) : null}
 
       {loading ? (
         <div className="rounded-xl border bg-white p-4 text-sm text-slate-600">Loading…</div>
       ) : items.length ? (
         <div className="grid grid-cols-1 gap-3">
           {items.map((i) => (
+            // ✅ Important: pass propertyId so IncidentCard can link to detail route
             <IncidentCard key={i.id} incident={i} propertyId={propertyId} />
           ))}
         </div>
       ) : (
-        <div className="rounded-xl border bg-white p-4 text-sm text-slate-600">No incidents found.</div>
+        <div className="rounded-xl border bg-white p-4 text-sm text-slate-600">
+          No incidents found.
+        </div>
       )}
     </div>
   );

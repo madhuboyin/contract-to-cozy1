@@ -8,6 +8,20 @@ import {
   ServiceCategory,
 } from '@prisma/client';
 
+function normalizeBaseUrl(url?: string | null) {
+  if (!url) return null;
+  return url.endsWith('/') ? url.slice(0, -1) : url;
+}
+
+/**
+ * Build a deep-link to the maintenance task in the app.
+ * Adjust the path/query if your UI uses a different route.
+ */
+function buildMaintenanceTaskUrl(args: { baseUrl: string; propertyId: string; taskId: string }) {
+  // Preferred: a dedicated maintenance page + optional taskId
+  return `${args.baseUrl}/dashboard/properties/${args.propertyId}/maintenance?taskId=${args.taskId}`;
+}
+
 export class MaintenanceTaskAdapter {
   static async findOrCreateFromIncidentAction(args: {
     incident: {
@@ -36,13 +50,19 @@ export class MaintenanceTaskAdapter {
 
     const serviceCategory: ServiceCategory | null = payload.serviceCategory ?? null;
 
+    const baseUrl = normalizeBaseUrl(process.env.APP_BASE_URL);
+
     // Dedup via unique (propertyId, actionKey)
     const existing = await prisma.propertyMaintenanceTask.findUnique({
       where: { propertyId_actionKey: { propertyId: incident.propertyId, actionKey } },
     });
 
     if (existing) {
-      return { entityType: 'PropertyMaintenanceTask', entityId: existing.id, actionUrl: payload.actionUrl ?? null };
+      const actionUrl =
+        payload.actionUrl ??
+        (baseUrl ? buildMaintenanceTaskUrl({ baseUrl, propertyId: incident.propertyId, taskId: existing.id }) : null);
+
+      return { entityType: 'PropertyMaintenanceTask', entityId: existing.id, actionUrl };
     }
 
     const created = await prisma.propertyMaintenanceTask.create({
@@ -73,6 +93,10 @@ export class MaintenanceTaskAdapter {
       },
     });
 
-    return { entityType: 'PropertyMaintenanceTask', entityId: created.id, actionUrl: payload.actionUrl ?? null };
+    const actionUrl =
+      payload.actionUrl ??
+      (baseUrl ? buildMaintenanceTaskUrl({ baseUrl, propertyId: incident.propertyId, taskId: created.id }) : null);
+
+    return { entityType: 'PropertyMaintenanceTask', entityId: created.id, actionUrl };
   }
 }

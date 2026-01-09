@@ -10,19 +10,20 @@ import {
   setIncidentStatus,
   upsertIncident,
   evaluateIncidentNow,
-  listIncidentEvents,
   orchestrateIncidentNow,
+  listIncidentEvents,
   confirmIncidentActionCreated,
+  executeIncidentAction,
+  reevaluateIncidentNow,
 } from '../controllers/incidents.controller';
-import { executeIncidentAction } from '../controllers/incidents.controller';
 
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware'; // adjust path if needed
-import { authenticate } from '../middleware/auth.middleware'; // adjust to your auth middleware
+import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { authenticate } from '../middleware/auth.middleware';
 
 const router = Router();
 
 /**
- * Property-scoped
+ * ✅ Property-scoped incidents (primary API surface)
  */
 router.get(
   '/properties/:propertyId/incidents',
@@ -39,24 +40,115 @@ router.post(
 );
 
 /**
- * Incident-scoped
+ * ✅ Incident detail (property-scoped to prevent IDOR)
+ * Recommend controller uses (propertyId, incidentId) to ensure ownership.
  */
-router.get('/incidents/:incidentId', authenticate, getIncident);
+router.get(
+  '/properties/:propertyId/incidents/:incidentId',
+  authenticate,
+  propertyAuthMiddleware,
+  getIncident
+);
 
-router.post('/incidents/:incidentId/signals', authenticate, addSignal);
-router.post('/incidents/:incidentId/actions', authenticate, createIncidentAction);
-router.post('/incidents/:incidentId/ack', authenticate, acknowledgeIncident);
-router.patch('/incidents/:incidentId/status', authenticate, setIncidentStatus);
+/**
+ * Signals
+ */
+router.post(
+  '/properties/:propertyId/incidents/:incidentId/signals',
+  authenticate,
+  propertyAuthMiddleware,
+  addSignal
+);
+
+/**
+ * Actions
+ * - createIncidentAction: creates an IncidentAction record (PROPOSED/CREATED)
+ * - confirmIncidentActionCreated: used when a task is materialized so we can log ACTION_CREATED
+ * - executeIncidentAction: optional - if you have server-side execution to materialize tasks
+ */
+router.post(
+  '/properties/:propertyId/incidents/:incidentId/actions',
+  authenticate,
+  propertyAuthMiddleware,
+  createIncidentAction
+);
+
+router.post(
+  '/properties/:propertyId/incidents/:incidentId/actions/:actionId/confirm-created',
+  authenticate,
+  propertyAuthMiddleware,
+  confirmIncidentActionCreated
+);
+
+router.post(
+  '/properties/:propertyId/incidents/:incidentId/actions/:actionId/execute',
+  authenticate,
+  propertyAuthMiddleware,
+  executeIncidentAction
+);
+
+/**
+ * Acknowledgements + status
+ */
+router.post(
+  '/properties/:propertyId/incidents/:incidentId/ack',
+  authenticate,
+  propertyAuthMiddleware,
+  acknowledgeIncident
+);
+
+router.patch(
+  '/properties/:propertyId/incidents/:incidentId/status',
+  authenticate,
+  propertyAuthMiddleware,
+  setIncidentStatus
+);
+
+/**
+ * Evaluation / orchestration
+ * - evaluateIncidentNow: compute severity, update state, log SEVERITY_COMPUTED, etc.
+ * - orchestrateIncidentNow: propose actions, log ACTION_PROPOSED (+ decisionTrace in payload)
+ */
+router.post(
+  '/properties/:propertyId/incidents/:incidentId/evaluate',
+  authenticate,
+  propertyAuthMiddleware,
+  evaluateIncidentNow
+);
+
+router.post(
+  '/properties/:propertyId/incidents/:incidentId/orchestrate',
+  authenticate,
+  propertyAuthMiddleware,
+  orchestrateIncidentNow
+);
+
+/**
+ * Events (for timeline + decision trace retrieval)
+ */
+router.get(
+  '/properties/:propertyId/incidents/:incidentId/events',
+  authenticate,
+  propertyAuthMiddleware,
+  listIncidentEvents
+);
 
 /**
  * Suppression rules
- * (Could also be property-scoped; leaving flexible for now.)
+ * ✅ Make property-scoped (aligns with snooze/dismiss UX and avoids cross-property IDOR)
  */
-router.post('/incident-suppression-rules', authenticate, createSuppressionRule);
-router.post('/incidents/:incidentId/evaluate', authenticate, evaluateIncidentNow);
-router.post('/incidents/:incidentId/orchestrate', authenticate, orchestrateIncidentNow);
-router.get('/incidents/:incidentId/events', authenticate, listIncidentEvents);
-router.post('/incidents/:incidentId/actions/:actionId/confirm-created', authenticate, confirmIncidentActionCreated);
-router.post('/incidents/:incidentId/actions/:actionId/execute', authenticate, executeIncidentAction);
+router.post(
+  '/properties/:propertyId/incident-suppression-rules',
+  authenticate,
+  propertyAuthMiddleware,
+  createSuppressionRule
+);
+
+router.post(
+  '/properties/:propertyId/incidents/:incidentId/reevaluate',
+  authenticate,
+  propertyAuthMiddleware,
+  reevaluateIncidentNow
+);
 
 export default router;
