@@ -29,6 +29,7 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/services/pdf/templates \
              src/shared/backend/services/domainEvents \
              src/shared/backend/services/incidents \
+             src/shared/backend/types \
              src/shared/backend/lib
 
 COPY apps/backend/src/utils/riskCalculator.util.ts src/shared/backend/utils/
@@ -41,6 +42,11 @@ COPY apps/backend/src/services/pdf/templates/homeReportPackHtml.ts src/shared/ba
 COPY apps/backend/src/services/domainEvents/domainEvents.service.ts src/shared/backend/services/domainEvents/
 COPY apps/backend/src/lib/prisma.ts src/shared/backend/lib/
 COPY apps/backend/src/services/incidents/incident.service.ts src/shared/backend/services/incidents/
+COPY apps/backend/src/types/incidents.types.ts src/shared/backend/types/
+COPY apps/backend/src/services/incidents/incident.utils.ts src/shared/backend/services/incidents/
+COPY apps/backend/src/services/incidents/incident.events.ts src/shared/backend/services/incidents/
+COPY apps/backend/src/services/incidents/incident.evaluator.ts src/shared/backend/services/incidents/
+COPY apps/backend/src/services/incidents/incident.orchestrator.ts src/shared/backend/services/incidents/
 # Copy worker source code + TS config
 COPY apps/workers/src ./src
 COPY apps/workers/tsconfig.json ./tsconfig.json
@@ -53,7 +59,9 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/pdf\/renderHomeReportPackPdf/\.\.\/shared\/backend\/services\/pdf\/renderHomeReportPackPdf/g' src/jobs/generateHomeReportExport.job.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/domainEvents\/domainEvents\.service/\.\/shared\/backend\/services\/domainEvents\/domainEvents\.service/g' src/runners/claimFollowUpDue.poller.ts && \
     # This ensures the domainEvents service can find the prisma lib in its new shared relative path
-    sed -i 's/\.\.\/\.\.\/lib\/prisma/\.\.\/\.\.\/lib\/prisma/g' src/shared/backend/services/domainEvents/domainEvents.service.ts
+    sed -i 's/\.\.\/\.\.\/lib\/prisma/\.\.\/\.\.\/lib\/prisma/g' src/shared/backend/services/domainEvents/domainEvents.service.ts && \
+    sed -i 's/\.\.\/\.\.\/backend\/src\/services\/incidents\/incident\.service/\.\/shared\/backend\/services\/incidents\/incident\.service/g' src/jobs/coverageLapseIncidents.job.ts && \
+    sed -i 's/\.\.\/\.\.\/backend\/src\/services\/incidents\/incident\.service/\.\/shared\/backend\/services\/incidents\/incident\.service/g' src/jobs/freezeRiskIncidents.job.ts
 
 # Compile TS -> dist/
 RUN npx tsc --project ./tsconfig.json
