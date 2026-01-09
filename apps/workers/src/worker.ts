@@ -27,6 +27,8 @@ import { startHighPriorityEmailEnqueuePoller } from './runners/highPriorityEmail
 import { startClaimFollowUpDuePoller } from './runners/claimFollowUpDue.poller';
 import { recallIngestJob, RECALL_INGEST_JOB } from './jobs/recallIngest.job';
 import { recallMatchJob, RECALL_MATCH_JOB } from './jobs/recallMatch.job';
+import { coverageLapseIncidentsJob } from './jobs/coverageLapseIncidents.job';
+import { freezeRiskIncidentsJob } from './jobs/freezeRiskIncidents.job';
 
 
 const prisma = new PrismaClient();
@@ -671,6 +673,18 @@ async function setupScheduledJobs() {
 setupScheduledJobs().catch(console.error);
 
 console.log(`[RECALL-WORKER] Recall Worker started for queue: ${RECALL_QUEUE_NAME}`);
+
+// =============================================================================
+// COVERAGE LAPSE INCIDENTS
+// =============================================================================
+cron.schedule('0 8 * * *', coverageLapseIncidentsJob, { timezone: 'America/New_York' });
+console.log('[COVERAGE-LAPSE] Coverage Lapse Incidents job scheduled for 8:00 AM EST');
+// =============================================================================
+// FREEZE RISK INCIDENTS
+// =============================================================================
+cron.schedule('0 9 * * *', freezeRiskIncidentsJob, { timezone: 'America/New_York' });
+console.log('[FREEZE-RISK] Freeze Risk Incidents job scheduled for 8:00 AM EST');
+
 
 // Start the worker
 startWorker();

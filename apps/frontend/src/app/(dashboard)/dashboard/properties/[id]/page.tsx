@@ -19,6 +19,7 @@ import ReportsClient from "./reports/ReportsClient";
 import ClaimsClient from "./claims/ClaimsClient";
 import { ClipboardCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import IncidentsClient from "./incidents/IncidentsClient";
 
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
@@ -618,9 +619,21 @@ export default function PropertyDetailPage() {
   const initialTab = searchParams.get('tab');
   
   // Updated defaultTab logic to include the new 'financial-efficiency' tab
-  const defaultTab = initialTab && ['overview', 'maintenance', 'risk-protection', 'financial-efficiency', 'documents', 'reports', 'claims',].includes(initialTab) 
-    ? initialTab 
+  const defaultTab =
+  initialTab &&
+  [
+    'overview',
+    'maintenance',
+    'incidents',
+    'risk-protection',
+    'financial-efficiency',
+    'documents',
+    'reports',
+    'claims',
+  ].includes(initialTab)
+    ? initialTab
     : 'overview';
+
 
 
   // [MODIFICATION] Assumed that the API returns ScoredProperty data for this endpoint.
@@ -712,6 +725,9 @@ export default function PropertyDetailPage() {
             <TabsTrigger value="maintenance" className="flex items-center gap-2">
               <Zap className="h-4 w-4" /> Maintenance Plan
             </TabsTrigger>
+            <TabsTrigger value="incidents" className="flex items-center gap-2">
+              <ShieldAlert className="h-4 w-4" /> Incidents
+            </TabsTrigger>
             <TabsTrigger value="risk-protection" className="flex items-center gap-2">
               <Shield className="h-4 w-4" /> Risk & Protection
             </TabsTrigger>
@@ -740,7 +756,9 @@ export default function PropertyDetailPage() {
             {/* [MODIFICATION] Pass the full (scored) property object */}
             <MaintenancePlanTab property={scoredProperty} /> 
           </TabsContent>
-
+          <TabsContent value="incidents" className="mt-4">
+            <IncidentsClient />
+          </TabsContent>
           <TabsContent value="risk-protection" className="mt-4">
             <RiskProtectionTab propertyId={property.id} />
           </TabsContent>

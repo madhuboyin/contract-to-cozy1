@@ -51,6 +51,7 @@ import propertyMaintenanceTaskRoutes from './routes/propertyMaintenanceTask.rout
 import inventoryRoutes from './routes/inventory.routes';
 import { insuranceQuoteRouter } from './routes/insuranceQuote.routes';
 import claimsRoutes from './routes/claims.routes';
+import incidentsRouter from './routes/incidents.routes';
 
 
 dotenv.config();
@@ -309,6 +310,7 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api', inventoryRoutes);
 app.use('/api', insuranceQuoteRouter);
 app.use('/api', claimsRoutes);
+app.use('/api', incidentsRouter);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
