@@ -2867,6 +2867,8 @@ model Incident {
   suppressedAt     DateTime?
   suppressionReason String?
   suppressionRuleId String?
+  events           IncidentEvent[]
+  snapshots        IncidentScoreSnapshot[]
 
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
@@ -2875,8 +2877,7 @@ model Incident {
   actions          IncidentAction[]
   acknowledgements IncidentAcknowledgement[]
 
-  // If you already have Property model, wire relation:
-  // property         Property          @relation(fields: [propertyId], references: [id])
+  property         Property          @relation(fields: [propertyId], references: [id])
 
   @@index([propertyId, status, severity])
   @@index([propertyId, typeKey, isSuppressed])
