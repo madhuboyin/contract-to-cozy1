@@ -2754,6 +2754,266 @@ model RecallMatch {
 }
 
 
+// ============================
+// Incidents (NEW)
+// ============================
+
+enum IncidentStatus {
+  DETECTED
+  EVALUATED
+  ACTIVE
+  ACTIONED
+  MITIGATED
+  RESOLVED
+  SUPPRESSED
+  EXPIRED
+}
+
+enum IncidentSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum IncidentSourceType {
+  WEATHER
+  COVERAGE
+  MODEL
+  IOT
+  MANUAL
+  SYSTEM
+}
+
+enum SignalType {
+  WEATHER_FORECAST
+  COVERAGE_CHECK
+  MODEL_OUTPUT
+  SENSOR_READING
+  USER_REPORT
+  SYSTEM_RULE
+}
+
+enum IncidentActionType {
+  TASK
+  BOOKING
+  CHECKLIST_ITEM
+  NOTIFICATION
+  DOCUMENT
+  NOTE
+}
+
+enum IncidentActionStatus {
+  PROPOSED
+  CREATED
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
+  FAILED
+}
+
+enum SuppressionScope {
+  PROPERTY
+  USER
+  GLOBAL
+}
+
+enum SuppressionReason {
+  BOOKING_EXISTS
+  TASK_EXISTS
+  COVERED
+  USER_ACKED
+  USER_DISMISSED
+  SNOOZED
+  RECENTLY_SHOWN
+  LOW_CONFIDENCE
+  NOT_ACTIONABLE
+}
+
+enum AcknowledgementType {
+  ACKNOWLEDGED
+  DISMISSED
+  SNOOZED
+}
+
+model Incident {
+  id               String            @id @default(cuid())
+  propertyId       String
+  userId           String?
+  sourceType       IncidentSourceType
+
+  typeKey          String
+  category         String?
+  title            String
+  summary          String?
+  details          Json?
+
+  status           IncidentStatus    @default(DETECTED)
+  openedAt         DateTime          @default(now())
+  activatedAt      DateTime?
+  mitigatedAt      DateTime?
+  resolvedAt       DateTime?
+  expiredAt        DateTime?
+
+  severity         IncidentSeverity?
+  severityScore    Int?
+  scoreBreakdown   Json?
+  confidence       Int?
+
+  fingerprint      String
+  recurrenceKey    String?
+  dedupeWindowMins Int?
+
+  isSuppressed     Boolean           @default(false)
+  suppressedAt     DateTime?
+  suppressionReason String?
+  suppressionRuleId String?
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  signals          IncidentSignal[]
+  actions          IncidentAction[]
+  acknowledgements IncidentAcknowledgement[]
+
+  // If you already have Property model, wire relation:
+  // property         Property          @relation(fields: [propertyId], references: [id])
+
+  @@index([propertyId, status, severity])
+  @@index([propertyId, typeKey, isSuppressed])
+  @@index([propertyId, fingerprint])
+}
+
+model IncidentSignal {
+  id          String     @id @default(cuid())
+  incidentId  String
+  signalType  SignalType
+  externalRef String?
+  observedAt  DateTime   @default(now())
+
+  payload     Json
+  scoreHint   Int?
+  confidence  Int?
+
+  createdAt   DateTime   @default(now())
+
+  incident    Incident   @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, signalType])
+  @@index([signalType, observedAt])
+}
+
+model IncidentAction {
+  id         String              @id @default(cuid())
+  incidentId String
+
+  type       IncidentActionType
+  status     IncidentActionStatus @default(PROPOSED)
+
+  entityType String?
+  entityId   String?
+
+  ctaLabel   String?
+  ctaUrl     String?
+  payload    Json?
+
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  incident   Incident            @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, type, status])
+  @@index([entityType, entityId])
+}
+
+model IncidentSuppressionRule {
+  id            String           @id @default(cuid())
+  scope         SuppressionScope @default(PROPERTY)
+  propertyId    String?
+  userId        String?
+
+  typeKey       String?
+  assetId       String?
+  reason        SuppressionReason
+  isEnabled     Boolean          @default(true)
+
+  params        Json?
+  suppressUntil DateTime?
+
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([propertyId, isEnabled])
+  @@index([userId, isEnabled])
+  @@index([typeKey, isEnabled])
+}
+
+model IncidentAcknowledgement {
+  id          String              @id @default(cuid())
+  incidentId  String
+  userId      String
+  type        AcknowledgementType
+  note        String?
+  snoozeUntil DateTime?
+
+  createdAt   DateTime            @default(now())
+
+  incident    Incident            @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, userId])
+  @@index([userId, createdAt])
+}
+
+// ============================
+// Incident events / timeline (NEW)
+// ============================
+
+enum IncidentEventType {
+  CREATED
+  STATUS_CHANGED
+  SEVERITY_COMPUTED
+  ACTION_PROPOSED
+  ACTION_CREATED
+  SUPPRESSED
+  ACKNOWLEDGED
+  DISMISSED
+  SNOOZED
+  RESOLVED
+  EXPIRED
+}
+
+model IncidentEvent {
+  id          String            @id @default(cuid())
+  incidentId  String
+  propertyId  String
+  userId      String?
+  type        IncidentEventType
+  message     String?
+  payload     Json?
+
+  createdAt   DateTime          @default(now())
+
+  incident    Incident          @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, createdAt])
+  @@index([propertyId, createdAt])
+}
+
+model IncidentScoreSnapshot {
+  id            String          @id @default(cuid())
+  incidentId    String
+  computedAt    DateTime        @default(now())
+
+  severity      IncidentSeverity
+  severityScore Int
+  confidence    Int?
+  breakdown     Json
+  modelVersion  String?
+
+  incident      Incident        @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, computedAt])
+}
+
 // ============================================================================
 // FAVORITES
 // ============================================================================
