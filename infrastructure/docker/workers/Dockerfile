@@ -47,6 +47,10 @@ COPY apps/backend/src/services/incidents/incident.utils.ts src/shared/backend/se
 COPY apps/backend/src/services/incidents/incident.events.ts src/shared/backend/services/incidents/
 COPY apps/backend/src/services/incidents/incident.evaluator.ts src/shared/backend/services/incidents/
 COPY apps/backend/src/services/incidents/incident.orchestrator.ts src/shared/backend/services/incidents/
+# Copy the missing dependencies for the incident evaluator
+COPY apps/backend/src/services/incidents/incident.scoring.ts src/shared/backend/services/incidents/
+COPY apps/backend/src/services/incidents/incident.events.ts src/shared/backend/services/incidents/
+COPY apps/backend/src/services/incidents/integrations/incidentNotification.service.ts src/shared/backend/services/incidents/integrations/
 # Copy worker source code + TS config
 COPY apps/workers/src ./src
 COPY apps/workers/tsconfig.json ./tsconfig.json
