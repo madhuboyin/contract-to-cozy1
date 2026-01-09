@@ -1019,6 +1019,7 @@ model Property {
   claims Claim[]
   claimTimelineEvents ClaimTimelineEvent[]
   recallMatches      RecallMatch[]
+  incidents          Incident[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
