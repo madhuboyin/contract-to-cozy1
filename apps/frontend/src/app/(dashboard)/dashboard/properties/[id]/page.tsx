@@ -718,34 +718,55 @@ export default function PropertyDetailPage() {
 
       {/* UPDATED: Removed space-y-4 wrapper - no container spacing needed */}
       <Tabs defaultValue={defaultTab} className="w-full">
-          <TabsList className="flex w-full overflow-x-auto">
-            <TabsTrigger value="overview" className="flex items-center gap-2">
-              <Home className="h-4 w-4" /> Overview
-            </TabsTrigger>
-            <TabsTrigger value="maintenance" className="flex items-center gap-2">
-              <Zap className="h-4 w-4" /> Maintenance Plan
-            </TabsTrigger>
-            <TabsTrigger value="incidents" className="flex items-center gap-2">
-              <ShieldAlert className="h-4 w-4" /> Incidents
-            </TabsTrigger>
-            <TabsTrigger value="risk-protection" className="flex items-center gap-2">
-              <Shield className="h-4 w-4" /> Risk & Protection
-            </TabsTrigger>
-            {/* NEW TRIGGER: Financial Efficiency */}
-            <TabsTrigger value="financial-efficiency" className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4" /> Financial Efficiency
-            </TabsTrigger>
-            <TabsTrigger value="documents" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" /> Documents
-            </TabsTrigger>
-            <TabsTrigger value="reports" className="flex items-center gap-2">
-              <FileDown className="h-4 w-4" /> Reports
-            </TabsTrigger>
-            <TabsTrigger value="claims" className="flex items-center gap-2">
-              <ClipboardCheck className="h-4 w-4" /> Claims
-            </TabsTrigger>
-
-          </TabsList>
+        <TabsList>
+          <TabsTrigger value="overview" className="flex items-center gap-1 sm:gap-2">
+            <Home className="h-4 w-4" />
+            <span className="hidden sm:inline">Overview</span>
+            <span className="sm:hidden">Info</span>
+          </TabsTrigger>
+          
+          <TabsTrigger value="maintenance" className="flex items-center gap-1 sm:gap-2">
+            <Zap className="h-4 w-4" />
+            <span className="hidden sm:inline">Maintenance Plan</span>
+            <span className="sm:hidden">Maint.</span>
+          </TabsTrigger>
+          
+          <TabsTrigger value="incidents" className="flex items-center gap-1 sm:gap-2">
+            <ShieldAlert className="h-4 w-4" />
+            <span className="hidden sm:inline">Incidents</span>
+            <span className="sm:hidden">Alerts</span>
+          </TabsTrigger>
+          
+          <TabsTrigger value="risk-protection" className="flex items-center gap-1 sm:gap-2">
+            <Shield className="h-4 w-4" />
+            <span className="hidden sm:inline">Risk & Protection</span>
+            <span className="sm:hidden">Risk</span>
+          </TabsTrigger>
+          
+          <TabsTrigger value="financial-efficiency" className="flex items-center gap-1 sm:gap-2">
+            <DollarSign className="h-4 w-4" />
+            <span className="hidden sm:inline">Financial Efficiency</span>
+            <span className="sm:hidden">Finance</span>
+          </TabsTrigger>
+          
+          <TabsTrigger value="documents" className="flex items-center gap-1 sm:gap-2">
+            <FileText className="h-4 w-4" />
+            <span className="hidden sm:inline">Documents</span>
+            <span className="sm:hidden">Docs</span>
+          </TabsTrigger>
+          
+          <TabsTrigger value="reports" className="flex items-center gap-1 sm:gap-2">
+            <FileDown className="h-4 w-4" />
+            <span className="hidden sm:inline">Reports</span>
+            <span className="sm:hidden">Reports</span>
+          </TabsTrigger>
+          
+          <TabsTrigger value="claims" className="flex items-center gap-1 sm:gap-2">
+            <ClipboardCheck className="h-4 w-4" />
+            <span className="hidden sm:inline">Claims</span>
+            <span className="sm:hidden">Claims</span>
+          </TabsTrigger>
+        </TabsList>
           
           {/* UPDATED: Reduced tab content spacing from mt-6 to mt-4 */}
           <TabsContent value="overview" className="mt-4">
