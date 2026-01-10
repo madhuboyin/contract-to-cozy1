@@ -718,7 +718,8 @@ export default function PropertyDetailPage() {
 
       {/* UPDATED: Removed space-y-4 wrapper - no container spacing needed */}
       <Tabs defaultValue={defaultTab} className="w-full">
-        <TabsList>
+      <div className="overflow-x-auto">
+        <TabsList className="inline-flex w-max">
           <TabsTrigger value="overview" className="flex items-center gap-1 sm:gap-2">
             <Home className="h-4 w-4" />
             <span className="hidden sm:inline">Overview</span>
@@ -767,6 +768,7 @@ export default function PropertyDetailPage() {
             <span className="sm:hidden">Claims</span>
           </TabsTrigger>
         </TabsList>
+        </div>
           
           {/* UPDATED: Reduced tab content spacing from mt-6 to mt-4 */}
           <TabsContent value="overview" className="mt-4">
