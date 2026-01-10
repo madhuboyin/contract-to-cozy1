@@ -121,29 +121,6 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
                         Exposure: ${Math.round((g.exposureCents || 0) / 100)} {g.currency || 'USD'} • {g.gapType}
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      <Link
-                        href={`/dashboard/properties/${propertyId}/inventory?focus=${g.inventoryItemId}`}
-                        className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
-                      >
-                        View item
-                      </Link>
-
-                      <button
-                        onClick={() => { setSelected(g); setQuoteOpen(true); }}
-                        className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
-                      >
-                        Get quotes
-                      </button>
-
-                      <button
-                        onClick={() => { setSelected(g); setCoveredOpen(true); }}
-                        className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
-                      >
-                        What’s covered?
-                      </button>
-                    </div>
                     {/* Fixed - wrap on mobile */}
                     <div className="flex flex-wrap items-center gap-2">
                       <Link
