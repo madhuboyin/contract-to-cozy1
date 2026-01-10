@@ -66,6 +66,13 @@ export default function ClaimsClient() {
 
   return (
     <div className="space-y-4">
+      {/* Add Back Link */}
+      <Link 
+        href={`/dashboard/properties/${propertyId}`}
+        className="text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors"
+      >
+        ← Back to Property
+      </Link>
       <SectionHeader
         icon="📋"
         title="Claims"

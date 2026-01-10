@@ -17,6 +17,7 @@ import {
 } from './reportsApi';
 
 import { toast } from '@/components/ui/use-toast';
+import Link from 'next/link';
 
 function fmt(dt?: string | null) {
   if (!dt) return '—';
@@ -72,6 +73,7 @@ export default function ReportsClient() {
   const [error, setError] = useState<string | null>(null);
 
   const pollRef = useRef<number | null>(null);
+  
 
   const hasActive = useMemo(
     () => exports.some((e) => e.status === 'PENDING' || e.status === 'GENERATING'),
@@ -189,7 +191,14 @@ export default function ReportsClient() {
   }, [hasActive, propertyId]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* Add Back Link */}
+      <Link 
+        href={`/dashboard/properties/${propertyId}`}
+        className="text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors"
+      >
+        ← Back to Property
+      </Link>
       <SectionHeader
         icon="📄"
         title="Home Reports"

@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { Document, DocumentType, Property, Warranty, InsurancePolicy, DocumentUploadInput } from '@/types';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 
 // --- Document Type Constants for UI ---
 const DOCUMENT_TYPES: DocumentType[] = [
@@ -42,6 +43,8 @@ const AISmartUpload = ({ properties, onUploadSuccess, onClose }: AISmartUploadPr
   const [preview, setPreview] = useState<string | null>(null);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>('');
   const { toast } = useToast();
+  const searchParams = useSearchParams();
+  const propertyId = searchParams.get('propertyId');
 
   useEffect(() => {
     if (properties.length > 0 && !selectedPropertyId) {
@@ -588,6 +591,14 @@ export default function DocumentsPage() {
 
   return (
     <div className="space-y-6 pb-8">
+      {propertyIdFromUrl && (
+        <Link 
+          href={`/dashboard/properties/${propertyIdFromUrl}`}
+          className="text-sm text-blue-600 hover:underline mb-4 inline-block"
+        >
+          ← Back to Property
+        </Link>
+      )}      
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
