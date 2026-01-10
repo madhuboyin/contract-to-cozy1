@@ -3,13 +3,15 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Save, MapPin, Bell, CheckCircle } from 'lucide-react';
+import { Save, MapPin, Bell, CheckCircle, ArrowLeft } from 'lucide-react';
 import { useClimateInfo, useUpdateClimateSettings } from '@/lib/hooks/useSeasonalChecklists';
 import { ClimateRegion, NotificationTiming } from '@/types/seasonal.types';
 import { getClimateRegionName, getClimateRegionIcon } from '@/lib/utils/seasonHelpers';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
-
+import { Button } from '@/components/ui/button';
+import { useRouter } from 'next/navigation';
 export default function SeasonalSettingsPage() {
+  const router = useRouter();
   // FIX: Get propertyId from URL params first (for page reload), then fall back to context
   const searchParams = useSearchParams();
   const { selectedPropertyId } = usePropertyContext();
@@ -91,6 +93,13 @@ export default function SeasonalSettingsPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
+      <Button 
+          variant="link" 
+          className="p-0 h-auto mb-2 text-sm text-muted-foreground"
+          onClick={() => router.back()}
+      >
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back
+      </Button>
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Seasonal Maintenance Settings</h1>

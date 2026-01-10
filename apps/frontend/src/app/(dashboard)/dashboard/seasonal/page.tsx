@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Calendar, ChevronDown, ChevronRight, CheckCircle, Clock, Settings } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronRight, CheckCircle, Clock, Settings, Link, ChevronLeft, ArrowLeft } from 'lucide-react';
 import { useSeasonalChecklists, useClimateInfo } from '@/lib/hooks/useSeasonalChecklists';
 import { SeasonalChecklistModal } from '@/components/seasonal/SeasonalChecklistModal';
 import {
@@ -18,6 +18,7 @@ import { SeasonalChecklist } from '@/types/seasonal.types';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { useRouter } from 'next/navigation';
 import { SettingsIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export default function SeasonalMaintenancePage() {
   const router = useRouter(); 
@@ -101,6 +102,14 @@ export default function SeasonalMaintenancePage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
+      <Button 
+          variant="link" 
+          className="p-0 h-auto mb-2 text-sm text-muted-foreground"
+          onClick={() => router.back()}
+      >
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back
+      </Button>
+    {/* Page Content */}
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between">

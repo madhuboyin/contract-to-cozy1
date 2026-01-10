@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { FileText, Plus, Loader2, Wrench, Trash2, Edit, X, Save, Upload, ExternalLink, AlertCircle } from 'lucide-react';
+import { FileText, Plus, Loader2, Wrench, Trash2, Edit, X, Save, Upload, ExternalLink, AlertCircle, ArrowLeft } from 'lucide-react';
 import { format, parseISO, isPast } from 'date-fns';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
@@ -672,6 +672,13 @@ export default function WarrantiesPage() {
 
   return (
     <div className="space-y-6 pb-8">
+      <Button 
+        variant="link" 
+        className="p-0 h-auto mb-2 text-sm text-muted-foreground"
+        onClick={() => router.back()}
+      >
+        <ArrowLeft className="h-4 w-4 mr-1" /> Back
+      </Button>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2 sm:text-3xl">
           <Wrench className="w-6 h-6 text-blue-600 sm:w-7 sm:h-7" /> My Home Warranties
