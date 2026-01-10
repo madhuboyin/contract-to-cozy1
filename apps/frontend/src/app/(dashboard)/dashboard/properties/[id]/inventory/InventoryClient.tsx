@@ -149,22 +149,19 @@ export default function InventoryClient() {
 
   return (
     <div className="p-6 space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        {/* LEFT: Title + Tabs */}
-        <div className="flex items-start gap-6">
+      <div className="flex flex-col gap-4">
+        {/* ROW 1: Title + Tabs */}
+        <div className="flex flex-col sm:flex-row sm:items-start gap-4">
           <SectionHeader
             icon="📦"
             title="Home Inventory"
             description="Track appliances, systems, and valuables with receipts and replacement values."
           />
 
-          <div className="inline-flex items-center p-1 bg-black/5 rounded-xl mt-1 border border-black/5">
-            {/* Active State (Static Div) */}
+          <div className="inline-flex items-center p-1 bg-black/5 rounded-xl border border-black/5 shrink-0">
             <div className="px-4 py-1.5 text-sm font-medium bg-white text-black shadow-sm rounded-lg border border-black/5">
               Items
             </div>
-            
-            {/* Inactive State (Link) */}
             <Link
               href={`/dashboard/properties/${propertyId}/inventory/coverage`}
               className="px-4 py-1.5 text-sm font-medium text-black/50 hover:text-black transition-colors duration-200"
@@ -174,27 +171,30 @@ export default function InventoryClient() {
           </div>
         </div>
 
-        {/* RIGHT: Actions */}
-        <div className="flex items-center gap-3">
+        {/* ROW 2: Actions - wrap on mobile */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <Link
             href={`/dashboard/properties/${propertyId}/inventory/rooms`}
             className="text-sm underline opacity-80 hover:opacity-100"
           >
-            Manage rooms
+            <span className="hidden sm:inline">Manage rooms</span>
+            <span className="sm:hidden">Rooms</span>
           </Link>
 
           <button
             onClick={onAdd}
-            className="rounded-xl px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5"
+            className="rounded-xl px-3 sm:px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5"
           >
-            Add item
+            <span className="hidden sm:inline">Add item</span>
+            <span className="sm:hidden">+ Add</span>
           </button>
 
           <button
             onClick={handleExport}
-            className="rounded-xl px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5"
+            className="rounded-xl px-3 sm:px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5"
           >
-            Export CSV
+            <span className="hidden sm:inline">Export CSV</span>
+            <span className="sm:hidden">Export</span>
           </button>
         </div>
       </div>
