@@ -2872,6 +2872,7 @@ model Incident {
   suppressionRuleId String?
   events           IncidentEvent[]
   snapshots        IncidentScoreSnapshot[]
+  snoozedUntil     DateTime?
 
   severityBreakdown  Json?
   decisionTrace      Json?
