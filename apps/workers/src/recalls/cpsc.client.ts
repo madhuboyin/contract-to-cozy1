@@ -114,6 +114,12 @@ function toNameArray(v: any): string[] {
   return [];
 }
 
+function joinFirstNameField(v: any): string | null {
+  const arr = toNameArray(v);
+  if (!arr.length) return null;
+  return arr[0] || null;
+}
+
 function pickFirstString(it: any, keys: string[]): string | null {
   for (const k of keys) {
     const v = it?.[k];
@@ -135,98 +141,225 @@ function pickStringList(it: any, keys: string[]): string[] {
 }
 
 // ----------------------------
-// Manufacturer cleaning (CRITICAL FIX)
-// ----------------------------
-function stripLocationSuffix(name: string): string {
-  // "Foo Inc., of China" -> "Foo Inc."
-  // "Bar LLC, of Columbus" -> "Bar LLC"
-  return name.replace(/,\s*of\s+.+$/i, '').trim();
-}
-
-function normalizeManufacturerName(name: string): string {
-  return normalizeManufacturer(stripLocationSuffix(name));
-}
-
-function buildManufacturersFromStructured(it: any): string[] {
-  // ✅ DO NOT token-split these (commas are part of the company name)
-  const names = [
-    ...toNameArray(it?.Manufacturers),
-    ...toNameArray(it?.Importers),
-    ...toNameArray(it?.Distributors),
-  ];
-
-  return uniq(
-    names
-      .map((s) => normalizeManufacturerName(String(s)))
-      .filter((s) => s.length >= 2)
-      // guard against common junk fragments if any slip in
-      .filter((s) => !/^of\s+/i.test(s))
-      .filter((s) => s.toLowerCase() !== 'ltd.' && s.toLowerCase() !== 'inc.' && s.toLowerCase() !== 'llc')
-  ).slice(0, 30);
-}
-
-// ----------------------------
-// Model extraction (improved + strict)
+// ✅ Manufacturer cleanup (Option A)
 // ----------------------------
 
-function isProbablyModelToken(token: string): boolean {
-  const t = token.trim();
-  if (t.length < 3 || t.length > 40) return false;
+// “suffix-only” or meaningless manufacturer values you saw in DB
+const MANUFACTURER_BAD_EXACT = new Set(
+  [
+    'inc',
+    'inc.',
+    'ltd',
+    'ltd.',
+    'llc',
+    'corp',
+    'corp.',
+    'co',
+    'co.',
+    'company',
+    'manufacturer',
+    'importer',
+    'distributor',
+    'office products',
+    'home',
+    'online',
+    'amazon',
+    'walmart',
+    'retailer',
+    'retailers',
+    'store',
+    'stores',
+    'unknown',
+    'n/a',
+    'na',
+  ].map((s) => s.toLowerCase())
+);
 
-  // Must contain at least one digit (most model numbers do)
-  if (!/\d/.test(t)) return false;
+// Location-ish single tokens we should usually reject if they appear alone
+// (You can expand later if needed.)
+const LIKELY_LOCATION_SINGLE = new Set(
+  [
+    'utah',
+    'ohio',
+    'texas',
+    'china',
+    'canada',
+    'california',
+    'florida',
+    'new york',
+    'virginia',
+    'washington',
+  ].map((s) => s.toLowerCase())
+);
 
-  // Exclude obvious descriptive patterns (your DB shows "9-Drawer", "13-Drawer")
-  if (/^\d+\s*-\s*drawer$/i.test(t)) return false;
+function normalizeManufacturerCandidate(raw: string): string | null {
+  const s0 = normalizeManufacturer(raw);
+  if (!s0) return null;
 
-  // Exclude pure years like 2026
-  if (/^(19|20)\d{2}$/.test(t)) return false;
+  // strip some common trailing narrative patterns: “, of China” / “ of Waukesha, Wisconsin”
+  // but keep the company part
+  let s = s0.replace(/\s*,?\s+of\s+[^,]{2,80}$/i, '').trim();
 
-  // Exclude tiny numbers like "120" unless they have letters too
-  if (/^\d{1,4}$/.test(t)) return false;
+  // collapse “dba …”:
+  // - if it begins with “dba”, it’s incomplete => junk
+  // - if it contains “ dba ” keep the portion before dba as “manufacturer”
+  if (/^\s*dba\b/i.test(s)) return null;
+  if (/\bdba\b/i.test(s)) {
+    s = s.split(/\bdba\b/i)[0].trim();
+  }
 
-  return true;
+  // reject “Ltd.” / “Inc.” etc when they’re alone after cleaning
+  const lower = s.toLowerCase();
+  if (MANUFACTURER_BAD_EXACT.has(lower)) return null;
+
+  // reject weirdly short fragments
+  if (s.length < 2) return null;
+
+  // reject “single word that looks like a location” (Utah, etc)
+  // allow “USA” etc when part of a longer string
+  if (!s.includes(' ') && LIKELY_LOCATION_SINGLE.has(lower)) return null;
+
+  // reject strings that look like pure generic category words
+  if (!s.includes(' ') && MANUFACTURER_BAD_EXACT.has(lower)) return null;
+
+  // reject strings that are basically punctuation
+  if (!/[A-Za-z0-9]/.test(s)) return null;
+
+  return s;
+}
+
+function filterAndFixManufacturers(input: string[]): string[] {
+  const out: string[] = [];
+  for (const raw of input) {
+    const fixed = normalizeManufacturerCandidate(raw);
+    if (!fixed) continue;
+
+    // avoid values like “of Columbus” that survive trimming but are still bad
+    if (/^of\s+/i.test(fixed)) continue;
+
+    out.push(fixed);
+  }
+  return uniq(out);
+}
+
+// ----------------------------
+// ✅ Model extraction (stricter tokens)
+// ----------------------------
+const MODEL_REJECT_WORDS = new Set(
+  [
+    'inch',
+    'inches',
+    'wide',
+    'height',
+    'tall',
+    'deep',
+    'about',
+    'approx',
+    'approximately',
+    'support',
+    'legs',
+    'leg',
+    'printed',
+    'located',
+    'front',
+    'back',
+    'side',
+    'wheel',
+    'motor',
+    'housing',
+    'engine',
+    'production',
+    'date',
+    'year',
+    'sold',
+    'from',
+    'through',
+    'between',
+    'for',
+    'with',
+    'unit',
+    'type',
+    'walk',
+    'behind',
+    'tow',
+    'note',
+    'additional',
+    'sizes',
+    'size',
+    'zip',
+  ].map((s) => s.toLowerCase())
+);
+
+function cleanModelToken(raw: string): string | null {
+  if (!raw) return null;
+
+  // Remove common prefixes that leak into tokens
+  let s = raw
+    .replace(/^\s*(model(?: number)?s?|number|no\.?)\s*[:\-]?\s*/i, '')
+    .replace(/^\s*(the\s+)?production\s+date\s*\(?/i, '')
+    .trim();
+
+  // strip surrounding punctuation
+  s = s.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '').trim();
+
+  if (!s) return null;
+
+  // reject if contains spaces after cleaning (these tend to be narrative fragments)
+  if (/\s/.test(s)) return null;
+
+  // must include at least one digit (critical to avoid “number”, “drawer”, etc)
+  if (!/[0-9]/.test(s)) return null;
+
+  if (s.length < 3 || s.length > 40) return null;
+
+  // reject pure years like 2026
+  if (/^(19|20)\d{2}$/.test(s)) return null;
+
+  // reject tokens containing reject words (after lower)
+  const lower = s.toLowerCase();
+  for (const w of MODEL_REJECT_WORDS) {
+    if (lower.includes(w)) return null;
+  }
+
+  // allow only reasonable characters
+  if (!/^[A-Za-z0-9][A-Za-z0-9\-_\/.]*$/.test(s)) return null;
+
+  return s;
 }
 
 /**
- * Extract models ONLY from explicit "model(s)" sections.
- * This avoids polluting models with descriptive tokens from the product narrative.
+ * Extract model-like tokens from narrative.
+ * We try to find “model numbers …” blocks, otherwise scan the full text.
  */
-function extractModelsStrict(text: string): string[] | undefined {
+function extractModels(text: string): string[] | undefined {
   if (!text) return undefined;
 
   const blocks: string[] = [];
 
-  // "models 2512, 2513, 2516"
-  const b1 = text.match(/\bmodels?\b\s*[:\-]?\s*([^\n]{0,1500})/i);
+  const b1 = text.match(/\bmodel\s+numbers?\b\s*[:\-]?\s*([\s\S]{0,1800})/i);
   if (b1?.[1]) blocks.push(b1[1]);
 
-  // "model numbers are ... 2512 ... 2513 ..."
-  const b2 = text.match(/\bmodel\s+numbers?\b\s*[:\-]?\s*([\s\S]{0,1500})/i);
+  const b2 = text.match(/\bmodels?\b\s*(?:include|are|:)?\s*([\s\S]{0,1500})/i);
   if (b2?.[1]) blocks.push(b2[1]);
 
-  if (!blocks.length) return undefined;
+  if (!blocks.length) blocks.push(text);
 
   const tokens: string[] = [];
+
   for (const b of blocks) {
-    for (const t of splitTokens(b)) {
-      const cleaned = normalizeModel(
-        t
-          .trim()
-          .replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '') // strip punctuation edges
-      );
-
-      if (!cleaned) continue;
-      if (!isProbablyModelToken(cleaned)) continue;
-
-      tokens.push(cleaned);
+    // Split fairly aggressively
+    const parts = b.split(/[\s,;]+/g);
+    for (let p of parts) {
+      const fixed = cleanModelToken(p);
+      if (!fixed) continue;
+      tokens.push(fixed);
       if (tokens.length >= 200) break;
     }
     if (tokens.length >= 200) break;
   }
 
-  const out = uniq(tokens);
-  return out.length ? out.slice(0, 80) : undefined;
+  const out = uniq(tokens).map(normalizeModel).filter(Boolean);
+  return out.length ? out : undefined;
 }
 
 // Lightweight manufacturer extraction from narrative as a fallback only
@@ -238,9 +371,8 @@ function extractManufacturersFromText(text: string): string[] | undefined {
     /\bmanufacturer\b\s*[:\-]?\s*([A-Za-z0-9][A-Za-z0-9&\-,.;\s]{0,250})/i
   );
   if (mfgMatches?.[1]) {
-    // Here splitTokens is OK because this is narrative "Manufacturer: A and B"
     splitTokens(mfgMatches[1])
-      .map((s) => normalizeManufacturerName(s))
+      .map(normalizeManufacturer)
       .filter((s) => s.length >= 2)
       .slice(0, 30)
       .forEach((m) => manufacturers.push(m));
@@ -251,19 +383,15 @@ function extractManufacturersFromText(text: string): string[] | undefined {
 }
 
 // ----------------------------
-// JSON mapping (updated for real saferproducts schema)
+// JSON mapping (updated for saferproducts schema)
 // ----------------------------
 function mapJson(json: any): CpscRecallItem[] {
-  // CPSC saferproducts returns a top-level array
-  // Some endpoints may return { items: [...] }, so support both.
   let items: any[] = Array.isArray(json) ? json : Array.isArray(json?.items) ? json.items : [];
 
-  // Keep the safety cap for v1 to avoid event-loop lock.
   items = items.slice(0, 200);
 
   return items
     .map((it: any) => {
-      // Prefer RecallID (stable), fallback to RecallNumber/others
       const externalId =
         clean(it?.RecallID) ||
         clean(it?.RecallNumber) ||
@@ -282,19 +410,16 @@ function mapJson(json: any): CpscRecallItem[] {
         (description ? description.slice(0, 120) : null) ||
         `CPSC Recall ${it?.RecallNumber ?? externalId}`;
 
-      // Summary: prefer Description (canonical narrative)
       const summary = description || clean(it?.Summary) || consumerContact || undefined;
 
-      // Hazard: prefer Hazards[].Name
       const hazard =
-        clean(toNameArray(it?.Hazards)[0]) ||
+        clean(joinFirstNameField(it?.Hazards)) ||
         clean(it?.Hazard) ||
         clean(it?.HazardDescription) ||
         undefined;
 
-      // Remedy: prefer Remedies[].Name
       const remedy =
-        clean(toNameArray(it?.Remedies)[0]) ||
+        clean(joinFirstNameField(it?.Remedies)) ||
         clean(it?.Remedy) ||
         clean(it?.RemedyDescription) ||
         undefined;
@@ -307,11 +432,9 @@ function mapJson(json: any): CpscRecallItem[] {
         clean(it?.link) ||
         undefined;
 
-      // Recall date: RecallDate is present in your sample
       const recalledAt =
         clean(it?.RecallDate) || clean(it?.LastPublishDate) || clean(it?.RecallDateText) || undefined;
 
-      // Affected units: in sample it's Products[].NumberOfUnits
       const affectedUnits =
         clean(it?.Products?.[0]?.NumberOfUnits) ||
         clean(it?.Units) ||
@@ -319,11 +442,39 @@ function mapJson(json: any): CpscRecallItem[] {
         clean(it?.UnitsAffected) ||
         undefined;
 
-      // ✅ Manufacturers (FIXED): structured arrays, no comma splitting
-      const structuredManufacturers = buildManufacturersFromStructured(it);
+      // Manufacturers: prefer structured arrays first (these are the best signal)
+      const structuredManufacturersRaw = uniq(
+        [
+          ...toNameArray(it?.Manufacturers),
+          ...toNameArray(it?.Importers),
+          ...toNameArray(it?.Distributors),
+          ...pickStringList(it, [
+            'Manufacturer',
+            'manufacturer',
+            'RecallingFirm',
+            'RecallingFirms',
+            'RecallingFirmName',
+            'CompanyName',
+            'Company',
+            'Firm',
+          ]),
+        ]
+          .flatMap((x) => splitTokens(String(x)))
+          .map(normalizeManufacturer)
+          .filter((s) => s.length >= 2)
+      );
 
-      // Models: prefer structured keys if present (rare in saferproducts); otherwise STRICT extraction from narrative
-      const structuredModels = uniq(
+      // Narrative fallback (kept, but will be filtered)
+      const extractedManufacturersRaw =
+        extractManufacturersFromText(`${title || ''}\n${description || ''}`) ?? [];
+
+      const manufacturers = filterAndFixManufacturers([
+        ...structuredManufacturersRaw,
+        ...extractedManufacturersRaw,
+      ]);
+
+      // Models: prefer structured keys if present; otherwise extract from Title+Description only
+      const structuredModelsRaw = uniq(
         pickStringList(it, [
           'Model',
           'Models',
@@ -337,29 +488,19 @@ function mapJson(json: any): CpscRecallItem[] {
         ])
           .flatMap((x) => splitTokens(String(x)))
           .map(normalizeModel)
-          .filter(isProbablyModelToken)
-      ).slice(0, 80);
-
-      // ✅ STRICT model extraction from explicit model blocks
-      const combinedForModels = `${title || ''}\n${description || ''}`.trim();
-      const extractedModels = extractModelsStrict(combinedForModels);
-
-      // Fallback manufacturer extraction from narrative (limited)
-      const extractedManufacturers = extractManufacturersFromText(`${title || ''}\n${description || ''}`);
-
-      const manufacturers = uniq(
-        [...structuredManufacturers, ...(extractedManufacturers ?? [])]
-          .map(normalizeManufacturerName)
-          .filter(Boolean)
-          .filter((s) => s.length >= 2)
-          .filter((s) => !/^of\s+/i.test(s))
+          .filter((s) => s.length >= 3)
       );
 
+      // Improved extraction: ONLY from title+description (avoid ConsumerContact noise)
+      const combinedForModels = `${title || ''}\n${description || ''}`.trim();
+      const extractedModelsRaw = extractModels(combinedForModels) ?? [];
+
+      // Final model cleanup pass
       const models = uniq(
-        [...structuredModels, ...(extractedModels ?? [])]
-          .map(normalizeModel)
+        [...structuredModelsRaw, ...extractedModelsRaw]
+          .map((m) => cleanModelToken(String(m)) ?? '')
           .filter(Boolean)
-          .filter(isProbablyModelToken)
+          .slice(0, 200)
       );
 
       return {
@@ -369,13 +510,11 @@ function mapJson(json: any): CpscRecallItem[] {
         hazard,
         remedy,
         recallUrl,
-        remedyUrl:
-          // Sample JSON doesn’t include RemedyURL fields, but keep backward compatibility
-          pickFirstString(it, ['RemedyURL', 'RemedyUrl', 'RemedyURLText']) || undefined,
+        remedyUrl: pickFirstString(it, ['RemedyURL', 'RemedyUrl', 'RemedyURLText']) || undefined,
         recalledAt,
         affectedUnits,
-        manufacturers: manufacturers.length ? manufacturers : undefined,
-        models: models.length ? models : undefined,
+        manufacturers: manufacturers.length ? manufacturers.slice(0, 30) : undefined,
+        models: models.length ? models.slice(0, 200) : undefined,
         raw: it,
       } as CpscRecallItem;
     })
@@ -397,8 +536,8 @@ function mapRssXml(xml: string): CpscRecallItem[] {
     const summary = stripCdata(description).trim();
 
     const combined = `${title}\n${summary}`;
-    const manufacturers = extractManufacturersFromText(combined);
-    const models = extractModelsStrict(combined);
+    const manufacturers = filterAndFixManufacturers(extractManufacturersFromText(combined) ?? []);
+    const models = extractModels(combined);
 
     return {
       externalId: guid,
@@ -406,7 +545,7 @@ function mapRssXml(xml: string): CpscRecallItem[] {
       summary,
       recallUrl: link,
       recalledAt: pubDate,
-      manufacturers,
+      manufacturers: manufacturers.length ? manufacturers : undefined,
       models,
       raw: { title, link, guid, description, pubDate },
     };
