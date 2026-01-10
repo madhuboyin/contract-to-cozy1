@@ -45,15 +45,15 @@ export default function InventoryItemRecallPanel(props: {
   }, [props.open, props.inventoryItemId, props.propertyId]);
 
   async function onConfirm(matchId: string) {
-    await confirmRecallMatch(matchId);
+    await confirmRecallMatch(props.propertyId, matchId);
     await refresh();
   }
   async function onDismiss(matchId: string) {
-    await dismissRecallMatch(matchId);
+    await dismissRecallMatch(props.propertyId, matchId);
     await refresh();
   }
   async function onResolve(matchId: string, payload: { resolutionType: RecallResolutionType; resolutionNotes?: string }) {
-    await resolveRecallMatch({ matchId, ...payload });
+    await resolveRecallMatch({ propertyId: props.propertyId, matchId, ...payload });
     await refresh();
   }
 
