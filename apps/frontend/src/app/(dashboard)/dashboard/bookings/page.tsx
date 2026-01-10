@@ -7,17 +7,14 @@ import Link from 'next/link';
 import { api } from '@/lib/api/client';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { Booking, BookingStatus } from '@/types';
-import { MoreVertical, Calendar, MapPin, DollarSign, ArrowLeft, ChevronLeft } from 'lucide-react';
+import { MoreVertical, Calendar, MapPin, DollarSign } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
-import { useRouter } from 'next/navigation';
 
-  const router = useRouter();
 interface EditFormData {
   scheduledDate: string;
   description: string;
@@ -238,13 +235,6 @@ export default function HomeownerBookingsPage() {
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <Link 
-          href="/dashboard"
-          className="text-sm font-medium text-indigo-600 hover:indigo-800 flex items-center gap-1"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Back to Dashboard
-        </Link>
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">My Bookings</h1>
           <p className="mt-2 text-sm text-gray-600">

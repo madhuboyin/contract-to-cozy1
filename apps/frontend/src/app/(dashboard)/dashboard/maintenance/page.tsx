@@ -34,8 +34,6 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { ArrowLeft } from 'lucide-react';
 
-
-  const router = useRouter();
 // --- Helper Functions ---
 
 function formatEnumString(val: string | null | undefined): string {
@@ -335,13 +333,7 @@ export default function MaintenancePage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <Link 
-        href={propertyId ? `/dashboard/properties/${propertyId}` : '/dashboard'}
-        className="mb-4 inline-block text-sm text-slate-500 hover:underline"
-      >
-        <ArrowLeft className="h-4 w-4 mr-1" /> Back to {propertyId ? 'Property' : 'Dashboard'}
-      </Link>
+    <div className="space-y-6 pb-8 max-w-7xl mx-auto px-4 md:px-8">
       {/* 🔑 NEW: Add back link here */}
       {fromRiskAssessment && propertyId && (
         <Button 
