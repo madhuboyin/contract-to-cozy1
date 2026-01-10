@@ -335,14 +335,13 @@ export default function MaintenancePage() {
   }
 
   return (
-    <div className="space-y-6 pb-8 max-w-7xl mx-auto px-4 md:px-8">
-      <Button 
-        variant="link" 
-        className="p-0 h-auto mb-2 text-sm text-muted-foreground"
-        onClick={() => router.back()}
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <Link 
+        href={propertyId ? `/dashboard/properties/${propertyId}` : '/dashboard'}
+        className="mb-4 inline-block text-sm text-slate-500 hover:underline"
       >
-        <ArrowLeft className="h-4 w-4 mr-1" /> Back
-      </Button>
+        <ArrowLeft className="h-4 w-4 mr-1" /> Back to {propertyId ? 'Property' : 'Dashboard'}
+      </Link>
       {/* 🔑 NEW: Add back link here */}
       {fromRiskAssessment && propertyId && (
         <Button 
