@@ -35,6 +35,7 @@ export class MaintenanceTaskAdapter {
     userId: string;
     action: { id: string; type: string };
     payload: any;
+    prismaClient?: typeof prisma;
   }): Promise<{ entityType: string; entityId: string; actionUrl?: string | null }> {
     const { incident, action, payload } = args;
 
@@ -51,9 +52,10 @@ export class MaintenanceTaskAdapter {
     const serviceCategory: ServiceCategory | null = payload.serviceCategory ?? null;
 
     const baseUrl = normalizeBaseUrl(process.env.APP_BASE_URL);
+    const client = args.prismaClient ?? prisma;
 
     // Dedup via unique (propertyId, actionKey)
-    const existing = await prisma.propertyMaintenanceTask.findUnique({
+    const existing = await client.propertyMaintenanceTask.findUnique({
       where: { propertyId_actionKey: { propertyId: incident.propertyId, actionKey } },
     });
 
@@ -65,7 +67,7 @@ export class MaintenanceTaskAdapter {
       return { entityType: 'PropertyMaintenanceTask', entityId: existing.id, actionUrl };
     }
 
-    const created = await prisma.propertyMaintenanceTask.create({
+    const created = await client.propertyMaintenanceTask.create({
       data: {
         propertyId: incident.propertyId,
         title,

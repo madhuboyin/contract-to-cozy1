@@ -29,7 +29,7 @@ export default function IncidentActionsPanel({
   const [err, setErr] = useState<string | null>(null);
 
   function findWhyForAction(a: IncidentActionDTO) {
-    const actionKey = a?.payload?.actionKey;
+    const actionKey = (a as any)?.actionKey ?? a?.payload?.actionKey;
     if (!actionKey) return null;
   
     const proposed = decisionTrace?.proposedActions ?? [];

@@ -254,8 +254,10 @@ export class IncidentService {
     });
   }
 
-  static async acknowledge(incidentId: string, userId: string, input: AcknowledgeIncidentInput) {
-    const ack = await prisma.incidentAcknowledgement.create({
+static async acknowledge(incidentId: string, userId: string, input: AcknowledgeIncidentInput) {
+  // ✅ Single-path, idempotent suppression enforcement for DISMISS/SNOOZE
+  const { ack, incident, didSuppress } = await prisma.$transaction(async (tx) => {
+    const ack = await tx.incidentAcknowledgement.create({
       data: {
         incidentId,
         userId,
@@ -264,63 +266,93 @@ export class IncidentService {
         snoozeUntil: toDateOrNull(input.snoozeUntil ?? null),
       },
     });
-  
-    const incident = await prisma.incident.findUnique({ where: { id: incidentId } });
-    if (!incident) return ack;
-  
-    // Map acknowledgement -> event type once (no TS narrowing issues)
-    const eventType =
-      input.type === AcknowledgementType.ACKNOWLEDGED
-        ? IncidentEventType.ACKNOWLEDGED
-        : input.type === AcknowledgementType.DISMISSED
-        ? IncidentEventType.DISMISSED
-        : IncidentEventType.SNOOZED;
-  
-    await logIncidentEvent({
-      incidentId,
-      propertyId: incident.propertyId,
-      userId,
-      type: eventType,
-      message: `User ${input.type.toLowerCase()}`,
-      payload: { note: input.note ?? null, snoozeUntil: input.snoozeUntil ?? null },
-    });
-  
-    // Snooze => suppression + mark incident suppressed
-    if (input.type === AcknowledgementType.SNOOZED && ack.snoozeUntil) {
-      await prisma.incidentSuppressionRule.create({
-        data: {
-          scope: SuppressionScope.USER,
-          userId,
-          typeKey: incident.typeKey,
-          reason: 'SNOOZED',
-          suppressUntil: ack.snoozeUntil,
-          params: { from: 'incident_ack', incidentId },
-          isEnabled: true,
-        },
-      });
-  
-      await prisma.incident.update({
+
+    const incident = await tx.incident.findUnique({ where: { id: incidentId } });
+    if (!incident) return { ack, incident: null as any, didSuppress: false };
+
+    const isSuppressionAction =
+      input.type === AcknowledgementType.SNOOZED || input.type === AcknowledgementType.DISMISSED;
+
+    let didSuppress = false;
+
+    if (isSuppressionAction) {
+      const reason = input.type === AcknowledgementType.SNOOZED ? 'SNOOZED' : 'USER_DISMISSED';
+      const suppressUntil = input.type === AcknowledgementType.SNOOZED ? ack.snoozeUntil : null;
+
+      // ✅ Persist suppression rule (best-effort idempotent)
+      try {
+        await tx.incidentSuppressionRule.create({
+          data: {
+            scope: SuppressionScope.PROPERTY,
+            propertyId: incident.propertyId,
+            typeKey: incident.typeKey,
+            reason: reason as any,
+            suppressUntil,
+            params: { from: 'incident_ack', incidentId, userId, note: input.note ?? null },
+            isEnabled: true,
+          },
+        });
+      } catch (e: any) {
+        // ignore unique violations (rule already exists)
+        const code = e?.code ?? e?.meta?.cause;
+        if (code !== 'P2002') throw e;
+      }
+
+      // ✅ Update incident suppression state (source of truth)
+      await tx.incident.update({
         where: { id: incidentId },
         data: {
           isSuppressed: true,
           status: IncidentStatus.SUPPRESSED,
           suppressedAt: new Date(),
-          suppressionReason: 'SNOOZED',
+          suppressionReason: reason,
+          snoozedUntil: suppressUntil,
         },
       });
-  
-      await logIncidentEvent({
-        incidentId,
-        propertyId: incident.propertyId,
-        userId,
-        type: IncidentEventType.SUPPRESSED,
-        message: 'Incident suppressed due to snooze',
-        payload: { suppressUntil: ack.snoozeUntil },
-      });
+
+      didSuppress = true;
     }
-  
-    return ack;
-  }  
+
+    return { ack, incident, didSuppress };
+  });
+
+  if (!incident) return ack;
+
+  // 1) Log the direct user action (ACK/DISMISS/SNOOZE)
+  const eventType =
+    input.type === AcknowledgementType.ACKNOWLEDGED
+      ? IncidentEventType.ACKNOWLEDGED
+      : input.type === AcknowledgementType.DISMISSED
+      ? IncidentEventType.DISMISSED
+      : IncidentEventType.SNOOZED;
+
+  await logIncidentEvent({
+    incidentId,
+    propertyId: incident.propertyId,
+    userId,
+    type: eventType,
+    message: `User ${input.type.toLowerCase()}`,
+    payload: { note: input.note ?? null, snoozeUntil: input.snoozeUntil ?? null },
+  });
+
+  // 2) If suppression action, also log SUPPRESSED for deterministic noise control
+  if (didSuppress) {
+    await logIncidentEvent({
+      incidentId,
+      propertyId: incident.propertyId,
+      userId,
+      type: IncidentEventType.SUPPRESSED,
+      message: `Incident suppressed due to user ${input.type.toLowerCase()}`,
+      payload: {
+        action: input.type,
+        suppressUntil:
+          input.type === AcknowledgementType.SNOOZED ? (ack as any).snoozeUntil : 'PERMANENT',
+      },
+    });
+  }
+
+  return ack;
+}
   static async createAction(incidentId: string, action: CreateIncidentActionInput) {
     const created = await prisma.incidentAction.create({
       data: {
