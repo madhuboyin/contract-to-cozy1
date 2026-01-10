@@ -133,11 +133,13 @@ export function SeasonalTaskCard({
       <CardContent className="p-6">
         <div className="space-y-4">
           {/* Header */}
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xl">{priorityIcon}</span>
-                <h3 className="font-semibold text-lg">{item.title}</h3>
+          <div className="flex flex-col gap-2">
+            {/* Row 1: Priority badge + Added badge */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Badge className={getPriorityBadgeClass(item.priority)}>
+                  {item.priority}
+                </Badge>
                 {isAdded && (
                   <Badge className="bg-green-100 text-green-800 border-green-300">
                     <CheckCircle2 className="h-3 w-3 mr-1" />
@@ -145,14 +147,16 @@ export function SeasonalTaskCard({
                   </Badge>
                 )}
               </div>
-              
-              <p className="text-sm text-gray-600">{item.description}</p>
             </div>
-
-            {/* Priority Badge */}
-            <Badge className={getPriorityBadgeClass(item.priority)}>
-              {item.priority}
-            </Badge>
+            
+            {/* Row 2: Icon + Title */}
+            <div className="flex items-start gap-2">
+              <span className="text-xl shrink-0">{priorityIcon}</span>
+              <h3 className="font-semibold text-lg">{item.title}</h3>
+            </div>
+            
+            {/* Row 3: Description */}
+            <p className="text-sm text-gray-600">{item.description}</p>
           </div>
 
           {/* Details */}
