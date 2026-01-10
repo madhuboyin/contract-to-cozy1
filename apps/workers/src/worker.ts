@@ -654,7 +654,7 @@ async function setupScheduledJobs() {
     {}, 
     { 
       
-      repeat: { pattern: '* 8 * * *' }, // 3 minutes past every hour
+      repeat: { pattern: '* 24 * * *' }, // 3 minutes past every hour
       jobId: 'recall-ingest-singleton' 
     }
   );
@@ -664,7 +664,7 @@ async function setupScheduledJobs() {
     RECALL_MATCH_JOB, 
     {}, 
     { 
-      repeat: { pattern: '* 8 * * *' }, // 7 minutes past every hour
+      repeat: { pattern: '* 24 * * *' }, // 7 minutes past every hour
       jobId: 'recall-match-singleton' 
     }
   );
