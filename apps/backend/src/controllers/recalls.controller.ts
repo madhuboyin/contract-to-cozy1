@@ -9,6 +9,7 @@ import {
 } from '../services/recalls.service';
 import { RecallResolutionType } from '@prisma/client';
 
+
 export async function listRecalls(req: Request, res: Response) {
   const { propertyId } = req.params as any;
   const rows = await listPropertyRecallMatches(propertyId);
@@ -44,7 +45,13 @@ export async function resolveMatch(req: Request, res: Response) {
 }
 
 export async function listInventoryItemRecalls(req: Request, res: Response) {
-  const { propertyId, itemId } = req.params as any;
-  const rows = await listInventoryItemRecallMatches(propertyId, itemId);
-  res.json({ propertyId, itemId, recallMatches: rows });
+  const { propertyId } = req.params;
+  const inventoryItemId = (req.params as any).inventoryItemId ?? (req.params as any).itemId;
+  
+  if (!inventoryItemId) {
+    return res.status(400).json({ message: 'inventoryItemId is required' });
+  }
+  
+  const matches = await listInventoryItemRecallMatches(propertyId, inventoryItemId);
+  return res.json({ matches });
 }

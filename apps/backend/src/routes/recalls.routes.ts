@@ -16,6 +16,12 @@ const router = Router();
 router.get('/properties/:propertyId/recalls', propertyAuthMiddleware, listRecalls);
 
 router.get(
+  '/properties/:propertyId/inventory/:inventoryItemId/recalls',
+  propertyAuthMiddleware,
+  listInventoryItemRecalls
+);
+
+router.get(
   '/properties/:propertyId/inventory/:itemId/recalls',
   propertyAuthMiddleware,
   listInventoryItemRecalls
