@@ -47,16 +47,23 @@ export default function IncidentsClient() {
         includeSuppressed,
         limit: 30,
       });
-      setItems(res.items ?? []);
+      
+      // ✅ FIX: Added optional chaining and nullish coalescing to ensure we never 
+      // set items to anything other than an array, even if the API structure changes.
+      setItems(res?.items ?? []);
     } catch (e: any) {
-      setErr(e?.message ?? 'Failed to load incidents');
+      // ✅ Better error extraction for Axios/API responses
+      const errorMessage = e?.response?.data?.message || e?.message || 'Failed to load incidents';
+      setErr(errorMessage);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    load();
+    if (propertyId) {
+      load();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, status, includeSuppressed]);
 
@@ -85,11 +92,11 @@ export default function IncidentsClient() {
         </label>
 
         <button
-          className="rounded-lg border bg-white px-3 py-2 text-sm hover:bg-slate-50"
+          className="rounded-lg border bg-white px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
           onClick={load}
           disabled={loading}
         >
-          Refresh
+          {loading ? 'Refreshing...' : 'Refresh'}
         </button>
       </div>
     );
@@ -100,7 +107,8 @@ export default function IncidentsClient() {
       <SectionHeader
         icon="⚠️"
         title="Incidents"
-        description={items.length ? `${items.length} shown` : undefined}
+        // ✅ FIX: Added optional chaining here to prevent crash if items is momentarily null
+        description={items?.length ? `${items.length} shown` : undefined}
         action={headerRight}
       />
 
@@ -110,7 +118,7 @@ export default function IncidentsClient() {
 
       {loading ? (
         <div className="rounded-xl border bg-white p-4 text-sm text-slate-600">Loading…</div>
-      ) : items.length ? (
+      ) : items && items.length > 0 ? (
         <div className="grid grid-cols-1 gap-3">
           {items.map((i) => (
             // ✅ Important: pass propertyId so IncidentCard can link to detail route
