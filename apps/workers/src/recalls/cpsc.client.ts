@@ -24,44 +24,109 @@ const DEFAULT_URL =
 export async function fetchCpscRecalls(): Promise<CpscRecallItem[]> {
   const res = await fetch(DEFAULT_URL, {
     headers: {
-      // 2. IMPORTANT: Add a real User-Agent to bypass bot detection/404s
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'application/json'
-    }
+      // IMPORTANT: Add a real User-Agent to bypass bot detection/404s
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      Accept: 'application/json',
+    },
   });
 
   if (!res.ok) {
-     // Log the URL to verify which one is actually being hit (check your env vars!)
-     console.error(`Attempting fetch from: ${DEFAULT_URL}`);
-     throw new Error(`CPSC fetch failed ${res.status} ${res.statusText}`);
+    console.error(`Attempting fetch from: ${DEFAULT_URL}`);
+    throw new Error(`CPSC fetch failed ${res.status} ${res.statusText}`);
   }
-  
+
   const text = await res.text();
 
   // Try JSON first
   try {
     const json = JSON.parse(text);
     const mapped = mapJson(json);
-    console.log('[CPSC-FETCH] items:', Array.isArray(json) ? json.length : json?.items?.length, 'mapped:', mapped.length);
+    console.log(
+      '[CPSC-FETCH] items:',
+      Array.isArray(json) ? json.length : json?.items?.length,
+      'mapped:',
+      mapped.length
+    );
     return mapped;
   } catch {
     return mapRssXml(text);
   }
 }
 
+// ----------------------------
+// Normalization helpers
+// ----------------------------
+function clean(s: unknown): string | null {
+  if (s === null || s === undefined) return null;
+  const t = String(s).trim();
+  return t.length ? t : null;
+}
+
+function splitTokens(raw: string): string[] {
+  return raw
+    .replace(/^model(?: number)?s?\s*[:\-]\s*/i, '')
+    .replace(/^manufacturer\s*[:\-]\s*/i, '')
+    .replace(/\s+(and|or)\s+/gi, ',')
+    .replace(/\s*&\s*/g, ',')
+    .replace(/\s*\/\s*/g, ',')
+    .split(/[,;|]/g)
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+function normalizeManufacturer(s: string): string {
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+function normalizeModel(s: string): string {
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+function uniq(xs: string[]) {
+  return Array.from(new Set(xs));
+}
+
+function toStringArray(v: any): string[] {
+  if (!v) return [];
+  if (Array.isArray(v)) return v.map(String).map((s) => s.trim()).filter(Boolean);
+  if (typeof v === 'string') {
+    return splitTokens(v);
+  }
+  return [];
+}
+
+// Some feeds embed lists under various keys. This tries multiple candidates and
+// returns the first non-empty string[] found.
+function pickStringList(it: any, keys: string[]): string[] {
+  for (const k of keys) {
+    const v = it?.[k];
+    const arr = toStringArray(v);
+    if (arr.length) return arr;
+  }
+  return [];
+}
+
+// ----------------------------
+// JSON mapping
+// ----------------------------
 function mapJson(json: any): CpscRecallItem[] {
   // CPSC saferproducts returns a top-level array
   // Some endpoints may return { items: [...] }, so support both.
   let items: any[] = Array.isArray(json) ? json : Array.isArray(json?.items) ? json.items : [];
 
   // Keep the safety cap for v1 to avoid event-loop lock.
-  // Later we’ll switch to date-window ingestion instead of slicing.
   items = items.slice(0, 200);
 
   return items
     .map((it: any) => {
-      // ✅ CPSC keys (confirmed from your pod fetch)
-      const externalId = String(it?.RecallID ?? it?.RecallNumber ?? it?.RecallNo ?? '');
+      const externalId =
+        clean(it?.RecallID) ||
+        clean(it?.RecallNumber) ||
+        clean(it?.RecallNo) ||
+        clean(it?.ReleaseNumber) ||
+        clean(it?.ID);
+
       if (!externalId) return null;
 
       const title =
@@ -72,37 +137,74 @@ function mapJson(json: any): CpscRecallItem[] {
 
       const summary = it?.Description || it?.Summary || it?.ConsumerContact || undefined;
 
-      // Some useful fields commonly present (best-effort)
       const hazard = it?.Hazard || it?.HazardDescription || undefined;
       const remedy = it?.Remedy || it?.RemedyDescription || undefined;
 
-      const recallUrl =
-        it?.URL ||
-        it?.RecallURL ||
-        it?.RecallUrl ||
-        it?.Link ||
-        it?.link ||
-        undefined;
+      const recallUrl = it?.URL || it?.RecallURL || it?.RecallUrl || it?.Link || it?.link || undefined;
 
-      const remedyUrl =
-        it?.RemedyURL ||
-        it?.RemedyUrl ||
-        it?.RemedyURLText ||
-        undefined;
+      const remedyUrl = it?.RemedyURL || it?.RemedyUrl || it?.RemedyURLText || undefined;
 
       const recalledAt = it?.RecallDate || it?.LastPublishDate || it?.RecallDateText || undefined;
 
-      const affectedUnits =
-        it?.Units ||
-        it?.NumberOfUnits ||
-        it?.UnitsAffected ||
-        undefined;
+      const affectedUnits = it?.Units || it?.NumberOfUnits || it?.UnitsAffected || undefined;
 
-      // Best-effort extraction from description (works with CPSC Description text)
-      const { manufacturers, models } = extractMakeModel(String(summary || ''));
+      // ✅ Prefer structured fields first (varies by feed/version)
+      const structuredManufacturers = pickStringList(it, [
+        'Manufacturer',
+        'Manufacturers',
+        'manufacturer',
+        'manufacturers',
+        'RecallingFirm',
+        'RecallingFirms',
+        'RecallingFirmName',
+        'CompanyName',
+        'Company',
+        'Firm',
+      ])
+        .flatMap(splitTokens)
+        .map(normalizeManufacturer)
+        .filter((s) => s.length >= 2);
+
+      const structuredModels = pickStringList(it, [
+        'Model',
+        'Models',
+        'ModelNumber',
+        'ModelNumbers',
+        'model',
+        'models',
+        'modelNumbers',
+        'ModelNo',
+        'ModelNos',
+      ])
+        .flatMap(splitTokens)
+        .map(normalizeModel)
+        .filter((s) => s.length >= 3);
+
+      // ✅ Fallback extraction from text if structured missing
+      const combinedText = `${title || ''} ${summary || ''} ${hazard || ''} ${remedy || ''}`.trim();
+      const fallback = extractMakeModel(combinedText);
+
+      const manufacturers = uniq(
+        [
+          ...structuredManufacturers,
+          ...(fallback.manufacturers ?? []).flatMap(splitTokens).map(normalizeManufacturer),
+        ]
+          .map((s) => s.trim())
+          .filter(Boolean)
+      );
+
+      const models = uniq(
+        [
+          ...structuredModels,
+          ...(fallback.models ?? []).flatMap(splitTokens).map(normalizeModel),
+        ]
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .filter((s) => s.length >= 3)
+      );
 
       return {
-        externalId,
+        externalId: String(externalId),
         title,
         summary,
         hazard,
@@ -111,15 +213,17 @@ function mapJson(json: any): CpscRecallItem[] {
         remedyUrl,
         recalledAt,
         affectedUnits,
-        manufacturers,
-        models,
+        manufacturers: manufacturers.length ? manufacturers.slice(0, 30) : undefined,
+        models: models.length ? models.slice(0, 50) : undefined,
         raw: it,
       } as CpscRecallItem;
     })
     .filter(Boolean) as CpscRecallItem[];
 }
 
-
+// ----------------------------
+// RSS/XML mapping (unchanged, but uses improved extractor)
+// ----------------------------
 function mapRssXml(xml: string): CpscRecallItem[] {
   const chunks = xml.split('<item>').slice(1);
   return chunks.map((chunk) => {
@@ -129,10 +233,8 @@ function mapRssXml(xml: string): CpscRecallItem[] {
     const description = pickTag(chunk, 'description') || '';
     const pubDate = pickTag(chunk, 'pubDate') || undefined;
 
-    // Minimal heuristics: attempt to extract manufacturer/model strings from description
-    // You can refine later once you confirm CPSC content format.
     const summary = stripCdata(description).trim();
-    const { manufacturers, models } = extractMakeModel(summary);
+    const { manufacturers, models } = extractMakeModel(`${title} ${summary}`);
 
     return {
       externalId: guid,
@@ -157,44 +259,42 @@ function stripCdata(s: string): string {
   return s.replace(/^<!\[CDATA\[/, '').replace(/\]\]>$/, '');
 }
 
-function toStringArray(v: any): string[] | undefined {
-  if (!v) return undefined;
-  if (Array.isArray(v)) return v.map(String).filter(Boolean);
-  if (typeof v === 'string') return v.split(/[,;|]/).map((x) => x.trim()).filter(Boolean);
-  return undefined;
-}
-
 /**
  * Best-effort extractor:
- * Looks for patterns like "Model: ABC123" or "Models ABC123, DEF456"
- * This is intentionally lightweight for v1.
+ * Now supports "A and B" / "&" / "/" plus common prefixes.
  */
 function extractMakeModel(text: string): { manufacturers?: string[]; models?: string[] } {
   const models: string[] = [];
   const manufacturers: string[] = [];
 
-  const modelMatches = text.match(/model(?:s)?\s*[:\-]?\s*([A-Za-z0-9\-,\s]+)/i);
+  // Models: capture after "Model:" / "Models:" / "Model numbers:"
+  const modelMatches = text.match(
+    /\bmodel(?: number)?s?\b\s*[:\-]?\s*([A-Za-z0-9][A-Za-z0-9\-\/&,;\s]+)/i
+  );
   if (modelMatches?.[1]) {
-    modelMatches[1]
-      .split(/[,;]/)
-      .map((s) => s.trim())
+    splitTokens(modelMatches[1])
+      .map(normalizeModel)
       .filter((s) => s.length >= 3)
-      .slice(0, 20)
+      .slice(0, 50)
       .forEach((m) => models.push(m));
   }
 
-  const mfgMatches = text.match(/manufacturer\s*[:\-]?\s*([A-Za-z0-9&\-,\s]+)/i);
+  // Manufacturers
+  const mfgMatches = text.match(
+    /\bmanufacturer\b\s*[:\-]?\s*([A-Za-z0-9][A-Za-z0-9&\-,.;\s]+)/i
+  );
   if (mfgMatches?.[1]) {
-    mfgMatches[1]
-      .split(/[,;]/)
-      .map((s) => s.trim())
+    splitTokens(mfgMatches[1])
+      .map(normalizeManufacturer)
       .filter((s) => s.length >= 2)
-      .slice(0, 10)
+      .slice(0, 30)
       .forEach((m) => manufacturers.push(m));
   }
 
-  return {
-    manufacturers: manufacturers.length ? manufacturers : undefined,
-    models: models.length ? models : undefined,
+  const out = {
+    manufacturers: manufacturers.length ? uniq(manufacturers) : undefined,
+    models: models.length ? uniq(models) : undefined,
   };
+
+  return out;
 }

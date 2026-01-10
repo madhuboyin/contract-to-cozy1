@@ -11,7 +11,7 @@ const NOTIF_ENTITY_TYPE = 'RECALL_MATCH';
 function buildActionUrl(propertyId: string, matchId: string) {
   // Example: property detail → safety alerts tab (future)
   // For now, link to property page; FE can add recall panel later.
-  return `/dashboard/properties/${propertyId}?tab=recalls&matchId=${matchId}`;
+  return `/dashboard/properties/${propertyId}/recalls?matchId=${matchId}`;
 }
 
 function taskTitle(recallTitle: string) {

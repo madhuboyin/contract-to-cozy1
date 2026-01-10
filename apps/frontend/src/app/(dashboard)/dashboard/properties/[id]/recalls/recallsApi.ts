@@ -7,25 +7,29 @@ export async function listPropertyRecalls(propertyId: string): Promise<ListPrope
   return res.data;
 }
 
-export async function confirmRecallMatch(matchId: string): Promise<RecallMatchDTO> {
-  const res = await api.post<RecallMatchDTO>(`/api/recalls/matches/${matchId}/confirm`, {});
+export async function confirmRecallMatch(propertyId: string, matchId: string): Promise<RecallMatchDTO> {
+  const res = await api.post<RecallMatchDTO>(`/api/properties/${propertyId}/recalls/matches/${matchId}/confirm`, {});
   return res.data;
 }
 
-export async function dismissRecallMatch(matchId: string): Promise<RecallMatchDTO> {
-  const res = await api.post<RecallMatchDTO>(`/api/recalls/matches/${matchId}/dismiss`, {});
+export async function dismissRecallMatch(propertyId: string, matchId: string): Promise<RecallMatchDTO> {
+  const res = await api.post<RecallMatchDTO>(`/api/properties/${propertyId}/recalls/matches/${matchId}/dismiss`, {});
   return res.data;
 }
 
 export async function resolveRecallMatch(params: {
+  propertyId: string;
   matchId: string;
   resolutionType: RecallResolutionType;
   resolutionNotes?: string;
 }): Promise<RecallMatchDTO> {
-  const res = await api.post<RecallMatchDTO>(`/api/recalls/matches/${params.matchId}/resolve`, {
-    resolutionType: params.resolutionType,
-    resolutionNotes: params.resolutionNotes,
-  });
+  const res = await api.post<RecallMatchDTO>(
+    `/api/properties/${params.propertyId}/recalls/matches/${params.matchId}/resolve`,
+    {
+      resolutionType: params.resolutionType,
+      resolutionNotes: params.resolutionNotes,
+    }
+  );
   return res.data;
 }
 

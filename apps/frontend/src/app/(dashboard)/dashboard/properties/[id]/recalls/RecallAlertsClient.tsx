@@ -56,17 +56,17 @@ export default function RecallAlertsClient() {
   }, [rows]);
 
   async function onConfirm(matchId: string) {
-    await confirmRecallMatch(matchId);
+    await confirmRecallMatch(propertyId as string, matchId);
     await refresh();
   }
 
   async function onDismiss(matchId: string) {
-    await dismissRecallMatch(matchId);
+    await dismissRecallMatch(propertyId as string, matchId);
     await refresh();
   }
 
   async function onResolve(matchId: string, payload: { resolutionType: RecallResolutionType; resolutionNotes?: string }) {
-    await resolveRecallMatch({ matchId, ...payload });
+    await resolveRecallMatch({ propertyId: propertyId as string, matchId, ...payload });
     await refresh();
   }
 
