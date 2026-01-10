@@ -3,18 +3,20 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 
 import { SectionHeader } from '../../../components/SectionHeader';
 import { ClaimDTO, listClaims } from './claimsApi';
 import ClaimStatusBadge from '@/app/(dashboard)/dashboard/components/claims/ClaimStatusBadge';
 import ClaimCreateModal from '@/app/(dashboard)/dashboard/components/claims/ClaimCreateModal';
 import { getClaimsSummary } from './claimsApi';
+import { ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export default function ClaimsClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
-
+  const router = useRouter();
   const [claims, setClaims] = useState<ClaimDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState('');
@@ -67,12 +69,13 @@ export default function ClaimsClient() {
   return (
     <div className="space-y-4">
       {/* Add Back Link */}
-      <Link 
-        href={`/dashboard/properties/${propertyId}`}
-        className="text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors"
+      <Button 
+          variant="link" 
+          className="p-0 h-auto mb-2 text-sm text-muted-foreground"
+          onClick={() => router.back()}
       >
-        ← Back to Property
-      </Link>
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back
+      </Button>
       <SectionHeader
         icon="📋"
         title="Claims"

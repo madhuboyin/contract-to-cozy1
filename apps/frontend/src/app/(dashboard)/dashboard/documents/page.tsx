@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { FileText, Plus, Loader2, Trash2, ExternalLink, Filter, X, Save, Upload, Sparkles, FileCheck } from 'lucide-react';
+import { FileText, Plus, Loader2, Trash2, ExternalLink, Filter, X, Save, Upload, Sparkles, FileCheck, ArrowLeft } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { api } from '@/lib/api/client';
 import { Card, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
@@ -15,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { Document, DocumentType, Property, Warranty, InsurancePolicy, DocumentUploadInput } from '@/types';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 // --- Document Type Constants for UI ---
@@ -500,7 +500,7 @@ export default function DocumentsPage() {
   const [filterType, setFilterType] = useState<string | 'ALL'>('ALL');
   const [filterParentType, setFilterParentType] = useState<string | 'ALL'>('ALL');
   const { toast } = useToast();
-
+  const router = useRouter();
   // Get propertyId from URL parameters
   const searchParams = useSearchParams();
   const propertyIdFromUrl = searchParams.get('propertyId');
@@ -592,12 +592,13 @@ export default function DocumentsPage() {
   return (
     <div className="space-y-6 pb-8">
       {propertyIdFromUrl && (
-        <Link 
-          href={`/dashboard/properties/${propertyIdFromUrl}`}
-          className="text-sm text-blue-600 hover:underline mb-4 inline-block"
+        <Button 
+            variant="link" 
+            className="p-0 h-auto mb-2 text-sm text-muted-foreground"
+            onClick={() => router.back()}
         >
-          ← Back to Property
-        </Link>
+            <ArrowLeft className="h-4 w-4 mr-1" /> Back
+        </Button>
       )}      
       <div className="flex justify-between items-center">
         <div>

@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 
 import { SectionHeader } from '../../../components/SectionHeader';
 import {
@@ -18,6 +18,8 @@ import {
 
 import { toast } from '@/components/ui/use-toast';
 import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 function fmt(dt?: string | null) {
   if (!dt) return '—';
@@ -66,7 +68,7 @@ function typeLabel(t: HomeReportExportDTO['type']) {
 export default function ReportsClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
-
+  const router = useRouter();
   const [exports, setExports] = useState<HomeReportExportDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -193,12 +195,13 @@ export default function ReportsClient() {
   return (
     <div className="space-y-4">
       {/* Add Back Link */}
-      <Link 
-        href={`/dashboard/properties/${propertyId}`}
-        className="text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors"
+      <Button 
+          variant="link" 
+          className="p-0 h-auto mb-2 text-sm text-muted-foreground"
+          onClick={() => router.back()}
       >
-        ← Back to Property
-      </Link>
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back
+      </Button>
       <SectionHeader
         icon="📄"
         title="Home Reports"
