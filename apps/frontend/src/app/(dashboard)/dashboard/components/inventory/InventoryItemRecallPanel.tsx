@@ -24,12 +24,16 @@ export default function InventoryItemRecallPanel(props: {
   const [resolveFor, setResolveFor] = useState<string | null>(null);
 
   async function refresh() {
+    if (!props.propertyId || !props.inventoryItemId) return;
+    
     setLoading(true);
     setError(null);
     try {
       const res = await listInventoryItemRecalls(props.propertyId, props.inventoryItemId);
-      setRows(res.recallMatches || []);
+      // ✅ FIX: Ensure we never map over undefined
+      setRows(res?.recallMatches ?? []);
     } catch (e: any) {
+      console.error('Recall fetch error:', e);
       setError(e?.message || 'Failed to load recall alerts');
       setRows([]);
     } finally {
@@ -39,139 +43,144 @@ export default function InventoryItemRecallPanel(props: {
 
   useEffect(() => {
     if (!props.open) return;
-    if (!props.inventoryItemId) return;
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.open, props.inventoryItemId, props.propertyId]);
+  }, [props.open, props.inventoryItemId]);
 
-  async function onConfirm(matchId: string) {
-    await confirmRecallMatch(props.propertyId, matchId);
-    await refresh();
+  async function onConfirm(id: string) {
+    try {
+      await confirmRecallMatch(props.propertyId, id);
+      await refresh();
+    } catch (e: any) {
+      alert(e.message || 'Failed to confirm');
+    }
   }
-  async function onDismiss(matchId: string) {
-    await dismissRecallMatch(props.propertyId, matchId);
-    await refresh();
+
+  async function onDismiss(id: string) {
+    if (!confirm('Are you sure you want to dismiss this alert?')) return;
+    try {
+      await dismissRecallMatch(props.propertyId, id);
+      await refresh();
+    } catch (e: any) {
+      alert(e.message || 'Failed to dismiss');
+    }
   }
-  async function onResolve(matchId: string, payload: { resolutionType: RecallResolutionType; resolutionNotes?: string }) {
-    await resolveRecallMatch({ propertyId: props.propertyId, matchId, ...payload });
-    await refresh();
+
+  // ✅ FIX: Payload keys matched to the expected API signature
+  async function onResolve(id: string, payload: { resolutionType: RecallResolutionType; resolutionNotes?: string }) {
+    try {
+      await resolveRecallMatch({
+        propertyId: props.propertyId,
+        matchId: id,
+        resolutionType: payload.resolutionType,
+        resolutionNotes: payload.resolutionNotes,
+      });
+      await refresh();
+    } catch (e: any) {
+      alert(e.message || 'Failed to resolve');
+    }
   }
+
+  const safeRows = rows || [];
 
   return (
-    <div className="rounded-2xl border border-black/10 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-medium">Safety / Recall Alerts</div>
-          <div className="text-xs opacity-70">Matches based on make/model. Confirm or resolve to keep your home safe.</div>
-        </div>
-        <button
-          onClick={refresh}
-          disabled={loading}
-          className="rounded-xl px-3 py-1.5 text-xs border border-black/10 hover:bg-black/5 disabled:opacity-50"
-        >
-          Refresh
-        </button>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-slate-900 text-sm">Safety / Recall Alerts</h3>
+        {loading && <span className="text-[10px] text-slate-400 animate-pulse font-medium uppercase tracking-wider">Scanning...</span>}
       </div>
 
       {error ? (
-        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
-      ) : loading ? (
-        <div className="mt-3 text-sm opacity-70">Loading…</div>
-      ) : rows.length === 0 ? (
-        <div className="mt-3 text-sm opacity-70">No recalls detected for this item.</div>
+        <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-xs text-red-700">
+          {error}
+        </div>
+      ) : null}
+
+      {!loading && safeRows.length === 0 ? (
+        <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-6 text-center">
+          <p className="text-xs text-slate-500 font-medium">No active recalls found</p>
+          <p className="mt-1 text-[10px] text-slate-400">We monitor CPSC data for your appliance models.</p>
+        </div>
       ) : (
-        <div className="mt-3 space-y-3">
-          {rows.map((m) => (
-            <div key={m.id} className="rounded-xl border border-black/10 p-3">
+        <div className="space-y-3">
+          {safeRows.map((m) => (
+            <div
+              key={m.id}
+              className="rounded-xl border border-black/5 bg-white p-4 shadow-sm transition-all hover:shadow-md"
+            >
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
+                <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <div className="text-sm font-medium truncate">{m.recall.title}</div>
+                    <span className="text-[10px] font-bold text-red-600 uppercase tracking-widest">Recall Alert</span>
                     <RecallStatusBadge status={m.status} />
                   </div>
-                  <div className="mt-1 text-xs opacity-70">
-                    Confidence <span className="font-medium">{m.confidencePct}%</span>
-                    {m.recall.severity ? (
-                      <>
-                        {' '}
-                        • Severity <span className="font-medium">{m.recall.severity}</span>
-                      </>
-                    ) : null}
-                  </div>
+                  <h4 className="text-sm font-bold text-slate-900 leading-snug">
+                    {m.recall?.title || 'Product Safety Alert'}
+                  </h4>
+                  <p className="text-xs text-slate-500 line-clamp-2">
+                    {m.recall?.hazard || 'Please review official notice for hazard details.'}
+                  </p>
                 </div>
-
-                {m.recall.recallUrl ? (
-                  <a
-                    href={m.recall.recallUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-xl px-3 py-1.5 text-xs border border-black/10 hover:bg-black/5"
-                  >
-                    Details
-                  </a>
-                ) : null}
               </div>
 
-              {(m.recall.hazard || m.recall.remedy || m.rationale) && (
-                <div className="mt-2 space-y-1 text-sm">
-                  {m.rationale ? <div className="text-xs opacity-70">{m.rationale}</div> : null}
-                  {m.recall.hazard ? (
-                    <div>
-                      <span className="font-medium">Hazard:</span> {m.recall.hazard}
-                    </div>
-                  ) : null}
-                  {m.recall.remedy ? (
-                    <div>
-                      <span className="font-medium">Recommended:</span> {m.recall.remedy}
-                    </div>
-                  ) : null}
-                </div>
+              {m.recall?.recallUrl && (
+                <a
+                  href={m.recall.recallUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-block text-[11px] font-semibold text-indigo-600 hover:text-indigo-800"
+                >
+                  View Official CPSC Notice ↗
+                </a>
               )}
 
-              <div className="mt-3 flex flex-wrap gap-2">
-                {m.status === 'NEEDS_CONFIRMATION' ? (
+              <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-50 pt-3">
+                {(m.status as string) === 'DETECTED' ? (
                   <>
                     <button
                       onClick={() => onConfirm(m.id)}
-                      className="rounded-xl px-3 py-2 text-xs bg-black text-white hover:bg-black/90"
+                      className="rounded-lg px-3 py-1.5 text-[11px] font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
                     >
-                      Confirm match
+                      Confirm Match
                     </button>
                     <button
                       onClick={() => onDismiss(m.id)}
-                      className="rounded-xl px-3 py-2 text-xs border border-black/10 hover:bg-black/5"
+                      className="rounded-lg px-3 py-1.5 text-[11px] font-bold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
                     >
                       Not my model
                     </button>
                   </>
                 ) : null}
 
-                {m.status === 'OPEN' ? (
+                {(m.status as string) === 'OPEN' ? (
                   <>
                     <button
                       onClick={() => setResolveFor(m.id)}
-                      className="rounded-xl px-3 py-2 text-xs bg-black text-white hover:bg-black/90"
+                      className="rounded-lg px-3 py-1.5 text-[11px] font-bold bg-slate-900 text-white hover:bg-black transition-colors"
                     >
-                      Mark resolved
+                      Mark Resolved
                     </button>
                     <button
                       onClick={() => onDismiss(m.id)}
-                      className="rounded-xl px-3 py-2 text-xs border border-black/10 hover:bg-black/5"
+                      className="rounded-lg px-3 py-1.5 text-[11px] font-bold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
                     >
                       Dismiss
                     </button>
                   </>
                 ) : null}
 
-                {m.status === 'RESOLVED' ? (
-                  <div className="text-xs text-emerald-700">
-                    Resolved{m.resolutionType ? ` • ${m.resolutionType.replace('_', ' ')}` : ''}
+                {(m.status as string) === 'RESOLVED' ? (
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    Resolved{m.resolutionType ? `: ${m.resolutionType.replace(/_/g, ' ')}` : ''}
                   </div>
                 ) : null}
 
-                {m.maintenanceTaskId ? (
-                  <div className="text-xs opacity-70">Action created</div>
-                ) : null}
+                {m.maintenanceTaskId && (
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                    • Linked to Task
+                  </div>
+                )}
               </div>
             </div>
           ))}
