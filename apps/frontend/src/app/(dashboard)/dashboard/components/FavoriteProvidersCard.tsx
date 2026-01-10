@@ -74,7 +74,7 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
 
   if (error) {
     return (
-      <Card className={cn("h-full flex flex-col", className)}>
+      <Card className={cn("h-full flex flex-col overflow-hidden", className)}>
          <CardHeader>
             <CardTitle className="font-heading text-xl flex items-center gap-2">
                 <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
@@ -101,7 +101,7 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
   }
 
   return (
-    <Card className={cn("h-full flex flex-col", className)}>
+    <Card className={cn("h-full flex flex-col overflow-hidden", className)}>
       <CardHeader>
         <CardTitle className="font-heading text-xl flex items-center gap-2">
           <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
@@ -159,7 +159,7 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
                             </div>
                         </div>
                     </div>
-                    <div className="flex space-x-2 shrink-0">
+                    <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                         {/* FIX 1: Use optional chaining to safely access provider.user.phone */}
                         {provider.user?.phone && (
                             <Button variant="ghost" size="icon" asChild>
@@ -170,8 +170,8 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
                         )}
                         <Button variant="outline" size="sm" asChild>
                             <Link href={`/dashboard/providers/${provider.id}/book`}>
-                                <Calendar className="h-4 w-4 mr-1" />
-                                Book
+                                <Calendar className="h-4 w-4 sm:mr-1" />
+                                <span className="hidden sm:inline">Book</span>
                             </Link>
                         </Button>
                     </div>

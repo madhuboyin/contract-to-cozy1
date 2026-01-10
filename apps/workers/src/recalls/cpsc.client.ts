@@ -63,6 +63,22 @@ function clean(s: unknown): string | null {
   return t.length ? t : null;
 }
 
+function uniq(xs: string[]) {
+  return Array.from(new Set(xs));
+}
+
+function normalizeSpaces(s: string): string {
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+function normalizeManufacturer(s: string): string {
+  return normalizeSpaces(s);
+}
+
+function normalizeModel(s: string): string {
+  return normalizeSpaces(s).replace(/\s+/g, ' ').trim();
+}
+
 function splitTokens(raw: string): string[] {
   return raw
     .replace(/^model(?: number)?s?\s*[:\-]\s*/i, '')
@@ -75,25 +91,42 @@ function splitTokens(raw: string): string[] {
     .filter(Boolean);
 }
 
-function normalizeManufacturer(s: string): string {
-  return s.replace(/\s+/g, ' ').trim();
-}
-
-function normalizeModel(s: string): string {
-  return s.replace(/\s+/g, ' ').trim();
-}
-
-function uniq(xs: string[]) {
-  return Array.from(new Set(xs));
-}
-
 function toStringArray(v: any): string[] {
   if (!v) return [];
   if (Array.isArray(v)) return v.map(String).map((s) => s.trim()).filter(Boolean);
-  if (typeof v === 'string') {
-    return splitTokens(v);
-  }
+  if (typeof v === 'string') return splitTokens(v);
   return [];
+}
+
+// Handles CPSC-style lists: [{ Name: "..." }, ...]
+function toNameArray(v: any): string[] {
+  if (!v) return [];
+  if (Array.isArray(v)) {
+    return v
+      .map((x) => {
+        if (typeof x === 'string') return x;
+        return x?.Name ?? x?.name ?? x?.CompanyName ?? x?.companyName ?? null;
+      })
+      .map((x) => (x === null || x === undefined ? '' : String(x).trim()))
+      .filter(Boolean);
+  }
+  if (typeof v === 'string') return splitTokens(v);
+  return [];
+}
+
+function joinFirstNameField(v: any): string | null {
+  const arr = toNameArray(v);
+  if (!arr.length) return null;
+  return arr[0] || null;
+}
+
+function pickFirstString(it: any, keys: string[]): string | null {
+  for (const k of keys) {
+    const v = it?.[k];
+    const s = clean(v);
+    if (s) return s;
+  }
+  return null;
 }
 
 // Some feeds embed lists under various keys. This tries multiple candidates and
@@ -108,7 +141,113 @@ function pickStringList(it: any, keys: string[]): string[] {
 }
 
 // ----------------------------
-// JSON mapping
+// Model extraction (improved)
+// ----------------------------
+function extractModels(text: string): string[] | undefined {
+  if (!text) return undefined;
+
+  // Try to capture “model numbers …” sections first (they tend to be the cleanest)
+  const blocks: string[] = [];
+
+  const b1 = text.match(/\bmodel\s+numbers?\b\s*[:\-]?\s*([\s\S]{0,1500})/i);
+  if (b1?.[1]) blocks.push(b1[1]);
+
+  const b2 = text.match(/\bmodels?\b\s*(?:include|are|:)?\s*([\s\S]{0,1200})/i);
+  if (b2?.[1]) blocks.push(b2[1]);
+
+  if (!blocks.length) blocks.push(text);
+
+  const STOP = new Set([
+    'model',
+    'models',
+    'number',
+    'numbers',
+    'printed',
+    'located',
+    'size',
+    'about',
+    'inches',
+    'wide',
+    'height',
+    'unit',
+    'type',
+    'walk',
+    'behind',
+    'tow',
+    'note',
+    'additional',
+    'may',
+    'or',
+    'and',
+    'the',
+    'are',
+    'is',
+    'on',
+    'of',
+    'to',
+    'from',
+    'through',
+    'for',
+    'with',
+    'sold',
+  ]);
+
+  const tokens: string[] = [];
+
+  for (const b of blocks) {
+    // Split on whitespace, commas, semicolons
+    const parts = b.split(/[\s,;]+/g);
+    for (let p of parts) {
+      p = p
+        .trim()
+        .replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '')
+        .replace(/\s+/g, '');
+
+      if (!p) continue;
+
+      const lower = p.toLowerCase();
+      if (STOP.has(lower)) continue;
+
+      // Critical: require at least one digit to avoid junk like “number”
+      if (!/[0-9]/.test(p)) continue;
+
+      if (p.length < 3 || p.length > 40) continue;
+
+      // Avoid capturing pure years like 2026
+      if (/^(19|20)\d{2}$/.test(p)) continue;
+
+      tokens.push(p);
+      if (tokens.length >= 200) break;
+    }
+    if (tokens.length >= 200) break;
+  }
+
+  const out = uniq(tokens).map(normalizeModel).filter(Boolean);
+  return out.length ? out : undefined;
+}
+
+// Lightweight manufacturer extraction from narrative as a fallback only
+function extractManufacturersFromText(text: string): string[] | undefined {
+  if (!text) return undefined;
+  const manufacturers: string[] = [];
+
+  const mfgMatches = text.match(
+    /\bmanufacturer\b\s*[:\-]?\s*([A-Za-z0-9][A-Za-z0-9&\-,.;\s]{0,250})/i
+  );
+  if (mfgMatches?.[1]) {
+    splitTokens(mfgMatches[1])
+      .map(normalizeManufacturer)
+      .filter((s) => s.length >= 2)
+      .slice(0, 30)
+      .forEach((m) => manufacturers.push(m));
+  }
+
+  const out = uniq(manufacturers).filter(Boolean);
+  return out.length ? out : undefined;
+}
+
+// ----------------------------
+// JSON mapping (updated for real saferproducts schema)
 // ----------------------------
 function mapJson(json: any): CpscRecallItem[] {
   // CPSC saferproducts returns a top-level array
@@ -120,6 +259,7 @@ function mapJson(json: any): CpscRecallItem[] {
 
   return items
     .map((it: any) => {
+      // Prefer RecallID (stable), fallback to RecallNumber/others
       const externalId =
         clean(it?.RecallID) ||
         clean(it?.RecallNumber) ||
@@ -129,92 +269,133 @@ function mapJson(json: any): CpscRecallItem[] {
 
       if (!externalId) return null;
 
+      const description = typeof it?.Description === 'string' ? it.Description : '';
+      const consumerContact = typeof it?.ConsumerContact === 'string' ? it.ConsumerContact : '';
+
       const title =
-        it?.Title ||
-        it?.ProductName ||
-        (typeof it?.Description === 'string' ? it.Description.slice(0, 120) : '') ||
+        clean(it?.Title) ||
+        clean(it?.ProductName) ||
+        (description ? description.slice(0, 120) : null) ||
         `CPSC Recall ${it?.RecallNumber ?? externalId}`;
 
-      const summary = it?.Description || it?.Summary || it?.ConsumerContact || undefined;
+      // Summary: prefer Description (canonical narrative)
+      const summary = description || clean(it?.Summary) || consumerContact || undefined;
 
-      const hazard = it?.Hazard || it?.HazardDescription || undefined;
-      const remedy = it?.Remedy || it?.RemedyDescription || undefined;
+      // Hazard: prefer Hazards[].Name
+      const hazard =
+        clean(joinFirstNameField(it?.Hazards)) ||
+        clean(it?.Hazard) ||
+        clean(it?.HazardDescription) ||
+        undefined;
 
-      const recallUrl = it?.URL || it?.RecallURL || it?.RecallUrl || it?.Link || it?.link || undefined;
+      // Remedy: prefer Remedies[].Name
+      const remedy =
+        clean(joinFirstNameField(it?.Remedies)) ||
+        clean(it?.Remedy) ||
+        clean(it?.RemedyDescription) ||
+        undefined;
 
-      const remedyUrl = it?.RemedyURL || it?.RemedyUrl || it?.RemedyURLText || undefined;
+      const recallUrl =
+        clean(it?.URL) ||
+        clean(it?.RecallURL) ||
+        clean(it?.RecallUrl) ||
+        clean(it?.Link) ||
+        clean(it?.link) ||
+        undefined;
 
-      const recalledAt = it?.RecallDate || it?.LastPublishDate || it?.RecallDateText || undefined;
+      // Recall date: RecallDate is present in your sample
+      const recalledAt = clean(it?.RecallDate) || clean(it?.LastPublishDate) || clean(it?.RecallDateText) || undefined;
 
-      const affectedUnits = it?.Units || it?.NumberOfUnits || it?.UnitsAffected || undefined;
+      // Affected units: in sample it's Products[].NumberOfUnits
+      const affectedUnits =
+        clean(it?.Products?.[0]?.NumberOfUnits) ||
+        clean(it?.Units) ||
+        clean(it?.NumberOfUnits) ||
+        clean(it?.UnitsAffected) ||
+        undefined;
 
-      // ✅ Prefer structured fields first (varies by feed/version)
-      const structuredManufacturers = pickStringList(it, [
-        'Manufacturer',
-        'Manufacturers',
-        'manufacturer',
-        'manufacturers',
-        'RecallingFirm',
-        'RecallingFirms',
-        'RecallingFirmName',
-        'CompanyName',
-        'Company',
-        'Firm',
-      ])
-        .flatMap(splitTokens)
-        .map(normalizeManufacturer)
-        .filter((s) => s.length >= 2);
+      // Manufacturers: prefer Manufacturers[].Name, then Importers/Distributors, then fallbacks
+      const structuredManufacturers = uniq(
+        [
+          ...toNameArray(it?.Manufacturers),
+          ...toNameArray(it?.Importers),
+          ...toNameArray(it?.Distributors),
+          // some feeds might still have these as plain strings
+          ...pickStringList(it, [
+            'Manufacturer',
+            'manufacturer',
+            'RecallingFirm',
+            'RecallingFirms',
+            'RecallingFirmName',
+            'CompanyName',
+            'Company',
+            'Firm',
+          ]),
+        ]
+          .flatMap((x) => splitTokens(String(x)))
+          .map(normalizeManufacturer)
+          .filter((s) => s.length >= 2)
+      ).slice(0, 30);
 
-      const structuredModels = pickStringList(it, [
-        'Model',
-        'Models',
-        'ModelNumber',
-        'ModelNumbers',
-        'model',
-        'models',
-        'modelNumbers',
-        'ModelNo',
-        'ModelNos',
-      ])
-        .flatMap(splitTokens)
-        .map(normalizeModel)
-        .filter((s) => s.length >= 3);
+      // Models: prefer structured keys if present; otherwise extract from Title+Description only
+      const structuredModels = uniq(
+        pickStringList(it, [
+          'Model',
+          'Models',
+          'ModelNumber',
+          'ModelNumbers',
+          'model',
+          'models',
+          'modelNumbers',
+          'ModelNo',
+          'ModelNos',
+        ])
+          .flatMap((x) => splitTokens(String(x)))
+          .map(normalizeModel)
+          .filter((s) => s.length >= 3)
+      ).slice(0, 50);
 
-      // ✅ Fallback extraction from text if structured missing
-      const combinedText = `${title || ''} ${summary || ''} ${hazard || ''} ${remedy || ''}`.trim();
-      const fallback = extractMakeModel(combinedText);
+      // Improved extraction: ONLY from title+description (avoid ConsumerContact noise)
+      const combinedForModels = `${title || ''}\n${description || ''}`.trim();
+      const extractedModels = extractModels(combinedForModels);
+
+      // Fallback manufacturer extraction from narrative (very limited)
+      const extractedManufacturers = extractManufacturersFromText(`${title || ''}\n${description || ''}`);
 
       const manufacturers = uniq(
         [
           ...structuredManufacturers,
-          ...(fallback.manufacturers ?? []).flatMap(splitTokens).map(normalizeManufacturer),
+          ...(extractedManufacturers ?? []),
         ]
-          .map((s) => s.trim())
+          .map(normalizeManufacturer)
           .filter(Boolean)
       );
 
       const models = uniq(
         [
           ...structuredModels,
-          ...(fallback.models ?? []).flatMap(splitTokens).map(normalizeModel),
+          ...(extractedModels ?? []),
         ]
-          .map((s) => s.trim())
+          .map(normalizeModel)
           .filter(Boolean)
           .filter((s) => s.length >= 3)
       );
 
       return {
         externalId: String(externalId),
-        title,
+        title: String(title),
         summary,
         hazard,
         remedy,
         recallUrl,
-        remedyUrl,
+        remedyUrl:
+          // Optional: if you want to keep old behavior, still try these keys,
+          // but sample JSON doesn’t include RemedyURL fields.
+          pickFirstString(it, ['RemedyURL', 'RemedyUrl', 'RemedyURLText']) || undefined,
         recalledAt,
         affectedUnits,
-        manufacturers: manufacturers.length ? manufacturers.slice(0, 30) : undefined,
-        models: models.length ? models.slice(0, 50) : undefined,
+        manufacturers: manufacturers.length ? manufacturers : undefined,
+        models: models.length ? models : undefined,
         raw: it,
       } as CpscRecallItem;
     })
@@ -222,7 +403,7 @@ function mapJson(json: any): CpscRecallItem[] {
 }
 
 // ----------------------------
-// RSS/XML mapping (unchanged, but uses improved extractor)
+// RSS/XML mapping (unchanged, but uses improved model extractor)
 // ----------------------------
 function mapRssXml(xml: string): CpscRecallItem[] {
   const chunks = xml.split('<item>').slice(1);
@@ -234,7 +415,11 @@ function mapRssXml(xml: string): CpscRecallItem[] {
     const pubDate = pickTag(chunk, 'pubDate') || undefined;
 
     const summary = stripCdata(description).trim();
-    const { manufacturers, models } = extractMakeModel(`${title} ${summary}`);
+
+    // For RSS, we can still try to extract manufacturers/models from narrative
+    const combined = `${title}\n${summary}`;
+    const manufacturers = extractManufacturersFromText(combined);
+    const models = extractModels(combined);
 
     return {
       externalId: guid,
@@ -257,44 +442,4 @@ function pickTag(xml: string, tag: string): string | null {
 
 function stripCdata(s: string): string {
   return s.replace(/^<!\[CDATA\[/, '').replace(/\]\]>$/, '');
-}
-
-/**
- * Best-effort extractor:
- * Now supports "A and B" / "&" / "/" plus common prefixes.
- */
-function extractMakeModel(text: string): { manufacturers?: string[]; models?: string[] } {
-  const models: string[] = [];
-  const manufacturers: string[] = [];
-
-  // Models: capture after "Model:" / "Models:" / "Model numbers:"
-  const modelMatches = text.match(
-    /\bmodel(?: number)?s?\b\s*[:\-]?\s*([A-Za-z0-9][A-Za-z0-9\-\/&,;\s]+)/i
-  );
-  if (modelMatches?.[1]) {
-    splitTokens(modelMatches[1])
-      .map(normalizeModel)
-      .filter((s) => s.length >= 3)
-      .slice(0, 50)
-      .forEach((m) => models.push(m));
-  }
-
-  // Manufacturers
-  const mfgMatches = text.match(
-    /\bmanufacturer\b\s*[:\-]?\s*([A-Za-z0-9][A-Za-z0-9&\-,.;\s]+)/i
-  );
-  if (mfgMatches?.[1]) {
-    splitTokens(mfgMatches[1])
-      .map(normalizeManufacturer)
-      .filter((s) => s.length >= 2)
-      .slice(0, 30)
-      .forEach((m) => manufacturers.push(m));
-  }
-
-  const out = {
-    manufacturers: manufacturers.length ? uniq(manufacturers) : undefined,
-    models: models.length ? uniq(models) : undefined,
-  };
-
-  return out;
 }

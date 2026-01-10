@@ -718,7 +718,7 @@ export default function PropertyDetailPage() {
 
       {/* UPDATED: Removed space-y-4 wrapper - no container spacing needed */}
       <Tabs defaultValue={defaultTab} className="w-full">
-          <TabsList>
+          <TabsList className="flex w-full overflow-x-auto">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <Home className="h-4 w-4" /> Overview
             </TabsTrigger>

@@ -89,7 +89,7 @@ export const SeasonalChecklistCard: React.FC<SeasonalChecklistCardProps> = ({
     return (
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+          <CardTitle className="text-lg font-semibold flex items-center gap-2 min-w-0">
             <Calendar className="h-5 w-5 text-purple-600" />
             Seasonal Maintenance
           </CardTitle>
@@ -106,7 +106,7 @@ export const SeasonalChecklistCard: React.FC<SeasonalChecklistCardProps> = ({
     return (
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+          <CardTitle className="text-lg font-semibold flex items-center gap-2 min-w-0">
             <Calendar className="h-5 w-5 text-purple-600" />
             Seasonal Maintenance
           </CardTitle>
@@ -125,7 +125,7 @@ export const SeasonalChecklistCard: React.FC<SeasonalChecklistCardProps> = ({
     return (
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+          <CardTitle className="text-lg font-semibold flex items-center gap-2 min-w-0">
             <Calendar className="h-5 w-5 text-purple-600" />
             Seasonal Maintenance
           </CardTitle>
@@ -145,7 +145,7 @@ export const SeasonalChecklistCard: React.FC<SeasonalChecklistCardProps> = ({
     return (
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+          <CardTitle className="text-lg font-semibold flex items-center gap-2 min-w-0">
             <Calendar className="h-5 w-5 text-purple-600" />
             Seasonal Maintenance
           </CardTitle>
@@ -186,14 +186,14 @@ export const SeasonalChecklistCard: React.FC<SeasonalChecklistCardProps> = ({
   );
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card className="hover:shadow-md transition-shadow overflow-hidden">
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+        <div className="flex items-start justify-between gap-2">
+          <CardTitle className="text-lg font-semibold flex items-center gap-2 min-w-0">
             <span className="text-2xl">{SEASON_EMOJI[checklist.season]}</span>
             {checklist.season} {checklist.year}
           </CardTitle>
-          <Badge variant="outline" className="text-xs">
+          <Badge variant="outline" className="text-xs shrink-0 truncate max-w-[80px] sm:max-w-none">
             {checklist.climateRegion.replace('_', ' ')}
           </Badge>
         </div>
