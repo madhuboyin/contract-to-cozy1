@@ -346,7 +346,11 @@ async function barcodeLookupHandler(req: CustomRequest, res: Response) {
 
   const clean = String(code || '').trim();
   if (!clean) {
-    return res.status(400).json({ message: 'code is required' });
+    return res.status(400).json({
+      success: false,
+      message: 'code is required',
+      code: 'CODE_REQUIRED',
+    });
   }
 
   try {
@@ -355,7 +359,6 @@ async function barcodeLookupHandler(req: CustomRequest, res: Response) {
     // result is: { provider, code, found, suggestion, raw }
     const s = (result as any)?.suggestion;
 
-    // Flatten to what the UI expects (defensive)
     const payload = {
       name: s?.title ?? null,
       manufacturer: s?.brand ?? null,
@@ -366,19 +369,23 @@ async function barcodeLookupHandler(req: CustomRequest, res: Response) {
       imageUrl: Array.isArray(s?.images) && s.images.length ? s.images[0] : null,
     };
 
-    return res.json(payload);
+    // ✅ IMPORTANT: wrap in {data: ...} so frontend api client unwraps correctly
+    return res.json({
+      success: true,
+      data: payload,
+    });
   } catch (err: any) {
-    // IMPORTANT: prevent process crash / upstream reset -> 502 at gateway
     console.error('[INVENTORY] barcode lookup failed:', err);
 
-    // Return a proper JSON error from Express (will include CORS headers)
     return res.status(502).json({
+      success: false,
       message: 'Barcode lookup failed',
       code: 'BARCODE_LOOKUP_FAILED',
       detail: err?.message || 'Unknown error',
     });
   }
 }
+
 
 // ✅ Phase 3 — OCR label -> Draft
 router.post(

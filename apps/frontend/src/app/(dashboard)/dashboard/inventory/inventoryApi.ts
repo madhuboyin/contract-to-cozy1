@@ -261,11 +261,33 @@ export async function lookupInventoryBarcode(
   code: string
 ): Promise<BarcodeLookupResult> {
   const path = `/api/properties/${propertyId}/inventory/barcode/lookup`;
+
   const res: any = await api.post(path, { code });
 
-  // normalize across api wrapper shapes
-  const raw = res?.data ?? res?.body ?? res?.payload ?? res?.result ?? res;
-  if (!raw || typeof raw !== 'object') return { upc: code } as any;
+  const candidate =
+    res?.data ??
+    res?.body ??
+    res?.payload ??
+    res?.result ??
+    res;
 
-  return raw as BarcodeLookupResult;
+  // If candidate is the wrapped response { success, data }
+  const payload =
+    candidate?.data && typeof candidate?.data === 'object'
+      ? candidate.data
+      : candidate;
+
+  // If it's { success:true, data: payload }
+  const finalPayload =
+    payload?.data && typeof payload?.data === 'object'
+      ? payload.data
+      : payload;
+
+  // Last guard: ensure object
+  if (!finalPayload || typeof finalPayload !== 'object') {
+    return { upc: code } as BarcodeLookupResult;
+  }
+
+  return finalPayload as BarcodeLookupResult;
 }
+
