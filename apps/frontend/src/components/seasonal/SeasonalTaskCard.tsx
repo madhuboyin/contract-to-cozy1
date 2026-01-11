@@ -252,14 +252,13 @@ export function SeasonalTaskCard({
                   {isLoading ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-1 animate-spin shrink-0" />
-                      <span className="hidden sm:inline">Adding...</span>
-                      <span className="sm:hidden">...</span>
+                      <span>Adding...</span>
                     </>
                   ) : (
                     <>
                       <Check className="h-4 w-4 mr-1 shrink-0" />
                       <span className="hidden sm:inline">Add to Maintenance</span>
-                      <span className="sm:hidden">Add</span>
+                      <span className="sm:hidden">Schedule</span>
                     </>
                   )}
                 </Button>
@@ -270,8 +269,9 @@ export function SeasonalTaskCard({
                   disabled={isLoading}
                   size="sm"
                 >
-                  <X className="h-4 w-4 sm:mr-1 shrink-0" />
+                  <X className="h-4 w-4 mr-1 shrink-0" />
                   <span className="hidden sm:inline">Dismiss</span>
+                  <span className="sm:hidden">Skip</span>
                 </Button>
               </>
             ) : (
@@ -279,7 +279,7 @@ export function SeasonalTaskCard({
                 <div className="flex-1 flex items-center gap-1 text-xs sm:text-sm text-green-700">
                   <CheckCircle2 className="h-4 w-4 shrink-0" />
                   <span className="hidden sm:inline">This task is in your maintenance schedule</span>
-                  <span className="sm:hidden">Added</span>
+                  <span className="sm:hidden">Scheduled</span>
                 </div>
 
                 <Button
@@ -289,11 +289,15 @@ export function SeasonalTaskCard({
                   size="sm"
                 >
                   {isLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <>
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin shrink-0" />
+                      <span>...</span>
+                    </>
                   ) : (
                     <>
-                      <X className="h-4 w-4 sm:mr-1 shrink-0" />
+                      <X className="h-4 w-4 mr-1 shrink-0" />
                       <span className="hidden sm:inline">Remove</span>
+                      <span className="sm:hidden">Undo</span>
                     </>
                   )}
                 </Button>
