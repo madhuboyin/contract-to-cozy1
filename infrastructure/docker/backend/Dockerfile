@@ -50,8 +50,9 @@ RUN apk add --no-cache \
     curl \
     openssl \
     openssl-dev \
-    libc6-compat
-
+    libc6-compat \
+    leptonica-dev
+    
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nodejs
