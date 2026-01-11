@@ -111,6 +111,7 @@ export default function InventoryItemRecallPanel(props: {
   console.log('visibleRows', visibleRows);
 
   return (
+    
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-slate-900 text-sm">Safety / Recall Alerts (FIXED_V3)</h3>

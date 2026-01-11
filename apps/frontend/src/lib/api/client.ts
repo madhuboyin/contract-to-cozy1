@@ -2362,18 +2362,17 @@ class APIClient {
       }
     );
   }
-
-  // ============================================================================
-  // DEPRECATED METHODS (Phase 2.6 - Keep with warnings until Phase 8)
-  // ============================================================================
-
-
-
-  // ============================================================================
-  // END OF PHASE 3 ADDITIONS
-  // ============================================================================
-
-
+  async getRaw<T>(endpoint: string): Promise<{ data: T }> {
+    const token = this.getToken();
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+  
+    const res = await fetch(`${this.baseURL}${endpoint}`, { method: 'GET', headers });
+    if (!res.ok) throw new APIError(`Request failed (${res.status})`, res.status);
+  
+    return { data: (await res.json()) as T };
+  }
+  
 }
 
 // Export singleton instance

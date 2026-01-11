@@ -1,24 +1,53 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/recalls/recallsApi.ts
 import { api } from '@/lib/api/client';
-import type { ListPropertyRecallsResponse, RecallResolutionType, RecallMatchDTO } from '@/types/recalls.types';
-
+import type {
+  ListPropertyRecallsResponse,
+  RecallResolutionType,
+  RecallMatchDTO,
+} from '@/types/recalls.types';
 
 export type ListInventoryItemRecallsResponse = {
   matches: RecallMatchDTO[];
 };
 
-export async function listPropertyRecalls(propertyId: string): Promise<ListPropertyRecallsResponse> {
+export async function listPropertyRecalls(
+  propertyId: string
+): Promise<ListPropertyRecallsResponse> {
+  // ✅ This endpoint likely returns { success: true, data: ... }
   const res = await api.get<ListPropertyRecallsResponse>(`/api/properties/${propertyId}/recalls`);
   return res.data;
 }
 
-export async function confirmRecallMatch(propertyId: string, matchId: string): Promise<RecallMatchDTO> {
-  const res = await api.post<RecallMatchDTO>(`/api/properties/${propertyId}/recalls/matches/${matchId}/confirm`, {});
+export async function listInventoryItemRecalls(
+  propertyId: string,
+  inventoryItemId: string
+): Promise<ListInventoryItemRecallsResponse> {
+  // ✅ This endpoint returns direct DTO: { matches: [...] }
+  const res = await api.getRaw<ListInventoryItemRecallsResponse>(
+    `/api/properties/${propertyId}/inventory/${inventoryItemId}/recalls`
+  );
   return res.data;
 }
 
-export async function dismissRecallMatch(propertyId: string, matchId: string): Promise<RecallMatchDTO> {
-  const res = await api.post<RecallMatchDTO>(`/api/properties/${propertyId}/recalls/matches/${matchId}/dismiss`, {});
+export async function confirmRecallMatch(
+  propertyId: string,
+  matchId: string
+): Promise<RecallMatchDTO> {
+  const res = await api.post<RecallMatchDTO>(
+    `/api/properties/${propertyId}/recalls/matches/${matchId}/confirm`,
+    {}
+  );
+  return res.data;
+}
+
+export async function dismissRecallMatch(
+  propertyId: string,
+  matchId: string
+): Promise<RecallMatchDTO> {
+  const res = await api.post<RecallMatchDTO>(
+    `/api/properties/${propertyId}/recalls/matches/${matchId}/dismiss`,
+    {}
+  );
   return res.data;
 }
 
@@ -35,13 +64,5 @@ export async function resolveRecallMatch(params: {
       resolutionNotes: params.resolutionNotes,
     }
   );
-  return res.data;
-}
-export async function listInventoryItemRecalls(
-  propertyId: string,
-  inventoryItemId: string
-): Promise<ListInventoryItemRecallsResponse> {
-  // IMPORTANT: backend returns { matches: [...] }
-  const res = await api.get<ListInventoryItemRecallsResponse>(`/api/properties/${propertyId}/inventory/${inventoryItemId}/recalls`);
   return res.data;
 }
