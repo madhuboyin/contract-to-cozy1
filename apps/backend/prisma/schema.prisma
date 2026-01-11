@@ -718,6 +718,7 @@ model User {
   homeReportExports HomeReportExport[]
   claimsCreated        Claim[]
   claimTimelineEvents  ClaimTimelineEvent[]
+  inventoryImportBatches InventoryImportBatch[]
   
   @@index([email])
   @@index([role])
@@ -1077,6 +1078,7 @@ model Property {
   claimTimelineEvents ClaimTimelineEvent[]
   recallMatches      RecallMatch[]
   incidents          Incident[]
+  inventoryImportBatches InventoryImportBatch[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
