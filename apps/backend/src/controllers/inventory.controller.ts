@@ -165,3 +165,13 @@ export async function rollbackImportBatch(req: CustomRequest, res: Response, nex
     next(err);
   }
 }
+
+export async function lookupBarcode(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const code = String(req.query.code || '');
+    const result = await service.lookupBarcode(code);
+    res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}

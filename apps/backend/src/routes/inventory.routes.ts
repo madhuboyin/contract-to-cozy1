@@ -10,6 +10,7 @@ import { prisma } from '../lib/prisma';
 import { detectCoverageGaps } from '../services/coverageGap.service';
 import { InventoryImportService } from '../services/inventoryImport.service';
 import { listImportBatches, rollbackImportBatch } from '../controllers/inventory.controller';
+import { InventoryService } from '../services/inventory.service';
 
 
 import {
@@ -24,6 +25,7 @@ import {
   deleteItem,
   linkDocumentToItem,
   unlinkDocumentFromItem,
+  lookupBarcode,
 } from '../controllers/inventory.controller';
 
 import {
@@ -40,6 +42,13 @@ import {
   importInventoryFromXlsx,
 } from '../controllers/inventoryImport.controller';
 
+import {
+  ocrLabelToDraft,
+  listDrafts,
+  dismissDraft,
+  confirmDraft,
+} from '../controllers/inventoryOcr.controller';
+
 const router = Router();
 
 const upload = multer({
@@ -47,6 +56,7 @@ const upload = multer({
   limits: { fileSize: 8 * 1024 * 1024 }, // 8MB
 });
 
+const inventoryService = new InventoryService();
 // Apply common middleware
 router.use(apiRateLimiter);
 router.use(authenticate);
@@ -313,6 +323,81 @@ router.post(
   '/properties/:propertyId/inventory/import-batches/:batchId/rollback',
   propertyAuthMiddleware,
   rollbackImportBatch
+);
+
+router.get(
+  '/properties/:propertyId/inventory/barcode/lookup',
+  propertyAuthMiddleware,
+  lookupBarcode
+);
+
+
+router.get(
+  '/properties/:propertyId/inventory/barcode/lookup',
+  propertyAuthMiddleware,
+  barcodeLookupHandler
+);
+
+router.post(
+  '/properties/:propertyId/inventory/barcode/lookup',
+  propertyAuthMiddleware,
+  barcodeLookupHandler
+);
+async function barcodeLookupHandler(req: CustomRequest, res: Response) {
+  const code =
+    (req.body && (req.body as any).code) ||
+    (req.query && (req.query as any).code) ||
+    '';
+
+  const clean = String(code || '').trim();
+  if (!clean) {
+    return res.status(400).json({ message: 'code is required' });
+  }
+
+  const result = await inventoryService.lookupBarcode(clean);
+
+  // result is: { provider, code, found, suggestion, raw }
+  const s = (result as any)?.suggestion;
+
+  // Flatten to what the UI expects (defensive)
+  const payload = {
+    name: s?.title ?? null,
+    manufacturer: s?.brand ?? null,
+    modelNumber: s?.model ?? null,
+    upc: (result as any)?.code ?? null,
+    sku: null,
+    categoryHint: s?.category ?? null,
+    imageUrl: Array.isArray(s?.images) && s.images.length ? s.images[0] : null,
+  };
+
+  return res.json(payload);
+}
+
+// ✅ Phase 3 — OCR label -> Draft
+router.post(
+  '/properties/:propertyId/inventory/ocr/label',
+  propertyAuthMiddleware,
+  upload.single('image'),
+  ocrLabelToDraft
+);
+
+// ✅ Drafts
+router.get(
+  '/properties/:propertyId/inventory/drafts',
+  propertyAuthMiddleware,
+  listDrafts
+);
+
+router.post(
+  '/properties/:propertyId/inventory/drafts/:draftId/dismiss',
+  propertyAuthMiddleware,
+  dismissDraft
+);
+
+router.post(
+  '/properties/:propertyId/inventory/drafts/:draftId/confirm',
+  propertyAuthMiddleware,
+  confirmDraft
 );
 
 export default router;

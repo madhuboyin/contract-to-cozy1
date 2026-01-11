@@ -16,6 +16,14 @@ export const updateRoomBodySchema = z.object({
 });
 
 // ---- Items ----
+const optionalTrimmed = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .transform((v) => v.trim())
+    .nullable()
+    .optional();
+
 export const createItemBodySchema = z.object({
   name: z.string().min(1).max(120),
   category: z.nativeEnum(InventoryItemCategory),
@@ -26,9 +34,17 @@ export const createItemBodySchema = z.object({
   warrantyId: z.string().uuid().nullable().optional(),
   insurancePolicyId: z.string().uuid().nullable().optional(),
 
-  brand: z.string().max(80).nullable().optional(),
-  model: z.string().max(80).nullable().optional(),
-  serialNo: z.string().max(120).nullable().optional(),
+  brand: optionalTrimmed(80),
+  model: optionalTrimmed(80),
+  serialNo: optionalTrimmed(120),
+
+  // ✅ Recall / barcode fields (already exist in Prisma schema)
+  manufacturer: z.string().trim().max(255).optional().nullable(),
+  modelNumber: z.string().trim().max(255).optional().nullable(),
+  serialNumber: z.string().trim().max(255).optional().nullable(),
+  upc: z.string().trim().max(64).optional().nullable(),
+  sku: z.string().trim().max(64).optional().nullable(),
+  
 
   installedOn: z.string().datetime().nullable().optional(),
   purchasedOn: z.string().datetime().nullable().optional(),
@@ -44,7 +60,6 @@ export const createItemBodySchema = z.object({
 
 export const updateItemBodySchema = createItemBodySchema.partial();
 
-// ---- Document linking ----
 export const linkDocumentBodySchema = z.object({
   documentId: z.string().uuid(),
 });

@@ -3,11 +3,9 @@ import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { InventoryItemCategory } from '@prisma/client';
 import crypto from 'crypto';
-
 function normalize(v: any) {
   return String(v ?? '').trim().toLowerCase();
 }
-
 export function computeInventorySourceHash(input: {
   propertyId: string;
   roomName?: string;
@@ -39,6 +37,36 @@ type ListItemsQuery = {
   hasDocuments?: boolean;
 };
 
+function norm(v?: string | null) {
+  return v ? v.toLowerCase().replace(/[^a-z0-9]/g, '') : null;
+}
+async function fetchJsonWithTimeout(url: string, timeoutMs = 8000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    const text = await res.text();
+    // UPCitemdb returns JSON; keep error body if not
+    let json: any;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw new APIError(`Barcode lookup returned non-JSON response (${res.status})`, 502, 'BARCODE_LOOKUP_BAD_RESPONSE');
+    }
+    if (!res.ok) {
+      throw new APIError(json?.message || `Barcode lookup failed (${res.status})`, 502, 'BARCODE_LOOKUP_FAILED');
+    }
+    return json;
+  } catch (e: any) {
+    if (e?.name === 'AbortError') {
+      throw new APIError('Barcode lookup timed out', 504, 'BARCODE_LOOKUP_TIMEOUT');
+    }
+    throw e;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 export class InventoryService {
   // ---------------- Rooms ----------------
 
@@ -48,7 +76,6 @@ export class InventoryService {
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
   }
-
   async createRoom(propertyId: string, input: { name: string; floorLevel?: number | null; sortOrder?: number }) {
     try {
       return await prisma.inventoryRoom.create({
@@ -105,7 +132,20 @@ export class InventoryService {
   }
 
   // ---------------- Items ----------------
-
+  async getItem(propertyId: string, itemId: string) {
+    const item = await prisma.inventoryItem.findFirst({
+      where: { id: itemId, propertyId },
+      include: {
+        room: true,
+        warranty: true,
+        insurancePolicy: true,
+        homeAsset: true,
+        documents: { orderBy: { createdAt: 'desc' } },
+      },
+    });
+    if (!item) throw new APIError('Inventory item not found', 404, 'ITEM_NOT_FOUND');
+    return item;
+  }
   async listItems(propertyId: string, query: ListItemsQuery) {
     const where: any = { propertyId };
 
@@ -119,6 +159,13 @@ export class InventoryService {
         { brand: { contains: term, mode: 'insensitive' } },
         { model: { contains: term, mode: 'insensitive' } },
         { serialNo: { contains: term, mode: 'insensitive' } },
+
+        // ✅ helpful for barcode / recall fields
+        { manufacturer: { contains: term, mode: 'insensitive' } },
+        { modelNumber: { contains: term, mode: 'insensitive' } },
+        { serialNumber: { contains: term, mode: 'insensitive' } },
+        { upc: { contains: term, mode: 'insensitive' } },
+        { sku: { contains: term, mode: 'insensitive' } },
       ];
     }
 
@@ -139,57 +186,51 @@ export class InventoryService {
   }
 
   async createItem(propertyId: string, data: any) {
-    // 1. Validate ownership/containment for all foreign keys before proceeding
-    // This ensures the selected room, warranty, or policy actually belongs to this property.
     await this.assertRoomBelongs(propertyId, data.roomId);
     await this.assertWarrantyBelongs(propertyId, data.warrantyId);
     await this.assertInsuranceBelongs(propertyId, data.insurancePolicyId);
     await this.assertHomeAssetBelongs(propertyId, data.homeAssetId);
-  
-    // 2. Explicitly map fields to ensure database compatibility
+
+    const manufacturerNorm = norm(data.manufacturer);
+    const modelNumberNorm = norm(data.modelNumber);
+
     return prisma.inventoryItem.create({
       data: {
         propertyId,
         name: data.name,
         category: data.category,
         condition: data.condition || 'UNKNOWN',
-        
-        // Relationship IDs - Explicitly set to null if missing to clear any defaults
+
         roomId: data.roomId || null,
         warrantyId: data.warrantyId || null,
         insurancePolicyId: data.insurancePolicyId || null,
         homeAssetId: data.homeAssetId || null,
-  
-        // Metadata
+
         brand: data.brand || null,
         model: data.model || null,
         serialNo: data.serialNo || null,
         notes: data.notes || null,
         tags: data.tags || [],
-  
-        // Financials
+
         purchaseCostCents: data.purchaseCostCents || null,
         replacementCostCents: data.replacementCostCents || null,
         currency: data.currency || 'USD',
-  
-        // Date conversion
+
         installedOn: data.installedOn ? new Date(data.installedOn) : null,
         purchasedOn: data.purchasedOn ? new Date(data.purchasedOn) : null,
         lastServicedOn: data.lastServicedOn ? new Date(data.lastServicedOn) : null,
-      },
-      include: {
-        room: true,
-        warranty: true,
-        insurancePolicy: true,
-        homeAsset: true,
-        documents: { orderBy: { createdAt: 'desc' } },
-      },
-    });
-  }
 
-  async getItem(propertyId: string, itemId: string) {
-    const item = await prisma.inventoryItem.findFirst({
-      where: { id: itemId, propertyId },
+        // ✅ barcode/recall fields
+        manufacturer: data.manufacturer || null,
+        modelNumber: data.modelNumber || null,
+        serialNumber: data.serialNumber || null,
+        upc: data.upc || null,
+        sku: data.sku || null,
+
+        // ✅ normalized (future-proof for matching)
+        manufacturerNorm,
+        modelNumberNorm,
+      },
       include: {
         room: true,
         warranty: true,
@@ -198,38 +239,34 @@ export class InventoryService {
         documents: { orderBy: { createdAt: 'desc' } },
       },
     });
-    if (!item) throw new APIError('Inventory item not found', 404, 'ITEM_NOT_FOUND');
-    return item;
   }
 
   async updateItem(propertyId: string, itemId: string, patch: any) {
-    // 1. Verify the item exists and belongs to the property
     const existing = await prisma.inventoryItem.findFirst({
       where: { id: itemId, propertyId },
       select: { id: true },
     });
     if (!existing) throw new APIError('Inventory item not found', 404, 'ITEM_NOT_FOUND');
-  
-    // 2. Validate containment ONLY for fields present in the patch
+
     if ('roomId' in patch) await this.assertRoomBelongs(propertyId, patch.roomId);
     if ('warrantyId' in patch) await this.assertWarrantyBelongs(propertyId, patch.warrantyId);
     if ('insurancePolicyId' in patch) await this.assertInsuranceBelongs(propertyId, patch.insurancePolicyId);
     if ('homeAssetId' in patch) await this.assertHomeAssetBelongs(propertyId, patch.homeAssetId);
-  
-    // 3. Prepare the update data object
+
     const updateData: any = { ...patch };
-  
-    // 4. Handle specialized date logic if they are being updated
+
     if ('installedOn' in patch) updateData.installedOn = patch.installedOn ? new Date(patch.installedOn) : null;
     if ('purchasedOn' in patch) updateData.purchasedOn = patch.purchasedOn ? new Date(patch.purchasedOn) : null;
     if ('lastServicedOn' in patch) updateData.lastServicedOn = patch.lastServicedOn ? new Date(patch.lastServicedOn) : null;
-  
-    // 5. Explicitly ensure relationship IDs are treated as IDs, not nested objects
-    // This handles the "not saving" issue by ensuring the key is explicitly assigned.
+
     if ('warrantyId' in patch) updateData.warrantyId = patch.warrantyId || null;
     if ('insurancePolicyId' in patch) updateData.insurancePolicyId = patch.insurancePolicyId || null;
     if ('roomId' in patch) updateData.roomId = patch.roomId || null;
-  
+
+    // ✅ keep normalized fields consistent if these change
+    if ('manufacturer' in patch) updateData.manufacturerNorm = norm(patch.manufacturer);
+    if ('modelNumber' in patch) updateData.modelNumberNorm = norm(patch.modelNumber);
+
     return prisma.inventoryItem.update({
       where: { id: itemId },
       data: updateData,
@@ -241,6 +278,37 @@ export class InventoryService {
         documents: { orderBy: { createdAt: 'desc' } },
       },
     });
+  }
+
+  // ✅ NEW: barcode → product lookup (server-side)
+  async lookupBarcode(code: string) {
+    const clean = String(code || '').trim();
+    if (!clean) throw new APIError('Missing barcode code', 400, 'BARCODE_CODE_REQUIRED');
+
+    // UPCitemdb free tier endpoint is commonly used as:
+    // https://api.upcitemdb.com/prod/trial/lookup?upc=...
+    const url = `https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(clean)}`;
+
+    const json = await fetchJsonWithTimeout(url, 8000);
+
+    // best-effort “top hit”
+    const item = Array.isArray(json?.items) && json.items.length ? json.items[0] : null;
+
+    return {
+      provider: 'UPCitemdb',
+      code: clean,
+      found: !!item,
+      suggestion: item
+        ? {
+            title: item.title ?? null,
+            brand: item.brand ?? null,
+            model: item.model ?? null,
+            category: item.category ?? null,
+            images: Array.isArray(item.images) ? item.images : [],
+          }
+        : null,
+      raw: json,
+    };
   }
 
   async deleteItem(propertyId: string, itemId: string) {
@@ -373,6 +441,8 @@ export class InventoryService {
     });
   }
 
+
+  
   // ---------------- Containment guards ----------------
 
   private async assertRoomBelongs(propertyId: string, roomId?: string | null) {
