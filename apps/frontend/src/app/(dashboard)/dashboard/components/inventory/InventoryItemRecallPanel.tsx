@@ -28,9 +28,15 @@ export default function InventoryItemRecallPanel(props: {
   
     setLoading(true);
     setError(null);
+  
     try {
-      const res = await listInventoryItemRecalls(props.propertyId, props.inventoryItemId);
-      // ✅ backend returns { matches: [...] }
+      const res = await listInventoryItemRecalls(
+        props.propertyId,
+        props.inventoryItemId
+      );
+  
+      console.log('[InventoryItemRecallPanel] matches:', res?.matches);
+  
       setRows(res?.matches ?? []);
     } catch (e: any) {
       console.error('Recall fetch error:', e);
@@ -40,6 +46,7 @@ export default function InventoryItemRecallPanel(props: {
       setLoading(false);
     }
   }
+  
   console.log('rows', rows);
 
   useEffect(() => {
@@ -100,14 +107,15 @@ export default function InventoryItemRecallPanel(props: {
   // Optional: if you only want to show actionable statuses in this panel:
   // const visibleRows = safeRows.filter(m => m.status === 'OPEN' || m.status === 'DETECTED' || m.status === 'NEEDS_CONFIRMATION');
   const visibleRows = safeRows.filter(m =>
-    ['OPEN', 'DETECTED', 'NEEDS_CONFIRMATION'].includes(m.status as any)
+    ['OPEN', 'NEEDS_CONFIRMATION'].includes(m.status as any)
   );
+  console.log('safeRows', safeRows);
   console.log('visibleRows', visibleRows);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-slate-900 text-sm">Safety / Recall Alerts</h3>
+        <h3 className="font-semibold text-slate-900 text-sm">Safety / Recall Alerts (FIXED_V3)</h3>
         {loading && (
           <span className="text-[10px] text-slate-400 animate-pulse font-medium uppercase tracking-wider">
             Scanning...
