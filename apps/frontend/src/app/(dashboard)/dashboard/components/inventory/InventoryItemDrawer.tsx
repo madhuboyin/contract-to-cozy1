@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { api } from '@/lib/api/client';
 import { InventoryItem, InventoryItemCategory, InventoryItemCondition, InventoryRoom } from '@/types';
 import DocumentPickerModal from './DocumentPickerModal';
@@ -8,7 +8,6 @@ import InventoryItemRecallPanel from './InventoryItemRecallPanel';
 import BarcodeScannerModal, { BarcodeLookupResult } from './BarcodeScannerModal';
 import LabelOcrModal from './LabelOcrModal';
 import { ocrLabelToDraft, confirmInventoryDraft, dismissInventoryDraft } from './inventoryApi';
-
 
 import {
   createInventoryItem,
@@ -35,6 +34,7 @@ const CATEGORIES: InventoryItemCategory[] = [
   'ELECTRONICS',
   'OTHER',
 ];
+
 const CONDITIONS: InventoryItemCondition[] = ['NEW', 'GOOD', 'FAIR', 'POOR', 'UNKNOWN'];
 
 function dollarsToCents(v: string) {
@@ -54,7 +54,6 @@ function centsToDollars(cents: number | null | undefined) {
 function inferCategoryFromLookup(lookup: BarcodeLookupResult): InventoryItemCategory {
   const hint = (lookup.categoryHint || '').toLowerCase();
   const name = (lookup.name || '').toLowerCase();
-
   const t = `${hint} ${name}`;
 
   if (t.includes('refrigerator') || t.includes('microwave') || t.includes('dishwasher') || t.includes('oven'))
@@ -69,6 +68,11 @@ function inferCategoryFromLookup(lookup: BarcodeLookupResult): InventoryItemCate
     return 'FURNITURE';
 
   return 'OTHER';
+}
+
+function pct(n?: number) {
+  const v = typeof n === 'number' ? n : 0;
+  return `${Math.round(v * 100)}%`;
 }
 
 export default function InventoryItemDrawer(props: {
@@ -88,17 +92,17 @@ export default function InventoryItemDrawer(props: {
   const [condition, setCondition] = useState<InventoryItemCondition>('UNKNOWN');
   const [roomId, setRoomId] = useState<string | ''>('');
 
-  // barcode/recall fields (Phase 2)
+  // product identifiers (Phase 2+)
   const [manufacturer, setManufacturer] = useState('');
   const [modelNumber, setModelNumber] = useState('');
   const [serialNumber, setSerialNumber] = useState('');
   const [upc, setUpc] = useState('');
   const [sku, setSku] = useState('');
 
-  // existing fields (kept)
-  const [brand, setBrand] = useState(''); // legacy field used elsewhere in your UI
-  const [model, setModel] = useState(''); // legacy
-  const [serialNo, setSerialNo] = useState(''); // legacy
+  // legacy fields (kept)
+  const [brand, setBrand] = useState('');
+  const [model, setModel] = useState('');
+  const [serialNo, setSerialNo] = useState('');
 
   const [purchaseCost, setPurchaseCost] = useState('');
   const [replacementCost, setReplacementCost] = useState('');
@@ -111,7 +115,7 @@ export default function InventoryItemDrawer(props: {
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [lastScannedCode, setLastScannedCode] = useState<string>('');
 
-  // ✅ Phase 3: OCR label -> draft
+  // Phase 3: OCR label -> draft
   const [labelOpen, setLabelOpen] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrError, setOcrError] = useState<string | null>(null);
@@ -142,14 +146,12 @@ export default function InventoryItemDrawer(props: {
     setCondition(item?.condition ?? 'UNKNOWN');
     setRoomId(item?.roomId ?? '');
 
-    // Phase 2 fields (if present on InventoryItem type)
     setManufacturer((item as any)?.manufacturer ?? '');
     setModelNumber((item as any)?.modelNumber ?? '');
     setSerialNumber((item as any)?.serialNumber ?? '');
     setUpc((item as any)?.upc ?? '');
     setSku((item as any)?.sku ?? '');
 
-    // legacy fields (kept)
     setBrand((item as any)?.brand ?? '');
     setModel((item as any)?.model ?? '');
     setSerialNo((item as any)?.serialNo ?? '');
@@ -178,7 +180,6 @@ export default function InventoryItemDrawer(props: {
     setOcrError(null);
     setDraftId('');
     setConfidenceByField({});
-
   }, [props.open, props.initialItem]);
 
   useEffect(() => {
@@ -283,6 +284,82 @@ export default function InventoryItemDrawer(props: {
     }
   }
 
+  // ---------- Barcode lookup ----------
+  const LOOKUP_PATH = `/api/properties/${props.propertyId}/inventory/barcode/lookup`;
+
+  async function lookupBarcode(code: string) {
+    const trimmed = code.trim();
+    if (!trimmed) return;
+
+    setLookupLoading(true);
+    setLookupError(null);
+
+    try {
+      const res = await api.post(LOOKUP_PATH, { code: trimmed });
+      const data: BarcodeLookupResult = res.data;
+
+      setLastScannedCode(trimmed);
+
+      // name/category (best-effort)
+      if (!name.trim() && data?.name) setName(data.name);
+      if (category === 'OTHER') setCategory(inferCategoryFromLookup(data));
+
+      // identifiers
+      if (!manufacturer.trim() && data?.manufacturer) setManufacturer(data.manufacturer);
+      if (!modelNumber.trim() && data?.modelNumber) setModelNumber(data.modelNumber);
+      if (!upc.trim()) setUpc(data?.upc || trimmed);
+      if (!sku.trim() && data?.sku) setSku(data.sku);
+
+      // legacy sync (optional)
+      if (!brand.trim() && data?.manufacturer) setBrand(data.manufacturer);
+      if (!model.trim() && data?.modelNumber) setModel(data.modelNumber);
+
+      setScannerOpen(false);
+    } catch (e: any) {
+      console.error('Barcode lookup failed', e);
+      setLookupError(e?.message || 'Lookup failed');
+    } finally {
+      setLookupLoading(false);
+    }
+  }
+
+  async function runLabelOcr(file: File) {
+    setOcrLoading(true);
+    setOcrError(null);
+    try {
+      const r = await ocrLabelToDraft(props.propertyId, file);
+
+      setDraftId(r.draftId || '');
+      setConfidenceByField(r.confidence || {});
+
+      const ex = r.extracted || {};
+      if (!manufacturer.trim() && ex.manufacturer) setManufacturer(ex.manufacturer);
+      if (!modelNumber.trim() && ex.modelNumber) setModelNumber(ex.modelNumber);
+      if (!serialNumber.trim() && ex.serialNumber) setSerialNumber(ex.serialNumber);
+
+      if (!brand.trim() && ex.manufacturer) setBrand(ex.manufacturer);
+      if (!model.trim() && ex.modelNumber) setModel(ex.modelNumber);
+      if (!serialNo.trim() && ex.serialNumber) setSerialNo(ex.serialNumber);
+    } catch (e: any) {
+      setOcrError(e?.message || 'OCR failed');
+    } finally {
+      setOcrLoading(false);
+    }
+  }
+
+  async function onDismissDraft() {
+    if (!draftId) return;
+    try {
+      await dismissInventoryDraft(props.propertyId, draftId);
+    } catch (e) {
+      // non-blocking; still clear local state so user can retry cleanly
+      console.warn('Dismiss draft failed', e);
+    } finally {
+      setDraftId('');
+      setConfidenceByField({});
+    }
+  }
+
   async function onSave() {
     if (!canSave) return;
     setSaving(true);
@@ -293,12 +370,10 @@ export default function InventoryItemDrawer(props: {
         condition,
         roomId: roomId || null,
 
-        // keep legacy fields (if your backend accepts them)
         brand: brand || null,
         model: model || null,
         serialNo: serialNo || null,
 
-        // Phase 2 fields (barcode/lookup/recall matching)
         manufacturer: manufacturer || null,
         modelNumber: modelNumber || null,
         serialNumber: serialNumber || null,
@@ -319,13 +394,13 @@ export default function InventoryItemDrawer(props: {
         await refreshItemDocs();
       } else {
         if (draftId) {
-          // ✅ confirm draft -> creates inventory item server-side
+          // confirm draft -> creates inventory item server-side
           await confirmInventoryDraft(props.propertyId, draftId);
         } else {
           await createInventoryItem(props.propertyId, payload);
         }
       }
-      
+
       props.onSaved();
     } catch (error) {
       console.error('Failed to save inventory item:', error);
@@ -335,72 +410,6 @@ export default function InventoryItemDrawer(props: {
     }
   }
 
-  // ---------- Barcode lookup ----------
-  const LOOKUP_PATH = `/api/properties/${props.propertyId}/inventory/barcode/lookup`;
-
-  async function lookupBarcode(code: string) {
-    const trimmed = code.trim();
-    if (!trimmed) return;
-
-    setLookupLoading(true);
-    setLookupError(null);
-
-    try {
-      const res = await api.post(LOOKUP_PATH, { code: trimmed });
-      const data: BarcodeLookupResult = res.data;
-
-      // Prefill fields, but don’t overwrite user input if they already typed something meaningful
-      setLastScannedCode(trimmed);
-
-      // name/category (best-effort)
-      if (!name.trim() && data?.name) setName(data.name);
-      if (category === 'OTHER') setCategory(inferCategoryFromLookup(data));
-
-      // barcode fields
-      if (!manufacturer.trim() && data?.manufacturer) setManufacturer(data.manufacturer);
-      if (!modelNumber.trim() && data?.modelNumber) setModelNumber(data.modelNumber);
-      if (!upc.trim()) setUpc(data?.upc || trimmed);
-      if (!sku.trim() && data?.sku) setSku(data.sku);
-
-      // If you want to keep legacy fields synced too (optional)
-      if (!brand.trim() && data?.manufacturer) setBrand(data.manufacturer);
-      if (!model.trim() && data?.modelNumber) setModel(data.modelNumber);
-
-      setScannerOpen(false);
-    } catch (e: any) {
-      console.error('Barcode lookup failed', e);
-      setLookupError(e?.message || 'Lookup failed');
-    } finally {
-      setLookupLoading(false);
-    }
-  }
-
-  async function runLabelOcr(file: File) {
-    setOcrLoading(true);
-    setOcrError(null);
-    try {
-      const r = await ocrLabelToDraft(props.propertyId, file);
-  
-      setDraftId(r.draftId || '');
-      setConfidenceByField(r.confidence || {});
-  
-      // Best-effort prefill (don’t overwrite user edits)
-      const ex = r.extracted || {};
-      if (!manufacturer.trim() && ex.manufacturer) setManufacturer(ex.manufacturer);
-      if (!modelNumber.trim() && ex.modelNumber) setModelNumber(ex.modelNumber);
-      if (!serialNumber.trim() && ex.serialNumber) setSerialNumber(ex.serialNumber);
-  
-      // Optional: keep legacy fields synced too
-      if (!brand.trim() && ex.manufacturer) setBrand(ex.manufacturer);
-      if (!model.trim() && ex.modelNumber) setModel(ex.modelNumber);
-      if (!serialNo.trim() && ex.serialNumber) setSerialNo(ex.serialNumber);
-    } catch (e: any) {
-      setOcrError(e?.message || 'OCR failed');
-    } finally {
-      setOcrLoading(false);
-    }
-  }
-  
   if (!props.open) return null;
 
   return (
@@ -418,52 +427,98 @@ export default function InventoryItemDrawer(props: {
         </div>
 
         <div className="mt-6 space-y-4">
-          {/* ✅ Phase 2: Scan BEFORE save */}
-          <div className="rounded-2xl border border-black/10 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-medium">Barcode scan</div>
-                <div className="text-xs opacity-70">
-                  Scan a product barcode to autofill details (works before saving).
+          {/* ✅ Unified "Smart scan" section */}
+          {!isEdit ? (
+            <div className="rounded-2xl border border-black/10 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-medium">Scan & autofill</div>
+                  <div className="text-xs opacity-70">
+                    Scan first to autofill details before saving. Barcode finds product info; label OCR extracts model/serial.
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setScannerOpen(true)}
+                    disabled={saving || lookupLoading}
+                    className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
+                    title="Scan barcode (UPC/EAN)"
+                  >
+                    {lookupLoading ? 'Looking up…' : 'Scan barcode'}
+                  </button>
+
+                  <button
+                    onClick={() => setLabelOpen(true)}
+                    disabled={saving || ocrLoading}
+                    className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
+                    title="Scan appliance label (OCR)"
+                  >
+                    {ocrLoading ? 'Extracting…' : 'Scan label'}
+                  </button>
                 </div>
               </div>
-              <button
-                onClick={() => setScannerOpen(true)}
-                disabled={saving || lookupLoading}
-                className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
-              >
-                {lookupLoading ? 'Looking up…' : 'Scan'}
-              </button>
+
+              {/* Lightweight status rows */}
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <div className="text-xs opacity-70">Barcode (UPC/EAN)</div>
+                  <input
+                    value={lastScannedCode}
+                    readOnly
+                    className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm bg-black/5"
+                    placeholder="No barcode scanned yet"
+                  />
+                  <div className="mt-1 text-[11px] opacity-60">Autofills: name, category (best effort), UPC, manufacturer/model (when available).</div>
+                </div>
+
+                <div className="col-span-2">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs opacity-70">Label OCR draft</div>
+                    {draftId ? (
+                      <button
+                        onClick={onDismissDraft}
+                        disabled={saving || ocrLoading}
+                        className="text-[11px] underline opacity-70 hover:opacity-100 disabled:opacity-50"
+                        title="Dismiss this draft (does not delete any saved item)"
+                      >
+                        Dismiss draft
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <input
+                    value={draftId ? `Draft created (${draftId.slice(0, 8)}…)` : ''}
+                    readOnly
+                    className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm bg-black/5"
+                    placeholder="No label scan yet"
+                  />
+
+                  {draftId ? (
+                    <div className="mt-1 text-[11px] opacity-60">
+                      Confidence: manufacturer {pct(confidenceByField.manufacturer)} • model {pct(confidenceByField.modelNumber)} • serial{' '}
+                      {pct(confidenceByField.serialNumber)}
+                      <span className="ml-2 opacity-70">Draft is confirmed when you hit Save.</span>
+                    </div>
+                  ) : (
+                    <div className="mt-1 text-[11px] opacity-60">Autofills: manufacturer, model number, serial number (creates a draft).</div>
+                  )}
+                </div>
+
+                {lookupError ? (
+                  <div className="col-span-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                    {lookupError}
+                  </div>
+                ) : null}
+
+                {ocrError ? (
+                  <div className="col-span-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                    {ocrError}
+                  </div>
+                ) : null}
+              </div>
             </div>
-
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <div className="text-xs opacity-70">Last scanned</div>
-                <input
-                  value={lastScannedCode}
-                  readOnly
-                  className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm bg-black/5"
-                  placeholder="—"
-                />
-              </div>
-
-              <div className="col-span-2">
-                <div className="text-xs opacity-70">UPC</div>
-                <input
-                  value={upc}
-                  onChange={(e) => setUpc(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-                  placeholder="Auto-filled from scan"
-                />
-              </div>
-            </div>
-
-            {lookupError ? (
-              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-                {lookupError}
-              </div>
-            ) : null}
-          </div>
+          ) : null}
 
           <div>
             <div className="text-sm font-medium">Name *</div>
@@ -526,38 +581,8 @@ export default function InventoryItemDrawer(props: {
             <div />
           </div>
 
-
-          <div className="rounded-2xl border border-black/10 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-medium">Label OCR</div>
-                <div className="text-xs opacity-70">Scan model/serial plate to autofill details (creates a draft).</div>
-              </div>
-              <button
-                onClick={() => setLabelOpen(true)}
-                disabled={saving || ocrLoading}
-                className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
-              >
-                {ocrLoading ? 'Extracting…' : 'Scan label'}
-              </button>
-            </div>
-
-            {ocrError ? <div className="mt-2 text-xs text-red-600">{ocrError}</div> : null}
-
-            {draftId ? (
-              <div className="mt-2 text-[11px] opacity-70">
-                Draft ready • manufacturer {Math.round((confidenceByField.manufacturer || 0) * 100)}% • model{' '}
-                {Math.round((confidenceByField.modelNumber || 0) * 100)}% • serial{' '}
-                {Math.round((confidenceByField.serialNumber || 0) * 100)}%
-              </div>
-            ) : null}
-          </div>
-
-          <LabelOcrModal
-            open={labelOpen}
-            onClose={() => setLabelOpen(false)}
-            onCaptured={runLabelOcr}
-          />
+          {/* OCR modal */}
+          <LabelOcrModal open={labelOpen} onClose={() => setLabelOpen(false)} onCaptured={runLabelOcr} />
 
           {/* Phase 2 fields */}
           <div className="rounded-2xl border border-black/10 p-4">
@@ -612,7 +637,11 @@ export default function InventoryItemDrawer(props: {
 
           {/* Existing recall panel behavior */}
           {isEdit && props.initialItem ? (
-            <InventoryItemRecallPanel open={props.open} propertyId={props.propertyId} inventoryItemId={props.initialItem.id} />
+            <InventoryItemRecallPanel
+              open={props.open}
+              propertyId={props.propertyId}
+              inventoryItemId={props.initialItem.id}
+            />
           ) : (
             <div className="rounded-2xl border border-black/10 p-4">
               <div className="text-sm font-medium">Safety / Recall Alerts</div>
@@ -794,12 +823,21 @@ export default function InventoryItemDrawer(props: {
 
           <div>
             <div className="text-sm font-medium">Notes</div>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm" rows={4} />
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
+              rows={4}
+            />
           </div>
 
           <div className="flex items-center justify-between gap-3 pt-2">
             {isEdit ? (
-              <button onClick={onDelete} disabled={saving} className="text-sm underline text-red-600 hover:text-red-700 disabled:opacity-50">
+              <button
+                onClick={onDelete}
+                disabled={saving}
+                className="text-sm underline text-red-600 hover:text-red-700 disabled:opacity-50"
+              >
                 Delete
               </button>
             ) : (
@@ -815,7 +853,7 @@ export default function InventoryItemDrawer(props: {
                 disabled={saving || !canSave}
                 className="rounded-xl px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
               >
-                {saving ? 'Saving…' : 'Save'}
+                {saving ? 'Saving…' : draftId ? 'Save (confirm draft)' : 'Save'}
               </button>
               <button
                 onClick={() => setDocPickerOpen(true)}

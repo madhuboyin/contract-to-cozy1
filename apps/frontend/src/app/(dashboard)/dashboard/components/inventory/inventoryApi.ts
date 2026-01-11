@@ -84,7 +84,7 @@ export async function getDocumentAssetSuggestions(_documentId: string, _property
 // ✅ NEW: barcode → product lookup
 export async function lookupBarcode(propertyId: string, code: string) {
     const res = await api.get(
-      `/api/properties/${propertyId}/inventory/barcode/lookup?code=${encodeURIComponent(code)}`
+      `/properties/${propertyId}/inventory/barcode/lookup?code=${encodeURIComponent(code)}`
     );
     // Expecting { success: true, data: { provider, code, found, suggestion, raw } }
     return res.data?.data ?? res.data;
@@ -95,7 +95,7 @@ export async function ocrLabelToDraft(propertyId: string, file: File) {
   const form = new FormData();
   form.append('image', file);
 
-  const res = await api.post(`/api/properties/${propertyId}/inventory/ocr/label`, form);
+  const res = await api.post(`/properties/${propertyId}/inventory/ocr/label`, form);
 
   return res.data as {
     sessionId: string;

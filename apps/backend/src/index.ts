@@ -53,7 +53,9 @@ import { insuranceQuoteRouter } from './routes/insuranceQuote.routes';
 import claimsRoutes from './routes/claims.routes';
 import incidentsRouter from './routes/incidents.routes';
 import recallsRoutes from './routes/recalls.routes';
-import inventoryImportRoutes from './routes/inventory.routes';  // FIX: inventoryImport.routes -> inventory.routes
+import inventoryImportRoutes from './routes/inventory.routes';
+import inventoryOcrRoutes from './routes/inventory.routes';
+
 
 
 dotenv.config();
@@ -309,12 +311,16 @@ app.use('/api', seasonalChecklistRoutes);
 app.use('/api/home-buyer-tasks', homeBuyerTaskRoutes);
 app.use('/api/maintenance-tasks', propertyMaintenanceTaskRoutes);
 app.use('/api/inventory', inventoryRoutes);
-app.use('/api', inventoryRoutes);
 app.use('/api', insuranceQuoteRouter);
 app.use('/api', claimsRoutes);
 app.use('/api', incidentsRouter);
 app.use('/api', recallsRoutes);
 app.use('/api', inventoryImportRoutes);
+app.use('/api/', inventoryOcrRoutes);
+// apps/backend/src/index.ts
+
+app.use(express.json({ limit: '10mb' })); // Ensure this is present
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // 404 handler
 app.use((req: Request, res: Response) => {
   res.status(404).json({
