@@ -255,3 +255,17 @@ export async function dismissInventoryDraft(propertyId: string, draftId: string)
   const res = await api.post(`/api/properties/${propertyId}/inventory/drafts/${draftId}/dismiss`, {});
   return res.data;
 }
+
+export async function lookupInventoryBarcode(
+  propertyId: string,
+  code: string
+): Promise<BarcodeLookupResult> {
+  const path = `/api/properties/${propertyId}/inventory/barcode/lookup`;
+  const res: any = await api.post(path, { code });
+
+  // normalize across api wrapper shapes
+  const raw = res?.data ?? res?.body ?? res?.payload ?? res?.result ?? res;
+  if (!raw || typeof raw !== 'object') return { upc: code } as any;
+
+  return raw as BarcodeLookupResult;
+}
