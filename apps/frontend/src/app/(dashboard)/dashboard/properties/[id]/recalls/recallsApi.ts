@@ -2,6 +2,11 @@
 import { api } from '@/lib/api/client';
 import type { ListPropertyRecallsResponse, RecallResolutionType, RecallMatchDTO } from '@/types/recalls.types';
 
+
+export type ListInventoryItemRecallsResponse = {
+  matches: RecallMatchDTO[];
+};
+
 export async function listPropertyRecalls(propertyId: string): Promise<ListPropertyRecallsResponse> {
   const res = await api.get<ListPropertyRecallsResponse>(`/api/properties/${propertyId}/recalls`);
   return res.data;
@@ -32,13 +37,11 @@ export async function resolveRecallMatch(params: {
   );
   return res.data;
 }
-
 export async function listInventoryItemRecalls(
   propertyId: string,
   inventoryItemId: string
-): Promise<{ recallMatches: RecallMatchDTO[] }> {
-  const res = await api.get<{ recallMatches: RecallMatchDTO[] }>(
-    `/api/properties/${propertyId}/inventory/${inventoryItemId}/recalls`
-  );
+): Promise<ListInventoryItemRecallsResponse> {
+  // IMPORTANT: backend returns { matches: [...] }
+  const res = await api.get<ListInventoryItemRecallsResponse>(`/api/properties/${propertyId}/inventory/${inventoryItemId}/recalls`);
   return res.data;
 }

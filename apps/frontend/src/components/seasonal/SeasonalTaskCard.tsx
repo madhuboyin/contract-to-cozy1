@@ -240,23 +240,25 @@ export function SeasonalTaskCard({
           )}
 
           {/* Actions */}
-          <div className="flex items-center gap-3 pt-2 border-t">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-2 border-t">
             {!isAdded ? (
               <>
                 <Button
                   onClick={handleAddToMaintenance}
                   disabled={isLoading}
-                  className="flex-1"
+                  size="sm"
+                  className="flex-1 text-xs sm:text-sm"
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Adding...
+                      <Loader2 className="h-4 w-4 mr-1 sm:mr-2 animate-spin shrink-0" />
+                      <span>Adding...</span>
                     </>
                   ) : (
                     <>
-                      <Check className="h-4 w-4 mr-2" />
-                      Add to Maintenance
+                      <Check className="h-4 w-4 mr-1 sm:mr-2 shrink-0" />
+                      <span className="hidden sm:inline">Add to Maintenance</span>
+                      <span className="sm:hidden">Add to Maintenance</span>
                     </>
                   )}
                 </Button>
@@ -265,16 +267,25 @@ export function SeasonalTaskCard({
                   variant="outline"
                   onClick={handleDismiss}
                   disabled={isLoading}
+                  size="sm"
+                  className="text-xs sm:text-sm"
                 >
-                  <X className="h-4 w-4 mr-2" />
+                  <X className="h-4 w-4 mr-1 sm:mr-2 shrink-0" />
                   Dismiss
                 </Button>
               </>
             ) : (
               <>
-                <div className="flex-1 flex items-center gap-2 text-sm text-green-700">
-                  <CheckCircle2 className="h-4 w-4" />
+                {/* Status text - hidden on mobile, visible on desktop */}
+                <div className="hidden sm:flex flex-1 items-center gap-2 text-sm text-green-700">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
                   <span>This task is in your maintenance schedule</span>
+                </div>
+                
+                {/* Mobile: just show the remove button full width */}
+                <div className="flex sm:hidden items-center gap-2 text-xs text-green-700 mb-1">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span>Added to schedule</span>
                 </div>
 
                 <Button
@@ -282,16 +293,18 @@ export function SeasonalTaskCard({
                   onClick={handleRemoveFromMaintenance}
                   disabled={isLoading}
                   size="sm"
+                  className="text-xs sm:text-sm w-full sm:w-auto"
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Removing...
+                      <Loader2 className="h-4 w-4 mr-1 sm:mr-2 animate-spin shrink-0" />
+                      <span className="hidden sm:inline">Removing...</span>
+                      <span className="sm:hidden">Removing...</span>
                     </>
                   ) : (
                     <>
-                      <X className="h-4 w-4 mr-2" />
-                      Remove
+                      <X className="h-4 w-4 mr-1 sm:mr-2 shrink-0" />
+                      <span>Remove</span>
                     </>
                   )}
                 </Button>

@@ -25,13 +25,13 @@ export default function InventoryItemRecallPanel(props: {
 
   async function refresh() {
     if (!props.propertyId || !props.inventoryItemId) return;
-    
+  
     setLoading(true);
     setError(null);
     try {
       const res = await listInventoryItemRecalls(props.propertyId, props.inventoryItemId);
-      // ✅ FIX: Ensure we never map over undefined
-      setRows(res?.recallMatches ?? []);
+      // ✅ backend returns { matches: [...] }
+      setRows(res?.matches ?? []);
     } catch (e: any) {
       console.error('Recall fetch error:', e);
       setError(e?.message || 'Failed to load recall alerts');
@@ -40,12 +40,24 @@ export default function InventoryItemRecallPanel(props: {
       setLoading(false);
     }
   }
+  console.log('rows', rows);
 
   useEffect(() => {
     if (!props.open) return;
+
     refresh();
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.open, props.inventoryItemId]);
+  }, [props.open, props.propertyId, props.inventoryItemId]);
+
+  useEffect(() => {
+    // Optional: when closing modal, clear state so next open is clean
+    if (!props.open) {
+      setError(null);
+      setRows([]);
+      setResolveFor(null);
+    }
+  }, [props.open]);
 
   async function onConfirm(id: string) {
     try {
@@ -66,8 +78,10 @@ export default function InventoryItemRecallPanel(props: {
     }
   }
 
-  // ✅ FIX: Payload keys matched to the expected API signature
-  async function onResolve(id: string, payload: { resolutionType: RecallResolutionType; resolutionNotes?: string }) {
+  async function onResolve(
+    id: string,
+    payload: { resolutionType: RecallResolutionType; resolutionNotes?: string }
+  ) {
     try {
       await resolveRecallMatch({
         propertyId: props.propertyId,
@@ -81,29 +95,38 @@ export default function InventoryItemRecallPanel(props: {
     }
   }
 
-  const safeRows = rows || [];
+  const safeRows = rows ?? [];
+
+  // Optional: if you only want to show actionable statuses in this panel:
+  // const visibleRows = safeRows.filter(m => m.status === 'OPEN' || m.status === 'DETECTED' || m.status === 'NEEDS_CONFIRMATION');
+  const visibleRows = safeRows.filter(m =>
+    ['OPEN', 'DETECTED', 'NEEDS_CONFIRMATION'].includes(m.status as any)
+  );
+  console.log('visibleRows', visibleRows);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-slate-900 text-sm">Safety / Recall Alerts</h3>
-        {loading && <span className="text-[10px] text-slate-400 animate-pulse font-medium uppercase tracking-wider">Scanning...</span>}
+        {loading && (
+          <span className="text-[10px] text-slate-400 animate-pulse font-medium uppercase tracking-wider">
+            Scanning...
+          </span>
+        )}
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-xs text-red-700">
-          {error}
-        </div>
+        <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-xs text-red-700">{error}</div>
       ) : null}
 
-      {!loading && safeRows.length === 0 ? (
+      {!loading && visibleRows.length === 0 ? (
         <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-6 text-center">
           <p className="text-xs text-slate-500 font-medium">No active recalls found</p>
           <p className="mt-1 text-[10px] text-slate-400">We monitor CPSC data for your appliance models.</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {safeRows.map((m) => (
+          {visibleRows.map((m) => (
             <div
               key={m.id}
               className="rounded-xl border border-black/5 bg-white p-4 shadow-sm transition-all hover:shadow-md"
@@ -177,9 +200,7 @@ export default function InventoryItemRecallPanel(props: {
                 ) : null}
 
                 {m.maintenanceTaskId && (
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
-                    • Linked to Task
-                  </div>
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">• Linked to Task</div>
                 )}
               </div>
             </div>
