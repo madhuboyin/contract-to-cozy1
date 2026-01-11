@@ -7,7 +7,6 @@ import DocumentPickerModal from './DocumentPickerModal';
 import InventoryItemRecallPanel from './InventoryItemRecallPanel';
 import BarcodeScannerModal, { BarcodeLookupResult } from './BarcodeScannerModal';
 import LabelOcrModal from './LabelOcrModal';
-import { ocrLabelToDraft, confirmInventoryDraft, dismissInventoryDraft } from './inventoryApi';
 
 import {
   createInventoryItem,
@@ -20,6 +19,9 @@ import {
   getDocumentAssetSuggestions,
   listPropertyWarranties,
   listPropertyInsurancePolicies,
+  ocrLabelToDraft,
+  confirmInventoryDraft,
+  dismissInventoryDraft,
 } from '../../inventory/inventoryApi';
 
 const CATEGORIES: InventoryItemCategory[] = [

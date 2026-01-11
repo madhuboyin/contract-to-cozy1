@@ -25,7 +25,6 @@ import {
   deleteItem,
   linkDocumentToItem,
   unlinkDocumentFromItem,
-  lookupBarcode,
 } from '../controllers/inventory.controller';
 
 import {
@@ -323,12 +322,6 @@ router.post(
   '/properties/:propertyId/inventory/import-batches/:batchId/rollback',
   propertyAuthMiddleware,
   rollbackImportBatch
-);
-
-router.get(
-  '/properties/:propertyId/inventory/barcode/lookup',
-  propertyAuthMiddleware,
-  lookupBarcode
 );
 
 

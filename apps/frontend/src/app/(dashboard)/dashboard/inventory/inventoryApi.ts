@@ -1,20 +1,58 @@
 // apps/frontend/src/app/(dashboard)/dashboard/inventory/inventoryApi.ts
 import { api } from '@/lib/api/client';
-import { InventoryItem, InventoryRoom, InventoryItemCategory } from '@/types';
-
-// -------- Rooms --------
+import type { InventoryItem, InventoryRoom, InventoryItemCategory } from '@/types';
 
 /**
- * Fetches all rooms for a specific property.
+ * ----------------------------
+ * Types (Phase 2 / Phase 3)
+ * ----------------------------
  */
+
+export type BarcodeLookupResult = {
+  name?: string;
+  manufacturer?: string;
+  modelNumber?: string;
+  upc?: string;
+  sku?: string;
+  categoryHint?: string;
+  imageUrl?: string;
+  // allow unknown extra fields
+  [k: string]: any;
+};
+
+export type InventoryOcrDraftResponse = {
+  sessionId?: string;
+  draftId: string;
+  extracted: {
+    manufacturer?: string | null;
+    modelNumber?: string | null;
+    serialNumber?: string | null;
+  };
+  confidence: Record<string, number>;
+  rawText?: string;
+};
+
+export type InventoryDraftListItem = {
+  id: string;
+  status?: string;
+  createdAt?: string;
+  extracted?: any;
+  confidence?: Record<string, number>;
+  // allow unknown extra fields
+  [k: string]: any;
+};
+
+/**
+ * ----------------------------
+ * Rooms
+ * ----------------------------
+ */
+
 export async function listInventoryRooms(propertyId: string) {
   const res = await api.get<{ rooms: InventoryRoom[] }>(`/api/properties/${propertyId}/inventory/rooms`);
   return res.data.rooms;
 }
 
-/**
- * Creates a new room in the inventory.
- */
 export async function createInventoryRoom(
   propertyId: string,
   body: { name: string; floorLevel?: number | null; sortOrder?: number }
@@ -23,9 +61,6 @@ export async function createInventoryRoom(
   return res.data.room;
 }
 
-/**
- * Updates an existing room's details.
- */
 export async function updateInventoryRoom(
   propertyId: string,
   roomId: string,
@@ -35,112 +70,89 @@ export async function updateInventoryRoom(
   return res.data.room;
 }
 
-/**
- * Deletes a room from the inventory.
- */
 export async function deleteInventoryRoom(propertyId: string, roomId: string) {
   await api.delete(`/api/properties/${propertyId}/inventory/rooms/${roomId}`);
 }
 
-// -------- Items --------
-
 /**
- * Lists inventory items based on filters.
+ * ----------------------------
+ * Items
+ * ----------------------------
  */
+
 export async function listInventoryItems(
-  propertyId: string, 
-  params: { q?: string; roomId?: string; category?: InventoryItemCategory; hasDocuments?: boolean; hasRecallAlerts?: boolean }
+  propertyId: string,
+  params: {
+    q?: string;
+    roomId?: string;
+    category?: InventoryItemCategory;
+    hasDocuments?: boolean;
+    hasRecallAlerts?: boolean;
+  }
 ) {
-  // Create a clean copy of parameters
   const cleanParams: any = { ...params };
 
-  // If roomId is 'ALL', undefined, or an empty string, remove it 
-  // so the backend returns all items for the property regardless of room.
+  // roomId='ALL' => treat as no room filter
   if (!cleanParams.roomId || cleanParams.roomId === 'ALL') {
     delete cleanParams.roomId;
   }
 
-  // Use the cleaned params for the API call
-  const res = await api.get<{ items: InventoryItem[] }>(
-    `/api/properties/${propertyId}/inventory/items`, 
-    { params: cleanParams }
-  );
-  
+  const res = await api.get<{ items: InventoryItem[] }>(`/api/properties/${propertyId}/inventory/items`, {
+    params: cleanParams,
+  });
+
   return res.data.items;
 }
 
-/**
- * Creates a new inventory item.
- */
 export async function createInventoryItem(propertyId: string, body: any) {
   const res = await api.post<{ item: InventoryItem }>(`/api/properties/${propertyId}/inventory/items`, body);
   return res.data.item;
 }
 
-/**
- * Updates an inventory item's details.
- */
 export async function updateInventoryItem(propertyId: string, itemId: string, body: any) {
   const res = await api.patch<{ item: InventoryItem }>(`/api/properties/${propertyId}/inventory/items/${itemId}`, body);
   return res.data.item;
 }
 
-/**
- * Deletes an item from the inventory.
- */
 export async function deleteInventoryItem(propertyId: string, itemId: string) {
   await api.delete(`/api/properties/${propertyId}/inventory/items/${itemId}`);
 }
 
-/**
- * Fetches a single inventory item.
- */
 export async function getInventoryItem(propertyId: string, itemId: string) {
   const res = await api.get<{ item: InventoryItem }>(`/api/properties/${propertyId}/inventory/items/${itemId}`);
   return res.data.item;
 }
 
-// -------- Documents & Linking --------
-
 /**
- * Links an existing document to an inventory item.
+ * ----------------------------
+ * Documents & Linking
+ * ----------------------------
  */
+
 export async function linkDocumentToInventoryItem(propertyId: string, itemId: string, documentId: string) {
   const res = await api.post<any>(`/api/properties/${propertyId}/inventory/items/${itemId}/documents`, { documentId });
   return res.data.document;
 }
 
-/**
- * Unlinks a document from an inventory item.
- */
 export async function unlinkDocumentFromInventoryItem(propertyId: string, itemId: string, documentId: string) {
   await api.delete(`/api/properties/${propertyId}/inventory/items/${itemId}/documents/${documentId}`);
 }
 
-/**
- * Lists documents available for a specific property.
- */
 export async function listPropertyDocuments(propertyId: string, q?: string) {
   const res = await api.get<{ documents: any[] }>(`/api/properties/${propertyId}/documents`, { params: { q } });
   return res.data.documents;
 }
 
-/**
- * Lists all documents for the current user.
- */
 export async function listUserDocuments() {
   const res = await api.get<{ documents: any[] }>('/api/documents');
   return res.data.documents;
 }
 
 /**
- * Uploads a document and analyzes it using AI.
+ * Uploads a document and analyzes it using your existing api client helper.
+ * NOTE: this depends on your api client implementing analyzeDocument().
  */
-export async function uploadAndAnalyzeDocument(args: {
-  file: File;
-  propertyId: string;
-  autoCreateWarranty?: boolean;
-}) {
+export async function uploadAndAnalyzeDocument(args: { file: File; propertyId: string; autoCreateWarranty?: boolean }) {
   const res = await api.analyzeDocument(args.file, args.propertyId, args.autoCreateWarranty);
   if (!res.success) {
     throw new Error(res.message || 'Failed to analyze document');
@@ -148,63 +160,98 @@ export async function uploadAndAnalyzeDocument(args: {
   return res.data;
 }
 
-/**
- * Fetches AI-powered asset suggestions from a specific document.
- */
 export async function getDocumentAssetSuggestions(documentId: string, propertyId: string) {
-  const res = await api.get<{ suggestions: any[] }>(`/api/documents/${documentId}/asset-suggestions`, { params: { propertyId } });
+  const res = await api.get<any>(`/api/documents/${documentId}/asset-suggestions`, { params: { propertyId } });
   return res.data;
 }
 
-// -------- Additional Helpers --------
 /**
- * Lists all warranties associated ONLY with the specific property.
+ * ----------------------------
+ * Coverage helpers
+ * ----------------------------
  */
+
 export async function listPropertyWarranties(propertyId: string) {
-  // Directly targeting the property-nested endpoint to ensure backend filtering
-  const res = await api.get<{ warranties: any[] }>(`/api/properties/${propertyId}/warranties`);
-  
-  // The central API client handles 'success' checks, 
-  // so we can return the data directly.
-  return res.data.warranties;
+  const res = await api.get<any>(`/api/properties/${propertyId}/warranties`);
+  return res.data.warranties ?? res.data.items ?? [];
 }
 
 /**
- * Lists all insurance policies associated ONLY with the specific property.
+ * Your backend has used different paths historically; be defensive.
+ * Prefer /insurance-policies if you have it, otherwise fallback to /insurance.
  */
 export async function listPropertyInsurancePolicies(propertyId: string) {
-  // Directly targeting the property-nested endpoint to ensure backend filtering
-  const res = await api.get<{ policies: any[] }>(`/api/properties/${propertyId}/insurance`);
-  
-  return res.data.policies;
+  try {
+    const res = await api.get<any>(`/api/properties/${propertyId}/insurance-policies`);
+    return res.data.policies ?? res.data.items ?? [];
+  } catch {
+    const res = await api.get<any>(`/api/properties/${propertyId}/insurance`);
+    return res.data.policies ?? res.data.items ?? [];
+  }
 }
 
+/**
+ * ----------------------------
+ * Export
+ * ----------------------------
+ */
+
 export async function downloadInventoryExport(propertyId: string) {
-  // Use the standard api client which includes the Authorization header automatically
   const res = await api.get<Blob>(`/api/properties/${propertyId}/inventory/export?format=csv`, {
-    responseType: 'blob' // Tells the client to return binary data
+    responseType: 'blob',
   });
 
-  // Create a blob URL and trigger download
   const url = window.URL.createObjectURL(res.data);
   const link = document.createElement('a');
   link.href = url;
   link.setAttribute('download', `inventory-${propertyId}.csv`);
   document.body.appendChild(link);
   link.click();
-  
-  // Cleanup
   link.remove();
   window.URL.revokeObjectURL(url);
 }
 
 /**
- * Looks up product information by barcode.
+ * ----------------------------
+ * Phase 2 — Barcode lookup
+ * ----------------------------
+ * Contract (recommended):
+ * POST /api/properties/:propertyId/inventory/barcode/lookup
+ * body: { code }
  */
-export async function lookupBarcode(propertyId: string, code: string) {
-  const res = await api.get<{ provider: string; code: string; found: boolean; suggestion?: any; raw?: any }>(
-    `/api/properties/${propertyId}/inventory/barcode/lookup?code=${encodeURIComponent(code)}`
-  );
-  // Backend returns { success: true, data: {...} }, api.get unwraps to { data: {...} }
+export async function lookupBarcode(propertyId: string, code: string): Promise<BarcodeLookupResult> {
+  const res = await api.post(`/api/properties/${propertyId}/inventory/barcode/lookup`, { code });
+  // UI is defensive; return whatever shape backend sends
+  return (res.data?.data ?? res.data) as BarcodeLookupResult;
+}
+
+/**
+ * ----------------------------
+ * Phase 3 — OCR Label -> Draft
+ * ----------------------------
+ * POST /api/properties/:propertyId/inventory/ocr/label
+ * multipart: image=<file>
+ */
+export async function ocrLabelToDraft(propertyId: string, file: File): Promise<InventoryOcrDraftResponse> {
+  const form = new FormData();
+  form.append('image', file);
+
+  const res = await api.post(`/api/properties/${propertyId}/inventory/ocr/label`, form);
+
+  return res.data as InventoryOcrDraftResponse;
+}
+
+export async function listInventoryDrafts(propertyId: string): Promise<InventoryDraftListItem[]> {
+  const res = await api.get(`/api/properties/${propertyId}/inventory/drafts`);
+  return (res.data?.drafts ?? res.data?.items ?? res.data) as InventoryDraftListItem[];
+}
+
+export async function confirmInventoryDraft(propertyId: string, draftId: string) {
+  const res = await api.post(`/api/properties/${propertyId}/inventory/drafts/${draftId}/confirm`, {});
+  return res.data?.item ?? res.data;
+}
+
+export async function dismissInventoryDraft(propertyId: string, draftId: string) {
+  const res = await api.post(`/api/properties/${propertyId}/inventory/drafts/${draftId}/dismiss`, {});
   return res.data;
 }
