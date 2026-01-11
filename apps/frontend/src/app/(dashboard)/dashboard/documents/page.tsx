@@ -600,14 +600,14 @@ export default function DocumentsPage() {
             <ArrowLeft className="h-4 w-4 mr-1" /> Back
         </Button>
       )}      
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <FileText className="w-7 h-7 text-purple-600" /> Document Vault
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
+            <FileText className="w-6 h-6 sm:w-7 sm:h-7 text-purple-600" /> Document Vault
           </h2>
           <p className="text-muted-foreground mt-1">Centralized repository with AI-powered analysis</p>
         </div>
-        <Button onClick={() => setIsUploadModalOpen(true)}>
+        <Button onClick={() => setIsUploadModalOpen(true)} className="w-full sm:w-auto">
           <Plus className="w-4 h-4 mr-2" /> Upload New Document
         </Button>
       </div>

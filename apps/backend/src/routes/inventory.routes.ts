@@ -47,6 +47,8 @@ import {
   dismissDraft,
   confirmDraft,
 } from '../controllers/inventoryOcr.controller';
+import { ocrRateLimiter } from '../middleware/ocrRateLimiter.middleware';
+import { requirePremiumForOcr } from '../middleware/premiumOcrGate.middleware';
 
 const router = Router();
 
@@ -324,6 +326,11 @@ router.post(
   rollbackImportBatch
 );
 
+router.post(
+  '/properties/:propertyId/inventory/barcode/lookup',
+  propertyAuthMiddleware,
+  barcodeLookupHandler
+);
 
 router.get(
   '/properties/:propertyId/inventory/barcode/lookup',
@@ -331,11 +338,6 @@ router.get(
   barcodeLookupHandler
 );
 
-router.post(
-  '/properties/:propertyId/inventory/barcode/lookup',
-  propertyAuthMiddleware,
-  barcodeLookupHandler
-);
 async function barcodeLookupHandler(req: CustomRequest, res: Response) {
   const code =
     (req.body && (req.body as any).code) ||
@@ -347,32 +349,50 @@ async function barcodeLookupHandler(req: CustomRequest, res: Response) {
     return res.status(400).json({ message: 'code is required' });
   }
 
-  const result = await inventoryService.lookupBarcode(clean);
+  try {
+    const result = await inventoryService.lookupBarcode(clean);
 
-  // result is: { provider, code, found, suggestion, raw }
-  const s = (result as any)?.suggestion;
+    // result is: { provider, code, found, suggestion, raw }
+    const s = (result as any)?.suggestion;
 
-  // Flatten to what the UI expects (defensive)
-  const payload = {
-    name: s?.title ?? null,
-    manufacturer: s?.brand ?? null,
-    modelNumber: s?.model ?? null,
-    upc: (result as any)?.code ?? null,
-    sku: null,
-    categoryHint: s?.category ?? null,
-    imageUrl: Array.isArray(s?.images) && s.images.length ? s.images[0] : null,
-  };
+    // Flatten to what the UI expects (defensive)
+    const payload = {
+      name: s?.title ?? null,
+      manufacturer: s?.brand ?? null,
+      modelNumber: s?.model ?? null,
+      upc: (result as any)?.code ?? clean,
+      sku: null,
+      categoryHint: s?.category ?? null,
+      imageUrl: Array.isArray(s?.images) && s.images.length ? s.images[0] : null,
+    };
 
-  return res.json(payload);
+    return res.json(payload);
+  } catch (err: any) {
+    // IMPORTANT: prevent process crash / upstream reset -> 502 at gateway
+    console.error('[INVENTORY] barcode lookup failed:', err);
+
+    // Return a proper JSON error from Express (will include CORS headers)
+    return res.status(502).json({
+      message: 'Barcode lookup failed',
+      code: 'BARCODE_LOOKUP_FAILED',
+      detail: err?.message || 'Unknown error',
+    });
+  }
 }
 
 // ✅ Phase 3 — OCR label -> Draft
 router.post(
   '/properties/:propertyId/inventory/ocr/label',
   propertyAuthMiddleware,
-  upload.single('file'),
+  ocrRateLimiter,
+  requirePremiumForOcr,
+  upload.fields([
+    { name: 'image', maxCount: 1 },
+    { name: 'file', maxCount: 1 },
+  ]),
   ocrLabelToDraft
 );
+
 
 // ✅ Drafts
 router.get(

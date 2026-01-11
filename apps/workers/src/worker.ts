@@ -29,6 +29,8 @@ import { recallIngestJob, RECALL_INGEST_JOB } from './jobs/recallIngest.job';
 import { recallMatchJob, RECALL_MATCH_JOB } from './jobs/recallMatch.job';
 import { coverageLapseIncidentsJob } from './jobs/coverageLapseIncidents.job';
 import { freezeRiskIncidentsJob } from './jobs/freezeRiskIncidents.job';
+import { cleanupInventoryDraftsJob } from './jobs/cleanupInventoryDrafts.job';
+
 
 
 const prisma = new PrismaClient();
@@ -685,6 +687,21 @@ console.log('[COVERAGE-LAPSE] Coverage Lapse Incidents job scheduled for 8:00 AM
 cron.schedule('0 9 * * *', freezeRiskIncidentsJob, { timezone: 'America/New_York' });
 console.log('[FREEZE-RISK] Freeze Risk Incidents job scheduled for 8:00 AM EST');
 
+// =============================================================================
+// INVENTORY DRAFT CLEANUP (Phase 3 hardening)
+// =============================================================================
+cron.schedule(
+  '30 3 * * *', // 3:30 AM daily (NY time)
+  async () => {
+    try {
+      await cleanupInventoryDraftsJob();
+    } catch (err) {
+      console.error('[INVENTORY-DRAFT-CLEANUP] Failed:', err);
+    }
+  },
+  { timezone: 'America/New_York' }
+);
+console.log('[INVENTORY-DRAFT-CLEANUP] Scheduled for 3:30 AM America/New_York');
 
 // Start the worker
 startWorker();
