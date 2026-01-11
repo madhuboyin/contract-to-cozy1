@@ -197,3 +197,14 @@ export async function downloadInventoryExport(propertyId: string) {
   link.remove();
   window.URL.revokeObjectURL(url);
 }
+
+/**
+ * Looks up product information by barcode.
+ */
+export async function lookupBarcode(propertyId: string, code: string) {
+  const res = await api.get<{ provider: string; code: string; found: boolean; suggestion?: any; raw?: any }>(
+    `/api/properties/${propertyId}/inventory/barcode/lookup?code=${encodeURIComponent(code)}`
+  );
+  // Backend returns { success: true, data: {...} }, api.get unwraps to { data: {...} }
+  return res.data;
+}
