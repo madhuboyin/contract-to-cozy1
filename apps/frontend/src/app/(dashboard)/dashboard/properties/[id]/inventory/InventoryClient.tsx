@@ -14,6 +14,7 @@ import InventoryFilters from '../../../components/inventory/InventoryFilters';
 import InventoryRoomChips from '../../../components/inventory/InventoryRoomChips';
 import InventoryItemCard from '../../../components/inventory/InventoryItemCard';
 import { SectionHeader } from '../../../components/SectionHeader';
+import { listPropertyRecalls } from '../recalls/recallsApi';
 
 export default function InventoryClient() {
   const params = useParams<{ id: string }>();
@@ -42,6 +43,9 @@ export default function InventoryClient() {
   const [showOnlyGaps, setShowOnlyGaps] = React.useState(false);
   const [hasRecallAlerts, setHasRecallAlerts] = useState<boolean | undefined>(undefined);
   const [autoOpenedFromUrl, setAutoOpenedFromUrl] = useState(false);
+
+  const [recallMatchesByItemId, setRecallMatchesByItemId] = useState<Record<string, any[]>>({});
+  const [recallsLoading, setRecallsLoading] = useState(false);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -78,18 +82,32 @@ export default function InventoryClient() {
   async function refreshAll() {
     if (!propertyId) return;
     setLoading(true);
+  
     try {
-      const [r, it] = await Promise.all([
+      const [r, it, recalls] = await Promise.all([
         listInventoryRooms(propertyId),
-        listInventoryItems(propertyId, { q, roomId, category, hasDocuments, hasRecallAlerts}),
-        
+        // ⛔️ remove hasRecallAlerts from server call (we’ll filter in UI)
+        listInventoryItems(propertyId, { q, roomId, category, hasDocuments }),
+        listPropertyRecalls(propertyId),
       ]);
+  
       setRooms(r);
       setItems(it);
+  
+      // Handle both shapes defensively: { matches } (new) or { recallMatches } (old)
+      const matches = (recalls as any)?.matches ?? (recalls as any)?.recallMatches ?? [];
+      const map: Record<string, any[]> = {};
+      for (const m of matches) {
+        const id = m?.inventoryItemId;
+        if (!id) continue;
+        (map[id] ||= []).push(m);
+      }
+      setRecallMatchesByItemId(map);
     } finally {
       setLoading(false);
     }
   }
+  
 
   async function handleExport() {
     try {
@@ -117,12 +135,12 @@ export default function InventoryClient() {
     }
   }, [openItemId, items, autoOpenedFromUrl]);
   
-  
 
   useEffect(() => {
     refreshAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, roomId, category, hasDocuments, hasRecallAlerts]);
+  }, [q, roomId, category, hasDocuments]);
+  
 
   const roomOptions = useMemo(
     () => [{ id: 'ALL', name: 'All Rooms' }, ...rooms.map((r) => ({ id: r.id, name: r.name }))],
@@ -130,9 +148,26 @@ export default function InventoryClient() {
   );
 
   const visibleItems = useMemo(() => {
-    if (!showOnlyGaps) return items;
-    return items.filter((it) => gapIds.has(it.id));
-  }, [items, showOnlyGaps, gapIds]);
+    let out = items;
+  
+    // gap filter
+    if (showOnlyGaps) {
+      out = out.filter((it) => gapIds.has(it.id));
+    }
+  
+    // ✅ recall alerts filter (OPEN only)
+    if (hasRecallAlerts !== undefined) {
+      out = out.filter((it) => {
+        const matches = recallMatchesByItemId[it.id] ?? [];
+        const hasOpen = matches.some((m) => m?.status === 'OPEN');
+  
+        return hasRecallAlerts ? hasOpen : !hasOpen;
+      });
+    }
+  
+    return out;
+  }, [items, showOnlyGaps, gapIds, hasRecallAlerts, recallMatchesByItemId]);
+  
 
   function onAdd() {
     setEditingItem(null);
