@@ -338,42 +338,85 @@ router.get(
   barcodeLookupHandler
 );
 
+function normalizeBarcode(input: any): { raw: string; digits: string; normalized: string } {
+  const raw = String(input ?? '').trim();
+
+  // Keep digits only (preserve leading zeros)
+  const digits = raw.replace(/\D/g, '');
+
+  // “normalized” is what we send to providers
+  // Keep conservative: if it's too short, still pass through digits to allow provider to decide.
+  // If empty digits but raw exists (rare), pass raw.
+  const normalized = digits || raw;
+
+  return { raw, digits, normalized };
+}
+
+function shouldIncludeDiagnostics(req: CustomRequest): boolean {
+  // Only include diagnostics when explicitly requested + enabled
+  const debugFlag =
+    String((req.query as any)?.debug ?? '').toLowerCase() === '1' ||
+    String((req.query as any)?.debug ?? '').toLowerCase() === 'true';
+
+  const envEnabled =
+    String(process.env.INVENTORY_BARCODE_DIAGNOSTICS ?? '').toLowerCase() === '1' ||
+    String(process.env.INVENTORY_BARCODE_DIAGNOSTICS ?? '').toLowerCase() === 'true';
+
+  return debugFlag && envEnabled;
+}
+
 async function barcodeLookupHandler(req: CustomRequest, res: Response) {
   const code =
     (req.body && (req.body as any).code) ||
+    (req.body && (req.body as any).upc) ||
     (req.query && (req.query as any).code) ||
+    (req.query && (req.query as any).upc) ||
     '';
 
-  const clean = String(code || '').trim();
-  if (!clean) {
+  const { raw, digits, normalized } = normalizeBarcode(code);
+
+  if (!normalized) {
     return res.status(400).json({
       success: false,
       message: 'code is required',
-      code: 'CODE_REQUIRED',
+      code: 'BARCODE_REQUIRED',
     });
   }
 
-  try {
-    const result = await inventoryService.lookupBarcode(clean);
+  const includeDiag = shouldIncludeDiagnostics(req);
 
-    // result is: { provider, code, found, suggestion, raw }
+  try {
+    const result = await inventoryService.lookupBarcode(normalized);
+
+    // result is expected: { provider, code, found, suggestion, raw }
     const s = (result as any)?.suggestion;
 
-    const payload = {
+    const data = {
       name: s?.title ?? null,
       manufacturer: s?.brand ?? null,
       modelNumber: s?.model ?? null,
-      upc: (result as any)?.code ?? clean,
+      upc: String((result as any)?.code ?? digits ?? normalized ?? raw),
       sku: null,
       categoryHint: s?.category ?? null,
       imageUrl: Array.isArray(s?.images) && s.images.length ? s.images[0] : null,
     };
 
-    // ✅ IMPORTANT: wrap in {data: ...} so frontend api client unwraps correctly
-    return res.json({
-      success: true,
-      data: payload,
-    });
+    // Optional diagnostics (kept out of normal responses)
+    if (includeDiag) {
+      return res.json({
+        success: true,
+        data,
+        diagnostics: {
+          input: { raw, digits, normalized },
+          provider: (result as any)?.provider ?? null,
+          found: (result as any)?.found ?? null,
+          // Keep raw payload minimal; it can be large
+          rawKeys: (result && typeof result === 'object') ? Object.keys(result as any) : [],
+        },
+      });
+    }
+
+    return res.json({ success: true, data });
   } catch (err: any) {
     console.error('[INVENTORY] barcode lookup failed:', err);
 
@@ -382,10 +425,12 @@ async function barcodeLookupHandler(req: CustomRequest, res: Response) {
       message: 'Barcode lookup failed',
       code: 'BARCODE_LOOKUP_FAILED',
       detail: err?.message || 'Unknown error',
+      ...(includeDiag
+        ? { diagnostics: { input: { raw, digits, normalized } } }
+        : {}),
     });
   }
 }
-
 
 // ✅ Phase 3 — OCR label -> Draft
 router.post(

@@ -8,7 +8,7 @@ import DocumentPickerModal from './DocumentPickerModal';
 import InventoryItemRecallPanel from './InventoryItemRecallPanel';
 import BarcodeScannerModal, { BarcodeLookupResult } from './BarcodeScannerModal';
 import LabelOcrModal from './LabelOcrModal';
-import { lookupInventoryBarcode } from '../../inventory/inventoryApi';
+import { lookupBarcode as lookupInventoryBarcode } from '../../inventory/inventoryApi';
 
 
 import {
@@ -324,51 +324,44 @@ export default function InventoryItemDrawer(props: {
     try {
       const data = await lookupInventoryBarcode(props.propertyId, trimmed);
   
-      console.log('[InventoryItemDrawer] barcode lookup response:', data);
+      // optional diagnostics log (keep it, but only in dev)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[InventoryItemDrawer] barcode lookup response:', data);
+      }
   
       setLastScannedCode(trimmed);
   
-      // Name
-      if (!touched.name && data.name) {
-        setName(String(data.name));
-      }
+      // name/category (best-effort)
+      if (!touched.name && !name.trim() && data?.name) setName(String(data.name));
+      if (!touched.category && category === 'OTHER') setCategory(inferCategoryFromLookup(data));
   
-      // Category (best-effort inference)
-      if (!touched.category && category === 'OTHER') {
-        setCategory(inferCategoryFromLookup(data));
-      }
+      // identifiers
+      if (!touched.manufacturer && data?.manufacturer) setManufacturer(String(data.manufacturer));
+      if (!touched.modelNumber && data?.modelNumber) setModelNumber(String(data.modelNumber));
   
-      // Product identifiers
-      if (!touched.manufacturer && data.manufacturer) {
-        setManufacturer(String(data.manufacturer));
-        if (!brand.trim()) setBrand(String(data.manufacturer));
-      }
+      // UPC always set unless user manually typed
+      if (!touched.upc) setUpc(String(data?.upc || trimmed));
   
-      if (!touched.modelNumber && data.modelNumber) {
-        setModelNumber(String(data.modelNumber));
-        if (!model.trim()) setModel(String(data.modelNumber));
-      }
+      if (!touched.sku && data?.sku) setSku(String(data.sku));
   
-      if (!touched.upc) {
-        setUpc(String(data.upc || trimmed));
-      }
-  
-      if (!touched.sku && data.sku) {
-        setSku(String(data.sku));
-      }
+      // legacy sync (optional)
+      if (!brand.trim() && data?.manufacturer) setBrand(String(data.manufacturer));
+      if (!model.trim() && data?.modelNumber) setModel(String(data.modelNumber));
   
       setScannerOpen(false);
     } catch (e: any) {
       console.error('Barcode lookup failed', e);
-      setLookupError(
-        e?.message ||
+      const msg =
         e?.response?.data?.message ||
-        'Barcode lookup failed'
-      );
+        e?.response?.data?.detail ||
+        e?.message ||
+        'Lookup failed';
+      setLookupError(msg);
     } finally {
       setLookupLoading(false);
     }
   }
+  
   
     
   async function runLabelOcr(file: File) {

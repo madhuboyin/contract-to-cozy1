@@ -220,10 +220,31 @@ export async function downloadInventoryExport(propertyId: string) {
  * body: { code }
  */
 export async function lookupBarcode(propertyId: string, code: string): Promise<BarcodeLookupResult> {
-  const res = await api.post(`/api/properties/${propertyId}/inventory/barcode/lookup`, { code });
-  // UI is defensive; return whatever shape backend sends
-  return (res.data?.data ?? res.data) as BarcodeLookupResult;
+  const path = `/api/properties/${propertyId}/inventory/barcode/lookup`;
+  const res: any = await api.post(path, { code });
+
+  // Normalize across wrapper shapes (api client differences)
+  const top =
+    res?.data ??
+    res?.body ??
+    res?.payload ??
+    res?.result ??
+    res;
+
+  // If backend returns { success, data }
+  const raw =
+    top?.data && typeof top?.data === 'object'
+      ? top.data
+      : (top && typeof top === 'object' ? top : null);
+
+  if (!raw || typeof raw !== 'object') {
+    // Still return UPC so UI fills at least that
+    return { upc: code } as any;
+  }
+
+  return raw as BarcodeLookupResult;
 }
+
 
 /**
  * ----------------------------
