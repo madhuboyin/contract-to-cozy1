@@ -53,9 +53,9 @@ function centsToDollars(cents: number | null | undefined) {
  * Best-effort mapping from lookup category hint / name into your InventoryItemCategory enum.
  * Keep this conservative; user can still override.
  */
-function inferCategoryFromLookup(lookup: BarcodeLookupResult): InventoryItemCategory {
-  const hint = (lookup.categoryHint || '').toLowerCase();
-  const name = (lookup.name || '').toLowerCase();
+function inferCategoryFromLookup(lookup?: Partial<BarcodeLookupResult> | null): InventoryItemCategory {
+  const hint = String(lookup?.categoryHint || '').toLowerCase();
+  const name = String(lookup?.name || '').toLowerCase();
   const t = `${hint} ${name}`;
 
   if (t.includes('refrigerator') || t.includes('microwave') || t.includes('dishwasher') || t.includes('oven'))
@@ -71,6 +71,7 @@ function inferCategoryFromLookup(lookup: BarcodeLookupResult): InventoryItemCate
 
   return 'OTHER';
 }
+
 
 function pct(n?: number) {
   const v = typeof n === 'number' ? n : 0;
@@ -298,13 +299,16 @@ export default function InventoryItemDrawer(props: {
 
     try {
       const res = await api.post(LOOKUP_PATH, { code: trimmed });
-      const data: BarcodeLookupResult = res.data;
-
+      const raw = res?.data;
+      const data: Partial<BarcodeLookupResult> =
+        raw && typeof raw === 'object' ? raw : {};
+      
       setLastScannedCode(trimmed);
-
+      
       // name/category (best-effort)
-      if (!name.trim() && data?.name) setName(data.name);
+      if (!name.trim() && data?.name) setName(String(data.name));
       if (category === 'OTHER') setCategory(inferCategoryFromLookup(data));
+      
 
       // identifiers
       if (!manufacturer.trim() && data?.manufacturer) setManufacturer(data.manufacturer);
@@ -319,7 +323,12 @@ export default function InventoryItemDrawer(props: {
       setScannerOpen(false);
     } catch (e: any) {
       console.error('Barcode lookup failed', e);
-      setLookupError(e?.message || 'Lookup failed');
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.detail ||
+        e?.message ||
+        'Lookup failed';
+      setLookupError(msg);
     } finally {
       setLookupLoading(false);
     }

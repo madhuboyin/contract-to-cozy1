@@ -8,14 +8,32 @@ import { InventoryDraftService } from '../services/inventoryDraft.service';
 
 const draftSvc = new InventoryDraftService();
 
+function getUploadedImage(req: CustomRequest): Express.Multer.File | undefined {
+  // If a single() middleware was used somewhere
+  const single = (req as any).file as Express.Multer.File | undefined;
+  if (single?.buffer?.length) return single;
+
+  // With upload.fields(...)
+  const files = (req as any).files as Record<string, Express.Multer.File[]> | undefined;
+  const img = files?.image?.[0];
+  if (img?.buffer?.length) return img;
+
+  const file = files?.file?.[0];
+  if (file?.buffer?.length) return file;
+
+  return undefined;
+}
+
 export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
   const propertyId = req.params.propertyId;
   const userId = req.user?.userId;
 
   if (!userId) throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
 
-  const file = (req as any).file as Express.Multer.File | undefined;
-  if (!file?.buffer?.length) throw new APIError('image file is required', 400, 'OCR_IMAGE_REQUIRED');
+  const file = getUploadedImage(req);
+  if (!file?.buffer?.length) {
+    throw new APIError('image file is required', 400, 'OCR_IMAGE_REQUIRED');
+  }
 
   const ocr = await extractLabelFieldsFromImage(file.buffer);
 
