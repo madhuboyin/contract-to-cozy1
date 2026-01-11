@@ -370,7 +370,7 @@ async function barcodeLookupHandler(req: CustomRequest, res: Response) {
 router.post(
   '/properties/:propertyId/inventory/ocr/label',
   propertyAuthMiddleware,
-  upload.single('image'),
+  upload.single('file'),
   ocrLabelToDraft
 );
 
