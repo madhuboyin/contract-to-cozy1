@@ -2,6 +2,35 @@
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { InventoryItemCategory } from '@prisma/client';
+import crypto from 'crypto';
+
+function normalize(v: any) {
+  return String(v ?? '').trim().toLowerCase();
+}
+
+export function computeInventorySourceHash(input: {
+  propertyId: string;
+  roomName?: string;
+  name: string;
+  brand?: string;
+  model?: string;
+  serialNo?: string;
+  upc?: string;
+  sku?: string;
+}) {
+  const key = [
+    input.propertyId,
+    normalize(input.roomName),
+    normalize(input.name),
+    normalize(input.brand),
+    normalize(input.model),
+    normalize(input.serialNo),
+    normalize(input.upc),
+    normalize(input.sku),
+  ].join('|');
+
+  return crypto.createHash('sha256').update(key).digest('hex');
+}
 
 type ListItemsQuery = {
   q?: string;
@@ -277,6 +306,70 @@ export class InventoryService {
     await prisma.document.update({
       where: { id: documentId },
       data: { inventoryItemId: null },
+    });
+  }
+
+  // ---------------- Import Batches ----------------
+
+  async listImportBatches(propertyId: string) {
+    return prisma.inventoryImportBatch.findMany({
+      where: { propertyId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        fileName: true,
+        templateVersion: true,
+        status: true,
+        createdCount: true,
+        skippedCount: true,
+        errorCount: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  async rollbackImportBatch(propertyId: string, batchId: string) {
+    // Ensure batch belongs to property
+    const batch = await prisma.inventoryImportBatch.findFirst({
+      where: { id: batchId, propertyId },
+      select: { id: true },
+    });
+    if (!batch) throw new APIError('Import batch not found', 404, 'IMPORT_BATCH_NOT_FOUND');
+
+    return prisma.$transaction(async (tx) => {
+      // Find item ids first (needed to detach docs cleanly)
+      const items = await tx.inventoryItem.findMany({
+        where: { propertyId, sourceBatchId: batchId },
+        select: { id: true },
+      });
+
+      const itemIds = items.map((x) => x.id);
+
+      // Unlink documents (Document.inventoryItemId is SetNull in your codebase patterns)
+      if (itemIds.length > 0) {
+        await tx.document.updateMany({
+          where: { inventoryItemId: { in: itemIds } },
+          data: { inventoryItemId: null },
+        });
+      }
+
+      // Delete items created by batch
+      const deleted = await tx.inventoryItem.deleteMany({
+        where: { propertyId, sourceBatchId: batchId },
+      });
+
+      // Mark batch as rolled back (keep record) OR delete it
+      // ✅ Prefer keeping for audit/history
+      await tx.inventoryImportBatch.update({
+        where: { id: batchId },
+        data: { status: 'ROLLED_BACK' },
+      });
+
+      return {
+        batchId,
+        deletedCount: deleted.count,
+      };
     });
   }
 

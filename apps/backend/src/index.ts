@@ -53,6 +53,7 @@ import { insuranceQuoteRouter } from './routes/insuranceQuote.routes';
 import claimsRoutes from './routes/claims.routes';
 import incidentsRouter from './routes/incidents.routes';
 import recallsRoutes from './routes/recalls.routes';
+import inventoryImportRoutes from './routes/inventory.routes';  // FIX: inventoryImport.routes -> inventory.routes
 
 
 dotenv.config();
@@ -313,6 +314,7 @@ app.use('/api', insuranceQuoteRouter);
 app.use('/api', claimsRoutes);
 app.use('/api', incidentsRouter);
 app.use('/api', recallsRoutes);
+app.use('/api', inventoryImportRoutes);
 // 404 handler
 app.use((req: Request, res: Response) => {
   res.status(404).json({

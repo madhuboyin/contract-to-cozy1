@@ -143,3 +143,25 @@ export async function unlinkDocumentFromItem(req: CustomRequest, res: Response, 
     next(err);
   }
 }
+
+export async function listImportBatches(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const propertyId = req.params.propertyId;
+    const batches = await service.listImportBatches(propertyId);
+    res.json({ success: true, data: { batches } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function rollbackImportBatch(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const propertyId = req.params.propertyId;
+    const batchId = req.params.batchId;
+
+    const result = await service.rollbackImportBatch(propertyId, batchId);
+    res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}

@@ -78,6 +78,24 @@ export type InventoryItemCategory =
 
 export type InventoryItemCondition = 'NEW' | 'GOOD' | 'FAIR' | 'POOR' | 'UNKNOWN';
 
+export type ImportBatchStatus = 'COMPLETED' | 'PARTIAL' | 'FAILED' | 'ROLLED_BACK';
+
+export type InventoryImportBatch = {
+  id: string;
+  propertyId: string;
+  createdByUserId: string | null;
+  fileName: string | null;
+  templateVersion: number;
+  status: ImportBatchStatus;
+  createdCount: number;
+  skippedCount: number;
+  errorCount: number;
+  notes: string | null;
+  meta: any | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type InventoryRoom = {
   id: string;
   propertyId: string;

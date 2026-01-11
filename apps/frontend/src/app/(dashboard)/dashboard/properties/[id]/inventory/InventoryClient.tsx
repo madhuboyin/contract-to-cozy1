@@ -15,6 +15,9 @@ import InventoryRoomChips from '../../../components/inventory/InventoryRoomChips
 import InventoryItemCard from '../../../components/inventory/InventoryItemCard';
 import { SectionHeader } from '../../../components/SectionHeader';
 import { listPropertyRecalls } from '../recalls/recallsApi';
+import InventoryBulkUploadModal from '../../../components/inventory/InventoryBulkUploadModal';
+import InventoryImportHistoryModal from '../../../components/inventory/InventoryImportHistoryModal';
+
 
 export default function InventoryClient() {
   const params = useParams<{ id: string }>();
@@ -46,6 +49,9 @@ export default function InventoryClient() {
 
   const [recallMatchesByItemId, setRecallMatchesByItemId] = useState<Record<string, any[]>>({});
   const [recallsLoading, setRecallsLoading] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  
 
   React.useEffect(() => {
     let cancelled = false;
@@ -231,6 +237,23 @@ export default function InventoryClient() {
             <span className="hidden sm:inline">Export CSV</span>
             <span className="sm:hidden">Export</span>
           </button>
+
+          <button
+            onClick={() => setBulkOpen(true)}
+            className="rounded-xl px-3 sm:px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5"
+          >
+            <span className="hidden sm:inline">Bulk upload</span>
+            <span className="sm:hidden">Upload</span>
+          </button>
+
+          <button
+            onClick={() => setHistoryOpen(true)}
+            className="rounded-xl px-3 sm:px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5"
+          >
+            <span className="hidden sm:inline">Import history</span>
+            <span className="sm:hidden">History</span>
+          </button>
+
         </div>
       </div>
   
@@ -356,6 +379,23 @@ export default function InventoryClient() {
         highlightRecallMatchId={highlightRecallMatchId}
         onSaved={async () => {
           setDrawerOpen(false);
+          await refreshAll();
+        }}
+      />
+      <InventoryBulkUploadModal
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        propertyId={propertyId}
+        onImported={async () => {
+          setBulkOpen(false);
+          await refreshAll();
+        }}
+      />
+      <InventoryImportHistoryModal
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        propertyId={propertyId}
+        onChanged={async () => {
           await refreshAll();
         }}
       />

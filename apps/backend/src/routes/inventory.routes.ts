@@ -8,6 +8,9 @@ import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { CustomRequest } from '../types';
 import { prisma } from '../lib/prisma';
 import { detectCoverageGaps } from '../services/coverageGap.service';
+import { InventoryImportService } from '../services/inventoryImport.service';
+import { listImportBatches, rollbackImportBatch } from '../controllers/inventory.controller';
+
 
 import {
   listRooms,
@@ -31,7 +34,18 @@ import {
   linkDocumentBodySchema,
 } from '../validators/inventory.validators';
 
+import multer from 'multer';
+import {
+  downloadInventoryImportTemplate,
+  importInventoryFromXlsx,
+} from '../controllers/inventoryImport.controller';
+
 const router = Router();
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 }, // 8MB
+});
 
 // Apply common middleware
 router.use(apiRateLimiter);
@@ -270,6 +284,35 @@ router.get(
       return res.status(500).json({ success: false, message: err.message || 'Failed to compute coverage gaps' });
     }
   }
+);
+// Bulk import template
+router.get(
+  '/properties/:propertyId/inventory/import/template',
+  authenticate,
+  propertyAuthMiddleware,
+  downloadInventoryImportTemplate
+);
+
+// Bulk import upload (XLSX)
+router.post(
+  '/properties/:propertyId/inventory/import',
+  authenticate,
+  propertyAuthMiddleware,
+  upload.single('file'),
+  importInventoryFromXlsx
+);
+// Import history
+router.get(
+  '/properties/:propertyId/inventory/import-batches',
+  propertyAuthMiddleware,
+  listImportBatches
+);
+
+// Rollback a batch (delete items created by that batch)
+router.post(
+  '/properties/:propertyId/inventory/import-batches/:batchId/rollback',
+  propertyAuthMiddleware,
+  rollbackImportBatch
 );
 
 export default router;

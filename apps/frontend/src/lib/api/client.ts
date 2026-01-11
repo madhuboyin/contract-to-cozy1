@@ -74,6 +74,7 @@ import {
   RemoveSeasonalMaintenanceResult,
   LinkBookingResponse,
 
+  InventoryImportBatch,
 } from '@/types';
 
 // REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
@@ -186,18 +187,33 @@ class APIClient {
     options: RequestInit = {}
   ): Promise<APIResponse<T>> {
     const token = this.getToken();
-    
-    // Ensure body is handled as JSON string if present
+
     let body = options.body;
-    if (options.body && typeof options.body !== 'string') {
-        body = JSON.stringify(options.body);
+    
+    // ✅ Detect FormData / binary payloads
+    const isFormData =
+      typeof FormData !== 'undefined' && body instanceof FormData;
+    const isBlob =
+      typeof Blob !== 'undefined' && body instanceof Blob;
+    const isArrayBuffer =
+      typeof ArrayBuffer !== 'undefined' && body instanceof ArrayBuffer;
+    
+    // ✅ Only JSON stringify plain objects (NOT FormData / Blob / ArrayBuffer)
+    if (body && typeof body !== 'string' && !isFormData && !isBlob && !isArrayBuffer) {
+      body = JSON.stringify(body);
     }
     
+    // ✅ Only set JSON Content-Type when body is JSON (not FormData)
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       ...(options.headers as Record<string, string>),
     };
     
+    if (!isFormData) {
+      // If caller didn't set Content-Type explicitly, default to JSON.
+      if (!headers['Content-Type']) headers['Content-Type'] = 'application/json';
+    }
+    
+    // Attach auth token if present
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
@@ -2373,6 +2389,15 @@ class APIClient {
     return { data: (await res.json()) as T };
   }
   
+  async listInventoryImportBatches(propertyId: string) {
+    const res = await this.get<{ batches: InventoryImportBatch[] }>(`/api/properties/${propertyId}/inventory/import-batches`);
+    return res.data?.batches ?? [];
+  }
+
+  async rollbackInventoryImportBatch(propertyId: string, batchId: string) {
+    const res = await this.post(`/api/properties/${propertyId}/inventory/import-batches/${batchId}/rollback`, {});
+    return res.data;
+  } 
 }
 
 // Export singleton instance
