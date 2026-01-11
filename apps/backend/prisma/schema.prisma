@@ -511,6 +511,102 @@ model RiskAssessmentReport {
 }
 
 // ============================================================================
+// INVENTORY SCANNER
+// ============================================================================
+
+enum InventoryOcrSessionStatus {
+  COMPLETE
+  FAILED
+  EXPIRED
+}
+
+enum InventoryDraftStatus {
+  DRAFT
+  CONFIRMED
+  DISMISSED
+}
+
+model InventoryOcrSession {
+  id          String   @id @default(uuid())
+  propertyId  String
+  userId      String
+
+  status      InventoryOcrSessionStatus @default(COMPLETE)
+
+  provider    String?  // e.g. "tesseract"
+  rawText     String?  // full OCR text (no image stored)
+  error       String?
+
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime?
+
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fields      InventoryOcrField[]
+  drafts      InventoryDraftItem[]
+
+  @@index([propertyId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model InventoryOcrField {
+  id          String   @id @default(uuid())
+  sessionId   String
+
+  key         String   // "manufacturer" | "modelNumber" | "serialNumber" | etc
+  value       String
+  confidence  Float    // 0..1
+
+  createdAt   DateTime @default(now())
+
+  session     InventoryOcrSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([key])
+}
+
+model InventoryDraftItem {
+  id          String   @id @default(uuid())
+  propertyId  String
+  userId      String
+  sessionId   String?
+
+  status      InventoryDraftStatus @default(DRAFT)
+
+  // extracted / editable fields
+  name         String?
+  category     InventoryItemCategory?
+  condition    InventoryItemCondition?
+
+  brand        String?
+  model        String?
+  serialNo     String?
+
+  manufacturer String?
+  modelNumber  String?
+  serialNumber String?
+  upc          String?
+  sku          String?
+
+  // confidence snapshot for UI (field->confidence)
+  confidenceJson Json?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session     InventoryOcrSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId, status])
+  @@index([userId, status])
+  @@index([createdAt])
+}
+
+
+// ============================================================================
 // FINANCIAL EFFICIENCY MANAGEMENT (PHASE 2)
 // ============================================================================
 
@@ -719,6 +815,9 @@ model User {
   claimsCreated        Claim[]
   claimTimelineEvents  ClaimTimelineEvent[]
   inventoryImportBatches InventoryImportBatch[]
+
+  inventoryOcrSessions InventoryOcrSession[]
+  inventoryDraftItems  InventoryDraftItem[]
   
   @@index([email])
   @@index([role])
@@ -1079,6 +1178,9 @@ model Property {
   recallMatches      RecallMatch[]
   incidents          Incident[]
   inventoryImportBatches InventoryImportBatch[]
+
+  inventoryOcrSessions InventoryOcrSession[]
+  inventoryDraftItems  InventoryDraftItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
