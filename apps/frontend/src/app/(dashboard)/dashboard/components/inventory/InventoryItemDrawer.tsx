@@ -155,7 +155,8 @@ export default function InventoryItemDrawer(props: {
   useEffect(() => {
     if (!props.open) return;
     const item = props.initialItem;
-
+    console.log('[InventoryItemDrawer] reset effect fired', { open: props.open, initialItem: props.initialItem });
+    console.log('[InventoryItemDrawer] initialItem:', props.initialItem);
     setName(item?.name ?? '');
     setCategory(item?.category ?? 'OTHER');
     setCondition(item?.condition ?? 'UNKNOWN');
@@ -204,7 +205,7 @@ export default function InventoryItemDrawer(props: {
     setOcrError(null);
     setDraftId('');
     setConfidenceByField({});
-  }, [props.open, props.initialItem]);
+  }, [props.open]);
 
   useEffect(() => {
     if (!props.open) return;
@@ -314,38 +315,46 @@ export default function InventoryItemDrawer(props: {
   async function lookupBarcode(code: string) {
     const trimmed = code.trim();
     if (!trimmed) return;
-
+  
     setLookupLoading(true);
     setLookupError(null);
-
+  
     try {
       const res = await api.post(LOOKUP_PATH, { code: trimmed });
       const raw = res?.data;
-      const data: Partial<BarcodeLookupResult> =
-        raw && typeof raw === 'object' ? raw : {};
-      
+      const data: Partial<BarcodeLookupResult> = raw && typeof raw === 'object' ? raw : {};
+  
+      // ✅ PROVE this code is running in prod (you'll see it in console)
+      console.log('[InventoryItemDrawer] barcode lookup response:', data);
+  
       setLastScannedCode(trimmed);
-      
-      // name/category (best-effort)
-      if (!touched.name && !name.trim() && data?.name) setName(String(data.name));
-
-      // only auto-infer category if user hasn't touched category (optional)
-      if (!touched.category && category === 'OTHER') setCategory(inferCategoryFromLookup(data));
-
-      // identifiers (fill unless user edited)
-      if (!touched.manufacturer && data?.manufacturer) setManufacturer(String(data.manufacturer));
-      if (!touched.modelNumber && data?.modelNumber) setModelNumber(String(data.modelNumber));
-
-      // UPC: always set from scan unless user typed a different UPC
+  
+      // ✅ Apply autofill using current touched flags
+      if (!touched.name && data?.name) setName(String(data.name));
+  
+      if (!touched.category && category === 'OTHER') {
+        setCategory(inferCategoryFromLookup(data));
+      }
+  
+      // ✅ Important: fill manufacturer/model regardless of existing stale state,
+      // only block if user edited the field
+      if (!touched.manufacturer && data?.manufacturer && String(data.manufacturer).trim()) {
+        setManufacturer(String(data.manufacturer));
+        // legacy sync
+        if (!brand.trim()) setBrand(String(data.manufacturer));
+      }
+  
+      if (!touched.modelNumber && data?.modelNumber != null) {
+        setModelNumber(String(data.modelNumber));
+        // legacy sync
+        if (!model.trim()) setModel(String(data.modelNumber));
+      }
+  
+      // ✅ UPC always from scan unless user typed it
       if (!touched.upc) setUpc(String(data?.upc || trimmed));
-
-      // SKU: fill unless user edited
-      if (!touched.sku && data?.sku) setSku(String(data.sku));
-
-      // legacy sync (optional)
-      if (!brand.trim() && data?.manufacturer) setBrand(String(data.manufacturer));
-      if (!model.trim() && data?.modelNumber) setModel(String(data.modelNumber));      
-
+  
+      if (!touched.sku && data?.sku != null) setSku(String(data.sku));
+  
       setScannerOpen(false);
     } catch (e: any) {
       console.error('Barcode lookup failed', e);
@@ -359,6 +368,7 @@ export default function InventoryItemDrawer(props: {
       setLookupLoading(false);
     }
   }
+  
 
   async function runLabelOcr(file: File) {
     setOcrLoading(true);
