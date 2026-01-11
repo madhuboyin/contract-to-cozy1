@@ -106,9 +106,7 @@ export default function InventoryItemRecallPanel(props: {
 
   // Optional: if you only want to show actionable statuses in this panel:
   // const visibleRows = safeRows.filter(m => m.status === 'OPEN' || m.status === 'DETECTED' || m.status === 'NEEDS_CONFIRMATION');
-  const visibleRows = safeRows.filter(m =>
-    ['OPEN', 'NEEDS_CONFIRMATION'].includes(m.status as any)
-  );
+  const visibleRows = safeRows;
   console.log('safeRows', safeRows);
   console.log('visibleRows', visibleRows);
 
