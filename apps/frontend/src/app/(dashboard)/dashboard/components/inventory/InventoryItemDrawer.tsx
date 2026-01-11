@@ -1,3 +1,4 @@
+// apps/frontend/src/app/(dashboard)/dashboard/components/inventory/InventoryItemDrawer.tsx
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -102,6 +103,17 @@ export default function InventoryItemDrawer(props: {
   const [upc, setUpc] = useState('');
   const [sku, setSku] = useState('');
 
+  // track manual edits so barcode/ocr doesn't overwrite user input
+  const [touched, setTouched] = useState({
+    name: false,
+    category: false,
+    manufacturer: false,
+    modelNumber: false,
+    serialNumber: false,
+    upc: false,
+    sku: false,
+  });
+
   // legacy fields (kept)
   const [brand, setBrand] = useState('');
   const [model, setModel] = useState('');
@@ -178,6 +190,15 @@ export default function InventoryItemDrawer(props: {
     setLookupError(null);
     setLastScannedCode('');
     setLabelOpen(false);
+    setTouched({
+      name: false,
+      category: false,
+      manufacturer: false,
+      modelNumber: false,
+      serialNumber: false,
+      upc: false,
+      sku: false,
+    });
 
     setOcrLoading(false);
     setOcrError(null);
@@ -306,19 +327,24 @@ export default function InventoryItemDrawer(props: {
       setLastScannedCode(trimmed);
       
       // name/category (best-effort)
-      if (!name.trim() && data?.name) setName(String(data.name));
-      if (category === 'OTHER') setCategory(inferCategoryFromLookup(data));
-      
+      if (!touched.name && !name.trim() && data?.name) setName(String(data.name));
 
-      // identifiers
-      if (!manufacturer.trim() && data?.manufacturer) setManufacturer(data.manufacturer);
-      if (!modelNumber.trim() && data?.modelNumber) setModelNumber(data.modelNumber);
-      if (!upc.trim()) setUpc(data?.upc || trimmed);
-      if (!sku.trim() && data?.sku) setSku(data.sku);
+      // only auto-infer category if user hasn't touched category (optional)
+      if (!touched.category && category === 'OTHER') setCategory(inferCategoryFromLookup(data));
+
+      // identifiers (fill unless user edited)
+      if (!touched.manufacturer && data?.manufacturer) setManufacturer(String(data.manufacturer));
+      if (!touched.modelNumber && data?.modelNumber) setModelNumber(String(data.modelNumber));
+
+      // UPC: always set from scan unless user typed a different UPC
+      if (!touched.upc) setUpc(String(data?.upc || trimmed));
+
+      // SKU: fill unless user edited
+      if (!touched.sku && data?.sku) setSku(String(data.sku));
 
       // legacy sync (optional)
-      if (!brand.trim() && data?.manufacturer) setBrand(data.manufacturer);
-      if (!model.trim() && data?.modelNumber) setModel(data.modelNumber);
+      if (!brand.trim() && data?.manufacturer) setBrand(String(data.manufacturer));
+      if (!model.trim() && data?.modelNumber) setModel(String(data.modelNumber));      
 
       setScannerOpen(false);
     } catch (e: any) {
@@ -535,7 +561,11 @@ export default function InventoryItemDrawer(props: {
             <div className="text-sm font-medium">Name *</div>
             <input
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                setTouched((t) => ({ ...t, name: true }));
+              }}
+              
               className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
               placeholder="e.g., Water Heater"
             />
@@ -546,7 +576,10 @@ export default function InventoryItemDrawer(props: {
               <div className="text-sm font-medium">Category</div>
               <select
                 value={category}
-                onChange={(e) => setCategory(e.target.value as any)}
+                onChange={(e) => {
+                  setCategory(e.target.value as any);
+                  setTouched((t) => ({ ...t, category: true }));
+                }}
                 className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
               >
                 {CATEGORIES.map((c) => (
@@ -603,7 +636,11 @@ export default function InventoryItemDrawer(props: {
                 <div className="text-xs opacity-70">Manufacturer</div>
                 <input
                   value={manufacturer}
-                  onChange={(e) => setManufacturer(e.target.value)}
+                  onChange={(e) => {
+                    setManufacturer(e.target.value);
+                    setTouched((t) => ({ ...t, manufacturer: true }));
+                  }}
+                  
                   className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
                 />
               </div>
@@ -611,7 +648,10 @@ export default function InventoryItemDrawer(props: {
                 <div className="text-xs opacity-70">Model number</div>
                 <input
                   value={modelNumber}
-                  onChange={(e) => setModelNumber(e.target.value)}
+                  onChange={(e) => {
+                    setModelNumber(e.target.value);
+                    setTouched((t) => ({ ...t, modelNumber: true }));
+                  }}
                   className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
                 />
               </div>
@@ -619,7 +659,10 @@ export default function InventoryItemDrawer(props: {
                 <div className="text-xs opacity-70">Serial number</div>
                 <input
                   value={serialNumber}
-                  onChange={(e) => setSerialNumber(e.target.value)}
+                  onChange={(e) => {
+                    setSerialNumber(e.target.value);
+                    setTouched((t) => ({ ...t, serialNumber: true }));
+                  }}
                   className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
                 />
               </div>
@@ -627,7 +670,10 @@ export default function InventoryItemDrawer(props: {
                 <div className="text-xs opacity-70">SKU</div>
                 <input
                   value={sku}
-                  onChange={(e) => setSku(e.target.value)}
+                  onChange={(e) => {
+                    setSku(e.target.value);
+                    setTouched((t) => ({ ...t, sku: true }));
+                  }}
                   className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
                 />
               </div>
@@ -635,7 +681,10 @@ export default function InventoryItemDrawer(props: {
                 <div className="text-xs opacity-70">UPC</div>
                 <input
                   value={upc}
-                  onChange={(e) => setUpc(e.target.value)}
+                  onChange={(e) => {
+                    setUpc(e.target.value);
+                    setTouched((t) => ({ ...t, upc: true }));
+                  }}
                   className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
                 />
               </div>
