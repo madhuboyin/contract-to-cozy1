@@ -232,6 +232,50 @@ enum InventoryItemCondition {
   UNKNOWN
 }
 
+enum InventoryItemSource {
+  MANUAL
+  BULK_UPLOAD
+  MOBILE_SCAN
+  INTEGRATION
+}
+
+enum ImportBatchStatus {
+  COMPLETED
+  PARTIAL
+  FAILED
+  ROLLED_BACK
+}
+
+model InventoryImportBatch {
+  id              String   @id @default(uuid())
+  propertyId       String
+  createdByUserId  String?
+  fileName         String?
+  templateVersion  Int      @default(1)
+
+  status           ImportBatchStatus @default(COMPLETED)
+
+  createdCount     Int      @default(0)
+  skippedCount     Int      @default(0)
+  errorCount       Int      @default(0)
+
+  notes            String?
+  meta             Json?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  property         Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdBy        User?    @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  items            InventoryItem[]
+
+  @@index([propertyId, createdAt])
+  @@map("inventory_import_batches")
+}
+
+
 model InventoryRoom {
   id         String   @id @default(uuid())
   propertyId String
@@ -256,6 +300,14 @@ model InventoryItem {
   id          String   @id @default(uuid())
   propertyId  String
   roomId      String?
+
+  // Source tracking (future proof)
+  sourceType      InventoryItemSource @default(MANUAL)
+  sourceBatchId   String?
+  sourceRowNumber Int?
+  sourceHash      String?
+  sourceFileName  String?
+  importedAt      DateTime?
 
   // Optional mapping to your existing "system asset" model
   homeAssetId String?
@@ -297,6 +349,8 @@ model InventoryItem {
   homeAsset       HomeAsset?      @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
   warranty        Warranty?       @relation(fields: [warrantyId], references: [id], onDelete: SetNull)
   insurancePolicy InsurancePolicy? @relation(fields: [insurancePolicyId], references: [id], onDelete: SetNull)
+  importBatch   InventoryImportBatch? @relation(fields: [sourceBatchId], references: [id], onDelete: SetNull)
+
 
   // Reuse your existing Document table for receipts/photos/manuals
   documents        Document[]
@@ -328,6 +382,9 @@ model InventoryItem {
   // Filter-friendly composite indexes
   @@index([propertyId, category])
   @@index([propertyId, roomId])
+  @@index([propertyId, sourceBatchId])
+
+  @@unique([propertyId, sourceHash])
 
   @@map("inventory_items")
 }
@@ -452,6 +509,102 @@ model RiskAssessmentReport {
   
   @@map("risk_assessment_reports")
 }
+
+// ============================================================================
+// INVENTORY SCANNER
+// ============================================================================
+
+enum InventoryOcrSessionStatus {
+  COMPLETE
+  FAILED
+  EXPIRED
+}
+
+enum InventoryDraftStatus {
+  DRAFT
+  CONFIRMED
+  DISMISSED
+}
+
+model InventoryOcrSession {
+  id          String   @id @default(uuid())
+  propertyId  String
+  userId      String
+
+  status      InventoryOcrSessionStatus @default(COMPLETE)
+
+  provider    String?  // e.g. "tesseract"
+  rawText     String?  // full OCR text (no image stored)
+  error       String?
+
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime?
+
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fields      InventoryOcrField[]
+  drafts      InventoryDraftItem[]
+
+  @@index([propertyId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model InventoryOcrField {
+  id          String   @id @default(uuid())
+  sessionId   String
+
+  key         String   // "manufacturer" | "modelNumber" | "serialNumber" | etc
+  value       String
+  confidence  Float    // 0..1
+
+  createdAt   DateTime @default(now())
+
+  session     InventoryOcrSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([key])
+}
+
+model InventoryDraftItem {
+  id          String   @id @default(uuid())
+  propertyId  String
+  userId      String
+  sessionId   String?
+
+  status      InventoryDraftStatus @default(DRAFT)
+
+  // extracted / editable fields
+  name         String?
+  category     InventoryItemCategory?
+  condition    InventoryItemCondition?
+
+  brand        String?
+  model        String?
+  serialNo     String?
+
+  manufacturer String?
+  modelNumber  String?
+  serialNumber String?
+  upc          String?
+  sku          String?
+
+  // confidence snapshot for UI (field->confidence)
+  confidenceJson Json?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session     InventoryOcrSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId, status])
+  @@index([userId, status])
+  @@index([createdAt])
+}
+
 
 // ============================================================================
 // FINANCIAL EFFICIENCY MANAGEMENT (PHASE 2)
@@ -661,6 +814,10 @@ model User {
   homeReportExports HomeReportExport[]
   claimsCreated        Claim[]
   claimTimelineEvents  ClaimTimelineEvent[]
+  inventoryImportBatches InventoryImportBatch[]
+
+  inventoryOcrSessions InventoryOcrSession[]
+  inventoryDraftItems  InventoryDraftItem[]
   
   @@index([email])
   @@index([role])
@@ -1020,6 +1177,10 @@ model Property {
   claimTimelineEvents ClaimTimelineEvent[]
   recallMatches      RecallMatch[]
   incidents          Incident[]
+  inventoryImportBatches InventoryImportBatch[]
+
+  inventoryOcrSessions InventoryOcrSession[]
+  inventoryDraftItems  InventoryDraftItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2872,6 +3033,12 @@ model Incident {
   suppressionRuleId String?
   events           IncidentEvent[]
   snapshots        IncidentScoreSnapshot[]
+  snoozedUntil     DateTime?
+
+  severityBreakdown  Json?
+  decisionTrace      Json?
+  lastEvaluatedAt    DateTime?
+  nextReevalAt       DateTime?
 
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
@@ -2913,6 +3080,9 @@ model IncidentAction {
   type       IncidentActionType
   status     IncidentActionStatus @default(PROPOSED)
 
+  actionKey   String?
+  decisionTrace Json?
+
   entityType String?
   entityId   String?
 
@@ -2927,6 +3097,8 @@ model IncidentAction {
 
   @@index([incidentId, type, status])
   @@index([entityType, entityId])
+  @@index([incidentId])
+  @@unique([actionKey])
 }
 
 model IncidentSuppressionRule {
