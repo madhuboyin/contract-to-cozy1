@@ -232,6 +232,50 @@ enum InventoryItemCondition {
   UNKNOWN
 }
 
+enum InventoryItemSource {
+  MANUAL
+  BULK_UPLOAD
+  MOBILE_SCAN
+  INTEGRATION
+}
+
+enum ImportBatchStatus {
+  COMPLETED
+  PARTIAL
+  FAILED
+  ROLLED_BACK
+}
+
+model InventoryImportBatch {
+  id              String   @id @default(uuid())
+  propertyId       String
+  createdByUserId  String?
+  fileName         String?
+  templateVersion  Int      @default(1)
+
+  status           ImportBatchStatus @default(COMPLETED)
+
+  createdCount     Int      @default(0)
+  skippedCount     Int      @default(0)
+  errorCount       Int      @default(0)
+
+  notes            String?
+  meta             Json?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  property         Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdBy        User?    @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  items            InventoryItem[]
+
+  @@index([propertyId, createdAt])
+  @@map("inventory_import_batches")
+}
+
+
 model InventoryRoom {
   id         String   @id @default(uuid())
   propertyId String
@@ -256,6 +300,14 @@ model InventoryItem {
   id          String   @id @default(uuid())
   propertyId  String
   roomId      String?
+
+  // Source tracking (future proof)
+  sourceType      InventoryItemSource @default(MANUAL)
+  sourceBatchId   String?
+  sourceRowNumber Int?
+  sourceHash      String?
+  sourceFileName  String?
+  importedAt      DateTime?
 
   // Optional mapping to your existing "system asset" model
   homeAssetId String?
@@ -297,6 +349,8 @@ model InventoryItem {
   homeAsset       HomeAsset?      @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
   warranty        Warranty?       @relation(fields: [warrantyId], references: [id], onDelete: SetNull)
   insurancePolicy InsurancePolicy? @relation(fields: [insurancePolicyId], references: [id], onDelete: SetNull)
+  importBatch   InventoryImportBatch? @relation(fields: [sourceBatchId], references: [id], onDelete: SetNull)
+
 
   // Reuse your existing Document table for receipts/photos/manuals
   documents        Document[]
@@ -328,6 +382,9 @@ model InventoryItem {
   // Filter-friendly composite indexes
   @@index([propertyId, category])
   @@index([propertyId, roomId])
+  @@index([propertyId, sourceBatchId])
+
+  @@unique([propertyId, sourceHash])
 
   @@map("inventory_items")
 }
