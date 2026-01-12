@@ -54,7 +54,15 @@ const router = Router();
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 8 * 1024 * 1024 }, // 8MB
+  limits: {
+    fileSize: 8 * 1024 * 1024, // 8MB
+    files: 1,                  // ✅ only allow 1 uploaded file
+  },
+  fileFilter: (_req, file, cb) => {
+    // ✅ allow common image mimetypes only
+    if (file.mimetype && file.mimetype.startsWith('image/')) return cb(null, true);
+    return cb(new Error('Only image uploads are allowed'));
+  },
 });
 
 const inventoryService = new InventoryService();
@@ -438,13 +446,9 @@ router.post(
   propertyAuthMiddleware,
   ocrRateLimiter,
   requirePremiumForOcr,
-  upload.fields([
-    { name: 'image', maxCount: 1 },
-    { name: 'file', maxCount: 1 },
-  ]),
+  upload.single('image'), // ✅ IMPORTANT: match frontend FormData key
   ocrLabelToDraft
 );
-
 
 // ✅ Drafts
 router.get(

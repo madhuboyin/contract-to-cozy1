@@ -690,18 +690,17 @@ console.log('[FREEZE-RISK] Freeze Risk Incidents job scheduled for 8:00 AM EST')
 // =============================================================================
 // INVENTORY DRAFT CLEANUP (Phase 3 hardening)
 // =============================================================================
-cron.schedule(
-  '30 3 * * *', // 3:30 AM daily (NY time)
-  async () => {
-    try {
-      await cleanupInventoryDraftsJob();
-    } catch (err) {
-      console.error('[INVENTORY-DRAFT-CLEANUP] Failed:', err);
-    }
-  },
-  { timezone: 'America/New_York' }
-);
-console.log('[INVENTORY-DRAFT-CLEANUP] Scheduled for 3:30 AM America/New_York');
+const draftCleanupCron = process.env.INVENTORY_DRAFT_CLEANUP_CRON || '15 3 * * *'; // default: 3:15am daily
+cron.schedule(draftCleanupCron, async () => {
+  try {
+    console.log('[WORKER] Running cleanupInventoryDraftsJob...');
+    await cleanupInventoryDraftsJob();
+  } catch (err) {
+    console.error('[WORKER] cleanupInventoryDraftsJob failed:', err);
+  }
+});
+
+console.log(`[WORKER] Inventory Draft Cleanup scheduled for: ${draftCleanupCron} America/New_York`);
 
 // Start the worker
 startWorker();

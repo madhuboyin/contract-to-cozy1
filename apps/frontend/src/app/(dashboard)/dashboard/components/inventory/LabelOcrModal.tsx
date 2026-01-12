@@ -1,3 +1,4 @@
+// apps/frontend/src/app/(dashboard)/dashboard/components/inventory/LabelOcrModal.tsx
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -55,30 +56,34 @@ export default function LabelOcrModal(props: {
     const v = videoRef.current;
     if (!v) return;
     setBusy(true);
+    setErr(null);
+  
     try {
       const canvas = document.createElement('canvas');
       canvas.width = v.videoWidth || 1280;
       canvas.height = v.videoHeight || 720;
-
+  
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error('Canvas not supported');
-
+  
       ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
-
+  
       const blob: Blob = await new Promise((resolve, reject) => {
         canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Capture failed'))), 'image/jpeg', 0.9);
       });
-
+  
       const file = new File([blob], `label-${Date.now()}.jpg`, { type: 'image/jpeg' });
-
-      props.onClose();
+  
+      // ✅ run upload first, close only on success
       await props.onCaptured(file);
+      props.onClose();
     } catch (e: any) {
       setErr(e?.message || 'Capture failed');
     } finally {
       setBusy(false);
     }
   }
+  
 
   if (!props.open) return null;
 

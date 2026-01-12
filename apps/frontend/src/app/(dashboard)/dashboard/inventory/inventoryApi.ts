@@ -253,14 +253,31 @@ export async function lookupBarcode(propertyId: string, code: string): Promise<B
  * POST /api/properties/:propertyId/inventory/ocr/label
  * multipart: image=<file>
  */
-export async function ocrLabelToDraft(propertyId: string, file: File): Promise<InventoryOcrDraftResponse> {
+export async function ocrLabelToDraft(
+  propertyId: string,
+  file: File
+): Promise<InventoryOcrDraftResponse> {
   const form = new FormData();
   form.append('image', file);
 
-  const res = await api.post(`/api/properties/${propertyId}/inventory/ocr/label`, form);
+  const res: any = await api.post(`/api/properties/${propertyId}/inventory/ocr/label`, form);
 
-  return res.data as InventoryOcrDraftResponse;
+  const raw =
+    res?.data ??
+    res?.body ??
+    res?.payload ??
+    res?.result ??
+    res;
+
+  const payload = (raw && typeof raw === 'object' && 'data' in raw && raw.data) ? raw.data : raw;
+
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('OCR upload succeeded but response was empty/invalid');
+  }
+
+  return payload as InventoryOcrDraftResponse;
 }
+
 
 export async function listInventoryDrafts(propertyId: string): Promise<InventoryDraftListItem[]> {
   const res = await api.get(`/api/properties/${propertyId}/inventory/drafts`);
