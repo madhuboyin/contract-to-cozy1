@@ -52,15 +52,33 @@ import { requirePremiumForOcr } from '../middleware/premiumOcrGate.middleware';
 
 const router = Router();
 
-const upload = multer({
+const uploadXlsx = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 8 * 1024 * 1024, // 8MB
-    files: 1,                  // ✅ only allow 1 uploaded file
+    fileSize: 10 * 1024 * 1024, // ✅ 10MB XLSX
+    files: 1,
   },
   fileFilter: (_req, file, cb) => {
-    // ✅ allow common image mimetypes only
-    if (file.mimetype && file.mimetype.startsWith('image/')) return cb(null, true);
+    // Optional: allow typical XLSX mime OR extension fallback
+    const okMime =
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      file.mimetype === 'application/octet-stream'; // some browsers send this
+
+    const okExt = /\.xlsx$/i.test(file.originalname || '');
+    if (okMime || okExt) return cb(null, true);
+
+    return cb(new Error('Only .xlsx uploads are allowed (field name: file)'));
+  },
+});
+
+const uploadImage = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 8 * 1024 * 1024, // ✅ 8MB images
+    files: 1,
+  },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype?.startsWith('image/')) return cb(null, true);
     return cb(new Error('Only image uploads are allowed'));
   },
 });
@@ -317,7 +335,7 @@ router.post(
   '/properties/:propertyId/inventory/import',
   authenticate,
   propertyAuthMiddleware,
-  upload.single('file'),
+  uploadXlsx.single('file'),
   importInventoryFromXlsx
 );
 // Import history
@@ -446,7 +464,11 @@ router.post(
   propertyAuthMiddleware,
   ocrRateLimiter,
   requirePremiumForOcr,
-  upload.single('image'), // ✅ IMPORTANT: match frontend FormData key
+  uploadImage.fields([
+    // accept BOTH keys to avoid Multer "Unexpected field"
+    { name: 'image', maxCount: 1 },
+    { name: 'file', maxCount: 1 },
+  ]),
   ocrLabelToDraft
 );
 

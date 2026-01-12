@@ -3,7 +3,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { Prisma } from '@prisma/client';
-
+import multer from 'multer';
 /**
  * Custom error class for API errors
  */
@@ -156,6 +156,16 @@ export const errorHandler = (
     return;
   }
 
+  if (error instanceof multer.MulterError) {
+    res.status(400).json({
+      success: false,
+      error: {
+        message: error.message || 'Multer error occurred',
+        code: 'MULTER_ERROR',
+      },
+    });
+    return;
+  }
   // Default error response
   res.status(statusCode).json({
     success: false,

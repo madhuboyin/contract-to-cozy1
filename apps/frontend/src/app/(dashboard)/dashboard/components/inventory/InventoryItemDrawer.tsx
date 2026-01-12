@@ -9,6 +9,7 @@ import InventoryItemRecallPanel from './InventoryItemRecallPanel';
 import BarcodeScannerModal, { BarcodeLookupResult } from './BarcodeScannerModal';
 import LabelOcrModal from './LabelOcrModal';
 import { lookupBarcode as lookupInventoryBarcode } from '../../inventory/inventoryApi';
+import QrScannerModal from './QrScannerModal';
 
 
 import {
@@ -52,6 +53,27 @@ function centsToDollars(cents: number | null | undefined) {
   return (cents / 100).toFixed(2);
 }
 
+function unwrapBarcodeLookupResponse(raw: any): Partial<BarcodeLookupResult> {
+  // supports:
+  // 1) { success: true, data: {...} }
+  // 2) direct {...}
+  if (!raw || typeof raw !== 'object') return {};
+  if ('success' in raw && 'data' in raw) {
+    const d = (raw as any).data;
+    return d && typeof d === 'object' ? d : {};
+  }
+  return raw as any;
+}
+
+function unwrapOcrResponse(raw: any): any {
+  // supports:
+  // 1) { success: true, data: {...} }
+  // 2) direct {...}
+  if (!raw || typeof raw !== 'object') return null;
+  if ('success' in raw && 'data' in raw) return (raw as any).data;
+  return raw;
+}
+
 /**
  * Best-effort mapping from lookup category hint / name into your InventoryItemCategory enum.
  * Keep this conservative; user can still override.
@@ -75,6 +97,67 @@ function inferCategoryFromLookup(lookup?: Partial<BarcodeLookupResult> | null): 
   return 'OTHER';
 }
 
+function extractDigitsCandidate(text: string): string | null {
+  const t = String(text || '').trim();
+  if (!t) return null;
+
+  // 1) if it’s a URL, try common params first
+  try {
+    const u = new URL(t);
+    const candidates = [
+      u.searchParams.get('upc'),
+      u.searchParams.get('gtin'),
+      u.searchParams.get('ean'),
+      u.searchParams.get('code'),
+      u.searchParams.get('barcode'),
+    ].filter(Boolean) as string[];
+
+    for (const c of candidates) {
+      const d = c.replace(/\D/g, '');
+      if (d.length >= 8) return d;
+    }
+  } catch {
+    // not a URL; ignore
+  }
+
+  // 2) raw text: look for explicit tokens
+  const tokenMatch = t.match(/(upc|gtin|ean|barcode)\s*[:=]\s*([0-9\- ]{8,})/i);
+  if (tokenMatch?.[2]) {
+    const d = tokenMatch[2].replace(/\D/g, '');
+    if (d.length >= 8) return d;
+  }
+
+  // 3) fallback: the longest digit run
+  const runs = t.match(/[0-9]{8,}/g);
+  if (runs?.length) {
+    // choose the longest run
+    runs.sort((a, b) => b.length - a.length);
+    return runs[0];
+  }
+
+  return null;
+}
+
+function extractModelSerialCandidate(text: string): { modelNumber?: string; serialNumber?: string; manufacturer?: string } {
+  const t = String(text || '');
+
+  const model =
+    t.match(/model\s*(no\.|number|#)?\s*[:=]\s*([A-Za-z0-9\-_.]+)/i)?.[2] ||
+    t.match(/\bmdl\s*[:=]\s*([A-Za-z0-9\-_.]+)/i)?.[1] ||
+    undefined;
+
+  const serial =
+    t.match(/serial\s*(no\.|number|#)?\s*[:=]\s*([A-Za-z0-9\-_.]+)/i)?.[2] ||
+    t.match(/\bs\/n\s*[:=]\s*([A-Za-z0-9\-_.]+)/i)?.[1] ||
+    undefined;
+
+  const mfg =
+    t.match(/manufacturer\s*[:=]\s*([A-Za-z0-9 &.'\-]+)/i)?.[1] ||
+    t.match(/\bmfg\s*[:=]\s*([A-Za-z0-9 &.'\-]+)/i)?.[1] ||
+    undefined;
+
+  return { modelNumber: model, serialNumber: serial, manufacturer: mfg };
+}
 
 function pct(n?: number) {
   const v = typeof n === 'number' ? n : 0;
@@ -139,6 +222,10 @@ export default function InventoryItemDrawer(props: {
   const [draftId, setDraftId] = useState<string>('');
   const [confidenceByField, setConfidenceByField] = useState<Record<string, number>>({});
 
+  const [qrOpen, setQrOpen] = useState(false);
+  const [qrError, setQrError] = useState<string | null>(null);
+  const [lastQrText, setLastQrText] = useState<string>('');
+
   // docs
   const [docPickerOpen, setDocPickerOpen] = useState(false);
   const [manualDocId, setManualDocId] = useState('');
@@ -173,7 +260,7 @@ export default function InventoryItemDrawer(props: {
     setBrand((item as any)?.brand ?? '');
     setModel((item as any)?.model ?? '');
     setSerialNo((item as any)?.serialNo ?? '');
-
+    
     setPurchaseCost(centsToDollars(item?.purchaseCostCents));
     setReplacementCost(centsToDollars(item?.replacementCostCents));
 
@@ -207,6 +294,10 @@ export default function InventoryItemDrawer(props: {
     setOcrError(null);
     setDraftId('');
     setConfidenceByField({});
+
+    setQrOpen(false);
+    setQrError(null);
+    setLastQrText('');
   }, [props.open]);
 
   useEffect(() => {
@@ -322,27 +413,31 @@ export default function InventoryItemDrawer(props: {
     setLookupError(null);
   
     try {
-      const data = await lookupInventoryBarcode(props.propertyId, trimmed);
+      // ✅ use shared API helper (normalizes wrapper shapes)
+      const raw = await lookupInventoryBarcode(props.propertyId, trimmed);
   
-      // optional diagnostics log (keep it, but only in dev)
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('[InventoryItemDrawer] barcode lookup response:', data);
-      }
+      // IMPORTANT: backend returns {success:true,data:{...}} now
+      const data = unwrapBarcodeLookupResponse(raw);
+  
+      console.log('[InventoryItemDrawer] barcode lookup response:', data);
   
       setLastScannedCode(trimmed);
   
       // name/category (best-effort)
       if (!touched.name && !name.trim() && data?.name) setName(String(data.name));
+  
+      // only auto-infer category if user hasn't touched category
       if (!touched.category && category === 'OTHER') setCategory(inferCategoryFromLookup(data));
   
-      // identifiers
+      // identifiers (fill unless user edited)
       if (!touched.manufacturer && data?.manufacturer) setManufacturer(String(data.manufacturer));
       if (!touched.modelNumber && data?.modelNumber) setModelNumber(String(data.modelNumber));
   
-      // UPC always set unless user manually typed
-      if (!touched.upc) setUpc(String(data?.upc || trimmed));
+      // UPC: always set from scan unless user typed a different UPC
+      if (!touched.upc) setUpc(String((data as any)?.upc || trimmed));
   
-      if (!touched.sku && data?.sku) setSku(String(data.sku));
+      // SKU: fill unless user edited
+      if (!touched.sku && (data as any)?.sku) setSku(String((data as any).sku));
   
       // legacy sync (optional)
       if (!brand.trim() && data?.manufacturer) setBrand(String(data.manufacturer));
@@ -351,37 +446,39 @@ export default function InventoryItemDrawer(props: {
       setScannerOpen(false);
     } catch (e: any) {
       console.error('Barcode lookup failed', e);
-      const msg =
-        e?.response?.data?.message ||
-        e?.response?.data?.detail ||
-        e?.message ||
-        'Lookup failed';
+      const msg = e?.message || 'Lookup failed';
       setLookupError(msg);
     } finally {
       setLookupLoading(false);
     }
-  }
-  
-  
-    
+  }  
+   
   async function runLabelOcr(file: File) {
     setOcrLoading(true);
     setOcrError(null);
+  
     try {
-      const r = await ocrLabelToDraft(props.propertyId, file);
-
+      const raw = await ocrLabelToDraft(props.propertyId, file);
+      const r = unwrapOcrResponse(raw) as any;
+  
+      if (!r || typeof r !== 'object') {
+        throw new Error('OCR upload succeeded but response was empty/invalid');
+      }
+  
       setDraftId(r.draftId || '');
       setConfidenceByField(r.confidence || {});
-
+  
       const ex = r.extracted || {};
-      if (!manufacturer.trim() && ex.manufacturer) setManufacturer(ex.manufacturer);
-      if (!modelNumber.trim() && ex.modelNumber) setModelNumber(ex.modelNumber);
-      if (!serialNumber.trim() && ex.serialNumber) setSerialNumber(ex.serialNumber);
-
-      if (!brand.trim() && ex.manufacturer) setBrand(ex.manufacturer);
-      if (!model.trim() && ex.modelNumber) setModel(ex.modelNumber);
-      if (!serialNo.trim() && ex.serialNumber) setSerialNo(ex.serialNumber);
+      if (!touched.manufacturer && !manufacturer.trim() && ex.manufacturer) setManufacturer(String(ex.manufacturer));
+      if (!touched.modelNumber && !modelNumber.trim() && ex.modelNumber) setModelNumber(String(ex.modelNumber));
+      if (!touched.serialNumber && !serialNumber.trim() && ex.serialNumber) setSerialNumber(String(ex.serialNumber));
+  
+      // legacy sync (optional)
+      if (!brand.trim() && ex.manufacturer) setBrand(String(ex.manufacturer));
+      if (!model.trim() && ex.modelNumber) setModel(String(ex.modelNumber));
+      if (!serialNo.trim() && ex.serialNumber) setSerialNo(String(ex.serialNumber));
     } catch (e: any) {
+      console.error('OCR failed', e);
       setOcrError(e?.message || 'OCR failed');
     } finally {
       setOcrLoading(false);
@@ -400,7 +497,61 @@ export default function InventoryItemDrawer(props: {
       setConfidenceByField({});
     }
   }
-
+  async function onQrDetected(text: string) {
+    const trimmedText = String(text || '').trim();
+    if (!trimmedText) return;
+  
+    setQrError(null);
+    setLastQrText(trimmedText);
+  
+    // 1) Try to find UPC/GTIN digits → use barcode lookup for rich autofill
+    const digits = extractDigitsCandidate(trimmedText);
+    if (digits) {
+      try {
+        setLookupLoading(true);
+        const data = await lookupInventoryBarcode(props.propertyId, digits);
+  
+        // name/category
+        if (!touched.name && !name.trim() && (data as any)?.name) setName(String((data as any).name));
+        if (!touched.category && category === 'OTHER') setCategory(inferCategoryFromLookup(data));
+  
+        // identifiers
+        if (!touched.manufacturer && (data as any)?.manufacturer) setManufacturer(String((data as any).manufacturer));
+        if (!touched.modelNumber && (data as any)?.modelNumber) setModelNumber(String((data as any).modelNumber));
+        if (!touched.upc) setUpc(String((data as any)?.upc || digits));
+        if (!touched.sku && (data as any)?.sku) setSku(String((data as any).sku));
+  
+        // legacy sync (optional)
+        if (!brand.trim() && (data as any)?.manufacturer) setBrand(String((data as any).manufacturer));
+        if (!model.trim() && (data as any)?.modelNumber) setModel(String((data as any).modelNumber));
+  
+        return;
+      } catch (e: any) {
+        const msg =
+          e?.response?.data?.message ||
+          e?.response?.data?.detail ||
+          e?.message ||
+          'QR lookup failed';
+        setQrError(msg);
+        return;
+      } finally {
+        setLookupLoading(false);
+      }
+    }
+  
+    // 2) If not UPC-like, try to extract model/serial/manufacturer and fill those
+    const ms = extractModelSerialCandidate(trimmedText);
+  
+    if (!touched.manufacturer && ms.manufacturer && !manufacturer.trim()) setManufacturer(ms.manufacturer);
+    if (!touched.modelNumber && ms.modelNumber && !modelNumber.trim()) setModelNumber(ms.modelNumber);
+    if (!touched.serialNumber && ms.serialNumber && !serialNumber.trim()) setSerialNumber(ms.serialNumber);
+  
+    // If nothing matched, show a gentle error
+    if (!ms.manufacturer && !ms.modelNumber && !ms.serialNumber) {
+      setQrError('QR code did not contain a recognizable UPC/GTIN or model/serial info.');
+    }
+  }
+  
   async function onSave() {
     if (!canSave) return;
     setSaving(true);
@@ -497,6 +648,16 @@ export default function InventoryItemDrawer(props: {
                   >
                     {ocrLoading ? 'Extracting…' : 'Scan label'}
                   </button>
+                  {/* QR scanner */}
+                  <button
+                    onClick={() => setQrOpen(true)}
+                    disabled={saving || lookupLoading}
+                    className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
+                    title="Scan QR code"
+                  >
+                    {lookupLoading ? 'Looking up…' : 'Scan QR'}
+                  </button>
+
                 </div>
               </div>
 
@@ -511,6 +672,19 @@ export default function InventoryItemDrawer(props: {
                     placeholder="No barcode scanned yet"
                   />
                   <div className="mt-1 text-[11px] opacity-60">Autofills: name, category (best effort), UPC, manufacturer/model (when available).</div>
+                </div>
+
+                <div className="col-span-2">
+                  <div className="text-xs opacity-70">QR code</div>
+                  <input
+                    value={lastQrText ? (lastQrText.length > 60 ? `${lastQrText.slice(0, 60)}…` : lastQrText) : ''}
+                    readOnly
+                    className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm bg-black/5"
+                    placeholder="No QR scanned yet"
+                  />
+                  <div className="mt-1 text-[11px] opacity-60">
+                    Autofills: UPC/name/manufacturer/model (when QR contains UPC/GTIN), or model/serial if present.
+                  </div>
                 </div>
 
                 <div className="col-span-2">
@@ -557,6 +731,12 @@ export default function InventoryItemDrawer(props: {
                     {ocrError}
                   </div>
                 ) : null}
+                {qrError ? (
+                  <div className="col-span-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                    {qrError}
+                  </div>
+                ) : null}
+
               </div>
             </div>
           ) : null}
@@ -949,6 +1129,12 @@ export default function InventoryItemDrawer(props: {
         onDetected={async (code) => {
           await lookupBarcode(code);
         }}
+      />
+      {/* QR scanner */}
+      <QrScannerModal
+        open={qrOpen}
+        onClose={() => setQrOpen(false)}
+        onDetected={onQrDetected}
       />
     </div>
   );

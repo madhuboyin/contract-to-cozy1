@@ -8,6 +8,12 @@ import { InventoryDraftService } from '../services/inventoryDraft.service';
 
 const draftSvc = new InventoryDraftService();
 
+type OcrField = {
+  key: string;
+  value: string | null;
+  confidence: number;
+};
+
 function pickUploadedFile(req: CustomRequest): Express.Multer.File | undefined {
   // upload.single(...) -> req.file
   const direct = (req as any).file as Express.Multer.File | undefined;
@@ -24,6 +30,35 @@ function pickUploadedFile(req: CustomRequest): Express.Multer.File | undefined {
   return undefined;
 }
 
+/**
+ * If providers return duplicate keys, keep the best-confidence value.
+ */
+function dedupeFields(fields: OcrField[]): OcrField[] {
+  const best = new Map<string, OcrField>();
+
+  for (const f of fields || []) {
+    if (!f?.key) continue;
+
+    const prev = best.get(f.key);
+    if (!prev) {
+      best.set(f.key, f);
+      continue;
+    }
+
+    const prevScore = typeof prev.confidence === 'number' ? prev.confidence : 0;
+    const nextScore = typeof f.confidence === 'number' ? f.confidence : 0;
+
+    // prefer higher confidence; on tie prefer non-empty value
+    const prevVal = (prev.value || '').trim();
+    const nextVal = (f.value || '').trim();
+
+    if (nextScore > prevScore) best.set(f.key, f);
+    else if (nextScore === prevScore && !prevVal && nextVal) best.set(f.key, f);
+  }
+
+  return Array.from(best.values());
+}
+
 export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
   const propertyId = req.params.propertyId;
   const userId = req.user?.userId;
@@ -35,7 +70,7 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
 
   const ocr = await extractLabelFieldsFromImage(file.buffer);
 
-  // Create OCR session (no image stored)
+  // 1) Create OCR session (no image stored)
   const session = await prisma.inventoryOcrSession.create({
     data: {
       propertyId,
@@ -45,24 +80,33 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
       rawText: ocr.rawText,
       expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000), // 7 days retention
     },
+    select: { id: true },
   });
 
-  // Store fields
-  if (ocr.fields.length) {
+  // 2) Store fields (Prisma schema expects value: string (non-null))
+  const fields: OcrField[] = dedupeFields((ocr.fields || []) as OcrField[]);
+
+  const persistable = fields
+    .filter((f) => typeof f.value === 'string' && f.value.trim().length > 0)
+    .map((f) => ({
+      sessionId: session.id,
+      key: f.key,
+      value: f.value!.trim(), // guaranteed string
+      confidence: f.confidence,
+    }));
+
+  if (persistable.length) {
     await prisma.inventoryOcrField.createMany({
-      data: ocr.fields.map((f) => ({
-        sessionId: session.id,
-        key: f.key,
-        value: f.value,
-        confidence: f.confidence,
-      })),
+      data: persistable,
     });
   }
 
-  const manufacturer = ocr.fields.find((f) => f.key === 'manufacturer')?.value ?? null;
-  const modelNumber = ocr.fields.find((f) => f.key === 'modelNumber')?.value ?? null;
-  const serialNumber = ocr.fields.find((f) => f.key === 'serialNumber')?.value ?? null;
+  // 3) Extract canonical values
+  const manufacturer = fields.find((f) => f.key === 'manufacturer')?.value ?? null;
+  const modelNumber = fields.find((f) => f.key === 'modelNumber')?.value ?? null;
+  const serialNumber = fields.find((f) => f.key === 'serialNumber')?.value ?? null;
 
+  // 4) Create draft tied to session
   const draft = await draftSvc.createDraftFromOcr({
     propertyId,
     userId,

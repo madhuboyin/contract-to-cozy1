@@ -32,6 +32,7 @@ export type InventoryOcrDraftResponse = {
   rawText?: string;
 };
 
+
 export type InventoryDraftListItem = {
   id: string;
   status?: string;
@@ -219,11 +220,14 @@ export async function downloadInventoryExport(propertyId: string) {
  * POST /api/properties/:propertyId/inventory/barcode/lookup
  * body: { code }
  */
-export async function lookupBarcode(propertyId: string, code: string): Promise<BarcodeLookupResult> {
+export async function lookupBarcode(
+  propertyId: string,
+  code: string
+): Promise<BarcodeLookupResult> {
   const path = `/api/properties/${propertyId}/inventory/barcode/lookup`;
   const res: any = await api.post(path, { code });
 
-  // Normalize across wrapper shapes (api client differences)
+  // Normalize top-level response (axios vs custom wrapper)
   const top =
     res?.data ??
     res?.body ??
@@ -231,21 +235,18 @@ export async function lookupBarcode(propertyId: string, code: string): Promise<B
     res?.result ??
     res;
 
-  // If backend returns { success, data }
+  // Unwrap exactly once, only for { success, data } shape
   const raw =
-    top?.data && typeof top?.data === 'object'
-      ? top.data
-      : (top && typeof top === 'object' ? top : null);
+    top && typeof top === 'object' && 'success' in top && 'data' in top
+      ? (top as any).data
+      : top;
 
   if (!raw || typeof raw !== 'object') {
-    // Still return UPC so UI fills at least that
     return { upc: code } as any;
   }
 
   return raw as BarcodeLookupResult;
 }
-
-
 /**
  * ----------------------------
  * Phase 3 — OCR Label -> Draft
@@ -258,26 +259,34 @@ export async function ocrLabelToDraft(
   file: File
 ): Promise<InventoryOcrDraftResponse> {
   const form = new FormData();
+
+  // ✅ canonical key
   form.append('image', file);
 
-  const res: any = await api.post(`/api/properties/${propertyId}/inventory/ocr/label`, form);
+  const res: any = await api.post(
+    `/api/properties/${propertyId}/inventory/ocr/label`,
+    form
+  );
 
-  const raw =
+  // unwrap axios/custom wrapper shapes
+  const top =
     res?.data ??
     res?.body ??
     res?.payload ??
     res?.result ??
     res;
 
-  const payload = (raw && typeof raw === 'object' && 'data' in raw && raw.data) ? raw.data : raw;
+  const raw =
+    top && typeof top === 'object' && 'success' in top && 'data' in top
+      ? (top as any).data
+      : top;
 
-  if (!payload || typeof payload !== 'object') {
+  if (!raw || typeof raw !== 'object') {
     throw new Error('OCR upload succeeded but response was empty/invalid');
   }
 
-  return payload as InventoryOcrDraftResponse;
+  return raw as InventoryOcrDraftResponse;
 }
-
 
 export async function listInventoryDrafts(propertyId: string): Promise<InventoryDraftListItem[]> {
   const res = await api.get(`/api/properties/${propertyId}/inventory/drafts`);
@@ -302,30 +311,34 @@ export async function lookupInventoryBarcode(
 
   const res: any = await api.post(path, { code });
 
-  const candidate =
+  // Normalize the wrapper *once* (axios res.data OR raw response)
+  const raw =
     res?.data ??
     res?.body ??
     res?.payload ??
     res?.result ??
     res;
 
-  // If candidate is the wrapped response { success, data }
+  // If backend returns { success: true, data: {...} }, unwrap once.
   const payload =
-    candidate?.data && typeof candidate?.data === 'object'
-      ? candidate.data
-      : candidate;
+    raw && typeof raw === 'object' && 'success' in raw && 'data' in raw
+      ? (raw as any).data
+      : raw;
 
-  // If it's { success:true, data: payload }
-  const finalPayload =
-    payload?.data && typeof payload?.data === 'object'
-      ? payload.data
-      : payload;
-
-  // Last guard: ensure object
-  if (!finalPayload || typeof finalPayload !== 'object') {
+  if (!payload || typeof payload !== 'object') {
     return { upc: code } as BarcodeLookupResult;
   }
 
-  return finalPayload as BarcodeLookupResult;
+  return payload as BarcodeLookupResult;
+}
+
+export async function lookupInventoryBarcodeWithDiagnostics(
+  propertyId: string,
+  code: string
+): Promise<any> {
+  const path = `/api/properties/${propertyId}/inventory/barcode/lookup?debug=1`;
+  const res: any = await api.post(path, { code });
+
+  return res?.data ?? res?.body ?? res?.payload ?? res?.result ?? res;
 }
 
