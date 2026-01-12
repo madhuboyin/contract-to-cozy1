@@ -105,7 +105,13 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
   const manufacturer = fields.find((f) => f.key === 'manufacturer')?.value ?? null;
   const modelNumber = fields.find((f) => f.key === 'modelNumber')?.value ?? null;
   const serialNumber = fields.find((f) => f.key === 'serialNumber')?.value ?? null;
-
+  const upc = fields.find((f) => f.key === 'upc')?.value ?? null;
+  const sku = fields.find((f) => f.key === 'sku')?.value ?? null;
+  console.log('manufacturer', manufacturer);
+  console.log('modelNumber', modelNumber);
+  console.log('serialNumber', serialNumber);
+  console.log('upc', upc);
+  console.log('sku', sku);
   // 4) Create draft tied to session
   const draft = await draftSvc.createDraftFromOcr({
     propertyId,
@@ -114,9 +120,12 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
     manufacturer,
     modelNumber,
     serialNumber,
+    upc,
+    sku,
     confidenceJson: ocr.confidenceByField,
   });
-
+  
+  console.log('draft', draft);
   return res.json({
     sessionId: session.id,
     draftId: draft.id,
@@ -124,6 +133,8 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
       manufacturer,
       modelNumber,
       serialNumber,
+      upc,
+      sku,
     },
     confidence: ocr.confidenceByField,
     rawText: ocr.rawText,

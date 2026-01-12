@@ -10,8 +10,11 @@ export class InventoryDraftService {
     manufacturer?: string | null;
     modelNumber?: string | null;
     serialNumber?: string | null;
+    upc?: string | null;
+    sku?: string | null;
     confidenceJson?: any;
   }) {
+
     return prisma.inventoryDraftItem.create({
       data: {
         propertyId: args.propertyId,
@@ -22,6 +25,8 @@ export class InventoryDraftService {
         manufacturer: args.manufacturer || null,
         modelNumber: args.modelNumber || null,
         serialNumber: args.serialNumber || null,
+        upc: args.upc || null,
+        sku: args.sku || null,
 
         // best-effort legacy sync (optional)
         brand: args.manufacturer || null,
