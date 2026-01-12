@@ -1,5 +1,6 @@
 // apps/backend/src/services/inventoryOcr.service.ts
 import { APIError } from '../middleware/error.middleware';
+import sharp from 'sharp';
 
 type ExtractedField = {
   key: string;
@@ -79,66 +80,61 @@ function findLabeledValue(rawText: string, labelRe: RegExp): string | null {
 export async function extractLabelFieldsFromImage(buffer: Buffer): Promise<OcrExtractResult> {
   if (!buffer?.length) throw new APIError('Image is required', 400, 'OCR_IMAGE_REQUIRED');
 
-  // Lazy import to reduce startup overhead
   const { createWorker } = await import('tesseract.js');
+
+  // ✅ Preprocess image for label OCR
+  const pre = await sharp(buffer)
+    .rotate()                 // auto-orient
+    .resize({ width: 2000, withoutEnlargement: true }) // upsample small labels
+    .grayscale()
+    .normalize()
+    .sharpen()
+    .threshold(170)           // binarize (tune if needed)
+    .toBuffer();
+
   const worker = await createWorker('eng');
 
   try {
-    const { data } = await worker.recognize(buffer);
+    // ✅ Better defaults for dense label text
+    await worker.setParameters({
+      tessedit_pageseg_mode: '6', // assume a block of text
+      preserve_interword_spaces: '1',
+    } as any);
 
-    const rawText = String(data?.text || '').trim();
+    const { data } = await worker.recognize(pre);
+
+    const rawText = (data?.text || '').trim();
+    const text = rawText.replace(/\s+/g, ' ').trim();
     const t = normText(rawText);
 
-    // For regex matching, also create a single-line version
-    const oneLine = t.replace(/\s+/g, ' ').trim();
-
-    // Allow apostrophes, slashes, commas, parentheses
     const manufacturer =
-      bestMatch(oneLine, [
-        /\bmanufacturer\b\s*[:#\-]?\s*([a-z0-9 .,&'()\/\-]{2,})/i,
-        /\bmfg\b\s*[:#\-]?\s*([a-z0-9 .,&'()\/\-]{2,})/i,
-        /\bmade by\b\s*[:#\-]?\s*([a-z0-9 .,&'()\/\-]{2,})/i,
-        /\bbrand\b\s*[:#\-]?\s*([a-z0-9 .,&'()\/\-]{2,})/i,
-      ]) || null;
+      bestMatch(text, [/manufacturer[:\s]+([a-z0-9 .&\-]+)/i, /mfg[:\s]+([a-z0-9 .&\-]+)/i]) ||
+      bestMatch(text, [/brand[:\s]+([a-z0-9 .&\-]+)/i]);
 
     const modelNumber =
-      findLabeledValue(
-        t,
-        /(?:\bMODEL\b|\bMODEL NO\b|\bMODEL #\b|\bM\/N\b|\bMOD\b)\s*[:#\-]?\s*([A-Z0-9][A-Z0-9\-\/]{2,})/i
-      ) || null;
+      findLabeledValue(t, /(?:\bMODEL\b|\bMODEL NO\b|\bMODEL #\b|\bM\/N\b|\bMOD\b)\s*[:#\-]?\s*([A-Z0-9\-\/]{3,})/i);
 
     const serialNumber =
-      findLabeledValue(
-        t,
-        /(?:\bSERIAL\b|\bSERIAL NO\b|\bSERIAL #\b|\bS\/N\b)\s*[:#\-]?\s*([A-Z0-9][A-Z0-9\-]{2,})/i
-      ) || null;
+      findLabeledValue(t, /(?:\bSERIAL\b|\bSERIAL NO\b|\bSERIAL #\b|\bS\/N\b)\s*[:#\-]?\s*([A-Z0-9\-]{3,})/i);
 
     const upc = findBarcode(t);
 
     const fields: ExtractedField[] = [];
-
-    // Base heuristics
-    if (manufacturer) fields.push({ key: 'manufacturer', value: manufacturer, confidence: 0.7 });
+    if (manufacturer) fields.push({ key: 'manufacturer', value: manufacturer, confidence: 0.75 });
     if (modelNumber) fields.push({ key: 'modelNumber', value: modelNumber, confidence: 0.85 });
     if (serialNumber) fields.push({ key: 'serialNumber', value: serialNumber, confidence: 0.85 });
-    console.log('fields', fields);
-    // ✅ IMPORTANT: include UPC if found
-    if (upc) fields.push({ key: 'upc', value: upc, confidence: 0.9 });
-    console.log('manufacturer', manufacturer);
-    console.log('modelNumber', modelNumber);
-    console.log('serialNumber', serialNumber);
-    console.log('upc', upc);
-    // Tesseract overall confidence (0..100) if present
+
+    // ✅ IMPORTANT: push UPC too if found
+    if (upc) fields.push({ key: 'upc', value: upc, confidence: 0.7 });
+
     const overall = typeof (data as any)?.confidence === 'number' ? (data as any).confidence / 100 : null;
     const scale = overall === null ? 1 : clamp01(0.6 + 0.4 * overall);
 
-    console.log('scale', scale);
     const scaledFields = fields.map((f) => ({ ...f, confidence: clamp01(f.confidence * scale) }));
-    console.log('scaledFields', scaledFields);
 
     const confidenceByField: Record<string, number> = {};
     for (const f of scaledFields) confidenceByField[f.key] = f.confidence;
-    console.log('confidenceByField', confidenceByField);
+
     return {
       provider: 'tesseract',
       rawText,
@@ -149,3 +145,4 @@ export async function extractLabelFieldsFromImage(buffer: Buffer): Promise<OcrEx
     await worker.terminate();
   }
 }
+

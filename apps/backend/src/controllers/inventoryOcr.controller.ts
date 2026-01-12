@@ -101,6 +101,11 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
     });
   }
 
+  console.log('[inventoryOcr] upload', {
+    mimetype: file.mimetype,
+    size: file.size,
+    hasBuffer: !!file.buffer?.length,
+  });
   // 3) Extract canonical values
   const manufacturer = fields.find((f) => f.key === 'manufacturer')?.value ?? null;
   const modelNumber = fields.find((f) => f.key === 'modelNumber')?.value ?? null;
@@ -139,6 +144,7 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
     confidence: ocr.confidenceByField,
     rawText: ocr.rawText,
   });
+  
 }
 
 export async function listDrafts(req: CustomRequest, res: Response) {
@@ -169,3 +175,4 @@ export async function confirmDraft(req: CustomRequest, res: Response) {
   const item = await draftSvc.confirmDraftToInventoryItem(propertyId, userId, draftId);
   return res.json({ item });
 }
+
