@@ -463,7 +463,7 @@ router.post(
   '/properties/:propertyId/inventory/ocr/label',
   propertyAuthMiddleware,
   ocrRateLimiter,
-  requirePremiumForOcr,
+  //requirePremiumForOcr,
   uploadImage.fields([
     // accept BOTH keys to avoid Multer "Unexpected field"
     { name: 'image', maxCount: 1 },
