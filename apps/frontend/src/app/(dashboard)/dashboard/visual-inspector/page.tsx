@@ -10,8 +10,9 @@ import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
 
-const router = useRouter();
+
 function VisualInspectorContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const propertyIdFromUrl = searchParams.get('propertyId');
   

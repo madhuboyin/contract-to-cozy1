@@ -15,10 +15,7 @@ import { Expense, CreateExpenseInput, UpdateExpenseInput, Property, ExpenseCateg
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
-import { useRouter } from 'next/navigation';
 
-
-const router = useRouter();
 // Helper for Expense Category mapping (for display)
 const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   REPAIR_SERVICE: 'Repair/Service',
