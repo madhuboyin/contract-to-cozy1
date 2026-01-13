@@ -469,14 +469,19 @@ export default function InventoryItemDrawer(props: {
       setConfidenceByField(r.confidence || {});
   
       const ex = r.extracted || {};
-      if (!touched.manufacturer && !manufacturer.trim() && ex.manufacturer) setManufacturer(String(ex.manufacturer));
-      if (!touched.modelNumber && !modelNumber.trim() && ex.modelNumber) setModelNumber(String(ex.modelNumber));
-      if (!touched.serialNumber && !serialNumber.trim() && ex.serialNumber) setSerialNumber(String(ex.serialNumber));
+      if (!touched.manufacturer && ex.manufacturer) {
+        setManufacturer(String(ex.manufacturer));
+      }
+      if (!touched.modelNumber && ex.modelNumber) {
+        setModelNumber(String(ex.modelNumber));
+      }
+      if (!touched.serialNumber && ex.serialNumber) {
+        setSerialNumber(String(ex.serialNumber));
+      }
   
       // legacy sync (optional)
       if (!brand.trim() && ex.manufacturer) setBrand(String(ex.manufacturer));
       if (!model.trim() && ex.modelNumber) setModel(String(ex.modelNumber));
-      if (!serialNo.trim() && ex.serialNumber) setSerialNo(String(ex.serialNumber));
     } catch (e: any) {
       console.error('OCR failed', e);
       setOcrError(e?.message || 'OCR failed');
