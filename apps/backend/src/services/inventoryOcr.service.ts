@@ -348,27 +348,64 @@ export async function extractLabelFieldsFromImage(
       findLabeledValue(upper, /\bITEM(?:\s*NO|NUMBER|#)?\b\s*[:#\-]?\s*([A-Z0-9][A-Z0-9\-./]{2,})\b/i) ||
       findLabeledValue(upper, /\bPART(?:\s*NO|NUMBER|#)?\b\s*[:#\-]?\s*([A-Z0-9][A-Z0-9\-./]{2,})\b/i);
 
-    const fields: ExtractedField[] = [];
+      const fields: ExtractedField[] = [];
 
-    if (manufacturer) fields.push({ key: 'manufacturer', value: manufacturer, confidence: scoreFromReasons(manufacturerReason, best.meanWordConfidence) });
-    if (manufacturer) {
-      const conf = scoreFromReasons(manufacturerReason, best.meanWordConfidence);
-    
-      // ✅ If it looks like OCR garbage OR confidence too low, drop it
-      if (looksLikeOcrGarbageBrand(manufacturer) || conf < 0.45) {
-        manufacturer = null;
+      // ✅ Sanitize manufacturer BEFORE pushing to fields
+      if (manufacturer) {
+        const meanConf = best.meanWordConfidence; // 0..100
+        const conf = scoreFromReasons(manufacturerReason, meanConf);
+      
+        if (manufacturerReason !== 'labeled') {
+          const upperBrand = manufacturer.toUpperCase();
+          const words = upperBrand.split(/\s+/).filter(Boolean);
+      
+          // "STI EAL" / "ABC DEF" style OCR junk: multiple short chunks
+          const allShort = words.length >= 2 && words.every((w) => w.length <= 3);
+      
+          // Extra strictness for non-labeled manufacturer guesses
+          if (
+            allShort ||
+            /\d/.test(upperBrand) ||
+            meanConf < 45 ||
+            conf < 0.45 ||
+            looksLikeOcrGarbageBrand(manufacturer)
+          ) {
+            manufacturer = null;
+          }
+        } else {
+          // even labeled values can be garbage sometimes
+          if (conf < 0.35 || looksLikeOcrGarbageBrand(manufacturer)) {
+            manufacturer = null;
+          }
+        }
+      
+        if (manufacturer) {
+          fields.push({
+            key: 'manufacturer',
+            value: manufacturer,
+            confidence: scoreFromReasons(manufacturerReason, meanConf),
+          });
+        }
       }
-    }    
+         
     if (modelNumber) fields.push({ key: 'modelNumber', value: modelNumber, confidence: scoreFromReasons('labeled', best.meanWordConfidence) });
     if (upc) fields.push({ key: 'upc', value: upc, confidence: scoreFromReasons('digit', best.meanWordConfidence) });
     if (sku) fields.push({ key: 'sku', value: sku, confidence: scoreFromReasons('labeled', best.meanWordConfidence) });
     if (serialNumber) {
+      const base = clamp01(best.meanWordConfidence / 100);
+    
+      // ✅ EXP/LOT/BATCH-derived serials are semantically strong
+      const serialConf =
+        serialReason.startsWith('exp_lot_')
+          ? clamp01(0.55 + 0.40 * base) // ~0.55..0.95
+          : scoreFromReasons(serialReason === 'labeled' ? 'labeled' : 'heuristic', best.meanWordConfidence);
+    
       fields.push({
         key: 'serialNumber',
         value: serialNumber,
-        confidence: scoreFromReasons(serialReason === 'labeled' ? 'labeled' : 'heuristic', best.meanWordConfidence),
+        confidence: serialConf,
       });
-    }
+    }    
     
     const confidenceByField: Record<string, number> = {};
     for (const f of fields) confidenceByField[f.key] = clamp01(f.confidence);
