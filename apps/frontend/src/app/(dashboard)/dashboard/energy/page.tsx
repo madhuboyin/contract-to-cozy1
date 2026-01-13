@@ -2,14 +2,15 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import EnergyAuditor from '@/components/EnergyAuditor';
-import { Zap, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Zap } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { api } from '@/lib/api/client';
-
+import { api } from '@/lib/api/client'; 
+import { Button } from '@/components/ui/button';  
 function EnergyContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const propertyIdFromUrl = searchParams.get('propertyId');
   
@@ -57,6 +58,16 @@ function EnergyContent() {
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
+      {/* Back Navigation */}
+      {propertyIdFromUrl && (
+        <Button 
+          variant="link" 
+          className="p-0 h-auto mb-2 text-sm text-muted-foreground"
+          onClick={() => router.back()}
+        >
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back
+        </Button>
+      )}
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <div className="p-2 sm:p-3 bg-gradient-to-br from-yellow-100 to-orange-100 rounded-lg">

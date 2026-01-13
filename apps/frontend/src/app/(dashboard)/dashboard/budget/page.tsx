@@ -4,12 +4,15 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import BudgetForecaster from '../components/BudgetForecaster';
-import { DollarSign, Loader2 } from 'lucide-react';
+import { ArrowLeft, DollarSign, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api/client';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
 
 function BudgetContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const propertyIdFromUrl = searchParams.get('propertyId');
   
@@ -55,6 +58,16 @@ function BudgetContent() {
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
+      {/* Back Navigation */}
+      {propertyIdFromUrl && (
+        <Button 
+          variant="link" 
+          className="p-0 h-auto mb-2 text-sm text-muted-foreground"
+          onClick={() => router.back()}
+        >
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back
+        </Button>
+      )}
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-lg">
