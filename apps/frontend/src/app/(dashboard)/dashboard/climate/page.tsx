@@ -57,13 +57,13 @@ function ClimateContent() {
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <div className="p-3 bg-gradient-to-br from-sky-100 to-blue-100 rounded-lg">
-          <Cloud className="w-8 h-8 text-sky-600" />
+        <div className="p-2 sm:p-3 bg-gradient-to-br from-sky-100 to-blue-100 rounded-lg">
+          <Cloud className="w-6 h-6 sm:w-8 sm:h-8 text-sky-600" />
         </div>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Climate Risk Predictor</h1>
-          <p className="text-gray-600 mt-1">
-            AI-powered climate risk analysis for your property
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Climate Risk Analyzer</h1>
+          <p className="text-sm sm:text-base text-gray-600 mt-1">
+            AI-powered climate risk assessment for your property
           </p>
         </div>
       </div>

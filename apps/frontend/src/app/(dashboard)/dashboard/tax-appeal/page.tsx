@@ -57,13 +57,13 @@ function TaxAppealContent() {
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <div className="p-3 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-lg">
-          <Scale className="w-8 h-8 text-blue-600" />
+        <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-lg">
+          <Scale className="w-6 h-6 sm:w-8 sm:h-8 text-blue-700" />
         </div>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">AI Property Tax Appeal Assistant</h1>
-          <p className="text-gray-600 mt-1">
-            Upload your tax bill and get AI-powered appeal analysis
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Property Tax Appeal Assistant</h1>
+          <p className="text-sm sm:text-base text-gray-600 mt-1">
+            AI-powered analysis to help reduce your property taxes
           </p>
         </div>
       </div>

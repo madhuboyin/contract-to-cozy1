@@ -59,12 +59,12 @@ function EnergyContent() {
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <div className="p-3 bg-gradient-to-br from-yellow-100 to-orange-100 rounded-lg">
-          <Zap className="w-8 h-8 text-yellow-600" />
+        <div className="p-2 sm:p-3 bg-gradient-to-br from-yellow-100 to-orange-100 rounded-lg">
+          <Zap className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-600" />
         </div>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">AI Home Energy Auditor</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">AI Home Energy Auditor</h1>
+          <p className="text-sm sm:text-base text-gray-600 mt-1">
             Get personalized energy-saving recommendations
           </p>
         </div>
