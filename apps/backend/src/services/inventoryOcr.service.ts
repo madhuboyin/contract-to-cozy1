@@ -185,6 +185,43 @@ function tryRecoverUpcFromFragments(rawText: string): string | null {
   return null;
 }
 
+function normalizeLotSerialToken(token: string) {
+  // Uppercase and remove obvious noise
+  let t = token.toUpperCase().trim();
+
+  // Replace common OCR confusions, but carefully:
+  // - Only fix letters that are often misread in alnum codes
+  // - Do NOT blindly convert everything (can create new errors)
+  t = t.replace(/O/g, '0'); // O -> 0 (common in codes)
+  t = t.replace(/I/g, '1'); // I -> 1
+  t = t.replace(/S/g, '5'); // S -> 5
+
+  // IMPORTANT: don't globally map R->M or M->R; that's too destructive.
+  // But we can fix a very common pattern: "U R 0" should often be "U M 0"?
+  // Your real token is "4092UM0723": pattern "...U M 0..."
+  // OCR sometimes reads "M" as "R" when followed by 0.
+  t = t.replace(/UR0/g, 'UM0');
+
+  return t;
+}
+function isValidUpcA(upc12: string) {
+  if (!/^\d{12}$/.test(upc12)) return false;
+
+  const digits = upc12.split('').map((d) => Number(d));
+  const check = digits[11];
+
+  let oddSum = 0;  // positions 1,3,5,7,9,11 (0-based even indexes 0,2,...,10)
+  let evenSum = 0; // positions 2,4,6,8,10 (0-based odd indexes 1,3,...,9)
+
+  for (let i = 0; i < 11; i++) {
+    if (i % 2 === 0) oddSum += digits[i];
+    else evenSum += digits[i];
+  }
+
+  const total = oddSum * 3 + evenSum;
+  const calcCheck = (10 - (total % 10)) % 10;
+  return calcCheck === check;
+}
 
 async function buildPreprocessVariants(buffer: Buffer) {
   const base = sharp(buffer, { failOn: 'none' }).rotate();
@@ -364,11 +401,24 @@ export async function extractLabelFieldsFromImage(
         if (fallback.value) {
           serialNumber = fallback.value;
           serialReason = fallback.reason;
+          serialNumber = normalizeLotSerialToken(serialNumber);
         }
       }
     
-      const upc = findBarcodeDigits(t) || tryRecoverUpcFromFragments(rawText);
+      let upc = findBarcodeDigits(t);
 
+      // Reject if it appears on EXP/LOT line (likely not UPC)
+      if (upc) {
+        const expLineHasUpc = rawText
+          .split(/\r?\n/)
+          .some((l) => upc && /\b(EXP|EXPIR|EXPIRATION|LOT|BATCH)\b/i.test(l) && l.replace(/\D/g, '').includes(upc));
+        if (expLineHasUpc) upc = null;
+      }
+
+      // If UPC-A (12 digits), validate check digit. If invalid, drop it.
+      if (upc && upc.length === 12 && !isValidUpcA(upc)) {
+        upc = null;
+      }
 
       // SKU: best effort (rare)
       const sku =
