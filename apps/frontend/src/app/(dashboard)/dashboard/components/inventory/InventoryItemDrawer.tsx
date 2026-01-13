@@ -503,30 +503,31 @@ export default function InventoryItemDrawer(props: {
   
       const ex = r.extracted || {};
 
-      const t = touchedRef.current;
-      const v = valuesRef.current;
-      
-      if (shouldAutofill(t.manufacturer, v.manufacturer, ex.manufacturer)) {
-        setManufacturer(String(ex.manufacturer));
-      }
-      if (shouldAutofill(t.modelNumber, v.modelNumber, ex.modelNumber)) {
-        setModelNumber(String(ex.modelNumber));
-      }
-      if (shouldAutofill(t.serialNumber, v.serialNumber, ex.serialNumber)) {
-        setSerialNumber(String(ex.serialNumber));
-      }
-      if (shouldAutofill(t.upc, v.upc, ex.upc)) {
-        setUpc(String(ex.upc));
-      }
-      if (shouldAutofill(t.sku, v.sku, ex.sku)) {
-        setSku(String(ex.sku));
+      if (ex.manufacturer) {
+        setManufacturer((prev) => (touched.manufacturer ? (prev.trim() ? prev : String(ex.manufacturer)) : String(ex.manufacturer)));
       }
       
-      if (!serialNo.trim() && ex.serialNumber) setSerialNo(String(ex.serialNumber));
-
-      // legacy sync (optional)
-      if (!brand.trim() && ex.manufacturer) setBrand(String(ex.manufacturer));
-      if (!model.trim() && ex.modelNumber) setModel(String(ex.modelNumber));
+      if (ex.modelNumber) {
+        setModelNumber((prev) => (touched.modelNumber ? (prev.trim() ? prev : String(ex.modelNumber)) : String(ex.modelNumber)));
+      }
+      
+      if (ex.serialNumber) {
+        setSerialNumber((prev) => (touched.serialNumber ? (prev.trim() ? prev : String(ex.serialNumber)) : String(ex.serialNumber)));
+      }
+      
+      if (ex.upc) {
+        setUpc((prev) => (touched.upc ? (prev.trim() ? prev : String(ex.upc)) : String(ex.upc)));
+      }
+      
+      if (ex.sku) {
+        setSku((prev) => (touched.sku ? (prev.trim() ? prev : String(ex.sku)) : String(ex.sku)));
+      }
+      
+      // legacy (keep if you want)
+      if (ex.serialNumber) setSerialNo((prev) => (prev.trim() ? prev : String(ex.serialNumber)));
+      if (ex.manufacturer) setBrand((prev) => (prev.trim() ? prev : String(ex.manufacturer)));
+      if (ex.modelNumber) setModel((prev) => (prev.trim() ? prev : String(ex.modelNumber)));
+      
       
     } catch (e: any) {
       console.error('OCR failed', e);

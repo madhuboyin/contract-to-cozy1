@@ -186,24 +186,24 @@ function tryRecoverUpcFromFragments(rawText: string): string | null {
 }
 
 function normalizeLotSerialToken(token: string) {
-  // Uppercase and remove obvious noise
   let t = token.toUpperCase().trim();
 
-  // Replace common OCR confusions, but carefully:
-  // - Only fix letters that are often misread in alnum codes
-  // - Do NOT blindly convert everything (can create new errors)
-  t = t.replace(/O/g, '0'); // O -> 0 (common in codes)
-  t = t.replace(/I/g, '1'); // I -> 1
-  t = t.replace(/S/g, '5'); // S -> 5
-
-  // IMPORTANT: don't globally map R->M or M->R; that's too destructive.
-  // But we can fix a very common pattern: "U R 0" should often be "U M 0"?
-  // Your real token is "4092UM0723": pattern "...U M 0..."
-  // OCR sometimes reads "M" as "R" when followed by 0.
+  // existing normalizations you already have
   t = t.replace(/UR0/g, 'UM0');
+
+  // ✅ NEW: fix leading OCR confusions only when pattern strongly matches your lot style
+  // Example: A092UM0723 (OCR) -> 4092UM0723 (expected)
+  if (/^[A-Z]\d{3}UM0\d{3}$/.test(t)) {
+    t = t.replace(/^A/, '4'); // A -> 4
+    // (optional) add more mappings only if you see them in practice
+    // t = t.replace(/^B/, '8');
+    // t = t.replace(/^O/, '0');
+    // t = t.replace(/^I/, '1');
+  }
 
   return t;
 }
+
 function isValidUpcA(upc12: string) {
   if (!/^\d{12}$/.test(upc12)) return false;
 
@@ -399,11 +399,10 @@ export async function extractLabelFieldsFromImage(
       if (!serialNumber) {
         const fallback = extractSerialFromExpLotLine(rawText);
         if (fallback.value) {
-          serialNumber = fallback.value;
+          serialNumber = normalizeLotSerialToken(fallback.value);
           serialReason = fallback.reason;
-          serialNumber = normalizeLotSerialToken(serialNumber);
         }
-      }
+      }      
     
       let upc = findBarcodeDigits(t);
 
