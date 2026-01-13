@@ -222,6 +222,15 @@ export default function InventoryItemDrawer(props: {
   const [draftId, setDraftId] = useState<string>('');
   const [confidenceByField, setConfidenceByField] = useState<Record<string, number>>({});
 
+  const touchedRef = React.useRef(touched);
+  const valuesRef = React.useRef({
+    manufacturer,
+    modelNumber,
+    serialNumber,
+    upc,
+    sku,
+  });
+
   const [qrOpen, setQrOpen] = useState(false);
   const [qrError, setQrError] = useState<string | null>(null);
   const [lastQrText, setLastQrText] = useState<string>('');
@@ -301,6 +310,20 @@ export default function InventoryItemDrawer(props: {
   }, [props.open]);
 
   useEffect(() => {
+    touchedRef.current = touched;
+  }, [touched]);
+  
+  useEffect(() => {
+    valuesRef.current = {
+      manufacturer,
+      modelNumber,
+      serialNumber,
+      upc,
+      sku,
+    };
+  }, [manufacturer, modelNumber, serialNumber, upc, sku]);
+  
+  useEffect(() => {
     if (!props.open) return;
     (async () => {
       try {
@@ -319,6 +342,16 @@ export default function InventoryItemDrawer(props: {
   }, [props.open, props.propertyId]);
 
   const canSave = name.trim().length > 0;
+
+  function shouldAutofill(touchedField: boolean, currentValue: string, incoming: any) {
+    if (!incoming) return false;
+  
+    // If user never edited, always autofill
+    if (!touchedField) return true;
+  
+    // If user "touched" but left empty, still autofill
+    return !String(currentValue || '').trim();
+  }  
 
   async function refreshItemDocs() {
     if (!props.initialItem) return;
@@ -469,19 +502,32 @@ export default function InventoryItemDrawer(props: {
       setConfidenceByField(r.confidence || {});
   
       const ex = r.extracted || {};
-      if (!touched.manufacturer && ex.manufacturer) {
+
+      const t = touchedRef.current;
+      const v = valuesRef.current;
+      
+      if (shouldAutofill(t.manufacturer, v.manufacturer, ex.manufacturer)) {
         setManufacturer(String(ex.manufacturer));
       }
-      if (!touched.modelNumber && ex.modelNumber) {
+      if (shouldAutofill(t.modelNumber, v.modelNumber, ex.modelNumber)) {
         setModelNumber(String(ex.modelNumber));
       }
-      if (!touched.serialNumber && ex.serialNumber) {
+      if (shouldAutofill(t.serialNumber, v.serialNumber, ex.serialNumber)) {
         setSerialNumber(String(ex.serialNumber));
       }
-  
+      if (shouldAutofill(t.upc, v.upc, ex.upc)) {
+        setUpc(String(ex.upc));
+      }
+      if (shouldAutofill(t.sku, v.sku, ex.sku)) {
+        setSku(String(ex.sku));
+      }
+      
+      if (!serialNo.trim() && ex.serialNumber) setSerialNo(String(ex.serialNumber));
+
       // legacy sync (optional)
       if (!brand.trim() && ex.manufacturer) setBrand(String(ex.manufacturer));
       if (!model.trim() && ex.modelNumber) setModel(String(ex.modelNumber));
+      
     } catch (e: any) {
       console.error('OCR failed', e);
       setOcrError(e?.message || 'OCR failed');
