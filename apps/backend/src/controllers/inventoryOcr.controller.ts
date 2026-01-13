@@ -58,6 +58,22 @@ function dedupeFields(fields: OcrField[]): OcrField[] {
 
   return Array.from(best.values());
 }
+function canReturnOcrDebug(req: CustomRequest) {
+  if (process.env.INVENTORY_OCR_DEBUG_ENABLED !== 'true') return false;
+  if (String((req as any).query?.debug || '') !== '1') return false;
+
+  const user: any = (req as any).user;
+  const role = user?.role || user?.roles?.[0];
+  if (role === 'ADMIN' || role === 'DEV') return true;
+
+  const allow = (process.env.INVENTORY_OCR_DEBUG_EMAILS || '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+
+  const email = String(user?.email || '').toLowerCase();
+  return email && allow.includes(email);
+}
 
 export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
   const propertyId = req.params.propertyId;
@@ -68,7 +84,8 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
   const file = pickUploadedFile(req);
   if (!file?.buffer?.length) throw new APIError('image file is required', 400, 'OCR_IMAGE_REQUIRED');
 
-  const ocr = await extractLabelFieldsFromImage(file.buffer);
+  const debug = canReturnOcrDebug(req);
+  const ocr = await extractLabelFieldsFromImage(file.buffer, { debug: debug as boolean });
 
   // 1) Create OCR session (no image stored)
   const session = await prisma.inventoryOcrSession.create({
@@ -117,6 +134,8 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
   console.log('serialNumber', serialNumber);
   console.log('upc', upc);
   console.log('sku', sku);
+
+  
   // 4) Create draft tied to session
   const draft = await draftSvc.createDraftFromOcr({
     propertyId,
@@ -134,16 +153,11 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
   return res.json({
     sessionId: session.id,
     draftId: draft.id,
-    extracted: {
-      manufacturer,
-      modelNumber,
-      serialNumber,
-      upc,
-      sku,
-    },
+    extracted: { manufacturer, modelNumber, serialNumber, upc, sku },
     confidence: ocr.confidenceByField,
     rawText: ocr.rawText,
-  });
+    ...(ocr.debug ? { debug: ocr.debug } : {}),
+  });  
   
 }
 
