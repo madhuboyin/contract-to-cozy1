@@ -220,6 +220,7 @@ export default function InventoryItemDrawer(props: {
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrError, setOcrError] = useState<string | null>(null);
   const [draftId, setDraftId] = useState<string>('');
+  const [pendingOcrExtracted, setPendingOcrExtracted] = useState<any | null>(null);
   const [confidenceByField, setConfidenceByField] = useState<Record<string, number>>({});
 
   const touchedRef = React.useRef(touched);
@@ -308,7 +309,40 @@ export default function InventoryItemDrawer(props: {
     setQrError(null);
     setLastQrText('');
   }, [props.open]);
-
+  
+  useEffect(() => {
+    if (!pendingOcrExtracted) return;
+  
+    const ex = pendingOcrExtracted;
+  
+    // Apply in a "barcode-like" way:
+    // - don't overwrite user-entered values
+    // - but do fill if field is currently blank (even if touched)
+    if (ex.manufacturer) {
+      setManufacturer((prev) => (prev.trim() ? prev : String(ex.manufacturer)));
+    }
+    if (ex.modelNumber) {
+      setModelNumber((prev) => (prev.trim() ? prev : String(ex.modelNumber)));
+    }
+    if (ex.serialNumber) {
+      setSerialNumber((prev) => (prev.trim() ? prev : String(ex.serialNumber)));
+    }
+    if (ex.upc) {
+      setUpc((prev) => (prev.trim() ? prev : String(ex.upc)));
+    }
+    if (ex.sku) {
+      setSku((prev) => (prev.trim() ? prev : String(ex.sku)));
+    }
+  
+    // legacy sync
+    if (ex.serialNumber) setSerialNo((prev) => (prev.trim() ? prev : String(ex.serialNumber)));
+    if (ex.manufacturer) setBrand((prev) => (prev.trim() ? prev : String(ex.manufacturer)));
+    if (ex.modelNumber) setModel((prev) => (prev.trim() ? prev : String(ex.modelNumber)));
+  
+    // clear so this is one-shot
+    setPendingOcrExtracted(null);
+  }, [pendingOcrExtracted]);
+  
   useEffect(() => {
     touchedRef.current = touched;
   }, [touched]);
@@ -502,6 +536,7 @@ export default function InventoryItemDrawer(props: {
       setConfidenceByField(r.confidence || {});
   
       const ex = r.extracted || {};
+      setPendingOcrExtracted(r.extracted || {});
 
       if (ex.manufacturer) {
         setManufacturer((prev) => (touched.manufacturer ? (prev.trim() ? prev : String(ex.manufacturer)) : String(ex.manufacturer)));
