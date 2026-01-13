@@ -81,6 +81,83 @@ function chooseBestPass(passes: PassResult[]) {
   scored.sort((a, b) => b.score - a.score);
   return scored[0]?.p || passes[0];
 }
+function tokenLooksLikeLotOrSerial(tok: string) {
+  const t = tok.trim();
+  if (t.length < 6 || t.length > 24) return false;
+
+  // must include at least one digit
+  if (!/\d/.test(t)) return false;
+
+  // allow alnum plus a few safe separators
+  if (!/^[A-Z0-9\-./]+$/i.test(t)) return false;
+
+  // avoid date-like tokens
+  if (/^\d{1,2}\/\d{2,4}$/.test(t)) return false;
+
+  return true;
+}
+
+function extractSerialFromExpLotLine(rawText: string): { value: string | null; reason: string } {
+  const lines = rawText
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(Boolean);
+
+  for (const line of lines) {
+    const upper = line.toUpperCase();
+
+    // look for EXP / LOT / BATCH cues
+    if (!/\b(EXP|EXPIR|EXPIRATION|LOT|BATCH)\b/.test(upper)) continue;
+
+    // tokenize: keep alnum-ish tokens
+    const toks = upper
+      .replace(/[^A-Z0-9\-./\s]/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean);
+
+    // Prefer a token immediately before EXP/LOT/BATCH
+    for (let i = 0; i < toks.length; i++) {
+      const w = toks[i];
+      if (w === 'EXP' || w === 'EXPIR' || w === 'EXPIRATION' || w === 'LOT' || w === 'BATCH') {
+        const prev = toks[i - 1];
+        if (prev && tokenLooksLikeLotOrSerial(prev)) return { value: prev, reason: 'exp_lot_prev_token' };
+
+        const next = toks[i + 1];
+        if (next && tokenLooksLikeLotOrSerial(next)) return { value: next, reason: 'exp_lot_next_token' };
+      }
+    }
+
+    // If not adjacent, pick the best-looking token on that line
+    const candidates = toks.filter(tokenLooksLikeLotOrSerial);
+    if (candidates.length) return { value: candidates[0], reason: 'exp_lot_line_candidate' };
+  }
+
+  return { value: null, reason: 'none' };
+}
+
+function looksLikeOcrGarbageBrand(s: string) {
+  const t = s.trim();
+  if (t.length < 2) return true;
+
+  // Too many repeated characters (e.g., "HHH", "IIII", etc.)
+  const lettersOnly = t.replace(/[^A-Za-z]/g, '');
+  if (lettersOnly.length >= 4) {
+    const freq: Record<string, number> = {};
+    for (const ch of lettersOnly.toUpperCase()) freq[ch] = (freq[ch] || 0) + 1;
+    const max = Math.max(...Object.values(freq));
+    if (max / lettersOnly.length > 0.55) return true; // very low diversity
+  }
+
+  // Weird quote/backslash artifacts
+  if (/[\\"]/.test(t)) return true;
+
+  // Looks like random OCR fragments (many 1-letter "words")
+  const words = t.split(/\s+/).filter(Boolean);
+  const oneCharWords = words.filter(w => w.length === 1).length;
+  if (words.length >= 3 && oneCharWords / words.length > 0.45) return true;
+
+  return false;
+}
 
 async function buildPreprocessVariants(buffer: Buffer) {
   const base = sharp(buffer, { failOn: 'none' }).rotate();
@@ -241,7 +318,7 @@ export async function extractLabelFieldsFromImage(
       })();
 
     // Serial number: stronger label patterns + vicinity fallback
-    const serialNumber =
+    let serialNumber =
       findLabeledValue(upper, /\bSERIAL(?:\s*(?:NO|NUMBER|#))?\b\s*[:#\-]?\s*([A-Z0-9][A-Z0-9\-./]{3,})\b/i) ||
       findLabeledValue(upper, /\bS\/N\b\s*[:#\-]?\s*([A-Z0-9][A-Z0-9\-./]{3,})\b/i) ||
       findLabeledValue(upper, /\bSN\b\s*[:#\-]?\s*([A-Z0-9][A-Z0-9\-./]{3,})\b/i) ||
@@ -251,6 +328,18 @@ export async function extractLabelFieldsFromImage(
         return m?.[1] ? cleanValue(m[1]) : null;
       })();
 
+    
+      // ✅ NEW fallback: detect lot/serial around EXP/LOT/BATCH lines
+      let serialReason = serialNumber ? 'labeled' : 'none';
+      
+      if (!serialNumber) {
+        const fallback = extractSerialFromExpLotLine(rawText);
+        if (fallback.value) {
+          serialNumber = fallback.value;
+          serialReason = fallback.reason;
+        }
+      }
+    
     const upc = findBarcodeDigits(t);
 
     // SKU: best effort (rare)
@@ -262,11 +351,25 @@ export async function extractLabelFieldsFromImage(
     const fields: ExtractedField[] = [];
 
     if (manufacturer) fields.push({ key: 'manufacturer', value: manufacturer, confidence: scoreFromReasons(manufacturerReason, best.meanWordConfidence) });
+    if (manufacturer) {
+      const conf = scoreFromReasons(manufacturerReason, best.meanWordConfidence);
+    
+      // ✅ If it looks like OCR garbage OR confidence too low, drop it
+      if (looksLikeOcrGarbageBrand(manufacturer) || conf < 0.45) {
+        manufacturer = null;
+      }
+    }    
     if (modelNumber) fields.push({ key: 'modelNumber', value: modelNumber, confidence: scoreFromReasons('labeled', best.meanWordConfidence) });
-    if (serialNumber) fields.push({ key: 'serialNumber', value: serialNumber, confidence: scoreFromReasons('labeled', best.meanWordConfidence) });
     if (upc) fields.push({ key: 'upc', value: upc, confidence: scoreFromReasons('digit', best.meanWordConfidence) });
     if (sku) fields.push({ key: 'sku', value: sku, confidence: scoreFromReasons('labeled', best.meanWordConfidence) });
-
+    if (serialNumber) {
+      fields.push({
+        key: 'serialNumber',
+        value: serialNumber,
+        confidence: scoreFromReasons(serialReason === 'labeled' ? 'labeled' : 'heuristic', best.meanWordConfidence),
+      });
+    }
+    
     const confidenceByField: Record<string, number> = {};
     for (const f of fields) confidenceByField[f.key] = clamp01(f.confidence);
 
