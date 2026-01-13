@@ -159,6 +159,33 @@ function looksLikeOcrGarbageBrand(s: string) {
   return false;
 }
 
+function tryRecoverUpcFromFragments(rawText: string): string | null {
+  const lines = rawText
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(Boolean);
+
+  // Look for sequences of digit chunks that could form a 12-digit UPC.
+  // Example fragments: "74", "312", "67906" etc.
+  const digitChunks: string[] = [];
+  for (const l of lines) {
+    const chunks = l.replace(/[^\d]/g, ' ').split(/\s+/).filter(Boolean);
+    for (const c of chunks) digitChunks.push(c);
+  }
+
+  // sliding window concat with bounds to avoid huge false positives
+  for (let i = 0; i < digitChunks.length; i++) {
+    let s = '';
+    for (let j = i; j < Math.min(i + 6, digitChunks.length); j++) {
+      s += digitChunks[j];
+      if (s.length === 12 && !/^0+$/.test(s)) return s;
+      if (s.length > 12) break;
+    }
+  }
+  return null;
+}
+
+
 async function buildPreprocessVariants(buffer: Buffer) {
   const base = sharp(buffer, { failOn: 'none' }).rotate();
   const meta = await base.metadata();
@@ -340,13 +367,14 @@ export async function extractLabelFieldsFromImage(
         }
       }
     
-    const upc = findBarcodeDigits(t);
+      const upc = findBarcodeDigits(t) || tryRecoverUpcFromFragments(rawText);
 
-    // SKU: best effort (rare)
-    const sku =
-      findLabeledValue(upper, /\bSKU\b\s*[:#\-]?\s*([A-Z0-9][A-Z0-9\-./]{2,})\b/i) ||
-      findLabeledValue(upper, /\bITEM(?:\s*NO|NUMBER|#)?\b\s*[:#\-]?\s*([A-Z0-9][A-Z0-9\-./]{2,})\b/i) ||
-      findLabeledValue(upper, /\bPART(?:\s*NO|NUMBER|#)?\b\s*[:#\-]?\s*([A-Z0-9][A-Z0-9\-./]{2,})\b/i);
+
+      // SKU: best effort (rare)
+      const sku =
+        findLabeledValue(upper, /\bSKU\b\s*[:#\-]?\s*([A-Z0-9][A-Z0-9\-./]{2,})\b/i) ||
+        findLabeledValue(upper, /\bITEM(?:\s*NO|NUMBER|#)?\b\s*[:#\-]?\s*([A-Z0-9][A-Z0-9\-./]{2,})\b/i) ||
+        findLabeledValue(upper, /\bPART(?:\s*NO|NUMBER|#)?\b\s*[:#\-]?\s*([A-Z0-9][A-Z0-9\-./]{2,})\b/i);
 
       const fields: ExtractedField[] = [];
 
