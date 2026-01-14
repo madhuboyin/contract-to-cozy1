@@ -1138,6 +1138,9 @@ export interface OrchestratedActionDTO {
   nextDueDate?: string | null;
   isRecurring?: boolean | null;
   serviceCategory?: ServiceCategory | null;
+  signalSources?: SignalSourceBadgeDTO[];
+  primarySignalSource?: SignalSourceBadgeDTO | null;
+
 
   coverage?: CoverageInfoDTO;
 
@@ -1265,6 +1268,32 @@ export interface CompletionPhotoDTO {
   fileSize: number;
   order: number;
 }
+
+
+export type SignalSourceType =
+  | 'SCHEDULED'
+  | 'INTELLIGENCE'
+  | 'COVERAGE'
+  | 'MANUAL'
+  | 'SENSOR'
+  | 'DOCUMENT'
+  | 'EXTERNAL';
+
+export type SignalTriggerType =
+  | 'RULE'
+  | 'MODEL'
+  | 'EXTRACTION'
+  | 'USER_ACTION'
+  | 'SCHEDULE'
+  | 'INGEST';
+
+export type SignalSourceBadgeDTO = {
+  sourceType: SignalSourceType;
+  triggerType: SignalTriggerType;
+  sourceSystem?: string | null;
+  summary?: string | null;
+  confidence?: number | null; // 0..1
+};
 
 /**
  * Community Events API payload

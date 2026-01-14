@@ -1,10 +1,11 @@
 // apps/frontend/src/components/orchestration/OrchestrationActionCard.tsx
 import React from 'react';
-import { OrchestratedActionDTO } from '@/types';
+import { OrchestratedActionDTO, SignalSourceBadgeDTO } from '@/types';
 import { DecisionTracePanel } from './DecisionTracePanel';
 import { ConfidenceBar } from './ConfidenceBar';
 import { ConfidencePopover } from './ConfidencePopover';
 import { TaskStatusBadge } from './TaskStatusBadge';
+
 
 type Props = {
   action: OrchestratedActionDTO;
@@ -146,6 +147,51 @@ function getSuppressionCopy(action: OrchestratedActionDTO) {
 
   return { title: 'This action is currently not required', detail: null };
 }
+function sourceMeta(sourceType?: string | null) {
+  const t = safeUpper(sourceType);
+  switch (t) {
+    case 'SCHEDULED':
+      return { icon: '⏱', label: 'Scheduled', cls: 'bg-gray-100 text-gray-700' };
+    case 'INTELLIGENCE':
+      return { icon: '📊', label: 'Intelligence', cls: 'bg-indigo-50 text-indigo-700' };
+    case 'COVERAGE':
+      return { icon: '📄', label: 'Coverage', cls: 'bg-sky-50 text-sky-700' };
+    case 'MANUAL':
+      return { icon: '👤', label: 'Manual', cls: 'bg-amber-50 text-amber-800' };
+    case 'SENSOR':
+      return { icon: '🔔', label: 'Sensor', cls: 'bg-emerald-50 text-emerald-700' };
+    case 'DOCUMENT':
+      return { icon: '🧾', label: 'Document', cls: 'bg-zinc-50 text-zinc-700' };
+    case 'EXTERNAL':
+      return { icon: '🌎', label: 'External', cls: 'bg-teal-50 text-teal-700' };
+    default:
+      return { icon: '•', label: 'Signal', cls: 'bg-gray-100 text-gray-700' };
+  }
+}
+
+function resolvePrimarySource(action: OrchestratedActionDTO): SignalSourceBadgeDTO | null {
+  return (
+    action.primarySignalSource ??
+    (action.signalSources && action.signalSources.length > 0 ? action.signalSources[0] : null) ??
+    null
+  );
+}
+
+function signalBadge(action: OrchestratedActionDTO) {
+  const s = resolvePrimarySource(action);
+  if (!s) return null;
+
+  const meta = sourceMeta(s.sourceType);
+  const base = 'text-[11px] font-semibold px-2 py-0.5 rounded inline-flex items-center gap-1';
+  const title = s.summary || undefined;
+
+  return (
+    <span className={`${base} ${meta.cls}`} title={title}>
+      <span>{meta.icon}</span>
+      <span>{meta.label}</span>
+    </span>
+  );
+}
 
 export const OrchestrationActionCard: React.FC<Props> = ({
   action,
@@ -184,12 +230,14 @@ export const OrchestrationActionCard: React.FC<Props> = ({
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-base font-semibold text-gray-900">
-              {action.title}
-            </h3>
-            {riskBadge(action.riskLevel)}
-          </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3 className="text-base font-semibold text-gray-900">
+            {action.title}
+          </h3>
+
+          {riskBadge(action.riskLevel)}
+          {signalBadge(action)}
+        </div>
 
           {description && (
             <p className="text-sm text-gray-600">{description}</p>

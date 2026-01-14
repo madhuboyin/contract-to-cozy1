@@ -20,7 +20,7 @@
  */
 
 import { prisma } from '../lib/prisma';
-import { ServiceCategory, BookingStatus, Prisma } from '@prisma/client';
+import { ServiceCategory, BookingStatus, Prisma, SignalSourceType, SignalTriggerType } from '@prisma/client';
 import { OrchestrationSuppressionService, SuppressionSource } from './orchestrationSuppression.service';
 import { computeActionKey } from './orchestrationActionKey';
 import { getPropertySnoozes, ActiveSnooze } from './orchestrationSnooze.service';
@@ -29,6 +29,7 @@ import { detectCoverageGaps } from './coverageGap.service';
 
 // PHASE 2.3 INTEGRATION
 import { createTaskFromActionCenter } from './orchestrationIntegration.service';
+
 
 type DerivedFrom = {
   riskAssessment: boolean;
@@ -69,10 +70,18 @@ export type DecisionTraceStep = {
   details?: Record<string, any> | null;
 };
 
+export type SignalSourceBadge = {
+  sourceType: SignalSourceType;
+  triggerType: SignalTriggerType;
+  sourceSystem?: string | null;
+  summary?: string | null;
+  confidence?: number | null; // 0..1
+};
+
 export type OrchestratedAction = {
   id: string;
   actionKey: string;
-  source: 'RISK' | 'CHECKLIST' | 'COVERAGE_GAP';
+  source: 'RISK' | 'CHECKLIST'
   propertyId: string;
 
   title: string;
@@ -139,6 +148,9 @@ export type OrchestratedAction = {
   decisionTrace?: {
     steps: DecisionTraceStep[];
   };
+
+  signalSources?: SignalSourceBadge[];
+  primarySignalSource?: SignalSourceBadge | null;
 
   priority: number;
   overdue: boolean;
@@ -217,6 +229,32 @@ function safeParseDate(dateLike: unknown): Date | null {
   if (!dateLike) return null;
   const d = new Date(String(dateLike));
   return Number.isNaN(d.getTime()) ? null : d;
+}
+function clamp01(n: number) {
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(1, n));
+}
+
+function scoreTo01(score0to100?: number | null) {
+  if (score0to100 == null) return null;
+  const n = Number(score0to100);
+  if (!Number.isFinite(n)) return null;
+  return clamp01(n / 100);
+}
+
+function pickPrimarySignal(sources: SignalSourceBadge[] | undefined): SignalSourceBadge | null {
+  const list = (sources ?? []).filter(Boolean);
+  if (list.length === 0) return null;
+
+  // Prefer higher confidence if present; otherwise stable order
+  const sorted = [...list].sort((a, b) => {
+    const ac = a.confidence ?? -1;
+    const bc = b.confidence ?? -1;
+    if (bc !== ac) return bc - ac;
+    return 0;
+  });
+
+  return sorted[0] ?? null;
 }
 
 function isPastDate(d: Date): boolean {
@@ -335,16 +373,20 @@ export async function createTaskFromOrchestration(
   let nextDueDate: Date;
   const now = new Date();
 
-  if (action.riskLevel === 'CRITICAL' || action.riskLevel === 'HIGH') {
-    // Urgent: 1 week
-    nextDueDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-  } else if (action.nextDueDate) {
-    // Use existing due date if available
-    nextDueDate = new Date(action.nextDueDate);
-  } else {
-    // Default: 1 month
-    nextDueDate = new Date(now.setMonth(now.getMonth() + 1));
-  }
+  const rl = normalizeUpper(action.riskLevel);
+  if (rl === 'CRITICAL' || rl === 'HIGH')
+    {
+      // Urgent: 1 week
+      nextDueDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    } else if (action.nextDueDate) {
+      // Use existing due date if available
+      nextDueDate = new Date(action.nextDueDate);
+    } else {
+      // Default: 1 month
+      const next = new Date();
+      next.setMonth(next.getMonth() + 1);
+      nextDueDate = next;
+    }
 
   // Route to segment-specific service
   const result = await createTaskFromActionCenter({
@@ -353,10 +395,10 @@ export async function createTaskFromOrchestration(
     title: action.title,
     description: action.description || undefined,
     assetType: action.systemType || undefined,
-    priority: mapRiskLevelToPriority(action.riskLevel),
-    riskLevel: action.riskLevel || undefined,
+    priority: mapRiskLevelToPriority(rl),
+    riskLevel: rl || undefined,
     serviceCategory: action.serviceCategory || undefined,
-    estimatedCost: toNumberSafe(action.exposure) || undefined,
+    estimatedCost: toNumberSafe(action.exposure) ?? undefined,
     nextDueDate: nextDueDate.toISOString(),
     actionKey: action.actionKey,
   });
@@ -400,8 +442,10 @@ function computeConfidence(params: {
   let score = 50;
   const explanation: string[] = [];
 
+  const rl = normalizeUpper(params.riskLevel);
+
   if (params.source === 'RISK') {
-    if (params.riskLevel === 'CRITICAL' || params.riskLevel === 'HIGH') {
+    if (rl === 'CRITICAL' || rl === 'HIGH') {
       score += 25;
       explanation.push('High risk severity');
     }
@@ -493,7 +537,7 @@ async function mapRiskDetailToAction(params: {
 
   const systemType = String(d.systemType ?? d.assetName ?? 'Unknown');
   const category = String(d.category ?? 'SAFETY');
-  const riskLevel = String(d.riskLevel ?? 'MODERATE');
+  const riskLevel = normalizeUpper(d.riskLevel ?? 'MODERATE');
   const age = typeof d.age === 'number' ? d.age : undefined;
   const expectedLife = typeof d.expectedLife === 'number' ? d.expectedLife : undefined;
   const exposure = toNumberSafe(d.exposure ?? d.outOfPocketCost ?? d.replacementCost);
@@ -677,6 +721,21 @@ async function mapRiskDetailToAction(params: {
     suppressed: suppression.suppressed,
   });
 
+  const signalSources: SignalSourceBadge[] = [
+    {
+      sourceType: SignalSourceType.INTELLIGENCE,
+      triggerType: SignalTriggerType.MODEL,
+      sourceSystem: 'riskAssessmentReport',
+      summary: 'Generated from your property risk assessment signals',
+      confidence: scoreTo01(confidenceRaw?.score),
+    },
+  ];
+
+  // If/when you later set real coverage.hasCoverage for risk actions, you can add:
+  // if (coverage.hasCoverage) { signalSources.push({ sourceType: SignalSourceType.COVERAGE, ... }) }
+
+  const primarySignalSource = pickPrimarySignal(signalSources);
+
   return {
     id: `risk:${propertyId}:${index}`,
     actionKey,
@@ -704,6 +763,8 @@ async function mapRiskDetailToAction(params: {
       daysRemaining: snooze.daysRemaining,
     } : undefined,
     decisionTrace: { steps },
+    signalSources,
+    primarySignalSource,
 
     priority,
     overdue: false,
@@ -729,7 +790,7 @@ async function mapChecklistItemToAction(params: {
   const nextDueDate = safeParseDate(item.nextDueDate);
 
   // Resolve suppression source for checklist item
-  const actionKey = computeActionKey({
+  const computedKey = computeActionKey({
     propertyId,
     source: 'CHECKLIST',
     orchestrationActionId: null,
@@ -739,9 +800,10 @@ async function mapChecklistItemToAction(params: {
     category: null,
   });
   
+  const finalActionKey = item?.actionKey || computedKey;
   const suppressionSource = await OrchestrationSuppressionService.resolveSuppressionSource({
     propertyId,
-    actionKey,
+    actionKey: finalActionKey,
   });
   
   const isSuppressed = suppressionSource !== null;
@@ -797,14 +859,26 @@ async function mapChecklistItemToAction(params: {
     suppressed: suppression.suppressed,
   });
 
+
+  const signalSources: SignalSourceBadge[] = [
+    {
+      sourceType: SignalSourceType.MANUAL,
+      triggerType: SignalTriggerType.USER_ACTION,
+      sourceSystem: 'checklistItem',
+      summary: 'From your maintenance checklist',
+      confidence: null,
+    },
+  ];
+
+  const primarySignalSource = pickPrimarySignal(signalSources);
+
   const storedKey = item?.actionKey;
-  const finalActionKey = storedKey || actionKey;
 
   console.log('🔍 CHECKLIST ACTION KEY DECISION:', {
     itemId: item?.id,
     title: item?.title,
     storedKey: storedKey,
-    computedKey: actionKey,
+    computedKey,
     finalKey: finalActionKey,
     usedStored: !!storedKey,
   });
@@ -829,6 +903,8 @@ async function mapChecklistItemToAction(params: {
     confidence: withDefaultConfidence(confidenceRaw),
     suppression,
     decisionTrace: { steps },
+    signalSources,
+    primarySignalSource,
 
     priority,
     overdue,
@@ -1002,6 +1078,18 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
         },
       },
     ];
+    
+    const signalSources: SignalSourceBadge[] = [
+      {
+        sourceType: SignalSourceType.COVERAGE,
+        triggerType: SignalTriggerType.RULE,
+        sourceSystem: 'coverageGapDetector',
+        summary: 'Derived from inventory coverage linkage and expiry checks',
+        confidence: scoreTo01(confidenceRaw?.score),
+      },
+    ];
+
+    const primarySignalSource = pickPrimarySignal(signalSources);
 
     candidates.push({
       id: `coverage-gap:${propertyId}:${gap.inventoryItemId}`,
@@ -1020,6 +1108,9 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
       category: 'INSURANCE',
       riskLevel: gap.gapType === 'NO_COVERAGE' ? 'HIGH' : 'MODERATE',
       exposure: gap.exposureCents ? gap.exposureCents / 100 : null,
+
+      signalSources,
+      primarySignalSource,
 
       // This enables your UI to know what to link to
       // (Your UI already uses related entity patterns elsewhere)
@@ -1128,8 +1219,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
     } catch (e) {
       console.warn('[ORCHESTRATION] decision trace persistence failed:', e);
     }
-  
-
+      
   return {
     propertyId,
     pendingActionCount: actions.length,
@@ -1182,7 +1272,18 @@ async function persistDecisionTraces(params: {
               snooze: a.snooze ?? null,
             },
             confidence: a.confidence ?? Prisma.JsonNull,
-            suppression: a.suppression ?? Prisma.JsonNull,
+            suppression: {
+              suppressed: a.suppression?.suppressed ?? false,
+              reasons: a.suppression?.reasons ?? [],
+              // optionally persist suppressionSource.type + ids only
+              suppressionSource: a.suppression?.suppressionSource
+                ? {
+                    type: a.suppression.suppressionSource.type,
+                    // include only ids you need, not full nested task/checklist objects
+                  }
+                : null,
+            },
+            
           },
           update: {
             algoVersion: algoVersion ?? null,
@@ -1199,7 +1300,17 @@ async function persistDecisionTraces(params: {
               snooze: a.snooze ?? null,
             },
             confidence: a.confidence ?? Prisma.JsonNull,
-            suppression: a.suppression ?? Prisma.JsonNull,
+            suppression: {
+              suppressed: a.suppression?.suppressed ?? false,
+              reasons: a.suppression?.reasons ?? [],
+              // optionally persist suppressionSource.type + ids only
+              suppressionSource: a.suppression?.suppressionSource
+                ? {
+                    type: a.suppression.suppressionSource.type,
+                    // include only ids you need, not full nested task/checklist objects
+                  }
+                : null,
+            },            
           },
         })
       )
