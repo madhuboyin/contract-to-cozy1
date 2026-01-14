@@ -2223,6 +2223,7 @@ enum DerivedFromType {
 
 model SignalProvenance {
   id              String           @id @default(uuid())
+  propertyId  String
 
   // Core taxonomy
   sourceType       SignalSourceType
@@ -2234,7 +2235,7 @@ model SignalProvenance {
   sourceRunId      String?          // jobRunId / batchId / ingestionRunId / workflowRunId
 
   // Optional linkage to the underlying evidence/inputs
-  derivedFromType  String?          // "RISK_ASSESSMENT" | "POLICY" | "WARRANTY" | "DOCUMENT" | "INVENTORY_ITEM" etc.
+  derivedFromType  DerivedFromType?         // "RISK_ASSESSMENT" | "POLICY" | "WARRANTY" | "DOCUMENT" | "INVENTORY_ITEM" etc.
   derivedFromId    String?          // id of the evidence record
   externalRef      String?          // provider id or URL-safe id (e.g., CPSC recall id)
 
@@ -2251,6 +2252,9 @@ model SignalProvenance {
 
   createdAt        DateTime         @default(now())
   attributions    SignalAttribution[]
+
+  @@index([propertyId])
+  @@index([propertyId, targetType, targetId])
 
   @@index([targetType, targetId])
   @@index([sourceType])
