@@ -174,6 +174,17 @@ export function ActionsClient() {
   };
 
   const handleOpenDecisionTrace = useCallback((action: OrchestratedActionDTO) => {
+    const isChecklist = action.source === 'CHECKLIST';
+    const steps = action.decisionTrace?.steps ?? [];
+    const checklistExplainOnly =
+      !action.suppression?.suppressed &&
+      (isChecklist || (steps.length === 1 && steps[0]?.rule === 'CHECKLIST_ACTIONABLE'));
+
+    if (checklistExplainOnly) {
+      // no modal – optionally set a toast or do nothing
+      return;
+    }
+
     setTraceAction(action);
   }, []);
   

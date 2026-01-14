@@ -31,7 +31,7 @@ export const ConfidencePopover: React.FC<Props> = ({
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-gray-900"
         >
           <Info className="h-3.5 w-3.5" />
-          How is this calculated?
+          How confident is this recommendation?
         </button>
       </PopoverTrigger>
 
