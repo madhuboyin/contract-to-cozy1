@@ -2154,6 +2154,33 @@ model OrchestrationActionCompletionPhoto {
   @@map("orchestration_action_completion_photos")
 }
 
+
+model OrchestrationDecisionTrace {
+  id          String   @id @default(uuid())
+
+  // Scope
+  propertyId  String
+  actionKey   String   // canonical identity (stable)
+
+  // Snapshot metadata
+  computedAt  DateTime @default(now())
+  algoVersion String?  // optional: "v1", "phase8-coverage", etc.
+
+  // Persisted explanation payloads
+  signals     Json?    // age, last service, coverage, assumptions, etc.
+  confidence  Json?    // confidence drivers and score/level
+  suppression Json?    // suppressionSource + reasons (if any)
+  steps       Json     // DecisionTraceStep[] (ordered)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([propertyId, actionKey])
+  @@index([propertyId])
+  @@index([actionKey])
+  @@map("orchestration_decision_traces")
+}
+
 // =============================================================================
 // SEASONAL MAINTENANCE MODELS
 // =============================================================================
