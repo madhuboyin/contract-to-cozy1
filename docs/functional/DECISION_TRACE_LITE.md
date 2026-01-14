@@ -226,3 +226,268 @@ Convert this into a PR description
 Create a product-facing spec
 
 Or define Phase 2 confidence visualization in detail
+
+
+PRD — Phase 2.3: Actionable Confidence Improvements
+Product Area
+
+Action Center → Confidence & Explainability
+
+Status
+
+Planned (Not Implemented)
+
+Owner
+
+Product / Platform (ContractToCozy)
+
+Related Phases
+
+Phase 2.1 — Confidence Visualization (popover, explanation)
+
+Phase 2.2 — Confidence Deltas (per-step impact)
+
+Phase 2.3 — Actionable Improvements (this PRD)
+
+1. Problem Statement
+
+Users understand why an action has LOW or MEDIUM confidence, but they are not guided on what to do next to improve it.
+
+This results in:
+
+Low-confidence actions being ignored
+
+Missed opportunities to collect better data
+
+Reduced trust in AI recommendations over time
+
+2. Goal
+
+Turn confidence from a passive explanation into an active improvement loop.
+
+Users should be able to:
+
+See what’s missing
+
+Click one clear action
+
+Improve confidence with minimal effort
+
+3. Non-Goals
+
+❌ No auto-modification of confidence score in this phase
+
+❌ No new ML models
+
+❌ No backend confidence recomputation logic
+
+❌ No complex attribution models
+
+This phase is UI + routing + analytics only.
+
+4. User Stories
+US-1: Improve coverage-related confidence
+
+As a homeowner, when confidence is low because coverage is missing, I want a direct link to add my warranty or insurance so the recommendation becomes more reliable.
+
+US-2: Improve asset data confidence
+
+As a homeowner, when confidence is reduced due to unknown age or system ambiguity, I want to quickly confirm the information without hunting through the app.
+
+US-3: Understand impact of my action
+
+As a homeowner, after I complete a suggested improvement, I want confidence to feel justified and earned.
+
+5. UX Entry Points
+Primary Surface
+
+ConfidencePopover (Phase 2.1 enhanced)
+
+Secondary Surface
+
+Decision Trace Modal → Confidence Drivers (read-only)
+
+6. UX Behavior (Detailed)
+When confidence level is:
+
+HIGH
+
+No “Improve confidence” CTAs shown
+
+MEDIUM / LOW
+
+Show 1–3 improvement CTAs
+
+CTAs are context-aware and actionable
+
+7. Improvement CTA Types
+7.1 Coverage Missing
+
+Trigger conditions
+
+Confidence explanation contains:
+
+“No coverage”
+
+“Missing coverage”
+
+coverage.hasCoverage === false
+
+Or decision trace contains:
+
+COVERAGE_CHECK / COVERAGE_MATCHING with negative impact
+
+CTA
+
+Label: “Add coverage details”
+
+Destination:
+
+/properties/{propertyId}/coverage?from=confidence
+
+7.2 Inventory / Asset Confirmation
+
+Trigger conditions
+
+Explanation mentions:
+
+“Unknown age”
+
+“Missing install year”
+
+“System could not be confirmed”
+
+Or decision trace includes:
+
+AGE_EVALUATION with negative impact
+
+CTA
+
+Label: “Confirm system details”
+
+Destination:
+
+/properties/{propertyId}/inventory?openItemId={entityId}&from=confidence
+
+7.3 Checklist / Maintenance Data
+
+Trigger conditions
+
+Checklist-derived actions with:
+
+Missing install year
+
+Ambiguous frequency
+
+Or decision trace includes:
+
+CHECKLIST_ITEM_TRACKED with negative impact
+
+CTA
+
+Label: “Update maintenance details”
+
+Destination:
+
+/properties/{propertyId}/maintenance/{checklistItemId}?from=confidence
+
+8. CTA Display Rules
+
+Max 2 CTAs per popover (avoid overwhelm)
+
+Ordered by largest negative confidence impact
+
+Shown as:
+
+Primary button (first)
+
+Secondary link (second)
+
+9. Analytics & Tracking
+9.1 Events
+Event: confidence_improvement_clicked
+{
+  "event": "confidence_improvement_clicked",
+  "propertyId": "...",
+  "actionId": "...",
+  "confidenceLevel": "LOW",
+  "improvementType": "COVERAGE | INVENTORY | CHECKLIST",
+  "source": "ConfidencePopover"
+}
+
+Event: confidence_improvement_completed
+
+Triggered when user completes the target action with from=confidence present.
+
+{
+  "event": "confidence_improvement_completed",
+  "propertyId": "...",
+  "actionId": "...",
+  "improvementType": "COVERAGE | INVENTORY | CHECKLIST",
+  "completionSurface": "CoverageUpload | InventoryEdit | ChecklistEdit"
+}
+
+10. Success Metrics
+Primary
+
+CTR on “Improve confidence” CTAs
+
+Completion rate of linked actions
+
+Secondary
+
+Increase in MEDIUM → HIGH confidence transitions (later phase)
+
+Reduced ignored/dismissed low-confidence actions
+
+11. Technical Scope
+Frontend
+
+Extend ConfidencePopover to render CTA buttons
+
+Add route helpers for deep links
+
+Append ?from=confidence query param
+
+Fire analytics events on click + completion
+
+Backend
+
+❌ No schema changes
+
+❌ No new endpoints
+
+Optional: accept from=confidence metadata on save events
+
+12. Risks & Mitigations
+Risk	Mitigation
+Too many CTAs	Cap at 2
+Users feel nagged	Only show for MEDIUM / LOW
+Attribution unclear	Use from=confidence param
+Inconsistent routing	Centralize route helpers
+13. Open Questions (for later)
+
+Should confidence immediately recompute after completion?
+
+Should we show “Confidence improved” toast?
+
+Should improvements affect prioritization?
+
+(Not required for Phase 2.3)
+
+14. Final Assessment
+
+Phase 2.3 converts explainability into engagement.
+It is the bridge between understanding and action, and unlocks measurable value without backend risk.
+
+Recommended priority: Medium-High
+Estimated effort: Low–Medium
+Dependency: Phase 2.1 (done), Phase 2.2 (optional but beneficial)
+
+When you’re ready to implement, I can:
+
+Generate exact CTA components
+
+Wire analytics events
+
+Map routes precisely to your existing app structure

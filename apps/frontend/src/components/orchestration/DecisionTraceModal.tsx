@@ -18,6 +18,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   steps: DecisionTraceStepDTO[];
+  showInternalDetails?: boolean;
 
   onMarkCompleted?: () => void;
   onUndo?: () => void;
@@ -79,6 +80,7 @@ export const DecisionTraceModal: React.FC<Props> = ({
   open,
   onClose,
   steps,
+  showInternalDetails = false,
   onMarkCompleted,
   onUndo,
   onSnooze,
@@ -186,7 +188,7 @@ export const DecisionTraceModal: React.FC<Props> = ({
                 )}
 
                 {/* Internal details */}
-                {step.details && (
+                {showInternalDetails && step.details && (
                   <details className="mt-2">
                     <summary className="cursor-pointer text-xs text-blue-600 hover:underline">
                       View internal details

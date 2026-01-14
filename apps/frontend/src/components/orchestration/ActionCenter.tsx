@@ -58,6 +58,7 @@ export const ActionCenter: React.FC<Props> = ({
 
   const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false);
   const [completionAction, setCompletionAction] = useState<OrchestratedActionDTO | null>(null);
+  const showInternalDetails = process.env.NODE_ENV !== 'production';
 
   const router = useRouter();
 
@@ -549,6 +550,7 @@ export const ActionCenter: React.FC<Props> = ({
         open={Boolean(traceAction)}
         onClose={() => setTraceAction(null)}
         steps={traceAction?.decisionTrace?.steps ?? []}
+        showInternalDetails={showInternalDetails}
         onMarkCompleted={
           traceAction && 
           traceAction.source === 'RISK' && 
