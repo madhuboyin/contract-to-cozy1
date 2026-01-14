@@ -32,9 +32,10 @@ export const RULE_LABELS: Record<string, { label: string; description?: string }
   COVERAGE_CHECK: { label: 'We checked your warranties and insurance' },
   COVERAGE_MATCHING: { label: 'We checked your warranties and insurance' },
   COVERAGE_AWARE_CTA: { label: 'Your coverage was considered' },
+  COVERAGE_GAP_DETECTOR: { label: 'Coverage gap detected' },
 
   // Scheduling / suppression checks
-  SUPPRESSION_CHECK: { label: 'We checked if this is already handled' },
+  SUPPRESSION_CHECK: { label: 'We checked whether this is already being handled' },
   TASK_ALREADY_SCHEDULED: { label: 'Related work is already scheduled' },
   TASK_EXISTS: { label: 'This is already tracked as a maintenance task' },
   BOOKING_SUPPRESSION: { label: 'We checked for existing scheduled work' },
@@ -50,6 +51,7 @@ export const RULE_LABELS: Record<string, { label: string; description?: string }
   USER_MARKED_COMPLETE: { label: 'You marked this as completed' },
   USER_SNOOZED: { label: 'You snoozed this recommendation' },
   SNOOZED: { label: 'Currently snoozed' },
+  USER_UNMARKED_COMPLETE: { label: 'You unmarked this as completed' },
 
   // Final decision
   SUPPRESSION_FINAL: { label: 'Final decision made' },
@@ -59,7 +61,6 @@ export function getRuleMeta(rule: string) {
   return RULE_LABELS[rule] ?? { label: rule.replace(/_/g, ' ') };
 }
 
-// Suppression reason labels (separate keyspace)
 // Suppression reason labels (single source of truth)
 export const SUPPRESSION_REASON_LABELS: Record<string, string> = {
   // Scheduling
@@ -76,9 +77,11 @@ export const SUPPRESSION_REASON_LABELS: Record<string, string> = {
 
   // User actions
   USER_MARKED_COMPLETE: 'You marked this as completed',
+  USER_SNOOZED: 'You snoozed this recommendation',
 
   // Generic / fallback
-  NOT_ACTIONABLE: 'This does not require action right now',
+  NOT_ACTIONABLE: 'This does not require action right now'
+  
 };
 
 
@@ -101,7 +104,31 @@ export function humanizeEnum(value: string): string {
 export function formatRuleDetails(details: Record<string, any>): string {
   if (!details) return '';
 
-  // Age evaluation
+  // 1) Prefer backend-curated message
+  if (details.message) return String(details.message);
+
+  // 2) Snooze: most human first
+  if (details.daysRemaining !== undefined) {
+    const d = Number(details.daysRemaining);
+    if (!Number.isNaN(d)) {
+      return `Snoozed for ${d} more ${d === 1 ? 'day' : 'days'}`;
+    }
+  }
+
+  if (details.snoozedUntil || details.snoozeUntil) {
+    const iso = details.snoozedUntil || details.snoozeUntil;
+    const dt = new Date(iso);
+    if (!Number.isNaN(dt.getTime())) {
+      return `Snoozed until ${dt.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })}`;
+    }
+    return `Snoozed until ${String(iso)}`;
+  }
+
+  // 3) Age evaluation
   if (details.remainingLife !== undefined && details.percentUsed !== undefined) {
     const remaining = Number(details.remainingLife);
     const used = Number(details.percentUsed);
@@ -112,7 +139,7 @@ export function formatRuleDetails(details: Record<string, any>): string {
     }
   }
 
-  // Coverage
+  // 4) Coverage
   if (details.hasCoverage === false) return 'No active coverage found';
   if (details.hasCoverage === true) {
     const t = details.coverageType || details.type;
@@ -121,29 +148,17 @@ export function formatRuleDetails(details: Record<string, any>): string {
   if (details.coverageType) return `Coverage: ${details.coverageType}`;
   if (details.type) return `Coverage: ${details.type}`;
 
-  // Service inference
-  if (details.serviceCategory) return `Service: ${details.serviceCategory}`;
-
-  // Tasks / checklist titles
+  // 5) Tasks / checklist titles (more useful than service category)
   if (details.taskTitle) return `Task: "${details.taskTitle}"`;
   if (details.itemTitle) return `Tracked as "${details.itemTitle}"`;
   if (details.title) return `"${details.title}"`;
 
-  // Snooze
-  if (details.daysRemaining !== undefined) {
-    const d = Number(details.daysRemaining);
-    if (!Number.isNaN(d)) return `Snoozed for ${d} more ${d === 1 ? 'day' : 'days'}`;
-  }
-  if (details.snoozedUntil || details.snoozeUntil) {
-    // Keep it short; modal can format date prettily if needed
-    return `Snoozed until ${String(details.snoozedUntil || details.snoozeUntil)}`;
-  }
+  // 6) Service inference
+  if (details.serviceCategory) return `Service: ${details.serviceCategory}`;
 
-  // Generic reason
+  // 7) Generic reason
   if (details.reason) return humanizeEnum(details.reason);
-
-  // Generic message passthrough (if backend already curates)
-  if (details.message) return String(details.message);
 
   return 'Additional context evaluated';
 }
+

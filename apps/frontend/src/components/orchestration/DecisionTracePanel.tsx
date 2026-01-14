@@ -53,6 +53,12 @@ function formatShortDate(iso?: string | null) {
     year: 'numeric',
   });
 }
+function humanizeStatus(s: string) {
+  return s
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/^\w/, (c) => c.toUpperCase());
+}
 
 export const DecisionTracePanel: React.FC<Props> = ({
   suppressed,
@@ -64,7 +70,7 @@ export const DecisionTracePanel: React.FC<Props> = ({
   const [expanded, setExpanded] = useState(false);
 
   // Nothing to show at all
-  if (reasons.length === 0 && steps.length === 0) return null;
+  if (!suppressed && reasons.length === 0 && steps.length === 0) return null;
 
   const checklistExplainOnly = useMemo(
     () => isChecklistExplainOnly({ suppressed, reasons, action, steps }),
@@ -141,13 +147,13 @@ export const DecisionTracePanel: React.FC<Props> = ({
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     {due && (
                       <span className={overdue ? 'text-red-600 font-medium' : 'text-gray-800'}>
-                        {overdue ? `Overdue (was due ${due})` : `Due ${due}`}
+                        {overdue ? `Overdue (due ${due})` : `Due ${due}`}
                       </span>
                     )}
 
                     {status && (
                       <span className="px-2 py-0.5 rounded bg-white border text-[11px] text-gray-700">
-                        {String(status).replace(/_/g, ' ')}
+                        {humanizeStatus(String(status))}
                       </span>
                     )}
 
