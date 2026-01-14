@@ -100,35 +100,51 @@ function getSuppressionCopy(action: OrchestratedActionDTO) {
   const { reasons, suppressionSource } = safeGetSuppression(action);
   const primaryReason = reasons[0];
 
-  if (primaryReason?.reason === 'USER_MARKED_COMPLETE') {
+  // 1) USER_EVENT suppression source (most explicit)
+  if (suppressionSource?.type === 'USER_EVENT') {
     return {
-      title: 'You’ve already completed this',
-      detail: primaryReason.message,
+      title:
+        suppressionSource.eventType === 'USER_MARKED_COMPLETE'
+          ? 'You’ve already completed this'
+          : 'You brought this back',
+      detail: primaryReason?.message ?? null,
     };
   }
 
+  // 2) Covered by a maintenance task
+  if (suppressionSource?.type === 'PROPERTY_MAINTENANCE_TASK') {
+    const t = suppressionSource.task;
+    const due = t.nextDueDate ? formatMonthYear(t.nextDueDate) : null;
+
+    return {
+      title: 'Already tracked as a maintenance task',
+      detail: due ? `"${t.title}" due ${due}` : `"${t.title}"`,
+    };
+  }
+
+  // 3) Covered by a checklist item
   if (suppressionSource?.type === 'CHECKLIST_ITEM') {
     const item = suppressionSource.checklistItem;
+    const due = item.nextDueDate ? formatMonthYear(item.nextDueDate) : null;
+
     return {
       title: 'This recommendation is already covered',
-      detail: item.nextDueDate
-        ? `Covered by "${item.title}", scheduled for ${formatMonthYear(item.nextDueDate)}`
-        : `Covered by "${item.title}"`,
+      detail: due ? `Covered by "${item.title}", due ${due}` : `Covered by "${item.title}"`,
     };
   }
 
-  const booking = reasons.find(r => r.reason === 'BOOKING_EXISTS');
+  // 4) Booking-based suppression (reason-driven)
+  const booking = reasons.find((r) => r.reason === 'BOOKING_EXISTS');
   if (booking) {
-    return {
-      title: 'Service already booked',
-      detail: booking.message,
-    };
+    return { title: 'Service already booked', detail: booking.message };
   }
 
-  return {
-    title: 'This action is currently not required',
-    detail: null,
-  };
+  // 5) Generic fallback
+  if (primaryReason?.reason === 'USER_MARKED_COMPLETE') {
+    return { title: 'You’ve already completed this', detail: primaryReason.message };
+  }
+
+  return { title: 'This action is currently not required', detail: null };
 }
 
 export const OrchestrationActionCard: React.FC<Props> = ({
@@ -146,13 +162,19 @@ export const OrchestrationActionCard: React.FC<Props> = ({
   const exposure = formatMoney(action.exposure);
   const dueDateLabel = formatDateLabel(action.nextDueDate);
   const description = resolveDescription(action.description, action.cta?.label);
-  const confidence = action.confidence;
 
   const resolvedLabel = ctaLabel || action.cta?.label || 'Schedule task';
   const isDisabled = suppressed || ctaDisabled;
   const shouldShowCta = forceShowCta || Boolean(action.cta?.show);
 
   const suppressionCopy = suppressed ? getSuppressionCopy(action) : null;
+
+  const confidence = action.confidence;
+  const confidencePercent =
+    confidence && Number.isFinite(confidence.score)
+      ? Math.round(confidence.score * 100)
+      : null;
+
 
   return (
     <div
@@ -197,13 +219,17 @@ export const OrchestrationActionCard: React.FC<Props> = ({
       </div>
 
       {/* Confidence */}
-      {confidence && (
+      {confidence && confidencePercent != null && (
         <div className="mt-4 space-y-2">
-          <ConfidenceBar score={confidence.score} level={confidence.level} />
+          <ConfidenceBar
+            score={confidencePercent}
+            level={confidence.level}
+          />
           <ConfidencePopover
-            score={confidence.score}
+            score={confidencePercent}
             level={confidence.level}
             explanation={confidence.explanation}
+            steps={action.decisionTrace?.steps ?? []}
           />
         </div>
       )}

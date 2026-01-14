@@ -1,7 +1,6 @@
 // apps/frontend/src/components/orchestration/DecisionTraceModal.tsx
-'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -13,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { DecisionTraceStepDTO } from '@/types';
 import { Clock } from 'lucide-react';
 
-import { DecisionTraceItem } from './DecisionTraceItem';
+import { getRuleMeta, formatRuleDetails } from './decisionTraceLabels';
 
 type Props = {
   open: boolean;
@@ -26,13 +25,55 @@ type Props = {
   onViewTask?: () => void;
 };
 
-/**
- * If you want to keep raw details during test phase,
- * gate it behind a local dev-only flag.
- */
-const SHOW_INTERNAL_DETAILS =
-  process.env.NODE_ENV !== 'production' &&
-  process.env.NEXT_PUBLIC_SHOW_TRACE_INTERNALS === 'true';
+function hasConfidenceImpact(steps: DecisionTraceStepDTO[]) {
+  return steps.some((s) => typeof s.confidenceImpact === 'number' && Number.isFinite(s.confidenceImpact));
+}
+
+function impactToPoints(impact?: number | null) {
+  if (impact === undefined || impact === null) return null;
+  const n = Number(impact);
+  if (!Number.isFinite(n)) return null;
+  // confidenceImpact is -1.0 → +1.0. Convert to a friendly +/- points scale.
+  return Math.round(n * 100);
+}
+
+function deltaBadge(points: number | null) {
+  if (points === null) {
+    return (
+      <span className="text-[11px] text-muted-foreground px-2 py-0.5 rounded border bg-white">
+        —
+      </span>
+    );
+  }
+
+  if (points === 0) {
+    return (
+      <span className="text-[11px] text-muted-foreground px-2 py-0.5 rounded border bg-white">
+        0
+      </span>
+    );
+  }
+
+  const isUp = points > 0;
+  const label = `${isUp ? '▲' : '▼'} ${isUp ? '+' : ''}${points}`;
+  const cls = isUp
+    ? 'text-[11px] text-green-700 px-2 py-0.5 rounded border bg-white'
+    : 'text-[11px] text-red-700 px-2 py-0.5 rounded border bg-white';
+
+  return <span className={cls}>{label}</span>;
+}
+
+function topDrivers(steps: DecisionTraceStepDTO[]) {
+  // Only consider steps with impacts
+  const impacted = steps
+    .map((s) => ({ step: s, pts: impactToPoints(s.confidenceImpact) }))
+    .filter((x) => x.pts !== null) as { step: DecisionTraceStepDTO; pts: number }[];
+
+  const up = [...impacted].filter((x) => x.pts > 0).sort((a, b) => b.pts - a.pts).slice(0, 2);
+  const down = [...impacted].filter((x) => x.pts < 0).sort((a, b) => a.pts - b.pts).slice(0, 2);
+
+  return { up, down };
+}
 
 export const DecisionTraceModal: React.FC<Props> = ({
   open,
@@ -43,11 +84,14 @@ export const DecisionTraceModal: React.FC<Props> = ({
   onSnooze,
   onViewTask,
 }) => {
+  const showImpact = useMemo(() => hasConfidenceImpact(steps), [steps]);
+  const drivers = useMemo(() => (showImpact ? topDrivers(steps) : null), [steps, showImpact]);
+
   return (
     <Dialog
       open={open}
-      onOpenChange={(isOpen) => {
-        if (!isOpen) onClose();
+      onOpenChange={(open) => {
+        if (!open) onClose();
       }}
     >
       <DialogContent className="max-w-2xl">
@@ -55,24 +99,95 @@ export const DecisionTraceModal: React.FC<Props> = ({
           <DialogTitle>How this recommendation was decided</DialogTitle>
         </DialogHeader>
 
+        {/* ================= Confidence Drivers (optional) ================= */}
+        {showImpact && drivers && (drivers.up.length > 0 || drivers.down.length > 0) && (
+          <div className="rounded-md border bg-gray-50 p-3 text-sm space-y-2">
+            <div className="font-medium text-gray-900">Confidence drivers</div>
+
+            {drivers.up.length > 0 && (
+              <div className="space-y-1">
+                <div className="text-xs font-medium text-gray-800">What increased confidence</div>
+                <ul className="list-disc pl-4 space-y-1 text-xs text-gray-700">
+                  {drivers.up.map(({ step, pts }, idx) => {
+                    const meta = getRuleMeta(step.rule);
+                    return (
+                      <li key={`up-${idx}`}>
+                        <span className="font-medium text-gray-900">{meta.label}</span>{' '}
+                        <span className="text-muted-foreground">({`+${pts}`})</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+
+            {drivers.down.length > 0 && (
+              <div className="space-y-1">
+                <div className="text-xs font-medium text-gray-800">What reduced confidence</div>
+                <ul className="list-disc pl-4 space-y-1 text-xs text-gray-700">
+                  {drivers.down.map(({ step, pts }, idx) => {
+                    const meta = getRuleMeta(step.rule);
+                    return (
+                      <li key={`down-${idx}`}>
+                        <span className="font-medium text-gray-900">{meta.label}</span>{' '}
+                        <span className="text-muted-foreground">({pts})</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ================= Trace Body ================= */}
         <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-          {steps.length === 0 ? (
+          {steps.length === 0 && (
             <div className="text-sm text-muted-foreground">
               No decision details are available for this recommendation.
             </div>
-          ) : (
-            steps.map((step, idx) => (
+          )}
+
+          {steps.map((step, idx) => {
+            const meta = getRuleMeta(step.rule);
+            const pts = impactToPoints(step.confidenceImpact);
+
+            return (
               <div
                 key={`trace-step-${idx}`}
-                className="rounded-md border p-3 text-sm bg-white space-y-2"
+                className="rounded-md border p-3 text-sm bg-white"
               >
-                {/* Canonical renderer (labels + details come from decisionTraceLabels.ts) */}
-                <DecisionTraceItem type="RULE" step={step} />
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-semibold text-gray-900">
+                    {meta.label}
+                  </div>
 
-                {/* Dev/test-only raw payload dump */}
-                {SHOW_INTERNAL_DETAILS && step.details && (
-                  <details>
+                  <div className="flex items-center gap-2">
+                    {/* Confidence delta badge */}
+                    {showImpact && deltaBadge(pts)}
+
+                    <span
+                      className={`text-xs font-medium ${
+                        step.outcome === 'APPLIED'
+                          ? 'text-green-700'
+                          : 'text-gray-500'
+                      }`}
+                    >
+                      {step.outcome === 'APPLIED' ? 'Applied' : 'Skipped'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Curated short detail */}
+                {step.details && (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {formatRuleDetails(step.details)}
+                  </div>
+                )}
+
+                {/* Internal details */}
+                {step.details && (
+                  <details className="mt-2">
                     <summary className="cursor-pointer text-xs text-blue-600 hover:underline">
                       View internal details
                     </summary>
@@ -82,15 +197,20 @@ export const DecisionTraceModal: React.FC<Props> = ({
                   </details>
                 )}
               </div>
-            ))
-          )}
+            );
+          })}
         </div>
 
         {/* ================= Footer ================= */}
         <DialogFooter className="flex justify-between gap-2">
           <div className="flex gap-2">
             {onSnooze && (
-              <Button variant="outline" onClick={onSnooze}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  onSnooze();
+                }}
+              >
                 <Clock className="mr-2 h-4 w-4" />
                 Snooze
               </Button>

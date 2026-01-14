@@ -4,11 +4,13 @@
 import React, { useMemo } from 'react';
 import { Info } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { DecisionTraceStepDTO } from '@/types';
 
 type Props = {
   level: 'HIGH' | 'MEDIUM' | 'LOW';
   score: number; // 0 → 100
   explanation?: string[];
+  steps?: DecisionTraceStepDTO[];
 };
 
 function normalize(s: string) {
