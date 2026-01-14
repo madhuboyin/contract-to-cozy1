@@ -280,3 +280,28 @@ export async function unsnoozeOrchestrationAction(
  * - PropertyMaintenanceTaskService for EXISTING_OWNER
  * - ChecklistService as fallback (deprecated)
  */
+
+export async function getOrchestrationDecisionTraceHandler(req: Request, res: Response) {
+  try {
+    const { propertyId, actionKey } = req.params;
+    if (!propertyId || !actionKey) {
+      return res.status(400).json({ success: false, message: 'Missing propertyId or actionKey' });
+    }
+
+    const decodedKey = decodeURIComponent(actionKey);
+
+    const trace = await prisma.orchestrationDecisionTrace.findUnique({
+      where: {
+        propertyId_actionKey: {
+          propertyId,
+          actionKey: decodedKey,
+        },
+      },
+    });
+
+    return res.json({ success: true, data: trace });
+  } catch (e: any) {
+    console.error('[ORCHESTRATION] trace fetch failed:', e?.message || e);
+    return res.status(500).json({ success: false, message: 'Failed to load decision trace' });
+  }
+}

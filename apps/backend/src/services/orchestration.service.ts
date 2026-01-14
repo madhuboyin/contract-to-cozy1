@@ -20,7 +20,7 @@
  */
 
 import { prisma } from '../lib/prisma';
-import { ServiceCategory, BookingStatus } from '@prisma/client';
+import { ServiceCategory, BookingStatus, Prisma } from '@prisma/client';
 import { OrchestrationSuppressionService, SuppressionSource } from './orchestrationSuppression.service';
 import { computeActionKey } from './orchestrationActionKey';
 import { getPropertySnoozes, ActiveSnooze } from './orchestrationSnooze.service';
@@ -1121,6 +1121,15 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
     checklist: checklistItems.length > 0,
   };
 
+    // Persist decision traces (Option B) — best effort, non-breaking
+    try {
+      const all = [...actions, ...suppressedActions, ...snoozedActions];
+      await persistDecisionTraces({ propertyId, actions: all, algoVersion: 'v1' });
+    } catch (e) {
+      console.warn('[ORCHESTRATION] decision trace persistence failed:', e);
+    }
+  
+
   return {
     propertyId,
     pendingActionCount: actions.length,
@@ -1135,4 +1144,64 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
       snoozedActions: snoozedActions.length,
     },
   };
+}
+
+async function persistDecisionTraces(params: {
+  propertyId: string;
+  actions: OrchestratedAction[];
+  algoVersion?: string;
+}) {
+  const { propertyId, actions, algoVersion } = params;
+
+  // best-effort: do not break summary if persistence fails
+  await Promise.allSettled(
+    actions
+      .filter(a => a?.actionKey && a?.decisionTrace?.steps?.length)
+      .map(a =>
+        prisma.orchestrationDecisionTrace.upsert({
+          where: {
+            propertyId_actionKey: {
+              propertyId,
+              actionKey: a.actionKey,
+            },
+          },
+          create: {
+            propertyId,
+            actionKey: a.actionKey,
+            algoVersion: algoVersion ?? null,
+            computedAt: new Date(),
+            steps: a.decisionTrace?.steps ?? [],
+            signals: {
+              source: a.source,
+              age: a.age ?? null,
+              expectedLife: a.expectedLife ?? null,
+              exposure: a.exposure ?? null,
+              serviceCategory: a.serviceCategory ?? null,
+              nextDueDate: a.nextDueDate ?? null,
+              coverage: a.coverage ?? null,
+              snooze: a.snooze ?? null,
+            },
+            confidence: a.confidence ?? Prisma.JsonNull,
+            suppression: a.suppression ?? Prisma.JsonNull,
+          },
+          update: {
+            algoVersion: algoVersion ?? null,
+            computedAt: new Date(),
+            steps: a.decisionTrace?.steps ?? [],
+            signals: {
+              source: a.source,
+              age: a.age ?? null,
+              expectedLife: a.expectedLife ?? null,
+              exposure: a.exposure ?? null,
+              serviceCategory: a.serviceCategory ?? null,
+              nextDueDate: a.nextDueDate ?? null,
+              coverage: a.coverage ?? null,
+              snooze: a.snooze ?? null,
+            },
+            confidence: a.confidence ?? Prisma.JsonNull,
+            suppression: a.suppression ?? Prisma.JsonNull,
+          },
+        })
+      )
+  );
 }

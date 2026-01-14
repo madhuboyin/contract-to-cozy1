@@ -7,6 +7,7 @@ import {
   snoozeOrchestrationAction,
   undoOrchestrationAction,
   unsnoozeOrchestrationAction,
+  getOrchestrationDecisionTraceHandler,
 } from '../controllers/orchestration.controller';
 
 import { authenticate } from '../middleware/auth.middleware';
@@ -54,6 +55,14 @@ router.post(
   propertyAuthMiddleware,
   unsnoozeOrchestrationAction
 );
+
+router.get(
+  '/:propertyId/actions/:actionKey/trace',
+  authenticate,
+  propertyAuthMiddleware,
+  getOrchestrationDecisionTraceHandler
+);
+
 // Mount completion routes
 router.use('/', completionRoutes);
 export default router;
