@@ -2250,6 +2250,7 @@ model SignalProvenance {
   targetId         String
 
   createdAt        DateTime         @default(now())
+  attributions    SignalAttribution[]
 
   @@index([targetType, targetId])
   @@index([sourceType])
