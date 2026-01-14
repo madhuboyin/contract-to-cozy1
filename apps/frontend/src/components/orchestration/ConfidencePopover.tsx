@@ -69,8 +69,8 @@ function suggestImprovements(lines: string[], level: Props['level']) {
 }
 
 export const ConfidencePopover: React.FC<Props> = ({ level, score, explanation = [] }) => {
-  const percent = Math.round(score);
 
+  const percent = score <= 1 ? Math.round(score * 100) : Math.round(score);
   const { up, down } = useMemo(() => bucketExplanation(explanation), [explanation]);
   const improvements = useMemo(() => suggestImprovements(explanation, level), [explanation, level]);
 

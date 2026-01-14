@@ -170,11 +170,10 @@ export const OrchestrationActionCard: React.FC<Props> = ({
   const suppressionCopy = suppressed ? getSuppressionCopy(action) : null;
 
   const confidence = action.confidence;
-  const confidencePercent =
+  const confidenceScore =
     confidence && Number.isFinite(confidence.score)
-      ? Math.round(confidence.score * 100)
+      ? Math.round(confidence.score)
       : null;
-
 
   return (
     <div
@@ -219,14 +218,11 @@ export const OrchestrationActionCard: React.FC<Props> = ({
       </div>
 
       {/* Confidence */}
-      {confidence && confidencePercent != null && (
+      {confidence && confidenceScore != null && (
         <div className="mt-4 space-y-2">
-          <ConfidenceBar
-            score={confidencePercent}
-            level={confidence.level}
-          />
+          <ConfidenceBar score={confidenceScore} level={confidence.level} />
           <ConfidencePopover
-            score={confidencePercent}
+            score={confidenceScore}
             level={confidence.level}
             explanation={confidence.explanation}
             steps={action.decisionTrace?.steps ?? []}

@@ -1099,7 +1099,7 @@ export interface DecisionTraceStepDTO {
 }
 
 export interface ActionConfidenceDTO {
-  score: number; // 0 → 1
+  score: number; // 0 → 100
   level: 'LOW' | 'MEDIUM' | 'HIGH';
   explanation?: string[];
 };

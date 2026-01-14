@@ -20,17 +20,34 @@ export type OrchestratedActionUI = OrchestratedActionDTO & {
 /**
  * Normalize a single action
  */
+function normalizeConfidenceScore(score: number): number {
+  if (score == null || Number.isNaN(score)) return 0;
+
+  // If backend ever sends 0..1, convert to 0..100
+  const normalized = score <= 1 ? score * 100 : score;
+
+  // Clamp
+  return Math.max(0, Math.min(100, Math.round(normalized)));
+}
+
 function adaptAction(action: OrchestratedActionDTO): OrchestratedActionUI {
   const suppressed = Boolean(action.suppression?.suppressed);
 
   const suppressionReasonText = suppressed
-    ? action.suppression?.reasons
-        ?.map(r => r.message)
-        .join(' • ')
+    ? action.suppression?.reasons?.map(r => r.message).join(' • ')
     : undefined;
+
+  const confidence =
+    action.confidence
+      ? {
+          ...action.confidence,
+          score: normalizeConfidenceScore(action.confidence.score),
+        }
+      : action.confidence;
 
   return {
     ...action,
+    confidence,
     isSuppressed: suppressed,
     suppressionReasonText,
   };
