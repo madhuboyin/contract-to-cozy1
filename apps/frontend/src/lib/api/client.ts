@@ -1853,6 +1853,14 @@ class APIClient {
       }
     );
   }
+
+  async getOrchestrationDecisionTrace(propertyId: string, actionKey: string) {
+    const encoded = encodeURIComponent(actionKey);
+    return this.request<any>(`/api/orchestration/${propertyId}/actions/${encoded}/trace`, {
+      method: 'GET',
+    });
+  }
+  
   async getCompletion(
     propertyId: string,
     completionId: string

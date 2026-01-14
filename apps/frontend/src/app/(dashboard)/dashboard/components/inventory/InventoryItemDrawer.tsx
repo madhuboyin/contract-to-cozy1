@@ -220,7 +220,6 @@ export default function InventoryItemDrawer(props: {
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrError, setOcrError] = useState<string | null>(null);
   const [draftId, setDraftId] = useState<string>('');
-  const [pendingOcrExtracted, setPendingOcrExtracted] = useState<any | null>(null);
   const [confidenceByField, setConfidenceByField] = useState<Record<string, number>>({});
 
   const touchedRef = React.useRef(touched);
@@ -311,39 +310,6 @@ export default function InventoryItemDrawer(props: {
   }, [props.open]);
   
   useEffect(() => {
-    if (!pendingOcrExtracted) return;
-  
-    const ex = pendingOcrExtracted;
-  
-    // Apply in a "barcode-like" way:
-    // - don't overwrite user-entered values
-    // - but do fill if field is currently blank (even if touched)
-    if (ex.manufacturer) {
-      setManufacturer((prev) => (prev.trim() ? prev : String(ex.manufacturer)));
-    }
-    if (ex.modelNumber) {
-      setModelNumber((prev) => (prev.trim() ? prev : String(ex.modelNumber)));
-    }
-    if (ex.serialNumber) {
-      setSerialNumber((prev) => (prev.trim() ? prev : String(ex.serialNumber)));
-    }
-    if (ex.upc) {
-      setUpc((prev) => (prev.trim() ? prev : String(ex.upc)));
-    }
-    if (ex.sku) {
-      setSku((prev) => (prev.trim() ? prev : String(ex.sku)));
-    }
-  
-    // legacy sync
-    if (ex.serialNumber) setSerialNo((prev) => (prev.trim() ? prev : String(ex.serialNumber)));
-    if (ex.manufacturer) setBrand((prev) => (prev.trim() ? prev : String(ex.manufacturer)));
-    if (ex.modelNumber) setModel((prev) => (prev.trim() ? prev : String(ex.modelNumber)));
-  
-    // clear so this is one-shot
-    setPendingOcrExtracted(null);
-  }, [pendingOcrExtracted]);
-  
-  useEffect(() => {
     touchedRef.current = touched;
   }, [touched]);
   
@@ -386,6 +352,37 @@ export default function InventoryItemDrawer(props: {
     // If user "touched" but left empty, still autofill
     return !String(currentValue || '').trim();
   }  
+
+  function normalizeSerial(v: any): string {
+    const s = String(v ?? '').trim();
+    if (!s) return '';
+  
+    // Heuristic: OCR sometimes reads leading 4 as 'A' (A092... instead of 4092...)
+    // Only do this when: starts with A + rest are digits
+    if (/^A\d+$/.test(s)) return `4${s.slice(1)}`;
+  
+    return s;
+  }
+  
+  function applyAutofillString(
+    field: keyof typeof touched,
+    incoming: any,
+    setter: (v: string) => void,
+    normalizer?: (v: any) => string
+  ) {
+    const incRaw = incoming;
+    const inc = normalizer ? normalizer(incRaw) : String(incRaw ?? '').trim();
+    if (!inc) return;
+  
+    const t = touchedRef.current[field];
+    const current = String((valuesRef.current as any)[field] ?? '').trim();
+  
+    // Same rule we used for barcode: fill if user hasn't edited OR field is still blank
+    if (!t || !current) {
+      setter(inc);
+    }
+  }
+  
 
   async function refreshItemDocs() {
     if (!props.initialItem) return;
@@ -536,34 +533,17 @@ export default function InventoryItemDrawer(props: {
       setConfidenceByField(r.confidence || {});
   
       const ex = r.extracted || {};
-      setPendingOcrExtracted(r.extracted || {});
-
-      if (ex.manufacturer) {
-        setManufacturer((prev) => (touched.manufacturer ? (prev.trim() ? prev : String(ex.manufacturer)) : String(ex.manufacturer)));
-      }
-      
-      if (ex.modelNumber) {
-        setModelNumber((prev) => (touched.modelNumber ? (prev.trim() ? prev : String(ex.modelNumber)) : String(ex.modelNumber)));
-      }
-      
-      if (ex.serialNumber) {
-        setSerialNumber((prev) => (touched.serialNumber ? (prev.trim() ? prev : String(ex.serialNumber)) : String(ex.serialNumber)));
-      }
-      
-      if (ex.upc) {
-        setUpc((prev) => (touched.upc ? (prev.trim() ? prev : String(ex.upc)) : String(ex.upc)));
-      }
-      
-      if (ex.sku) {
-        setSku((prev) => (touched.sku ? (prev.trim() ? prev : String(ex.sku)) : String(ex.sku)));
-      }
-      
-      // legacy (keep if you want)
-      if (ex.serialNumber) setSerialNo((prev) => (prev.trim() ? prev : String(ex.serialNumber)));
-      if (ex.manufacturer) setBrand((prev) => (prev.trim() ? prev : String(ex.manufacturer)));
-      if (ex.modelNumber) setModel((prev) => (prev.trim() ? prev : String(ex.modelNumber)));
-      
-      
+  
+      applyAutofillString('manufacturer', ex.manufacturer, setManufacturer);
+      applyAutofillString('modelNumber', ex.modelNumber, setModelNumber);
+      applyAutofillString('serialNumber', ex.serialNumber, setSerialNumber, normalizeSerial);
+      applyAutofillString('upc', ex.upc, setUpc);
+      applyAutofillString('sku', ex.sku, setSku);
+  
+      // legacy sync (optional)
+      if (!serialNo.trim() && ex.serialNumber) setSerialNo(normalizeSerial(ex.serialNumber));
+      if (!brand.trim() && ex.manufacturer) setBrand(String(ex.manufacturer));
+      if (!model.trim() && ex.modelNumber) setModel(String(ex.modelNumber));
     } catch (e: any) {
       console.error('OCR failed', e);
       setOcrError(e?.message || 'OCR failed');
@@ -571,6 +551,7 @@ export default function InventoryItemDrawer(props: {
       setOcrLoading(false);
     }
   }
+  
 
   async function onDismissDraft() {
     if (!draftId) return;

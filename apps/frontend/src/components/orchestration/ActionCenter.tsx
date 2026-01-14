@@ -201,9 +201,28 @@ export const ActionCenter: React.FC<Props> = ({
     }
   }, [traceAction, propertyId, loadActions, toast]);
 
-  const handleOpenDecisionTrace = useCallback((action: OrchestratedActionDTO) => {
-    setTraceAction(action);
-  }, []);
+  const handleOpenDecisionTrace = useCallback(async (action: OrchestratedActionDTO) => {
+    // If we already have steps, just open
+    const hasSteps = (action.decisionTrace?.steps?.length ?? 0) > 0;
+    if (hasSteps || !propertyId) {
+      setTraceAction(action);
+      return;
+    }
+  
+    try {
+      const resp = await api.getOrchestrationDecisionTrace(propertyId, action.actionKey);
+      const persisted = resp?.success ? resp.data : null;
+  
+      setTraceAction({
+        ...action,
+        decisionTrace: { steps: persisted?.steps ?? [] },
+        // optional: you could also surface persisted.signals/confidence in the modal later
+      });
+    } catch {
+      setTraceAction(action); // degrade gracefully
+    }
+  }, [propertyId]);
+  
   
   const handleSnoozeFromTrace = useCallback(() => {
     if (!traceAction) return;

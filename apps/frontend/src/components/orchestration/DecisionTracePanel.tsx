@@ -9,6 +9,8 @@ import {
   OrchestratedActionDTO,
 } from '@/types';
 
+import { DecisionTraceItem } from './DecisionTraceItem';
+
 type Props = {
   suppressed: boolean;
   reasons?: SuppressionReasonEntryDTO[];
@@ -36,23 +38,19 @@ export const DecisionTracePanel: React.FC<Props> = ({
 
   const isChecklistAction = action?.source === 'CHECKLIST';
 
-  // 🔑 UX IMPROVEMENT: Open modal directly for suppressed actions OR checklist items
+  // Open modal directly for suppressed actions OR checklist items
   const shouldOpenModalDirectly = suppressed || isChecklistAction;
 
   const handleToggleExpanded = () => {
     if (shouldOpenModalDirectly && action && onOpenTrace) {
-      // For suppressed actions or checklist items, open modal directly
       onOpenTrace(action);
     } else {
-      // For active RISK actions, toggle inline expansion
-      setExpanded(v => !v);
+      setExpanded((v) => !v);
     }
   };
 
   const handleOpenModal = () => {
-    if (action && onOpenTrace) {
-      onOpenTrace(action);
-    }
+    if (action && onOpenTrace) onOpenTrace(action);
   };
 
   return (
@@ -73,23 +71,11 @@ export const DecisionTracePanel: React.FC<Props> = ({
           {steps.length > 0 && (
             <div className="space-y-2">
               {steps.slice(0, 3).map((step, idx) => (
-                <div key={idx} className="flex items-start gap-2 text-xs">
-                  <span className="text-green-700 font-semibold">
-                    {step.outcome === 'APPLIED' ? '✅' : '⭕'}
-                  </span>
-
-                  <div>
-                    <div className="font-medium text-gray-800">
-                      {humanizeRule(step.rule)}
-                    </div>
-
-                    {humanizeDetails(step) && (
-                      <div className="text-xs text-muted-foreground">
-                        {humanizeDetails(step)}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <DecisionTraceItem
+                  key={`trace-step-${idx}`}
+                  type="RULE"
+                  step={step}
+                />
               ))}
             </div>
           )}
@@ -106,58 +92,3 @@ export const DecisionTracePanel: React.FC<Props> = ({
     </div>
   );
 };
-
-/* -------------------------------
-   Helpers (Plain English)
--------------------------------- */
-
-function humanizeRule(rule: string) {
-  switch (rule) {
-    case 'RISK_ACTIONABLE':
-      return 'This issue needs attention';
-    case 'RISK_INFER_ASSET_KEY':
-      return 'We identified the part of your home involved';
-    case 'COVERAGE_MATCHING':
-      return 'We checked your warranties and insurance';
-    case 'COVERAGE_AWARE_CTA':
-      return 'Your coverage was considered';
-    case 'BOOKING_SUPPRESSION':
-      return 'We checked for existing scheduled work';
-    case 'SUPPRESSION_FINAL':
-      return 'Final decision made';
-    case 'USER_MARKED_COMPLETE':
-      return 'You marked this recommendation as completed';
-    case 'CHECKLIST_SUPPRESSION':
-    case 'CHECKLIST_SUPPRESSION_AUTHORITATIVE':
-      return 'This is already tracked in your maintenance checklist';
-    case 'CHECKLIST_ACTIONABLE':
-      return 'This maintenance task needs attention';
-    default:
-      return rule.replace(/_/g, ' ');
-  }
-}
-
-function humanizeDetails(step: DecisionTraceStepDTO) {
-  if (!step.details) return null;
-
-  if (step.rule === 'BOOKING_SUPPRESSION') {
-    return step.outcome === 'APPLIED'
-      ? 'Related work is already scheduled.'
-      : 'No related work is currently scheduled.';
-  }
-
-  if (step.rule === 'COVERAGE_MATCHING') {
-    return step.details?.type === 'NONE'
-      ? 'No active coverage was found for this issue.'
-      : 'Active coverage was found.';
-  }
-
-  // 🔑 NEW: Handle CHECKLIST_ITEM_TRACKED
-  if (step.rule === 'CHECKLIST_ITEM_TRACKED') {
-    return step.details?.title 
-      ? `Tracked in your maintenance schedule as "${step.details.title}".`
-      : 'Tracked in your maintenance schedule.';
-  }
-
-  return 'Additional context was evaluated.';
-}
