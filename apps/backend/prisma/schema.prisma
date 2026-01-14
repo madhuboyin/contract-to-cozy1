@@ -2044,10 +2044,15 @@ model OrchestrationActionEvent {
   actionType    OrchestrationActionEventType
   source        OrchestrationActionSource
 
+  primarySourceType  SignalSourceType? // optional cache
+  primarySourceLabel String?           // optional cache
+  primaryConfidence  Float?            // optional cache
+
   // Metadata / audit
   payload       Json?
   createdBy     String?  // userId (nullable for system actions)
   createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   // Performance + idempotency
   @@index([propertyId])
@@ -2180,6 +2185,88 @@ model OrchestrationDecisionTrace {
   @@index([actionKey])
   @@map("orchestration_decision_traces")
 }
+
+// ===============================
+// SIGNAL SOURCE TAGGING
+// ===============================
+
+enum SignalSourceType {
+  SCHEDULED     // ⏱ Time-based / cron / seasonal
+  INTELLIGENCE  // 📊 Risk model / AI / prediction
+  COVERAGE      // 📄 Insurance / warranty derived
+  MANUAL        // 👤 User initiated
+  SENSOR        // 🔔 IoT / telemetry
+  DOCUMENT      // 🧾 OCR/PDF extraction
+  EXTERNAL      // 🌎 CPSC/NOAA/3rd-party feeds (optional but useful)
+}
+
+enum SignalTriggerType {
+  RULE          // deterministic rule fired
+  MODEL         // probabilistic model output
+  EXTRACTION    // OCR/doc parsing
+  USER_ACTION   // explicit user action
+  SCHEDULE      // cron/time-based
+  INGEST        // external feed ingestion
+}
+
+enum DerivedFromType {
+  RISK_ASSESSMENT
+  POLICY
+  WARRANTY
+  DOCUMENT
+  INVENTORY_ITEM
+  RECALL_RECORD
+  WEATHER_EVENT
+  USER_EVENT
+}
+
+
+model SignalProvenance {
+  id              String           @id @default(uuid())
+
+  // Core taxonomy
+  sourceType       SignalSourceType
+  triggerType      SignalTriggerType
+
+  // Optional “where it came from”
+  sourceSystem     String?          // e.g. "coverageLapseJob", "freezeRiskModel", "ocrLabel", "cpscIngest"
+  sourceVersion    String?          // model version, ruleset version, pipeline version
+  sourceRunId      String?          // jobRunId / batchId / ingestionRunId / workflowRunId
+
+  // Optional linkage to the underlying evidence/inputs
+  derivedFromType  String?          // "RISK_ASSESSMENT" | "POLICY" | "WARRANTY" | "DOCUMENT" | "INVENTORY_ITEM" etc.
+  derivedFromId    String?          // id of the evidence record
+  externalRef      String?          // provider id or URL-safe id (e.g., CPSC recall id)
+
+  // Explainability
+  label            String?          // short UI label override (rare)
+  summary          String?          // 1-line “why this appeared”
+  details          Json?            // structured payload: thresholds, features, matched fields, etc.
+  confidence       Float?           // 0..1 (or 0..100) – pick one convention
+  severityScore    Float?           // optional numeric strength signal separate from confidence
+
+  // Polymorphic target (links provenance to a thing in your system)
+  targetType       String           // "ORCHESTRATED_ACTION" | "INCIDENT" | "NOTIFICATION" | "TASK" | "CLAIM_INSIGHT"
+  targetId         String
+
+  createdAt        DateTime         @default(now())
+
+  @@index([targetType, targetId])
+  @@index([sourceType])
+  @@index([sourceSystem])
+}
+
+model SignalAttribution {
+  id             String @id @default(uuid())
+  provenanceId   String
+  provenance     SignalProvenance @relation(fields: [provenanceId], references: [id], onDelete: Cascade)
+
+  rank           Int    @default(0)    // 0 = primary
+  weight         Float?                 // e.g. contribution score
+
+  @@index([provenanceId])
+}
+
 
 // =============================================================================
 // SEASONAL MAINTENANCE MODELS
