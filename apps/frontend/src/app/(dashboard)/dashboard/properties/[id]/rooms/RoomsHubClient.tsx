@@ -37,6 +37,8 @@ function guessRoomType(name: string) {
   if (t.includes('office') || t.includes('study') || t.includes('den')) return 'OFFICE';
 
   if (t.includes('bath') || t.includes('toilet') || t.includes('powder') || t.includes('wc')) return 'BATHROOM';
+  
+  if (t.includes('basement') || t.includes('cellar') || t.includes('lower level') || t.includes('lower-level')) return 'BASEMENT';
 
   return 'OTHER';
 }

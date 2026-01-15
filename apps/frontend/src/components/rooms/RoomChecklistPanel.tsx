@@ -16,7 +16,17 @@ import { CheckCircle2, Circle, Plus, Trash2, Sparkles } from 'lucide-react';
 interface Props {
   propertyId: string;
   roomId: string;
-  roomType: 'KITCHEN' | 'LIVING' | 'BEDROOM' | 'BATHROOM' | 'DINING' | 'LAUNDRY' | 'GARAGE' | 'OFFICE' | 'OTHER';
+  roomType:
+    | 'KITCHEN'
+    | 'LIVING'
+    | 'BEDROOM'
+    | 'BATHROOM'
+    | 'DINING'
+    | 'LAUNDRY'
+    | 'GARAGE'
+    | 'OFFICE'
+    | 'BASEMENT'
+    | 'OTHER';
   bedroomKind?: 'MASTER' | 'KIDS' | 'GUEST' | null;
 }
 
@@ -116,7 +126,9 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
                         : 'e.g., Make bed'
                     : roomType === 'BATHROOM'
                       ? 'e.g., Check under-sink for leaks'
-                      : 'e.g., Dust vents';
+                      : roomType === 'BASEMENT'
+                        ? 'e.g., Clean basement vents'
+                        : 'e.g., Dust vents';
 
   const recommended: ChecklistSeed[] = useMemo(() => {
     if (roomType === 'KITCHEN') {
@@ -180,7 +192,17 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
         { title: 'Test GFCI outlets', frequency: 'QUARTERLY' },
       ];
     }
-    
+
+    if (roomType === 'BASEMENT') {
+      return [
+        { title: 'Check for moisture / odors', frequency: 'MONTHLY' },
+        { title: 'Inspect foundation walls (cracks/seepage)', frequency: 'SEASONAL' },
+        { title: 'Clean/replace dehumidifier filter', frequency: 'MONTHLY' },
+        { title: 'Test sump pump (if present)', frequency: 'QUARTERLY' },
+        { title: 'Check smoke/CO detector nearby', frequency: 'SEASONAL' },
+      ];
+    }
+        
     if (roomType === 'BEDROOM') {
       if (bedroomKind === 'MASTER') {
         return [
@@ -205,6 +227,8 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
           { title: 'Run room for 10 mins (air out)', frequency: 'MONTHLY' },
         ];
       }
+      
+      
       return [
         { title: 'Make bed + quick reset', frequency: 'WEEKLY' },
         { title: 'Dust fan + vents', frequency: 'MONTHLY' },
