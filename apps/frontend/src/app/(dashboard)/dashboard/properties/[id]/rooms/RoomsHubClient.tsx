@@ -6,8 +6,9 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 
 import { InventoryRoom } from '@/types';
-import { listInventoryRooms, patchRoomMeta } from '../../../inventory/inventoryApi';
+import { listInventoryRooms, patchRoomMeta, getRoomInsights } from '../../../inventory/inventoryApi';
 import { SectionHeader } from '../../../components/SectionHeader';
+import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
 
 function guessRoomType(name: string) {
   const t = (name || '').toLowerCase();
@@ -16,17 +17,25 @@ function guessRoomType(name: string) {
   return 'OTHER';
 }
 
-function roomIcon(type?: string | null, name?: string) {
-  const t = String(type || '').toUpperCase();
-  if (t === 'KITCHEN') return '🍳';
-  if (t === 'LIVING_ROOM' || t === 'LIVING') return '🛋️';
+function computeHealthScore(insights: any): number {
+  const stats = insights?.stats || {};
+  const itemCount = Number(stats.itemCount || 0);
+  const docs = Number(stats.docsLinkedCount || 0);
+  const gaps = Number(stats.coverageGapsCount || 0);
 
-  const n = (name || '').toLowerCase();
-  if (n.includes('bed')) return '🛏️';
-  if (n.includes('bath')) return '🛁';
-  if (n.includes('office') || n.includes('study')) return '🧠';
-  if (n.includes('garage')) return '🚗';
-  return '✨';
+  let score = 55;
+  score += Math.min(20, itemCount * 2);
+  score += Math.min(20, docs * 5);
+  score -= Math.min(30, gaps * 8);
+
+  const missing = insights?.kitchen?.missingAppliances?.length || 0;
+  score -= Math.min(20, missing * 6);
+
+  const hint = insights?.livingRoom?.comfortScoreHint;
+  if (hint === 'HIGH') score += 6;
+  if (hint === 'LOW') score -= 6;
+
+  return Math.max(0, Math.min(100, Math.round(score)));
 }
 
 export default function RoomsHubClient() {
@@ -37,7 +46,11 @@ export default function RoomsHubClient() {
   const [loading, setLoading] = useState(false);
   const [detectingId, setDetectingId] = useState<string | null>(null);
 
-  async function refresh() {
+  // insights cache per room
+  const [roomInsights, setRoomInsights] = useState<Record<string, any>>({});
+  const [insightsLoading, setInsightsLoading] = useState<Record<string, boolean>>({});
+
+  async function refreshRooms() {
     setLoading(true);
     try {
       const r = await listInventoryRooms(propertyId);
@@ -48,7 +61,7 @@ export default function RoomsHubClient() {
   }
 
   useEffect(() => {
-    if (propertyId) refresh();
+    if (propertyId) refreshRooms();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
 
@@ -58,18 +71,14 @@ export default function RoomsHubClient() {
   );
 
   async function ensureType(room: any) {
-    if (!propertyId || !room?.id) return;
-
-    // already set
     if (room?.type) return;
-
     const inferred = guessRoomType(room.name);
     if (inferred === 'OTHER') return;
 
     setDetectingId(room.id);
     try {
       await patchRoomMeta(propertyId, room.id, { type: inferred });
-      await refresh();
+      await refreshRooms();
     } catch {
       // non-blocking
     } finally {
@@ -77,13 +86,39 @@ export default function RoomsHubClient() {
     }
   }
 
+  async function loadInsight(roomId: string) {
+    setInsightsLoading((m) => ({ ...m, [roomId]: true }));
+    try {
+      const data = await getRoomInsights(propertyId, roomId);
+      const normalized = (data as any)?.data ?? data;
+      setRoomInsights((m) => ({ ...m, [roomId]: normalized }));
+    } catch {
+      // keep empty
+    } finally {
+      setInsightsLoading((m) => ({ ...m, [roomId]: false }));
+    }
+  }
+
+  // Lazy-load insights after rooms load (avoids blocking)
+  useEffect(() => {
+    if (!propertyId || sorted.length === 0) return;
+
+    // load first 12 rooms by default (enough for most homes)
+    const targets = sorted.slice(0, 12).map((r) => r.id);
+    for (const id of targets) {
+      if (roomInsights[id] || insightsLoading[id]) continue;
+      loadInsight(id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId, sorted.map((r) => r.id).join(',')]);
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-start justify-between gap-4">
         <SectionHeader
           icon="✨"
           title="Rooms"
-          description="Beautiful room pages powered by your inventory—insights, value snapshot, and checklists."
+          description="Select a room to see health, value snapshot, and quick wins."
         />
         <div className="flex items-center gap-2">
           <Link
@@ -103,9 +138,7 @@ export default function RoomsHubClient() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {loading && (
-          <div className="rounded-2xl border border-black/10 p-4 text-sm opacity-70">
-            Loading rooms…
-          </div>
+          <div className="rounded-2xl border border-black/10 p-4 text-sm opacity-70">Loading rooms…</div>
         )}
 
         {!loading && sorted.length === 0 && (
@@ -122,15 +155,15 @@ export default function RoomsHubClient() {
           const inferred = r.type ? null : guessRoomType(r.name);
           const showDetect = !r.type && inferred !== 'OTHER';
 
+          const insights = roomInsights[r.id];
+          const score = insights ? computeHealthScore(insights) : 0;
+          const stats = insights?.stats;
+
           return (
             <div key={r.id} className="rounded-2xl border border-black/10 p-4 bg-white">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">{roomIcon(r.type, r.name)}</span>
-                    <div className="font-medium truncate">{r.name}</div>
-                  </div>
-
+                  <div className="font-medium truncate">{r.name}</div>
                   <div className="text-xs opacity-60 mt-1">
                     {r.type ? (
                       <>Template: <span className="font-medium">{r.type}</span></>
@@ -156,7 +189,26 @@ export default function RoomsHubClient() {
                 )}
               </div>
 
-              <div className="mt-4 flex items-center gap-2">
+              <div className="mt-4">
+                {insightsLoading[r.id] ? (
+                  <div className="rounded-xl border border-black/10 p-3 text-sm opacity-70">Loading insights…</div>
+                ) : insights ? (
+                  <RoomHealthScoreRing
+                    value={score}
+                    label="Room health"
+                    sublabel={`${stats?.itemCount ?? 0} items · ${stats?.docsLinkedCount ?? 0} docs · ${stats?.coverageGapsCount ?? 0} gaps`}
+                  />
+                ) : (
+                  <button
+                    onClick={() => loadInsight(r.id)}
+                    className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+                  >
+                    Load health score
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
                 <Link
                   href={`/dashboard/properties/${propertyId}/rooms/${r.id}`}
                   className="rounded-xl px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5"
@@ -164,7 +216,6 @@ export default function RoomsHubClient() {
                   View room
                 </Link>
 
-                {/* UX: cross-link to workspace */}
                 <Link
                   href={`/dashboard/properties/${propertyId}/inventory/rooms/${r.id}`}
                   className="rounded-xl px-4 py-2 text-sm border border-black/10 hover:bg-black/5"

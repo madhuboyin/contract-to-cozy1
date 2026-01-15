@@ -375,50 +375,45 @@ export type RoomTimelineEventDTO = {
   meta?: any;
 };
 
-export async function listRoomChecklistItems(propertyId: string, roomId: string) {
-  const res = await api.get<{ items: RoomChecklistItemDTO[] }>(
-    `/api/properties/${propertyId}/inventory/rooms/${roomId}/checklist-items`
-  );
-  return res.data.items;
-}
-
-export async function createRoomChecklistItem(propertyId: string, roomId: string, body: any) {
-  const res = await api.post<{ item: RoomChecklistItemDTO }>(
-    `/api/properties/${propertyId}/inventory/rooms/${roomId}/checklist-items`,
-    body
-  );
-  return res.data.item;
-}
-
-export async function updateRoomChecklistItem(propertyId: string, roomId: string, itemId: string, body: any) {
-  const res = await api.patch<{ item: RoomChecklistItemDTO }>(
-    `/api/properties/${propertyId}/inventory/rooms/${roomId}/checklist-items/${itemId}`,
-    body
-  );
-  return res.data.item;
-}
-
-export async function deleteRoomChecklistItem(propertyId: string, roomId: string, itemId: string) {
-  await api.delete(`/api/properties/${propertyId}/inventory/rooms/${roomId}/checklist-items/${itemId}`);
-}
-
-export async function getRoomTimeline(propertyId: string, roomId: string) {
-  const res = await api.get<{ timeline: RoomTimelineEventDTO[] }>(
-    `/api/properties/${propertyId}/inventory/rooms/${roomId}/timeline`
-  );
-  return res.data.timeline;
-}
-
 export async function getInventoryRoom(propertyId: string, roomId: string) {
   const res = await api.get<{ room: any }>(`/api/properties/${propertyId}/inventory/rooms/${roomId}`);
   return res.data.room;
 }
 
+export async function listRoomChecklistItems(propertyId: string, roomId: string) {
+  const res = await api.get(
+    `/api/properties/${propertyId}/inventory/rooms/${roomId}/checklist-items`
+  );
+  return (res as any)?.data?.data?.items ?? [];
+}
+
+export async function createRoomChecklistItem(propertyId: string, roomId: string, body: any) {
+  const res = await api.post(
+    `/api/properties/${propertyId}/inventory/rooms/${roomId}/checklist-items`,
+    body
+  );
+  return (res as any)?.data?.data?.item;
+}
+
+export async function updateRoomChecklistItem(propertyId: string, roomId: string, itemId: string, body: any) {
+  const res = await api.patch(
+    `/api/properties/${propertyId}/inventory/rooms/${roomId}/checklist-items/${itemId}`,
+    body
+  );
+  return (res as any)?.data?.data?.item;
+}
+
+export async function getRoomTimeline(propertyId: string, roomId: string) {
+  const res = await api.get(
+    `/api/properties/${propertyId}/inventory/rooms/${roomId}/timeline`
+  );
+  return (res as any)?.data?.data?.timeline ?? [];
+}
+
 export async function updateInventoryRoomProfile(propertyId: string, roomId: string, profile: any) {
-  const res = await api.patch<{ room: InventoryRoom }>(
+  const res = await api.patch(
     `/api/properties/${propertyId}/inventory/rooms/${roomId}/profile`,
     { profile }
   );
-  return res.data.room;
+  return (res as any)?.data?.data?.room ?? (res as any)?.data?.room ?? (res as any)?.data;
 }
-
