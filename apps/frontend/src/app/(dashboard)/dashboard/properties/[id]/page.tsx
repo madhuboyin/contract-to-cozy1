@@ -12,7 +12,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-import { Edit, Zap, Shield, FileText, ArrowLeft, Home, Calendar, Ruler, DollarSign, Wrench, Settings, ShieldAlert, ArrowRight, TrendingUp } from "lucide-react"; 
+import {
+  Edit,
+  Zap,
+  Shield,
+  FileText,
+  ArrowLeft,
+  Home,
+  Calendar,
+  Ruler,
+  DollarSign,
+  Wrench,
+  Settings,
+  ShieldAlert,
+  ArrowRight,
+  TrendingUp,
+  LayoutGrid,
+} from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { FileDown } from "lucide-react";
 import ReportsClient from "./reports/ReportsClient";
@@ -21,6 +37,8 @@ import { ClipboardCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import IncidentsClient from "./incidents/IncidentsClient";
 
+// ✅ NEW: Rooms tab content
+import RoomsHubClient from "./rooms/RoomsHubClient";
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
 
@@ -31,9 +49,9 @@ interface HealthScoreResult {
   maxPotentialScore: number;
   maxBaseScore: number;
   maxExtraScore: number;
-  insights: { 
-    factor: string; 
-    status: string; 
+  insights: {
+    factor: string;
+    status: string;
     score: number;
     details?: string[]; // ADD THIS LINE
   }[];
@@ -49,98 +67,98 @@ const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspec
  * UPDATED: Added appliance warranty redirect logic (Fix 1)
  */
 const renderContextualButton = (insight: any, propertyId: string) => {
-    
+
   let buttonLabel = '';
   let category = ''; // Must be a ServiceCategory enum value (e.g., INSPECTION, PLUMBING)
   let isUrgent = false;
 
   // 1. Actions related to scheduling professionals (Inspection, Review, Attention)
-  if (insight.status.includes('Inspection') || 
-  insight.status.includes('Review') || 
-  insight.status.includes('Attention')) {
-  
-      // Map to valid ENUMs for Provider Search
-      if (insight.factor.includes('Age Factor') || insight.factor.includes('Roof')) {
-          category = 'INSPECTION'; 
-      } else if (insight.factor.includes('HVAC')) {
-          category = 'HVAC';
-      } else if (insight.factor.includes('Water Heater')) {
-          category = 'PLUMBING'; 
-      } else if (insight.factor.includes('Exterior') || insight.factor.includes('Drainage')) {
-          category = 'HANDYMAN'; 
-      } else {
-          category = 'INSPECTION';
+  if (insight.status.includes('Inspection') ||
+    insight.status.includes('Review') ||
+    insight.status.includes('Attention')) {
+
+    // Map to valid ENUMs for Provider Search
+    if (insight.factor.includes('Age Factor') || insight.factor.includes('Roof')) {
+      category = 'INSPECTION';
+    } else if (insight.factor.includes('HVAC')) {
+      category = 'HVAC';
+    } else if (insight.factor.includes('Water Heater')) {
+      category = 'PLUMBING';
+    } else if (insight.factor.includes('Exterior') || insight.factor.includes('Drainage')) {
+      category = 'HANDYMAN';
+    } else {
+      category = 'INSPECTION';
+    }
+
+    // Determine the action label based on status
+    if (insight.status.includes('Inspection')) {
+      buttonLabel = "Schedule Inspection";
+      isUrgent = true;
+    } else if (insight.status.includes('Review')) {
+      buttonLabel = "Schedule Comprehensive Assessment";
+      isUrgent = false;
+    } else if (insight.status.includes('Attention')) {
+      buttonLabel = "Book Repair Service";
+      isUrgent = true;
+    }
+
+    // FIXED: Use Next.js object-based routing for reliable parameter passing
+    const providerSearchLink = {
+      pathname: '/dashboard/providers',
+      query: {
+        category: category,
+        insightFactor: insight.factor,
+        propertyId: propertyId
       }
+    };
 
-      // Determine the action label based on status
-      if (insight.status.includes('Inspection')) {
-          buttonLabel = "Schedule Inspection";
-          isUrgent = true;
-      } else if (insight.status.includes('Review')) {
-          buttonLabel = "Schedule Comprehensive Assessment";
-          isUrgent = false;
-      } else if (insight.status.includes('Attention')) {
-          buttonLabel = "Book Repair Service";
-          isUrgent = true;
-      }
-
-      // FIXED: Use Next.js object-based routing for reliable parameter passing
-      const providerSearchLink = {
-          pathname: '/dashboard/providers',
-          query: {
-              category: category,
-              insightFactor: insight.factor,
-              propertyId: propertyId
-          }
-      };
-
-      return (
-          <Button 
-              size="sm" 
-              variant={isUrgent ? 'destructive' : 'default'} 
-              asChild 
-              className="w-full sm:w-auto"
-          >
-              <Link href={providerSearchLink}>
-                  {buttonLabel} <Wrench className="ml-2 h-4 w-4" />
-              </Link>
-          </Button>
-      );
+    return (
+      <Button
+        size="sm"
+        variant={isUrgent ? 'destructive' : 'default'}
+        asChild
+        className="w-full sm:w-auto"
+      >
+        <Link href={providerSearchLink}>
+          {buttonLabel} <Wrench className="ml-2 h-4 w-4" />
+        </Link>
+      </Button>
+    );
   }
-  
+
   // FIX 1: Appliance warranty actions - redirect to warranties page
   // Check factor name since count is in factor, not status
   if (insight.factor.includes('Appliances') && insight.status === 'Needs Warranty') {
-      return (
-          <Button size="sm" variant="default" asChild className="w-full sm:w-auto">
-              <Link href={`/dashboard/warranties?propertyId=${propertyId}`}>
-                  Manage Appliance Warranties <Shield className="ml-2 h-4 w-4" />
-              </Link>
-          </Button>
-      );
+    return (
+      <Button size="sm" variant="default" asChild className="w-full sm:w-auto">
+        <Link href={`/dashboard/warranties?propertyId=${propertyId}`}>
+          Manage Appliance Warranties <Shield className="ml-2 h-4 w-4" />
+        </Link>
+      </Button>
+    );
   }
 
   // 2. Actions related to updating missing data (Safety, Documents)
-  if (insight.factor.includes('Safety') || 
-      insight.factor.includes('Documents') || 
-      insight.status.includes('Missing Data')) {
-      
-      return (
-          <Button size="sm" variant="default" asChild className="w-full sm:w-auto">
-              <Link href={`/dashboard/properties/${propertyId}/edit`}>
-                  Update Profile Data <Settings className="ml-2 h-4 w-4" />
-              </Link>
-          </Button>
-      );
+  if (insight.factor.includes('Safety') ||
+    insight.factor.includes('Documents') ||
+    insight.status.includes('Missing Data')) {
+
+    return (
+      <Button size="sm" variant="default" asChild className="w-full sm:w-auto">
+        <Link href={`/dashboard/properties/${propertyId}/edit`}>
+          Update Profile Data <Settings className="ml-2 h-4 w-4" />
+        </Link>
+      </Button>
+    );
   }
 
   // 3. Default action (catch-all)
   return (
-      <Button size="sm" variant="outline" asChild className="w-full sm:w-auto">
-           <Link href={`/dashboard/maintenance?propertyId=${propertyId}`}>
-              View Maintenance <ArrowRight className="ml-2 h-4 w-4" />
-           </Link>
-      </Button>
+    <Button size="sm" variant="outline" asChild className="w-full sm:w-auto">
+      <Link href={`/dashboard/maintenance?propertyId=${propertyId}`}>
+        View Maintenance <ArrowRight className="ml-2 h-4 w-4" />
+      </Link>
+    </Button>
   );
 };
 
@@ -152,55 +170,55 @@ const renderContextualButton = (insight: any, propertyId: string) => {
  */
 function HealthInsightList({ property }: { property: ScoredProperty }) {
   if (!property.healthScore) {
-      return null;
+    return null;
   }
 
   // Filter for insights that match the high-priority statuses
-  const criticalInsights = property.healthScore.insights.filter(i => 
-      HIGH_PRIORITY_STATUSES.includes(i.status)
+  const criticalInsights = property.healthScore.insights.filter(i =>
+    HIGH_PRIORITY_STATUSES.includes(i.status)
   );
   console.log('🔍 INSIGHTS DATA:', JSON.stringify(criticalInsights, null, 2));
   if (criticalInsights.length === 0) {
-      return null;
+    return null;
   }
 
   return (
-      <Card className="border-2 border-blue-500 bg-blue-50 shadow-lg">
-          <CardContent className="p-4 sm:p-6">
-              <h2 className="text-xl font-extrabold text-blue-800 mb-4 flex items-center">
-                  <Shield className="h-6 w-6 mr-2 flex-shrink-0 text-blue-600" /> 
-                  Proactive Maintenance Recommended ({criticalInsights.length} Items)
-              </h2>
-              <p className="text-sm text-blue-700 mb-4">
-                  These maintenance actions will directly increase your Health Score and reduce risk.
-              </p>
-              
-              <ul className="space-y-3">
-                  {criticalInsights.map((insight, index) => (
-                      <li key={index} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-white rounded-lg shadow-sm border border-blue-100">
-                          <div className="flex-1 pr-4 mb-2 sm:mb-0">
-                              <p className="font-semibold text-gray-800">
-                                  {insight.factor}
-                              </p>
-                              <p className="text-sm text-blue-600 font-medium mt-1">
-                                  Status: **{insight.status}**
-                              </p>
-                              {insight.details && insight.details.length > 0 && (
-                                <ul className="text-xs text-gray-600 mt-2 ml-4 list-disc space-y-1">
-                                    {insight.details.map((detail, idx) => (
-                                        <li key={idx}>{detail}</li>
-                                    ))}
-                                </ul>
-                              )}
-                          </div>
-                          
-                          {/* Contextual Action Button */}
-                          {renderContextualButton(insight, property.id)}
-                      </li>
-                  ))}
-              </ul>
-          </CardContent>
-      </Card>
+    <Card className="border-2 border-blue-500 bg-blue-50 shadow-lg">
+      <CardContent className="p-4 sm:p-6">
+        <h2 className="text-xl font-extrabold text-blue-800 mb-4 flex items-center">
+          <Shield className="h-6 w-6 mr-2 flex-shrink-0 text-blue-600" />
+          Proactive Maintenance Recommended ({criticalInsights.length} Items)
+        </h2>
+        <p className="text-sm text-blue-700 mb-4">
+          These maintenance actions will directly increase your Health Score and reduce risk.
+        </p>
+
+        <ul className="space-y-3">
+          {criticalInsights.map((insight, index) => (
+            <li key={index} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-white rounded-lg shadow-sm border border-blue-100">
+              <div className="flex-1 pr-4 mb-2 sm:mb-0">
+                <p className="font-semibold text-gray-800">
+                  {insight.factor}
+                </p>
+                <p className="text-sm text-blue-600 font-medium mt-1">
+                  Status: **{insight.status}**
+                </p>
+                {insight.details && insight.details.length > 0 && (
+                  <ul className="text-xs text-gray-600 mt-2 ml-4 list-disc space-y-1">
+                    {insight.details.map((detail, idx) => (
+                      <li key={idx}>{detail}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Contextual Action Button */}
+              {renderContextualButton(insight, property.id)}
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -234,7 +252,6 @@ const SellingPrepBanner = ({ propertyId }: { propertyId: string }) => (
     </div>
   </div>
 );
-
 
 // UPDATED: PropertyOverview with Card structure and Phase 2 typography
 const PropertyOverview = ({ property }: { property: Property }) => (
@@ -434,38 +451,35 @@ const MaintenancePlanTab = ({ property }: { property: ScoredProperty }) => {
   const searchParams = useSearchParams();
   const viewContext = searchParams.get('view');
   const showCriticalInsights = viewContext === 'insights';
-  
-  return (
-    <div className="space-y-6"> {/* Use div here to manage space between sections */}
-        
-        {/* [NEW] Conditional rendering of the critical insights component */}
-        {showCriticalInsights && property.healthScore && (
-            <HealthInsightList property={property} />
-        )}
 
-        {/* Standard Maintenance Card (Always displayed, possibly below the insights) */}
-        <Card>
-          <CardHeader className="p-4">
-            <CardTitle className="font-heading text-xl flex items-center gap-2">
-              <Zap className="h-5 w-5 text-red-600" />
-              {showCriticalInsights ? 'Proactive Maintenance Schedule' : 'Property Maintenance Plan'}
-            </CardTitle>
-            <CardDescription className="font-body text-sm">
-              View and manage all scheduled maintenance tasks for this property
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-4 pt-0 space-y-3">
-            <p className="font-body text-base text-gray-700">
-              This section displays recurring tasks, future appointments, and your long-term maintenance calendar.
-            </p>
-            <Link href={`/dashboard/maintenance?propertyId=${property.id}`} passHref>
-              <Button variant="default">
-                <Zap className="mr-2 h-4 w-4" />
-                Manage Maintenance Tasks
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+  return (
+    <div className="space-y-6">
+      {showCriticalInsights && property.healthScore && (
+        <HealthInsightList property={property} />
+      )}
+
+      <Card>
+        <CardHeader className="p-4">
+          <CardTitle className="font-heading text-xl flex items-center gap-2">
+            <Zap className="h-5 w-5 text-red-600" />
+            {showCriticalInsights ? 'Proactive Maintenance Schedule' : 'Property Maintenance Plan'}
+          </CardTitle>
+          <CardDescription className="font-body text-sm">
+            View and manage all scheduled maintenance tasks for this property
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 pt-0 space-y-3">
+          <p className="font-body text-base text-gray-700">
+            This section displays recurring tasks, future appointments, and your long-term maintenance calendar.
+          </p>
+          <Link href={`/dashboard/maintenance?propertyId=${property.id}`} passHref>
+            <Button variant="default">
+              <Zap className="mr-2 h-4 w-4" />
+              Manage Maintenance Tasks
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
     </div>
   );
 };
@@ -538,7 +552,7 @@ const DocumentsTab = ({ propertyId }: { propertyId: string }) => (
     </CardHeader>
     <CardContent className="p-4 pt-0 space-y-3">
       <p className="font-body text-base text-gray-700">
-        Documents associated with this property will be listed here, including warranties, 
+        Documents associated with this property will be listed here, including warranties,
         insurance policies, inspection reports, and more.
       </p>
       <Link href={`/dashboard/documents?propertyId=${propertyId}`} passHref>
@@ -577,6 +591,7 @@ const ReportsTab = ({ propertyId }: { propertyId: string }) => (
     </CardContent>
   </Card>
 );
+
 const ClaimsTab = ({ propertyId }: { propertyId: string }) => (
   <Card>
     <CardHeader className="p-4">
@@ -613,37 +628,34 @@ const ClaimsTab = ({ propertyId }: { propertyId: string }) => (
 
 export default function PropertyDetailPage() {
   const params = useParams();
-  const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const propertyId = Array.isArray(params.id) ? params.id[0] : (params as any).id;
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab');
-  
-  // Updated defaultTab logic to include the new 'financial-efficiency' tab
+
+  // ✅ UPDATED: include rooms tab
   const defaultTab =
-  initialTab &&
-  [
-    'overview',
-    'maintenance',
-    'incidents',
-    'risk-protection',
-    'financial-efficiency',
-    'documents',
-    'reports',
-    'claims',
-  ].includes(initialTab)
-    ? initialTab
-    : 'overview';
+    initialTab &&
+      [
+        'overview',
+        'maintenance',
+        'rooms', // ✅ NEW
+        'incidents',
+        'risk-protection',
+        'financial-efficiency',
+        'documents',
+        'reports',
+        'claims',
+      ].includes(initialTab)
+      ? initialTab
+      : 'overview';
 
-
-
-  // [MODIFICATION] Assumed that the API returns ScoredProperty data for this endpoint.
   const { data: property, isLoading } = useQuery({
     queryKey: ["property", propertyId],
     queryFn: async () => {
       const response = await api.getProperty(propertyId);
       if (response.success) {
-        // Cast the result to ScoredProperty type for safety
-        return response.data as ScoredProperty; 
+        return response.data as ScoredProperty;
       }
       toast({
         title: "Error",
@@ -663,9 +675,7 @@ export default function PropertyDetailPage() {
     );
   }
 
-  // [MODIFICATION] Cast the result to ScoredProperty
-  const scoredProperty = property as ScoredProperty; 
-
+  const scoredProperty = property as ScoredProperty;
 
   if (!property) {
     return (
@@ -682,9 +692,9 @@ export default function PropertyDetailPage() {
 
   return (
     <DashboardShell className="gap-2">
-      {/* UPDATED: Back Navigation - Reduced to mb-2 for tighter spacing */}
+      {/* Back Navigation */}
       <div className="mb-2">
-        <button 
+        <button
           onClick={() => router.back()}
           className="font-body text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center transition-colors bg-transparent border-none p-0 cursor-pointer"
         >
@@ -692,8 +702,8 @@ export default function PropertyDetailPage() {
           Back
         </button>
       </div>
-      
-      {/* UPDATED: PageHeader with Edit button in top-right */}
+
+      {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-2">
         <PageHeader className="pt-2 pb-2 gap-1 flex-1">
           <PageHeaderHeading>{property.name || "My Property"}</PageHeaderHeading>
@@ -701,8 +711,7 @@ export default function PropertyDetailPage() {
             {property.address}, {property.city}
           </PageHeaderDescription>
         </PageHeader>
-        
-        {/* NEW: Edit button in header */}
+
         <div className="flex-shrink-0 pt-2">
           <Link href={`/dashboard/properties/${property.id}/edit`} passHref>
             <Button variant="outline" size="sm" className="gap-2">
@@ -713,96 +722,107 @@ export default function PropertyDetailPage() {
         </div>
       </div>
 
-      {/* NEW: Compact Selling Prep Banner - Always visible */}
+      {/* Selling Prep Banner */}
       <SellingPrepBanner propertyId={property.id} />
 
-      {/* UPDATED: Removed space-y-4 wrapper - no container spacing needed */}
       <Tabs defaultValue={defaultTab} className="w-full">
-      <div className="overflow-x-auto">
-        <TabsList className="inline-flex w-max">
-          <TabsTrigger value="overview" className="flex items-center gap-1 sm:gap-2">
-            <Home className="h-4 w-4" />
-            <span className="hidden sm:inline">Overview</span>
-            <span className="sm:hidden">Info</span>
-          </TabsTrigger>
-          
-          <TabsTrigger value="maintenance" className="flex items-center gap-1 sm:gap-2">
-            <Zap className="h-4 w-4" />
-            <span className="hidden sm:inline">Maintenance Plan</span>
-            <span className="sm:hidden">Maint.</span>
-          </TabsTrigger>
-          
-          <TabsTrigger value="incidents" className="flex items-center gap-1 sm:gap-2">
-            <ShieldAlert className="h-4 w-4" />
-            <span className="hidden sm:inline">Incidents</span>
-            <span className="sm:hidden">Alerts</span>
-          </TabsTrigger>
-          
-          <TabsTrigger value="risk-protection" className="flex items-center gap-1 sm:gap-2">
-            <Shield className="h-4 w-4" />
-            <span className="hidden sm:inline">Risk & Protection</span>
-            <span className="sm:hidden">Risk</span>
-          </TabsTrigger>
-          
-          <TabsTrigger value="financial-efficiency" className="flex items-center gap-1 sm:gap-2">
-            <DollarSign className="h-4 w-4" />
-            <span className="hidden sm:inline">Financial Efficiency</span>
-            <span className="sm:hidden">Finance</span>
-          </TabsTrigger>
-          
-          <TabsTrigger value="documents" className="flex items-center gap-1 sm:gap-2">
-            <FileText className="h-4 w-4" />
-            <span className="hidden sm:inline">Documents</span>
-            <span className="sm:hidden">Docs</span>
-          </TabsTrigger>
-          
-          <TabsTrigger value="reports" className="flex items-center gap-1 sm:gap-2">
-            <FileDown className="h-4 w-4" />
-            <span className="hidden sm:inline">Reports</span>
-            <span className="sm:hidden">Reports</span>
-          </TabsTrigger>
-          
-          <TabsTrigger value="claims" className="flex items-center gap-1 sm:gap-2">
-            <ClipboardCheck className="h-4 w-4" />
-            <span className="hidden sm:inline">Claims</span>
-            <span className="sm:hidden">Claims</span>
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto">
+          <TabsList className="inline-flex w-max">
+            <TabsTrigger value="overview" className="flex items-center gap-1 sm:gap-2">
+              <Home className="h-4 w-4" />
+              <span className="hidden sm:inline">Overview</span>
+              <span className="sm:hidden">Info</span>
+            </TabsTrigger>
+
+            <TabsTrigger value="maintenance" className="flex items-center gap-1 sm:gap-2">
+              <Zap className="h-4 w-4" />
+              <span className="hidden sm:inline">Maintenance Plan</span>
+              <span className="sm:hidden">Maint.</span>
+            </TabsTrigger>
+
+            {/* ✅ NEW: Rooms */}
+            <TabsTrigger value="rooms" className="flex items-center gap-1 sm:gap-2">
+              <LayoutGrid className="h-4 w-4" />
+              <span className="hidden sm:inline">Rooms</span>
+              <span className="sm:hidden">Rooms</span>
+            </TabsTrigger>
+
+            <TabsTrigger value="incidents" className="flex items-center gap-1 sm:gap-2">
+              <ShieldAlert className="h-4 w-4" />
+              <span className="hidden sm:inline">Incidents</span>
+              <span className="sm:hidden">Alerts</span>
+            </TabsTrigger>
+
+            <TabsTrigger value="risk-protection" className="flex items-center gap-1 sm:gap-2">
+              <Shield className="h-4 w-4" />
+              <span className="hidden sm:inline">Risk & Protection</span>
+              <span className="sm:hidden">Risk</span>
+            </TabsTrigger>
+
+            <TabsTrigger value="financial-efficiency" className="flex items-center gap-1 sm:gap-2">
+              <DollarSign className="h-4 w-4" />
+              <span className="hidden sm:inline">Financial Efficiency</span>
+              <span className="sm:hidden">Finance</span>
+            </TabsTrigger>
+
+            <TabsTrigger value="documents" className="flex items-center gap-1 sm:gap-2">
+              <FileText className="h-4 w-4" />
+              <span className="hidden sm:inline">Documents</span>
+              <span className="sm:hidden">Docs</span>
+            </TabsTrigger>
+
+            <TabsTrigger value="reports" className="flex items-center gap-1 sm:gap-2">
+              <FileDown className="h-4 w-4" />
+              <span className="hidden sm:inline">Reports</span>
+              <span className="sm:hidden">Reports</span>
+            </TabsTrigger>
+
+            <TabsTrigger value="claims" className="flex items-center gap-1 sm:gap-2">
+              <ClipboardCheck className="h-4 w-4" />
+              <span className="hidden sm:inline">Claims</span>
+              <span className="sm:hidden">Claims</span>
+            </TabsTrigger>
+          </TabsList>
         </div>
-          
-          {/* UPDATED: Reduced tab content spacing from mt-6 to mt-4 */}
-          <TabsContent value="overview" className="mt-4">
-            <PropertyOverview property={property} />
-          </TabsContent>
-          
-          <TabsContent value="maintenance" className="mt-4">
-            {/* [MODIFICATION] Pass the full (scored) property object */}
-            <MaintenancePlanTab property={scoredProperty} /> 
-          </TabsContent>
-          <TabsContent value="incidents" className="mt-4">
-            <IncidentsClient />
-          </TabsContent>
-          <TabsContent value="risk-protection" className="mt-4">
-            <RiskProtectionTab propertyId={property.id} />
-          </TabsContent>
-          
-          {/* NEW CONTENT: Financial Efficiency */}
-          <TabsContent value="financial-efficiency" className="mt-4">
-            <FinancialEfficiencyTab propertyId={property.id} />
-          </TabsContent>
-          
-          <TabsContent value="documents" className="mt-4">
-            <DocumentsTab propertyId={property.id} />
-          </TabsContent>
 
-          <TabsContent value="reports" className="mt-4">
-            <ReportsTab propertyId={property.id} />
-          </TabsContent>
-          <TabsContent value="claims" className="mt-4">
-            <ClaimsTab propertyId={property.id} />
-          </TabsContent>
+        <TabsContent value="overview" className="mt-4">
+          <PropertyOverview property={property} />
+        </TabsContent>
 
-        </Tabs>
-      </DashboardShell>
+        <TabsContent value="maintenance" className="mt-4">
+          <MaintenancePlanTab property={scoredProperty} />
+        </TabsContent>
+
+        {/* ✅ NEW: Rooms tab content */}
+        <TabsContent value="rooms" className="mt-4">
+          {/* Render the full Rooms hub directly inside the property page */}
+          <RoomsHubClient />
+        </TabsContent>
+
+        <TabsContent value="incidents" className="mt-4">
+          <IncidentsClient />
+        </TabsContent>
+
+        <TabsContent value="risk-protection" className="mt-4">
+          <RiskProtectionTab propertyId={property.id} />
+        </TabsContent>
+
+        <TabsContent value="financial-efficiency" className="mt-4">
+          <FinancialEfficiencyTab propertyId={property.id} />
+        </TabsContent>
+
+        <TabsContent value="documents" className="mt-4">
+          <DocumentsTab propertyId={property.id} />
+        </TabsContent>
+
+        <TabsContent value="reports" className="mt-4">
+          <ReportsTab propertyId={property.id} />
+        </TabsContent>
+
+        <TabsContent value="claims" className="mt-4">
+          <ClaimsTab propertyId={property.id} />
+        </TabsContent>
+      </Tabs>
+    </DashboardShell>
   );
 }
