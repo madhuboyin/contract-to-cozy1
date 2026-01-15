@@ -12,8 +12,30 @@ import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
 
 function guessRoomType(name: string) {
   const t = (name || '').toLowerCase();
+
+  // High-confidence keywords first
   if (t.includes('kitchen')) return 'KITCHEN';
-  if (t.includes('living')) return 'LIVING_ROOM';
+
+  if (t.includes('living') || t.includes('family') || t.includes('great')) return 'LIVING_ROOM';
+
+  if (
+    t.includes('bed') ||
+    t.includes('master') ||
+    t.includes('guest') ||
+    t.includes('kids') ||
+    t.includes('nursery')
+  )
+    return 'BEDROOM';
+
+  if (t.includes('dining') || t.includes('breakfast') || t.includes('eat')) return 'DINING';
+
+  if (t.includes('laundry') || t.includes('utility') || t.includes('washer') || t.includes('dryer'))
+    return 'LAUNDRY';
+
+  if (t.includes('garage')) return 'GARAGE';
+
+  if (t.includes('office') || t.includes('study') || t.includes('den')) return 'OFFICE';
+
   return 'OTHER';
 }
 
@@ -182,7 +204,7 @@ export default function RoomsHubClient() {
                     onClick={() => ensureType(r)}
                     disabled={detectingId === r.id}
                     className="text-xs rounded-full border border-black/10 px-2 py-1 hover:bg-black/5 disabled:opacity-50"
-                    title="Auto-detect Kitchen / Living Room from name"
+                    title="Auto-detect room template from name"
                   >
                     {detectingId === r.id ? 'Detecting…' : 'Apply'}
                   </button>

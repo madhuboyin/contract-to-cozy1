@@ -1,10 +1,4 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/inventory/rooms/[roomId]/RoomDetailClient.tsx
-// ✅ Changes:
-// - Replace Master/Kids/Guest insights imports with BedroomInsightsCard
-// - Render <BedroomInsightsCard profile={profile} /> for any BEDROOM
-// - Keep “select bedroom type” helper when bedroomKind is not set (optional)
-// - Keep passing bedroomKind to RoomChecklistPanel
-
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -20,27 +14,83 @@ import RoomTimeline from '@/components/rooms/RoomTimeline';
 import KitchenInsightsCard from '@/components/rooms/KitchenInsightsCard';
 import LivingRoomInsightsCard from '@/components/rooms/LivingRoomInsightsCard';
 import BedroomInsightsCard from '@/components/rooms/BedroomInsightsCard';
+import DiningInsightsCard from '@/components/rooms/DiningInsightsCard';
+import LaundryInsightsCard from '@/components/rooms/LaundryInsightsCard';
+import GarageInsightsCard from '@/components/rooms/GarageInsightsCard';
+import OfficeInsightsCard from '@/components/rooms/OfficeInsightsCard';
 import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
 import AnimatedTabPanel from '@/components/rooms/AnimatedTabPanel';
 
 type Tab = 'PROFILE' | 'CHECKLIST' | 'TIMELINE';
-type RoomBase = 'KITCHEN' | 'LIVING' | 'BEDROOM' | 'OTHER';
-type BedroomKind = 'MASTER' | 'KIDS' | 'GUEST' | null;
 
-function resolveRoomBase(name: string): RoomBase {
-  const t = (name || '').toLowerCase();
-  if (t.includes('kitchen')) return 'KITCHEN';
-  if (t.includes('living')) return 'LIVING';
-  if (t.includes('bed')) return 'BEDROOM';
-  return 'OTHER';
-}
+type RoomBase =
+  | 'KITCHEN'
+  | 'LIVING'
+  | 'BEDROOM'
+  | 'DINING'
+  | 'LAUNDRY'
+  | 'GARAGE'
+  | 'OFFICE'
+  | 'OTHER';
+
+type BedroomKind = 'MASTER' | 'KIDS' | 'GUEST' | null;
 
 function normalizeBedroomKind(v: any): BedroomKind {
   if (v === 'MASTER' || v === 'KIDS' || v === 'GUEST') return v;
   return null;
 }
 
-function computeHealthScore(insights: any): number {
+function resolveRoomBaseFromType(type?: string | null): RoomBase | null {
+  if (!type) return null;
+  switch (type) {
+    case 'KITCHEN':
+      return 'KITCHEN';
+    case 'LIVING_ROOM':
+      return 'LIVING';
+    case 'BEDROOM':
+      return 'BEDROOM';
+    case 'DINING':
+      return 'DINING';
+    case 'LAUNDRY':
+      return 'LAUNDRY';
+    case 'GARAGE':
+      return 'GARAGE';
+    case 'OFFICE':
+      return 'OFFICE';
+    default:
+      return 'OTHER';
+  }
+}
+
+function resolveRoomBaseFromName(name: string): RoomBase {
+  const t = (name || '').toLowerCase();
+
+  if (t.includes('kitchen')) return 'KITCHEN';
+  if (t.includes('living') || t.includes('family') || t.includes('great')) return 'LIVING';
+  if (t.includes('bed') || t.includes('master') || t.includes('guest') || t.includes('kids') || t.includes('nursery'))
+    return 'BEDROOM';
+  if (t.includes('dining') || t.includes('breakfast') || t.includes('eat')) return 'DINING';
+  if (t.includes('laundry') || t.includes('utility') || t.includes('washer') || t.includes('dryer')) return 'LAUNDRY';
+  if (t.includes('garage')) return 'GARAGE';
+  if (t.includes('office') || t.includes('study') || t.includes('den')) return 'OFFICE';
+
+  return 'OTHER';
+}
+
+function resolveRoomBase(room: any): RoomBase {
+  // ✅ Source of truth: room.type (set by RoomsHub / patchRoomMeta)
+  const byType = resolveRoomBaseFromType(room?.type);
+  if (byType) return byType;
+
+  // Fallback: name matching
+  return resolveRoomBaseFromName(room?.name || '');
+}
+
+function clampScore(v: number) {
+  return Math.max(0, Math.min(100, Math.round(v)));
+}
+
+function computeHealthScore(roomBase: RoomBase, profile: any, insights: any): number {
   const stats = insights?.stats || {};
   const itemCount = Number(stats.itemCount || 0);
   const docs = Number(stats.docsLinkedCount || 0);
@@ -48,18 +98,82 @@ function computeHealthScore(insights: any): number {
 
   let score = 55;
 
+  // General readiness signals
   score += Math.min(20, itemCount * 2);
   score += Math.min(20, docs * 5);
   score -= Math.min(30, gaps * 8);
 
+  // Existing room-specific nudges (keep)
   const missing = insights?.kitchen?.missingAppliances?.length || 0;
-  score -= Math.min(20, missing * 6);
+  if (roomBase === 'KITCHEN') score -= Math.min(20, missing * 6);
 
   const hint = insights?.livingRoom?.comfortScoreHint;
-  if (hint === 'HIGH') score += 6;
-  if (hint === 'LOW') score -= 6;
+  if (roomBase === 'LIVING') {
+    if (hint === 'HIGH') score += 6;
+    if (hint === 'LOW') score -= 6;
+  }
 
-  return Math.max(0, Math.min(100, Math.round(score)));
+  // Lightweight profile completion boost (explainable)
+  const completionKeys: Record<RoomBase, string[]> = {
+    KITCHEN: ['countertops', 'cabinets', 'ventHood', 'flooring'],
+    LIVING: ['seatingCapacity', 'primaryUse', 'tvMount', 'lighting', 'flooring'],
+    BEDROOM: ['bedroomKind', 'bedSize', 'nightLighting'],
+    DINING: ['seatingCapacity', 'tableMaterial', 'lighting', 'flooring'],
+    LAUNDRY: ['washerType', 'dryerType', 'ventingType', 'leakPan', 'floorDrain'],
+    GARAGE: ['carCapacity', 'doorType', 'storageType', 'fireExtinguisherPresent', 'waterHeaterLocatedHere'],
+    OFFICE: ['primaryUse', 'monitorCount', 'cableManagement', 'ergonomicSetup', 'surgeProtection'],
+    OTHER: ['flooring', 'style'],
+  };
+
+  const keys = completionKeys[roomBase] || [];
+  const filled = keys.filter((k) => {
+    const v = profile?.[k];
+    return v !== null && v !== undefined && String(v).trim() !== '';
+  }).length;
+
+  if (keys.length > 0) {
+    // up to +8 points for completion
+    score += Math.min(8, Math.round((filled / keys.length) * 8));
+  }
+
+  // Extra simple readiness rules (small deltas)
+  if (roomBase === 'LAUNDRY') {
+    if (profile?.leakPan === 'YES') score += 2;
+    if (profile?.floorDrain === 'YES') score += 1;
+    if (profile?.ventingType) score += 1;
+  }
+  if (roomBase === 'GARAGE') {
+    if (profile?.fireExtinguisherPresent === 'YES') score += 3;
+    if (profile?.doorType === 'AUTO') score += 1;
+  }
+  if (roomBase === 'OFFICE') {
+    if (profile?.surgeProtection === 'YES') score += 3;
+    if (profile?.ergonomicSetup === 'YES') score += 1;
+    if (profile?.cableManagement) score += 1;
+  }
+
+  return clampScore(score);
+}
+
+function roomIcon(base: RoomBase) {
+  switch (base) {
+    case 'KITCHEN':
+      return '🍳';
+    case 'LIVING':
+      return '🛋️';
+    case 'BEDROOM':
+      return '🛏️';
+    case 'DINING':
+      return '🍽️';
+    case 'LAUNDRY':
+      return '🧺';
+    case 'GARAGE':
+      return '🚗';
+    case 'OFFICE':
+      return '🖥️';
+    default:
+      return '🏠';
+  }
 }
 
 export default function RoomDetailClient() {
@@ -75,10 +189,10 @@ export default function RoomDetailClient() {
   const [insights, setInsights] = useState<any>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
 
-  const roomBase = useMemo<RoomBase>(() => (room?.name ? resolveRoomBase(room.name) : 'OTHER'), [room?.name]);
+  const roomBase = useMemo<RoomBase>(() => (room ? resolveRoomBase(room) : 'OTHER'), [room]);
   const bedroomKind = useMemo<BedroomKind>(() => normalizeBedroomKind(profile?.bedroomKind), [profile?.bedroomKind]);
 
-  const healthScore = useMemo(() => computeHealthScore(insights), [insights]);
+  const healthScore = useMemo(() => computeHealthScore(roomBase, profile, insights), [roomBase, profile, insights]);
 
   async function loadRoom() {
     const rooms = await listInventoryRooms(propertyId);
@@ -128,10 +242,9 @@ export default function RoomDetailClient() {
 
   return (
     <div className="p-6 space-y-4">
-      {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <SectionHeader
-          icon={roomBase === 'KITCHEN' ? '🍳' : roomBase === 'LIVING' ? '🛋️' : roomBase === 'BEDROOM' ? '🛏️' : '🏠'}
+          icon={roomIcon(roomBase)}
           title={room.name}
           description="Profile, micro-checklists, and maintenance timeline."
         />
@@ -140,7 +253,6 @@ export default function RoomDetailClient() {
         </Link>
       </div>
 
-      {/* Summary strip */}
       <div className="rounded-2xl border border-black/10 bg-white p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <RoomHealthScoreRing
           value={healthScore}
@@ -170,7 +282,6 @@ export default function RoomDetailClient() {
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="inline-flex items-center p-1 bg-black/5 rounded-xl border border-black/5">
         {(['PROFILE', 'CHECKLIST', 'TIMELINE'] as Tab[]).map((t) => (
           <button
@@ -185,13 +296,12 @@ export default function RoomDetailClient() {
         ))}
       </div>
 
-      {/* Animated content */}
       <AnimatedTabPanel tabKey={tab}>
         {tab === 'PROFILE' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <RoomProfileForm
               profile={profile}
-              roomType={roomBase} // ✅ includes BEDROOM
+              roomType={roomBase}
               saving={savingProfile}
               onChange={setProfile}
               onSave={saveProfile}
@@ -204,8 +314,11 @@ export default function RoomDetailClient() {
               <div className="mt-4 space-y-3">
                 {roomBase === 'KITCHEN' && <KitchenInsightsCard profile={profile} />}
                 {roomBase === 'LIVING' && <LivingRoomInsightsCard profile={profile} />}
-
                 {roomBase === 'BEDROOM' && <BedroomInsightsCard profile={profile} />}
+                {roomBase === 'DINING' && <DiningInsightsCard profile={profile} />}
+                {roomBase === 'LAUNDRY' && <LaundryInsightsCard profile={profile} />}
+                {roomBase === 'GARAGE' && <GarageInsightsCard profile={profile} />}
+                {roomBase === 'OFFICE' && <OfficeInsightsCard profile={profile} />}
 
                 {roomBase === 'BEDROOM' && !bedroomKind && (
                   <div className="rounded-xl border border-black/10 bg-black/[0.02] p-3 text-sm">
@@ -231,12 +344,7 @@ export default function RoomDetailClient() {
         )}
 
         {tab === 'CHECKLIST' && (
-          <RoomChecklistPanel
-            propertyId={propertyId}
-            roomId={roomId}
-            roomType={roomBase}
-            bedroomKind={bedroomKind}
-          />
+          <RoomChecklistPanel propertyId={propertyId} roomId={roomId} roomType={roomBase} bedroomKind={bedroomKind} />
         )}
 
         {tab === 'TIMELINE' && <RoomTimeline propertyId={propertyId} roomId={roomId} />}

@@ -5,17 +5,11 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface Props {
   profile: any;
-  roomType: 'KITCHEN' | 'LIVING' | 'BEDROOM' | 'OTHER';
+  roomType: 'KITCHEN' | 'LIVING' | 'BEDROOM' | 'DINING' | 'LAUNDRY' | 'GARAGE' | 'OFFICE' | 'OTHER';
   saving: boolean;
   onChange: (profile: any) => void;
   onSave: (profile: any) => Promise<void>;
@@ -65,7 +59,6 @@ export default function RoomProfileForm({ profile, roomType, saving, onChange, o
 
   return (
     <div className="lg:col-span-2 rounded-2xl border border-black/10 bg-white shadow-sm">
-      {/* Header */}
       <div className="p-5">
         <div className="text-sm font-semibold">Room questionnaire</div>
         <div className="text-xs text-black/50 mt-1">
@@ -75,16 +68,12 @@ export default function RoomProfileForm({ profile, roomType, saving, onChange, o
 
       <Divider />
 
-      {/* Grouped list */}
       <div className="p-5 pt-0">
         <div className="rounded-xl border border-black/10 bg-black/[0.02] overflow-hidden">
           {/* Bedroom kind selector */}
           {roomType === 'BEDROOM' && (
             <>
-              <Row
-                label="Bedroom type"
-                hint="Drives insights + suggested checklist defaults (no DB enum changes)."
-              >
+              <Row label="Bedroom type" hint="Drives insights + suggested checklist defaults (no DB enum changes).">
                 <Select value={bedroomKind} onValueChange={(v) => updateField('bedroomKind', v)}>
                   <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
                     <SelectValue placeholder="Select bedroom type…" />
@@ -203,6 +192,258 @@ export default function RoomProfileForm({ profile, roomType, saving, onChange, o
             </>
           )}
 
+          {/* Dining */}
+          {roomType === 'DINING' && (
+            <>
+              <Divider />
+              <Row label="Seating capacity">
+                <Input
+                  value={p.seatingCapacity || ''}
+                  onChange={(e) => updateField('seatingCapacity', e.target.value)}
+                  placeholder="e.g., 6"
+                  className="h-10 rounded-xl border-black/10 bg-white"
+                />
+              </Row>
+              <Divider />
+              <Row label="Table material">
+                <Input
+                  value={p.tableMaterial || ''}
+                  onChange={(e) => updateField('tableMaterial', e.target.value)}
+                  placeholder="Wood / Glass / Marble…"
+                  className="h-10 rounded-xl border-black/10 bg-white"
+                />
+              </Row>
+              <Divider />
+              <Row label="Lighting">
+                <Select value={(p.lighting || '') as string} onValueChange={(v) => updateField('lighting', v)}>
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CHANDELIER">Chandelier</SelectItem>
+                    <SelectItem value="PENDANT">Pendant</SelectItem>
+                    <SelectItem value="RECESSED">Recessed</SelectItem>
+                    <SelectItem value="MIXED">Mixed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Row>
+              <Divider />
+              <Row label="High chair use (optional)">
+                <Select value={(p.highChairUse || '') as '' | YesNo} onValueChange={(v) => updateField('highChairUse', v)}>
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="YES">Yes</SelectItem>
+                    <SelectItem value="NO">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Row>
+            </>
+          )}
+
+          {/* Laundry */}
+          {roomType === 'LAUNDRY' && (
+            <>
+              <Divider />
+              <Row label="Washer type">
+                <Select value={(p.washerType || '') as string} onValueChange={(v) => updateField('washerType', v)}>
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="FRONT_LOAD">Front-load</SelectItem>
+                    <SelectItem value="TOP_LOAD">Top-load</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Row>
+              <Divider />
+              <Row label="Dryer type">
+                <Select value={(p.dryerType || '') as string} onValueChange={(v) => updateField('dryerType', v)}>
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ELECTRIC">Electric</SelectItem>
+                    <SelectItem value="GAS">Gas</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Row>
+              <Divider />
+              <Row label="Venting type">
+                <Input
+                  value={p.ventingType || ''}
+                  onChange={(e) => updateField('ventingType', e.target.value)}
+                  placeholder="Rigid / Semi-rigid / Flex…"
+                  className="h-10 rounded-xl border-black/10 bg-white"
+                />
+              </Row>
+              <Divider />
+              <Row label="Floor drain">
+                <Select value={(p.floorDrain || '') as '' | YesNo} onValueChange={(v) => updateField('floorDrain', v)}>
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="YES">Yes</SelectItem>
+                    <SelectItem value="NO">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Row>
+              <Divider />
+              <Row label="Leak pan">
+                <Select value={(p.leakPan || '') as '' | YesNo} onValueChange={(v) => updateField('leakPan', v)}>
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="YES">Yes</SelectItem>
+                    <SelectItem value="NO">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Row>
+            </>
+          )}
+
+          {/* Garage */}
+          {roomType === 'GARAGE' && (
+            <>
+              <Divider />
+              <Row label="Car capacity">
+                <Input
+                  value={p.carCapacity || ''}
+                  onChange={(e) => updateField('carCapacity', e.target.value)}
+                  placeholder="e.g., 2"
+                  className="h-10 rounded-xl border-black/10 bg-white"
+                />
+              </Row>
+              <Divider />
+              <Row label="Door type">
+                <Select value={(p.doorType || '') as string} onValueChange={(v) => updateField('doorType', v)}>
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AUTO">Automatic opener</SelectItem>
+                    <SelectItem value="MANUAL">Manual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Row>
+              <Divider />
+              <Row label="Storage type">
+                <Select value={(p.storageType || '') as string} onValueChange={(v) => updateField('storageType', v)}>
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SHELVES">Shelves</SelectItem>
+                    <SelectItem value="CABINETS">Cabinets</SelectItem>
+                    <SelectItem value="MIXED">Mixed</SelectItem>
+                    <SelectItem value="NONE">None</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Row>
+              <Divider />
+              <Row label="Water heater located here">
+                <Select
+                  value={(p.waterHeaterLocatedHere || '') as '' | YesNo}
+                  onValueChange={(v) => updateField('waterHeaterLocatedHere', v)}
+                >
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="YES">Yes</SelectItem>
+                    <SelectItem value="NO">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Row>
+              <Divider />
+              <Row label="Fire extinguisher present">
+                <Select
+                  value={(p.fireExtinguisherPresent || '') as '' | YesNo}
+                  onValueChange={(v) => updateField('fireExtinguisherPresent', v)}
+                >
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="YES">Yes</SelectItem>
+                    <SelectItem value="NO">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Row>
+            </>
+          )}
+
+          {/* Office */}
+          {roomType === 'OFFICE' && (
+            <>
+              <Divider />
+              <Row label="Primary use">
+                <Select value={(p.primaryUse || '') as string} onValueChange={(v) => updateField('primaryUse', v)}>
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="WFH">Work from home</SelectItem>
+                    <SelectItem value="STUDY">Study</SelectItem>
+                    <SelectItem value="GAMING">Gaming</SelectItem>
+                    <SelectItem value="MIXED">Mixed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Row>
+              <Divider />
+              <Row label="Monitor count">
+                <Input
+                  value={p.monitorCount || ''}
+                  onChange={(e) => updateField('monitorCount', e.target.value)}
+                  placeholder="e.g., 2"
+                  className="h-10 rounded-xl border-black/10 bg-white"
+                />
+              </Row>
+              <Divider />
+              <Row label="Cable management">
+                <Input
+                  value={p.cableManagement || ''}
+                  onChange={(e) => updateField('cableManagement', e.target.value)}
+                  placeholder="Under-desk tray / clips / none…"
+                  className="h-10 rounded-xl border-black/10 bg-white"
+                />
+              </Row>
+              <Divider />
+              <Row label="Ergonomic setup">
+                <Select
+                  value={(p.ergonomicSetup || '') as '' | YesNo}
+                  onValueChange={(v) => updateField('ergonomicSetup', v)}
+                >
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="YES">Yes</SelectItem>
+                    <SelectItem value="NO">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Row>
+              <Divider />
+              <Row label="Surge protection">
+                <Select
+                  value={(p.surgeProtection || '') as '' | YesNo}
+                  onValueChange={(v) => updateField('surgeProtection', v)}
+                >
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="YES">Yes</SelectItem>
+                    <SelectItem value="NO">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Row>
+            </>
+          )}
+
           {/* Bedroom base fields */}
           {roomType === 'BEDROOM' && (
             <>
@@ -225,7 +466,6 @@ export default function RoomProfileForm({ profile, roomType, saving, onChange, o
                 />
               </Row>
 
-              {/* Master */}
               {bedroomKind === 'MASTER' && (
                 <>
                   <Divider />
@@ -258,7 +498,6 @@ export default function RoomProfileForm({ profile, roomType, saving, onChange, o
                 </>
               )}
 
-              {/* Kids */}
               {bedroomKind === 'KIDS' && (
                 <>
                   <Divider />
@@ -312,7 +551,6 @@ export default function RoomProfileForm({ profile, roomType, saving, onChange, o
                 </>
               )}
 
-              {/* Guest */}
               {bedroomKind === 'GUEST' && (
                 <>
                   <Divider />
@@ -351,12 +589,11 @@ export default function RoomProfileForm({ profile, roomType, saving, onChange, o
           )}
         </div>
 
-        {/* Save */}
         <div className="mt-4 flex items-center gap-2">
           <Button onClick={saveProfile} disabled={saving} className="rounded-xl">
             {saving ? 'Saving…' : 'Save profile'}
           </Button>
-          <div className="text-xs text-black/50">Tip: keep this quick. Defaults come from bedroom kind.</div>
+          <div className="text-xs text-black/50">Tip: keep this quick. Defaults + insights adapt to the room.</div>
         </div>
       </div>
     </div>

@@ -16,7 +16,7 @@ import { CheckCircle2, Circle, Plus, Trash2, Sparkles } from 'lucide-react';
 interface Props {
   propertyId: string;
   roomId: string;
-  roomType: 'KITCHEN' | 'LIVING' | 'BEDROOM' | 'OTHER';
+  roomType: 'KITCHEN' | 'LIVING' | 'BEDROOM' | 'DINING' | 'LAUNDRY' | 'GARAGE' | 'OFFICE' | 'OTHER';
   bedroomKind?: 'MASTER' | 'KIDS' | 'GUEST' | null;
 }
 
@@ -98,15 +98,23 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
       ? 'e.g., Clean hood filter'
       : roomType === 'LIVING'
         ? 'e.g., Vacuum under sofa'
-        : roomType === 'BEDROOM'
-          ? bedroomKind === 'MASTER'
-            ? 'e.g., Change sheets'
-            : bedroomKind === 'KIDS'
-              ? 'e.g., Organize toys'
-              : bedroomKind === 'GUEST'
-                ? 'e.g., Refresh linens'
-                : 'e.g., Make bed'
-          : 'e.g., Dust vents';
+        : roomType === 'DINING'
+          ? 'e.g., Wipe table'
+          : roomType === 'LAUNDRY'
+            ? 'e.g., Clean lint trap'
+            : roomType === 'GARAGE'
+              ? 'e.g., Test garage door auto-reverse'
+              : roomType === 'OFFICE'
+                ? 'e.g., Cable tidy'
+                : roomType === 'BEDROOM'
+                  ? bedroomKind === 'MASTER'
+                    ? 'e.g., Change sheets'
+                    : bedroomKind === 'KIDS'
+                      ? 'e.g., Organize toys'
+                      : bedroomKind === 'GUEST'
+                        ? 'e.g., Refresh linens'
+                        : 'e.g., Make bed'
+                  : 'e.g., Dust vents';
 
   const recommended: ChecklistSeed[] = useMemo(() => {
     if (roomType === 'KITCHEN') {
@@ -123,6 +131,42 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
         { title: 'Vacuum under sofa / chairs', frequency: 'WEEKLY' },
         { title: 'Dust vents + baseboards', frequency: 'MONTHLY' },
         { title: 'Check smoke/CO detector nearby', frequency: 'SEASONAL' },
+      ];
+    }
+
+    if (roomType === 'DINING') {
+      return [
+        { title: 'Wipe table + chairs', frequency: 'WEEKLY' },
+        { title: 'Check chair screws / wobble', frequency: 'SEASONAL' },
+        { title: 'Clean chandelier / pendant', frequency: 'SEASONAL' },
+        { title: 'Check smoke/CO detector nearby', frequency: 'SEASONAL' },
+      ];
+    }
+
+    if (roomType === 'LAUNDRY') {
+      return [
+        { title: 'Clean lint trap (weekly / heavy loads)', frequency: 'WEEKLY' },
+        { title: 'Run washer drum cleaning cycle', frequency: 'MONTHLY' },
+        { title: 'Check washer hoses for bulges/leaks', frequency: 'SEASONAL' },
+        { title: 'Clean dryer vent', frequency: 'SEASONAL' },
+      ];
+    }
+
+    if (roomType === 'GARAGE') {
+      return [
+        { title: 'Test garage door auto-reverse', frequency: 'SEASONAL' },
+        { title: 'Replace opener batteries (remotes/keypad)', frequency: 'SEASONAL' },
+        { title: 'Check for leaks near water heater', frequency: 'MONTHLY' },
+        { title: 'Organize chemicals safely', frequency: 'SEASONAL' },
+      ];
+    }
+
+    if (roomType === 'OFFICE') {
+      return [
+        { title: 'Dust electronics (vents/fans)', frequency: 'MONTHLY' },
+        { title: 'Cable tidy / re-route hazards', frequency: 'MONTHLY' },
+        { title: 'Clean chair casters', frequency: 'SEASONAL' },
+        { title: 'Check surge protector health', frequency: 'SEASONAL' },
       ];
     }
 
@@ -150,7 +194,6 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
           { title: 'Run room for 10 mins (air out)', frequency: 'MONTHLY' },
         ];
       }
-      // generic bedroom
       return [
         { title: 'Make bed + quick reset', frequency: 'WEEKLY' },
         { title: 'Dust fan + vents', frequency: 'MONTHLY' },
@@ -158,7 +201,6 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
       ];
     }
 
-    // OTHER
     return [
       { title: 'Dust vents', frequency: 'MONTHLY' },
       { title: 'Quick reset / declutter', frequency: 'WEEKLY' },
@@ -172,7 +214,6 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
 
     setMutating(true);
     try {
-      // Create sequentially to keep API simple; easy to parallelize later
       const created: RoomChecklistItemDTO[] = [];
       for (const seed of recommendedToAdd) {
         // eslint-disable-next-line no-await-in-loop
@@ -188,6 +229,8 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
     }
   }
 
+  const showSeedCallout = !loading && items.length === 0 && recommendedToAdd.length > 0;
+
   return (
     <div className="rounded-2xl border border-black/10 bg-white shadow-sm">
       <div className="p-5">
@@ -198,41 +241,60 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
           </div>
         </div>
 
-        {/* Recommended defaults */}
-        <div className="mt-4 rounded-xl border border-black/10 bg-black/[0.02] p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-black/60" />
-                <div className="text-sm font-medium text-black/80">Recommended for this room</div>
+        {/* Seed defaults UX (only when empty) */}
+        {showSeedCallout && (
+          <div className="mt-4 rounded-xl border border-black/10 bg-black/[0.02] p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-black/60" />
+                  <div className="text-sm font-medium text-black/80">Add recommended checklist</div>
+                </div>
+                <div className="text-xs text-black/50 mt-1">
+                  Starter set based on room type{roomType === 'BEDROOM' ? ' + bedroom kind' : ''}. You can edit anytime.
+                </div>
               </div>
-              <div className="text-xs text-black/50 mt-1">
-                Adds a starter set based on room type{roomType === 'BEDROOM' ? ' + bedroom kind' : ''}. You can edit anytime.
-              </div>
+
+              <Button
+                variant="outline"
+                onClick={addRecommended}
+                disabled={mutating || recommendedToAdd.length === 0}
+                className="rounded-xl"
+              >
+                Add ({recommendedToAdd.length})
+              </Button>
             </div>
 
+            <div className="mt-3 flex flex-wrap gap-2">
+              {recommended.map((r) => (
+                <span
+                  key={`${r.frequency}:${r.title}`}
+                  className="text-xs rounded-full border border-black/10 bg-white px-2 py-1 text-black/70"
+                >
+                  {r.title} · {r.frequency}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* If not empty, still allow “top-up” recommended items (compact) */}
+        {!showSeedCallout && recommendedToAdd.length > 0 && (
+          <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-black/10 bg-black/[0.02] p-3">
+            <div className="text-xs text-black/60">
+              {recommendedToAdd.length} recommended item{recommendedToAdd.length === 1 ? '' : 's'} available
+            </div>
             <Button
               variant="outline"
               onClick={addRecommended}
-              disabled={mutating || recommendedToAdd.length === 0}
+              disabled={mutating}
               className="rounded-xl"
-              title={recommendedToAdd.length === 0 ? 'All recommended items already added' : 'Add recommended items'}
+              title="Add recommended items not already in your checklist"
             >
-              Add {recommendedToAdd.length > 0 ? `(${recommendedToAdd.length})` : ''}
+              Add ({recommendedToAdd.length})
             </Button>
           </div>
-
-          <div className="mt-3 flex flex-wrap gap-2">
-            {recommended.map((r) => (
-              <span
-                key={`${r.frequency}:${r.title}`}
-                className="text-xs rounded-full border border-black/10 bg-white px-2 py-1 text-black/70"
-              >
-                {r.title} · {r.frequency}
-              </span>
-            ))}
-          </div>
-        </div>
+        )}
 
         {/* Add row */}
         <div className="mt-4 flex gap-2">
