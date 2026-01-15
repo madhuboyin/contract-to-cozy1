@@ -31,7 +31,8 @@ export default function RecallAlertsClient() {
     setError(null);
     try {
       const res = await listPropertyRecalls(propertyId);
-      setRows(res.recallMatches || []);
+      // CHANGE THIS LINE: res.recallMatches -> res.matches
+      setRows(res.matches || []); 
     } catch (e: any) {
       setError(e?.message || 'Failed to load recall alerts');
     } finally {

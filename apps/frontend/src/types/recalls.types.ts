@@ -63,5 +63,6 @@ export type RecallMatchDTO = {
 
 export type ListPropertyRecallsResponse = {
   propertyId: string;
+  matches: RecallMatchDTO[];
   recallMatches: RecallMatchDTO[];
 };
