@@ -1,179 +1,363 @@
 // apps/frontend/src/components/rooms/RoomProfileForm.tsx
 'use client';
 
-import React, { useCallback } from 'react';
+import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-
-export type RoomProfile = {
-  // shared
-  style?: string;
-  flooring?: string;
-
-  // kitchen
-  countertops?: string;
-  cabinets?: string;
-  backsplash?: string;
-  ventHood?: string;
-
-  // living
-  seatingCapacity?: number;
-  primaryUse?: string;
-  tvMount?: string;
-  lighting?: string;
-};
-
-type RoomTypeUI = 'KITCHEN' | 'LIVING' | 'OTHER';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface Props {
-  profile: RoomProfile | Record<string, any>;
-  roomType: RoomTypeUI;
+  profile: any;
+  roomType: 'KITCHEN' | 'LIVING' | 'BEDROOM' | 'OTHER';
   saving: boolean;
   onChange: (profile: any) => void;
   onSave: (profile: any) => Promise<void>;
 }
 
-export default function RoomProfileForm({ profile, roomType, saving, onChange, onSave }: Props) {
-  const updateField = useCallback(
-    (key: string, value: any) => {
-      onChange({ ...(profile || {}), [key]: value });
-    },
-    [onChange, profile]
+type BedroomKind = 'MASTER' | 'KIDS' | 'GUEST';
+type YesNo = 'YES' | 'NO';
+
+function safeObj(v: any) {
+  return v && typeof v === 'object' ? v : {};
+}
+
+function Divider() {
+  return <div className="h-px bg-black/10" />;
+}
+
+function Row({
+  label,
+  children,
+  hint,
+}: {
+  label: string;
+  children: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div className="px-4 py-3">
+      <Label className="text-xs font-medium text-black/70">{label}</Label>
+      <div className="mt-1">{children}</div>
+      {hint ? <div className="mt-1 text-[11px] text-black/50">{hint}</div> : null}
+    </div>
   );
+}
 
-  const saveProfile = useCallback(async () => {
-    await onSave(profile || {});
-  }, [onSave, profile]);
+export default function RoomProfileForm({ profile, roomType, saving, onChange, onSave }: Props) {
+  const p = safeObj(profile);
 
-  function onKeyDownSave(e: React.KeyboardEvent) {
-    // Cmd+Enter (mac) or Ctrl+Enter (win/linux)
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      e.preventDefault();
-      if (!saving) saveProfile();
-    }
+  function updateField(key: string, value: any) {
+    onChange({ ...p, [key]: value });
   }
 
+  async function saveProfile() {
+    await onSave(p);
+  }
+
+  const bedroomKind = (p?.bedroomKind || '') as '' | BedroomKind;
+
   return (
-    <div className="lg:col-span-2 rounded-2xl border border-black/10 bg-white p-5" onKeyDown={onKeyDownSave}>
-      <div className="text-sm font-semibold">Room questionnaire</div>
-      <div className="text-xs opacity-70 mt-1">
-        Lightweight inputs. Stored in <span className="font-mono">InventoryRoom.profile</span>.
+    <div className="lg:col-span-2 rounded-2xl border border-black/10 bg-white shadow-sm">
+      {/* Header */}
+      <div className="p-5">
+        <div className="text-sm font-semibold">Room questionnaire</div>
+        <div className="text-xs text-black/50 mt-1">
+          Lightweight inputs stored in <span className="font-mono">InventoryRoom.profile</span>.
+        </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {/* Common fields */}
-        <div>
-          <Label>Primary style</Label>
-          <Input
-            value={(profile as any)?.style || ''}
-            onChange={(e) => updateField('style', e.target.value)}
-            placeholder="Modern / Transitional / Traditional…"
-          />
+      <Divider />
+
+      {/* Grouped list */}
+      <div className="p-5 pt-0">
+        <div className="rounded-xl border border-black/10 bg-black/[0.02] overflow-hidden">
+          {/* Bedroom kind selector */}
+          {roomType === 'BEDROOM' && (
+            <>
+              <Row
+                label="Bedroom type"
+                hint="Drives insights + suggested checklist defaults (no DB enum changes)."
+              >
+                <Select value={bedroomKind} onValueChange={(v) => updateField('bedroomKind', v)}>
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                    <SelectValue placeholder="Select bedroom type…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="MASTER">Master bedroom</SelectItem>
+                    <SelectItem value="KIDS">Kids bedroom</SelectItem>
+                    <SelectItem value="GUEST">Guest bedroom</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Row>
+              <Divider />
+            </>
+          )}
+
+          {/* Common fields */}
+          <Row label="Primary style">
+            <Input
+              value={p.style || ''}
+              onChange={(e) => updateField('style', e.target.value)}
+              placeholder="Modern / Transitional / Traditional…"
+              className="h-10 rounded-xl border-black/10 bg-white"
+            />
+          </Row>
+          <Divider />
+          <Row label="Flooring">
+            <Input
+              value={p.flooring || ''}
+              onChange={(e) => updateField('flooring', e.target.value)}
+              placeholder="Wood / Tile / Vinyl…"
+              className="h-10 rounded-xl border-black/10 bg-white"
+            />
+          </Row>
+
+          {/* Kitchen */}
+          {roomType === 'KITCHEN' && (
+            <>
+              <Divider />
+              <Row label="Countertops">
+                <Input
+                  value={p.countertops || ''}
+                  onChange={(e) => updateField('countertops', e.target.value)}
+                  placeholder="Quartz / Granite / Laminate…"
+                  className="h-10 rounded-xl border-black/10 bg-white"
+                />
+              </Row>
+              <Divider />
+              <Row label="Cabinet finish">
+                <Input
+                  value={p.cabinets || ''}
+                  onChange={(e) => updateField('cabinets', e.target.value)}
+                  placeholder="White / Walnut / Painted…"
+                  className="h-10 rounded-xl border-black/10 bg-white"
+                />
+              </Row>
+              <Divider />
+              <Row label="Backsplash">
+                <Input
+                  value={p.backsplash || ''}
+                  onChange={(e) => updateField('backsplash', e.target.value)}
+                  placeholder="Subway tile / Stone…"
+                  className="h-10 rounded-xl border-black/10 bg-white"
+                />
+              </Row>
+              <Divider />
+              <Row label="Vent hood type">
+                <Input
+                  value={p.ventHood || ''}
+                  onChange={(e) => updateField('ventHood', e.target.value)}
+                  placeholder="Microwave hood / Chimney / Under-cabinet…"
+                  className="h-10 rounded-xl border-black/10 bg-white"
+                />
+              </Row>
+            </>
+          )}
+
+          {/* Living */}
+          {roomType === 'LIVING' && (
+            <>
+              <Divider />
+              <Row label="Seating capacity">
+                <Input
+                  value={p.seatingCapacity || ''}
+                  onChange={(e) => updateField('seatingCapacity', e.target.value)}
+                  placeholder="e.g., 5"
+                  className="h-10 rounded-xl border-black/10 bg-white"
+                />
+              </Row>
+              <Divider />
+              <Row label="Primary use">
+                <Input
+                  value={p.primaryUse || ''}
+                  onChange={(e) => updateField('primaryUse', e.target.value)}
+                  placeholder="Family / Entertaining / TV…"
+                  className="h-10 rounded-xl border-black/10 bg-white"
+                />
+              </Row>
+              <Divider />
+              <Row label="TV mount">
+                <Input
+                  value={p.tvMount || ''}
+                  onChange={(e) => updateField('tvMount', e.target.value)}
+                  placeholder="Wall / Stand / None"
+                  className="h-10 rounded-xl border-black/10 bg-white"
+                />
+              </Row>
+              <Divider />
+              <Row label="Lighting">
+                <Input
+                  value={p.lighting || ''}
+                  onChange={(e) => updateField('lighting', e.target.value)}
+                  placeholder="Recessed / Floor lamps / Pendant…"
+                  className="h-10 rounded-xl border-black/10 bg-white"
+                />
+              </Row>
+            </>
+          )}
+
+          {/* Bedroom base fields */}
+          {roomType === 'BEDROOM' && (
+            <>
+              <Divider />
+              <Row label="Bed size">
+                <Input
+                  value={p.bedSize || ''}
+                  onChange={(e) => updateField('bedSize', e.target.value)}
+                  placeholder="King / Queen / Twin…"
+                  className="h-10 rounded-xl border-black/10 bg-white"
+                />
+              </Row>
+              <Divider />
+              <Row label="Night lighting">
+                <Input
+                  value={p.nightLighting || ''}
+                  onChange={(e) => updateField('nightLighting', e.target.value)}
+                  placeholder="Lamps / Sconces / None…"
+                  className="h-10 rounded-xl border-black/10 bg-white"
+                />
+              </Row>
+
+              {/* Master */}
+              {bedroomKind === 'MASTER' && (
+                <>
+                  <Divider />
+                  <Row label="Mattress type">
+                    <Input
+                      value={p.mattressType || ''}
+                      onChange={(e) => updateField('mattressType', e.target.value)}
+                      placeholder="Memory foam / Hybrid / Innerspring…"
+                      className="h-10 rounded-xl border-black/10 bg-white"
+                    />
+                  </Row>
+                  <Divider />
+                  <Row label="Noise level">
+                    <Input
+                      value={p.noiseLevel || ''}
+                      onChange={(e) => updateField('noiseLevel', e.target.value)}
+                      placeholder="Quiet / Moderate / Noisy…"
+                      className="h-10 rounded-xl border-black/10 bg-white"
+                    />
+                  </Row>
+                  <Divider />
+                  <Row label="Storage">
+                    <Input
+                      value={p.storage || ''}
+                      onChange={(e) => updateField('storage', e.target.value)}
+                      placeholder="Walk-in closet / Dresser / Under-bed…"
+                      className="h-10 rounded-xl border-black/10 bg-white"
+                    />
+                  </Row>
+                </>
+              )}
+
+              {/* Kids */}
+              {bedroomKind === 'KIDS' && (
+                <>
+                  <Divider />
+                  <Row label="Age range">
+                    <Input
+                      value={p.ageRange || ''}
+                      onChange={(e) => updateField('ageRange', e.target.value)}
+                      placeholder="e.g., 3–6"
+                      className="h-10 rounded-xl border-black/10 bg-white"
+                    />
+                  </Row>
+                  <Divider />
+                  <Row label="Toy storage">
+                    <Input
+                      value={p.toyStorage || ''}
+                      onChange={(e) => updateField('toyStorage', e.target.value)}
+                      placeholder="Bins / Shelves / Closet…"
+                      className="h-10 rounded-xl border-black/10 bg-white"
+                    />
+                  </Row>
+                  <Divider />
+                  <Row label="Furniture anchored">
+                    <Select
+                      value={(p.anchorFurniture || '') as '' | YesNo}
+                      onValueChange={(v) => updateField('anchorFurniture', v)}
+                    >
+                      <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                        <SelectValue placeholder="Select…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="YES">Yes</SelectItem>
+                        <SelectItem value="NO">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Row>
+                  <Divider />
+                  <Row label="Window safety">
+                    <Select
+                      value={(p.windowSafety || '') as '' | YesNo}
+                      onValueChange={(v) => updateField('windowSafety', v)}
+                    >
+                      <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                        <SelectValue placeholder="Select…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="YES">Yes</SelectItem>
+                        <SelectItem value="NO">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Row>
+                </>
+              )}
+
+              {/* Guest */}
+              {bedroomKind === 'GUEST' && (
+                <>
+                  <Divider />
+                  <Row label="Blackout curtains">
+                    <Select value={(p.blackout || '') as '' | YesNo} onValueChange={(v) => updateField('blackout', v)}>
+                      <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                        <SelectValue placeholder="Select…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="YES">Yes</SelectItem>
+                        <SelectItem value="NO">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Row>
+                  <Divider />
+                  <Row label="Charging setup">
+                    <Input
+                      value={p.charging || ''}
+                      onChange={(e) => updateField('charging', e.target.value)}
+                      placeholder="USB outlet / Charger on nightstand…"
+                      className="h-10 rounded-xl border-black/10 bg-white"
+                    />
+                  </Row>
+                  <Divider />
+                  <Row label="Linens / towels">
+                    <Input
+                      value={p.linens || ''}
+                      onChange={(e) => updateField('linens', e.target.value)}
+                      placeholder="Spare sheets / Towels stored where…"
+                      className="h-10 rounded-xl border-black/10 bg-white"
+                    />
+                  </Row>
+                </>
+              )}
+            </>
+          )}
         </div>
 
-        <div>
-          <Label>Flooring</Label>
-          <Input
-            value={(profile as any)?.flooring || ''}
-            onChange={(e) => updateField('flooring', e.target.value)}
-            placeholder="Wood / Tile / Vinyl…"
-          />
+        {/* Save */}
+        <div className="mt-4 flex items-center gap-2">
+          <Button onClick={saveProfile} disabled={saving} className="rounded-xl">
+            {saving ? 'Saving…' : 'Save profile'}
+          </Button>
+          <div className="text-xs text-black/50">Tip: keep this quick. Defaults come from bedroom kind.</div>
         </div>
-
-        {/* Kitchen-specific */}
-        {roomType === 'KITCHEN' && (
-          <>
-            <div>
-              <Label>Countertops</Label>
-              <Input
-                value={(profile as any)?.countertops || ''}
-                onChange={(e) => updateField('countertops', e.target.value)}
-                placeholder="Quartz / Granite / Laminate…"
-              />
-            </div>
-
-            <div>
-              <Label>Cabinet finish</Label>
-              <Input
-                value={(profile as any)?.cabinets || ''}
-                onChange={(e) => updateField('cabinets', e.target.value)}
-                placeholder="White / Walnut / Painted…"
-              />
-            </div>
-
-            <div>
-              <Label>Backsplash</Label>
-              <Input
-                value={(profile as any)?.backsplash || ''}
-                onChange={(e) => updateField('backsplash', e.target.value)}
-                placeholder="Subway tile / Stone…"
-              />
-            </div>
-
-            <div>
-              <Label>Vent hood type</Label>
-              <Input
-                value={(profile as any)?.ventHood || ''}
-                onChange={(e) => updateField('ventHood', e.target.value)}
-                placeholder="Microwave hood / Chimney / Under-cabinet…"
-              />
-            </div>
-          </>
-        )}
-
-        {/* Living-specific */}
-        {roomType === 'LIVING' && (
-          <>
-            <div>
-              <Label>Seating capacity</Label>
-              <Input
-                type="number"
-                inputMode="numeric"
-                value={Number.isFinite((profile as any)?.seatingCapacity) ? String((profile as any)?.seatingCapacity) : ''}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  updateField('seatingCapacity', v === '' ? undefined : Number(v));
-                }}
-                placeholder="e.g., 5"
-              />
-            </div>
-
-            <div>
-              <Label>Primary use</Label>
-              <Input
-                value={(profile as any)?.primaryUse || ''}
-                onChange={(e) => updateField('primaryUse', e.target.value)}
-                placeholder="Family / Entertaining / TV…"
-              />
-            </div>
-
-            <div>
-              <Label>TV mount</Label>
-              <Input
-                value={(profile as any)?.tvMount || ''}
-                onChange={(e) => updateField('tvMount', e.target.value)}
-                placeholder="Wall / Stand / None"
-              />
-            </div>
-
-            <div>
-              <Label>Lighting</Label>
-              <Input
-                value={(profile as any)?.lighting || ''}
-                onChange={(e) => updateField('lighting', e.target.value)}
-                placeholder="Recessed / Floor lamps / Pendant…"
-              />
-            </div>
-          </>
-        )}
-      </div>
-
-      <div className="mt-4 flex items-center gap-2">
-        <Button onClick={saveProfile} disabled={saving}>
-          {saving ? 'Saving…' : 'Save profile'}
-        </Button>
-        <div className="text-xs opacity-60">Tip: Cmd/Ctrl + Enter to save.</div>
       </div>
     </div>
   );

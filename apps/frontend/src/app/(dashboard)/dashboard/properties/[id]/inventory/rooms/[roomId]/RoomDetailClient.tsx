@@ -1,4 +1,10 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/inventory/rooms/[roomId]/RoomDetailClient.tsx
+// ✅ Changes:
+// - Replace Master/Kids/Guest insights imports with BedroomInsightsCard
+// - Render <BedroomInsightsCard profile={profile} /> for any BEDROOM
+// - Keep “select bedroom type” helper when bedroomKind is not set (optional)
+// - Keep passing bedroomKind to RoomChecklistPanel
+
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -6,33 +12,35 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 
 import { SectionHeader } from '../../../../../components/SectionHeader';
-import {
-  listInventoryRooms,
-  updateInventoryRoomProfile,
-  getRoomTimeline,
-  listRoomChecklistItems,
-  getRoomInsights,
-} from '../../../../../inventory/inventoryApi';
+import { listInventoryRooms, updateInventoryRoomProfile, getRoomInsights } from '../../../../../inventory/inventoryApi';
 
 import RoomProfileForm from '@/components/rooms/RoomProfileForm';
 import RoomChecklistPanel from '@/components/rooms/RoomChecklistPanel';
 import RoomTimeline from '@/components/rooms/RoomTimeline';
 import KitchenInsightsCard from '@/components/rooms/KitchenInsightsCard';
 import LivingRoomInsightsCard from '@/components/rooms/LivingRoomInsightsCard';
+import BedroomInsightsCard from '@/components/rooms/BedroomInsightsCard';
 import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
 import AnimatedTabPanel from '@/components/rooms/AnimatedTabPanel';
 
 type Tab = 'PROFILE' | 'CHECKLIST' | 'TIMELINE';
+type RoomBase = 'KITCHEN' | 'LIVING' | 'BEDROOM' | 'OTHER';
+type BedroomKind = 'MASTER' | 'KIDS' | 'GUEST' | null;
 
-function normRoomType(name: string): 'KITCHEN' | 'LIVING' | 'OTHER' {
+function resolveRoomBase(name: string): RoomBase {
   const t = (name || '').toLowerCase();
   if (t.includes('kitchen')) return 'KITCHEN';
   if (t.includes('living')) return 'LIVING';
+  if (t.includes('bed')) return 'BEDROOM';
   return 'OTHER';
 }
 
+function normalizeBedroomKind(v: any): BedroomKind {
+  if (v === 'MASTER' || v === 'KIDS' || v === 'GUEST') return v;
+  return null;
+}
+
 function computeHealthScore(insights: any): number {
-  // Score is intentionally lightweight + explainable (no AI).
   const stats = insights?.stats || {};
   const itemCount = Number(stats.itemCount || 0);
   const docs = Number(stats.docsLinkedCount || 0);
@@ -40,20 +48,13 @@ function computeHealthScore(insights: any): number {
 
   let score = 55;
 
-  // More items tracked = better baseline (cap)
   score += Math.min(20, itemCount * 2);
-
-  // Docs help claims readiness
   score += Math.min(20, docs * 5);
-
-  // Coverage gaps reduce readiness
   score -= Math.min(30, gaps * 8);
 
-  // Kitchen: missing common appliances = incomplete tracking
   const missing = insights?.kitchen?.missingAppliances?.length || 0;
   score -= Math.min(20, missing * 6);
 
-  // Living: comfort hint gives tiny nudge
   const hint = insights?.livingRoom?.comfortScoreHint;
   if (hint === 'HIGH') score += 6;
   if (hint === 'LOW') score -= 6;
@@ -71,14 +72,11 @@ export default function RoomDetailClient() {
   const [profile, setProfile] = useState<any>({});
   const [savingProfile, setSavingProfile] = useState(false);
 
-  // summary data (for ring + header micro-stats)
   const [insights, setInsights] = useState<any>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
 
-  const roomType = useMemo(
-    () => (room?.name ? normRoomType(room.name) : 'OTHER'),
-    [room?.name]
-  );
+  const roomBase = useMemo<RoomBase>(() => (room?.name ? resolveRoomBase(room.name) : 'OTHER'), [room?.name]);
+  const bedroomKind = useMemo<BedroomKind>(() => normalizeBedroomKind(profile?.bedroomKind), [profile?.bedroomKind]);
 
   const healthScore = useMemo(() => computeHealthScore(insights), [insights]);
 
@@ -92,7 +90,6 @@ export default function RoomDetailClient() {
   async function loadSummary() {
     setSummaryLoading(true);
     try {
-      // If you haven’t wired getRoomInsights yet, this will just fail silently.
       const data = await getRoomInsights(propertyId, roomId);
       setInsights((data as any)?.data ?? data);
     } catch {
@@ -134,19 +131,16 @@ export default function RoomDetailClient() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <SectionHeader
-          icon={roomType === 'KITCHEN' ? '🍳' : roomType === 'LIVING' ? '🛋️' : '🏠'}
+          icon={roomBase === 'KITCHEN' ? '🍳' : roomBase === 'LIVING' ? '🛋️' : roomBase === 'BEDROOM' ? '🛏️' : '🏠'}
           title={room.name}
           description="Profile, micro-checklists, and maintenance timeline."
         />
-        <Link
-          href={`/dashboard/properties/${propertyId}/inventory/rooms`}
-          className="text-sm underline opacity-80 hover:opacity-100"
-        >
+        <Link href={`/dashboard/properties/${propertyId}/inventory/rooms`} className="text-sm underline opacity-80 hover:opacity-100">
           Back to rooms
         </Link>
       </div>
 
-      {/* “Apple Reminders”-ish summary strip */}
+      {/* Summary strip */}
       <div className="rounded-2xl border border-black/10 bg-white p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <RoomHealthScoreRing
           value={healthScore}
@@ -197,7 +191,7 @@ export default function RoomDetailClient() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <RoomProfileForm
               profile={profile}
-              roomType={roomType}
+              roomType={roomBase} // ✅ includes BEDROOM
               saving={savingProfile}
               onChange={setProfile}
               onSave={saveProfile}
@@ -208,21 +202,27 @@ export default function RoomDetailClient() {
               <div className="text-xs opacity-70 mt-1">Rule-based, no AI.</div>
 
               <div className="mt-4 space-y-3">
-                {roomType === 'KITCHEN' && <KitchenInsightsCard profile={profile} />}
-                {roomType === 'LIVING' && <LivingRoomInsightsCard profile={profile} />}
-                {roomType === 'OTHER' && (
+                {roomBase === 'KITCHEN' && <KitchenInsightsCard profile={profile} />}
+                {roomBase === 'LIVING' && <LivingRoomInsightsCard profile={profile} />}
+
+                {roomBase === 'BEDROOM' && <BedroomInsightsCard profile={profile} />}
+
+                {roomBase === 'BEDROOM' && !bedroomKind && (
+                  <div className="rounded-xl border border-black/10 bg-black/[0.02] p-3 text-sm">
+                    Select a bedroom type (Master / Kids / Guest) to unlock tailored insights + checklist defaults.
+                  </div>
+                )}
+
+                {roomBase === 'OTHER' && (
                   <div className="rounded-xl border border-black/10 bg-black/[0.02] p-3 text-sm">
                     Add a couple of micro-checklist items to build a maintenance rhythm.
                   </div>
                 )}
 
-                {/* Optional: show “missing appliances” if your insights API returns it */}
-                {roomType === 'KITCHEN' && insights?.kitchen?.missingAppliances?.length ? (
+                {roomBase === 'KITCHEN' && insights?.kitchen?.missingAppliances?.length ? (
                   <div className="rounded-xl border border-black/10 p-3">
                     <div className="text-xs uppercase tracking-wide opacity-60">Missing common appliances</div>
-                    <div className="text-sm mt-1">
-                      {insights.kitchen.missingAppliances.join(', ')}
-                    </div>
+                    <div className="text-sm mt-1">{insights.kitchen.missingAppliances.join(', ')}</div>
                   </div>
                 ) : null}
               </div>
@@ -231,7 +231,12 @@ export default function RoomDetailClient() {
         )}
 
         {tab === 'CHECKLIST' && (
-          <RoomChecklistPanel propertyId={propertyId} roomId={roomId} roomType={roomType} />
+          <RoomChecklistPanel
+            propertyId={propertyId}
+            roomId={roomId}
+            roomType={roomBase}
+            bedroomKind={bedroomKind}
+          />
         )}
 
         {tab === 'TIMELINE' && <RoomTimeline propertyId={propertyId} roomId={roomId} />}
