@@ -4,76 +4,90 @@
 import React, { useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 
-type LivingRoomProfile = {
-  seatingCapacity?: number | string;
-  primaryUse?: string;
-  tvMount?: string;
-  lighting?: string;
-};
-
 interface Props {
-  profile?: LivingRoomProfile | Record<string, any> | null;
+  profile: any;
+}
+
+function Chip({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-full border border-black/10 bg-black/[0.02] px-2 py-0.5 text-xs font-medium text-black/70">
+      {children}
+    </span>
+  );
+}
+
+function Row({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null;
+  return (
+    <div className="flex items-center justify-between gap-3 py-2">
+      <div className="text-sm text-black/70">{label}</div>
+      <div className="text-sm font-medium text-black truncate max-w-[55%] text-right">{value}</div>
+    </div>
+  );
 }
 
 export default function LivingRoomInsightsCard({ profile }: Props) {
-  const p = (profile || {}) as any;
-
   const highlights = useMemo(() => {
-    const rows: { label: string; value: string }[] = [];
+    const chips: string[] = [];
+    if (profile?.primaryUse) chips.push(`Use: ${profile.primaryUse}`);
+    if (profile?.windowsCount) chips.push(`${profile.windowsCount} windows`);
+    if (profile?.wallColor) chips.push(`Walls: ${profile.wallColor}`);
+    if (profile?.tvMount) chips.push(`TV: ${profile.tvMount}`);
+    return chips.slice(0, 4);
+  }, [profile]);
 
-    if (p.seatingCapacity) rows.push({ label: 'Seating', value: String(p.seatingCapacity) });
-    if (p.primaryUse) rows.push({ label: 'Primary use', value: String(p.primaryUse) });
-    if (p.tvMount) rows.push({ label: 'TV mount', value: String(p.tvMount) });
-    if (p.lighting) rows.push({ label: 'Lighting', value: String(p.lighting) });
-
-    return rows;
-  }, [p]);
-
-  const nudges = useMemo(() => {
-    const tips: string[] = [];
-
-    if (!p.seatingCapacity) tips.push('Add seating capacity to help plan comfort + traffic flow.');
-    if (!p.primaryUse) tips.push('Set primary use (family, entertaining, TV) for better suggestions.');
-    if (!p.lighting) tips.push('Add lighting type to suggest bulb replacement cadence.');
-    if (tips.length === 0) tips.push('Nice—your living room profile is well defined.');
-
-    return tips.slice(0, 2);
-  }, [p]);
+  const quickNudges = useMemo(() => {
+    const nudges: string[] = [];
+    nudges.push('Vacuum under sofas & along edges monthly');
+    if (profile?.windowsCount) nudges.push('Check window seals before winter');
+    nudges.push('Dust vents / fan blades every 2–3 months');
+    return nudges.slice(0, 3);
+  }, [profile]);
 
   return (
-    <Card className="rounded-2xl border border-black/10 bg-white">
-      <CardContent className="p-5 space-y-3">
-        <div>
-          <div className="text-sm font-semibold">Living room insights</div>
-          <div className="text-xs opacity-70 mt-1">Lightweight, rule-based (no AI).</div>
+    <Card className="rounded-2xl border border-black/10 bg-white shadow-sm">
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold">Living Room</div>
+            <div className="text-xs text-black/50 mt-0.5">Comfort + upkeep snapshot</div>
+          </div>
+          <div className="text-xs font-medium text-black/40">Insights</div>
         </div>
 
-        {highlights.length === 0 ? (
-          <div className="text-sm opacity-70">
-            Add a few profile details to unlock living-room-specific suggestions.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {highlights.map((h) => (
-              <div
-                key={h.label}
-                className="flex items-center justify-between gap-3 rounded-xl border border-black/10 px-3 py-2"
-              >
-                <div className="text-xs opacity-70">{h.label}</div>
-                <div className="text-sm font-medium truncate max-w-[60%] text-right">
-                  {h.value}
-                </div>
-              </div>
+        {highlights.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {highlights.map((c) => (
+              <Chip key={c}>{c}</Chip>
             ))}
           </div>
         )}
 
-        <div className="pt-1 space-y-1">
-          {nudges.map((t, idx) => (
-            <div key={idx} className="text-xs opacity-70">
-              • {t}
-            </div>
-          ))}
+        <div className="mt-4 rounded-xl border border-black/10 bg-black/[0.02] px-3">
+          <Row label="Primary use" value={profile?.primaryUse} />
+          <div className="h-px bg-black/10" />
+          <Row label="Wall color" value={profile?.wallColor} />
+          <div className="h-px bg-black/10" />
+          <Row label="Natural light" value={profile?.windowsCount ? `${profile.windowsCount} windows` : null} />
+        </div>
+
+        <div className="mt-4">
+          <div className="text-xs font-semibold text-black/50 uppercase tracking-wide">Quick wins</div>
+          <div className="mt-2 space-y-2">
+            {quickNudges.map((t) => (
+              <div
+                key={t}
+                className="flex items-start gap-2 rounded-xl border border-black/10 bg-white px-3 py-2"
+              >
+                <div className="mt-1 h-2 w-2 rounded-full bg-black/50" />
+                <div className="text-sm text-black/80 leading-snug">{t}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4 text-xs text-black/50">
+          Add a micro-checklist item to keep this room “alive” over time.
         </div>
       </CardContent>
     </Card>
