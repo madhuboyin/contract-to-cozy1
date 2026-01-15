@@ -13,8 +13,8 @@ export type ListInventoryItemRecallsResponse = {
 export async function listPropertyRecalls(
   propertyId: string
 ): Promise<ListPropertyRecallsResponse> {
-  // ✅ This endpoint likely returns { success: true, data: ... }
-  const res = await api.get<ListPropertyRecallsResponse>(`/api/properties/${propertyId}/recalls`);
+  // Use getRaw because the API returns the object directly, not wrapped in { data: ... }
+  const res = await api.getRaw<ListPropertyRecallsResponse>(`/api/properties/${propertyId}/recalls`);
   return res.data;
 }
 

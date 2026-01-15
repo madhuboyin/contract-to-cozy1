@@ -31,9 +31,14 @@ export default function RecallAlertsClient() {
     setError(null);
     try {
       const res = await listPropertyRecalls(propertyId);
-      // CHANGE THIS LINE: res.recallMatches -> res.matches
-      setRows(res.matches || []); 
+      // Add a null check for 'res'
+      if (res) {
+        setRows(res.matches || []); 
+      } else {
+        setRows([]);
+      }
     } catch (e: any) {
+      console.error("Recall Load Error:", e);
       setError(e?.message || 'Failed to load recall alerts');
     } finally {
       setLoading(false);
