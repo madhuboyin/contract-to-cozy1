@@ -1067,9 +1067,13 @@ model PropertyMaintenanceTask {
   recallMatchId String? @unique
   recallMatch   RecallMatch?
 
+  roomId String?
+  room   InventoryRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([roomId]) 
   @@index([recallMatchId])
   @@unique([propertyId, actionKey])
   @@index([propertyId])
@@ -1181,6 +1185,7 @@ model Property {
 
   inventoryOcrSessions InventoryOcrSession[]
   inventoryDraftItems  InventoryDraftItem[]
+  roomChecklistItems RoomChecklistItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3124,6 +3129,9 @@ model Incident {
   userId           String?
   sourceType       IncidentSourceType
 
+  roomId           String?
+  room             InventoryRoom?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
   typeKey          String
   category         String?
   title            String
@@ -3168,6 +3176,7 @@ model Incident {
 
   property         Property          @relation(fields: [propertyId], references: [id])
 
+  @@index([roomId])
   @@index([propertyId, status, severity])
   @@index([propertyId, typeKey, isSuppressed])
   @@index([propertyId, fingerprint])
@@ -3308,6 +3317,94 @@ model IncidentScoreSnapshot {
 
   @@index([incidentId, computedAt])
 }
+
+// ============================================================================
+// ROOM DESIGN
+// ============================================================================
+
+enum RoomType {
+  KITCHEN
+  LIVING_ROOM
+  BEDROOM
+  BATHROOM
+  DINING
+  LAUNDRY
+  GARAGE
+  OFFICE
+  OTHER
+}
+
+enum RoomChecklistStatus {
+  OPEN
+  DONE
+}
+
+enum RoomChecklistFrequency {
+  ONCE
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  SEASONAL
+}
+
+model RoomChecklistItem {
+  id         String @id @default(uuid())
+  propertyId String
+  roomId     String
+
+  // Optional “stable key” to ship default items later without duplicates
+  key        String?
+
+  title      String
+  notes      String?
+
+  status     RoomChecklistStatus    @default(OPEN)
+  frequency  RoomChecklistFrequency @default(ONCE)
+
+  sortOrder  Int @default(0)
+
+  lastCompletedAt DateTime?
+  nextDueDate     DateTime?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  property   Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  room       InventoryRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, roomId])
+  @@index([roomId, status])
+  @@unique([roomId, key])
+  @@map("room_checklist_items")
+}
+
+model InventoryRoom {
+  id         String   @id @default(uuid())
+  propertyId String
+
+  name       String
+  floorLevel Int?
+  sortOrder  Int      @default(0)
+
+  // ✅ NEW
+  type       RoomType?  @default(OTHER)
+  profile    Json?      // optional questionnaire / notes for this room (lightweight)
+  heroImage  String?    // optional (can be null); URL if you ever add visuals
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  property   Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  items      InventoryItem[]
+  checklistItems RoomChecklistItem[]
+  maintenanceTasks PropertyMaintenanceTask[]
+  incidents        Incident[]
+
+  @@index([propertyId])
+  @@unique([propertyId, name])
+  @@map("inventory_rooms")
+}
+
 
 // ============================================================================
 // FAVORITES
