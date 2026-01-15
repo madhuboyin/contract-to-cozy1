@@ -403,6 +403,12 @@ export async function updateRoomChecklistItem(propertyId: string, roomId: string
   return (res as any)?.data?.data?.item;
 }
 
+export async function deleteRoomChecklistItem(propertyId: string, roomId: string, itemId: string) { 
+  const res = await api.delete<any>(
+  `/api/properties/${propertyId}/inventory/rooms/${roomId}/checklist-items/${itemId}`); 
+  return res.data as any ; 
+}
+
 export async function getRoomTimeline(propertyId: string, roomId: string) {
   const res = await api.get(
     `/api/properties/${propertyId}/inventory/rooms/${roomId}/timeline`
