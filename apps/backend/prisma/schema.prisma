@@ -284,12 +284,19 @@ model InventoryRoom {
   floorLevel Int?
   sortOrder  Int      @default(0)
 
+  // ✅ NEW
+  type       RoomType?  @default(OTHER)
+  profile    Json?      // optional questionnaire / notes for this room (lightweight)
+  heroImage  String?    // optional (can be null); URL if you ever add visuals
+
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  // Relations
   property   Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   items      InventoryItem[]
+  checklistItems RoomChecklistItem[]
+  maintenanceTasks PropertyMaintenanceTask[]
+  incidents        Incident[]
 
   @@index([propertyId])
   @@unique([propertyId, name])
@@ -3376,33 +3383,6 @@ model RoomChecklistItem {
   @@index([roomId, status])
   @@unique([roomId, key])
   @@map("room_checklist_items")
-}
-
-model InventoryRoom {
-  id         String   @id @default(uuid())
-  propertyId String
-
-  name       String
-  floorLevel Int?
-  sortOrder  Int      @default(0)
-
-  // ✅ NEW
-  type       RoomType?  @default(OTHER)
-  profile    Json?      // optional questionnaire / notes for this room (lightweight)
-  heroImage  String?    // optional (can be null); URL if you ever add visuals
-
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  property   Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  items      InventoryItem[]
-  checklistItems RoomChecklistItem[]
-  maintenanceTasks PropertyMaintenanceTask[]
-  incidents        Incident[]
-
-  @@index([propertyId])
-  @@unique([propertyId, name])
-  @@map("inventory_rooms")
 }
 
 
