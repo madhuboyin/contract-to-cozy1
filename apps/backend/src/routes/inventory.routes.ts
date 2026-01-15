@@ -12,7 +12,6 @@ import { InventoryImportService } from '../services/inventoryImport.service';
 import { listImportBatches, rollbackImportBatch } from '../controllers/inventory.controller';
 import { InventoryService } from '../services/inventory.service';
 
-
 import {
   listRooms,
   createRoom,
@@ -33,6 +32,8 @@ import {
   createItemBodySchema,
   updateItemBodySchema,
   linkDocumentBodySchema,
+  createRoomChecklistItemBodySchema,
+  updateRoomChecklistItemBodySchema,
 } from '../validators/inventory.validators';
 
 import multer from 'multer';

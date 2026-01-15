@@ -3,6 +3,7 @@ import { Response, NextFunction } from 'express';
 import { InventoryItemCategory } from '@prisma/client';
 import { CustomRequest } from '../types';
 import { InventoryService } from '../services/inventory.service';
+import { prisma } from '../lib/prisma';
 
 const service = new InventoryService();
 
@@ -175,3 +176,5 @@ export async function lookupBarcode(req: CustomRequest, res: Response, next: Nex
     next(err);
   }
 }
+
+

@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import { InventoryItemCategory, InventoryItemCondition } from '@prisma/client';
 
+
 // ---- Rooms ----
 export const createRoomBodySchema = z.object({
   name: z.string().min(1).max(80),
@@ -13,6 +14,24 @@ export const updateRoomBodySchema = z.object({
   name: z.string().min(1).max(80).optional(),
   floorLevel: z.number().int().min(-5).max(50).nullable().optional(),
   sortOrder: z.number().int().min(0).max(10000).optional(),
+
+  // ✅ NEW: questionnaire payload (flexible)
+  profile: z.record(z.string(), z.any()).optional().nullable(),
+});
+
+const jsonValue: z.ZodType<any> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValue),
+    z.record(z.string(), jsonValue),
+  ])
+);
+
+export const updateRoomProfileBodySchema = z.object({
+  profile: z.unknown().nullable(), // stored as JSONB (required key)
 });
 
 // ---- Items ----
@@ -62,4 +81,24 @@ export const updateItemBodySchema = createItemBodySchema.partial();
 
 export const linkDocumentBodySchema = z.object({
   documentId: z.string().uuid(),
+});
+
+export const createRoomChecklistItemBodySchema = z.object({
+  title: z.string().min(1).max(140),
+  notes: z.string().max(1000).optional().nullable(),
+  frequency: z.enum(['ONCE', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'SEASONAL']).optional(),
+  sortOrder: z.number().int().min(0).max(10000).optional(),
+  nextDueDate: z.string().datetime().optional().nullable(),
+
+  // optional stable key
+  key: z.string().max(120).optional().nullable(),
+});
+
+export const updateRoomChecklistItemBodySchema = z.object({
+  title: z.string().min(1).max(140).optional(),
+  notes: z.string().max(1000).optional().nullable(),
+  frequency: z.enum(['ONCE', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'SEASONAL']).optional(),
+  sortOrder: z.number().int().min(0).max(10000).optional(),
+  status: z.enum(['OPEN', 'DONE']).optional(),
+  nextDueDate: z.string().datetime().optional().nullable(),
 });
