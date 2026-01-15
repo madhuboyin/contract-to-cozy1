@@ -4,7 +4,91 @@ import { AuthRequest } from '../types/auth.types';
 import { NotificationService } from '../services/notification.service';
 import { prisma } from '../lib/prisma';
 import { emailNotificationQueue } from '../services/JobQueue.service';
-import { NotificationChannel, DeliveryStatus } from '@prisma/client';
+import { NotificationChannel, DeliveryStatus,SignalSourceType, SignalTriggerType } from '@prisma/client';
+
+type SignalSourceBadge = {
+  sourceType: SignalSourceType;
+  triggerType: SignalTriggerType;
+  sourceSystem?: string | null;
+  summary?: string | null;
+  confidence?: number | null; // 0..1
+};
+
+function inferSignalSourceFromNotification(n: any): SignalSourceBadge {
+  // 1) Prefer explicit metadata.signalSource (if present)
+  const ss = n?.metadata?.signalSource;
+  if (ss?.sourceType && ss?.triggerType) {
+    return {
+      sourceType: ss.sourceType,
+      triggerType: ss.triggerType,
+      sourceSystem: ss.sourceSystem ?? null,
+      summary: ss.summary ?? null,
+      confidence: typeof ss.confidence === 'number' ? ss.confidence : null,
+    };
+  }
+
+  const type = String(n?.type ?? '').toUpperCase();
+
+  // 2) Fallback heuristic
+  if (type.includes('SEASONAL') || type.includes('SCHEDULED')) {
+    return {
+      sourceType: SignalSourceType.SCHEDULED,
+      triggerType: SignalTriggerType.SCHEDULE,
+      sourceSystem: 'scheduler',
+      summary: 'Scheduled reminder',
+      confidence: null,
+    };
+  }
+
+  if (type.includes('RECALL') || type.includes('CPSC')) {
+    return {
+      sourceType: SignalSourceType.EXTERNAL,
+      triggerType: SignalTriggerType.INGEST,
+      sourceSystem: 'externalFeed',
+      summary: 'From a third-party feed',
+      confidence: null,
+    };
+  }
+
+  if (type.includes('WARRANTY') || type.includes('INSURANCE') || type.includes('COVERAGE')) {
+    return {
+      sourceType: SignalSourceType.COVERAGE,
+      triggerType: SignalTriggerType.RULE,
+      sourceSystem: 'coverage',
+      summary: 'Derived from your coverage records',
+      confidence: null,
+    };
+  }
+
+  if (type.includes('RISK') || type.includes('FREEZE') || type.includes('LAPSE')) {
+    return {
+      sourceType: SignalSourceType.INTELLIGENCE,
+      triggerType: SignalTriggerType.MODEL,
+      sourceSystem: 'riskModel',
+      summary: 'Generated from your property intelligence',
+      confidence: null,
+    };
+  }
+
+  if (type.includes('DOCUMENT') || type.includes('OCR')) {
+    return {
+      sourceType: SignalSourceType.DOCUMENT,
+      triggerType: SignalTriggerType.EXTRACTION,
+      sourceSystem: 'docExtraction',
+      summary: 'Extracted from a document',
+      confidence: null,
+    };
+  }
+
+  // Default: user-driven lifecycle
+  return {
+    sourceType: SignalSourceType.MANUAL,
+    triggerType: SignalTriggerType.USER_ACTION,
+    sourceSystem: 'userActivity',
+    summary: 'Triggered by your activity',
+    confidence: null,
+  };
+}
 
 export class NotificationController {
   /**
@@ -27,10 +111,15 @@ export class NotificationController {
       : 30;
 
     const notifications = await NotificationService.listForUser(userId, limit);
+    // ✅ enrich for UI
+    const dto = notifications.map((n: any) => ({
+      ...n,
+      signalSource: inferSignalSourceFromNotification(n),
+    }));
 
     return res.json({
       success: true,
-      data: notifications,
+      data: dto,
     });
   }
 

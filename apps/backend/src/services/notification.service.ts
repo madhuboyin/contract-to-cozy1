@@ -1,7 +1,7 @@
 // apps/backend/src/services/notification.service.ts
 
 import { prisma } from '../lib/prisma';
-import { NotificationChannel, DeliveryStatus } from '@prisma/client';
+import { NotificationChannel, DeliveryStatus,SignalSourceType, SignalTriggerType } from '@prisma/client';
 import {
   emailNotificationQueue,
   pushNotificationQueue,
@@ -17,8 +17,16 @@ type CreateNotificationInput = {
   entityType?: string;
   entityId?: string;
   metadata?: Record<string, any>;
+  signalSource?: NotificationSignalSource;
 };
 
+type NotificationSignalSource = {
+  sourceType: SignalSourceType;
+  triggerType: SignalTriggerType;
+  sourceSystem?: string;
+  summary?: string;
+  confidence?: number | null; // 0..1
+};
 /**
  * Notification types that MUST be delivered immediately
  * (affects EMAIL/SMS/PUSH urgency — NOT in-app behavior)
@@ -59,6 +67,12 @@ export class NotificationService {
      */
     const isImportant = IMPORTANT_TYPES.has(input.type);
 
+    const mergedMetadata = {
+      ...input.metadata,
+      priority: isImportant ? 'HIGH' : 'LOW',
+      signalSource: input.signalSource ?? input.metadata?.signalSource ?? undefined,
+    };
+
     /**
      * 3️⃣ Decide channels
      *
@@ -89,16 +103,13 @@ export class NotificationService {
         actionUrl: input.actionUrl,
         entityType: input.entityType,
         entityId: input.entityId,
-        metadata: {
-          ...input.metadata,
-          priority: isImportant ? 'HIGH' : 'LOW',
-        },
+        metadata: mergedMetadata,
         deliveries: {
           create: channels.map((channel) => ({
             channel,
             status:
               channel === NotificationChannel.IN_APP
-                ? DeliveryStatus.SENT // In-app is instant
+                ? DeliveryStatus.SENT
                 : DeliveryStatus.PENDING,
           })),
         },

@@ -1,12 +1,44 @@
 // apps/frontend/src/app/(dashboard)/dashboard/notifications/page.tsx
 'use client';
 
+import React from 'react';
 import Link from 'next/link';
 import { useNotifications } from '@/lib/notifications/NotificationContext';
 import { Badge } from '@/components/ui/badge';
 import { Circle, RotateCcw } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import { Notification } from '@/lib/notifications/NotificationContext';
 
+const SOURCE_BADGE_META: Record<string, { emoji: string; label: string }> = {
+  SCHEDULED: { emoji: '⏱', label: 'Scheduled' },
+  INTELLIGENCE: { emoji: '📊', label: 'Intelligence' },
+  COVERAGE: { emoji: '📄', label: 'Coverage' },
+  MANUAL: { emoji: '👤', label: 'Manual' },
+  SENSOR: { emoji: '🔔', label: 'Sensor' },
+  DOCUMENT: { emoji: '🧾', label: 'Document' },
+  EXTERNAL: { emoji: '🌎', label: 'External' },
+};
+
+function renderSignalBadge(n: Notification  ) {
+  const st = n?.signalSource?.sourceType;
+  if (!st) return null;
+
+  const meta = SOURCE_BADGE_META[st] ?? { emoji: '🏷️', label: st };
+  const title = n?.signalSource?.summary
+    ? `${meta.label}: ${n.signalSource.summary}`
+    : meta.label;
+
+  return (
+    <Badge
+      variant="secondary"
+      className="text-[10px] px-1.5 py-0 h-4 uppercase tracking-wider"
+      title={title}
+    >
+      <span className="mr-1">{meta.emoji}</span>
+      {meta.label}
+    </Badge>
+  );
+}
 export default function NotificationsPage() {
   const {
     notifications,
@@ -28,7 +60,7 @@ export default function NotificationsPage() {
     e.stopPropagation();
     try {
       // Calls the persistent PATCH endpoint in the backend
-      await api.patch(`/api/notifications/${id}/unread`, {}); 
+      await api.markNotificationAsUnread(id);
       await refresh();
     } catch (err) {
       console.error('Failed to mark as unread:', err);
@@ -87,6 +119,7 @@ export default function NotificationsPage() {
                     {n.title}
                   </div>
                   <div className="flex items-center gap-2 min-h-[24px]">
+                    {renderSignalBadge(n)}
                     {!n.isRead ? (
                       <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 uppercase tracking-wider">
                         New
