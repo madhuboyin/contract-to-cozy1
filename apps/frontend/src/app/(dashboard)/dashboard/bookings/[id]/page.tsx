@@ -10,7 +10,7 @@ import { ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 
-  const router = useRouter();
+
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'DRAFT':
