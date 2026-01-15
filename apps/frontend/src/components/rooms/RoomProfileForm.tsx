@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 interface Props {
   profile: any;
-  roomType: 'KITCHEN' | 'LIVING' | 'BEDROOM' | 'DINING' | 'LAUNDRY' | 'GARAGE' | 'OFFICE' | 'OTHER';
+  roomType: 'KITCHEN' | 'LIVING' | 'BEDROOM' | 'BATHROOM' | 'DINING' | 'LAUNDRY' | 'GARAGE' | 'OFFICE' | 'OTHER';
   saving: boolean;
   onChange: (profile: any) => void;
   onSave: (profile: any) => Promise<void>;
@@ -230,6 +230,78 @@ export default function RoomProfileForm({ profile, roomType, saving, onChange, o
               <Divider />
               <Row label="High chair use (optional)">
                 <Select value={(p.highChairUse || '') as '' | YesNo} onValueChange={(v) => updateField('highChairUse', v)}>
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="YES">Yes</SelectItem>
+                    <SelectItem value="NO">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Row>
+            </>
+          )}
+          {/* Bathroom */}
+          {roomType === 'BATHROOM' && (
+            <>
+              <Divider />
+              <Row label="Bathroom type">
+                <Select value={(p.bathroomType || '') as string} onValueChange={(v) => updateField('bathroomType', v)}>
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="FULL">Full (shower/tub)</SelectItem>
+                    <SelectItem value="HALF">Half / powder</SelectItem>
+                    <SelectItem value="PRIMARY">Primary ensuite</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Row>
+
+              <Divider />
+              <Row label="Shower / tub type">
+                <Select value={(p.showerType || '') as string} onValueChange={(v) => updateField('showerType', v)}>
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SHOWER_ONLY">Shower only</SelectItem>
+                    <SelectItem value="TUB_ONLY">Tub only</SelectItem>
+                    <SelectItem value="SHOWER_TUB">Shower + tub combo</SelectItem>
+                    <SelectItem value="NONE">None</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Row>
+
+              <Divider />
+              <Row label="Exhaust fan present">
+                <Select value={(p.exhaustFan || '') as '' | 'YES' | 'NO'} onValueChange={(v) => updateField('exhaustFan', v)}>
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="YES">Yes</SelectItem>
+                    <SelectItem value="NO">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Row>
+
+              <Divider />
+              <Row label="GFCI outlets present">
+                <Select value={(p.gfciPresent || '') as '' | 'YES' | 'NO'} onValueChange={(v) => updateField('gfciPresent', v)}>
+                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="YES">Yes</SelectItem>
+                    <SelectItem value="NO">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Row>
+
+              <Divider />
+              <Row label="Shutoff access is easy">
+                <Select value={(p.shutoffAccessible || '') as '' | 'YES' | 'NO'} onValueChange={(v) => updateField('shutoffAccessible', v)}>
                   <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
                     <SelectValue placeholder="Select…" />
                   </SelectTrigger>

@@ -20,6 +20,7 @@ import GarageInsightsCard from '@/components/rooms/GarageInsightsCard';
 import OfficeInsightsCard from '@/components/rooms/OfficeInsightsCard';
 import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
 import AnimatedTabPanel from '@/components/rooms/AnimatedTabPanel';
+import BathroomInsightsCard from '@/components/rooms/BathroomInsightsCard';
 
 type Tab = 'PROFILE' | 'CHECKLIST' | 'TIMELINE';
 
@@ -27,6 +28,7 @@ type RoomBase =
   | 'KITCHEN'
   | 'LIVING'
   | 'BEDROOM'
+  | 'BATHROOM'
   | 'DINING'
   | 'LAUNDRY'
   | 'GARAGE'
@@ -49,6 +51,8 @@ function resolveRoomBaseFromType(type?: string | null): RoomBase | null {
       return 'LIVING';
     case 'BEDROOM':
       return 'BEDROOM';
+    case 'BATHROOM':
+      return 'BATHROOM';
     case 'DINING':
       return 'DINING';
     case 'LAUNDRY':
@@ -73,6 +77,7 @@ function resolveRoomBaseFromName(name: string): RoomBase {
   if (t.includes('laundry') || t.includes('utility') || t.includes('washer') || t.includes('dryer')) return 'LAUNDRY';
   if (t.includes('garage')) return 'GARAGE';
   if (t.includes('office') || t.includes('study') || t.includes('den')) return 'OFFICE';
+  if (t.includes('bath') || t.includes('toilet') || t.includes('powder') || t.includes('wc')) return 'BATHROOM';
 
   return 'OTHER';
 }
@@ -118,6 +123,7 @@ function computeHealthScore(roomBase: RoomBase, profile: any, insights: any): nu
     KITCHEN: ['countertops', 'cabinets', 'ventHood', 'flooring'],
     LIVING: ['seatingCapacity', 'primaryUse', 'tvMount', 'lighting', 'flooring'],
     BEDROOM: ['bedroomKind', 'bedSize', 'nightLighting'],
+    BATHROOM: ['bathroomType', 'showerType', 'exhaustFan', 'gfciPresent', 'flooring'],
     DINING: ['seatingCapacity', 'tableMaterial', 'lighting', 'flooring'],
     LAUNDRY: ['washerType', 'dryerType', 'ventingType', 'leakPan', 'floorDrain'],
     GARAGE: ['carCapacity', 'doorType', 'storageType', 'fireExtinguisherPresent', 'waterHeaterLocatedHere'],
@@ -152,6 +158,12 @@ function computeHealthScore(roomBase: RoomBase, profile: any, insights: any): nu
     if (profile?.cableManagement) score += 1;
   }
 
+  if (roomBase === 'BATHROOM') {
+    if (profile?.exhaustFan === 'YES') score += 2;
+    if (profile?.gfciPresent === 'YES') score += 2;
+    if (profile?.shutoffAccessible === 'YES') score += 1;
+  }
+  
   return clampScore(score);
 }
 
@@ -171,6 +183,8 @@ function roomIcon(base: RoomBase) {
       return '🚗';
     case 'OFFICE':
       return '🖥️';
+    case 'BATHROOM':
+      return '🚿';
     default:
       return '🏠';
   }
@@ -319,7 +333,7 @@ export default function RoomDetailClient() {
                 {roomBase === 'LAUNDRY' && <LaundryInsightsCard profile={profile} />}
                 {roomBase === 'GARAGE' && <GarageInsightsCard profile={profile} />}
                 {roomBase === 'OFFICE' && <OfficeInsightsCard profile={profile} />}
-
+                {roomBase === 'BATHROOM' && <BathroomInsightsCard profile={profile} />}
                 {roomBase === 'BEDROOM' && !bedroomKind && (
                   <div className="rounded-xl border border-black/10 bg-black/[0.02] p-3 text-sm">
                     Select a bedroom type (Master / Kids / Guest) to unlock tailored insights + checklist defaults.

@@ -16,7 +16,7 @@ import { CheckCircle2, Circle, Plus, Trash2, Sparkles } from 'lucide-react';
 interface Props {
   propertyId: string;
   roomId: string;
-  roomType: 'KITCHEN' | 'LIVING' | 'BEDROOM' | 'DINING' | 'LAUNDRY' | 'GARAGE' | 'OFFICE' | 'OTHER';
+  roomType: 'KITCHEN' | 'LIVING' | 'BEDROOM' | 'BATHROOM' | 'DINING' | 'LAUNDRY' | 'GARAGE' | 'OFFICE' | 'OTHER';
   bedroomKind?: 'MASTER' | 'KIDS' | 'GUEST' | null;
 }
 
@@ -114,7 +114,9 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
                       : bedroomKind === 'GUEST'
                         ? 'e.g., Refresh linens'
                         : 'e.g., Make bed'
-                  : 'e.g., Dust vents';
+                    : roomType === 'BATHROOM'
+                      ? 'e.g., Check under-sink for leaks'
+                      : 'e.g., Dust vents';
 
   const recommended: ChecklistSeed[] = useMemo(() => {
     if (roomType === 'KITCHEN') {
@@ -170,6 +172,15 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
       ];
     }
 
+    if (roomType === 'BATHROOM') {
+      return [
+        { title: 'Check under-sink for leaks', frequency: 'MONTHLY' },
+        { title: 'Clean exhaust fan cover', frequency: 'QUARTERLY' },
+        { title: 'Inspect caulk / grout', frequency: 'QUARTERLY' },
+        { title: 'Test GFCI outlets', frequency: 'QUARTERLY' },
+      ];
+    }
+    
     if (roomType === 'BEDROOM') {
       if (bedroomKind === 'MASTER') {
         return [
