@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams ,useRouter} from 'next/navigation';
 
 import { SectionHeader } from '../../../components/SectionHeader';
 import type { RecallMatchDTO, RecallResolutionType } from '@/types/recalls.types';
@@ -14,8 +14,11 @@ import {
 } from './recallsApi';
 
 import RecallMatchCard from '@/app/(dashboard)/dashboard/components/recalls/RecallMatchCard';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft } from 'lucide-react';
 
 export default function RecallAlertsClient() {
+  const router = useRouter();
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
 
@@ -78,6 +81,16 @@ export default function RecallAlertsClient() {
 
   return (
     <div className="space-y-4">
+      {/* Back Navigation */}
+      {propertyId && router && (
+        <Button 
+          variant="link" 
+          className="p-0 h-auto mb-2 text-sm text-muted-foreground"
+          onClick={() => router.back()}
+        >
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back
+        </Button>
+      )}
       <SectionHeader
         icon="⚠️"
         title="Recall & Safety Alerts"
