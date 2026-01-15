@@ -100,6 +100,12 @@ export default function RoomsClient() {
                 <div className="text-xs opacity-60">Sort: {r.sortOrder}</div>
               </div>
               <div className="flex gap-2">
+                <Link
+                  href={`/dashboard/properties/${propertyId}/inventory/rooms/${r.id}`}
+                  className="text-sm underline opacity-80 hover:opacity-100"
+                >
+                  View
+                </Link>
                 <button onClick={() => onRename(r)} className="text-sm underline opacity-80 hover:opacity-100">
                   Rename
                 </button>
