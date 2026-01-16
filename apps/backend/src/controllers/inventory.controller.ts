@@ -79,7 +79,8 @@ export async function listItems(req: CustomRequest, res: Response, next: NextFun
 export async function createItem(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const propertyId = req.params.propertyId;
-    const item = await service.createItem(propertyId, req.body);
+    const userId = req.user?.userId ?? null;
+    const item = await service.createItem(propertyId, req.body, userId);    
     res.status(201).json({ success: true, data: { item } });
   } catch (err) {
     next(err);

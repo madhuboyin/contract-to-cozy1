@@ -3,6 +3,8 @@ import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { InventoryItemCategory } from '@prisma/client';
 import crypto from 'crypto';
+import { HomeEventsAutoGen } from './homeEvents/homeEvents.autogen';
+
 function normalize(v: any) {
   return String(v ?? '').trim().toLowerCase();
 }
@@ -206,48 +208,48 @@ export class InventoryService {
     });
   }
 
-  async createItem(propertyId: string, data: any) {
+  async createItem(propertyId: string, data: any, userId: string | null) {
     await this.assertRoomBelongs(propertyId, data.roomId);
     await this.assertWarrantyBelongs(propertyId, data.warrantyId);
     await this.assertInsuranceBelongs(propertyId, data.insurancePolicyId);
     await this.assertHomeAssetBelongs(propertyId, data.homeAssetId);
-
+  
     const manufacturerNorm = norm(data.manufacturer);
     const modelNumberNorm = norm(data.modelNumber);
-
-    return prisma.inventoryItem.create({
+  
+    const created = await prisma.inventoryItem.create({
       data: {
         propertyId,
         name: data.name,
         category: data.category,
         condition: data.condition || 'UNKNOWN',
-
+  
         roomId: data.roomId || null,
         warrantyId: data.warrantyId || null,
         insurancePolicyId: data.insurancePolicyId || null,
         homeAssetId: data.homeAssetId || null,
-
+  
         brand: data.brand || null,
         model: data.model || null,
         serialNo: data.serialNo || null,
         notes: data.notes || null,
         tags: data.tags || [],
-
+  
         purchaseCostCents: data.purchaseCostCents || null,
         replacementCostCents: data.replacementCostCents || null,
         currency: data.currency || 'USD',
-
+  
         installedOn: data.installedOn ? new Date(data.installedOn) : null,
         purchasedOn: data.purchasedOn ? new Date(data.purchasedOn) : null,
         lastServicedOn: data.lastServicedOn ? new Date(data.lastServicedOn) : null,
-
+  
         // ✅ barcode/recall fields
         manufacturer: data.manufacturer || null,
         modelNumber: data.modelNumber || null,
         serialNumber: data.serialNumber || null,
         upc: data.upc || null,
         sku: data.sku || null,
-
+  
         // ✅ normalized (future-proof for matching)
         manufacturerNorm,
         modelNumberNorm,
@@ -260,7 +262,33 @@ export class InventoryService {
         documents: { orderBy: { createdAt: 'desc' } },
       },
     });
+  
+    // ✅ Home Timeline Replay™: auto-generate purchase moment (safe + idempotent)
+    try {
+    await HomeEventsAutoGen.onInventoryItemCreated({
+      propertyId,
+      itemId: created.id,
+      userId: userId ?? null,
+  
+      name: created.name,
+      category: String(created.category ?? ''),
+      roomId: created.roomId ?? null,
+      purchasedOn: created.purchasedOn ?? null,
+      purchaseCostCents: created.purchaseCostCents ?? null,
+      currency: created.currency ?? null,
+  
+      brand: created.brand ?? null,
+      model: created.model ?? null,
+      upc: created.upc ?? null,
+      sku: created.sku ?? null,
+    });
+    } catch (e: any) {
+      console.error('[HOME_EVENTS_AUTOGEN] onInventoryItemCreated failed:', e);
+    }
+  
+    return created;
   }
+  
 
   async updateItem(propertyId: string, itemId: string, patch: any) {
     const existing = await prisma.inventoryItem.findFirst({

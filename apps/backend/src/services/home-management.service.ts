@@ -9,6 +9,7 @@ import {
 
 import { prisma } from '../lib/prisma';
 import JobQueueService from './JobQueue.service';
+import { HomeEventsAutoGen } from './homeEvents/homeEvents.autogen';
 
 // Helper interface for safe Decimal conversion (the object must have a toNumber method)
 interface DecimalLike {
@@ -156,7 +157,27 @@ export async function createExpense(
         transactionDate: new Date(data.transactionDate),
       } as Prisma.ExpenseCreateInput,
     });
-    
+    // AUTO-GEN HomeEvent (only if propertyId exists)
+    if (data.propertyId && data.propertyId !== "") {
+      try {
+        await HomeEventsAutoGen.onExpenseCreated({
+          propertyId: data.propertyId,
+          expenseId: rawExpense.id,
+          userId: null, // home-management module is homeowner-profile scoped; ok to keep null
+
+          category: rawExpense.category ?? data.category ?? null,
+          description: rawExpense.description ?? data.description ?? null,
+
+          transactionDate: rawExpense.transactionDate,
+          amount: typeof data.amount === 'number' ? data.amount : Number(rawExpense.amount as any),
+          currency: null, // if you add currency to Expense later, wire it here
+        });
+      } catch (e) {
+        // Never break expense creation if timeline autogen fails
+        console.error('[HOME_EVENTS_AUTOGEN] Failed onExpenseCreated:', e);
+      }
+    }
+
     return mapRawExpenseToExpense(rawExpense);
   } catch (error) {
     console.error('FATAL ERROR (POST /expenses): Prisma operation failed.', error); 
@@ -193,7 +214,28 @@ export async function updateExpense(
       ...(data.transactionDate && { transactionDate: new Date(data.transactionDate) }),
     } as Prisma.ExpenseUpdateInput,
   });
-  
+  // Keep HomeEvent in sync (optional, safe)
+  if (rawUpdatedExpense.propertyId) {
+    try {
+      await HomeEventsAutoGen.onExpenseUpdated({
+        propertyId: rawUpdatedExpense.propertyId,
+        expenseId: rawUpdatedExpense.id,
+        userId: null,
+
+        category: rawUpdatedExpense.category ?? null,
+        description: rawUpdatedExpense.description ?? null,
+
+        transactionDate: rawUpdatedExpense.transactionDate,
+        amount: typeof data.amount === 'number'
+          ? data.amount
+          : (rawUpdatedExpense.amount as any)?.toNumber?.() ?? Number(rawUpdatedExpense.amount as any),
+        currency: null,
+      });
+    } catch (e) {
+      console.error('[HOME_EVENTS_AUTOGEN] Failed onExpenseUpdated:', e);
+    }
+  }
+
   return mapRawExpenseToExpense(rawUpdatedExpense);
 }
 
@@ -475,7 +517,29 @@ export async function createDocument(
       insurancePolicy: data.policyId ? { connect: { id: data.policyId } } : undefined,
     } as Prisma.DocumentCreateInput,
   });
-  
+  // AUTO-GEN Timeline moment for property-linked docs (safe, non-blocking)
+  if (rawDocument.propertyId) {
+    try {
+      await HomeEventsAutoGen.onDocumentUploaded({
+        propertyId: rawDocument.propertyId,
+        documentId: rawDocument.id,
+        homeownerProfileId,
+
+        name: rawDocument.name,
+        docType: String(rawDocument.type),
+        mimeType: rawDocument.mimeType ?? null,
+        description: rawDocument.description ?? null,
+
+        createdAt: rawDocument.createdAt,
+
+        warrantyId: (rawDocument as any).warrantyId ?? data.warrantyId ?? null,
+        policyId: (rawDocument as any).insurancePolicyId ?? data.policyId ?? null,
+      });
+    } catch (e) {
+      console.error('[HOME_EVENTS_AUTOGEN] Failed onDocumentUploaded (home-management):', e);
+    }
+  }
+
   return rawDocument as Document;
 }
 

@@ -9,6 +9,7 @@ import { prisma } from '../lib/prisma';
 import { documentIntelligenceService } from '../services/documentIntelligence.service';
 import { DocumentType } from '@prisma/client';
 import { validateDocumentUpload } from '../utils/documentValidator.util'; // Assuming this was added in the previous step
+import { HomeEventsAutoGen } from '../services/homeEvents/homeEvents.autogen';
 
 const router = Router();
 
@@ -141,6 +142,26 @@ router.post('/analyze', authenticate, upload.single('file'), validateDocumentUpl
         metadata: insights as any
       }
     });
+    
+    // AUTO-GEN timeline moment if property-linked (safe, non-blocking)
+    if (document.propertyId) {
+      try {
+        await HomeEventsAutoGen.onDocumentUploaded({
+          propertyId: document.propertyId,
+          documentId: document.id,
+          homeownerProfileId: homeownerProfile.id,
+
+          name: document.name,
+          docType: String(document.type),
+          mimeType: document.mimeType ?? null,
+          description: (document as any).description ?? null,
+
+          createdAt: document.createdAt,
+        });
+      } catch (e) {
+        console.error('[HOME_EVENTS_AUTOGEN] Failed onDocumentUploaded (documents/analyze):', e);
+      }
+    }
 
     // Optionally auto-create warranty if requested
     let warranty = null;

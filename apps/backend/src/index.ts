@@ -54,6 +54,8 @@ import claimsRoutes from './routes/claims.routes';
 import incidentsRouter from './routes/incidents.routes';
 import recallsRoutes from './routes/recalls.routes';
 import roomInsightsRoutes from './routes/roomInsights.routes';
+import homeEventsRoutes from './routes/homeEvents.routes';
+
 
 dotenv.config();
 
@@ -313,6 +315,8 @@ app.use('/api', claimsRoutes);
 app.use('/api', incidentsRouter);
 app.use('/api', recallsRoutes);
 app.use('/api', roomInsightsRoutes);
+app.use('/api', homeEventsRoutes);
+
 
 //app.use(express.json({ limit: '10mb' })); // Ensure this is present
 //app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -343,7 +347,7 @@ app.use((req: Request, res: Response) => {
       'GET /api/community/trash',
       'GET /api/v1/community/events',
       'GET /api/inventory',
-
+      'GET /api/home-events',
     ],
   });
 });
@@ -391,6 +395,7 @@ app.listen(PORT, () => {
   console.log(`   - PATCH /api/room-insights/rooms/:roomId/checklist-items/:itemId`);
   console.log(`   - DELETE /api/room-insights/rooms/:roomId/checklist-items/:itemId`);
   console.log(`   - GET  /api/room-insights/rooms/:roomId/timeline`);
+  console.log(`   - GET  /api/home-events`);
 });
 
 export default app;

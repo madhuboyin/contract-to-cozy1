@@ -90,6 +90,11 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: EVENTS_STALE_DAYS
+            - name: HOME_EVENTS_AUTOGEN_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: HOME_EVENTS_AUTOGEN_ENABLED
             - name: S3_BUCKET
               valueFrom:
                 secretKeyRef:

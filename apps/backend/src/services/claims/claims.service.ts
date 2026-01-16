@@ -14,6 +14,7 @@ import { DomainEventsService } from '../domainEvents/domainEvents.service';
 import { ClaimStatus } from '../../types/claims.types';
 
 import { ClaimDocumentType, ClaimTimelineEventType} from '@prisma/client';
+import { HomeEventsAutoGen } from '../homeEvents/homeEvents.autogen';
 
 
 type UploadAndAttachArgs = {
@@ -470,6 +471,15 @@ export class ClaimsService {
       },
     });
 
+    await HomeEventsAutoGen.onClaimCreated({
+      propertyId,
+      claimId: claim.id,
+      userId,
+      title: claim.title,
+      type: String(claim.type ?? ''),
+      incidentAt: claim.incidentAt ?? null,
+    });
+    
     await prisma.claimTimelineEvent.create({
       data: {
         claimId: claim.id,
@@ -640,6 +650,15 @@ export class ClaimsService {
           },
         },
       },
+    });
+
+    await HomeEventsAutoGen.onClaimStatusChanged({
+      propertyId: updated.propertyId,
+      claimId: updated.id,
+      userId,
+      title: updated.title,
+      fromStatus: String(claim.status),
+      toStatus: String(requestedStatus),
     });
   }
 
