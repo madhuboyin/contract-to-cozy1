@@ -25,6 +25,6 @@ export async function listHomeEvents(propertyId: string, params: HomeEventListPa
 
   const suffix = qs.toString() ? `?${qs.toString()}` : '';
   return api.get<{ data: HomeEventsResponse }>(
-    `/properties/${propertyId}/home-events${suffix}`
+    `/api/properties/${propertyId}/home-events${suffix}`
   );
 }
