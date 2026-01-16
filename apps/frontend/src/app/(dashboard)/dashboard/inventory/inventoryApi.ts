@@ -392,7 +392,7 @@ export async function createRoomChecklistItem(propertyId: string, roomId: string
     `/api/properties/${propertyId}/inventory/rooms/${roomId}/checklist-items`,
     body
   );
-  return (res as any)?.data?.data?.item;
+  return (res as any)?.data?.item ?? (res as any)?.data?.data?.item ?? (res as any)?.item;
 }
 
 export async function updateRoomChecklistItem(propertyId: string, roomId: string, itemId: string, body: any) {
@@ -400,13 +400,11 @@ export async function updateRoomChecklistItem(propertyId: string, roomId: string
     `/api/properties/${propertyId}/inventory/rooms/${roomId}/checklist-items/${itemId}`,
     body
   );
-  return (res as any)?.data?.data?.item;
+  return (res as any)?.data?.item ?? (res as any)?.data?.data?.item;
 }
 
-export async function deleteRoomChecklistItem(propertyId: string, roomId: string, itemId: string) { 
-  const res = await api.delete<any>(
-  `/api/properties/${propertyId}/inventory/rooms/${roomId}/checklist-items/${itemId}`); 
-  return res.data as any ; 
+export async function deleteRoomChecklistItem(propertyId: string, roomId: string, itemId: string) {
+  await api.delete(`/api/properties/${propertyId}/inventory/rooms/${roomId}/checklist-items/${itemId}`);
 }
 
 export async function getRoomTimeline(propertyId: string, roomId: string) {
