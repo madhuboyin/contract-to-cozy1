@@ -1193,6 +1193,7 @@ model Property {
   inventoryOcrSessions InventoryOcrSession[]
   inventoryDraftItems  InventoryDraftItem[]
   roomChecklistItems RoomChecklistItem[]
+  homeEvents HomeEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1524,6 +1525,7 @@ model Document {
   inventoryItem    InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
   homeReportExports HomeReportExport[]
   claimDocuments ClaimDocument[]
+  homeEventLinks HomeEventDocument[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2406,6 +2408,124 @@ model PropertyClimateSetting {
   @@index([climateRegion])
   @@map("property_climate_settings")
 }
+
+// ============================================================================
+// HOME TIMELINE
+// ============================================================================
+
+enum HomeEventType {
+  PURCHASE
+  DOCUMENT
+  REPAIR
+  MAINTENANCE
+  CLAIM
+  IMPROVEMENT
+  VALUE_UPDATE
+  INSPECTION
+  NOTE
+  MILESTONE
+  OTHER
+}
+
+enum HomeEventImportance {
+  LOW
+  NORMAL
+  HIGH
+  HIGHLIGHT
+}
+
+enum HomeEventVisibility {
+  PRIVATE
+  HOUSEHOLD
+  SHARE_LINK
+  RESALE_PACK
+}
+
+enum HomeEventDocumentKind {
+  PHOTO
+  RECEIPT
+  INVOICE
+  PDF
+  BEFORE
+  AFTER
+  OTHER
+}
+
+model HomeEvent {
+  id              String   @id @default(uuid())
+  propertyId      String
+  createdById     String?
+
+  roomId          String?
+  inventoryItemId String?
+  claimId         String?
+  expenseId       String?
+
+  type            HomeEventType
+  subtype         String?
+  importance      HomeEventImportance @default(NORMAL)
+  visibility      HomeEventVisibility @default(HOUSEHOLD)
+
+  occurredAt      DateTime
+  endAt           DateTime?
+
+  title           String
+  summary         String?
+
+  // Money/value signals (align with Expense using Decimal)
+  amount          Decimal? @db.Decimal(12, 2)
+  currency        String?  @default("USD")
+  valueDelta      Decimal? @db.Decimal(12, 2)
+
+  meta            Json?
+  groupKey        String?
+  idempotencyKey  String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdBy       User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  room            InventoryRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  claim           Claim?         @relation(fields: [claimId], references: [id], onDelete: SetNull)
+  expense         Expense?       @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+
+  documents       HomeEventDocument[]
+
+  @@index([propertyId, occurredAt])
+  @@index([propertyId, type, occurredAt])
+  @@index([propertyId, roomId, occurredAt])
+  @@index([propertyId, inventoryItemId, occurredAt])
+  @@index([propertyId, claimId, occurredAt])
+  @@index([propertyId, importance, occurredAt])
+  @@index([propertyId, groupKey])
+
+  @@unique([propertyId, idempotencyKey])
+  @@map("home_events")
+}
+
+model HomeEventDocument {
+  id         String @id @default(uuid())
+  eventId    String
+  documentId String
+
+  kind       HomeEventDocumentKind @default(OTHER)
+  caption    String?
+  sortOrder  Int @default(0)
+
+  createdAt  DateTime @default(now())
+
+  event      HomeEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  document   Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, documentId])
+  @@index([eventId])
+  @@index([documentId])
+  @@map("home_event_documents")
+}
+
 // ============================================================================
 // REVIEWS & RATINGS
 // ============================================================================
