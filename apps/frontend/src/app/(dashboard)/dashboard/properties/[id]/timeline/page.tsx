@@ -64,7 +64,6 @@ function RevealIn({
   enabled: boolean;
   highlight?: boolean;
 }) {
-
   const [shown, setShown] = useState(!enabled);
 
   useEffect(() => {
@@ -72,7 +71,6 @@ function RevealIn({
       setShown(true);
       return;
     }
-    // Start hidden, then reveal next frame so transition runs
     setShown(false);
     const id = requestAnimationFrame(() => setShown(true));
     return () => cancelAnimationFrame(id);
@@ -84,24 +82,16 @@ function RevealIn({
     <div
       style={{
         opacity: shown ? 1 : 0,
-        transform: shown
-          ? 'translateY(0px)'
-          : `translateY(${offset}px)`,
+        transform: shown ? 'translateY(0px)' : `translateY(${offset}px)`,
         transition: highlight
           ? 'opacity 520ms ease, transform 520ms cubic-bezier(0.22, 1, 0.36, 1)'
           : 'opacity 420ms ease, transform 420ms ease',
-        boxShadow:
-          shown && highlight
-            ? '0 0 0 0 rgba(0,0,0,0)'
-            : highlight
-            ? '0 6px 20px rgba(0,0,0,0.06)'
-            : undefined,
         willChange: 'opacity, transform',
       }}
     >
       {children}
     </div>
-  );  
+  );
 }
 
 function groupByYear(events: any[]) {
@@ -113,7 +103,83 @@ function groupByYear(events: any[]) {
   const years = Array.from(map.keys()).sort((a, b) => b - a);
   return years.map((y) => ({ year: y, events: map.get(y) ?? [] }));
 }
+function TimelineEventRow({
+  e,
+  replayOn,
+}: {
+  e: any;
+  replayOn: boolean;
+}) {
+  const highlight = e.importance === 'HIGHLIGHT';
 
+  // ✅ Hook is now inside a component (legal)
+  const glow = useOneShotGlow(replayOn && highlight);
+
+  return (
+    <RevealIn enabled={replayOn} highlight={highlight}>
+      <div className="relative">
+        {/* node */}
+        <div
+          className={clsx(
+            'absolute -left-12 top-5 flex h-8 w-8 items-center justify-center rounded-full border bg-background transition-all duration-300',
+            highlight && 'ring-2 ring-primary/30'
+          )}
+          style={{
+            boxShadow: glow ? '0 0 0 6px rgba(99,102,241,0.12)' : undefined,
+            transition: 'box-shadow 600ms ease, transform 300ms ease',
+          }}
+          title={e.type}
+        >
+          <span className="text-base">{iconForType(e.type)}</span>
+        </div>
+
+        {/* card */}
+        <div className={clsx('rounded-lg border p-4', highlight && 'bg-muted/30')}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="font-medium truncate">{e.title}</div>
+
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span>{formatDate(e.occurredAt)}</span>
+                {e.type && <Badge>{e.type}</Badge>}
+                {e.importance && <Badge>{e.importance}</Badge>}
+                {e.subtype && <Badge>{e.subtype}</Badge>}
+              </div>
+
+              {e.summary ? (
+                <div className="mt-2 text-sm text-muted-foreground">{e.summary}</div>
+              ) : null}
+
+              {Array.isArray(e.documents) && e.documents.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {e.documents.slice(0, 6).map((d: any) => (
+                    <Badge key={d.id}>
+                      {d.kind || 'DOC'}: {d.document?.name || 'Attachment'}
+                    </Badge>
+                  ))}
+                  {e.documents.length > 6 ? <Badge>+{e.documents.length - 6} more</Badge> : null}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="flex flex-col items-end gap-2">
+              {e.amount != null ? <Badge>${e.amount}</Badge> : null}
+              {e.valueDelta != null ? <Badge>Δ {e.valueDelta}</Badge> : null}
+            </div>
+          </div>
+
+          {e?.meta?.semantic ? (
+            <div className="mt-3 text-xs text-muted-foreground">
+              Semantic: {e.meta.semantic.promoted ? 'promoted' : 'not promoted'}
+              {e.meta.semantic.confidence != null ? ` · conf=${e.meta.semantic.confidence}` : ''}
+              {e.meta.semantic.reason ? ` · ${e.meta.semantic.reason}` : ''}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </RevealIn>
+  );
+}
 function TimelineVisual({
   events,
   replayOn,
@@ -186,80 +252,9 @@ function TimelineVisual({
             <div className="absolute left-4 top-0 bottom-0 w-px bg-border" />
 
             <div className="space-y-6 pl-12">
-              {g.events.map((e, index) => {
-                const highlight = e.importance === 'HIGHLIGHT';
-                const glow = useOneShotGlow(replayOn && highlight);
-
-                return (
-                  <RevealIn
-                    key={e.id}
-                    enabled={replayOn}
-                    highlight={e.importance === 'HIGHLIGHT'}
-                  >
-                    <div className="relative">
-                      {/* node */}
-                      <div
-                        className={clsx(
-                          'absolute -left-12 top-5 flex h-8 w-8 items-center justify-center rounded-full border bg-background transition-all duration-300',
-                          highlight && 'ring-2 ring-primary/30'
-                        )}
-                        style={{
-                          boxShadow: glow
-                            ? '0 0 0 6px rgba(99,102,241,0.12)' // soft indigo halo
-                            : undefined,
-                          transition: 'box-shadow 600ms ease, transform 300ms ease',
-                        }}
-                        title={e.type}
-                      >
-                        <span className="text-base">{iconForType(e.type)}</span>
-                      </div>
-
-                      {/* card */}
-                      <div className={clsx('rounded-lg border p-4', highlight && 'bg-muted/30')}>
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <div className="font-medium truncate">{e.title}</div>
-                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                              <span>{formatDate(e.occurredAt)}</span>
-                              {e.type && <Badge>{e.type}</Badge>}
-                              {e.importance && <Badge>{e.importance}</Badge>}
-                              {e.subtype && <Badge>{e.subtype}</Badge>}
-                            </div>
-
-                            {e.summary ? (
-                              <div className="mt-2 text-sm text-muted-foreground">{e.summary}</div>
-                            ) : null}
-
-                            {Array.isArray(e.documents) && e.documents.length > 0 ? (
-                              <div className="mt-3 flex flex-wrap gap-2">
-                                {e.documents.slice(0, 6).map((d: any) => (
-                                  <Badge key={d.id}>
-                                    {d.kind || 'DOC'}: {d.document?.name || 'Attachment'}
-                                  </Badge>
-                                ))}
-                                {e.documents.length > 6 ? <Badge>+{e.documents.length - 6} more</Badge> : null}
-                              </div>
-                            ) : null}
-                          </div>
-
-                          <div className="flex flex-col items-end gap-2">
-                            {e.amount != null ? <Badge>${e.amount}</Badge> : null}
-                            {e.valueDelta != null ? <Badge>Δ {e.valueDelta}</Badge> : null}
-                          </div>
-                        </div>
-
-                        {e?.meta?.semantic ? (
-                          <div className="mt-3 text-xs text-muted-foreground">
-                            Semantic: {e.meta.semantic.promoted ? 'promoted' : 'not promoted'}
-                            {e.meta.semantic.confidence != null ? ` · conf=${e.meta.semantic.confidence}` : ''}
-                            {e.meta.semantic.reason ? ` · ${e.meta.semantic.reason}` : ''}
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  </RevealIn>
-                );
-              })}
+              {g.events.map((e: any) => (
+                <TimelineEventRow key={e.id} e={e} replayOn={replayOn} />
+              ))}
 
               {/* attach ref INSIDE returned JSX */}
               <div ref={endRef} />
