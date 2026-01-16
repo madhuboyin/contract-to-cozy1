@@ -42,14 +42,29 @@ function Badge({ children }: { children: React.ReactNode }) {
     </span>
   );
 }
+function useOneShotGlow(active: boolean, durationMs = 600) {
+  const [on, setOn] = useState(false);
+
+  useEffect(() => {
+    if (!active) return;
+    setOn(true);
+    const t = setTimeout(() => setOn(false), durationMs);
+    return () => clearTimeout(t);
+  }, [active, durationMs]);
+
+  return on;
+}
 
 function RevealIn({
   children,
   enabled,
+  highlight,
 }: {
   children: React.ReactNode;
   enabled: boolean;
+  highlight?: boolean;
 }) {
+
   const [shown, setShown] = useState(!enabled);
 
   useEffect(() => {
@@ -63,18 +78,30 @@ function RevealIn({
     return () => cancelAnimationFrame(id);
   }, [enabled]);
 
+  const offset = highlight ? 12 : 8;
+
   return (
     <div
       style={{
         opacity: shown ? 1 : 0,
-        transform: shown ? 'translateY(0px)' : 'translateY(8px)',
-        transition: 'opacity 420ms ease, transform 420ms ease',
+        transform: shown
+          ? 'translateY(0px)'
+          : `translateY(${offset}px)`,
+        transition: highlight
+          ? 'opacity 520ms ease, transform 520ms cubic-bezier(0.22, 1, 0.36, 1)'
+          : 'opacity 420ms ease, transform 420ms ease',
+        boxShadow:
+          shown && highlight
+            ? '0 0 0 0 rgba(0,0,0,0)'
+            : highlight
+            ? '0 6px 20px rgba(0,0,0,0.06)'
+            : undefined,
         willChange: 'opacity, transform',
       }}
     >
       {children}
     </div>
-  );
+  );  
 }
 
 function groupByYear(events: any[]) {
@@ -161,9 +188,14 @@ function TimelineVisual({
             <div className="space-y-6 pl-12">
               {g.events.map((e, index) => {
                 const highlight = e.importance === 'HIGHLIGHT';
+                const glow = useOneShotGlow(replayOn && highlight);
 
                 return (
-                  <RevealIn key={e.id} enabled={replayOn}>
+                  <RevealIn
+                    key={e.id}
+                    enabled={replayOn}
+                    highlight={e.importance === 'HIGHLIGHT'}
+                  >
                     <div className="relative">
                       {/* node */}
                       <div
@@ -171,6 +203,12 @@ function TimelineVisual({
                           'absolute -left-12 top-5 flex h-8 w-8 items-center justify-center rounded-full border bg-background transition-all duration-300',
                           highlight && 'ring-2 ring-primary/30'
                         )}
+                        style={{
+                          boxShadow: glow
+                            ? '0 0 0 6px rgba(99,102,241,0.12)' // soft indigo halo
+                            : undefined,
+                          transition: 'box-shadow 600ms ease, transform 300ms ease',
+                        }}
                         title={e.type}
                       >
                         <span className="text-base">{iconForType(e.type)}</span>
