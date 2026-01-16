@@ -36,8 +36,14 @@ function Divider() {
 
 type ChecklistSeed = { title: string; frequency: RoomChecklistItemDTO['frequency'] };
 
-function uniqueByTitle(existing: RoomChecklistItemDTO[], seeds: ChecklistSeed[]) {
-  const seen = new Set(existing.map((i) => i.title.trim().toLowerCase()));
+function uniqueByTitle(existing: (RoomChecklistItemDTO | null | undefined)[], seeds: ChecklistSeed[]) {
+  const seen = new Set(
+    existing
+      .filter(Boolean)
+      .map((i) => (i!.title || '').trim().toLowerCase())
+      .filter(Boolean)
+  );
+
   return seeds.filter((s) => !seen.has(s.title.trim().toLowerCase()));
 }
 
@@ -50,12 +56,16 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
   async function load() {
     setLoading(true);
     try {
-      const data = await listRoomChecklistItems(propertyId, roomId);
-      setItems(data);
+      const raw = await listRoomChecklistItems(propertyId, roomId);
+  
+      // Handle either: RoomChecklistItemDTO[] OR { data: RoomChecklistItemDTO[] }
+      const arr = (raw as any)?.data ?? raw;
+      setItems((Array.isArray(arr) ? arr : []).filter(Boolean));
     } finally {
       setLoading(false);
     }
   }
+  
 
   useEffect(() => {
     load();
@@ -65,19 +75,24 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
   async function addItem() {
     const title = newLabel.trim();
     if (!title) return;
-
+  
     setMutating(true);
     try {
-      const created = await createRoomChecklistItem(propertyId, roomId, {
+      const raw = await createRoomChecklistItem(propertyId, roomId, {
         title,
         frequency: 'ONCE',
       });
-      setItems((prev) => [created, ...prev]);
+  
+      const created = (raw as any)?.data ?? raw;
+      if (!created) return; // ✅ prevents inserting undefined
+  
+      setItems((prev) => [created, ...prev].filter(Boolean));
       setNewLabel('');
     } finally {
       setMutating(false);
     }
   }
+  
 
   async function toggle(item: RoomChecklistItemDTO) {
     setMutating(true);
@@ -244,23 +259,28 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
 
   async function addRecommended() {
     if (recommendedToAdd.length === 0) return;
-
+  
     setMutating(true);
     try {
       const created: RoomChecklistItemDTO[] = [];
+  
       for (const seed of recommendedToAdd) {
         // eslint-disable-next-line no-await-in-loop
-        const it = await createRoomChecklistItem(propertyId, roomId, {
+        const raw = await createRoomChecklistItem(propertyId, roomId, {
           title: seed.title,
           frequency: seed.frequency,
         });
-        created.push(it);
+  
+        const it = (raw as any)?.data ?? raw;
+        if (it) created.push(it);
       }
-      setItems((prev) => [...created, ...prev]);
+  
+      setItems((prev) => [...created, ...prev].filter(Boolean));
     } finally {
       setMutating(false);
     }
   }
+  
 
   return (
     <div className="rounded-2xl border border-black/10 bg-white shadow-sm">
