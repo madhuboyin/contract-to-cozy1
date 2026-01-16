@@ -34,17 +34,29 @@ function Divider() {
   return <div className="h-px bg-black/10" />;
 }
 
+function normTitle(t: string) {
+  return t
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
 type ChecklistSeed = { title: string; frequency: RoomChecklistItemDTO['frequency'] };
 
-function uniqueByTitle(existing: (RoomChecklistItemDTO | null | undefined)[], seeds: ChecklistSeed[]) {
+function uniqueByTitle(
+  existing: Array<RoomChecklistItemDTO | null | undefined>,
+  seeds: ChecklistSeed[]
+) {
   const seen = new Set(
     existing
-      .filter(Boolean)
-      .map((i) => (i!.title || '').trim().toLowerCase())
+      .filter((x): x is RoomChecklistItemDTO => Boolean(x && x.title))
+      .map((i) => normTitle(i.title))
       .filter(Boolean)
   );
 
-  return seeds.filter((s) => !seen.has(s.title.trim().toLowerCase()));
+  return seeds
+    .filter((s) => normTitle(s.title)) // ✅ drop empty titles
+    .filter((s) => !seen.has(normTitle(s.title)));
 }
 
 export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedroomKind }: Props) {

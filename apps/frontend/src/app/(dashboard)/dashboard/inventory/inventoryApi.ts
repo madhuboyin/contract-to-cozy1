@@ -381,18 +381,15 @@ export async function getInventoryRoom(propertyId: string, roomId: string) {
 }
 
 export async function listRoomChecklistItems(propertyId: string, roomId: string) {
-  const res = await api.get(
-    `/api/properties/${propertyId}/inventory/rooms/${roomId}/checklist-items`
-  );
-  return (res as any)?.data?.data?.items ?? [];
+  const res = await api.get(`/api/properties/${propertyId}/inventory/rooms/${roomId}/checklist-items`);
+  const payload = (res as any)?.data ?? res;
+  return payload?.data?.items ?? payload?.items ?? [];
 }
 
 export async function createRoomChecklistItem(propertyId: string, roomId: string, body: any) {
-  const res = await api.post(
-    `/api/properties/${propertyId}/inventory/rooms/${roomId}/checklist-items`,
-    body
-  );
-  return (res as any)?.data?.item ?? (res as any)?.data?.data?.item ?? (res as any)?.item;
+  const res = await api.post(`/api/properties/${propertyId}/inventory/rooms/${roomId}/checklist-items`, body);
+  const payload = (res as any)?.data ?? res;
+  return payload?.data?.item ?? payload?.item;
 }
 
 export async function updateRoomChecklistItem(propertyId: string, roomId: string, itemId: string, body: any) {
