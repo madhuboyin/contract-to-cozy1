@@ -4,6 +4,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { SectionHeader } from '@/app/(dashboard)/dashboard/components/SectionHeader';
+
 import { getPropertyTaxEstimate, PropertyTaxEstimateDTO } from './taxApi';
 
 function money(n: number | null | undefined, currency = 'USD') {
@@ -16,17 +17,18 @@ function pct(n: number) {
 }
 
 function MiniLineChart({ points }: { points: number[] }) {
+  const safe = points.length >= 2 ? points : [0, 0];
   const w = 220;
   const h = 44;
   const pad = 4;
 
-  const min = Math.min(...points);
-  const max = Math.max(...points);
+  const min = Math.min(...safe);
+  const max = Math.max(...safe);
   const span = Math.max(1e-6, max - min);
 
-  const path = points
+  const path = safe
     .map((v, i) => {
-      const x = pad + (i * (w - pad * 2)) / Math.max(1, points.length - 1);
+      const x = pad + (i * (w - pad * 2)) / Math.max(1, safe.length - 1);
       const y = pad + (h - pad * 2) * (1 - (v - min) / span);
       return `${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
     })
@@ -50,25 +52,35 @@ export default function PropertyTaxClient() {
   // Optional overrides UI (simple, can be enhanced later)
   const [assessedValue, setAssessedValue] = useState<string>(''); // USD
   const [taxRate, setTaxRate] = useState<string>(''); // decimal
+  const [trendYears, setTrendYears] = useState<5 | 10>(5);
+  const reqRef = React.useRef(0);
 
-  async function refresh() {
+  async function getAndSet(years: 5 | 10) {
+    if (!propertyId) return;
     setLoading(true);
     setError(null);
+  
     try {
       const av = assessedValue ? Number(assessedValue) : undefined;
       const tr = taxRate ? Number(taxRate) : undefined;
-
+      const reqId = ++reqRef.current;
       const r = await getPropertyTaxEstimate(propertyId, {
         assessedValue: Number.isFinite(av as any) ? av : undefined,
         taxRate: Number.isFinite(tr as any) ? tr : undefined,
-        historyYears: 7,
+        historyYears: years,
       });
+  
+      if (reqId !== reqRef.current) return;
       setEstimate(r);
     } catch (e: any) {
       setError(e?.message || 'Failed to load property tax estimate');
     } finally {
       setLoading(false);
     }
+  }
+  
+  async function refresh() {
+    await getAndSet(trendYears);
   }
 
   useEffect(() => {
@@ -163,10 +175,40 @@ export default function PropertyTaxClient() {
             </div>
           </div>
 
-          <div className="mt-4 flex items-center justify-between">
-            <div className="text-xs opacity-70">Trend (last {estimate?.history?.length || 0} yrs)</div>
-            <div className="text-xs opacity-70">Projection included below</div>
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <div className="text-xs opacity-70">
+              Trend (last {estimate?.history?.length || trendYears} yrs)
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (trendYears === 5) return;
+                  setTrendYears(5);
+                  await getAndSet(5);
+                }}
+                className={`text-xs underline ${trendYears === 5 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+              >
+                5y
+              </button>
+              <span className="text-xs opacity-40">|</span>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (trendYears === 10) return;
+                  setTrendYears(10);
+                  await getAndSet(10);
+                }}
+                className={`text-xs underline ${trendYears === 10 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+              >
+                10y
+              </button>
+
+              <div className="text-xs opacity-70 ml-3 hidden sm:block">Projection included below</div>
+            </div>
           </div>
+
 
           <div className="mt-2 text-black/70">
             <MiniLineChart points={historyValues} />

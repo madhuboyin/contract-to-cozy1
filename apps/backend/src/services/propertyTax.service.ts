@@ -2,6 +2,7 @@
 import { prisma } from '../lib/prisma';
 
 export type PropertyTaxConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
+type ImpactLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 
 export type PropertyTaxEstimateInput = {
   assessedValue?: number; // USD (override)
@@ -181,45 +182,89 @@ function buildComparison(currentAnnualTax: number, state: string) {
   };
 }
 
-function buildDrivers(state: string) {
-  // Simple “explainers” you can later replace with county-specific breakdown.
-  const base = [
+type Driver = { factor: string; impact: ImpactLevel; explanation: string };
+
+function buildDriversLocalized(args: { state: string; zipCode: string; taxRate: number; assessedValue: number }): Driver[] {
+  const { state, zipCode, taxRate, assessedValue } = args;
+
+  const zp = zipPrefix(zipCode);
+  const rateBand = typicalEffectiveRateBand(state, taxRate);
+  const growth = localGrowthHint(state, zipCode);
+
+  const drivers: Driver[] = [
     {
-      factor: 'Assessed value',
-      impact: 'HIGH' as const,
+      factor: `Local effective tax rates (${state})`,
+      impact: rateBand.band,
       explanation:
-        'Property taxes generally scale with assessed value. Higher assessed value typically means higher annual tax.',
+        `Based on your state (${state}), your effective rate (${(taxRate * 100).toFixed(2)}%) is ${rateBand.msg}. ` +
+        `This is one of the biggest drivers of annual tax differences across ZIP codes.`,
     },
     {
-      factor: 'Local tax rates',
-      impact: 'HIGH' as const,
+      factor: `Assessed value pressure (ZIP ${zipCode})`,
+      impact: assessedValue >= 500000 ? 'HIGH' : assessedValue >= 300000 ? 'MEDIUM' : 'LOW',
       explanation:
-        'County, city, and school district rates can vary significantly even within the same state.',
+        `Your estimate scales with assessed value. ZIP prefix ${zp} is used to anchor localized messaging in v1; ` +
+        `we’ll enrich this with county/assessor data later for more precision.`,
     },
     {
-      factor: 'Reassessment cadence',
-      impact: 'MEDIUM' as const,
+      factor: `Reassessment & market growth signals (ZIP ${zipCode})`,
+      impact: growth,
       explanation:
-        'Some areas reassess annually while others do so less frequently, which impacts year-over-year changes.',
-    },
-    {
-      factor: 'Exemptions & caps',
-      impact: 'MEDIUM' as const,
-      explanation:
-        'Homestead exemptions and growth caps can reduce or limit increases depending on eligibility and local rules.',
+        growth === 'HIGH'
+          ? `Homes in parts of your region (ZIP prefix ${zp}) often experience faster valuation changes, which can push taxes upward during reassessments.`
+          : `Your region (ZIP prefix ${zp}) typically follows moderate reassessment-driven changes compared to high-growth metros.`,
     },
   ];
 
-  if (state === 'TX') {
-    base.push({
-      factor: 'School district levies (TX)',
-      impact: 'HIGH',
+  if (stateHasHomestead(state)) {
+    drivers.push({
+      factor: `Exemptions & caps (${state})`,
+      impact: 'MEDIUM',
       explanation:
-        'In many Texas counties, school district taxes are a major portion of the total property tax bill.',
+        `Many homeowners can reduce taxable value or limit increases via exemptions/caps (often called “homestead” or similar). ` +
+        `We can surface eligibility prompts later once you confirm your residency/ownership status.`,
     });
   }
 
-  return base;
+  if (state === 'TX') {
+    drivers.push({
+      factor: 'School district levies (TX)',
+      impact: 'HIGH',
+      explanation:
+        'In many Texas jurisdictions, school district taxes make up a large portion of the total bill. This can vary significantly by district even within the same city.',
+    });
+  }
+
+  return drivers;
+}
+
+
+function zipPrefix(zip: string) {
+  const z = String(zip || '').replace(/\D/g, '');
+  return z.length >= 3 ? z.slice(0, 3) : z;
+}
+
+function stateHasHomestead(state: string) {
+  // v1: broad hinting; expand later per-state
+  return [
+    'TX','FL','CA','NY','NJ','IL','WA','MA','CO','NC','GA','AZ'
+  ].includes(state);
+}
+
+function localGrowthHint(state: string, zip: string): ImpactLevel {
+  const zp = zipPrefix(zip);
+  if (state === 'TX' && ['786', '787', '750', '752'].includes(zp)) return 'HIGH';
+  if (state === 'FL' && ['331', '333', '334', '328'].includes(zp)) return 'HIGH';
+  if (state === 'CA' && ['900', '902', '940', '941', '943'].includes(zp)) return 'HIGH';
+  return 'MEDIUM';
+}
+
+function typicalEffectiveRateBand(state: string, rate: number): { band: ImpactLevel; msg: string } {
+  const baseline = EFFECTIVE_TAX_RATE_BY_STATE[state] ?? 0.011;
+  const delta = rate - baseline;
+  if (delta > 0.003) return { band: 'HIGH', msg: 'higher than typical for your state' };
+  if (delta < -0.003) return { band: 'LOW', msg: 'lower than typical for your state' };
+  return { band: 'MEDIUM', msg: 'around typical for your state' };
 }
 
 export class PropertyTaxService {
@@ -285,7 +330,13 @@ export class PropertyTaxService {
     const history = buildHistory(annualTax, state, historyYears);
     const projection = buildProjections(annualTax, state);
     const comparison = buildComparison(annualTax, state);
-    const drivers = buildDrivers(state);
+    const drivers = buildDriversLocalized({
+      state,
+      zipCode: property.zipCode,
+      taxRate,
+      assessedValue,
+    });
+    
 
     return {
       input: {
