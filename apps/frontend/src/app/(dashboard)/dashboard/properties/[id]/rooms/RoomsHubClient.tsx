@@ -12,36 +12,20 @@ import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
 
 function guessRoomType(name: string) {
   const t = (name || '').toLowerCase();
-
-  // High-confidence keywords first
   if (t.includes('kitchen')) return 'KITCHEN';
-
   if (t.includes('living') || t.includes('family') || t.includes('great')) return 'LIVING_ROOM';
-
-  if (
-    t.includes('bed') ||
-    t.includes('master') ||
-    t.includes('guest') ||
-    t.includes('kids') ||
-    t.includes('nursery')
-  )
+  if (t.includes('bed') || t.includes('master') || t.includes('guest') || t.includes('kids') || t.includes('nursery'))
     return 'BEDROOM';
-
-  if (t.includes('dining') || t.includes('breakfast') || t.includes('eat')) return 'DINING';
-
-  if (t.includes('laundry') || t.includes('utility') || t.includes('washer') || t.includes('dryer'))
-    return 'LAUNDRY';
-
-  if (t.includes('garage')) return 'GARAGE';
-
-  if (t.includes('office') || t.includes('study') || t.includes('den')) return 'OFFICE';
-
   if (t.includes('bath') || t.includes('toilet') || t.includes('powder') || t.includes('wc')) return 'BATHROOM';
-  
-  if (t.includes('basement') || t.includes('cellar') || t.includes('lower level') || t.includes('lower-level')) return 'BASEMENT';
-
+  if (t.includes('dining') || t.includes('breakfast') || t.includes('eat')) return 'DINING';
+  if (t.includes('laundry') || t.includes('utility') || t.includes('washer') || t.includes('dryer')) return 'LAUNDRY';
+  if (t.includes('garage')) return 'GARAGE';
+  if (t.includes('office') || t.includes('study') || t.includes('den')) return 'OFFICE';
+  if (t.includes('basement') || t.includes('cellar') || t.includes('lower level') || t.includes('lower-level'))
+    return 'BASEMENT';
   return 'OTHER';
 }
+
 
 function computeHealthScore(insights: any): number {
   const stats = insights?.stats || {};

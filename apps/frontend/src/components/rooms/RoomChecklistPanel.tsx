@@ -109,26 +109,26 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
       : roomType === 'LIVING'
         ? 'e.g., Vacuum under sofa'
         : roomType === 'DINING'
-          ? 'e.g., Wipe table'
+          ? 'e.g., Wipe table weekly'
           : roomType === 'LAUNDRY'
             ? 'e.g., Clean lint trap'
             : roomType === 'GARAGE'
-              ? 'e.g., Test garage door auto-reverse'
+              ? 'e.g., Test garage door reverse'
               : roomType === 'OFFICE'
                 ? 'e.g., Cable tidy'
-                : roomType === 'BEDROOM'
-                  ? bedroomKind === 'MASTER'
-                    ? 'e.g., Change sheets'
-                    : bedroomKind === 'KIDS'
-                      ? 'e.g., Organize toys'
-                      : bedroomKind === 'GUEST'
-                        ? 'e.g., Refresh linens'
-                        : 'e.g., Make bed'
-                    : roomType === 'BATHROOM'
-                      ? 'e.g., Check under-sink for leaks'
-                      : roomType === 'BASEMENT'
-                        ? 'e.g., Clean basement vents'
-                        : 'e.g., Dust vents';
+                : roomType === 'BATHROOM'
+                  ? 'e.g., Clean exhaust fan cover'
+                  : roomType === 'BASEMENT'
+                    ? 'e.g., Check for damp spots'
+                    : roomType === 'BEDROOM'
+                      ? bedroomKind === 'MASTER'
+                        ? 'e.g., Change sheets'
+                        : bedroomKind === 'KIDS'
+                          ? 'e.g., Organize toys'
+                          : bedroomKind === 'GUEST'
+                            ? 'e.g., Refresh linens'
+                            : 'e.g., Make bed'
+                      : 'e.g., Dust vents';
 
   const recommended: ChecklistSeed[] = useMemo(() => {
     if (roomType === 'KITCHEN') {
@@ -152,57 +152,56 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
       return [
         { title: 'Wipe table + chairs', frequency: 'WEEKLY' },
         { title: 'Check chair screws / wobble', frequency: 'SEASONAL' },
-        { title: 'Clean chandelier / pendant', frequency: 'SEASONAL' },
-        { title: 'Check smoke/CO detector nearby', frequency: 'SEASONAL' },
+        { title: 'Clean light fixture (wipe dust)', frequency: 'SEASONAL' },
+        { title: 'Inspect smoke/CO detector nearby', frequency: 'SEASONAL' },
       ];
     }
 
     if (roomType === 'LAUNDRY') {
       return [
-        { title: 'Clean lint trap (weekly / heavy loads)', frequency: 'WEEKLY' },
-        { title: 'Run washer drum cleaning cycle', frequency: 'MONTHLY' },
-        { title: 'Check washer hoses for bulges/leaks', frequency: 'SEASONAL' },
-        { title: 'Clean dryer vent', frequency: 'SEASONAL' },
+        { title: 'Clean lint trap', frequency: 'WEEKLY' },
+        { title: 'Run washer drum clean cycle', frequency: 'MONTHLY' },
+        { title: 'Inspect washer hoses for cracks', frequency: 'SEASONAL' },
+        { title: 'Wipe dryer vent area / check airflow', frequency: 'SEASONAL' },
       ];
     }
 
     if (roomType === 'GARAGE') {
       return [
         { title: 'Test garage door auto-reverse', frequency: 'SEASONAL' },
-        { title: 'Replace opener batteries (remotes/keypad)', frequency: 'SEASONAL' },
         { title: 'Check for leaks near water heater', frequency: 'MONTHLY' },
         { title: 'Organize chemicals safely', frequency: 'SEASONAL' },
+        { title: 'Replace opener remote batteries', frequency: 'SEASONAL' },
       ];
     }
 
     if (roomType === 'OFFICE') {
       return [
-        { title: 'Dust electronics (vents/fans)', frequency: 'MONTHLY' },
-        { title: 'Cable tidy / re-route hazards', frequency: 'MONTHLY' },
+        { title: 'Dust electronics (screens/vents)', frequency: 'MONTHLY' },
+        { title: 'Cable tidy + desk reset', frequency: 'MONTHLY' },
+        { title: 'Check surge protector (test/reset)', frequency: 'SEASONAL' },
         { title: 'Clean chair casters', frequency: 'SEASONAL' },
-        { title: 'Check surge protector health', frequency: 'SEASONAL' },
       ];
     }
 
     if (roomType === 'BATHROOM') {
       return [
-        { title: 'Check under-sink for leaks', frequency: 'MONTHLY' },
-        { title: 'Clean exhaust fan cover', frequency: 'QUARTERLY' },
-        { title: 'Inspect caulk / grout', frequency: 'QUARTERLY' },
-        { title: 'Test GFCI outlets', frequency: 'QUARTERLY' },
+        { title: 'Clean exhaust fan cover', frequency: 'SEASONAL' },
+        { title: 'Check for slow leaks under sink', frequency: 'MONTHLY' },
+        { title: 'Test GFCI outlets', frequency: 'SEASONAL' },
+        { title: 'Re-caulk / inspect grout problem spots', frequency: 'SEASONAL' },
       ];
     }
 
     if (roomType === 'BASEMENT') {
       return [
-        { title: 'Check for moisture / odors', frequency: 'MONTHLY' },
-        { title: 'Inspect foundation walls (cracks/seepage)', frequency: 'SEASONAL' },
-        { title: 'Clean/replace dehumidifier filter', frequency: 'MONTHLY' },
-        { title: 'Test sump pump (if present)', frequency: 'QUARTERLY' },
-        { title: 'Check smoke/CO detector nearby', frequency: 'SEASONAL' },
+        { title: 'Check for damp spots / musty smell', frequency: 'MONTHLY' },
+        { title: 'Test sump pump (if present)', frequency: 'SEASONAL' },
+        { title: 'Inspect foundation cracks (visual)', frequency: 'SEASONAL' },
+        { title: 'Confirm dehumidifier / humidity control', frequency: 'MONTHLY' },
       ];
     }
-        
+
     if (roomType === 'BEDROOM') {
       if (bedroomKind === 'MASTER') {
         return [
@@ -224,11 +223,10 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
         return [
           { title: 'Refresh linens + towels', frequency: 'SEASONAL' },
           { title: 'Dust surfaces + vents', frequency: 'MONTHLY' },
-          { title: 'Run room for 10 mins (air out)', frequency: 'MONTHLY' },
+          { title: 'Air out room for 10 minutes', frequency: 'MONTHLY' },
         ];
       }
-      
-      
+
       return [
         { title: 'Make bed + quick reset', frequency: 'WEEKLY' },
         { title: 'Dust fan + vents', frequency: 'MONTHLY' },
@@ -264,8 +262,6 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
     }
   }
 
-  const showSeedCallout = !loading && items.length === 0 && recommendedToAdd.length > 0;
-
   return (
     <div className="rounded-2xl border border-black/10 bg-white shadow-sm">
       <div className="p-5">
@@ -276,129 +272,84 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
           </div>
         </div>
 
-        {/* Seed defaults UX (only when empty) */}
-        {showSeedCallout && (
-          <div className="mt-4 rounded-xl border border-black/10 bg-black/[0.02] p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-black/60" />
-                  <div className="text-sm font-medium text-black/80">Add recommended checklist</div>
-                </div>
-                <div className="text-xs text-black/50 mt-1">
-                  Starter set based on room type{roomType === 'BEDROOM' ? ' + bedroom kind' : ''}. You can edit anytime.
-                </div>
+        <div className="mt-4 rounded-xl border border-black/10 bg-black/[0.02] p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-black/60" />
+                <div className="text-sm font-medium text-black/80">Recommended for this room</div>
               </div>
-
-              <Button
-                variant="outline"
-                onClick={addRecommended}
-                disabled={mutating || recommendedToAdd.length === 0}
-                className="rounded-xl"
-              >
-                Add ({recommendedToAdd.length})
-              </Button>
+              <div className="text-xs text-black/50 mt-1">
+                Adds a starter set based on room type{roomType === 'BEDROOM' ? ' + bedroom kind' : ''}. You can edit
+                anytime.
+              </div>
             </div>
 
-            <div className="mt-3 flex flex-wrap gap-2">
-              {recommended.map((r) => (
-                <span
-                  key={`${r.frequency}:${r.title}`}
-                  className="text-xs rounded-full border border-black/10 bg-white px-2 py-1 text-black/70"
-                >
-                  {r.title} · {r.frequency}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* If not empty, still allow “top-up” recommended items (compact) */}
-        {!showSeedCallout && recommendedToAdd.length > 0 && (
-          <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-black/10 bg-black/[0.02] p-3">
-            <div className="text-xs text-black/60">
-              {recommendedToAdd.length} recommended item{recommendedToAdd.length === 1 ? '' : 's'} available
-            </div>
-            <Button
-              variant="outline"
-              onClick={addRecommended}
-              disabled={mutating}
-              className="rounded-xl"
-              title="Add recommended items not already in your checklist"
-            >
-              Add ({recommendedToAdd.length})
+            <Button variant="outline" onClick={addRecommended} disabled={mutating || recommendedToAdd.length === 0}>
+              Add recommended
             </Button>
           </div>
-        )}
 
-        {/* Add row */}
-        <div className="mt-4 flex gap-2">
+          {recommendedToAdd.length > 0 && (
+            <div className="mt-3 text-xs text-black/60">
+              Will add: {recommendedToAdd.map((r) => r.title).join(' · ')}
+            </div>
+          )}
+          {recommendedToAdd.length === 0 && (
+            <div className="mt-3 text-xs text-black/50">Already added.</div>
+          )}
+        </div>
+
+        <div className="mt-4 flex items-center gap-2">
           <Input
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
             placeholder={placeholder}
-            className="h-10 rounded-xl border-black/10"
+            disabled={mutating}
           />
-          <Button onClick={addItem} disabled={!newLabel.trim() || mutating} className="rounded-xl" title="Add item">
-            <Plus size={18} />
+          <Button onClick={addItem} disabled={mutating || !newLabel.trim()}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add
           </Button>
         </div>
 
-        {/* Grouped list */}
-        <div className="mt-4 rounded-xl border border-black/10 bg-black/[0.02]">
+        <div className="mt-4 rounded-xl border border-black/10 bg-black/[0.02] overflow-hidden">
           {loading ? (
             <div className="p-4 text-sm text-black/60">Loading…</div>
           ) : items.length === 0 ? (
             <div className="p-4 text-sm text-black/60">No checklist items yet.</div>
           ) : (
-            <div>
-              {items.map((item, idx) => (
-                <div key={item.id}>
-                  <div className="flex items-center justify-between gap-3 px-4 py-3">
-                    <button
-                      onClick={() => toggle(item)}
-                      disabled={mutating}
-                      className="flex items-center gap-3 text-left disabled:opacity-60"
-                    >
-                      {item.status === 'DONE' ? (
-                        <CheckCircle2 className="h-5 w-5 text-black/70" />
-                      ) : (
-                        <Circle className="h-5 w-5 text-black/40" />
-                      )}
+            items.map((item, idx) => (
+              <div key={item.id}>
+                {idx > 0 && <Divider />}
+                <div className="px-4 py-3 flex items-start justify-between gap-3">
+                  <button onClick={() => toggle(item)} className="mt-0.5">
+                    {item.status === 'DONE' ? (
+                      <CheckCircle2 className="h-5 w-5 text-black/70" />
+                    ) : (
+                      <Circle className="h-5 w-5 text-black/40" />
+                    )}
+                  </button>
 
-                      <div>
-                        <div
-                          className={`text-sm ${
-                            item.status === 'DONE' ? 'line-through text-black/50' : 'text-black/80'
-                          }`}
-                        >
-                          {item.title}
-                        </div>
-                        <div className="text-xs text-black/50">
-                          {item.frequency || 'ONCE'}
-                          {item.lastCompletedAt ? ` • last: ${new Date(item.lastCompletedAt).toLocaleDateString()}` : ''}
-                        </div>
-                      </div>
-                    </button>
-
-                    <button
-                      onClick={() => removeItem(item)}
-                      disabled={mutating}
-                      className="rounded-lg p-2 hover:bg-black/5 disabled:opacity-60"
-                      title="Delete"
-                      aria-label="Delete"
+                  <div className="flex-1 min-w-0">
+                    <div
+                      className={`text-sm ${
+                        item.status === 'DONE' ? 'line-through text-black/50' : 'text-black/80'
+                      }`}
                     >
-                      <Trash2 className="h-4 w-4 text-black/50" />
-                    </button>
+                      {item.title}
+                    </div>
+                    <div className="text-xs text-black/50">{item.frequency}</div>
                   </div>
-                  {idx !== items.length - 1 && <Divider />}
+
+                  <button onClick={() => removeItem(item)} className="text-black/50 hover:text-black/80">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))
           )}
         </div>
-
-        <div className="mt-3 text-xs text-black/50">Tip: keep 3–6 items per room. Consistency beats volume.</div>
       </div>
     </div>
   );

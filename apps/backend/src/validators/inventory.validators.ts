@@ -1,19 +1,39 @@
 // apps/backend/src/validators/inventory.validators.ts
 import { z } from 'zod';
-import { InventoryItemCategory, InventoryItemCondition } from '@prisma/client';
-
+import { InventoryItemCategory, InventoryItemCondition, RoomType } from '@prisma/client';
 
 // ---- Rooms ----
-export const createRoomBodySchema = z.object({
-  name: z.string().min(1).max(80),
-  floorLevel: z.number().int().min(-5).max(50).nullable().optional(),
-  sortOrder: z.number().int().min(0).max(10000).optional(),
-});
+export const createRoomBodySchema = z
+  .object({
+    // ✅ Atomic: always create rooms with a template/type
+    type: z.nativeEnum(RoomType),
+
+    // Optional label. If omitted, backend will default from type (e.g. "Kitchen").
+    // For OTHER, we require a user-provided label.
+    name: z.string().min(1).max(80).optional(),
+
+    floorLevel: z.number().int().min(-5).max(50).nullable().optional(),
+    sortOrder: z.number().int().min(0).max(10000).optional(),
+
+    // Optional flexible profile payload (JSON)
+    profile: z.record(z.string(), z.any()).optional().nullable(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.type === RoomType.OTHER && (!v.name || !v.name.trim())) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['name'], message: 'Name is required for OTHER rooms' });
+    }
+  });
 
 export const updateRoomBodySchema = z.object({
   name: z.string().min(1).max(80).optional(),
   floorLevel: z.number().int().min(-5).max(50).nullable().optional(),
   sortOrder: z.number().int().min(0).max(10000).optional(),
+
+  // ✅ Template/type (used by Rooms hub + RoomDetail)
+  type: z.nativeEnum(RoomType).optional(),
+
+  // Optional hero image URL (Room pages)
+  heroImage: z.string().url().optional().nullable(),
 
   // ✅ NEW: questionnaire payload (flexible)
   profile: z.record(z.string(), z.any()).optional().nullable(),
@@ -26,7 +46,7 @@ const jsonValue: z.ZodType<any> = z.lazy(() =>
     z.boolean(),
     z.null(),
     z.array(jsonValue),
-    z.record(z.string(), jsonValue),
+    z.record(z.any(), jsonValue), // ✅ keyType + valueType
   ])
 );
 

@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/inventory/rooms/RoomsClient.tsx
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 
@@ -14,13 +14,44 @@ import {
 } from '../../../../inventory/inventoryApi';
 import { SectionHeader } from '../../../../components/SectionHeader';
 
+const ROOM_TYPES = [
+  'KITCHEN',
+  'LIVING_ROOM',
+  'BEDROOM',
+  'BATHROOM',
+  'DINING',
+  'LAUNDRY',
+  'GARAGE',
+  'OFFICE',
+  'BASEMENT',
+  'OTHER',
+] as const;
+
+type RoomTypeValue = (typeof ROOM_TYPES)[number];
+
+function prettyType(t: string) {
+  return t
+    .toLowerCase()
+    .split('_')
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(' ');
+}
+
+function defaultLabelForType(t: RoomTypeValue) {
+  return prettyType(t);
+}
+
 export default function RoomsClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
 
   const [rooms, setRooms] = useState<InventoryRoom[]>([]);
-  const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const [roomType, setRoomType] = useState<RoomTypeValue>('KITCHEN');
+  const [label, setLabel] = useState<string>('');
+
+  const suggestedLabel = useMemo(() => defaultLabelForType(roomType), [roomType]);
 
   async function refresh() {
     const r = await listInventoryRooms(propertyId);
@@ -33,21 +64,23 @@ export default function RoomsClient() {
   }, [propertyId]);
 
   async function onAdd() {
-    if (!name.trim()) return;
+    if (roomType === 'OTHER' && !label.trim()) return;
+
     setSaving(true);
     try {
-      await createInventoryRoom(propertyId, { name: name.trim() });
-      setName('');
+      const nameToSend = label.trim() ? label.trim() : undefined;
+      await createInventoryRoom(propertyId, { type: roomType, name: nameToSend });
+      setLabel('');
       await refresh();
     } finally {
       setSaving(false);
     }
   }
 
-  async function onRename(room: InventoryRoom) {
-    const next = prompt('Rename room', room.name);
-    if (!next) return;
-    await updateInventoryRoom(propertyId, room.id, { name: next.trim() });
+  async function onRename(room: InventoryRoom, nextName: string) {
+    const name = nextName.trim();
+    if (!name) return;
+    await updateInventoryRoom(propertyId, room.id, { name });
     await refresh();
   }
 
@@ -70,52 +103,143 @@ export default function RoomsClient() {
         </Link>
       </div>
 
-      <div className="rounded-2xl border border-black/10 p-4">
-        <div className="text-sm font-medium">Add a room</div>
-        <div className="flex gap-2 mt-2">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g., Kitchen"
-            className="flex-1 rounded-xl border border-black/10 px-3 py-2 text-sm"
-          />
+      <div className="rounded-2xl border border-black/10 bg-white p-4">
+        <div className="text-sm font-medium">Add room</div>
+        <div className="text-xs opacity-60 mt-1">
+          Choose a room template first. You can optionally customize the label (e.g., “Kids Bathroom”).
+        </div>
+
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
+            <div className="text-xs uppercase tracking-wide opacity-60">Room type</div>
+            <select
+              value={roomType}
+              onChange={(e) => setRoomType(e.target.value as RoomTypeValue)}
+              className="mt-1 w-full text-sm bg-transparent outline-none"
+            >
+              {ROOM_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {prettyType(t)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="rounded-xl border border-black/10 bg-white px-3 py-2 md:col-span-2">
+            <div className="text-xs uppercase tracking-wide opacity-60">
+              Label <span className="opacity-60">(optional)</span>
+            </div>
+            <input
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder={roomType === 'OTHER' ? 'e.g., “Music Room”' : `Default: “${suggestedLabel}”`}
+              className="mt-1 w-full text-sm bg-transparent outline-none"
+            />
+            {roomType === 'OTHER' && !label.trim() ? (
+              <div className="text-xs text-red-600 mt-1">Label is required for “Other”.</div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-center gap-2">
           <button
             onClick={onAdd}
-            disabled={saving || !name.trim()}
+            disabled={saving || (roomType === 'OTHER' && !label.trim())}
             className="rounded-xl px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
           >
-            Add
+            {saving ? 'Adding…' : 'Add room'}
           </button>
+
+          <div className="text-xs opacity-60">Tip: Leave label blank to use the default name for the selected template.</div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-black/10 divide-y">
-        {rooms.length === 0 ? (
-          <div className="p-4 text-sm opacity-70">No rooms yet.</div>
-        ) : (
-          rooms.map((r) => (
-            <div key={r.id} className="p-4 flex items-center justify-between">
-              <div>
-                <div className="font-medium">{r.name}</div>
-                <div className="text-xs opacity-60">Sort: {r.sortOrder}</div>
-              </div>
-              <div className="flex gap-2">
-                <Link
-                  href={`/dashboard/properties/${propertyId}/inventory/rooms/${r.id}`}
-                  className="text-sm underline opacity-80 hover:opacity-100"
-                >
-                  View
-                </Link>
-                <button onClick={() => onRename(r)} className="text-sm underline opacity-80 hover:opacity-100">
-                  Rename
-                </button>
-                <button onClick={() => onDelete(r)} className="text-sm underline text-red-600 hover:text-red-700">
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))
-        )}
+      <div className="rounded-2xl border border-black/10 bg-white p-4">
+        <div className="text-sm font-medium">Rooms</div>
+        <div className="mt-3 space-y-2">
+          {rooms.length === 0 ? (
+            <div className="text-sm opacity-70">No rooms yet.</div>
+          ) : (
+            rooms.map((r) => <RoomRow key={r.id} room={r} onRename={onRename} onDelete={onDelete} />)
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RoomRow({
+  room,
+  onRename,
+  onDelete,
+}: {
+  room: InventoryRoom;
+  onRename: (room: InventoryRoom, nextName: string) => Promise<void>;
+  onDelete: (room: InventoryRoom) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(room.name);
+
+  useEffect(() => setName(room.name), [room.name]);
+
+  return (
+    <div className="rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          {editing ? (
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full text-sm bg-white rounded-lg border border-black/10 px-3 py-2 outline-none"
+            />
+          ) : (
+            <div className="text-sm font-medium truncate">{room.name}</div>
+          )}
+
+          <div className="text-xs opacity-60 mt-1">
+            Template: <span className="font-medium">{(room as any)?.type || '—'}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {editing ? (
+            <>
+              <button
+                onClick={async () => {
+                  await onRename(room, name);
+                  setEditing(false);
+                }}
+                className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => {
+                  setName(room.name);
+                  setEditing(false);
+                }}
+                className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setEditing(true)}
+              className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+            >
+              Rename
+            </button>
+          )}
+
+          <button
+            onClick={() => onDelete(room)}
+            className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+            title="Delete room"
+          >
+            Delete
+          </button>
+        </div>
       </div>
     </div>
   );

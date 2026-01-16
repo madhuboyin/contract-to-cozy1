@@ -68,6 +68,15 @@ async function fetchJsonWithTimeout(url: string, timeoutMs = 8000) {
 }
 
 export class InventoryService {
+  private roomDisplayNameFromType(type: string) {
+    // e.g. "LIVING_ROOM" -> "Living Room"
+    return String(type || 'OTHER')
+      .toLowerCase()
+      .split('_')
+      .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+      .join(' ');
+  }
+
   // ---------------- Rooms ----------------
 
   async listRooms(propertyId: string) {
@@ -76,14 +85,26 @@ export class InventoryService {
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
   }
-  async createRoom(propertyId: string, input: { name: string; floorLevel?: number | null; sortOrder?: number }) {
+
+  async createRoom(
+    propertyId: string,
+    input: { type: any; name?: string; floorLevel?: number | null; sortOrder?: number; profile?: any | null }
+  ) {
+    const type = String((input as any)?.type || 'OTHER');
+    const name =
+      (input as any)?.name && String((input as any).name).trim()
+        ? String((input as any).name).trim()
+        : this.roomDisplayNameFromType(type);
+
     try {
       return await prisma.inventoryRoom.create({
         data: {
           propertyId,
-          name: input.name.trim(),
-          floorLevel: input.floorLevel ?? null,
-          sortOrder: input.sortOrder ?? 0,
+          type: type as any,
+          name,
+          floorLevel: (input as any).floorLevel ?? null,
+          sortOrder: (input as any).sortOrder ?? 0,
+          profile: (input as any).profile ?? undefined,
         },
       });
     } catch (e: any) {

@@ -56,10 +56,10 @@ export async function listInventoryRooms(propertyId: string) {
 
 export async function createInventoryRoom(
   propertyId: string,
-  body: { name: string; floorLevel?: number | null; sortOrder?: number }
+  body: { type: any; name?: string; floorLevel?: number | null; sortOrder?: number; profile?: any | null }
 ) {
   const res = await api.post<{ room: InventoryRoom }>(`/api/properties/${propertyId}/inventory/rooms`, body);
-  return res.data.room;
+  return (res as any)?.data?.room ?? (res as any)?.data?.data?.room;
 }
 
 export async function updateInventoryRoom(
