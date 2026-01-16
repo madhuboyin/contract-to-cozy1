@@ -633,13 +633,13 @@ export default function PropertyDetailPage() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab');
 
-  // ✅ UPDATED: include rooms tab
   const defaultTab =
     initialTab &&
       [
         'overview',
         'maintenance',
-        'rooms', // ✅ NEW
+        'timeline',
+        'rooms',
         'incidents',
         'risk-protection',
         'financial-efficiency',
@@ -740,7 +740,16 @@ export default function PropertyDetailPage() {
               <span className="sm:hidden">Maint.</span>
             </TabsTrigger>
 
-            {/* ✅ NEW: Rooms */}
+            <TabsTrigger
+              value="timeline"
+              className="flex items-center gap-1 sm:gap-2"
+              onClick={() => router.push(`/dashboard/properties/${property.id}/timeline`)}
+            >
+              <Calendar className="h-4 w-4" />
+              <span className="hidden sm:inline">Timeline</span>
+              <span className="sm:hidden">Time</span>
+            </TabsTrigger>
+
             <TabsTrigger value="rooms" className="flex items-center gap-1 sm:gap-2">
               <LayoutGrid className="h-4 w-4" />
               <span className="hidden sm:inline">Rooms</span>
@@ -822,6 +831,26 @@ export default function PropertyDetailPage() {
         <TabsContent value="claims" className="mt-4">
           <ClaimsTab propertyId={property.id} />
         </TabsContent>
+        
+        <TabsContent value="timeline" className="mt-4">
+          <Card>
+            <CardHeader className="p-4">
+              <CardTitle className="font-heading text-xl flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-blue-600" />
+                Home Timeline
+              </CardTitle>
+              <CardDescription className="font-body text-sm">
+                View your home's story: purchases, repairs, claims, improvements, and key documents.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              <Link href={`/dashboard/properties/${property.id}/timeline`} passHref>
+                <Button variant="default">Open Timeline</Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
       </Tabs>
     </DashboardShell>
   );
