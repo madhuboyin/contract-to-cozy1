@@ -37,18 +37,33 @@ function iconForType(type?: string) {
   }
 }
 
-export default function TimelineClient() {
+export type TimelineClientProps = {
+  // Controlled mode (provided by parent to avoid double-fetch)
+  events?: any[];
+  isLoading?: boolean;
+  error?: unknown;
+  isFetching?: boolean;
+  onRefresh?: () => void;
+
+  // Optional UI controls (useful when embedded)
+  hideHeader?: boolean;
+  hideFilters?: boolean;
+};
+
+export default function TimelineClient(props: TimelineClientProps = {}) {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
 
   const [type, setType] = useState<string>(''); // empty = all
   const [limit, setLimit] = useState<number>(80);
 
+  const isControlled = props.events !== undefined;
+
   const queryKey = useMemo(() => ['homeEvents', propertyId, type || 'ALL', limit], [propertyId, type, limit]);
 
-  const { data: events = [], isLoading, error, refetch, isFetching } = useQuery({
+  const query = useQuery({
     queryKey,
-    enabled: !!propertyId,
+    enabled: !!propertyId && !isControlled,
     queryFn: async () => {
       const res: any = await listHomeEvents(propertyId, {
         type: type || undefined,
@@ -62,72 +77,88 @@ export default function TimelineClient() {
       const payload = res?.data ?? res;
       const inner = payload?.data ?? payload;
       const events = inner?.events ?? [];
-
       return Array.isArray(events) ? events : [];
     },
   });
-  
-  console.log('🎌 TimelineClient data:', events);
+
+  const events = (isControlled ? props.events : (query.data ?? [])) as any[];
+  const isLoading = isControlled ? !!props.isLoading : query.isLoading;
+  const error = isControlled ? props.error : query.error;
+  const isFetching = isControlled ? !!props.isFetching : query.isFetching;
+
+  const onRefresh = props.onRefresh ?? (() => query.refetch());
 
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Home Timeline</h1>
-          <p className="text-sm text-muted-foreground">
-            Your home’s story — purchases, repairs, claims, improvements, and key documents.
-          </p>
-        </div>
+      {!props.hideHeader ? (
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold">Home Timeline</h1>
+            <p className="text-sm text-muted-foreground">
+              Your home’s story — purchases, repairs, claims, improvements, and key documents.
+            </p>
+          </div>
 
-        <button
-          className="rounded-md border px-3 py-2 text-sm"
-          onClick={() => refetch()}
-          disabled={isFetching}
-        >
-          {isFetching ? 'Refreshing…' : 'Refresh'}
-        </button>
-      </div>
+          <button
+            className="rounded-md border px-3 py-2 text-sm"
+            onClick={onRefresh}
+            disabled={isFetching}
+          >
+            {isFetching ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
+      ) : null}
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
-        <div className="text-sm text-muted-foreground">Filter:</div>
+      {!props.hideFilters ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
+          <div className="text-sm text-muted-foreground">Filter:</div>
 
-        <select
-          className="rounded-md border px-2 py-2 text-sm"
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-        >
-          <option value="">All</option>
-          <option value="PURCHASE">Purchase</option>
-          <option value="REPAIR">Repair</option>
-          <option value="MAINTENANCE">Maintenance</option>
-          <option value="IMPROVEMENT">Improvement</option>
-          <option value="CLAIM">Claim</option>
-          <option value="INSPECTION">Inspection</option>
-          <option value="DOCUMENT">Document</option>
-          <option value="VALUE_UPDATE">Value</option>
-          <option value="MILESTONE">Milestone</option>
-          <option value="NOTE">Note</option>
-          <option value="OTHER">Other</option>
-        </select>
+          <select
+            className="rounded-md border px-2 py-2 text-sm"
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+            disabled={isControlled} // parent controls filtering in controlled mode
+          >
+            <option value="">All</option>
+            <option value="PURCHASE">Purchase</option>
+            <option value="REPAIR">Repair</option>
+            <option value="MAINTENANCE">Maintenance</option>
+            <option value="IMPROVEMENT">Improvement</option>
+            <option value="CLAIM">Claim</option>
+            <option value="INSPECTION">Inspection</option>
+            <option value="DOCUMENT">Document</option>
+            <option value="VALUE_UPDATE">Value</option>
+            <option value="MILESTONE">Milestone</option>
+            <option value="NOTE">Note</option>
+            <option value="OTHER">Other</option>
+          </select>
 
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Limit</span>
-          <input
-            className="w-24 rounded-md border px-2 py-2 text-sm"
-            type="number"
-            min={10}
-            max={200}
-            value={limit}
-            onChange={(e) => setLimit(Number(e.target.value))}
-          />
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Limit</span>
+            <input
+              className="w-24 rounded-md border px-2 py-2 text-sm"
+              type="number"
+              min={10}
+              max={200}
+              value={limit}
+              onChange={(e) => setLimit(Number(e.target.value))}
+              disabled={isControlled}
+            />
+          </div>
+
+          <div className="ml-auto text-xs text-muted-foreground">
+            {isFetching ? 'Updating…' : `${events.length} event(s)`}
+          </div>
+
+          {isControlled ? (
+            <div className="text-xs text-muted-foreground">
+              (Filters managed by view mode)
+            </div>
+          ) : null}
         </div>
-
-        <div className="ml-auto text-xs text-muted-foreground">
-          {isFetching ? 'Updating…' : `${events.length} event(s)`}
-        </div>
-      </div>
+      ) : null}
 
       {/* Body */}
       {isLoading ? (

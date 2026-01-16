@@ -1,0 +1,199 @@
+//home_events
+
+INSERT INTO home_events (
+  id,
+  "propertyId",
+  type,
+  subtype,
+  importance,
+  "occurredAt",
+  title,
+  summary,
+  amount,
+  currency,
+  "valueDelta",
+  meta,
+  "createdAt",
+  "updatedAt"
+)
+VALUES (
+  gen_random_uuid(),
+  'fdbb8ddc-a284-4b84-92ac-5a1664a41f60',
+  'IMPROVEMENT',
+  'SEED_EVENT',
+  'HIGHLIGHT',
+  now(),
+  'Kitchen Remodel Completed',
+  'Cabinet upgrade, quartz countertops, and new appliances installed.',
+  18500.00,
+  'USD',
+  32000.00,
+  '{"seeded": true}',
+  now(),
+  now()
+);
+
+
+-- Enable UUID generation if not already enabled
+-- CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+INSERT INTO home_events (
+  id,
+  "propertyId",
+  type,
+  subtype,
+  importance,
+  "occurredAt",
+  title,
+  summary,
+  amount,
+  currency,
+  "valueDelta",
+  meta,
+  "createdAt",
+  "updatedAt"
+) VALUES
+
+-- 1️⃣ Purchase
+(
+  gen_random_uuid(),
+  'fdbb8ddc-a284-4b84-92ac-5a1664a41f60',
+  'PURCHASE',
+  'SEED_PURCHASE',
+  'NORMAL',
+  now() - interval '420 days',
+  'Purchased Dishwasher',
+  'Energy-efficient dishwasher installed. Receipt uploaded.',
+  849.00,
+  'USD',
+  NULL,
+  '{"seeded": true}',
+  now(),
+  now()
+),
+
+-- 2️⃣ Maintenance
+(
+  gen_random_uuid(),
+  'fdbb8ddc-a284-4b84-92ac-5a1664a41f60',
+  'MAINTENANCE',
+  'SEED_MAINTENANCE',
+  'NORMAL',
+  now() - interval '210 days',
+  'HVAC Annual Service',
+  'Filter replacement and full system tune-up.',
+  189.00,
+  'USD',
+  NULL,
+  '{"seeded": true}',
+  now(),
+  now()
+),
+
+-- 3️⃣ Repair
+(
+  gen_random_uuid(),
+  'fdbb8ddc-a284-4b84-92ac-5a1664a41f60',
+  'REPAIR',
+  'SEED_REPAIR',
+  'NORMAL',
+  now() - interval '120 days',
+  'Fixed Kitchen Faucet Leak',
+  'Replaced cartridge and resealed joints.',
+  145.00,
+  'USD',
+  NULL,
+  '{"seeded": true}',
+  now(),
+  now()
+),
+
+-- 4️⃣ Claim (highlight)
+(
+  gen_random_uuid(),
+  'fdbb8ddc-a284-4b84-92ac-5a1664a41f60',
+  'CLAIM',
+  'SEED_CLAIM',
+  'HIGHLIGHT',
+  now() - interval '90 days',
+  'Claim Opened: Water Damage',
+  'Kitchen and adjacent flooring affected.',
+  NULL,
+  'USD',
+  NULL,
+  '{"seeded": true}',
+  now(),
+  now()
+),
+
+-- 5️⃣ Inspection
+(
+  gen_random_uuid(),
+  'fdbb8ddc-a284-4b84-92ac-5a1664a41f60',
+  'INSPECTION',
+  'SEED_INSPECTION',
+  'NORMAL',
+  now() - interval '60 days',
+  'Roof & Attic Inspection',
+  'Minor flashing wear observed; no active leaks.',
+  NULL,
+  'USD',
+  NULL,
+  '{"seeded": true}',
+  now(),
+  now()
+),
+
+-- 6️⃣ Document upload
+(
+  gen_random_uuid(),
+  'fdbb8ddc-a284-4b84-92ac-5a1664a41f60',
+  'DOCUMENT',
+  'SEED_DOCUMENT',
+  'NORMAL',
+  now() - interval '30 days',
+  'Uploaded Home Warranty Document',
+  'Coverage includes appliances and HVAC.',
+  NULL,
+  'USD',
+  NULL,
+  '{"seeded": true, "semantic": {"promoted": true, "confidence": 0.9}}',
+  now(),
+  now()
+),
+
+-- 7️⃣ Value update
+(
+  gen_random_uuid(),
+  'fdbb8ddc-a284-4b84-92ac-5a1664a41f60',
+  'VALUE_UPDATE',
+  'SEED_VALUE',
+  'NORMAL',
+  now() - interval '14 days',
+  'Estimated Home Value Increased',
+  'Local comps improved after renovations.',
+  NULL,
+  'USD',
+  18000.00,
+  '{"seeded": true}',
+  now(),
+  now()
+),
+
+-- 8️⃣ Improvement (highlight)
+(
+  gen_random_uuid(),
+  'fdbb8ddc-a284-4b84-92ac-5a1664a41f60',
+  'IMPROVEMENT',
+  'SEED_IMPROVEMENT',
+  'HIGHLIGHT',
+  now(),
+  'Kitchen Remodel Completed',
+  'Cabinet upgrade, quartz countertops, and new appliances installed.',
+  18500.00,
+  'USD',
+  32000.00,
+  '{"seeded": true}',
+  now(),
+  now()
+);
