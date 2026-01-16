@@ -44,17 +44,26 @@ export default function TimelineClient() {
   const [type, setType] = useState<string>(''); // empty = all
   const [limit, setLimit] = useState<number>(80);
 
-  const queryKey = useMemo(() => ['homeEvents', propertyId, { type, limit }], [propertyId, type, limit]);
+  const queryKey = useMemo(() => ['homeEvents', propertyId, type || 'ALL', limit], [propertyId, type, limit]);
 
   const { data: events = [], isLoading, error, refetch, isFetching } = useQuery({
     queryKey,
     enabled: !!propertyId,
     queryFn: async () => {
-      const res = await listHomeEvents(propertyId, {
+      const res: any = await listHomeEvents(propertyId, {
         type: type || undefined,
         limit,
       });
-      return res.data.data.events ?? [];
+
+      // Support multiple shapes:
+      // 1) AxiosResponse -> res.data = { success, data: { events } }
+      // 2) Wrapper-unwrapped -> res = { success, data: { events } }
+      // 3) Fully unwrapped -> res = { events }
+      const payload = res?.data ?? res;
+      const inner = payload?.data ?? payload;
+      const events = inner?.events ?? [];
+
+      return Array.isArray(events) ? events : [];
     },
   });
   
