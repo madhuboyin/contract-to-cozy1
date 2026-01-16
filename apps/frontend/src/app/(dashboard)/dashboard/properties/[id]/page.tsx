@@ -39,6 +39,7 @@ import IncidentsClient from "./incidents/IncidentsClient";
 
 // ✅ NEW: Rooms tab content
 import RoomsHubClient from "./rooms/RoomsHubClient";
+import PropertyTaxClient from "./tax/property-tax/PropertyTaxClient";
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
 
@@ -774,6 +775,12 @@ export default function PropertyDetailPage() {
               <span className="sm:hidden">Finance</span>
             </TabsTrigger>
 
+            <TabsTrigger value="property-tax" className="flex items-center gap-1 sm:gap-2">
+              <DollarSign className="h-4 w-4" />
+              <span className="hidden sm:inline">Property Tax</span>
+              <span className="sm:hidden">Tax</span>
+            </TabsTrigger>
+
             <TabsTrigger value="documents" className="flex items-center gap-1 sm:gap-2">
               <FileText className="h-4 w-4" />
               <span className="hidden sm:inline">Documents</span>
@@ -818,6 +825,10 @@ export default function PropertyDetailPage() {
 
         <TabsContent value="financial-efficiency" className="mt-4">
           <FinancialEfficiencyTab propertyId={property.id} />
+        </TabsContent>
+
+        <TabsContent value="property-tax" className="mt-4">
+          <PropertyTaxClient />
         </TabsContent>
 
         <TabsContent value="documents" className="mt-4">

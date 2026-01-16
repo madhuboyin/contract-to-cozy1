@@ -55,6 +55,8 @@ import incidentsRouter from './routes/incidents.routes';
 import recallsRoutes from './routes/recalls.routes';
 import roomInsightsRoutes from './routes/roomInsights.routes';
 import homeEventsRoutes from './routes/homeEvents.routes';
+import propertyTaxRoutes from './routes/propertyTax.routes';
+
 
 
 dotenv.config();
@@ -316,7 +318,7 @@ app.use('/api', incidentsRouter);
 app.use('/api', recallsRoutes);
 app.use('/api', roomInsightsRoutes);
 app.use('/api', homeEventsRoutes);
-
+app.use('/api', propertyTaxRoutes);
 
 //app.use(express.json({ limit: '10mb' })); // Ensure this is present
 //app.use(express.urlencoded({ extended: true, limit: '10mb' }));
