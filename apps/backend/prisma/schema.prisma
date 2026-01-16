@@ -297,6 +297,7 @@ model InventoryRoom {
   checklistItems RoomChecklistItem[]
   maintenanceTasks PropertyMaintenanceTask[]
   incidents        Incident[]
+  homeEvents HomeEvent[]
 
   @@index([propertyId])
   @@unique([propertyId, name])
@@ -362,6 +363,7 @@ model InventoryItem {
   // Reuse your existing Document table for receipts/photos/manuals
   documents        Document[]
   insuranceQuoteRequests InsuranceQuoteRequest[]
+  homeEvents HomeEvent[]
 
   // Recall matching fields (NEW)
   manufacturer   String?
@@ -825,6 +827,7 @@ model User {
 
   inventoryOcrSessions InventoryOcrSession[]
   inventoryDraftItems  InventoryDraftItem[]
+  homeEvents HomeEvent[]
   
   @@index([email])
   @@index([role])
@@ -1690,6 +1693,7 @@ model Expense {
   homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
   property           Property? @relation(fields: [propertyId], references: [id])
   booking            Booking? @relation(fields: [bookingId], references: [id])
+  homeEvents HomeEvent[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2875,6 +2879,7 @@ model Claim {
   checklistItems ClaimChecklistItem[]
   documents      ClaimDocument[]
   timelineEvents ClaimTimelineEvent[]
+  homeEvents HomeEvent[]
 
   @@index([propertyId, status])
   @@index([createdBy, status])
