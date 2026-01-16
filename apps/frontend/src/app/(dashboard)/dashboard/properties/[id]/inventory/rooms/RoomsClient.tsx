@@ -3,7 +3,8 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+
 
 import { InventoryRoom } from '@/types';
 import {
@@ -177,18 +178,40 @@ function RoomRow({
   onRename: (room: InventoryRoom, nextName: string) => Promise<void>;
   onDelete: (room: InventoryRoom) => Promise<void>;
 }) {
+  const router = useRouter();
+  const params = useParams<{ id: string }>();
+  const propertyId = params.id;
+
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(room.name);
 
   useEffect(() => setName(room.name), [room.name]);
 
+  //const href = `/dashboard/properties/${propertyId}/inventory/rooms/${room.id}`;
+  const href = `/dashboard/properties/${propertyId}/rooms/${room.id}`;
+
   return (
-    <div className="rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2">
+    <div
+      className={[
+        'rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2',
+        !editing ? 'hover:bg-black/[0.04] cursor-pointer' : '',
+      ].join(' ')}
+      role={!editing ? 'button' : undefined}
+      tabIndex={!editing ? 0 : -1}
+      onClick={() => {
+        if (!editing) router.push(href);
+      }}
+      onKeyDown={(e) => {
+        if (!editing && (e.key === 'Enter' || e.key === ' ')) router.push(href);
+      }}
+      title={!editing ? 'Open room' : undefined}
+    >
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
           {editing ? (
             <input
               value={name}
+              onClick={(e) => e.stopPropagation()}
               onChange={(e) => setName(e.target.value)}
               className="w-full text-sm bg-white rounded-lg border border-black/10 px-3 py-2 outline-none"
             />
@@ -201,11 +224,19 @@ function RoomRow({
           </div>
         </div>
 
+        {/* Right rail: chevron + actions */}
         <div className="flex items-center gap-2">
+          {!editing ? (
+            <div className="text-black/30 text-lg leading-none select-none" aria-hidden>
+              ›
+            </div>
+          ) : null}
+
           {editing ? (
             <>
               <button
-                onClick={async () => {
+                onClick={async (e) => {
+                  e.stopPropagation();
                   await onRename(room, name);
                   setEditing(false);
                 }}
@@ -214,7 +245,8 @@ function RoomRow({
                 Save
               </button>
               <button
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   setName(room.name);
                   setEditing(false);
                 }}
@@ -225,7 +257,10 @@ function RoomRow({
             </>
           ) : (
             <button
-              onClick={() => setEditing(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditing(true);
+              }}
               className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
             >
               Rename
@@ -233,7 +268,10 @@ function RoomRow({
           )}
 
           <button
-            onClick={() => onDelete(room)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(room);
+            }}
             className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
             title="Delete room"
           >
@@ -244,3 +282,4 @@ function RoomRow({
     </div>
   );
 }
+
