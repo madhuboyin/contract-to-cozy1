@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/timeline/page.tsx
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 
@@ -53,8 +53,63 @@ function groupByYear(events: any[]) {
   return years.map((y) => ({ year: y, events: map.get(y) ?? [] }));
 }
 
-function TimelineVisual({ events }: { events: any[] }) {
-  const groups = useMemo(() => groupByYear(events), [events]);
+function TimelineVisual({
+  events,
+  replayOn,
+  replayRunning,
+  replayIndex,
+  setReplayIndex,
+  setReplayRunning,
+  replaySpeedMs,
+}: {
+  events: any[];
+  replayOn: boolean;
+  replayRunning: boolean;
+  replayIndex: number;
+  setReplayIndex: (n: number) => void;
+  setReplayRunning: (v: boolean) => void;
+  replaySpeedMs: number;
+}) {
+  // Replay should reveal from oldest -> newest
+  const chronological = useMemo(() => {
+    const copy = [...events];
+    copy.sort((a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime());
+    return copy;
+  }, [events]);
+
+  const visibleChronological = useMemo(() => {
+    if (!replayOn) return chronological;
+    // show at least 1 item once replay starts
+    const n = Math.max(0, Math.min(replayIndex, chronological.length));
+    return chronological.slice(0, n);
+  }, [replayOn, replayIndex, chronological]);
+
+  // Timer: advance replay
+  useEffect(() => {
+    if (!replayOn) return;
+    if (!replayRunning) return;
+
+    if (replayIndex >= chronological.length) {
+      // stop at the end (MVP)
+      setReplayRunning(false);
+      return;
+    }
+
+    const t = window.setTimeout(() => {
+      setReplayIndex(replayIndex + 1);
+    }, replaySpeedMs);
+
+    return () => window.clearTimeout(t);
+  }, [replayOn, replayRunning, replayIndex, chronological.length, replaySpeedMs, setReplayIndex, setReplayRunning]);
+
+  // Auto-scroll to bottom as events reveal
+  const endRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!replayOn) return;
+    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [replayOn, replayIndex]);
+
+  const groups = useMemo(() => groupByYear(visibleChronological), [visibleChronological]);
 
   return (
     <div className="space-y-8">
@@ -77,7 +132,7 @@ function TimelineVisual({ events }: { events: any[] }) {
                     {/* node */}
                     <div
                       className={clsx(
-                        'absolute -left-12 top-5 flex h-8 w-8 items-center justify-center rounded-full border bg-background',
+                        'absolute -left-12 top-5 flex h-8 w-8 items-center justify-center rounded-full border bg-background transition-all duration-300',
                         highlight && 'ring-2 ring-primary/30'
                       )}
                       title={e.type}
@@ -88,7 +143,9 @@ function TimelineVisual({ events }: { events: any[] }) {
                     {/* card */}
                     <div
                       className={clsx(
-                        'rounded-lg border p-4',
+                        'rounded-lg border p-4 transition-all duration-500',
+                        // “reveal” feel without relying on external animation libs
+                        replayOn ? 'opacity-100 translate-y-0' : 'opacity-100',
                         highlight && 'bg-muted/30'
                       )}
                     >
@@ -101,10 +158,12 @@ function TimelineVisual({ events }: { events: any[] }) {
                             {e.importance && <Badge>{e.importance}</Badge>}
                             {e.subtype && <Badge>{e.subtype}</Badge>}
                           </div>
+
                           {e.summary ? (
                             <div className="mt-2 text-sm text-muted-foreground">{e.summary}</div>
                           ) : null}
 
+                          {/* Attachments preview */}
                           {Array.isArray(e.documents) && e.documents.length > 0 ? (
                             <div className="mt-3 flex flex-wrap gap-2">
                               {e.documents.slice(0, 6).map((d: any) => (
@@ -135,6 +194,8 @@ function TimelineVisual({ events }: { events: any[] }) {
                   </div>
                 );
               })}
+              {/* attach ref INSIDE returned JSX */}
+              <div ref={endRef} />
             </div>
           </div>
         </div>
@@ -147,8 +208,20 @@ export default function Page() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
 
+  // Replay state MUST be declared before any effects that use it
+  const [replayOn, setReplayOn] = useState(false);
+  const [replayRunning, setReplayRunning] = useState(false);
+  const [replayIndex, setReplayIndex] = useState(0);
+  const [replaySpeedMs, setReplaySpeedMs] = useState(650); // calm default
+
+  function resetReplay() {
+    setReplayIndex(0);
+    setReplayRunning(false);
+  }
+
   const [mode, setMode] = useState<Mode>('LIST');
 
+  // Load mode preference
   useEffect(() => {
     try {
       const v = window.localStorage.getItem('ctc.timeline.mode');
@@ -156,10 +229,20 @@ export default function Page() {
     } catch {}
   }, []);
 
+  // Persist mode preference
   useEffect(() => {
     try {
       window.localStorage.setItem('ctc.timeline.mode', mode);
     } catch {}
+  }, [mode]);
+
+  // If leaving VISUAL, turn off replay cleanly
+  useEffect(() => {
+    if (mode !== 'VISUAL') {
+      setReplayOn(false);
+      resetReplay();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
   const [type, setType] = useState<string>(''); // filter shared between modes
@@ -221,6 +304,66 @@ export default function Page() {
           </button>
         </div>
       </div>
+
+      {/* Replay controls (visual only) */}
+      {mode === 'VISUAL' ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex items-center gap-2 rounded-md border px-2 py-1">
+            <label className="text-xs text-muted-foreground">Replay</label>
+            <button
+              className={clsx(
+                'px-2 py-1 text-xs rounded-md',
+                replayOn ? 'bg-muted' : 'hover:bg-muted/50'
+              )}
+              onClick={() => {
+                const next = !replayOn;
+                setReplayOn(next);
+                if (!next) {
+                  resetReplay();
+                } else {
+                  // start replay; show first item shortly
+                  setReplayIndex(1);
+                  setReplayRunning(true);
+                }
+              }}
+            >
+              {replayOn ? 'On' : 'Off'}
+            </button>
+          </div>
+
+          {replayOn ? (
+            <>
+              <button
+                className="rounded-md border px-3 py-2 text-sm"
+                onClick={() => setReplayRunning((v) => !v)}
+              >
+                {replayRunning ? 'Pause' : 'Resume'}
+              </button>
+
+              <button
+                className="rounded-md border px-3 py-2 text-sm"
+                onClick={() => {
+                  setReplayIndex(1);
+                  setReplayRunning(true);
+                }}
+              >
+                Restart
+              </button>
+
+              <select
+                className="rounded-md border px-2 py-2 text-sm"
+                value={replaySpeedMs}
+                onChange={(e) => setReplaySpeedMs(Number(e.target.value))}
+                title="Replay speed"
+              >
+                <option value={950}>Slow</option>
+                <option value={650}>Calm</option>
+                <option value={380}>Fast</option>
+              </select>
+            </>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Filters (shared) */}
       <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
@@ -287,8 +430,16 @@ export default function Page() {
           hideFilters
         />
       ) : (
-        <TimelineVisual events={events} />
+        <TimelineVisual
+          events={events}
+          replayOn={replayOn}
+          replayRunning={replayRunning}
+          replayIndex={replayIndex}
+          setReplayIndex={setReplayIndex}
+          setReplayRunning={setReplayRunning}
+          replaySpeedMs={replaySpeedMs}
+        />
       )}
     </div>
   );
-} 
+}
