@@ -215,6 +215,7 @@ function buildDriversLocalized(args: { state: string; zipCode: string; taxRate: 
           : `Your region (ZIP prefix ${zp}) typically follows moderate reassessment-driven changes compared to high-growth metros.`,
     },
   ];
+  
 
   if (stateHasHomestead(state)) {
     drivers.push({
@@ -226,15 +227,26 @@ function buildDriversLocalized(args: { state: string; zipCode: string; taxRate: 
     });
   }
 
-  if (state === 'TX') {
-    drivers.push({
+  if (state !==  'TX') {
+    const school = schoolFundingSignal(state);
+
+    drivers.splice(1, 0, {
+      factor: `School funding impact (${state})`,
+      impact: school.impact,
+      explanation:
+        `${school.note} ` +
+        `If your area is known for strong school resources, that can correlate with higher local rates compared to nearby ZIP codes.`,
+    });
+  } else {
+    // keep the detailed TX card and insert it instead at index 1
+    drivers.splice(1, 0, {
       factor: 'School district levies (TX)',
       impact: 'HIGH',
       explanation:
         'In many Texas jurisdictions, school district taxes make up a large portion of the total bill. This can vary significantly by district even within the same city.',
     });
   }
-
+  
   return drivers;
 }
 
@@ -265,6 +277,32 @@ function typicalEffectiveRateBand(state: string, rate: number): { band: ImpactLe
   if (delta > 0.003) return { band: 'HIGH', msg: 'higher than typical for your state' };
   if (delta < -0.003) return { band: 'LOW', msg: 'lower than typical for your state' };
   return { band: 'MEDIUM', msg: 'around typical for your state' };
+}
+function schoolFundingSignal(state: string): { impact: 'LOW' | 'MEDIUM' | 'HIGH'; note: string } {
+  // Heuristic: states where property-tax-funded school systems are a major narrative/driver.
+  // This is intentionally conservative; later you can replace with district finance data.
+  const high = new Set(['NJ', 'NY', 'TX', 'IL', 'CT', 'NH', 'MA', 'PA']);
+  const medium = new Set(['CA', 'FL', 'VA', 'MD', 'WA', 'CO', 'NC', 'GA', 'AZ']);
+
+  if (high.has(state)) {
+    return {
+      impact: 'HIGH',
+      note:
+        'Public schools are often heavily funded through local property taxes, and school budgets can meaningfully influence total tax rates.',
+    };
+  }
+  if (medium.has(state)) {
+    return {
+      impact: 'MEDIUM',
+      note:
+        'A meaningful share of local property taxes often supports public schools, which can influence overall tax rates.',
+    };
+  }
+  return {
+    impact: 'MEDIUM',
+    note:
+      'Property taxes can support local services including public schools; the school funding share varies by area.',
+  };
 }
 
 export class PropertyTaxService {
