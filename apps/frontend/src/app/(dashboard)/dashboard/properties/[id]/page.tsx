@@ -541,6 +541,33 @@ const FinancialEfficiencyTab = ({ propertyId }: { propertyId: string }) => (
   </Card>
 );
 
+const CostGrowthTab = ({ propertyId }: { propertyId: string }) => (
+  <Card>
+  <CardHeader className="p-4">
+    <CardTitle className="font-heading text-xl flex items-center gap-2">
+      <TrendingUp className="h-5 w-5 text-green-600" />
+      Home Cost Growth Analyzer
+    </CardTitle>
+    <CardDescription className="font-body text-sm">
+      Compare appreciation vs ownership cost growth (tax, insurance, maintenance) with a calm trend story.
+    </CardDescription>
+  </CardHeader>
+
+  <CardContent className="p-4 pt-0 space-y-3">
+    <p className="font-body text-base text-gray-700">
+      See whether your home’s appreciation is outpacing the cost of owning it over time.
+    </p>
+
+      <Link href={`/dashboard/properties/${propertyId}/tools/cost-growth`} passHref>
+      <Button variant="default">
+        <TrendingUp className="mr-2 h-4 w-4" />
+        Open Cost Growth Analyzer
+      </Button>
+    </Link>
+  </CardContent>
+</Card>
+);
+
 // UPDATED: DocumentsTab with Phase 2 typography and compact spacing
 const DocumentsTab = ({ propertyId }: { propertyId: string }) => (
   <Card>
@@ -725,6 +752,13 @@ export default function PropertyDetailPage() {
           </Link>
         </div>
       </div>
+
+      <Link href={`/dashboard/properties/${property.id}/tools/cost-growth`} passHref>
+        <Button variant="outline" size="sm" className="gap-2">
+          <TrendingUp className="h-4 w-4" />
+          Cost Growth
+        </Button>
+      </Link>
 
       {/* Selling Prep Banner */}
       <SellingPrepBanner propertyId={property.id} />
