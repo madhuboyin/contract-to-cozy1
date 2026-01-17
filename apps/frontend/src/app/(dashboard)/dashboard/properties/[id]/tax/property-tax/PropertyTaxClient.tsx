@@ -21,20 +21,41 @@ function MiniLineChart({
 }: {
   points: { xLabel: string; y: number }[];
 }) {
-  const w = 520;   // bigger for visibility
-  const h = 120;
-  const padL = 44;
-  const padR = 16;
-  const padT = 10;
-  const padB = 26;
+  const w = 640;
+  const h = 180;
 
-  const safe = points.length >= 2 ? points : [
-    { xLabel: '—', y: 0 },
-    { xLabel: '—', y: 0 },
-  ];
+  const padL = 54;
+  const padR = 14;
+  const padT = 12;
+  const padB = 32;
 
-  const maxY = Math.max(...safe.map((p) => p.y), 1);
-  const minY = 0; // IMPORTANT: fixed baseline makes 5y vs 10y visually different
+  const safe =
+    points.length >= 2
+      ? points
+      : [
+          { xLabel: '—', y: 0 },
+          { xLabel: '—', y: 0 },
+        ];
+
+  const rawMin = Math.min(...safe.map((p) => p.y));
+  const rawMax = Math.max(...safe.map((p) => p.y), 1);
+  const range = rawMax - rawMin;
+  const rel = range / Math.max(rawMax, 1);
+
+  // If variation is small, pad the scale to make slope visually meaningful.
+  // Otherwise, start at 0 to show "absolute" level.
+  let minY: number;
+  let maxY: number;
+
+  if (rel < 0.12) {
+    const pad = Math.max(rawMax * 0.08, 250); // at least $250 padding
+    minY = Math.max(0, rawMin - pad);
+    maxY = rawMax + pad;
+  } else {
+    minY = 0;
+    maxY = rawMax;
+  }
+
   const spanY = Math.max(1e-6, maxY - minY);
 
   const xFor = (i: number) =>
@@ -47,19 +68,23 @@ function MiniLineChart({
     .map((p, i) => `${i === 0 ? 'M' : 'L'} ${xFor(i).toFixed(2)} ${yFor(p.y).toFixed(2)}`)
     .join(' ');
 
-  // ticks
-  const yTop = maxY;
-  const yMid = maxY * 0.5;
+  // ✅ 5 Y ticks (top -> bottom)
+  const yTicks = [1, 0.75, 0.5, 0.25, 0].map((t) => minY + (maxY - minY) * t);
 
-  // show 3 x ticks: first, middle, last
-  const midIdx = Math.floor((safe.length - 1) / 2);
-  const xTicks = [
-    { idx: 0, label: safe[0].xLabel },
-    { idx: midIdx, label: safe[midIdx].xLabel },
-    { idx: safe.length - 1, label: safe[safe.length - 1].xLabel },
-  ];
+  // ✅ X ticks:
+  // - If <= 5 points, show all labels (your requirement).
+  // - If more (future), show first/mid/last.
+  const xTicks =
+    safe.length <= 5
+      ? safe.map((p, idx) => ({ idx, label: p.xLabel }))
+      : [
+          { idx: 0, label: safe[0].xLabel },
+          { idx: Math.floor((safe.length - 1) / 2), label: safe[Math.floor((safe.length - 1) / 2)].xLabel },
+          { idx: safe.length - 1, label: safe[safe.length - 1].xLabel },
+        ];
 
   const fmtMoneyShort = (v: number) => {
+    if (v >= 1000000) return `$${(v / 1000000).toFixed(1)}M`;
     if (v >= 1000) return `$${Math.round(v / 1000)}k`;
     return `$${Math.round(v)}`;
   };
@@ -67,21 +92,22 @@ function MiniLineChart({
   return (
     <svg
       viewBox={`0 0 ${w} ${h}`}
-      className="w-full max-w-[640px] h-auto text-black/70"
+      className="w-full h-[180px] text-black/70"
+      preserveAspectRatio="none"
       role="img"
       aria-label="Property tax trend chart"
     >
       {/* axes */}
-      <line x1={padL} y1={h - padB} x2={w - padR} y2={h - padB} stroke="currentColor" strokeOpacity="0.2" />
-      <line x1={padL} y1={padT} x2={padL} y2={h - padB} stroke="currentColor" strokeOpacity="0.2" />
+      <line x1={padL} y1={h - padB} x2={w - padR} y2={h - padB} stroke="currentColor" strokeOpacity="0.18" />
+      <line x1={padL} y1={padT} x2={padL} y2={h - padB} stroke="currentColor" strokeOpacity="0.18" />
 
-      {/* y ticks */}
-      {[yTop, yMid].map((v, i) => {
+      {/* y ticks + grid */}
+      {yTicks.map((v, i) => {
         const y = yFor(v);
         return (
           <g key={i}>
-            <line x1={padL} y1={y} x2={w - padR} y2={y} stroke="currentColor" strokeOpacity="0.08" />
-            <text x={padL - 8} y={y + 4} fontSize="10" textAnchor="end" fill="currentColor" opacity="0.55">
+            <line x1={padL} y1={y} x2={w - padR} y2={y} stroke="currentColor" strokeOpacity="0.06" />
+            <text x={padL - 10} y={y + 4} fontSize="11" textAnchor="end" fill="currentColor" opacity="0.45">
               {fmtMoneyShort(v)}
             </text>
           </g>
@@ -89,15 +115,15 @@ function MiniLineChart({
       })}
 
       {/* line */}
-      <path d={path} fill="none" stroke="currentColor" strokeWidth="2.5" />
+      <path d={path} fill="none" stroke="currentColor" strokeWidth="2.75" />
 
       {/* x ticks */}
       {xTicks.map((t, i) => {
         const x = xFor(t.idx);
         return (
           <g key={i}>
-            <line x1={x} y1={h - padB} x2={x} y2={h - padB + 4} stroke="currentColor" strokeOpacity="0.25" />
-            <text x={x} y={h - 8} fontSize="10" textAnchor="middle" fill="currentColor" opacity="0.55">
+            <line x1={x} y1={h - padB} x2={x} y2={h - padB + 5} stroke="currentColor" strokeOpacity="0.22" />
+            <text x={x} y={h - 8} fontSize="11" textAnchor="middle" fill="currentColor" opacity="0.45">
               {t.label}
             </text>
           </g>
@@ -106,7 +132,6 @@ function MiniLineChart({
     </svg>
   );
 }
-
 
 export default function PropertyTaxClient() {
   const params = useParams<{ id: string }>();
@@ -159,9 +184,20 @@ export default function PropertyTaxClient() {
   const historyPoints = useMemo(() => {
     const hist = estimate?.history ?? [];
     if (!hist.length) return [];
-    return hist.map((h) => ({ xLabel: String(h.year), y: h.annualTax }));
-  }, [estimate]);
   
+    if (trendYears === 5) {
+      return hist.slice(-5).map((h) => ({ xLabel: String(h.year), y: h.annualTax }));
+    }
+  
+    // 10y: sample 5 points spaced by 2 years
+    const ten = hist.slice(-10);
+    const sampled = [0, 2, 4, 6, 8]
+      .filter((i) => i < ten.length)
+      .map((i) => ten[i]);
+  
+    return sampled.map((h) => ({ xLabel: String(h.year), y: h.annualTax }));
+  }, [estimate, trendYears]);
+    
 
   const confidenceBadge = (c?: string) => {
     const base = 'text-xs rounded px-2 py-0.5 border border-black/10';
@@ -233,7 +269,7 @@ export default function PropertyTaxClient() {
 
           <div className="mt-4 flex items-end justify-between gap-4">
             <div>
-              <div className="text-3xl font-semibold">{money(estimate?.current?.annualTax)}</div>
+              <div className="text-2xl font-semibold">{money(estimate?.current?.annualTax)}</div>
               <div className="text-xs opacity-70 mt-1">≈ {money(estimate?.current?.monthlyTax)} / month</div>
             </div>
 
