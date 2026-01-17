@@ -25,27 +25,59 @@ function overlapScore(a: string, b: string) {
   return inter / A.size;
 }
 
-async function fetchJsonWithTimeout(url: string, timeoutMs = 6000): Promise<{ ok: boolean; status: number; json: any }> {
-    const ac = new AbortController();
-    const t = setTimeout(() => ac.abort(), timeoutMs);
-  
+async function fetchJsonWithTimeout(
+  url: string,
+  timeoutMs = 6000
+): Promise<{ ok: boolean; status: number; json: any }> {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), timeoutMs);
+
+  try {
+    const r = await fetch(url, { signal: ac.signal });
+    let json: any = null;
     try {
-      const r = await fetch(url, { signal: ac.signal });
-      let json: any = null;
-      try {
-        json = await r.json();
-      } catch {
-        json = null;
-      }
-      return { ok: r.ok, status: r.status, json };
-    } finally {
-      clearTimeout(t);
+      json = await r.json();
+    } catch {
+      json = null;
     }
+    return { ok: r.ok, status: r.status, json };
+  } finally {
+    clearTimeout(t);
   }
-  
+}
 
 function moneyRound(n: number) {
   return Math.round(n);
+}
+
+function firstArrayRows(payload: any): any[] {
+  if (Array.isArray(payload?.results)) return payload.results;
+  if (Array.isArray(payload)) return payload;
+  return [];
+}
+
+function bestNameMatch(targetName: string, rows: any[]) {
+  const candidates = rows
+    .filter((x) => typeof x?.name === 'string')
+    .map((x) => ({ name: x.name as string, row: x }));
+
+  let best: { name: string; row: any; score: number } | null = null;
+  for (const c of candidates) {
+    const s = overlapScore(targetName, c.name);
+    if (!best || s > best.score) best = { ...c, score: s };
+  }
+  return best;
+}
+
+function extractLeaid(row: any): string | null {
+  const v =
+    row?.leaid ??
+    row?.lea_id ??
+    row?.ncesid ??
+    row?.nces_id ??
+    row?.id ??
+    null;
+  return v !== null && v !== undefined ? String(v) : null;
 }
 
 /**
@@ -59,7 +91,6 @@ function moneyRound(n: number) {
  */
 export async function getSchoolInsights(args: {
   address: { street: string; city: string; state: string; zipCode: string };
-  // optional tuning
   year?: string; // CCD year (e.g., "2022")
 }): Promise<SchoolInsights> {
   const { street, city, state, zipCode } = args.address;
@@ -70,8 +101,6 @@ export async function getSchoolInsights(args: {
   // -----------------------------
   // 1) Census Geocoder (district)
   // -----------------------------
-  // Uses "geographies/address" to retrieve school district names.
-  // We request school district layers; response includes Unified/Secondary/Elementary where available.
   const censusUrl =
     `https://geocoding.geo.census.gov/geocoder/geographies/address` +
     `?street=${encodeURIComponent(street)}` +
@@ -86,7 +115,7 @@ export async function getSchoolInsights(args: {
   let districtName: string | null = null;
 
   try {
-    const r = await fetchJsonWithTimeout(censusUrl, 7000);
+    const r = await fetchJsonWithTimeout(censusUrl, 10000);
     if (!r.ok) throw new Error(`Census geocoder HTTP ${r.status}`);
 
     const j: any = r.json;
@@ -104,6 +133,37 @@ export async function getSchoolInsights(args: {
     notes.push(`Census lookup failed: ${e?.message || String(e)}`);
   }
 
+  // Fallback: Census "onelineaddress" can match better than split fields
+  if (!districtName) {
+    const oneLine = `${street}, ${city}, ${state} ${zipCode}`.replace(/\s+/g, ' ').trim();
+    const censusUrl2 =
+      `https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress` +
+      `?address=${encodeURIComponent(oneLine)}` +
+      `&benchmark=Public_AR_Current` +
+      `&vintage=Current_Current` +
+      `&layers=14,16,18` +
+      `&format=json`;
+
+    try {
+      const r2 = await fetchJsonWithTimeout(censusUrl2, 10000);
+      if (!r2.ok) throw new Error(`Census oneline HTTP ${r2.status}`);
+
+      const j2: any = r2.json;
+      const geos2 = j2?.result?.addressMatches?.[0]?.geographies ?? {};
+
+      const unified2 = geos2['Unified School Districts']?.[0];
+      const secondary2 = geos2['Secondary School Districts']?.[0];
+      const elementary2 = geos2['Elementary School Districts']?.[0];
+
+      districtName = unified2?.NAME ?? secondary2?.NAME ?? elementary2?.NAME ?? null;
+
+      if (districtName) notes.push(`Census oneline resolved: ${districtName}`);
+      else notes.push(`Census oneline returned no district match`);
+    } catch (e: any) {
+      notes.push(`Census oneline lookup failed: ${e?.message || String(e)}`);
+    }
+  }
+
   if (!districtName) {
     return {
       districtName: null,
@@ -118,122 +178,138 @@ export async function getSchoolInsights(args: {
   // ---------------------------------------
   const EDU_BASE = process.env.EDUCATION_DATA_API_BASE || 'https://educationdata.urban.org/api/v1';
 
-  // We need a district identifier to query finance.
-  // The Education Data API has multiple datasets; coverage + fields vary by year.
-  // Strategy:
-  // - Pull a page of district directory rows for the state/year
-  // - best-match by district name
-  // - attempt to query finance by leaid
   try {
-    // Directory search (state-wide). We best-match client-side.
-    const dirUrl = `${EDU_BASE}/schools/ccd/directory/${YEAR}/?state=${encodeURIComponent(state)}&per_page=200`;
-    const dir = await fetchJsonWithTimeout(dirUrl, 7000);
-    if (!dir.ok) throw new Error(`EducationData directory HTTP ${dir.status}`);
+    // Try multiple directory endpoints (API structure can vary)
+    const dirUrls = [
+      `${EDU_BASE}/schools/ccd/districts/${YEAR}/?state=${encodeURIComponent(state)}&per_page=200`,
+      `${EDU_BASE}/schools/ccd/directory/${YEAR}/?state=${encodeURIComponent(state)}&per_page=200`,
+    ];
 
-    const dirPayload: any = dir.json;
-    const rows: any[] = Array.isArray(dirPayload?.results)
-      ? dirPayload.results
-      : Array.isArray(dirPayload)
-        ? dirPayload
-        : [];
-    
-    const candidates = rows
-      .filter((x) => typeof x?.name === 'string')
-      .map((x) => ({ name: x.name as string, row: x }));
+    let rows: any[] = [];
+    let dirUsed: string | null = null;
 
-    // best match
-    let best: { name: string; row: any; score: number } | null = null;
-    for (const c of candidates) {
-      const s = overlapScore(districtName, c.name);
-      if (!best || s > best.score) best = { ...c, score: s };
+    for (const u of dirUrls) {
+      const dir = await fetchJsonWithTimeout(u, 10000);
+      if (!dir.ok) continue;
+      const r = firstArrayRows(dir.json);
+      if (r.length) {
+        rows = r;
+        dirUsed = u;
+        break;
+      }
     }
+
+    if (!rows.length) {
+      notes.push(`EducationData: no directory rows for state=${state} year=${YEAR}`);
+      return { districtName, perPupilSpendUsd: null, confidence: 'MEDIUM', notes };
+    }
+    notes.push(`EducationData directory endpoint used`);
+
+    const best = bestNameMatch(districtName, rows);
 
     if (!best || best.score < 0.35) {
-      notes.push(`Finance match weak for "${districtName}" (directory match score low)`);
-      return {
-        districtName,
-        perPupilSpendUsd: null,
-        confidence: 'MEDIUM',
-        notes,
-      };
+      notes.push(`EducationData: weak district match for "${districtName}"`);
+      return { districtName, perPupilSpendUsd: null, confidence: 'MEDIUM', notes };
     }
-
-    const leaid =
-      best.row?.leaid ??
-      best.row?.nces_id ??
-      best.row?.id ??
-      null;
 
     notes.push(`EducationData district match: "${best.name}" (${Math.round(best.score * 100)}% match)`);
 
+    const leaid = extractLeaid(best.row);
     if (!leaid) {
-      notes.push(`EducationData directory row missing LEAID for matched district`);
-      return {
-        districtName,
-        perPupilSpendUsd: null,
-        confidence: 'MEDIUM',
-        notes,
-      };
+      notes.push(`EducationData: matched district missing LEAID-like id`);
+      notes.push(`EducationData: matched keys=${Object.keys(best.row || {}).slice(0, 25).join(',')}`);
+      return { districtName, perPupilSpendUsd: null, confidence: 'MEDIUM', notes };
     }
 
-    // Finance lookup
-    const finUrl = `${EDU_BASE}/schools/ccd/finance/${YEAR}/?leaid=${encodeURIComponent(String(leaid))}&per_page=5`;
-    const fin = await fetchJsonWithTimeout(finUrl, 7000);
-    if (!fin.ok) throw new Error(`EducationData finance HTTP ${fin.status}`);
+    // Try multiple finance endpoints (API structure can vary)
+    const finUrls = [
+      `${EDU_BASE}/schools/ccd/finance/${YEAR}/?leaid=${encodeURIComponent(leaid)}&per_page=5`,
+      `${EDU_BASE}/schools/ccd/district_finance/${YEAR}/?leaid=${encodeURIComponent(leaid)}&per_page=5`,
+    ];
 
-    const finRow: any = (fin.json?.results ?? fin.json ?? [])[0] ?? null;
+    let finRows: any[] = [];
+    let finUsed: string | null = null;
+
+    for (const u of finUrls) {
+      const fin = await fetchJsonWithTimeout(u, 10000);
+      if (!fin.ok) continue;
+      const r = firstArrayRows(fin.json);
+      if (r.length) {
+        finRows = r;
+        finUsed = u;
+        break;
+      }
+    }
+
+    if (!finRows.length) {
+      notes.push(`EducationData: no finance rows for LEAID=${leaid} year=${YEAR}`);
+      return { districtName, perPupilSpendUsd: null, confidence: 'MEDIUM', notes };
+    }
+
+    const finRow: any = finRows[0] ?? null;
     if (!finRow) {
-      notes.push(`No finance row found for LEAID=${leaid}`);
-      return {
-        districtName,
-        perPupilSpendUsd: null,
-        confidence: 'MEDIUM',
-        notes,
-      };
+      notes.push(`EducationData: finance payload empty for LEAID=${leaid}`);
+      return { districtName, perPupilSpendUsd: null, confidence: 'MEDIUM', notes };
     }
 
-    // Robust per-pupil extraction (field names can vary)
-    const ppeRaw =
-      finRow?.per_pupil_expenditure ??
-      finRow?.pp_expenditure ??
-      finRow?.ppe ??
-      finRow?.totelep;
+    // Capture keys (very helpful during rollout)
+    notes.push(`EducationData finance keys sample=${Object.keys(finRow || {}).slice(0, 25).join(',')}`);
+
+    // Broaden per-pupil extraction
+    const ppeCandidates = [
+      finRow?.per_pupil_expenditure,
+      finRow?.per_pupil_exp,
+      finRow?.pp_expenditure,
+      finRow?.ppe,
+      finRow?.totelep,
+      finRow?.exppp,
+      finRow?.total_exp_per_pupil,
+    ];
 
     let perPupilSpendUsd: number | null = null;
 
-    if (Number.isFinite(Number(ppeRaw))) {
-      perPupilSpendUsd = Number(ppeRaw);
-    } else {
-      const totalExp =
-        finRow?.total_expenditure ??
-        finRow?.totelexp ??
-        finRow?.expenditure_total;
+    for (const v of ppeCandidates) {
+      if (Number.isFinite(Number(v))) {
+        perPupilSpendUsd = Number(v);
+        break;
+      }
+    }
 
-      const membership =
-        finRow?.membership ??
-        finRow?.student_membership ??
-        finRow?.enrollment;
+    // If not available, compute from totals
+    if (!perPupilSpendUsd) {
+      const totalExpCandidates = [
+        finRow?.total_expenditure,
+        finRow?.totelexp,
+        finRow?.expenditure_total,
+        finRow?.total_exp,
+      ];
+      const membershipCandidates = [
+        finRow?.membership,
+        finRow?.student_membership,
+        finRow?.enrollment,
+        finRow?.students,
+      ];
 
-      if (
-        Number.isFinite(Number(totalExp)) &&
-        Number.isFinite(Number(membership)) &&
-        Number(membership) > 0
-      ) {
+      const totalExp = totalExpCandidates.find((v) => Number.isFinite(Number(v)));
+      const membership = membershipCandidates.find(
+        (v) => Number.isFinite(Number(v)) && Number(v) > 0
+      );
+
+      if (totalExp !== undefined && membership !== undefined) {
         perPupilSpendUsd = Number(totalExp) / Number(membership);
       }
     }
 
     if (!perPupilSpendUsd || !Number.isFinite(perPupilSpendUsd)) {
-      notes.push(`Finance row present but per-pupil spend not derivable for LEAID=${leaid}`);
-      return {
-        districtName,
-        perPupilSpendUsd: null,
-        confidence: 'MEDIUM',
-        notes,
-      };
+      notes.push(`EducationData: finance row found but per-pupil not derivable (LEAID=${leaid})`);
+      if (dirUsed) notes.push(`EducationData dirEndpoint=${dirUsed}`);
+      if (finUsed) notes.push(`EducationData finEndpoint=${finUsed}`);
+      return { districtName, perPupilSpendUsd: null, confidence: 'MEDIUM', notes };
     }
 
     notes.push(`Per-pupil spend resolved: ~$${moneyRound(perPupilSpendUsd).toLocaleString()}`);
+    if (dirUsed) notes.push(`EducationData dirEndpoint=${dirUsed}`);
+    if (finUsed) notes.push(`EducationData finEndpoint=${finUsed}`);
 
     return {
       districtName,
