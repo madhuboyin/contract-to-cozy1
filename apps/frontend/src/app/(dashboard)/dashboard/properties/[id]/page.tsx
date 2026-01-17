@@ -731,7 +731,7 @@ export default function PropertyDetailPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Link href={`/dashboard/properties/${property.id}/tools/property-tax`} passHref>
+          <Link href={`/dashboard/properties/${property.id}/tax/property-tax`} passHref>
             <Button variant="outline" size="sm" className="gap-2">
               <DollarSign className="h-4 w-4" />
               Property Tax
