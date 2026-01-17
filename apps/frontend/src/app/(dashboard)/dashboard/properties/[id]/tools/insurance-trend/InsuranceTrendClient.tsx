@@ -7,6 +7,7 @@ import { SectionHeader } from '@/app/(dashboard)/dashboard/components/SectionHea
 
 import MultiLineChart from './MultiLineChart';
 import { getInsuranceTrend, InsuranceCostTrendDTO } from './insuranceTrendApi';
+import HomeToolsRail from '../../components/HomeToolsRail';
 
 function money(n: number | null | undefined, currency = 'USD') {
   if (n === null || n === undefined) return '—';
@@ -103,6 +104,9 @@ export default function InsuranceTrendClient() {
         title="Insurance Cost Trend Analyzer"
         description="Insurance premium growth by ZIP, comparison vs state baseline, and climate/claims pressure drivers."
       />
+      <div className="mt-4">
+        <HomeToolsRail propertyId={propertyId} />
+      </div>
 
       <div className="rounded-2xl border border-black/10 bg-white p-4">
         <div className="flex items-start justify-between gap-4">

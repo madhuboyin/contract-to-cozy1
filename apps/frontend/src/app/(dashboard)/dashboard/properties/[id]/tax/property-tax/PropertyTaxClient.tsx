@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { SectionHeader } from '@/app/(dashboard)/dashboard/components/SectionHeader';
 
 import { getPropertyTaxEstimate, PropertyTaxEstimateDTO } from './taxApi';
-
+import HomeToolsRail from '../../components/HomeToolsRail';
 function money(n: number | null | undefined, currency = 'USD') {
   if (n === null || n === undefined) return '—';
   return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(n);
@@ -213,6 +213,10 @@ export default function PropertyTaxClient() {
         title="Property Tax Intelligence"
         description="Estimated property taxes, trend, projection, and what drives changes."
       />
+
+      <div className="mt-4">
+        <HomeToolsRail propertyId={propertyId} />
+      </div>
 
       {/* Controls */}
       <div className="rounded-2xl border border-black/10 bg-white p-4">

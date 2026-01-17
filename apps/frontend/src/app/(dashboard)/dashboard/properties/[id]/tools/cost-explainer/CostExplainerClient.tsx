@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { SectionHeader } from '@/app/(dashboard)/dashboard/components/SectionHeader';
 import { getCostExplainer, CostExplainerDTO } from './costExplainerApi';
 import MultiLineChart from '../insurance-trend/MultiLineChart';
-
+import HomeToolsRail from '../../components/HomeToolsRail';
 function money(n: number | null | undefined, currency = 'USD') {
   if (n === null || n === undefined) return '—';
   return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(n);
@@ -102,7 +102,9 @@ export default function CostExplainerClient() {
         title="Why Is My Home Cost Increasing?"
         description="Plain-English breakdown of what’s driving higher taxes, insurance, and maintenance — tied to your state + ZIP."
       />
-
+      <div className="mt-4">
+        <HomeToolsRail propertyId={propertyId} />
+      </div>
       {/* Top block */}
       <div className="rounded-2xl border border-black/10 bg-white p-4">
         <div className="flex items-start justify-between gap-4">

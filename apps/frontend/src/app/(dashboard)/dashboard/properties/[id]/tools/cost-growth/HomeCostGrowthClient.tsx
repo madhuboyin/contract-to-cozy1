@@ -7,6 +7,7 @@ import { SectionHeader } from '@/app/(dashboard)/dashboard/components/SectionHea
 
 import MultiLineChart from './MultiLineChart';
 import { getHomeCostGrowth, HomeCostGrowthDTO } from './costGrowthApi';
+import HomeToolsRail from '../../components/HomeToolsRail';
 
 function money(n: number | null | undefined, currency = 'USD') {
   if (n === null || n === undefined) return '—';
@@ -110,6 +111,9 @@ export default function HomeCostGrowthClient() {
         title="Home Cost Growth Analyzer"
         description="Compare appreciation vs ownership expense growth to understand your net cost trend over time."
       />
+      <div className="mt-3">
+        <HomeToolsRail propertyId={propertyId} />
+      </div>
 
       {/* Main Story Card */}
       <div className="rounded-2xl border border-black/10 bg-white p-4">

@@ -39,6 +39,8 @@ import IncidentsClient from "./incidents/IncidentsClient";
 
 import RoomsHubClient from "./rooms/RoomsHubClient";
 import PropertyTaxClient from "./tax/property-tax/PropertyTaxClient";
+import HomeToolsRail from './components/HomeToolsRail';
+
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
 
@@ -707,13 +709,20 @@ export default function PropertyDetailPage() {
 
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-2">
-        <PageHeader className="pt-2 pb-2 gap-1 flex-1">
-          <PageHeaderHeading>{property.name || "My Property"}</PageHeaderHeading>
-          <PageHeaderDescription>
-            {property.address}, {property.city}
-          </PageHeaderDescription>
-        </PageHeader>
+        {/* Header row */}
+        <div className="flex items-start justify-between gap-4 mb-2">
+          <PageHeader className="pt-2 pb-2 gap-1 flex-1">
+            <PageHeaderHeading>{property.name || "My Property"}</PageHeaderHeading>
+            <PageHeaderDescription>
+              {property.address}, {property.city}
+            </PageHeaderDescription>
+          </PageHeader>
+        </div>
 
+        {/* Home tools rail — under header */}
+        <div className="mt-1 mb-3">
+          <HomeToolsRail propertyId={property.id} />
+        </div>
         <div className="flex-shrink-0 pt-2">
           <Link href={`/dashboard/properties/${property.id}/edit`} passHref>
             <Button variant="outline" size="sm" className="gap-2">
