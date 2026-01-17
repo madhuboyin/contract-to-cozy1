@@ -13,6 +13,7 @@ export type CostExplainerDTO = {
     state: string;
     zipCode: string;
   };
+
   snapshot: {
     annualTaxNow: number;
     annualInsuranceNow: number;
@@ -25,18 +26,30 @@ export type CostExplainerDTO = {
       total: number;
     };
   };
+
+  // ✅ ADD THIS
+  history: Array<{
+    year: number;
+    annualTax: number;
+    annualInsurance: number;
+    annualMaintenance: number;
+    annualTotal: number;
+  }>;
+
   explanations: Array<{
     category: 'TAXES' | 'INSURANCE' | 'MAINTENANCE' | 'TOTAL';
     headline: string;
     bullets: string[];
     confidence: 'HIGH' | 'MEDIUM' | 'LOW';
   }>;
+
   meta: {
     generatedAt: string;
     notes: string[];
     dataSources: string[];
   };
 };
+
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -108,7 +121,7 @@ export class CostExplainerService {
     const homeValueNow =
       (tax?.current as any)?.homeValueNow ??
       clamp((property.propertySize || 1800) * (state === 'NJ' ? 310 : state === 'CA' ? 420 : 260), 150_000, 2_500_000);
-
+      
     // 4) Maintenance heuristic
     const maintNow = estimateMaintenanceNow(homeValueNow, state);
     const inflation = 0.035;
@@ -129,7 +142,43 @@ export class CostExplainerService {
     const insConfidence: 'HIGH' | 'MEDIUM' | 'LOW' =
     ins?.meta?.confidence ?? 'LOW';
   
-
+    const nowYear = new Date().getFullYear();
+    
+    // Align years to available history
+    const n = years;
+    
+    // Build aligned year list ending at current year (n points)
+    const yearsList = Array.from({ length: n }, (_, i) => nowYear - (n - 1 - i));
+    
+    // Taxes: if taxHist has matching years use them; else backfill flat
+    const taxByYear = new Map<number, number>(
+      (tax?.history || []).map((h: any) => [h.year, h.annualTax])
+    );
+    
+    const insByYear = new Map<number, number>(
+      (ins?.history || []).map((h) => [h.year, h.annualPremium])
+    );
+    
+    // Maintenance: estimate backwards using inflation (maintenanceNow is current year)
+    function maintenanceForYear(targetYear: number) {
+      const delta = nowYear - targetYear;
+      return maintNow / Math.pow(1 + inflation, delta);
+    }
+    
+    const history = yearsList.map((y) => {
+      const annualTax = taxByYear.get(y) ?? taxNow; // fallback
+      const annualInsurance = insByYear.get(y) ?? insNow; // fallback
+      const annualMaintenance = maintenanceForYear(y);
+    
+      return {
+        year: y,
+        annualTax,
+        annualInsurance,
+        annualMaintenance,
+        annualTotal: annualTax + annualInsurance + annualMaintenance,
+      };
+    });
+    
     const explanations: CostExplainerDTO['explanations'] = [
       {
         category: 'TAXES',
@@ -177,10 +226,12 @@ export class CostExplainerService {
         ],
         confidence: 'MEDIUM',
       },
+      
     ];
 
     return {
       input: { propertyId, years, addressLabel, state, zipCode: zip },
+    
       snapshot: {
         annualTaxNow: taxNow,
         annualInsuranceNow: insNow,
@@ -193,7 +244,12 @@ export class CostExplainerService {
           total: totalDelta,
         },
       },
+    
+      // ✅ MOVE HERE (top-level)
+      history,
+    
       explanations,
+    
       meta: {
         generatedAt: new Date().toISOString(),
         dataSources: ['PropertyTaxService (modeled)', 'InsuranceTrend (modeled)', 'Maintenance heuristic'],
@@ -202,6 +258,6 @@ export class CostExplainerService {
           'Maintenance is a heuristic (~1% of value/year) adjusted lightly by state and inflation.',
         ],
       },
-    };
+    };    
   }
 }

@@ -1,10 +1,11 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/cost-explainer/CostExplainerClient.tsx
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { SectionHeader } from '@/app/(dashboard)/dashboard/components/SectionHeader';
 import { getCostExplainer, CostExplainerDTO } from './costExplainerApi';
+import MultiLineChart from '../insurance-trend/MultiLineChart';
 
 function money(n: number | null | undefined, currency = 'USD') {
   if (n === null || n === undefined) return '—';
@@ -51,6 +52,50 @@ export default function CostExplainerClient() {
     load(years);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
+
+  // ✅ Trend chart model (mirrors InsuranceTrendClient sampling)
+  const chartModel = useMemo(() => {
+    const hist = (data as any)?.history ?? [];
+
+    if (!hist.length) {
+      return {
+        x: ['—', '—'],
+        series: [
+          { key: 'total', label: 'Total', values: [0, 0], opacity: 0.9, strokeWidth: 2.75 },
+          { key: 'tax', label: 'Taxes', values: [0, 0], opacity: 0.55, dash: '6 5' },
+          { key: 'ins', label: 'Insurance', values: [0, 0], opacity: 0.45, dash: '2 4' },
+          { key: 'maint', label: 'Maintenance', values: [0, 0], opacity: 0.4, dash: '1 5' },
+        ],
+      };
+    }
+
+    // Normalize last N, then sample for 10y
+    if (years === 5) {
+      const s = hist.slice(-5);
+      return {
+        x: s.map((h: any) => String(h.year)),
+        series: [
+          { key: 'total', label: 'Total', values: s.map((h: any) => h.annualTotal), opacity: 0.9, strokeWidth: 2.75 },
+          { key: 'tax', label: 'Taxes', values: s.map((h: any) => h.annualTax), opacity: 0.55, dash: '6 5' },
+          { key: 'ins', label: 'Insurance', values: s.map((h: any) => h.annualInsurance), opacity: 0.45, dash: '2 4' },
+          { key: 'maint', label: 'Maintenance', values: s.map((h: any) => h.annualMaintenance), opacity: 0.4, dash: '1 5' },
+        ],
+      };
+    }
+
+    const ten = hist.slice(-10);
+    const sampled = [0, 2, 4, 6, 8].filter((i) => i < ten.length).map((i) => ten[i]);
+
+    return {
+      x: sampled.map((h: any) => String(h.year)),
+      series: [
+        { key: 'total', label: 'Total', values: sampled.map((h: any) => h.annualTotal), opacity: 0.9, strokeWidth: 2.75 },
+        { key: 'tax', label: 'Taxes', values: sampled.map((h: any) => h.annualTax), opacity: 0.55, dash: '6 5' },
+        { key: 'ins', label: 'Insurance', values: sampled.map((h: any) => h.annualInsurance), opacity: 0.45, dash: '2 4' },
+        { key: 'maint', label: 'Maintenance', values: sampled.map((h: any) => h.annualMaintenance), opacity: 0.4, dash: '1 5' },
+      ],
+    };
+  }, [data, years]);
 
   return (
     <div className="p-6 space-y-4">
@@ -124,6 +169,14 @@ export default function CostExplainerClient() {
             <div className="text-sm font-medium">{money(data?.snapshot?.deltaVsPriorYear?.maintenance)}</div>
           </div>
         </div>
+
+        {/* ✅ Trend chart */}
+        <div className="mt-4 text-black/70">
+          <MultiLineChart xLabels={chartModel.x} series={chartModel.series} ariaLabel="Home cost trend chart" />
+          <div className="mt-2 text-[11px] text-black/50">
+            Total is emphasized; Taxes/Insurance/Maintenance are shown as comparison lines. 10y view is sampled for readability.
+          </div>
+        </div>
       </div>
 
       {/* Explanations */}
@@ -143,7 +196,9 @@ export default function CostExplainerClient() {
               </div>
               <div className="mt-2 space-y-1">
                 {(e.bullets || []).map((b, i) => (
-                  <div key={i} className="text-xs text-black/70">• {b}</div>
+                  <div key={i} className="text-xs text-black/70">
+                    • {b}
+                  </div>
                 ))}
               </div>
             </div>
@@ -154,12 +209,12 @@ export default function CostExplainerClient() {
           <div className="text-xs opacity-70">Assumptions (Phase 1)</div>
           <div className="mt-2 space-y-1">
             {(data?.meta?.notes || []).map((n, i) => (
-              <div key={i} className="text-xs text-black/70">• {n}</div>
+              <div key={i} className="text-xs text-black/70">
+                • {n}
+              </div>
             ))}
           </div>
-          <div className="text-xs text-black/60 mt-2">
-            {loading ? 'Refreshing…' : data?.meta?.generatedAt ? 'Updated just now' : ''}
-          </div>
+          <div className="text-xs text-black/60 mt-2">{loading ? 'Refreshing…' : data?.meta?.generatedAt ? 'Updated just now' : ''}</div>
         </div>
       </div>
     </div>

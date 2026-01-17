@@ -1,3 +1,4 @@
+// apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/cost-explainer/costExplainerApi.ts
 import { api } from '@/lib/api/client';
 
 export type CostExplainerDTO = {
@@ -16,6 +17,13 @@ export type CostExplainerDTO = {
     confidence: 'HIGH' | 'MEDIUM' | 'LOW';
   }>;
   meta: { generatedAt: string; notes: string[]; dataSources: string[] };
+  history: Array<{
+    year: number;
+    annualTax: number;
+    annualInsurance: number;
+    annualMaintenance: number;
+    annualTotal: number;
+  }>;
 };
 
 export async function getCostExplainer(propertyId: string, opts: { years: 5 | 10 }) {
