@@ -35,7 +35,7 @@ const HOME_TOOLS: ToolDef[] = [
   {
     key: 'property-tax',
     label: 'Property Tax',
-    href: (id) => `/dashboard/properties/${id}/tax/property-tax`,
+    href: (id) => `/dashboard/properties/${id}/tools/property-tax`,
     Icon: DollarSign,
     tooltip: 'Estimate tax trend and reassessment drivers for your state/ZIP.',
   },
