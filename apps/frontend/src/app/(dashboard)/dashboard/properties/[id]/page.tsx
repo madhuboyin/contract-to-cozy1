@@ -724,32 +724,41 @@ export default function PropertyDetailPage() {
         </div>
       </div>
 
-      {/* Tools quick link row (placed under header, above banner) */}
-      <div className="mb-2">
-        <Link href={`/dashboard/properties/${property.id}/tools/cost-growth`} passHref>
-          <Button variant="outline" size="sm" className="gap-2">
-            <TrendingUp className="h-4 w-4" />
-            Cost Growth
-          </Button>
-        </Link>
-      </div>
+      {/* Home tools rail (under header, above banner) */}
+      <div className="mb-3">
+        <div className="text-xs uppercase tracking-wide text-black/60 mb-1">
+          Home Tools
+        </div>
 
-      <div className="mb-2 flex flex-wrap gap-2">
-        <Link href={`/dashboard/properties/${property.id}/tools/insurance-trend`} passHref>
-          <Button variant="outline" size="sm" className="gap-2">
-            <Shield className="h-4 w-4" />
-            Insurance Trend
-          </Button>
-        </Link>
-      </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href={`/dashboard/properties/${property.id}/tools/property-tax`} passHref>
+            <Button variant="outline" size="sm" className="gap-2">
+              <DollarSign className="h-4 w-4" />
+              Property Tax
+            </Button>
+          </Link>
 
-      <div className="mb-2 flex flex-wrap gap-2">
-        <Link href={`/dashboard/properties/${property.id}/tools/cost-explainer`} passHref>
-          <Button variant="outline" size="sm" className="gap-2">
-            <span className="text-base leading-none">🧘</span>
-            Cost Explainer
-          </Button>
-        </Link>
+          <Link href={`/dashboard/properties/${property.id}/tools/cost-growth`} passHref>
+            <Button variant="outline" size="sm" className="gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Cost Growth
+            </Button>
+          </Link>
+
+          <Link href={`/dashboard/properties/${property.id}/tools/insurance-trend`} passHref>
+            <Button variant="outline" size="sm" className="gap-2">
+              <Shield className="h-4 w-4" />
+              Insurance Trend
+            </Button>
+          </Link>
+
+          <Link href={`/dashboard/properties/${property.id}/tools/cost-explainer`} passHref>
+            <Button variant="outline" size="sm" className="gap-2">
+              <span className="text-base leading-none">🧘</span>
+              Cost Explainer
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Selling Prep Banner */}
@@ -804,12 +813,6 @@ export default function PropertyDetailPage() {
               <span className="sm:hidden">Finance</span>
             </TabsTrigger>
 
-            <TabsTrigger value="property-tax" className="flex items-center gap-1 sm:gap-2">
-              <DollarSign className="h-4 w-4" />
-              <span className="hidden sm:inline">Property Tax</span>
-              <span className="sm:hidden">Tax</span>
-            </TabsTrigger>
-
             <TabsTrigger value="documents" className="flex items-center gap-1 sm:gap-2">
               <FileText className="h-4 w-4" />
               <span className="hidden sm:inline">Documents</span>
@@ -854,10 +857,6 @@ export default function PropertyDetailPage() {
 
         <TabsContent value="financial-efficiency" className="mt-4">
           <FinancialEfficiencyTab propertyId={property.id} />
-        </TabsContent>
-
-        <TabsContent value="property-tax" className="mt-4">
-          <PropertyTaxClient />
         </TabsContent>
 
         <TabsContent value="documents" className="mt-4">
