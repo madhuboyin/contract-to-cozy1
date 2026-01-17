@@ -60,6 +60,14 @@ const HOME_TOOLS: ToolDef[] = [
     Icon: Info,
     tooltip: 'Plain-English reasons why taxes/insurance/maintenance are rising.',
   },
+  {
+    key: 'true-cost',
+    label: 'True Cost',
+    href: (id) => `/dashboard/properties/${id}/tools/true-cost`,
+    Icon: /* pick */ Info, // or Calculator icon if you use lucide Calculator
+    tooltip: '5-year total ownership cost projection: tax + insurance + maintenance + utilities.',
+  },
+  
 ];
 
 function isActivePath(pathname: string, href: string) {
