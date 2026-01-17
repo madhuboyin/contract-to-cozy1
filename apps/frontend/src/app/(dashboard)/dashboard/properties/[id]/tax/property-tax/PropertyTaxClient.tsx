@@ -16,30 +16,97 @@ function pct(n: number) {
   return `${(n * 100).toFixed(2)}%`;
 }
 
-function MiniLineChart({ points }: { points: number[] }) {
-  const safe = points.length >= 2 ? points : [0, 0];
-  const w = 220;
-  const h = 44;
-  const pad = 4;
+function MiniLineChart({
+  points,
+}: {
+  points: { xLabel: string; y: number }[];
+}) {
+  const w = 520;   // bigger for visibility
+  const h = 120;
+  const padL = 44;
+  const padR = 16;
+  const padT = 10;
+  const padB = 26;
 
-  const min = Math.min(...safe);
-  const max = Math.max(...safe);
-  const span = Math.max(1e-6, max - min);
+  const safe = points.length >= 2 ? points : [
+    { xLabel: '—', y: 0 },
+    { xLabel: '—', y: 0 },
+  ];
+
+  const maxY = Math.max(...safe.map((p) => p.y), 1);
+  const minY = 0; // IMPORTANT: fixed baseline makes 5y vs 10y visually different
+  const spanY = Math.max(1e-6, maxY - minY);
+
+  const xFor = (i: number) =>
+    padL + (i * (w - padL - padR)) / Math.max(1, safe.length - 1);
+
+  const yFor = (v: number) =>
+    padT + (h - padT - padB) * (1 - (v - minY) / spanY);
 
   const path = safe
-    .map((v, i) => {
-      const x = pad + (i * (w - pad * 2)) / Math.max(1, safe.length - 1);
-      const y = pad + (h - pad * 2) * (1 - (v - min) / span);
-      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${xFor(i).toFixed(2)} ${yFor(p.y).toFixed(2)}`)
     .join(' ');
 
+  // ticks
+  const yTop = maxY;
+  const yMid = maxY * 0.5;
+
+  // show 3 x ticks: first, middle, last
+  const midIdx = Math.floor((safe.length - 1) / 2);
+  const xTicks = [
+    { idx: 0, label: safe[0].xLabel },
+    { idx: midIdx, label: safe[midIdx].xLabel },
+    { idx: safe.length - 1, label: safe[safe.length - 1].xLabel },
+  ];
+
+  const fmtMoneyShort = (v: number) => {
+    if (v >= 1000) return `$${Math.round(v / 1000)}k`;
+    return `$${Math.round(v)}`;
+  };
+
   return (
-    <svg width={w} height={h} className="opacity-90">
-      <path d={path} fill="none" stroke="currentColor" strokeWidth="2" />
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      className="w-full max-w-[640px] h-auto text-black/70"
+      role="img"
+      aria-label="Property tax trend chart"
+    >
+      {/* axes */}
+      <line x1={padL} y1={h - padB} x2={w - padR} y2={h - padB} stroke="currentColor" strokeOpacity="0.2" />
+      <line x1={padL} y1={padT} x2={padL} y2={h - padB} stroke="currentColor" strokeOpacity="0.2" />
+
+      {/* y ticks */}
+      {[yTop, yMid].map((v, i) => {
+        const y = yFor(v);
+        return (
+          <g key={i}>
+            <line x1={padL} y1={y} x2={w - padR} y2={y} stroke="currentColor" strokeOpacity="0.08" />
+            <text x={padL - 8} y={y + 4} fontSize="10" textAnchor="end" fill="currentColor" opacity="0.55">
+              {fmtMoneyShort(v)}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* line */}
+      <path d={path} fill="none" stroke="currentColor" strokeWidth="2.5" />
+
+      {/* x ticks */}
+      {xTicks.map((t, i) => {
+        const x = xFor(t.idx);
+        return (
+          <g key={i}>
+            <line x1={x} y1={h - padB} x2={x} y2={h - padB + 4} stroke="currentColor" strokeOpacity="0.25" />
+            <text x={x} y={h - 8} fontSize="10" textAnchor="middle" fill="currentColor" opacity="0.55">
+              {t.label}
+            </text>
+          </g>
+        );
+      })}
     </svg>
   );
 }
+
 
 export default function PropertyTaxClient() {
   const params = useParams<{ id: string }>();
@@ -89,10 +156,12 @@ export default function PropertyTaxClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
 
-  const historyValues = useMemo(() => {
-    const pts = estimate?.history?.map((h) => h.annualTax) ?? [];
-    return pts.length >= 2 ? pts : [0, 0];
+  const historyPoints = useMemo(() => {
+    const hist = estimate?.history ?? [];
+    if (!hist.length) return [];
+    return hist.map((h) => ({ xLabel: String(h.year), y: h.annualTax }));
   }, [estimate]);
+  
 
   const confidenceBadge = (c?: string) => {
     const base = 'text-xs rounded px-2 py-0.5 border border-black/10';
@@ -180,7 +249,7 @@ export default function PropertyTaxClient() {
               Trend (last {estimate?.history?.length || trendYears} yrs)
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <button
                 type="button"
                 onClick={async () => {
@@ -204,14 +273,13 @@ export default function PropertyTaxClient() {
               >
                 10y
               </button>
-
-              <div className="text-xs opacity-70 ml-3 hidden sm:block">Projection included below</div>
+              <div className="text-xs opacity-60 mt-1">Projection shown below</div>
             </div>
           </div>
 
 
           <div className="mt-2 text-black/70">
-            <MiniLineChart points={historyValues} />
+            <MiniLineChart points={historyPoints} />
           </div>
 
           <div className="mt-3 flex flex-wrap gap-2">
