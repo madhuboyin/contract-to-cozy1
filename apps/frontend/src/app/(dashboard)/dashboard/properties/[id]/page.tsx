@@ -743,6 +743,14 @@ export default function PropertyDetailPage() {
         </Link>
       </div>
 
+      <div className="mb-2 flex flex-wrap gap-2">
+        <Link href={`/dashboard/properties/${property.id}/tools/cost-explainer`} passHref>
+          <Button variant="outline" size="sm" className="gap-2">
+            <span className="text-base leading-none">🧘</span>
+            Cost Explainer
+          </Button>
+        </Link>
+      </div>
 
       {/* Selling Prep Banner */}
       <SellingPrepBanner propertyId={property.id} />
