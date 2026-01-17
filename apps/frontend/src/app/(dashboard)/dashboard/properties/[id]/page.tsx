@@ -40,6 +40,8 @@ import IncidentsClient from "./incidents/IncidentsClient";
 // ✅ NEW: Rooms tab content
 import RoomsHubClient from "./rooms/RoomsHubClient";
 import PropertyTaxClient from "./tax/property-tax/PropertyTaxClient";
+import HomeCostGrowthClient from "./tools/cost-growth/HomeCostGrowthClient";
+
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
 
@@ -643,7 +645,8 @@ export default function PropertyDetailPage() {
         'rooms',
         'incidents',
         'risk-protection',
-        'financial-efficiency',
+        'financial-efficiency', 
+        'cost-growth',
         'documents',
         'reports',
         'claims',
@@ -781,6 +784,12 @@ export default function PropertyDetailPage() {
               <span className="sm:hidden">Tax</span>
             </TabsTrigger>
 
+            <TabsTrigger value="cost-growth" className="flex items-center gap-1 sm:gap-2">
+              <TrendingUp className="h-4 w-4" />
+              <span className="hidden sm:inline">Cost Growth</span>
+              <span className="sm:hidden">Growth</span>
+            </TabsTrigger>
+
             <TabsTrigger value="documents" className="flex items-center gap-1 sm:gap-2">
               <FileText className="h-4 w-4" />
               <span className="hidden sm:inline">Documents</span>
@@ -829,6 +838,10 @@ export default function PropertyDetailPage() {
 
         <TabsContent value="property-tax" className="mt-4">
           <PropertyTaxClient />
+        </TabsContent>
+
+        <TabsContent value="cost-growth" className="mt-4">
+          <HomeCostGrowthClient />
         </TabsContent>
 
         <TabsContent value="documents" className="mt-4">
