@@ -5,7 +5,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, Shield, DollarSign, Info, PanelBottomOpen } from 'lucide-react';
+import { TrendingUp, Shield, DollarSign, Info, PanelBottomOpen ,Calculator} from 'lucide-react';
 
 // shadcn/ui (already used elsewhere in your app)
 import {
@@ -64,7 +64,7 @@ const HOME_TOOLS: ToolDef[] = [
     key: 'true-cost',
     label: 'True Cost',
     href: (id) => `/dashboard/properties/${id}/tools/true-cost`,
-    Icon: /* pick */ Info, // or Calculator icon if you use lucide Calculator
+    Icon: Calculator,
     tooltip: '5-year total ownership cost projection: tax + insurance + maintenance + utilities.',
   },
   
