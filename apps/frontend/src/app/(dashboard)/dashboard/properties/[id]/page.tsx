@@ -38,7 +38,6 @@ import { Badge } from "@/components/ui/badge";
 import IncidentsClient from "./incidents/IncidentsClient";
 
 import RoomsHubClient from "./rooms/RoomsHubClient";
-import PropertyTaxClient from "./tax/property-tax/PropertyTaxClient";
 import HomeToolsRail from './components/HomeToolsRail';
 
 
