@@ -1,6 +1,6 @@
 // apps/backend/src/services/propertyTax.service.ts
 import { prisma } from '../lib/prisma';
-import { type SchoolInsights } from './tax/schoolInsights.provider';
+import { getSchoolInsights, type SchoolInsights } from './tax/schoolInsights.provider';
 
 export type PropertyTaxConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
 type ImpactLevel = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -278,32 +278,6 @@ function typicalEffectiveRateBand(state: string, rate: number): { band: ImpactLe
   if (delta < -0.003) return { band: 'LOW', msg: 'lower than typical for your state' };
   return { band: 'MEDIUM', msg: 'around typical for your state' };
 }
-function schoolFundingSignal(state: string): { impact: 'LOW' | 'MEDIUM' | 'HIGH'; note: string } {
-  // Heuristic: states where property-tax-funded school systems are a major narrative/driver.
-  // This is intentionally conservative; later you can replace with district finance data.
-  const high = new Set(['NJ', 'NY', 'TX', 'IL', 'CT', 'NH', 'MA', 'PA']);
-  const medium = new Set(['CA', 'FL', 'VA', 'MD', 'WA', 'CO', 'NC', 'GA', 'AZ']);
-
-  if (high.has(state)) {
-    return {
-      impact: 'HIGH',
-      note:
-        'Public schools are often heavily funded through local property taxes, and school budgets can meaningfully influence total tax rates.',
-    };
-  }
-  if (medium.has(state)) {
-    return {
-      impact: 'MEDIUM',
-      note:
-        'A meaningful share of local property taxes often supports public schools, which can influence overall tax rates.',
-    };
-  }
-  return {
-    impact: 'MEDIUM',
-    note:
-      'Property taxes can support local services including public schools; the school funding share varies by area.',
-  };
-}
 
 export class PropertyTaxService {
   async estimate(propertyId: string, opts: PropertyTaxEstimateInput = {}): Promise<PropertyTaxEstimateDTO> {
@@ -368,14 +342,34 @@ export class PropertyTaxService {
     const history = buildHistory(annualTax, state, historyYears);
     const projection = buildProjections(annualTax, state);
     const comparison = buildComparison(annualTax, state);
-    const drivers = buildDriversLocalized({
-      state,
-      zipCode: property.zipCode,
-      taxRate,
-      assessedValue,
-    });
-    
+    // ✅ Real-data school district + finance signals
+    const street = String(property.address || '').split(',')[0].trim();
 
+    const schoolInsights = await getSchoolInsights({
+      address: {
+        street,
+        city: String(property.city || '').trim(),
+        state,
+        zipCode: String(property.zipCode || '').trim(),
+      },
+    });
+
+    dataSources.push(
+      'US Census Geocoder (school district geographies)',
+      'Urban Institute Education Data API (CCD finance signals)'
+    );
+    notes.push(...(schoolInsights.notes || []));
+
+    const drivers = buildDriversLocalized(
+      {
+        state,
+        zipCode: property.zipCode,
+        taxRate,
+        assessedValue,
+      },
+      schoolInsights
+    );
+      
     return {
       input: {
         propertyId,
