@@ -80,25 +80,25 @@ function ToolButton({
   tooltip: string;
   active: boolean;
 }) {
-  const base =
-    'gap-2 rounded-full border border-black/10 bg-white hover:bg-black/[0.03]';
-  const activeCls =
-    'bg-black/[0.06] border-black/20 text-black font-medium';
+  const base = 'gap-2 rounded-full border border-black/10 bg-white hover:bg-black/[0.03]';
+  const activeCls = 'bg-black/[0.06] border-black/20 text-black font-medium';
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Link href={href}>
-          <Button
-            variant="outline"
-            size="sm"
-            className={`${base} ${active ? activeCls : ''}`}
-          >
+        <Button
+          asChild
+          variant="outline"
+          size="sm"
+          className={`${base} ${active ? activeCls : ''}`}
+        >
+          <Link href={href}>
             <Icon className="h-4 w-4" />
             {label}
-          </Button>
-        </Link>
+          </Link>
+        </Button>
       </TooltipTrigger>
+
       <TooltipContent side="bottom" align="center">
         <div className="max-w-[260px] text-xs leading-5">{tooltip}</div>
       </TooltipContent>
