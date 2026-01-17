@@ -1,5 +1,6 @@
 // apps/backend/src/services/propertyTax.service.ts
 import { prisma } from '../lib/prisma';
+import { type SchoolInsights } from './tax/schoolInsights.provider';
 
 export type PropertyTaxConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
 type ImpactLevel = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -184,7 +185,10 @@ function buildComparison(currentAnnualTax: number, state: string) {
 
 type Driver = { factor: string; impact: ImpactLevel; explanation: string };
 
-function buildDriversLocalized(args: { state: string; zipCode: string; taxRate: number; assessedValue: number }): Driver[] {
+function buildDriversLocalized(
+  args: { state: string; zipCode: string; taxRate: number; assessedValue: number },
+  school?: SchoolInsights | null
+): Driver[] {
   const { state, zipCode, taxRate, assessedValue } = args;
 
   const zp = zipPrefix(zipCode);
@@ -215,7 +219,24 @@ function buildDriversLocalized(args: { state: string; zipCode: string; taxRate: 
           : `Your region (ZIP prefix ${zp}) typically follows moderate reassessment-driven changes compared to high-growth metros.`,
     },
   ];
-  
+
+  // ✅ Real-data school signal card (district + per-pupil + confidence)
+  const district = school?.districtName || null;
+  const ppe = school?.perPupilSpendUsd ?? null;
+  const conf = school?.confidence ?? 'LOW';
+
+  const impact: ImpactLevel = conf === 'HIGH' ? 'HIGH' : conf === 'MEDIUM' ? 'MEDIUM' : 'LOW';
+
+  const districtLine = district ? `District: ${district}.` : `District: not resolved.`;
+  const ppeLine = ppe ? `Per-pupil spend (est.): ~$${Math.round(ppe).toLocaleString()}.` : `Per-pupil spend: —.`;
+
+  drivers.splice(1, 0, {
+    factor: `School district signal (${state})`,
+    impact,
+    explanation:
+      `${districtLine} ${ppeLine} Confidence: ${conf}. ` +
+      `School district funding can be a meaningful component of local property tax rates.`,
+  });
 
   if (stateHasHomestead(state)) {
     drivers.push({
@@ -227,29 +248,8 @@ function buildDriversLocalized(args: { state: string; zipCode: string; taxRate: 
     });
   }
 
-  if (state !==  'TX') {
-    const school = schoolFundingSignal(state);
-
-    drivers.splice(1, 0, {
-      factor: `School funding impact (${state})`,
-      impact: school.impact,
-      explanation:
-        `${school.note} ` +
-        `If your area is known for strong school resources, that can correlate with higher local rates compared to nearby ZIP codes.`,
-    });
-  } else {
-    // keep the detailed TX card and insert it instead at index 1
-    drivers.splice(1, 0, {
-      factor: 'School district levies (TX)',
-      impact: 'HIGH',
-      explanation:
-        'In many Texas jurisdictions, school district taxes make up a large portion of the total bill. This can vary significantly by district even within the same city.',
-    });
-  }
-  
   return drivers;
 }
-
 
 function zipPrefix(zip: string) {
   const z = String(zip || '').replace(/\D/g, '');
