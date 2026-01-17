@@ -753,12 +753,15 @@ export default function PropertyDetailPage() {
         </div>
       </div>
 
-      <Link href={`/dashboard/properties/${property.id}/tools/cost-growth`} passHref>
-        <Button variant="outline" size="sm" className="gap-2">
-          <TrendingUp className="h-4 w-4" />
-          Cost Growth
-        </Button>
-      </Link>
+      {/* Tools quick link row (placed under header, above banner) */}
+      <div className="mb-2">
+        <Link href={`/dashboard/properties/${property.id}/tools/cost-growth`} passHref>
+          <Button variant="outline" size="sm" className="gap-2">
+            <TrendingUp className="h-4 w-4" />
+            Cost Growth
+          </Button>
+        </Link>
+      </div>
 
       {/* Selling Prep Banner */}
       <SellingPrepBanner propertyId={property.id} />
@@ -818,12 +821,6 @@ export default function PropertyDetailPage() {
               <span className="sm:hidden">Tax</span>
             </TabsTrigger>
 
-            <TabsTrigger value="cost-growth" className="flex items-center gap-1 sm:gap-2">
-              <TrendingUp className="h-4 w-4" />
-              <span className="hidden sm:inline">Cost Growth</span>
-              <span className="sm:hidden">Growth</span>
-            </TabsTrigger>
-
             <TabsTrigger value="documents" className="flex items-center gap-1 sm:gap-2">
               <FileText className="h-4 w-4" />
               <span className="hidden sm:inline">Documents</span>
@@ -872,10 +869,6 @@ export default function PropertyDetailPage() {
 
         <TabsContent value="property-tax" className="mt-4">
           <PropertyTaxClient />
-        </TabsContent>
-
-        <TabsContent value="cost-growth" className="mt-4">
-          <HomeCostGrowthClient />
         </TabsContent>
 
         <TabsContent value="documents" className="mt-4">
