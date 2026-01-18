@@ -10,24 +10,40 @@ export type SellHoldRentDTO = {
     zipCode: string;
     overrides: Record<string, number | undefined>;
   };
+
   current: {
     homeValueNow: number;
     appreciationRate: number;
     monthlyRentNow: number;
     sellingCostRate: number;
   };
+
   scenarios: {
-    sell: { projectedSalePrice: number; sellingCosts: number; netProceeds: number; notes: string[] };
-    hold: { totalOwnershipCosts: number; appreciationGain: number; net: number; notes: string[] };
+    sell: {
+      projectedSalePrice: number;
+      sellingCosts: number;
+      netProceeds: number;
+      notes: string[];
+    };
+    hold: {
+      totalOwnershipCosts: number;
+      appreciationGain: number;
+      net: number;
+      notes: string[];
+    };
     rent: {
       totalRentalIncome: number;
-      rentalOverheads: { vacancyLoss: number; managementFees: number };
+      rentalOverheads: {
+        vacancyLoss: number;
+        managementFees: number;
+      };
       totalOwnershipCosts: number;
       appreciationGain: number;
       net: number;
       notes: string[];
     };
   };
+
   history: Array<{
     year: number;
     homeValue: number;
@@ -35,9 +51,25 @@ export type SellHoldRentDTO = {
     holdNetDelta: number;
     rentNetDelta: number;
   }>;
-  recommendation: { winner: 'SELL'|'HOLD'|'RENT'; rationale: string[]; confidence: 'HIGH'|'MEDIUM'|'LOW' };
-  drivers: Array<{ factor: string; impact: 'LOW'|'MEDIUM'|'HIGH'; explanation: string }>;
-  meta: { generatedAt: string; dataSources: string[]; notes: string[]; confidence: 'HIGH'|'MEDIUM'|'LOW' };
+
+  recommendation: {
+    winner: 'SELL' | 'HOLD' | 'RENT';
+    rationale: string[];
+    confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  };
+
+  drivers: Array<{
+    factor: string;
+    impact: 'LOW' | 'MEDIUM' | 'HIGH';
+    explanation: string;
+  }>;
+
+  meta: {
+    generatedAt: string;
+    dataSources: string[];
+    notes: string[];
+    confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  };
 };
 
 export async function getSellHoldRent(
@@ -54,7 +86,8 @@ export async function getSellHoldRent(
   }
 ): Promise<SellHoldRentDTO> {
   const params = new URLSearchParams();
-  if (opts?.years) params.set('years', String(opts.years));
+
+  if (opts?.years !== undefined) params.set('years', String(opts.years));
   if (opts?.homeValueNow !== undefined) params.set('homeValueNow', String(opts.homeValueNow));
   if (opts?.appreciationRate !== undefined) params.set('appreciationRate', String(opts.appreciationRate));
   if (opts?.sellingCostRate !== undefined) params.set('sellingCostRate', String(opts.sellingCostRate));
@@ -66,6 +99,14 @@ export async function getSellHoldRent(
   const q = params.toString();
   const url = `/api/properties/${propertyId}/tools/sell-hold-rent${q ? `?${q}` : ''}`;
 
-  const res = await api.get(url);
-  return res.data.sellHoldRent as SellHoldRentDTO;
+  const res: any = await api.get(url);
+
+  // ✅ Works with AxiosResponse (res.data) AND with any wrapper that returns body directly.
+  const dto = res?.data?.sellHoldRent ?? res?.sellHoldRent;
+
+  if (!dto) {
+    throw new Error('Malformed response: missing sellHoldRent payload');
+  }
+
+  return dto as SellHoldRentDTO;
 }

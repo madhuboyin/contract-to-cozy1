@@ -69,6 +69,39 @@ export default function SellHoldRentClient() {
 
   const winnerNet = winner === 'SELL' ? sellNet : winner === 'RENT' ? rentNet : holdNet;
 
+    // ✅ Fix 2: Prevent empty placeholder $0.00 / “Hold” defaults during first load.
+  // Show a calm loading shell until we have real data OR we have an error.
+  if (!data && loading && !error) {
+    return (
+      <div className="p-6 space-y-4">
+        <SectionHeader
+          icon="🎯"
+          title="Sell vs Hold vs Rent"
+          description="Compare outcomes using appreciation, ownership costs, and rental income assumptions."
+        />
+
+        <div className="mt-3">
+          <HomeToolsRail propertyId={propertyId} />
+        </div>
+
+        <div className="rounded-2xl border border-black/10 bg-white p-4">
+          <div className="text-sm font-medium">Loading simulator…</div>
+          <div className="text-xs opacity-70 mt-1">
+            Pulling appreciation, ownership cost trends, and rental assumptions.
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="h-20 rounded-xl bg-black/5" />
+            <div className="h-20 rounded-xl bg-black/5" />
+            <div className="h-20 rounded-xl bg-black/5" />
+          </div>
+
+          <div className="mt-3 h-44 rounded-xl bg-black/5" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-4">
       <SectionHeader
