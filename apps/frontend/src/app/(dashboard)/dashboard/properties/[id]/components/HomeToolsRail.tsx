@@ -5,7 +5,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, Shield, DollarSign, Info, PanelBottomOpen ,Calculator} from 'lucide-react';
+import { TrendingUp, Shield, DollarSign, Info, PanelBottomOpen ,Calculator, Scale} from 'lucide-react';
 
 // shadcn/ui (already used elsewhere in your app)
 import {
@@ -66,6 +66,13 @@ const HOME_TOOLS: ToolDef[] = [
     href: (id) => `/dashboard/properties/${id}/tools/true-cost`,
     Icon: Calculator,
     tooltip: '5-year total ownership cost projection: tax + insurance + maintenance + utilities.',
+  },
+  {
+    key: 'sell-hold-rent',
+    label: 'Sell / Hold / Rent',
+    href: (id) => `/dashboard/properties/${id}/tools/sell-hold-rent`,
+    Icon: Scale,
+    tooltip: 'Compare outcomes over 5y/10y: sell vs hold vs convert to rental.',
   },
   
 ];
