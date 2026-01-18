@@ -28,6 +28,7 @@ import {
   ArrowRight,
   TrendingUp,
   LayoutGrid,
+  Calculator,
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { FileDown } from "lucide-react";
@@ -764,6 +765,12 @@ export default function PropertyDetailPage() {
             <Button variant="outline" size="sm" className="gap-2">
               <span className="text-base leading-none">🧘</span>
               Cost Explainer
+            </Button>
+          </Link>
+          <Link href={`/dashboard/properties/${property.id}/tools/true-cost`} passHref>
+            <Button variant="outline" size="sm" className="gap-2">
+              <Calculator className="h-4 w-4" />
+              True Cost
             </Button>
           </Link>
         </div>
