@@ -1,153 +1,196 @@
 // apps/backend/src/services/sellHoldRent.service.ts
 import { prisma } from '../lib/prisma';
+
 import { HomeCostGrowthService } from './homeCostGrowth.service';
 import { TrueCostOwnershipService } from './trueCostOwnership.service';
+import { listToolOverrides } from './toolOverride.service';
+import { getFinanceSnapshot } from './propertyFinanceSnapshot.service';
 
-type Years = 5 | 10;
+import { amortizeYears, computeMonthlyPayment } from '../services/tools/mortgageMath';
+
+type Confidence = 'HIGH' | 'MEDIUM' | 'LOW';
+type Impact = 'LOW' | 'MEDIUM' | 'HIGH';
 
 export type SellHoldRentInput = {
-  years?: Years;
+  years?: 5 | 10;
 
-  // Phase-1 overrides
+  // Overrides (request)
   homeValueNow?: number;
-  appreciationRate?: number;
-  sellingCostRate?: number;
+  appreciationRate?: number;     // decimal
+  sellingCostRate?: number;      // decimal
 
+  // Rent modeling
   monthlyRentNow?: number;
-  rentGrowthRate?: number;
-  vacancyRate?: number;
-  managementRate?: number;
+  rentGrowthRate?: number;       // decimal
+  vacancyRate?: number;          // decimal
+  managementRate?: number;       // decimal
 
-  // Phase-2 (optional)
+  // Debt overrides (optional; normally sourced from propertyFinanceSnapshot)
   mortgageBalance?: number;
-  interestRate?: number; // decimal
+  mortgageAnnualRate?: number;   // decimal
   remainingTermMonths?: number;
+  monthlyPayment?: number;
 };
 
-type MortgageSnapshot = {
-  mortgageBalance?: number | null;
-  interestRate?: number | null;
-  remainingTermMonths?: number | null;
+export type SellHoldRentDTO = {
+  input: {
+    propertyId: string;
+    years: 5 | 10;
+    addressLabel: string;
+    state: string;
+    zipCode: string;
+    overrides: Record<string, number | undefined>;
+  };
+
+  current: {
+    homeValueNow: number;
+    appreciationRate: number;
+    monthlyRentNow: number;
+    sellingCostRate: number;
+    // debt (for transparency)
+    mortgageBalanceNow?: number | null;
+    mortgageAnnualRate?: number | null;
+    remainingTermMonths?: number | null;
+    monthlyPayment?: number | null;
+  };
+
+  scenarios: {
+    sell: {
+      projectedSalePrice: number;
+      sellingCosts: number;
+      netProceeds: number;             // equity proceeds after payoff if debt known; otherwise net proceeds before debt
+      notes: string[];
+    };
+    hold: {
+      totalOwnershipCosts: number;     // true-cost + (interest, if debt known)
+      appreciationGain: number;
+      principalPaydown: number;        // 0 if no debt
+      net: number;                     // appreciation + principalPaydown - costs
+      notes: string[];
+    };
+    rent: {
+      totalRentalIncome: number;
+      rentalOverheads: {
+        vacancyLoss: number;
+        managementFees: number;
+      };
+      totalOwnershipCosts: number;     // true-cost + (interest, if debt known)
+      appreciationGain: number;
+      principalPaydown: number;
+      net: number;                     // rentalCash + appreciation + principalPaydown - costs
+      notes: string[];
+    };
+  };
+
+  history: Array<{
+    year: number;
+    homeValue: number;
+    ownershipCosts: number;
+    holdNetDelta: number;
+    rentNetDelta: number;
+  }>;
+
+  recommendation: {
+    winner: 'SELL' | 'HOLD' | 'RENT';
+    rationale: string[];
+    confidence: Confidence;
+  };
+
+  drivers: Array<{
+    factor: string;
+    impact: Impact;
+    explanation: string;
+  }>;
+
+  meta: {
+    generatedAt: string;
+    dataSources: string[];
+    notes: string[];
+    confidence: Confidence;
+  };
 };
 
-function clamp(n: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, n));
-}
+const TOOL_KEY = 'SELL_HOLD_RENT';
 
-function nowIso() {
-  return new Date().toISOString();
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
 }
-
-function safeNum(v: any): number | undefined {
-  const n = typeof v === 'number' ? v : v === '' || v === null || v === undefined ? NaN : Number(v);
-  return Number.isFinite(n) ? n : undefined;
+function roundMoney(n: number) {
+  return Math.round(n * 100) / 100;
+}
+function zipPrefix(zip: string) {
+  const z = String(zip || '').replace(/\D/g, '');
+  return z.length >= 3 ? z.slice(0, 3) : z;
 }
 
 /**
- * Standard fixed-rate mortgage amortization.
- * Returns yearly aggregates for interest/principal paid and balance.
+ * Phase 3: Use ToolOverride rows as persisted defaults for this tool.
  */
-function amortize(params: {
-  balance: number;
-  annualRate: number; // decimal
-  termMonths: number;
-  years: Years;
+async function loadToolOverrideMap(propertyId: string): Promise<Record<string, number>> {
+  const rows = await listToolOverrides(propertyId, TOOL_KEY);
+  const out: Record<string, number> = {};
+  for (const r of rows) out[r.key] = r.value;
+  return out;
+}
+
+function pickOverride(
+  reqVal: number | undefined,
+  toolVal: number | undefined,
+  fallback: number
+) {
+  if (reqVal !== undefined && Number.isFinite(reqVal)) return reqVal;
+  if (toolVal !== undefined && Number.isFinite(toolVal)) return toolVal;
+  return fallback;
+}
+
+function buildDrivers(args: {
+  appreciationRate: number;
+  vacancyRate: number;
+  managementRate: number;
+  sellingCostRate: number;
+  rentGrowthRate: number;
+  debtMode: 'ON' | 'OFF';
+  confidence: Confidence;
+  state: string;
+  zipCode: string;
 }) {
-  const { balance, annualRate, termMonths, years } = params;
-
-  // Guard rails
-  const b0 = Math.max(0, balance);
-  const r = clamp(annualRate, 0, 0.25);
-  const n = Math.max(1, Math.floor(termMonths));
-  const monthsToSim = Math.min(n, years * 12);
-
-  const monthlyRate = r / 12;
-
-  // Payment formula:
-  // pmt = B * i / (1 - (1+i)^-n)
-  const payment =
-    monthlyRate === 0
-      ? b0 / n
-      : (b0 * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -n));
-
-  let bal = b0;
-  const yearly: Array<{
-    yearIndex: number; // 1..years
-    interestPaid: number;
-    principalPaid: number;
-    balanceEnd: number;
-  }> = [];
-
-  for (let y = 1; y <= years; y++) {
-    let interestPaid = 0;
-    let principalPaid = 0;
-
-    for (let m = 0; m < 12; m++) {
-      const globalMonth = (y - 1) * 12 + m + 1;
-      if (globalMonth > monthsToSim) break;
-      if (bal <= 0) break;
-
-      const interest = bal * monthlyRate;
-      const principal = Math.min(bal, Math.max(0, payment - interest));
-
-      interestPaid += interest;
-      principalPaid += principal;
-      bal = Math.max(0, bal - principal);
-    }
-
-    yearly.push({
-      yearIndex: y,
-      interestPaid,
-      principalPaid,
-      balanceEnd: bal,
-    });
-  }
-
-  const interestTotal = yearly.reduce((s, r) => s + r.interestPaid, 0);
-  const principalTotal = yearly.reduce((s, r) => s + r.principalPaid, 0);
-
-  return { payment, yearly, interestTotal, principalTotal, balanceEnd: bal };
-}
-
-async function readToolOverrides(propertyId: string) {
-  const rows = await prisma.toolOverride.findMany({
-    where: { propertyId, toolKey: 'SELL_HOLD_RENT' },
-  });
-
-  const map: Record<string, number> = {};
-  for (const r of rows) map[r.key] = r.value;
-  return map;
-}
-
-async function readMortgageSnapshot(propertyId: string): Promise<MortgageSnapshot | null> {
-  const snap = await prisma.propertyFinanceSnapshot.findUnique({ where: { propertyId } });
-  if (!snap) return null;
-  return {
-    mortgageBalance: snap.mortgageBalance,
-    interestRate: snap.interestRate,
-    remainingTermMonths: snap.remainingTermMonths,
-  };
-}
-
-function confidenceFromCompleteness(args: {
-  hasTrueCost: boolean;
-  hasGrowth: boolean;
-  usedMortgage: boolean;
-  mortgageComplete: boolean;
-  usedOverrides: boolean;
-}) {
-  const { hasTrueCost, hasGrowth, usedMortgage, mortgageComplete, usedOverrides } = args;
-
-  // Simple heuristic
-  let score = 0;
-  if (hasTrueCost) score += 2;
-  if (hasGrowth) score += 2;
-  if (usedMortgage) score += mortgageComplete ? 2 : 1;
-  if (usedOverrides) score += 1;
-
-  if (score >= 6) return 'HIGH' as const;
-  if (score >= 4) return 'MEDIUM' as const;
-  return 'LOW' as const;
+  const z3 = zipPrefix(args.zipCode);
+  const drivers: SellHoldRentDTO['drivers'] = [
+    {
+      factor: `Appreciation sensitivity (${args.state}, ZIP ${z3}*)`,
+      impact: args.appreciationRate >= 0.04 ? 'HIGH' : args.appreciationRate >= 0.025 ? 'MEDIUM' : 'LOW',
+      explanation: `Appreciation modeled at ${(args.appreciationRate * 100).toFixed(1)}%/yr. Higher appreciation favors HOLD/RENT outcomes.`,
+    },
+    {
+      factor: 'Rental overhead friction',
+      impact: (args.vacancyRate + args.managementRate) >= 0.16 ? 'HIGH' : (args.vacancyRate + args.managementRate) >= 0.12 ? 'MEDIUM' : 'LOW',
+      explanation: `Vacancy ${(args.vacancyRate * 100).toFixed(1)}% + management ${(args.managementRate * 100).toFixed(1)}% reduce rental income.`,
+    },
+    {
+      factor: 'Selling costs friction',
+      impact: args.sellingCostRate >= 0.07 ? 'HIGH' : args.sellingCostRate >= 0.055 ? 'MEDIUM' : 'LOW',
+      explanation: `Selling costs modeled at ${(args.sellingCostRate * 100).toFixed(1)}% (agent + closing + fees).`,
+    },
+    {
+      factor: args.debtMode === 'ON' ? 'Debt-aware modeling' : 'Debt unknown',
+      impact: 'MEDIUM',
+      explanation:
+        args.debtMode === 'ON'
+          ? 'Mortgage interest + principal paydown are modeled from the finance snapshot/overrides.'
+          : 'No mortgage snapshot/override provided; mortgage effects are not modeled.',
+    },
+    {
+      factor: 'Confidence & data completeness',
+      impact: args.confidence,
+      explanation:
+        args.confidence === 'HIGH'
+          ? 'Inputs are override/snapshot-backed.'
+          : args.confidence === 'MEDIUM'
+          ? 'Mix of modeled estimates + partial overrides.'
+          : 'Mostly heuristic estimates; add overrides for stronger signal.',
+    },
+  ];
+  return drivers;
 }
 
 export class SellHoldRentService {
@@ -156,9 +199,7 @@ export class SellHoldRentService {
     private trueCost = new TrueCostOwnershipService()
   ) {}
 
-  async getSellHoldRent(propertyId: string, input: SellHoldRentInput) {
-    const years: Years = input.years === 10 ? 10 : 5;
-
+  async estimate(propertyId: string, input: SellHoldRentInput = {}): Promise<SellHoldRentDTO> {
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
       select: {
@@ -171,290 +212,334 @@ export class SellHoldRentService {
         yearBuilt: true,
       },
     });
+    if (!property) throw new Error('Property not found');
 
-    if (!property) {
-      throw new Error('Property not found');
-    }
+    const state = String(property.state || '').toUpperCase().trim();
+    const zipCode = String(property.zipCode || '');
+    const addressLabel = `${property.address}, ${property.city} ${property.state} ${property.zipCode}`;
 
-    // Persisted overrides (Option B)
-    const persistedOverrides = await readToolOverrides(propertyId);
+    const years: 5 | 10 = input.years === 10 ? 10 : 5;
 
-    // Mortgage snapshot (Option B)
-    const mortgageSnap = await readMortgageSnapshot(propertyId);
+    // --- Phase 3 persisted overrides ---
+    const toolOv = await loadToolOverrideMap(propertyId);
 
-    // Merge overrides:
-    // - explicit request input wins
-    // - else persisted override
-    // - else default
-    const homeValueNow =
-      safeNum(input.homeValueNow) ??
-      safeNum(persistedOverrides.homeValueNow) ??
-      600000;
+    // --- Cost growth tool gives appreciation rate + value trajectory ---
+    const cg = await this.costGrowth.estimate(propertyId, { years: years as any } as any);
 
-    const appreciationRate =
-      safeNum(input.appreciationRate) ??
-      safeNum(persistedOverrides.appreciationRate) ??
+    const modeledAppreciation =
+      (cg as any)?.current?.appreciationRate ??
+      (cg as any)?.current?.annualAppreciationRate ??
       0.035;
 
-    const sellingCostRate =
-      safeNum(input.sellingCostRate) ??
-      safeNum(persistedOverrides.sellingCostRate) ??
-      0.06;
+    // defaults aligned to Phase1/2 assumptions
+    const appreciationRate = clamp(
+      pickOverride(input.appreciationRate, toolOv['appreciationRate'], modeledAppreciation),
+      0,
+      0.15
+    );
 
-    const monthlyRentNow =
-      safeNum(input.monthlyRentNow) ??
-      safeNum(persistedOverrides.monthlyRentNow) ??
-      this.estimateRentHeuristic({
-        state: property.state || '',
-        zipCode: property.zipCode || '',
-        sqft: property.propertySize ?? undefined,
-      });
+    const sellingCostRate = clamp(
+      pickOverride(input.sellingCostRate, toolOv['sellingCostRate'], 0.06),
+      0.01,
+      0.12
+    );
 
-    const rentGrowthRate =
-      safeNum(input.rentGrowthRate) ??
-      safeNum(persistedOverrides.rentGrowthRate) ??
-      0.03;
+    // home value: request override > tool override > costGrowth current > heuristic fallback
+    const modeledHomeValue =
+      (cg as any)?.current?.homeValueNow ??
+      (cg as any)?.current?.homeValue ??
+      (cg as any)?.current?.valueNow ??
+      350000;
 
-    const vacancyRate =
-      safeNum(input.vacancyRate) ??
-      safeNum(persistedOverrides.vacancyRate) ??
-      0.06;
+    const homeValueNow = pickOverride(input.homeValueNow, toolOv['homeValueNow'], modeledHomeValue);
 
-    const managementRate =
-      safeNum(input.managementRate) ??
-      safeNum(persistedOverrides.managementRate) ??
-      0.08;
+    // Rent: request > tool override > heuristic (state + sqft)
+    const ppsfRentByState: Record<string, number> = {
+      NJ: 2.2, NY: 2.4, CA: 2.7, TX: 1.4, FL: 1.7, WA: 1.9, MA: 2.3, CO: 1.8, AZ: 1.6,
+    };
+    const sqft = property.propertySize && property.propertySize > 200 ? property.propertySize : undefined;
+    const heuristicRent =
+      sqft ? (ppsfRentByState[state] ?? 1.6) * sqft : 2400;
 
-    // Phase-2 mortgage fields (optional)
-    const mortgageBalance =
-      safeNum(input.mortgageBalance) ??
-      safeNum(persistedOverrides.mortgageBalance) ??
-      safeNum(mortgageSnap?.mortgageBalance);
+    const monthlyRentNow = pickOverride(input.monthlyRentNow, toolOv['monthlyRentNow'], heuristicRent);
 
-    const interestRate =
-      safeNum(input.interestRate) ??
-      safeNum(persistedOverrides.interestRate) ??
-      safeNum(mortgageSnap?.interestRate);
+    const rentGrowthRate = clamp(
+      pickOverride(input.rentGrowthRate, toolOv['rentGrowthRate'], 0.03),
+      0,
+      0.10
+    );
+    const vacancyRate = clamp(
+      pickOverride(input.vacancyRate, toolOv['vacancyRate'], 0.06),
+      0,
+      0.25
+    );
+    const managementRate = clamp(
+      pickOverride(input.managementRate, toolOv['managementRate'], 0.08),
+      0,
+      0.20
+    );
 
+    // --- Ownership costs from TrueCost tool (5y fixed), extend to 10y with a light drift assumption ---
+    const tc = await this.trueCost.estimate(propertyId, {
+      homeValueNow,
+      // allow overrides later via ToolOverride keys if you add UI:
+      insuranceAnnualNow: toolOv['insuranceAnnualNow'],
+      maintenanceAnnualNow: toolOv['maintenanceAnnualNow'],
+      utilitiesAnnualNow: toolOv['utilitiesAnnualNow'],
+      inflationRate: toolOv['inflationRate'],
+    } as any);
+
+    const annualTotalNow = (tc as any)?.current?.annualTotalNow ?? 0;
+    const total5y = (tc as any)?.rollup?.total5y ?? 0;
+
+    const inflationRate =
+      toolOv['inflationRate'] !== undefined
+        ? clamp(toolOv['inflationRate'], 0, 0.12)
+        : (['CA', 'FL', 'TX'].includes(state) ? 0.045 : 0.035);
+
+    const ownershipCosts =
+      years === 5
+        ? total5y
+        : (() => {
+            // extend years 6..10 using drift on current annual baseline
+            // keeps behavior deterministic + cheap (<200ms)
+            let s = total5y;
+            let base = annualTotalNow;
+            for (let i = 6; i <= 10; i++) {
+              base = base * (1 + inflationRate);
+              s += base;
+            }
+            return s;
+          })();
+
+    // --- Debt aware (Phase 3) ---
+    const snap = await getFinanceSnapshot(propertyId);
+
+    // allow request/tool overrides to override snapshot
+    const mortgageBalanceNow =
+      input.mortgageBalance ?? toolOv['mortgageBalance'] ?? snap?.mortgageBalance ?? null;
+    const mortgageAnnualRate =
+      input.mortgageAnnualRate ?? toolOv['mortgageAnnualRate'] ?? snap?.interestRate ?? null;
     const remainingTermMonths =
-      safeNum(input.remainingTermMonths) ??
-      safeNum(persistedOverrides.remainingTermMonths) ??
-      safeNum(mortgageSnap?.remainingTermMonths);
+      input.remainingTermMonths ?? toolOv['remainingTermMonths'] ?? snap?.remainingTermMonths ?? null;
+    const monthlyPaymentOverride =
+      input.monthlyPayment ?? toolOv['monthlyPayment'] ?? snap?.monthlyPayment ?? null;
 
-    const usingMortgage =
-      mortgageBalance !== undefined &&
-      interestRate !== undefined &&
-      remainingTermMonths !== undefined &&
-      mortgageBalance > 0 &&
-      remainingTermMonths > 0;
+    const debtMode: 'ON' | 'OFF' =
+      mortgageBalanceNow && mortgageAnnualRate !== null && remainingTermMonths ? 'ON' : 'OFF';
 
-    // Existing tool services for trends/costs
-    const growth = await this.costGrowth.estimate(propertyId, { years });
-    const tc = await this.trueCost.estimate(propertyId);
-
-    // total ownership costs (already includes tax/ins/maint/util)
-    const totalOwnershipCosts = tc?.rollup?.total5y ?? 0;
-
-    // appreciation gain over horizon (use growth output if available; else compound)
-    const projectedSalePrice =
-      growth?.history?.[growth.history.length - 1]?.homeValue ??
-      homeValueNow * Math.pow(1 + appreciationRate, years);
-
-    const appreciationGain =
-      projectedSalePrice - homeValueNow;
-
-    // Mortgage amortization impacts
-    let mortgage = null as null | {
-      paymentMonthly: number;
-      interestTotal: number;
-      principalTotal: number;
-      balanceEnd: number;
-      notes: string[];
+    let debt = {
+      endingBalance: 0,
+      interestPaid: 0,
+      principalPaid: 0,
+      monthlyPayment: null as number | null,
     };
 
-    let interestTotal = 0;
-    let principalTotal = 0;
-    let balanceEnd = mortgageBalance ?? 0;
+    if (debtMode === 'ON') {
+      const mi = {
+        balanceNow: mortgageBalanceNow!,
+        annualRate: mortgageAnnualRate!,
+        remainingTermMonths: remainingTermMonths!,
+        monthlyPayment: monthlyPaymentOverride,
+      };
 
-    if (usingMortgage) {
-      const sim = amortize({
-        balance: mortgageBalance!,
-        annualRate: interestRate!,
-        termMonths: remainingTermMonths!,
-        years,
-      });
-      interestTotal = sim.interestTotal;
-      principalTotal = sim.principalTotal;
-      balanceEnd = sim.balanceEnd;
-
-      mortgage = {
-        paymentMonthly: sim.payment,
-        interestTotal,
-        principalTotal,
-        balanceEnd,
-        notes: [
-          'Mortgage modeled with fixed-rate amortization (Phase 2).',
-          'Interest counts as cost; principal increases equity (not treated as expense).',
-        ],
+      const payment = mi.monthlyPayment ?? computeMonthlyPayment(mi);
+      const a = amortizeYears({ ...mi, monthlyPayment: payment }, years);
+      debt = {
+        endingBalance: a.endingBalance,
+        interestPaid: a.interestPaid,
+        principalPaid: a.principalPaid,
+        monthlyPayment: a.monthlyPayment,
       };
     }
 
-    // SELL scenario (Phase 2 subtract remaining balance at sale time)
+    // --- Sale price projection ---
+    const projectedSalePrice = homeValueNow * Math.pow(1 + appreciationRate, years);
     const sellingCosts = projectedSalePrice * sellingCostRate;
-    const netProceedsBeforeDebt = projectedSalePrice - sellingCosts;
-    const netProceeds = netProceedsBeforeDebt - (usingMortgage ? balanceEnd : 0);
 
-    // HOLD: costs + (interest if mortgage) against appreciation
-    const holdCosts = totalOwnershipCosts + (usingMortgage ? interestTotal : 0);
-    const holdNet = appreciationGain - holdCosts;
+    // net proceeds BEFORE debt payoff
+    const netBeforeDebt = projectedSalePrice - sellingCosts;
 
-    // RENT: rental income minus overhead minus ownership costs minus interest, plus appreciation
-    const totalRentalIncome = this.projectRentTotal({
-      monthlyRentNow,
-      rentGrowthRate,
-      years,
-    });
+    // net proceeds AFTER debt payoff if known (equity check)
+    const netProceeds = debtMode === 'ON'
+      ? Math.max(0, netBeforeDebt - debt.endingBalance)
+      : netBeforeDebt;
+
+    const appreciationGain = projectedSalePrice - homeValueNow;
+
+    // HOLD: appreciation + principal paydown - (ownership costs + interest)
+    const holdCosts = ownershipCosts + (debtMode === 'ON' ? debt.interestPaid : 0);
+    const holdNet = (appreciationGain + (debtMode === 'ON' ? debt.principalPaid : 0)) - holdCosts;
+
+    // RENT: rental income net of vacancy/management, then + appreciation + principal paydown - (ownership + interest)
+    const totalRentalIncome = (() => {
+      let total = 0;
+      for (let y = 1; y <= years; y++) {
+        const annualRent = monthlyRentNow * 12 * Math.pow(1 + rentGrowthRate, y - 1);
+        total += annualRent;
+      }
+      return total;
+    })();
 
     const vacancyLoss = totalRentalIncome * vacancyRate;
     const managementFees = totalRentalIncome * managementRate;
     const rentalOverheads = vacancyLoss + managementFees;
 
-    const rentCosts = totalOwnershipCosts + rentalOverheads + (usingMortgage ? interestTotal : 0);
-    const rentNet = (totalRentalIncome - rentalOverheads - (totalOwnershipCosts + (usingMortgage ? interestTotal : 0))) + appreciationGain;
+    const rentCosts = ownershipCosts + rentalOverheads + (debtMode === 'ON' ? debt.interestPaid : 0);
 
-    // Equity signals
-    const equityNow = usingMortgage ? (homeValueNow - mortgageBalance!) : homeValueNow;
-    const equityEndHold = usingMortgage ? (projectedSalePrice - balanceEnd) : projectedSalePrice;
-    const equityGrowth = equityEndHold - equityNow;
+    // rental cash contribution AFTER overheads and ownership costs (exclude appreciation / principal)
+    const rentalCashNet = totalRentalIncome - rentalOverheads - ownershipCosts - (debtMode === 'ON' ? debt.interestPaid : 0);
 
-    // Winner scoring (Phase 2: blended)
-    const cashflowStability = usingMortgage ? 0.6 : 0.7; // placeholder signal (keep calm)
-    const decisionScore = {
-      SELL: netProceeds * 0.6 + equityGrowth * 0.25 + (cashflowStability * 0.15 * 1000),
-      HOLD: holdNet * 0.6 + equityGrowth * 0.25 + (cashflowStability * 0.15 * 1000),
-      RENT: rentNet * 0.6 + equityGrowth * 0.25 + (cashflowStability * 0.15 * 1000),
-    };
+    const rentNet =
+      rentalCashNet + appreciationGain + (debtMode === 'ON' ? debt.principalPaid : 0);
 
-    const winner =
-      decisionScore.SELL >= decisionScore.HOLD && decisionScore.SELL >= decisionScore.RENT
-        ? 'SELL'
-        : decisionScore.RENT >= decisionScore.HOLD
-          ? 'RENT'
-          : 'HOLD';
+    // --- winner logic ---
+    const candidates = [
+      { k: 'SELL' as const, v: netProceeds },
+      { k: 'HOLD' as const, v: holdNet },
+      { k: 'RENT' as const, v: rentNet },
+    ].sort((a, b) => b.v - a.v);
 
-    const usedOverrides =
-      Object.keys(persistedOverrides || {}).length > 0 ||
-      Object.keys(input || {}).some((k) => (input as any)[k] !== undefined);
+    const winner = candidates[0].k;
 
-    const confidence = confidenceFromCompleteness({
-      hasTrueCost: !!tc,
-      hasGrowth: !!growth,
-      usedMortgage: usingMortgage,
-      mortgageComplete: usingMortgage,
-      usedOverrides,
-    });
+    // confidence heuristic
+    let confidence: Confidence = 'LOW';
+    const hasSize = !!(sqft && sqft > 200);
+    const hasOverrides = Object.keys(toolOv).length > 0 || Object.values(input).some((v) => v !== undefined);
+    if (debtMode === 'ON' && hasOverrides) confidence = 'HIGH';
+    else if (hasOverrides || hasSize) confidence = 'MEDIUM';
 
-    // Build Phase-1 compatible history shape:
-    // - Keep same keys used by your existing UI chart
-    const history = (growth?.history ?? []).map((h: any, idx: number) => {
-      // ownership cost per year from true-cost history if present
-      const tcYear = (tc?.history ?? [])[idx];
-      const ownershipCostsYear = tcYear?.annualTotal ?? 0;
+    // --- Notes ---
+    const sellNotes: string[] = [
+      `Projected sale price assumes ${(appreciationRate * 100).toFixed(1)}%/yr appreciation.`,
+      `Selling costs assume ${(sellingCostRate * 100).toFixed(1)}% (agent + closing + fees).`,
+    ];
+    if (debtMode === 'ON') sellNotes.push(`Mortgage payoff modeled; ending balance at sale ≈ ${roundMoney(debt.endingBalance)}.`);
+    else sellNotes.push('Mortgage not modeled (no finance snapshot/override).');
 
-      // allocate mortgage interest by year if mortgage is used
-      let interestYear = 0;
-      let principalYear = 0;
-      if (usingMortgage && mortgage) {
-        const yr = idx + 1;
-        const sim = amortize({
-          balance: mortgageBalance!,
-          annualRate: interestRate!,
-          termMonths: remainingTermMonths!,
-          years,
-        });
-        const row = sim.yearly.find((r) => r.yearIndex === yr);
-        interestYear = row?.interestPaid ?? 0;
-        principalYear = row?.principalPaid ?? 0;
-      }
+    const holdNotes: string[] = [
+      'Ownership costs use True Cost model components (tax + insurance + maintenance + utilities).',
+    ];
+    if (years === 10) holdNotes.push('Years 6–10 ownership costs extend the 5y True Cost baseline with an inflation drift assumption.');
+    if (debtMode === 'ON') holdNotes.push('Mortgage interest is treated as a cost; principal paydown increases equity.');
+    else holdNotes.push('Mortgage not modeled (no finance snapshot/override).');
 
-      // keep the UI-friendly “delta” semantics (annual net delta)
-      const holdNetDelta = -(ownershipCostsYear + interestYear); // appreciation shown via growth in winner story
-      const rentNetDelta =
-        this.projectRentYearly({ monthlyRentNow, rentGrowthRate, yearIndex: idx + 1 }) -
-        (ownershipCostsYear + interestYear) -
-        (this.projectRentYearly({ monthlyRentNow, rentGrowthRate, yearIndex: idx + 1 }) * (vacancyRate + managementRate));
+    const rentNotes: string[] = [
+      'Rent modeled with simple growth + overhead assumptions.',
+      `Vacancy ${(vacancyRate * 100).toFixed(1)}% • management ${(managementRate * 100).toFixed(1)}% • rent growth ${(rentGrowthRate * 100).toFixed(1)}%/yr.`,
+    ];
+    if (!input.monthlyRentNow && toolOv['monthlyRentNow'] === undefined) {
+      rentNotes.push(`Rent estimated using $/sqft heuristic for ${state} (Phase 3 baseline). Override monthly rent for accuracy.`);
+    }
+    if (debtMode === 'ON') rentNotes.push('Mortgage interest is treated as a cost; principal paydown increases equity.');
+    else rentNotes.push('Mortgage not modeled (no finance snapshot/override).');
 
-      return {
-        year: h.year,
-        homeValue: h.homeValue,
-        ownershipCosts: ownershipCostsYear + interestYear,
-        holdNetDelta,
-        rentNetDelta,
-        // optional Phase-2 info (ignored by Phase-1 UI)
-        mortgageInterest: interestYear,
-        mortgagePrincipal: principalYear,
-      };
-    });
+    // --- history: keep chart calm (5 points) using last 5 years ending now ---
+    const nowYear = new Date().getFullYear();
+    const historyYears = 5;
+    const history: SellHoldRentDTO['history'] = [];
+    for (let i = historyYears - 1; i >= 0; i--) {
+      const year = nowYear - i;
+      const t = historyYears - 1 - i; // 0..4
 
-    const addressLabel =
-      [property.address, property.city, property.state, property.zipCode].filter(Boolean).join(', ');
+      const hv = homeValueNow * Math.pow(1 + appreciationRate, t - (historyYears - 1));
+      const annualCosts = annualTotalNow * Math.pow(1 + inflationRate, t - (historyYears - 1));
+
+      // show “net delta” as: appreciation for that year minus costs (and minus interest if debt ON)
+      const annualAppGain = hv * appreciationRate;
+      const annualInterest = debtMode === 'ON' ? (debt.interestPaid / Math.max(1, years)) : 0;
+
+      // rent delta adds net rent - overheads (simplified annualized)
+      const annualRent = monthlyRentNow * 12 * Math.pow(1 + rentGrowthRate, t - (historyYears - 1));
+      const annualVac = annualRent * vacancyRate;
+      const annualMgmt = annualRent * managementRate;
+      const rentDelta = (annualRent - annualVac - annualMgmt) + annualAppGain - annualCosts - annualInterest;
+
+      history.push({
+        year,
+        homeValue: roundMoney(hv),
+        ownershipCosts: roundMoney(annualCosts),
+        holdNetDelta: roundMoney(annualAppGain - annualCosts - annualInterest),
+        rentNetDelta: roundMoney(rentDelta),
+      });
+    }
+
+    const rationale: string[] = [];
+    if (winner === 'SELL') {
+      rationale.push('Selling provides the strongest liquidity outcome under current assumptions.');
+      if (debtMode === 'ON') rationale.push('Mortgage payoff is included in sale proceeds (equity-based net).');
+    } else if (winner === 'HOLD') {
+      rationale.push('Holding wins when appreciation plus equity paydown outweigh ownership + interest costs.');
+    } else {
+      rationale.push('Rent wins when rental net cashflow plus equity growth outweighs costs and overhead.');
+    }
+
+    const dataSources: string[] = [
+      'HomeCostGrowthService (appreciation/value trend)',
+      'TrueCostOwnershipService (tax/insurance/maintenance/utilities)',
+      'ToolOverride (persisted per-property overrides)',
+    ];
+    if (debtMode === 'ON') dataSources.push('PropertyFinanceSnapshot + mortgageMath (debt modeling)');
 
     return {
       input: {
         propertyId,
         years,
-        addressLabel: addressLabel || '—',
-        state: property.state || '',
-        zipCode: property.zipCode || '',
+        addressLabel,
+        state,
+        zipCode,
         overrides: {
-          ...persistedOverrides,
-          ...Object.fromEntries(Object.entries(input).filter(([_, v]) => v !== undefined)),
+          years,
+          homeValueNow: input.homeValueNow,
+          appreciationRate: input.appreciationRate,
+          sellingCostRate: input.sellingCostRate,
+          monthlyRentNow: input.monthlyRentNow,
+          rentGrowthRate: input.rentGrowthRate,
+          vacancyRate: input.vacancyRate,
+          managementRate: input.managementRate,
+          mortgageBalance: input.mortgageBalance,
+          mortgageAnnualRate: input.mortgageAnnualRate,
+          remainingTermMonths: input.remainingTermMonths,
+          monthlyPayment: input.monthlyPayment,
         },
       },
 
       current: {
-        homeValueNow,
+        homeValueNow: roundMoney(homeValueNow),
         appreciationRate,
-        monthlyRentNow,
+        monthlyRentNow: roundMoney(monthlyRentNow),
         sellingCostRate,
+        mortgageBalanceNow,
+        mortgageAnnualRate,
+        remainingTermMonths,
+        monthlyPayment: debtMode === 'ON' ? roundMoney(debt.monthlyPayment || 0) : monthlyPaymentOverride,
       },
 
       scenarios: {
         sell: {
-          projectedSalePrice,
-          sellingCosts,
-          netProceeds,
-          notes: [
-            `Projected sale price assumes ${(appreciationRate * 100).toFixed(1)}%/yr appreciation.`,
-            `Selling costs assume ${(sellingCostRate * 100).toFixed(1)}% (agent + closing + fees).`,
-            ...(usingMortgage ? [`Mortgage payoff subtracted (ending balance ≈ $${Math.round(balanceEnd).toLocaleString()}).`] : []),
-          ],
+          projectedSalePrice: roundMoney(projectedSalePrice),
+          sellingCosts: roundMoney(sellingCosts),
+          netProceeds: roundMoney(netProceeds),
+          notes: sellNotes,
         },
-
         hold: {
-          totalOwnershipCosts: holdCosts,
-          appreciationGain,
-          net: holdNet,
-          notes: [
-            'Ownership costs use True Cost components (tax + insurance + maintenance + utilities).',
-            ...(usingMortgage ? ['Mortgage interest included in costs; principal treated as equity transfer.'] : []),
-          ],
+          totalOwnershipCosts: roundMoney(holdCosts),
+          appreciationGain: roundMoney(appreciationGain),
+          principalPaydown: roundMoney(debtMode === 'ON' ? debt.principalPaid : 0),
+          net: roundMoney(holdNet),
+          notes: holdNotes,
         },
-
         rent: {
-          totalRentalIncome,
+          totalRentalIncome: roundMoney(totalRentalIncome),
           rentalOverheads: {
-            vacancyLoss,
-            managementFees,
+            vacancyLoss: roundMoney(vacancyLoss),
+            managementFees: roundMoney(managementFees),
           },
-          totalOwnershipCosts: holdCosts, // includes interest if used
-          appreciationGain,
-          net: rentNet,
-          notes: [
-            'Rent modeled with simple growth and overhead assumptions.',
-            `Vacancy ${(vacancyRate * 100).toFixed(1)}% • management ${(managementRate * 100).toFixed(1)}% • rent growth ${(rentGrowthRate * 100).toFixed(1)}%/yr.`,
-            ...(usingMortgage ? ['Mortgage interest included; principal increases equity (Phase 2).'] : ['Mortgage ignored (no mortgage snapshot/override provided).']),
-          ],
+          totalOwnershipCosts: roundMoney(rentCosts),
+          appreciationGain: roundMoney(appreciationGain),
+          principalPaydown: roundMoney(debtMode === 'ON' ? debt.principalPaid : 0),
+          net: roundMoney(rentNet),
+          notes: rentNotes,
         },
       },
 
@@ -462,177 +547,41 @@ export class SellHoldRentService {
 
       recommendation: {
         winner,
-        rationale: this.buildRationale({
-          winner,
-          netProceeds,
-          holdNet,
-          rentNet,
-          usingMortgage,
-        }),
+        rationale,
         confidence,
       },
 
-      drivers: this.buildDrivers({
-        propertyState: property.state || '',
-        zip: property.zipCode || '',
+      drivers: buildDrivers({
         appreciationRate,
         vacancyRate,
         managementRate,
         sellingCostRate,
+        rentGrowthRate,
+        debtMode,
         confidence,
-        usingMortgage,
+        state,
+        zipCode,
       }),
 
-      // ✅ Phase-2 additions (backward compatible — UI can ignore)
-      mortgage: mortgage
-        ? {
-            balanceNow: mortgageBalance!,
-            interestRate: interestRate!,
-            remainingTermMonths: remainingTermMonths!,
-            paymentMonthly: mortgage.paymentMonthly,
-            interestTotal: mortgage.interestTotal,
-            principalTotal: mortgage.principalTotal,
-            balanceEnd: mortgage.balanceEnd,
-            notes: mortgage.notes,
-          }
-        : null,
-
-      equity: {
-        equityNow,
-        equityEnd: equityEndHold,
-        equityGrowth,
-        notes: usingMortgage
-          ? ['Equity = home value − mortgage balance.', 'Principal payments increase equity; interest is a cost.']
-          : ['No mortgage modeled; equity equals home value.'],
-      },
-
-      decisionQuality: {
-        annualized: {
-          sell: netProceeds / years,
-          hold: holdNet / years,
-          rent: rentNet / years,
-        },
-        cashflowStability: usingMortgage ? 'MEDIUM' : 'HIGH',
-      },
-
       meta: {
-        generatedAt: nowIso(),
-        dataSources: [
-          'HomeCostGrowthService',
-          'TrueCostOwnershipService',
-          ...(usingMortgage ? ['PropertyFinanceSnapshot / ToolOverride (Phase 2 mortgage)'] : ['Rent heuristic model']),
-        ],
+        generatedAt: new Date().toISOString(),
+        dataSources,
         notes: [
-          ...(usingMortgage ? [] : ['Add mortgage snapshot or override values to enable Phase 2 debt-aware modeling.']),
-          'Overrides are persisted per property (ToolOverride) when you add UI later.',
+          `Tool overrides (ToolOverride) are applied automatically for ${TOOL_KEY}.`,
+          debtMode === 'ON'
+            ? 'Debt-aware modeling is ON (snapshot/overrides present).'
+            : 'Debt-aware modeling is OFF (no snapshot/overrides).',
+          years === 10
+            ? '10y mode extends True Cost beyond 5y using a drift assumption; adjust via overrides for better accuracy.'
+            : '5y mode uses True Cost 5y rollup directly.',
         ],
         confidence,
       },
     };
   }
-
-  private estimateRentHeuristic(args: { state: string; zipCode: string; sqft?: number }) {
-    const sqft = args.sqft ?? 1600;
-    const basePerSqftByState: Record<string, number> = {
-      NJ: 3.0,
-      NY: 3.6,
-      CA: 3.3,
-      TX: 1.8,
-      FL: 2.3,
-    };
-
-    const per = basePerSqftByState[args.state] ?? 2.2;
-    const est = sqft * per;
-
-    // mild ZIP prefix adjustment (messaging-level heuristic)
-    const zipPrefix = (args.zipCode || '').slice(0, 3);
-    const bump = zipPrefix ? 1.0 : 1.0;
-
-    return Math.round(est * bump);
-  }
-
-  private projectRentTotal(args: { monthlyRentNow: number; rentGrowthRate: number; years: Years }) {
-    const { monthlyRentNow, rentGrowthRate, years } = args;
-    let total = 0;
-    for (let y = 1; y <= years; y++) {
-      const yearRent = monthlyRentNow * 12 * Math.pow(1 + rentGrowthRate, y - 1);
-      total += yearRent;
-    }
-    return total;
-  }
-
-  private projectRentYearly(args: { monthlyRentNow: number; rentGrowthRate: number; yearIndex: number }) {
-    const { monthlyRentNow, rentGrowthRate, yearIndex } = args;
-    return monthlyRentNow * 12 * Math.pow(1 + rentGrowthRate, Math.max(0, yearIndex - 1));
-  }
-
-  private buildRationale(args: {
-    winner: 'SELL' | 'HOLD' | 'RENT';
-    netProceeds: number;
-    holdNet: number;
-    rentNet: number;
-    usingMortgage: boolean;
-  }) {
-    const r: string[] = [];
-    if (args.winner === 'SELL') {
-      r.push('Selling provides the strongest liquidity outcome under current assumptions.');
-      if (args.usingMortgage) r.push('Mortgage payoff was included in net proceeds (Phase 2).');
-    } else if (args.winner === 'RENT') {
-      r.push('Renting wins due to modeled rental income outweighing costs and overhead.');
-      if (args.usingMortgage) r.push('Mortgage interest was included; principal treated as equity transfer (Phase 2).');
-    } else {
-      r.push('Holding wins when appreciation dominates ownership costs over the horizon.');
-      if (args.usingMortgage) r.push('Equity growth benefits from principal paydown (Phase 2).');
-    }
-    return r;
-  }
-
-  private buildDrivers(args: {
-    propertyState: string;
-    zip: string;
-    appreciationRate: number;
-    vacancyRate: number;
-    managementRate: number;
-    sellingCostRate: number;
-    confidence: 'HIGH' | 'MEDIUM' | 'LOW';
-    usingMortgage: boolean;
-  }) {
-    return [
-      {
-        factor: `Appreciation sensitivity (${args.propertyState}, ZIP ${String(args.zip).slice(0, 3)}*)`,
-        impact: 'MEDIUM',
-        explanation: `Appreciation modeled at ${(args.appreciationRate * 100).toFixed(1)}%/yr. Higher appreciation favors HOLD/RENT.`,
-      },
-      {
-        factor: 'Rental overhead friction',
-        impact: 'MEDIUM',
-        explanation: `Vacancy ${(args.vacancyRate * 100).toFixed(1)}% + management ${(args.managementRate * 100).toFixed(1)}% reduce rental income.`,
-      },
-      {
-        factor: 'Selling costs friction',
-        impact: 'MEDIUM',
-        explanation: `Selling costs modeled at ${(args.sellingCostRate * 100).toFixed(1)}%. Higher costs reduce SELL net.`,
-      },
-      ...(args.usingMortgage
-        ? [
-            {
-              factor: 'Mortgage structure',
-              impact: 'HIGH',
-              explanation: 'Interest is treated as cost; principal paydown increases equity (Phase 2).',
-            },
-          ]
-        : [
-            {
-              factor: 'Debt unknown',
-              impact: 'MEDIUM',
-              explanation: 'No mortgage snapshot/override provided; mortgage effects are not modeled.',
-            },
-          ]),
-      {
-        factor: 'Confidence & data completeness',
-        impact: 'MEDIUM',
-        explanation: `Confidence is ${args.confidence}. Add/verify mortgage + override inputs to increase signal.`,
-      },
-    ] as any;
-  }
 }
+
+// ✅ Backward-safe: allow either import style.
+// Named import:  import { SellHoldRentService } from ...
+// Default import: import SellHoldRentService from ...
+export default SellHoldRentService;
