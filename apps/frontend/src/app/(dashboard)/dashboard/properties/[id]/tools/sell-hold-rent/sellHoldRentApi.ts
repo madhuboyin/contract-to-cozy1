@@ -93,5 +93,5 @@ export async function getSellHoldRent(
     { params }
   );
 
-  return res.data.sellHoldRent;
+  return (res as any).sellHoldRent || res;
 }

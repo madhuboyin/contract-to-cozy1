@@ -29,13 +29,17 @@ export default function SellHoldRentClient() {
   const [data, setData] = useState<SellHoldRentDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Find the load function (around line 38) and update it:
   async function load(y: 5 | 10) {
     if (!propertyId) return;
     setLoading(true);
     setError(null);
     try {
       const r = await getSellHoldRent(propertyId, { years: y });
-      setData(r);
+      // Extract the nested object from the API response
+      // @ts-ignore - handling the wrapper key from the API
+      const actualData = r.sellHoldRent || r; 
+      setData(actualData);
     } catch (e: any) {
       setError(e?.message || 'Failed to load simulator');
     } finally {
@@ -49,17 +53,31 @@ export default function SellHoldRentClient() {
   }, [propertyId]);
 
   const chartModel = useMemo(() => {
+    // Use optional chaining for safety
     const h = data?.history ?? [];
     const x = h.map((r) => String(r.year));
     return {
       x: x.length >= 2 ? x : ['—', '—'],
       series: [
-        { key: 'hold', label: 'Hold net Δ', values: h.map((r) => r.holdNetDelta), opacity: 0.75, strokeWidth: 2.75 },
-        { key: 'rent', label: 'Rent net Δ', values: h.map((r) => r.rentNetDelta), opacity: 0.55, dash: '6 5' },
+        { 
+          key: 'hold', 
+          label: 'Hold net Δ', 
+          values: h.map((r) => r.holdNetDelta ?? 0), // Default to 0
+          opacity: 0.75, 
+          strokeWidth: 2.75 
+        },
+        { 
+          key: 'rent', 
+          label: 'Rent net Δ', 
+          values: h.map((r) => r.rentNetDelta ?? 0), // Default to 0
+          opacity: 0.55, 
+          dash: '6 5' 
+        },
       ],
     };
   }, [data]);
 
+  // Update these variables (around line 65):
   const winner = data?.recommendation?.winner ?? 'HOLD';
   const winnerLabel = winner === 'SELL' ? 'Sell' : winner === 'RENT' ? 'Rent' : 'Hold';
 
