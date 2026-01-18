@@ -140,15 +140,37 @@ export default function MiniLineChartPct(props: {
         {/* line */}
         <path d={path} fill="none" stroke="currentColor" strokeWidth="2.75" />
 
-        {/* ✅ Phase-2: event markers (calm dots on baseline) */}
+        {/* ✅ Phase-2: event markers (anchored to datapoints) */}
         {safe.xLabels.map((lbl, idx) => {
           const evs = eventByYear.get(lbl);
           if (!evs || !evs.length) return null;
+
+          const v = numeric[idx];
+          if (!Number.isFinite(v)) return null;
+
           const x = xFor(idx);
-          const y = h - padB;
+          const y = yFor(v);
+
+          // Subtle color hint by dominant event type (still calm)
+          const type = evs[0]?.type;
+          let stroke = 'currentColor';
+          let strokeOpacity = 0.55;
+
+          if (type === 'INSURANCE_SHOCK') strokeOpacity = 0.75;
+          if (type === 'TAX_RESET') strokeOpacity = 0.65;
+          if (type === 'CLIMATE_EVENT') strokeOpacity = 0.6;
+
           return (
             <g key={`ev-${lbl}`}>
-              <circle cx={x} cy={y - 2} r={3} fill="white" stroke="currentColor" strokeOpacity="0.55" strokeWidth={1.5} />
+              <circle
+                cx={x}
+                cy={y}
+                r={3.5}
+                fill="white"
+                stroke={stroke}
+                strokeOpacity={strokeOpacity}
+                strokeWidth={2}
+              />
             </g>
           );
         })}
