@@ -93,5 +93,7 @@ export async function getSellHoldRent(
     { params }
   );
 
-  return (res as any).sellHoldRent || res;
+  // CHANGE: Access the key directly from the response body 'res'
+  // @ts-ignore - handling the wrapper key from the API
+  return res.sellHoldRent || res; 
 }

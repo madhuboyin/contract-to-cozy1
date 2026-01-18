@@ -29,17 +29,14 @@ export default function SellHoldRentClient() {
   const [data, setData] = useState<SellHoldRentDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Find the load function (around line 38) and update it:
   async function load(y: 5 | 10) {
     if (!propertyId) return;
     setLoading(true);
     setError(null);
     try {
       const r = await getSellHoldRent(propertyId, { years: y });
-      // Extract the nested object from the API response
-      // @ts-ignore - handling the wrapper key from the API
-      const actualData = r.sellHoldRent || r; 
-      setData(actualData);
+      // Defensive check: ensure we are setting the DTO object directly
+      setData(r); 
     } catch (e: any) {
       setError(e?.message || 'Failed to load simulator');
     } finally {

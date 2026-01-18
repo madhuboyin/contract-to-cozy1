@@ -15,9 +15,9 @@ export default function ComparisonBars(props: {
   winner: 'SELL'|'HOLD'|'RENT';
 }) {
   const vals = [
-    { k: 'SELL' as const, label: 'Sell', v: props.sell },
-    { k: 'HOLD' as const, label: 'Hold', v: props.hold },
-    { k: 'RENT' as const, label: 'Rent', v: props.rent },
+    { k: 'SELL' as const, label: 'Sell', v: props.sell ?? 0 },
+    { k: 'HOLD' as const, label: 'Hold', v: props.hold ?? 0 },
+    { k: 'RENT' as const, label: 'Rent', v: props.rent ?? 0 },
   ];
 
   const maxAbs = Math.max(1, ...vals.map((x) => Math.abs(x.v)));
