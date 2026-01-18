@@ -72,8 +72,8 @@ const HOME_TOOLS: ToolDef[] = [
     label: 'Sell / Hold / Rent',
     href: (id) => `/dashboard/properties/${id}/tools/sell-hold-rent`,
     Icon: Scale,
-    tooltip: 'Compare outcomes over 5y/10y: sell vs hold vs convert to rental.',
-  },
+    tooltip: 'Compare Sell vs Hold vs Rent outcomes over 5y or 10y using appreciation, ownership costs, and rent assumptions.',
+  },  
   
 ];
 

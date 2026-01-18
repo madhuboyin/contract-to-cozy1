@@ -82,8 +82,16 @@ export default function SellHoldRentClient() {
   const holdNet = data?.scenarios?.hold?.net ?? 0;
   const rentNet = data?.scenarios?.rent?.net ?? 0;
 
-  const winnerNet = winner === 'SELL' ? sellNet : winner === 'RENT' ? rentNet : holdNet;
+  const winnerNet =
+    winner === 'SELL' ? sellNet :
+    winner === 'RENT' ? rentNet :
+    holdNet;
 
+  const hasScenarioData =
+    typeof sellNet === 'number' &&
+    typeof holdNet === 'number' &&
+    typeof rentNet === 'number';
+  
     // ✅ Fix 2: Prevent empty placeholder $0.00 / “Hold” defaults during first load.
   // Show a calm loading shell until we have real data OR we have an error.
   if (!data && !error) {
@@ -219,6 +227,15 @@ export default function SellHoldRentClient() {
         </div>
 
         <div className="lg:col-span-7 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="mt-3">
+            {hasScenarioData ? (
+              <ComparisonBars sell={sellNet} hold={holdNet} rent={rentNet} winner={winner} />
+            ) : (
+              <div className="rounded-xl border border-black/10 bg-black/[0.02] p-3 text-xs text-black/60">
+                {loading ? 'Loading scenarios…' : 'No scenario data yet.'}
+              </div>
+            )}
+          </div>
           {/* SELL */}
           <div className="rounded-2xl border border-black/10 bg-white p-4">
             <div className="text-sm font-medium">Sell</div>

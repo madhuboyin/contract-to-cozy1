@@ -1,5 +1,4 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/sell-hold-rent/sellHoldRentApi.ts
-
 import { api } from '@/lib/api/client';
 
 export type SellHoldRentDTO = {
@@ -73,24 +72,37 @@ export type SellHoldRentDTO = {
   };
 };
 
-type SellHoldRentParams = {
+export type SellHoldRentParams = {
   years?: 5 | 10;
+
+  // Overrides
   homeValueNow?: number;
   appreciationRate?: number;
   sellingCostRate?: number;
+
+  // Rent modeling
   monthlyRentNow?: number;
   rentGrowthRate?: number;
   vacancyRate?: number;
   managementRate?: number;
 };
 
-export async function getSellHoldRent(
-  propertyId: string,
-  params?: SellHoldRentParams
-): Promise<SellHoldRentDTO> {
-  const res = await api.getRaw<{ sellHoldRent: SellHoldRentDTO }>(
-    `/api/properties/${propertyId}/tools/sell-hold-rent${params ? `?${new URLSearchParams(params as any).toString()}` : ''}`
-  );
+function toQuery(params?: SellHoldRentParams) {
+  if (!params) return '';
+  const sp = new URLSearchParams();
+  (Object.entries(params) as Array<[keyof SellHoldRentParams, any]>).forEach(([k, v]) => {
+    if (v === undefined || v === null || v === '') return;
+    sp.set(String(k), String(v));
+  });
+  const qs = sp.toString();
+  return qs ? `?${qs}` : '';
+}
 
+export async function getSellHoldRent(propertyId: string, params?: SellHoldRentParams): Promise<SellHoldRentDTO> {
+  // ✅ Option B: backend returns { success, data: { sellHoldRent: dto } }
+  // api.get() returns { data: <inner data object> }
+  const res = await api.get<{ sellHoldRent: SellHoldRentDTO }>(
+    `/api/properties/${propertyId}/tools/sell-hold-rent${toQuery(params)}`
+  );
   return res.data.sellHoldRent;
 }

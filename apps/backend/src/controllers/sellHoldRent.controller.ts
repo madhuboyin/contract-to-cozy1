@@ -27,6 +27,9 @@ export async function getSellHoldRent(req: Request, res: Response) {
     managementRate: num(req.query.managementRate),
   });
 
-  // Match existing tool response pattern (keyed payload)
-  return res.json({ sellHoldRent: dto });
+  // ✅ Option B: match your standard API envelope used by api.get()
+  return res.json({
+    success: true,
+    data: { sellHoldRent: dto },
+  });
 }
