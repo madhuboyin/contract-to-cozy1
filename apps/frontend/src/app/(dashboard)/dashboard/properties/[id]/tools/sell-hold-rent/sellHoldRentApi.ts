@@ -89,7 +89,7 @@ export async function getSellHoldRent(
   params?: SellHoldRentParams
 ): Promise<SellHoldRentDTO> {
   const res = await api.get<{ sellHoldRent: SellHoldRentDTO }>(
-    `/properties/${propertyId}/tools/sell-hold-rent`,
+    `/api/properties/${propertyId}/tools/sell-hold-rent`,
     { params }
   );
 
@@ -98,7 +98,7 @@ export async function getSellHoldRent(
   if (!payload) {
     // eslint-disable-next-line no-console
     console.error('[sellHoldRentApi] Unexpected response shape', {
-      url: `/properties/${propertyId}/tools/sell-hold-rent`,
+      url: `/api/properties/${propertyId}/tools/sell-hold-rent`,
       res,
     });
     throw new Error('Malformed response: missing sellHoldRent payload');
@@ -106,4 +106,5 @@ export async function getSellHoldRent(
 
   return payload;
 }
+
 
