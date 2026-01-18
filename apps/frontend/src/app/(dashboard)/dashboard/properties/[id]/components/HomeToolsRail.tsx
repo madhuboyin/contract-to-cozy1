@@ -5,7 +5,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, Shield, DollarSign, Info, PanelBottomOpen ,Calculator, Scale} from 'lucide-react';
+import { TrendingUp, Shield, DollarSign, Info, PanelBottomOpen ,Calculator, Scale, Activity} from 'lucide-react';
 
 // shadcn/ui (already used elsewhere in your app)
 import {
@@ -74,6 +74,13 @@ const HOME_TOOLS: ToolDef[] = [
     Icon: Scale,
     tooltip: 'Compare Sell vs Hold vs Rent outcomes over 5y or 10y using appreciation, ownership costs, and rent assumptions.',
   },  
+  {
+    key: 'cost-volatility',
+    label: 'Volatility',
+    href: (id) => `/dashboard/properties/${id}/tools/cost-volatility`,
+    Icon: Activity,
+    tooltip: 'How unpredictable your costs are year-to-year.',
+  },
   
 ];
 

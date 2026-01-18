@@ -63,7 +63,7 @@ import trueCostOwnershipRoutes from './routes/trueCostOwnership.routes';
 import sellHoldRentRoutes from './routes/sellHoldRent.routes';
 import propertyFinanceSnapshotRoutes from './routes/propertyFinanceSnapshot.routes';
 import toolOverrideRoutes from './routes/toolOverride.routes';
-
+import costVolatilityRoutes from './routes/costVolatility.routes';
 dotenv.config();
 
 // Initialize Prisma Client
@@ -330,6 +330,7 @@ app.use('/api', costExplainerRoutes);
 app.use('/api', sellHoldRentRoutes);
 app.use('/api', propertyFinanceSnapshotRoutes);
 app.use('/api', toolOverrideRoutes);
+app.use('/api', costVolatilityRoutes);
 //app.use(express.json({ limit: '10mb' })); // Ensure this is present
 app.use('/api', trueCostOwnershipRoutes);
 //app.use(express.urlencoded({ extended: true, limit: '10mb' }));
