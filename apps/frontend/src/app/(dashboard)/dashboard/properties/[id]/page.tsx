@@ -707,18 +707,7 @@ export default function PropertyDetailPage() {
         </button>
       </div>
 
-      {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-2">
-        {/* Header row */}
-        <div className="flex items-start justify-between gap-4 mb-2">
-          <PageHeader className="pt-2 pb-2 gap-1 flex-1">
-            <PageHeaderHeading>{property.name || "My Property"}</PageHeaderHeading>
-            <PageHeaderDescription>
-              {property.address}, {property.city}
-            </PageHeaderDescription>
-          </PageHeader>
-        </div>
-
         {/* Home tools rail — under header */}
         <div className="mt-1 mb-3">
           <HomeToolsRail propertyId={property.id} />
@@ -735,44 +724,14 @@ export default function PropertyDetailPage() {
 
       {/* Home tools rail (under header, above banner) */}
       <div className="mb-3">
-        <div className="text-xs uppercase tracking-wide text-black/60 mb-1">
-          Home Tools
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href={`/dashboard/properties/${property.id}/tools/property-tax`} passHref>
-            <Button variant="outline" size="sm" className="gap-2">
-              <DollarSign className="h-4 w-4" />
-              Property Tax
-            </Button>
-          </Link>
-
-          <Link href={`/dashboard/properties/${property.id}/tools/cost-growth`} passHref>
-            <Button variant="outline" size="sm" className="gap-2">
-              <TrendingUp className="h-4 w-4" />
-              Cost Growth
-            </Button>
-          </Link>
-
-          <Link href={`/dashboard/properties/${property.id}/tools/insurance-trend`} passHref>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Shield className="h-4 w-4" />
-              Insurance Trend
-            </Button>
-          </Link>
-
-          <Link href={`/dashboard/properties/${property.id}/tools/cost-explainer`} passHref>
-            <Button variant="outline" size="sm" className="gap-2">
-              <span className="text-base leading-none">🧘</span>
-              Cost Explainer
-            </Button>
-          </Link>
-          <Link href={`/dashboard/properties/${property.id}/tools/true-cost`} passHref>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Calculator className="h-4 w-4" />
-              True Cost
-            </Button>
-          </Link>
+        {/* Header row */}
+        <div className="flex items-start justify-between gap-4 mb-2">
+          <PageHeader className="pt-2 pb-2 gap-1 flex-1">
+            <PageHeaderHeading>{property.name || "My Property"}</PageHeaderHeading>
+            <PageHeaderDescription>
+              {property.address}, {property.city}
+            </PageHeaderDescription>
+          </PageHeader>
         </div>
       </div>
 
