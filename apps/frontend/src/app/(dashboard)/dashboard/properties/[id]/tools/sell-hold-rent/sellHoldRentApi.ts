@@ -1,5 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/sell-hold-rent/sellHoldRentApi.ts
 
+import { api } from '@/lib/api/client';
+
 export type SellHoldRentDTO = {
   input: {
     propertyId: string;
@@ -71,51 +73,37 @@ export type SellHoldRentDTO = {
   };
 };
 
+type SellHoldRentParams = {
+  years?: 5 | 10;
+  homeValueNow?: number;
+  appreciationRate?: number;
+  sellingCostRate?: number;
+  monthlyRentNow?: number;
+  rentGrowthRate?: number;
+  vacancyRate?: number;
+  managementRate?: number;
+};
+
 export async function getSellHoldRent(
   propertyId: string,
-  opts?: {
-    years?: 5 | 10;
-    homeValueNow?: number;
-    appreciationRate?: number;
-    sellingCostRate?: number;
-    monthlyRentNow?: number;
-    rentGrowthRate?: number;
-    vacancyRate?: number;
-    managementRate?: number;
-  }
+  params?: SellHoldRentParams
 ): Promise<SellHoldRentDTO> {
-  const params = new URLSearchParams();
+  const res = await api.get<{ sellHoldRent: SellHoldRentDTO }>(
+    `/properties/${propertyId}/tools/sell-hold-rent`,
+    { params }
+  );
 
-  if (opts?.years !== undefined) params.set('years', String(opts.years));
-  if (opts?.homeValueNow !== undefined) params.set('homeValueNow', String(opts.homeValueNow));
-  if (opts?.appreciationRate !== undefined) params.set('appreciationRate', String(opts.appreciationRate));
-  if (opts?.sellingCostRate !== undefined) params.set('sellingCostRate', String(opts.sellingCostRate));
-  if (opts?.monthlyRentNow !== undefined) params.set('monthlyRentNow', String(opts.monthlyRentNow));
-  if (opts?.rentGrowthRate !== undefined) params.set('rentGrowthRate', String(opts.rentGrowthRate));
-  if (opts?.vacancyRate !== undefined) params.set('vacancyRate', String(opts.vacancyRate));
-  if (opts?.managementRate !== undefined) params.set('managementRate', String(opts.managementRate));
+  const payload = res.data?.sellHoldRent;
 
-  const q = params.toString();
-  const url = `/api/properties/${propertyId}/tools/sell-hold-rent${q ? `?${q}` : ''}`;
-
-  // ✅ Bypass shared api client (it expects APISuccess envelope).
-  // Keep request authenticated via cookies.
-  const resp = await fetch(url, { credentials: 'include' });
-
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(`Sell/Hold/Rent request failed (${resp.status}): ${text || resp.statusText}`);
-  }
-
-  const body = (await resp.json()) as any;
-
-  // Backend returns: { sellHoldRent: { ...dto } }
-  const dto = body?.sellHoldRent;
-  if (!dto) {
+  if (!payload) {
     // eslint-disable-next-line no-console
-    console.error('[sellHoldRentApi] Missing sellHoldRent payload', { url, body });
+    console.error('[sellHoldRentApi] Unexpected response shape', {
+      url: `/properties/${propertyId}/tools/sell-hold-rent`,
+      res,
+    });
     throw new Error('Malformed response: missing sellHoldRent payload');
   }
 
-  return dto as SellHoldRentDTO;
+  return payload;
 }
+
