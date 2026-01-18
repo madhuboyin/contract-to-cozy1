@@ -221,15 +221,10 @@ export default function SellHoldRentClient() {
         <div className="lg:col-span-5 rounded-2xl border border-black/10 bg-white p-4">
           <div className="text-sm font-medium">Scenario comparison</div>
           <div className="text-xs opacity-70 mt-1">Net outcomes over {years} years</div>
-          <div className="mt-3">
-            <ComparisonBars sell={sellNet} hold={holdNet} rent={rentNet} winner={winner} />
-          </div>
-        </div>
 
-        <div className="lg:col-span-7 grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="mt-3">
             {hasScenarioData ? (
-              <ComparisonBars sell={sellNet} hold={holdNet} rent={rentNet} winner={winner} />
+              <ComparisonBars sell={sellNet!} hold={holdNet!} rent={rentNet!} winner={winner} />
             ) : (
               <div className="rounded-xl border border-black/10 bg-black/[0.02] p-3 text-xs text-black/60">
                 {loading ? 'Loading scenarios…' : 'No scenario data yet.'}
