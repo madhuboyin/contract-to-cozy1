@@ -31,6 +31,10 @@ function eventLabel(t?: string) {
   return 'Event';
 }
 
+function isFiniteNumber(n: any): n is number {
+  return typeof n === 'number' && Number.isFinite(n);
+}
+
 export default function CostVolatilityClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
@@ -95,6 +99,26 @@ export default function CostVolatilityClient() {
     const ev = data?.events || [];
     return [...ev].sort((a, b) => a.year - b.year).slice(-8);
   }, [data]);
+
+  // ✅ Patch: avoid “Insurance volatility = 0” when it’s actually “not enough history”
+  const insuranceDeltaCount = useMemo(() => {
+    const hist = data?.history || [];
+    // count non-null yoy insurance points
+    return hist.reduce((acc, h) => acc + (isFiniteNumber(h.yoyInsurancePct) ? 1 : 0), 0);
+  }, [data]);
+
+  const showInsuranceAsMissing = useMemo(() => {
+    const v = data?.index?.insuranceVolatility;
+    // If score is exactly 0 and we have <3 delta points, it’s likely “insufficient history”
+    return v === 0 && insuranceDeltaCount < 3;
+  }, [data, insuranceDeltaCount]);
+
+  // ✅ Patch: year-anchored spikes copy when events exist
+  const spikeAnchor = useMemo(() => {
+    if (!recentEvents.length) return null;
+    const top = recentEvents[recentEvents.length - 1];
+    return `In ${top.year}, we flagged a ${eventLabel(top.type).toLowerCase()} event that can increase surprise risk.`;
+  }, [recentEvents]);
 
   return (
     <div className="p-6 space-y-4">
@@ -171,8 +195,15 @@ export default function CostVolatilityClient() {
 
           <div className="rounded-xl border border-black/10 p-3">
             <div className="text-xs opacity-70">Insurance volatility</div>
-            <div className="text-xl font-semibold tabular-nums">{data?.index?.insuranceVolatility ?? '—'}</div>
-            <div className="text-xs opacity-60 mt-1">Std dev of YoY premium changes</div>
+
+            {/* ✅ Patch: show "—" if insufficient history */}
+            <div className="text-xl font-semibold tabular-nums">
+              {showInsuranceAsMissing ? '—' : (data?.index?.insuranceVolatility ?? '—')}
+            </div>
+
+            <div className="text-xs opacity-60 mt-1">
+              {showInsuranceAsMissing ? 'Insufficient renewal history' : 'Std dev of YoY premium changes'}
+            </div>
           </div>
 
           <div className="rounded-xl border border-black/10 p-3">
@@ -181,10 +212,19 @@ export default function CostVolatilityClient() {
             <div className="text-xs opacity-60 mt-1">YoY variance + cadence pressure</div>
           </div>
 
+          {/* ✅ Patch: rename ZIP proxy to Phase-2 meaning */}
           <div className="rounded-xl border border-black/10 p-3">
-            <div className="text-xs opacity-70">ZIP proxy</div>
+            <div className="text-xs opacity-70">Regional sensitivity</div>
             <div className="text-xl font-semibold tabular-nums">{data?.index?.zipVolatility ?? '—'}</div>
-            <div className="text-xs opacity-60 mt-1">Messaging-only modifier</div>
+            <div className="text-xs opacity-60 mt-1">
+              Pricing environment modifier
+              <span
+                className="ml-2 underline decoration-dotted cursor-help"
+                title="Derived from regional sensitivity signals. Not a direct risk score."
+              >
+                ?
+              </span>
+            </div>
           </div>
         </div>
 
@@ -199,7 +239,6 @@ export default function CostVolatilityClient() {
             </span>
           </div>
 
-          {/* ✅ Phase-2: pass events to chart */}
           <MiniLineChartPct
             xLabels={yoyChart.x}
             yValues={yoyChart.y}
@@ -217,7 +256,7 @@ export default function CostVolatilityClient() {
           <div className="mt-4 rounded-xl border border-black/10 p-3">
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm font-medium">Years with surprise risk</div>
-              <div className="text-xs opacity-60">Dots mark step-change years</div>
+              <div className="text-xs opacity-60">Dots mark flagged years</div>
             </div>
 
             <div className="mt-2 flex flex-wrap gap-2">
@@ -238,6 +277,14 @@ export default function CostVolatilityClient() {
         {!!(data?.drivers?.length ?? 0) && (
           <div className="mt-4 rounded-xl border border-black/10 p-3">
             <div className="text-sm font-medium">Why volatility spikes here</div>
+
+            {/* ✅ Patch: year anchor when events exist */}
+            {!!spikeAnchor && (
+              <div className="mt-2 text-xs text-black/70 leading-5">
+                {spikeAnchor}
+              </div>
+            )}
+
             <div className="mt-2 space-y-2">
               {(data?.drivers || []).slice(0, 2).map((d, idx) => (
                 <div key={`${d.factor}-${idx}`} className="text-xs text-black/70 leading-5">
@@ -275,6 +322,11 @@ export default function CostVolatilityClient() {
           <div>
             <div className="text-sm font-medium">What’s driving unpredictability</div>
             <div className="text-xs opacity-70 mt-1">Ranked by estimated impact.</div>
+
+            {/* ✅ Patch: confidence clarification */}
+            <div className="text-xs opacity-60 mt-1">
+              Confidence reflects data availability, not volatility severity.
+            </div>
           </div>
           <div className="shrink-0">{confidenceBadge(data?.meta?.confidence)}</div>
         </div>
