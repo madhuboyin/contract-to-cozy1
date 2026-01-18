@@ -1,5 +1,4 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/sell-hold-rent/sellHoldRentApi.ts
-import { api } from '@/lib/api/client';
 
 export type SellHoldRentDTO = {
   input: {
@@ -99,7 +98,8 @@ export async function getSellHoldRent(
   const q = params.toString();
   const url = `/api/properties/${propertyId}/tools/sell-hold-rent${q ? `?${q}` : ''}`;
 
-  // ✅ Use fetch so we don't depend on api.get wrapper behavior.
+  // ✅ Bypass shared api client (it expects APISuccess envelope).
+  // Keep request authenticated via cookies.
   const resp = await fetch(url, { credentials: 'include' });
 
   if (!resp.ok) {
@@ -109,14 +109,13 @@ export async function getSellHoldRent(
 
   const body = (await resp.json()) as any;
 
+  // Backend returns: { sellHoldRent: { ...dto } }
   const dto = body?.sellHoldRent;
   if (!dto) {
     // eslint-disable-next-line no-console
-    console.error('[sellHoldRentApi] Missing sellHoldRent in response body', { url, body });
+    console.error('[sellHoldRentApi] Missing sellHoldRent payload', { url, body });
     throw new Error('Malformed response: missing sellHoldRent payload');
   }
 
   return dto as SellHoldRentDTO;
 }
-
-
