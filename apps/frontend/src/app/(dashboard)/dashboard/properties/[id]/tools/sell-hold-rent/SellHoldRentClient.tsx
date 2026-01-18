@@ -218,6 +218,7 @@ export default function SellHoldRentClient() {
 
       {/* Scenario Comparison */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* LEFT: Comparison */}
         <div className="lg:col-span-5 rounded-2xl border border-black/10 bg-white p-4">
           <div className="text-sm font-medium">Scenario comparison</div>
           <div className="text-xs opacity-70 mt-1">Net outcomes over {years} years</div>
@@ -231,6 +232,10 @@ export default function SellHoldRentClient() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* RIGHT: 3 scenario cards */}
+        <div className="lg:col-span-7 grid grid-cols-1 md:grid-cols-3 gap-3">
           {/* SELL */}
           <div className="rounded-2xl border border-black/10 bg-white p-4">
             <div className="text-sm font-medium">Sell</div>
@@ -238,12 +243,18 @@ export default function SellHoldRentClient() {
             <div className="text-lg font-semibold mt-2">{money(data?.scenarios?.sell?.netProceeds)}</div>
 
             <div className="mt-3 text-xs text-black/70 space-y-1">
-              <div>Projected sale: <span className="font-medium">{money(data?.scenarios?.sell?.projectedSalePrice)}</span></div>
-              <div>Selling costs: <span className="font-medium">{money(data?.scenarios?.sell?.sellingCosts)}</span></div>
+              <div>
+                Projected sale: <span className="font-medium">{money(data?.scenarios?.sell?.projectedSalePrice)}</span>
+              </div>
+              <div>
+                Selling costs: <span className="font-medium">{money(data?.scenarios?.sell?.sellingCosts)}</span>
+              </div>
             </div>
 
             <div className="mt-3 text-xs opacity-70 space-y-1">
-              {(data?.scenarios?.sell?.notes || []).slice(0, 2).map((n, i) => <div key={i}>• {n}</div>)}
+              {(data?.scenarios?.sell?.notes || []).slice(0, 2).map((n, i) => (
+                <div key={i}>• {n}</div>
+              ))}
             </div>
           </div>
 
@@ -254,12 +265,18 @@ export default function SellHoldRentClient() {
             <div className="text-lg font-semibold mt-2">{money(data?.scenarios?.hold?.net)}</div>
 
             <div className="mt-3 text-xs text-black/70 space-y-1">
-              <div>Appreciation gain: <span className="font-medium">{money(data?.scenarios?.hold?.appreciationGain)}</span></div>
-              <div>Ownership costs: <span className="font-medium">{money(data?.scenarios?.hold?.totalOwnershipCosts)}</span></div>
+              <div>
+                Appreciation gain: <span className="font-medium">{money(data?.scenarios?.hold?.appreciationGain)}</span>
+              </div>
+              <div>
+                Ownership costs: <span className="font-medium">{money(data?.scenarios?.hold?.totalOwnershipCosts)}</span>
+              </div>
             </div>
 
             <div className="mt-3 text-xs opacity-70 space-y-1">
-              {(data?.scenarios?.hold?.notes || []).slice(0, 2).map((n, i) => <div key={i}>• {n}</div>)}
+              {(data?.scenarios?.hold?.notes || []).slice(0, 2).map((n, i) => (
+                <div key={i}>• {n}</div>
+              ))}
             </div>
           </div>
 
@@ -270,17 +287,24 @@ export default function SellHoldRentClient() {
             <div className="text-lg font-semibold mt-2">{money(data?.scenarios?.rent?.net)}</div>
 
             <div className="mt-3 text-xs text-black/70 space-y-1">
-              <div>Rental income: <span className="font-medium">{money(data?.scenarios?.rent?.totalRentalIncome)}</span></div>
+              <div>
+                Rental income: <span className="font-medium">{money(data?.scenarios?.rent?.totalRentalIncome)}</span>
+              </div>
               <div>
                 Vacancy + mgmt:{' '}
                 <span className="font-medium">
-                  {money((data?.scenarios?.rent?.rentalOverheads?.vacancyLoss ?? 0) + (data?.scenarios?.rent?.rentalOverheads?.managementFees ?? 0))}
+                  {money(
+                    (data?.scenarios?.rent?.rentalOverheads?.vacancyLoss ?? 0) +
+                      (data?.scenarios?.rent?.rentalOverheads?.managementFees ?? 0)
+                  )}
                 </span>
               </div>
             </div>
 
             <div className="mt-3 text-xs opacity-70 space-y-1">
-              {(data?.scenarios?.rent?.notes || []).slice(0, 2).map((n, i) => <div key={i}>• {n}</div>)}
+              {(data?.scenarios?.rent?.notes || []).slice(0, 2).map((n, i) => (
+                <div key={i}>• {n}</div>
+              ))}
             </div>
           </div>
         </div>
