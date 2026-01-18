@@ -707,11 +707,15 @@ export default function PropertyDetailPage() {
         </button>
       </div>
 
-      <div className="flex items-start justify-between gap-4 mb-2">
-        {/* Home tools rail — under header */}
-        <div className="mt-1 mb-3">
-          <HomeToolsRail propertyId={property.id} />
-        </div>
+      {/* Header row */}
+      <div className="flex items-start justify-between gap-4 mb-3">
+        <PageHeader className="pt-2 pb-2 gap-1 flex-1">
+          <PageHeaderHeading>{property.name || "My Property"}</PageHeaderHeading>
+          <PageHeaderDescription>
+            {property.address}, {property.city}
+          </PageHeaderDescription>
+        </PageHeader>
+
         <div className="flex-shrink-0 pt-2">
           <Link href={`/dashboard/properties/${property.id}/edit`} passHref>
             <Button variant="outline" size="sm" className="gap-2">
@@ -722,17 +726,9 @@ export default function PropertyDetailPage() {
         </div>
       </div>
 
-      {/* Home tools rail (under header, above banner) */}
-      <div className="mb-3">
-        {/* Header row */}
-        <div className="flex items-start justify-between gap-4 mb-2">
-          <PageHeader className="pt-2 pb-2 gap-1 flex-1">
-            <PageHeaderHeading>{property.name || "My Property"}</PageHeaderHeading>
-            <PageHeaderDescription>
-              {property.address}, {property.city}
-            </PageHeaderDescription>
-          </PageHeader>
-        </div>
+      {/* Home tools rail — just above banner (your desired placement) */}
+      <div className="mb-4">
+        <HomeToolsRail propertyId={property.id} />
       </div>
 
       {/* Selling Prep Banner */}
