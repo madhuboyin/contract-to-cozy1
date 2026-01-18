@@ -16,7 +16,7 @@ export async function getSellHoldRent(req: Request, res: Response) {
   const yearsRaw = req.query.years;
   const years = yearsRaw === '10' ? 10 : 5;
 
-  const dto = await svc.getSellHoldRent(propertyId, {
+  const dto = await svc.estimate(propertyId, {
     years,
     homeValueNow: num(req.query.homeValueNow),
     appreciationRate: num(req.query.appreciationRate),
