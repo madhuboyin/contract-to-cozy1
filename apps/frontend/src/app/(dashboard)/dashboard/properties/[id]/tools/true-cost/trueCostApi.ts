@@ -35,7 +35,11 @@ export type TrueCostOwnershipDTO = {
 };
 
 export async function getTrueCostOwnership(propertyId: string) {
-  const res = await api.get(`/api/properties/${propertyId}/tools/true-cost`);
-  // api wrapper returns { data: { success, data: { trueCostOwnership } } }
-  return res.data?.data?.trueCostOwnership as TrueCostOwnershipDTO;
+  // NOTE: api.get() returns { data: APISuccess<T>["data"] }
+  // Your controller returns { success, data: { trueCostOwnership: dto } }
+  // So res.data is { trueCostOwnership: dto }
+  const res = await api.get<{ trueCostOwnership: TrueCostOwnershipDTO }>(
+    `/api/properties/${propertyId}/tools/true-cost`
+  );
+  return res.data.trueCostOwnership;
 }
