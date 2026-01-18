@@ -88,9 +88,8 @@ export async function getSellHoldRent(
   propertyId: string,
   params?: SellHoldRentParams
 ): Promise<SellHoldRentDTO> {
-  const res = await api.get<{ sellHoldRent: SellHoldRentDTO }>(
-    `/api/properties/${propertyId}/tools/sell-hold-rent`,
-    { params }
+  const res = await api.getRaw<{ sellHoldRent: SellHoldRentDTO }>(
+    `/api/properties/${propertyId}/tools/sell-hold-rent${params ? `?${new URLSearchParams(params as any).toString()}` : ''}`
   );
 
   return res.data.sellHoldRent;
