@@ -101,12 +101,30 @@ export async function getSellHoldRent(
 
   const res: any = await api.get(url);
 
-  // ✅ Works with AxiosResponse (res.data) AND with any wrapper that returns body directly.
-  const dto = res?.data?.sellHoldRent ?? res?.sellHoldRent;
+  // ✅ Robust unwrap for different api client wrappers
+  // Possible shapes:
+  // 1) AxiosResponse: { data: { sellHoldRent: ... } }
+  // 2) Direct body: { sellHoldRent: ... }
+  // 3) Wrapped: { data: { ... } } but not AxiosResponse
+  // 4) Wrapped: { payload: { sellHoldRent: ... } } (some clients)
+  const body =
+    res?.data?.data ??        // some wrappers: { data: { data: body } }
+    res?.data ??              // axios: { data: body }
+    res?.payload ??           // some wrappers: { payload: body }
+    res;                      // direct
+
+  const dto =
+    body?.sellHoldRent ??
+    body?.data?.sellHoldRent ??      // defensive nesting
+    body?.payload?.sellHoldRent;     // defensive nesting
 
   if (!dto) {
+    // Help future debugging without crashing silently
+    // eslint-disable-next-line no-console
+    console.error('[sellHoldRentApi] Unexpected response shape', { url, res });
     throw new Error('Malformed response: missing sellHoldRent payload');
   }
 
   return dto as SellHoldRentDTO;
 }
+

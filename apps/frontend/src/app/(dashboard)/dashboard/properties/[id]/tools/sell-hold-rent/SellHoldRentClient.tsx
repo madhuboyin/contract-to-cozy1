@@ -71,7 +71,7 @@ export default function SellHoldRentClient() {
 
     // ✅ Fix 2: Prevent empty placeholder $0.00 / “Hold” defaults during first load.
   // Show a calm loading shell until we have real data OR we have an error.
-  if (!data && loading && !error) {
+  if (!data && !error) {
     return (
       <div className="p-6 space-y-4">
         <SectionHeader
