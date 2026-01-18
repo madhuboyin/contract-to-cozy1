@@ -93,18 +93,5 @@ export async function getSellHoldRent(
     { params }
   );
 
-  const payload = res.data?.sellHoldRent;
-
-  if (!payload) {
-    // eslint-disable-next-line no-console
-    console.error('[sellHoldRentApi] Unexpected response shape', {
-      url: `/api/properties/${propertyId}/tools/sell-hold-rent`,
-      res,
-    });
-    throw new Error('Malformed response: missing sellHoldRent payload');
-  }
-
-  return payload;
+  return res.data.sellHoldRent;
 }
-
-
