@@ -21,7 +21,7 @@ export type CostVolatilityDTO = {
     annualTax: number;
     annualInsurance: number;
     annualTotal: number;
-    yoyTotalPct: number | null; // percent points
+    yoyTotalPct: number | null;
     yoyInsurancePct: number | null;
     yoyTaxPct: number | null;
   }>;
@@ -38,17 +38,17 @@ export type CostVolatilityDTO = {
   };
 };
 
-export async function getCostVolatility(propertyId: string, opts: { years: 5 | 10 }): Promise<CostVolatilityDTO> {
-  const r = await api.get(`/properties/${propertyId}/tools/cost-volatility?years=${opts.years}`);
+export async function getCostVolatility(
+  propertyId: string,
+  opts?: { years?: 5 | 10 }
+): Promise<CostVolatilityDTO> {
+  const params = new URLSearchParams();
+  if (opts?.years) params.set('years', String(opts.years));
 
-  // Robust unwrap across your patterns
-  const payload: any = (r as any)?.data ?? r;
-  const dto: any =
-    payload?.data?.costVolatility ??
-    payload?.costVolatility ??
-    payload?.data?.data?.costVolatility;
+  const q = params.toString();
+  const url = `/api/properties/${propertyId}/tools/cost-volatility${q ? `?${q}` : ''}`;
 
-  if (!dto) throw new Error('Failed to load cost volatility');
-
-  return dto as CostVolatilityDTO;
+  const res = await api.get(url);
+  // controller returns { success: true, data: { costVolatility } }
+  return (res.data as any)?.costVolatility as CostVolatilityDTO;
 }
