@@ -7,10 +7,19 @@ function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
+type ChartEvent = {
+  year: string; // must match xLabels entries
+  type: 'INSURANCE_SHOCK' | 'TAX_RESET' | 'CLIMATE_EVENT' | string;
+  description: string;
+};
+
 export default function MiniLineChartPct(props: {
   xLabels: string[];
   yValues: Array<number | null>;
   ariaLabel?: string;
+
+  // ✅ Phase-2 additive
+  events?: ChartEvent[];
 }) {
   const w = 720;
   const h = 200;
@@ -55,6 +64,18 @@ export default function MiniLineChartPct(props: {
           { idx: safe.xLabels.length - 1, label: safe.xLabels[safe.xLabels.length - 1] },
         ];
 
+  // ✅ Phase-2: map events by year label for fast lookup
+  const eventByYear = useMemo(() => {
+    const m = new Map<string, ChartEvent[]>();
+    for (const e of props.events || []) {
+      const k = String(e.year);
+      const arr = m.get(k) || [];
+      arr.push(e);
+      m.set(k, arr);
+    }
+    return m;
+  }, [props.events]);
+
   // Hover tooltip (lightweight)
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [hoverXPct, setHoverXPct] = useState<number>(0);
@@ -77,8 +98,16 @@ export default function MiniLineChartPct(props: {
     if (hoverIdx === null) return null;
     const year = safe.xLabels[hoverIdx] ?? '—';
     const v = numeric[hoverIdx] ?? 0;
-    return { year, v };
-  }, [hoverIdx, safe.xLabels, numeric]);
+    const evs = eventByYear.get(year) || [];
+    return { year, v, evs };
+  }, [hoverIdx, safe.xLabels, numeric, eventByYear]);
+
+  function badgeLabel(type: string) {
+    if (type === 'INSURANCE_SHOCK') return 'Insurance repricing';
+    if (type === 'TAX_RESET') return 'Reassessment reset';
+    if (type === 'CLIMATE_EVENT') return 'Regional sensitivity';
+    return 'Event';
+  }
 
   return (
     <div className="relative w-full">
@@ -111,6 +140,19 @@ export default function MiniLineChartPct(props: {
         {/* line */}
         <path d={path} fill="none" stroke="currentColor" strokeWidth="2.75" />
 
+        {/* ✅ Phase-2: event markers (calm dots on baseline) */}
+        {safe.xLabels.map((lbl, idx) => {
+          const evs = eventByYear.get(lbl);
+          if (!evs || !evs.length) return null;
+          const x = xFor(idx);
+          const y = h - padB;
+          return (
+            <g key={`ev-${lbl}`}>
+              <circle cx={x} cy={y - 2} r={3} fill="white" stroke="currentColor" strokeOpacity="0.55" strokeWidth={1.5} />
+            </g>
+          );
+        })}
+
         {/* x ticks */}
         {xTicks.map((t, i) => {
           const x = xFor(t.idx);
@@ -127,14 +169,7 @@ export default function MiniLineChartPct(props: {
         {/* hover marker */}
         {hoverIdx !== null && (
           <g>
-            <line
-              x1={xFor(hoverIdx)}
-              y1={padT}
-              x2={xFor(hoverIdx)}
-              y2={h - padB}
-              stroke="currentColor"
-              strokeOpacity="0.12"
-            />
+            <line x1={xFor(hoverIdx)} y1={padT} x2={xFor(hoverIdx)} y2={h - padB} stroke="currentColor" strokeOpacity="0.12" />
             <circle cx={xFor(hoverIdx)} cy={yFor(numeric[hoverIdx] ?? 0)} r={3.5} fill="white" stroke="currentColor" strokeWidth={2} />
           </g>
         )}
@@ -150,6 +185,19 @@ export default function MiniLineChartPct(props: {
             <span>Total YoY</span>
             <span className="font-medium tabular-nums">{tooltip.v.toFixed(1)}%</span>
           </div>
+
+          {!!tooltip.evs.length && (
+            <div className="mt-2 space-y-1">
+              {tooltip.evs.slice(0, 2).map((e, i) => (
+                <div key={i} className="text-[11px] text-black/60 leading-4">
+                  <span className="inline-block mr-1 rounded border border-black/10 bg-white px-1.5 py-0.5">
+                    {badgeLabel(e.type)}
+                  </span>
+                  {e.description}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

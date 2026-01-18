@@ -24,6 +24,13 @@ function confidenceBadge(c?: string) {
   return <span className={`${base} bg-black/5 text-black/70`}>Estimated</span>;
 }
 
+function eventLabel(t?: string) {
+  if (t === 'INSURANCE_SHOCK') return 'Insurance';
+  if (t === 'TAX_RESET') return 'Tax';
+  if (t === 'CLIMATE_EVENT') return 'Regional';
+  return 'Event';
+}
+
 export default function CostVolatilityClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
@@ -74,6 +81,20 @@ export default function CostVolatilityClient() {
     const sampled = [0, 2, 4, 6, 8].filter((i) => i < ten.length).map((i) => ten[i]);
     return { x: sampled.map((h) => String(h.year)), y: sampled.map((h) => h.yoyTotalPct) };
   }, [data, years]);
+
+  // ✅ Phase-2: show markers only for years visible on the sampled chart (keeps calm + avoids mismatch)
+  const chartEvents = useMemo(() => {
+    const ev = data?.events || [];
+    const shown = new Set(yoyChart.x);
+    return ev
+      .map((e) => ({ year: String(e.year), type: e.type, description: e.description }))
+      .filter((e) => shown.has(e.year));
+  }, [data, yoyChart.x]);
+
+  const recentEvents = useMemo(() => {
+    const ev = data?.events || [];
+    return [...ev].sort((a, b) => a.year - b.year).slice(-8);
+  }, [data]);
 
   return (
     <div className="p-6 space-y-4">
@@ -133,7 +154,19 @@ export default function CostVolatilityClient() {
           <div className="rounded-xl border border-black/10 p-3">
             <div className="text-xs opacity-70">Index</div>
             <div className="text-2xl font-semibold tabular-nums">{data?.index?.volatilityIndex ?? '—'}</div>
-            <div className="mt-1">{badgeForBand(data?.index?.band)}</div>
+
+            <div className="mt-1 flex items-center gap-2">
+              {badgeForBand(data?.index?.band)}
+              {!!data?.index?.bandLabel && (
+                <span className="text-xs opacity-60">{data.index.bandLabel}</span>
+              )}
+            </div>
+
+            {!!data?.index?.dominantDriver && (
+              <div className="mt-2 text-xs opacity-60">
+                Primary driver: <span className="font-medium text-black/70">{data.index.dominantDriver}</span>
+              </div>
+            )}
           </div>
 
           <div className="rounded-xl border border-black/10 p-3">
@@ -161,15 +194,79 @@ export default function CostVolatilityClient() {
             <span className="text-xs rounded-full border border-black/10 px-2 py-0.5 bg-white">
               Total annual cost YoY change (%)
             </span>
-            <span className="text-xs opacity-60 ml-auto">{loading ? 'Refreshing…' : data?.meta?.generatedAt ? 'Updated just now' : ''}</span>
+            <span className="text-xs opacity-60 ml-auto">
+              {loading ? 'Refreshing…' : data?.meta?.generatedAt ? 'Updated just now' : ''}
+            </span>
           </div>
 
-          <MiniLineChartPct xLabels={yoyChart.x} yValues={yoyChart.y} ariaLabel="Total cost YoY change chart" />
+          {/* ✅ Phase-2: pass events to chart */}
+          <MiniLineChartPct
+            xLabels={yoyChart.x}
+            yValues={yoyChart.y}
+            events={chartEvents}
+            ariaLabel="Total cost YoY change chart"
+          />
 
           <div className="mt-2 text-xs opacity-60">
             Higher swings = more surprise risk. 10y view is sampled for readability.
           </div>
         </div>
+
+        {/* ✅ Phase-2: calm event chips */}
+        {!!recentEvents.length && (
+          <div className="mt-4 rounded-xl border border-black/10 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm font-medium">Years with surprise risk</div>
+              <div className="text-xs opacity-60">Dots mark step-change years</div>
+            </div>
+
+            <div className="mt-2 flex flex-wrap gap-2">
+              {recentEvents.map((e, idx) => (
+                <span
+                  key={`${e.year}-${idx}`}
+                  className="text-xs rounded-full border border-black/10 bg-white px-2 py-0.5"
+                  title={e.description}
+                >
+                  {e.year} <span className="opacity-60">·</span> {eventLabel(e.type)}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ✅ Phase-2: why spikes (top 2 drivers) */}
+        {!!(data?.drivers?.length ?? 0) && (
+          <div className="mt-4 rounded-xl border border-black/10 p-3">
+            <div className="text-sm font-medium">Why volatility spikes here</div>
+            <div className="mt-2 space-y-2">
+              {(data?.drivers || []).slice(0, 2).map((d, idx) => (
+                <div key={`${d.factor}-${idx}`} className="text-xs text-black/70 leading-5">
+                  <span className="font-medium text-black/80">{d.factor}:</span> {d.explanation}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ✅ Phase-2: optional AI readiness hook */}
+        {!!data?.meta?.aiSummary && (
+          <div className="mt-4 rounded-xl bg-black/5 p-3">
+            <div className="text-xs font-medium text-black/70">Summary</div>
+            <div className="mt-2 text-xs text-black/70 leading-5">{data.meta.aiSummary.shortExplanation}</div>
+            <div className="mt-2 text-xs text-black/70 leading-5">{data.meta.aiSummary.riskNarrative}</div>
+
+            {!!data.meta.aiSummary.whatToWatch?.length && (
+              <div className="mt-2">
+                <div className="text-[11px] uppercase tracking-wide text-black/60">What to watch</div>
+                <div className="mt-1 space-y-1">
+                  {data.meta.aiSummary.whatToWatch.slice(0, 3).map((w, i) => (
+                    <div key={i} className="text-xs text-black/70">• {w}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Drivers */}
@@ -177,7 +274,7 @@ export default function CostVolatilityClient() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-sm font-medium">What’s driving unpredictability</div>
-            <div className="text-xs opacity-70 mt-1">Ranked by estimated impact (Phase 1).</div>
+            <div className="text-xs opacity-70 mt-1">Ranked by estimated impact.</div>
           </div>
           <div className="shrink-0">{confidenceBadge(data?.meta?.confidence)}</div>
         </div>

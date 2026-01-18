@@ -15,6 +15,8 @@ export type CostVolatilityDTO = {
     insuranceVolatility: number;
     taxVolatility: number;
     zipVolatility: number;
+    bandLabel?: string;
+    dominantDriver?: 'INSURANCE' | 'TAX' | 'CLIMATE';
   };
   history: Array<{
     year: number;
@@ -30,11 +32,21 @@ export type CostVolatilityDTO = {
     impact: 'LOW' | 'MEDIUM' | 'HIGH';
     explanation: string;
   }>;
+  events?: Array<{
+    year: number;
+    type: 'INSURANCE_SHOCK' | 'TAX_RESET' | 'CLIMATE_EVENT';
+    description: string;
+  }>;
   meta: {
     generatedAt: string;
     dataSources: string[];
     notes: string[];
     confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+    aiSummary?: {
+      shortExplanation: string;
+      riskNarrative: string;
+      whatToWatch: string[];
+    };
   };
 };
 
