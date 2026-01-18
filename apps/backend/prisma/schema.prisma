@@ -2413,6 +2413,38 @@ model PropertyClimateSetting {
   @@map("property_climate_settings")
 }
 
+model PropertyFinanceSnapshot {
+  id                 String   @id @default(uuid())
+  propertyId          String   @unique
+  mortgageBalance     Float?
+  interestRate        Float?   // decimal, e.g. 0.0625
+  remainingTermMonths Int?
+  monthlyPayment      Float?   // optional override; if null, computed
+  lastVerifiedAt      DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+}
+
+model ToolOverride {
+  id         String   @id @default(uuid())
+  propertyId  String
+  toolKey     String   // e.g. "SELL_HOLD_RENT"
+  key         String   // e.g. "monthlyRentNow", "appreciationRate"
+  value       Float
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, toolKey, key])
+  @@index([propertyId, toolKey])
+}
+
+
 // ============================================================================
 // HOME TIMELINE
 // ============================================================================
