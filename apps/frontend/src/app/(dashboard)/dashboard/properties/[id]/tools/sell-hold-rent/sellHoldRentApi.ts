@@ -99,32 +99,24 @@ export async function getSellHoldRent(
   const q = params.toString();
   const url = `/api/properties/${propertyId}/tools/sell-hold-rent${q ? `?${q}` : ''}`;
 
-  const res: any = await api.get(url);
+  // ✅ Use fetch so we don't depend on api.get wrapper behavior.
+  const resp = await fetch(url, { credentials: 'include' });
 
-  // ✅ Robust unwrap for different api client wrappers
-  // Possible shapes:
-  // 1) AxiosResponse: { data: { sellHoldRent: ... } }
-  // 2) Direct body: { sellHoldRent: ... }
-  // 3) Wrapped: { data: { ... } } but not AxiosResponse
-  // 4) Wrapped: { payload: { sellHoldRent: ... } } (some clients)
-  const body =
-    res?.data?.data ??        // some wrappers: { data: { data: body } }
-    res?.data ??              // axios: { data: body }
-    res?.payload ??           // some wrappers: { payload: body }
-    res;                      // direct
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(`Sell/Hold/Rent request failed (${resp.status}): ${text || resp.statusText}`);
+  }
 
-  const dto =
-    body?.sellHoldRent ??
-    body?.data?.sellHoldRent ??      // defensive nesting
-    body?.payload?.sellHoldRent;     // defensive nesting
+  const body = (await resp.json()) as any;
 
+  const dto = body?.sellHoldRent;
   if (!dto) {
-    // Help future debugging without crashing silently
     // eslint-disable-next-line no-console
-    console.error('[sellHoldRentApi] Unexpected response shape', { url, res });
+    console.error('[sellHoldRentApi] Missing sellHoldRent in response body', { url, body });
     throw new Error('Malformed response: missing sellHoldRent payload');
   }
 
   return dto as SellHoldRentDTO;
 }
+
 
