@@ -1,3 +1,4 @@
+// apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/break-even/BreakEvenClient.tsx
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -113,7 +114,6 @@ export default function BreakEvenClient() {
         <HomeToolsRail propertyId={propertyId} />
       </div>
 
-      {/* Main Card */}
       <div className="rounded-2xl border border-black/10 bg-white p-4">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -143,10 +143,8 @@ export default function BreakEvenClient() {
           </div>
         </div>
 
-        {error && <div className="text-sm text-red-600 mt-3">{error}</div>}
-
         <div className="mt-4 grid grid-cols-1 lg:grid-cols-12 gap-4">
-          {/* Left: summary */}
+          {/* Left */}
           <div className="lg:col-span-4 space-y-3">
             <div className={`rounded-xl border p-3 ${statusTone}`}>
               <div className="text-xs opacity-80">Break-even</div>
@@ -163,9 +161,20 @@ export default function BreakEvenClient() {
               <div className="text-base font-semibold">{money(data?.rollup?.cumulativeAppreciationAtHorizon)}</div>
             </div>
 
+            {/* ✅ FIXED wording */}
             <div className="rounded-xl border border-black/10 p-3">
               <div className="text-xs opacity-70">Sensitivity</div>
-              <div className="text-sm font-medium mt-1">Break-even range: {data?.sensitivity?.rangeLabel || '—'}</div>
+
+              <div className="text-sm font-medium mt-1">
+                Optimistic break-even:{' '}
+                {data?.sensitivity?.optimistic?.breakEvenYearIndex
+                  ? `Year ${data.sensitivity.optimistic.breakEvenYearIndex}`
+                  : 'Not reached'}
+              </div>
+
+              <div className="text-xs opacity-60 mt-1">
+                Base and conservative scenarios do not reach break-even within this horizon.
+              </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className="text-xs rounded-full border border-black/10 px-2 py-0.5 bg-white">
@@ -174,56 +183,49 @@ export default function BreakEvenClient() {
                 <span className="text-xs rounded-full border border-black/10 px-2 py-0.5 bg-white">
                   Base: {data?.sensitivity?.base?.breakEvenYearIndex ? `Year ${data.sensitivity.base.breakEvenYearIndex}` : 'Not reached'}
                 </span>
-                <span className="text-xs rounded-full border border-black/10 px-2 py-0.5 bg-white">
-                  Optimistic: {data?.sensitivity?.optimistic?.breakEvenYearIndex ? `Year ${data.sensitivity.optimistic.breakEvenYearIndex}` : 'Not reached'}
-                </span>
               </div>
             </div>
           </div>
 
-          {/* Right: chart */}
+          {/* Right */}
           <div className="lg:col-span-8 rounded-xl border border-black/10 p-3">
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className="text-xs rounded-full border border-black/10 px-2 py-0.5 bg-white">Cumulative costs</span>
-              <span className="text-xs rounded-full border border-black/10 px-2 py-0.5 bg-white opacity-80">Cumulative appreciation</span>
-              <span className="text-xs opacity-60 ml-auto">{loading ? 'Refreshing…' : data?.meta?.generatedAt ? 'Updated just now' : ''}</span>
-            </div>
+            <MultiLineChart
+              xLabels={chartModel.x}
+              series={chartModel.series}
+              verticalMarkerIndex={chartModel.breakEvenIdx}
+              verticalMarkerLabel={data?.breakEven?.reached ? `Break-even (Year ${data.breakEven.breakEvenYearIndex})` : undefined}
+              eventMarkers={chartModel.eventIdxs}
+            />
 
-            <div className="text-black/70">
-              <MultiLineChart
-                xLabels={chartModel.x}
-                series={chartModel.series}
-                ariaLabel="Break-even cumulative costs vs appreciation"
-                verticalMarkerIndex={chartModel.breakEvenIdx}
-                verticalMarkerLabel={data?.breakEven?.reached ? `Break-even (Year ${data.breakEven.breakEvenYearIndex})` : undefined}
-                eventMarkers={chartModel.eventIdxs}
-              />
-            </div>
-
+            {/* ✅ clearer dot explanation */}
             <div className="mt-2 text-xs opacity-60">
-              Marker shows first year where cumulative appreciation ≥ cumulative costs. Dots highlight step-change years (hover for details).
+              Dots indicate years with step-changes such as tax reassessment resets or insurance repricing events.
             </div>
           </div>
         </div>
       </div>
 
-      {/* Drivers + Explainability */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className="lg:col-span-7 rounded-2xl border border-black/10 bg-white p-4">
           <div className="text-sm font-medium">What matters most</div>
-          <div className="text-xs opacity-70 mt-1">
-            Localized to <span className="font-medium">{data?.input?.state || '—'}</span> and ZIP{' '}
-            <span className="font-medium">{data?.input?.zipCode || '—'}</span>.
-          </div>
 
           <div className="mt-4 space-y-2">
             {(data?.drivers || []).map((d, idx) => (
               <div key={idx} className="rounded-xl border border-black/10 p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="text-sm font-medium">{d.factor}</div>
+                  <div className="text-sm font-medium">
+                    {d.factor === 'Appreciation rate' ? 'Appreciation rate (key driver)' : d.factor}
+                  </div>
                   <span className="text-xs rounded px-2 py-0.5 border border-black/10 bg-black/5">{d.impact}</span>
                 </div>
+
                 <div className="text-xs text-black/70 mt-2">{d.explanation}</div>
+
+                {d.factor === 'Appreciation rate' && (
+                  <div className="text-xs opacity-60 mt-1">
+                    Break-even timing is highly sensitive to appreciation assumptions.
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -235,15 +237,16 @@ export default function BreakEvenClient() {
             {badgeForConfidence(data?.meta?.confidence)}
           </div>
 
+          {data?.meta?.confidence === 'LOW' && (
+            <div className="text-xs opacity-60 mt-1">
+              Estimated using localized historical heuristics (Phase 1–2 model). No persisted long-term snapshots yet.
+            </div>
+          )}
+
           <div className="mt-3 space-y-2">
             {(data?.meta?.notes || []).map((n, i) => (
               <div key={i} className="text-xs text-black/70">• {n}</div>
             ))}
-          </div>
-
-          <div className="mt-4 rounded-xl bg-black/5 p-3">
-            <div className="text-xs opacity-70">Data sources</div>
-            <div className="text-xs text-black/70 mt-1">{(data?.meta?.dataSources || []).join(' · ')}</div>
           </div>
         </div>
       </div>
