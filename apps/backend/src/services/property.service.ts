@@ -1,16 +1,15 @@
 // apps/backend/src/services/property.service.ts
 
-import { PrismaClient, Property, PropertyType, OwnershipType, HeatingType, CoolingType, WaterHeaterType, RoofType, HomeAsset, Prisma, ChecklistItem, Warranty } from '@prisma/client';
-// IMPORT REQUIRED: Import the utility and interface
+import { Property, PropertyType, OwnershipType, HeatingType, CoolingType, WaterHeaterType, RoofType, Prisma, ChecklistItem, Warranty } from '@prisma/client';
 import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.util'; 
-
-// NEW IMPORTS FOR PHASE 2: Risk Assessment Triggering
 import JobQueueService from './JobQueue.service';
-import { PropertyIntelligenceJobType } from '../config/risk-job-types';
+import type { HomeAssetDTO } from './propertyApplianceInventory.service';
+import {
+  syncPropertyApplianceInventoryItems,
+  listPropertyAppliancesAsHomeAssets,
+} from './propertyApplianceInventory.service';
 
 import { prisma } from '../lib/prisma';
-
-// --- NEW STRUCTURED INPUT INTERFACES ---
 
 interface HomeAssetInput {
   id?: string; // Optional: Used for client-side tracking, ignored by service but kept for consistency
@@ -66,8 +65,8 @@ interface UpdatePropertyData extends Partial<CreatePropertyData> {
 // === INJECT MISSING INTERFACE DEFINITIONS ===
 // FIX 1: Add 'warranties: Warranty[]' to include the relation for scoring
 export interface PropertyWithAssets extends Property {
-    homeAssets: HomeAsset[];
-    warranties: Warranty[];
+  homeAssets: HomeAssetDTO[];
+  warranties: Warranty[];
 }
 
 export interface ScoredProperty extends PropertyWithAssets {
@@ -110,64 +109,13 @@ export interface PropertyAIGuidance {
 }
 // ===============================================
 
-// --- CORE ASSET SYNC LOGIC (FIXED) ---
-
-/**
- * Helper function to create/update/delete HomeAsset records.
- */
-async function syncHomeAssets(propertyId: string, incomingAssets: HomeAssetInput[]): Promise<void> {
-  
-  // 1. Fetch existing assets for the property
-  const existingAssets = await prisma.homeAsset.findMany({
-    where: { propertyId: propertyId },
-  });
-
-  const operations: Prisma.PrismaPromise<any>[] = [];
-  const existingAssetMap = new Map(existingAssets.map(a => [a.assetType, a]));
-  const incomingAssetTypes = new Set(incomingAssets.map(a => a.type));
-
-  // 2. Identify and queue UPDATE or CREATE operations
-  for (const incoming of incomingAssets) {
-    if (!incoming.type) continue;
-    
-    // Check if asset already exists (by assetType)
-    const existing = existingAssetMap.get(incoming.type);
-
-    if (existing) {
-      // Update existing asset
-      if (existing.installationYear !== incoming.installYear) {
-        operations.push(prisma.homeAsset.update({
-          where: { id: existing.id },
-          data: { installationYear: incoming.installYear },
-        }));
-      }
-    } else {
-      // Create new asset
-      operations.push(prisma.homeAsset.create({
-        data: {
-          propertyId: propertyId,
-          assetType: incoming.type as any, // Cast to match Enum/Type
-          installationYear: incoming.installYear,
-        },
-      }));
-    }
-  }
-
-  // 3. Identify and queue DELETE operations
-  for (const existing of existingAssets) {
-    if (!incomingAssetTypes.has(existing.assetType)) {
-      // Delete asset that was present but is now missing from the incoming list
-      operations.push(prisma.homeAsset.delete({
-        where: { id: existing.id },
-      }));
-    }
-  }
-
-  // 4. Execute all operations in a single transaction
-  if (operations.length > 0) {
-    await prisma.$transaction(operations);
-  }
+async function hydrateHomeAssetsFromInventory<T extends { id: string }>(
+  property: T
+): Promise<T & { homeAssets: HomeAssetDTO[] }> {
+  const homeAssets = await listPropertyAppliancesAsHomeAssets(property.id);
+  return { ...(property as any), homeAssets };
 }
+
 
 // --- SCORE ATTACHMENT ---
 
@@ -259,16 +207,15 @@ export async function getUserProperties(userId: string): Promise<ScoredProperty[
     ],
     include: {
       homeownerProfile: true,
-      homeAssets: true, 
+      //homeAssets: true, 
       // FIX 3: Include warranties in the fetch query
       warranties: true, 
     }
   });
   
   // MAP REQUIRED: Calculate and attach score for all properties
-  const scoredProperties = await Promise.all(
-      properties.map(attachHealthScore)
-  );
+  const hydrated = await Promise.all(properties.map(hydrateHomeAssetsFromInventory));
+  const scoredProperties = await Promise.all(hydrated.map(attachHealthScore));
 
   return scoredProperties;
 }
@@ -330,9 +277,10 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
   });
 
   // NEW STEP: Handle assets AFTER property creation
-  if (data.homeAssets && data.homeAssets.length > 0) {
-    await syncHomeAssets(property.id, data.homeAssets);
+  if (data.homeAssets !== undefined) {
+    await syncPropertyApplianceInventoryItems(property.id, data.homeAssets || []);
   }
+  
 
   // PHASE 2 ADDITION: FIX: Use the comprehensive job enqueuer
   // This triggers both Risk and FES calculations
@@ -342,7 +290,7 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
   const fullProperty = await prisma.property.findUnique({
       where: { id: property.id },
       include: { 
-          homeAssets: true, 
+          //homeAssets: true, 
           // FIX 4: Include warranties
           warranties: true,
       }
@@ -350,7 +298,8 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
 
   // ATTACH SCORE: Calculate and attach score before returning
   // Ensure fullProperty is not null (shouldn't be right after creation)
-  return attachHealthScore(fullProperty as PropertyWithAssets);
+  const hydrated = await hydrateHomeAssetsFromInventory(fullProperty as any);
+  return attachHealthScore(hydrated as PropertyWithAssets);
 }
 
 /**
@@ -365,7 +314,7 @@ export async function getPropertyById(propertyId: string, userId: string): Promi
       homeownerProfileId,
     },
     include: {
-      homeAssets: true, 
+      //homeAssets: true, 
       // FIX 5: Include warranties in the fetch query
       warranties: true, 
     }
@@ -374,7 +323,8 @@ export async function getPropertyById(propertyId: string, userId: string): Promi
   if (!property) return null;
 
   // ATTACH SCORE: Calculate and attach score before returning
-  return attachHealthScore(property);
+  const hydrated = await hydrateHomeAssetsFromInventory(property as any);
+return attachHealthScore(hydrated as PropertyWithAssets);
 }
 
 /**
@@ -492,8 +442,9 @@ export async function updateProperty(
   // NEW STEP: Sync assets if they are present in the update payload.
   // The 'undefined' check ensures we only sync if the frontend explicitly sends the field (which it does)
   if (data.homeAssets !== undefined) {
-      await syncHomeAssets(propertyId, data.homeAssets);
+    await syncPropertyApplianceInventoryItems(propertyId, data.homeAssets || []);
   }
+  
 
   // Use a proper type for updatePayload for better type checking
   const updatePayload: Partial<Omit<CreatePropertyData, 'address' | 'city' | 'state' | 'zipCode' | 'homeAssets'>> & {
@@ -540,8 +491,6 @@ export async function updateProperty(
   if (data.hasCoDetectors !== undefined) updatePayload.hasCoDetectors = data.hasCoDetectors;
   if (data.hasSecuritySystem !== undefined) updatePayload.hasSecuritySystem = data.hasSecuritySystem;
   if (data.hasFireExtinguisher !== undefined) updatePayload.hasFireExtinguisher = data.hasFireExtinguisher;
-  // applianceAges is explicitly excluded here
-  // END PHASE 2 ADDITIONS
 
   const property = await prisma.property.update({
     where: { id: propertyId },
@@ -557,14 +506,16 @@ export async function updateProperty(
   const updatedProperty = await prisma.property.findUnique({
       where: { id: propertyId },
       include: { 
-          homeAssets: true,
+          //homeAssets: true,
           // FIX 6: Include warranties
           warranties: true,
       }
   });
 
   // ATTACH SCORE: Calculate and attach score before returning
-  return attachHealthScore(updatedProperty as PropertyWithAssets);
+  const hydrated = await hydrateHomeAssetsFromInventory(updatedProperty as any);
+  return attachHealthScore(hydrated as PropertyWithAssets);
+
 }
 
 /**
