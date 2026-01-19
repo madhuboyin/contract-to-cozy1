@@ -13,6 +13,12 @@ export type CostVolatilityInput = {
   useClimateDatasets?: boolean;
 };
 
+export type CostVolatilityEvent = {
+  year: number;
+  type: 'INSURANCE_SHOCK' | 'TAX_RESET' | 'CLIMATE_EVENT';
+  description: string;
+};
+
 export type CostVolatilityDTO = {
   input: {
     propertyId: string;
@@ -31,8 +37,8 @@ export type CostVolatilityDTO = {
     taxVolatility: number; // 0..100
     zipVolatility: number; // 0..100
 
-    // Phase-2 additive fields
-    bandLabel?: string; // "Moderate volatility", etc.
+    // Phase-2 additive fields (non-breaking)
+    bandLabel?: string; // "Very stable volatility", "Moderate volatility", etc.
     dominantDriver?: 'INSURANCE' | 'TAX' | 'CLIMATE';
   };
 
@@ -41,7 +47,7 @@ export type CostVolatilityDTO = {
     annualTax: number;
     annualInsurance: number;
     annualTotal: number;
-    yoyTotalPct: number | null; // percent points
+    yoyTotalPct: number | null; // percent points (e.g., 4.2 means +4.2%)
     yoyInsurancePct: number | null;
     yoyTaxPct: number | null;
   }>;
@@ -53,24 +59,20 @@ export type CostVolatilityDTO = {
   }>;
 
   // Phase-2 additive fields
-  events?: Array<{
-    year: number;
-    type: 'INSURANCE_SHOCK' | 'TAX_RESET' | 'CLIMATE_EVENT';
-    description: string;
-  }>;
-
-  // Phase-2 AI readiness hook (no LLM calls)
-  aiSummary?: {
-    shortExplanation: string;
-    riskNarrative: string;
-    whatToWatch: string[];
-  };
+  events?: CostVolatilityEvent[];
 
   meta: {
     generatedAt: string;
     dataSources: string[];
     notes: string[];
     confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+
+    // Phase-2 AI readiness hook (no LLM calls yet)
+    aiSummary?: {
+      shortExplanation: string;
+      riskNarrative: string;
+      whatToWatch: string[];
+    };
   };
 };
 
@@ -112,233 +114,178 @@ function impactForScore(s: number): 'LOW' | 'MEDIUM' | 'HIGH' {
 
 /**
  * Backward-compatible band mapping:
- * We keep Phase-1 band (LOW/MED/HIGH) but compute Phase-2 five-bucket label.
+ * Keep Phase-1 tier (LOW/MED/HIGH), add Phase-2 five-bucket label (non-breaking).
  */
 function bandLabelForPhase2(score: number) {
-  if (score <= 25) return { label: 'Very stable', copy: 'Costs tend to move predictably', tier: 'LOW' as const };
-  if (score <= 45) return { label: 'Stable', copy: 'Some variation, low surprise risk', tier: 'LOW' as const };
-  if (score <= 65) return { label: 'Moderate', copy: 'Noticeable swings in certain years', tier: 'MEDIUM' as const };
-  if (score <= 80) return { label: 'High', copy: 'Frequent cost surprises', tier: 'MEDIUM' as const };
-  return { label: 'Severe', copy: 'Highly unpredictable cost environment', tier: 'HIGH' as const };
+  if (score <= 25) return { label: 'Very stable volatility', copy: 'Costs tend to move predictably', tier: 'LOW' as const };
+  if (score <= 45) return { label: 'Stable volatility', copy: 'Some variation, low surprise risk', tier: 'LOW' as const };
+  if (score <= 65) return { label: 'Moderate volatility', copy: 'Noticeable swings in certain years', tier: 'MEDIUM' as const };
+  if (score <= 80) return { label: 'High volatility', copy: 'Frequent cost surprises', tier: 'MEDIUM' as const };
+  return { label: 'Severe volatility', copy: 'Highly unpredictable cost environment', tier: 'HIGH' as const };
 }
 
 /**
- * Phase-2: lightweight TTL cache (in-memory)
- * Keeps performance stable (<300ms) once adapters expand.
+ * Phase-2 Tax cadence mapping (static; can be replaced with county tables later)
+ * This is used to produce window-invariant TAX_RESET events.
  */
-class TTLCache<T> {
-  private map = new Map<string, { exp: number; value: T }>();
-  constructor(private ttlMs: number) {}
-  get(key: string): T | null {
-    const hit = this.map.get(key);
-    if (!hit) return null;
-    if (Date.now() > hit.exp) {
-      this.map.delete(key);
-      return null;
-    }
-    return hit.value;
-  }
-  set(key: string, value: T) {
-    this.map.set(key, { exp: Date.now() + this.ttlMs, value });
-  }
-}
-
-const PHASE2_CACHE = new TTLCache<any>(15 * 60 * 1000);
-
-/**
- * Phase-2 Adapters (lightweight / public-derived mappings)
- * These are intentionally minimal in-code so Phase-2 is drop-in without new DB tables.
- * You can later replace with real dataset loaders, keeping the same adapter interfaces.
- */
-
-type InsuranceShock = {
-  year: number;
-  pctJump: number; // fraction e.g. 0.22
-  classification: 'INFLATIONARY_DRIFT' | 'CATASTROPHE_REPRICE' | 'INSURER_SHOCK';
-  description: string;
-};
-
-class InsuranceRateFilingAdapter {
-  // Public-derived state sensitivity buckets (placeholder until DOI/NAIC ingestion is wired)
-  private hurricane = new Set(['FL', 'LA', 'TX', 'NC', 'SC', 'GA']);
-  private wildfire = new Set(['CA', 'OR', 'WA', 'CO', 'AZ', 'NM']);
-  private mixed = new Set(['NJ', 'NY', 'MA', 'CT']);
-
-  classify(state: string, pctJump: number) {
-    const s = String(state || '').toUpperCase().trim();
-    if (pctJump >= 0.25 && (this.hurricane.has(s) || this.wildfire.has(s))) return 'CATASTROPHE_REPRICE' as const;
-    if (pctJump >= 0.18) return 'INSURER_SHOCK' as const;
-    return 'INFLATIONARY_DRIFT' as const;
-  }
-
-  /**
-   * Detect step-change years from the *property's* insurance history.
-   * This is "data-anchored" even before DOI/NAIC parsing is added.
-   */
-  detectStepEvents(state: string, history: Array<{ year: number; yoyInsurancePct: number | null }>, jumpPct = 15) {
-    const cacheKey = `insStep:${state}:${jumpPct}:${history.map((h) => `${h.year}:${h.yoyInsurancePct ?? 'n'}`).join('|')}`;
-    const cached = PHASE2_CACHE.get(cacheKey);
-    if (cached) return cached as InsuranceShock[];
-
-    const out: InsuranceShock[] = [];
-    for (const h of history) {
-      if (typeof h.yoyInsurancePct !== 'number') continue;
-      const frac = h.yoyInsurancePct / 100;
-      if (Math.abs(frac) >= jumpPct / 100) {
-        const cls = this.classify(state, Math.abs(frac));
-        const desc =
-          cls === 'CATASTROPHE_REPRICE'
-            ? 'Insurance repricing spike (catastrophe-driven sensitivity)'
-            : cls === 'INSURER_SHOCK'
-              ? 'Insurance repricing spike (market/insurer shock)'
-              : 'Insurance jump above normal drift';
-        out.push({ year: h.year, pctJump: frac, classification: cls, description: desc });
-      }
-    }
-
-    PHASE2_CACHE.set(cacheKey, out);
-    return out;
-  }
-}
-
 type TaxCadence = {
   cadenceYears: 1 | 2 | 3 | 4 | 5 | 6;
   pattern: 'ANNUAL' | 'MULTI_YEAR_STEP';
   label: string;
 };
 
-class TaxCadenceAdapter {
-  // Static cadence mapping (Phase-2). Expand later to county tables when available.
-  private stateCadence: Record<string, TaxCadence> = {
+function taxCadenceByState(state: string): TaxCadence {
+  const s = String(state || '').toUpperCase().trim();
+
+  // NOTE: Expand as you add county/assessor tables.
+  const MAP: Record<string, TaxCadence> = {
     // annual-ish
     TX: { cadenceYears: 1, pattern: 'ANNUAL', label: 'Annual reassessment environment' },
     FL: { cadenceYears: 1, pattern: 'ANNUAL', label: 'Annual reassessment with exemptions/caps' },
-    CA: { cadenceYears: 1, pattern: 'ANNUAL', label: 'Annual with cap rules (Prop 13-like effects)' },
+    CA: { cadenceYears: 1, pattern: 'ANNUAL', label: 'Annual reassessment with cap rules' },
     WA: { cadenceYears: 1, pattern: 'ANNUAL', label: 'Annual reassessment environment' },
-    CO: { cadenceYears: 2, pattern: 'MULTI_YEAR_STEP', label: 'Reassessment tends to create step-changes' },
+    GA: { cadenceYears: 1, pattern: 'ANNUAL', label: 'Annual reassessment environment' },
+    NC: { cadenceYears: 1, pattern: 'ANNUAL', label: 'Annual reassessment environment' },
 
-    // multi-year / step-change-prone
-    NJ: { cadenceYears: 3, pattern: 'MULTI_YEAR_STEP', label: 'Multi-year cadence with step-change resets' },
-    NY: { cadenceYears: 3, pattern: 'MULTI_YEAR_STEP', label: 'Multi-year cadence with step-change resets' },
-    IL: { cadenceYears: 3, pattern: 'MULTI_YEAR_STEP', label: 'Multi-year cadence with step-change resets' },
-    PA: { cadenceYears: 4, pattern: 'MULTI_YEAR_STEP', label: 'Longer reassessment cycles can cause step-changes' },
-    CT: { cadenceYears: 5, pattern: 'MULTI_YEAR_STEP', label: 'Infrequent reassessment can cause step-changes' },
-    MA: { cadenceYears: 3, pattern: 'MULTI_YEAR_STEP', label: 'Multi-year cadence with step-change resets' },
+    // multi-year / step-change prone
+    NJ: { cadenceYears: 3, pattern: 'MULTI_YEAR_STEP', label: 'Multi-year reassessment cadence (step-change risk)' },
+    NY: { cadenceYears: 3, pattern: 'MULTI_YEAR_STEP', label: 'Multi-year reassessment cadence (step-change risk)' },
+    IL: { cadenceYears: 4, pattern: 'MULTI_YEAR_STEP', label: 'Multi-year reassessment cadence (step-change risk)' },
+    PA: { cadenceYears: 3, pattern: 'MULTI_YEAR_STEP', label: 'Multi-year reassessment cadence (step-change risk)' },
+    MA: { cadenceYears: 3, pattern: 'MULTI_YEAR_STEP', label: 'Multi-year reassessment cadence (step-change risk)' },
+    CT: { cadenceYears: 5, pattern: 'MULTI_YEAR_STEP', label: 'Multi-year reassessment cadence (step-change risk)' },
+
+    // some states commonly exhibit step behavior at a shorter cadence
+    CO: { cadenceYears: 2, pattern: 'MULTI_YEAR_STEP', label: 'Reassessment tends to create step-changes' },
   };
 
-  get(state: string): TaxCadence {
-    const s = String(state || '').toUpperCase().trim();
-    return (
-      this.stateCadence[s] || {
-        cadenceYears: 1,
-        pattern: 'ANNUAL',
-        label: 'More stable annual adjustment patterns',
-      }
-    );
-  }
-
-  // Tag "reassessment event years" based on cadence + observed YoY jumps
-  detectReassessmentEvents(
-    state: string,
-    yearsSorted: number[],
-    history: Array<{ year: number; yoyTaxPct: number | null }>,
-    jumpPct = 10
-  ) {
-    const cadence = this.get(state);
-    const cacheKey = `taxCad:${state}:${jumpPct}:${yearsSorted.join(',')}:${history
-      .map((h) => `${h.year}:${h.yoyTaxPct ?? 'n'}`)
-      .join('|')}`;
-    const cached = PHASE2_CACHE.get(cacheKey);
-    if (cached) return cached as Array<{ year: number; description: string; cadence: TaxCadence }>;
-
-    const out: Array<{ year: number; description: string; cadence: TaxCadence }> = [];
-    const byYear = new Map(history.map((h) => [h.year, h.yoyTaxPct]));
-
-    for (let i = 0; i < yearsSorted.length; i++) {
-      const y = yearsSorted[i];
-      const yoy = byYear.get(y);
-      const frac = typeof yoy === 'number' ? yoy / 100 : null;
-
-      // cadence-based "expected reset years"
-      const cadenceHit =
-        cadence.pattern === 'MULTI_YEAR_STEP' && i > 0 && cadence.cadenceYears > 1 ? i % cadence.cadenceYears === 0 : false;
-
-      const jumpHit = frac !== null && Math.abs(frac) >= jumpPct / 100;
-
-      if (cadenceHit || (cadence.pattern === 'MULTI_YEAR_STEP' && jumpHit)) {
-        out.push({
-          year: y,
-          cadence,
-          description: cadenceHit
-            ? 'County/state reassessment cadence year (step-change risk)'
-            : 'Tax reset / step-change detected from YoY tax jump',
-        });
-      }
-    }
-
-    PHASE2_CACHE.set(cacheKey, out);
-    return out;
-  }
+  return MAP[s] ?? { cadenceYears: 1, pattern: 'ANNUAL', label: 'More stable annual adjustment patterns' };
 }
 
-type ClimateRisk = {
-  score: number; // 0..100 (pressure/sensitivity)
-  label: string;
-};
+/**
+ * Phase-2 Regional sensitivity (climate) modifier:
+ * Kept in zipVolatility (field name preserved for backward compatibility).
+ */
+function regionalSensitivityByState(state: string): { score: number; label: string; impact: 'LOW' | 'MEDIUM' | 'HIGH' } {
+  const s = String(state || '').toUpperCase().trim();
+  if (['FL', 'LA'].includes(s)) return { score: 82, label: 'Hurricane / flood exposure', impact: 'HIGH' };
+  if (['TX'].includes(s)) return { score: 74, label: 'Convective storms + hurricane sensitivity', impact: 'HIGH' };
+  if (['CA'].includes(s)) return { score: 78, label: 'Wildfire + reinsurance pressure', impact: 'HIGH' };
+  if (['CO', 'AZ'].includes(s)) return { score: 62, label: 'Hail / wildfire-adjacent exposure', impact: 'MEDIUM' };
+  if (['NJ', 'NY', 'MA', 'CT'].includes(s)) return { score: 59, label: 'Coastal storm risk pockets', impact: 'MEDIUM' };
+  return { score: 52, label: 'Broad inflation + claims severity', impact: 'LOW' };
+}
 
-class ClimateRiskAdapter {
-  // State-level risk pressure proxy (placeholder until FEMA NRI / NOAA ingestion is wired)
-  private stateRisk: Record<string, ClimateRisk> = {
-    FL: { score: 78, label: 'Higher repricing sensitivity (hurricane exposure)' },
-    LA: { score: 75, label: 'Higher repricing sensitivity (hurricane/flood exposure)' },
-    TX: { score: 65, label: 'Higher repricing sensitivity (storm/flood exposure)' },
-    CA: { score: 70, label: 'Higher repricing sensitivity (wildfire exposure)' },
-    CO: { score: 58, label: 'Moderate repricing sensitivity (hail/wildfire exposure)' },
-    NJ: { score: 54, label: 'Moderate repricing sensitivity (coastal storm exposure)' },
-    NY: { score: 52, label: 'Moderate repricing sensitivity (coastal storm exposure)' },
-    AZ: { score: 55, label: 'Moderate repricing sensitivity (heat/wildfire exposure)' },
-  };
+function insuranceStateBaseline(state: string) {
+  const s = String(state || '').toUpperCase().trim();
+  if (['FL', 'LA'].includes(s)) return 10;
+  if (s === 'TX') return 8;
+  if (s === 'CA') return 9;
+  if (['CO', 'AZ'].includes(s)) return 6;
+  if (['NJ', 'NY', 'MA'].includes(s)) return 5;
+  return 3;
+}
 
-  get(state: string): ClimateRisk {
-    const s = String(state || '').toUpperCase().trim();
-    return this.stateRisk[s] || { score: 42, label: 'Stable pricing environment (lower shock sensitivity)' };
+function computeYoY<T extends Record<string, any>>(
+  series: T[],
+  field: keyof T
+): Array<{ year: number; delta: number }> {
+  const out: Array<{ year: number; delta: number }> = [];
+  for (let i = 1; i < series.length; i++) {
+    const prev = Number(series[i - 1]?.[field]);
+    const curr = Number(series[i]?.[field]);
+    if (!Number.isFinite(prev) || prev <= 0 || !Number.isFinite(curr)) continue;
+    out.push({ year: Number(series[i].year), delta: (curr - prev) / prev });
   }
+  return out;
+}
 
-  // Climate "shock years" derived from insurance shocks + risk environment
-  inferShockYearsFromInsurance(
-    state: string,
-    insuranceShocks: InsuranceShock[]
-  ): Array<{ year: number; description: string }> {
-    const risk = this.get(state);
-    const out: Array<{ year: number; description: string }> = [];
-    if (risk.score < 50) return out;
+/**
+ * Build aligned annual history for N years.
+ * NOTE: TrueCostOwnershipService is only 5y; we blend it when present and fall back otherwise.
+ */
+async function buildAnnualHistory(args: {
+  propertyId: string;
+  years: 5 | 10;
+  insuranceSvc: InsuranceCostTrendService;
+  taxSvc: PropertyTaxService;
+  trueCostSvc: TrueCostOwnershipService;
+}) {
+  const { propertyId, years, insuranceSvc, taxSvc, trueCostSvc } = args;
 
-    for (const e of insuranceShocks) {
-      if (e.classification === 'CATASTROPHE_REPRICE') {
-        out.push({ year: e.year, description: 'Climate-linked repricing sensitivity year' });
-      }
-    }
-    return out;
-  }
+  const ins = await insuranceSvc.estimate(propertyId, { years });
+  const insHist = (ins?.history || []).slice(-years);
+
+  const tax = await taxSvc.estimate(propertyId, { historyYears: years } as any);
+  const taxHist = (((tax as any)?.history || []) as Array<{ year: number; annualTax: number }>).slice(-years);
+
+  // True cost is only 5y; use it if available, otherwise fall back.
+  const trueCostHist =
+    years === 5
+      ? await (async () => {
+          try {
+            const tc = await trueCostSvc.estimate(propertyId, {});
+            return (tc?.history || []).map((h: any) => ({ year: h.year, annualTotal: h.annualTotal }));
+          } catch {
+            return [];
+          }
+        })()
+      : [];
+
+  const byYearIns = new Map<number, number>();
+  for (const r of insHist) byYearIns.set(r.year, Number(r.annualPremium) || 0);
+
+  const byYearTax = new Map<number, number>();
+  for (const r of taxHist) byYearTax.set(r.year, Number((r as any).annualTax) || 0);
+
+  const byYearTrue = new Map<number, number>();
+  for (const r of trueCostHist) byYearTrue.set(r.year, Number(r.annualTotal) || 0);
+
+  const yearSet = new Set<number>();
+  for (const r of insHist) yearSet.add(r.year);
+  for (const r of taxHist) yearSet.add(r.year);
+
+  const yearsSorted = Array.from(yearSet).sort((a, b) => a - b).slice(-years);
+
+  return yearsSorted.map((year, idx) => {
+    const annualInsurance = byYearIns.get(year) ?? 0;
+    const annualTax = byYearTax.get(year) ?? 0;
+
+    const baseTotal = annualInsurance + annualTax;
+    const annualTotal = byYearTrue.get(year) ?? baseTotal;
+
+    const prevYear = yearsSorted[idx - 1];
+    const prevIns = prevYear ? byYearIns.get(prevYear) ?? null : null;
+    const prevTax = prevYear ? byYearTax.get(prevYear) ?? null : null;
+    const prevTotal = prevYear
+      ? byYearTrue.get(prevYear) ?? ((byYearIns.get(prevYear) ?? 0) + (byYearTax.get(prevYear) ?? 0))
+      : null;
+
+    const yoyInsurance = prevIns ? yoyFrac(annualInsurance, prevIns) : null;
+    const yoyTax = prevTax ? yoyFrac(annualTax, prevTax) : null;
+    const yoyTotal = prevTotal ? yoyFrac(annualTotal, prevTotal) : null;
+
+    return {
+      year,
+      annualTax,
+      annualInsurance,
+      annualTotal,
+      yoyTotalPct: yoyTotal === null ? null : round1(yoyTotal * 100),
+      yoyInsurancePct: yoyInsurance === null ? null : round1(yoyInsurance * 100),
+      yoyTaxPct: yoyTax === null ? null : round1(yoyTax * 100),
+    };
+  });
 }
 
 export class CostVolatilityService {
   constructor(
     private insuranceTrend = new InsuranceCostTrendService(),
     private propertyTax = new PropertyTaxService(),
-    private trueCost = new TrueCostOwnershipService(),
-    private insAdapter = new InsuranceRateFilingAdapter(),
-    private taxCadenceAdapter = new TaxCadenceAdapter(),
-    private climateAdapter = new ClimateRiskAdapter()
+    private trueCost = new TrueCostOwnershipService()
   ) {}
 
   async compute(propertyId: string, input: CostVolatilityInput = {}): Promise<CostVolatilityDTO> {
     const years: 5 | 10 = input.years ?? 5;
-
-    // Phase-2 toggles default ON (still graceful fallback if no signals)
-    const useRealInsuranceData = input.useRealInsuranceData !== false;
-    const useRealTaxCadence = input.useRealTaxCadence !== false;
-    const useClimateDatasets = input.useClimateDatasets !== false;
 
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
@@ -353,274 +300,232 @@ export class CostVolatilityService {
 
     const notes: string[] = [];
     const dataSources: string[] = [
-      'InsuranceCostTrendService (property history)',
-      'PropertyTaxService (property history)',
-      'TrueCostOwnershipService (optional cross-check for 5y)',
-      'Phase-2: step-change detection (insurance)',
-      'Phase-2: reassessment cadence mapping (tax)',
-      'Phase-2: climate sensitivity mapping (state-level; FEMA/NOAA-ready)',
+      'InsuranceCostTrendService (modeled; Phase 2 step-event detection anchored on series)',
+      'PropertyTaxService (modeled; Phase 2 cadence mapping + delta variance)',
+      'TrueCostOwnershipService (optional cross-check for 5y totals)',
+      'State reassessment cadence mapping (Phase 2 static adapter)',
+      'Regional sensitivity (climate) modifier (Phase 2 state-level mapping)',
     ];
 
-    // 1) Insurance history
-    const ins = await this.insuranceTrend.estimate(propertyId, { years });
-    const insHist = (ins?.history || []).slice(-years);
+    // ============================
+    // ✅ FIX: window-invariant events
+    // ============================
 
-    // 2) Tax history
-    const tax = await this.propertyTax.estimate(propertyId, { historyYears: years } as any);
-    const taxHist = (((tax as any)?.history || []) as Array<{ year: number; annualTax: number }>).slice(-years);
-
-    // 3) TrueCost optional (5y only)
-    const trueCostHist =
-      years === 5
-        ? (await (async () => {
-            try {
-              const tc = await this.trueCost.estimate(propertyId, {});
-              return (tc?.history || []).map((h: any) => ({ year: h.year, annualTotal: h.annualTotal }));
-            } catch {
-              return [];
-            }
-          })())
-        : [];
-
-    // Align by year keys
-    const yearSet = new Set<number>();
-    for (const r of insHist) yearSet.add(r.year);
-    for (const r of taxHist) yearSet.add(r.year);
-    const yearsSorted = Array.from(yearSet).sort((a, b) => a - b).slice(-years);
-
-    const byYearIns = new Map<number, number>();
-    for (const r of insHist) byYearIns.set(r.year, Number((r as any).annualPremium) || 0);
-
-    const byYearTax = new Map<number, number>();
-    for (const r of taxHist) byYearTax.set(r.year, Number((r as any).annualTax) || 0);
-
-    const byYearTrue = new Map<number, number>();
-    for (const r of trueCostHist) byYearTrue.set(r.year, Number((r as any).annualTotal) || 0);
-
-    const history: CostVolatilityDTO['history'] = yearsSorted.map((year, idx) => {
-      const annualInsurance = byYearIns.get(year) ?? 0;
-      const annualTax = byYearTax.get(year) ?? 0;
-
-      const baseTotal = annualInsurance + annualTax;
-      const annualTotal = byYearTrue.get(year) ?? baseTotal;
-
-      const prevYear = yearsSorted[idx - 1];
-      const prevIns = prevYear ? byYearIns.get(prevYear) ?? null : null;
-      const prevTax = prevYear ? byYearTax.get(prevYear) ?? null : null;
-      const prevTotal = prevYear
-        ? byYearTrue.get(prevYear) ?? ((byYearIns.get(prevYear) ?? 0) + (byYearTax.get(prevYear) ?? 0))
-        : null;
-
-      const yoyInsurance = prevIns ? yoyFrac(annualInsurance, prevIns) : null;
-      const yoyTax = prevTax ? yoyFrac(annualTax, prevTax) : null;
-      const yoyTotal = prevTotal ? yoyFrac(annualTotal, prevTotal) : null;
-
-      return {
-        year,
-        annualTax,
-        annualInsurance,
-        annualTotal,
-        yoyTotalPct: yoyTotal === null ? null : round1(yoyTotal * 100),
-        yoyInsurancePct: yoyInsurance === null ? null : round1(yoyInsurance * 100),
-        yoyTaxPct: yoyTax === null ? null : round1(yoyTax * 100),
-      };
+    // 1) Build full history once (10y) for stable event detection
+    const MAX_EVENT_YEARS: 10 = 10;
+    const fullHistory = await buildAnnualHistory({
+      propertyId,
+      years: MAX_EVENT_YEARS,
+      insuranceSvc: this.insuranceTrend,
+      taxSvc: this.propertyTax,
+      trueCostSvc: this.trueCost,
     });
 
-    // --- Phase-2 signals: step events, cadence events, climate shock years ---
-    const insuranceStepEvents: InsuranceShock[] =
-      useRealInsuranceData ? this.insAdapter.detectStepEvents(state, history, 15) : [];
+    // 2) Slice requested window for scoring & chart
+    const windowYears = years;
+    const historyWindow = fullHistory.slice(-windowYears);
 
-    const taxReassessmentEvents =
-      useRealTaxCadence ? this.taxCadenceAdapter.detectReassessmentEvents(state, yearsSorted, history, 10) : [];
+    // 3) Detect events on full history (window-invariant)
+    const eventsFull: CostVolatilityEvent[] = [];
 
-    const climateShockYears =
-      useClimateDatasets ? this.climateAdapter.inferShockYearsFromInsurance(state, insuranceStepEvents) : [];
+    // --- TAX REASSESSMENT EVENTS (cadence-driven, deterministic)
+    const taxCadence = taxCadenceByState(state);
+    if (taxCadence.cadenceYears > 1 && fullHistory.length) {
+      const baseYear = fullHistory[fullHistory.length - 1].year; // stable anchor (current-year-ish)
+      for (const h of fullHistory) {
+        if ((baseYear - h.year) % taxCadence.cadenceYears === 0) {
+          eventsFull.push({
+            year: h.year,
+            type: 'TAX_RESET',
+            description: `County reassessment reset year (~${taxCadence.cadenceYears}y cadence).`,
+          });
+        }
+      }
+    }
 
-    // --- Scores (Phase-2 model) ---
-    // Insurance variance score: stddev + step-event amplification
-    const deltasIns = history.map((h) => (h.yoyInsurancePct == null ? null : h.yoyInsurancePct / 100));
-    const insStd = stddev(deltasIns);
+    // Optional: tax step-change detection anchored on full series (guards for modeled drift)
+    const taxDeltas = computeYoY(fullHistory, 'annualTax');
+    const taxStd = stddev(taxDeltas.map((d) => d.delta));
+    const taxShockThreshold = Math.max(taxStd * 2.0, 0.12); // >=12% change treated as notable
+    for (const d of taxDeltas) {
+      if (Math.abs(d.delta) >= taxShockThreshold) {
+        eventsFull.push({
+          year: d.year,
+          type: 'TAX_RESET',
+          description: 'Notable tax step-change detected.',
+        });
+      }
+    }
 
-    // step-event boost: each shock adds pressure, scaled by magnitude
-    const stepBoost = insuranceStepEvents.reduce((s, e) => s + clamp(Math.abs(e.pctJump) * 140, 0, 22), 0);
-    const insuranceVarianceScore = clamp(deltaStdToScore(insStd, 0.22, 0) + Math.round(stepBoost), 0, 100);
+    // --- INSURANCE STEP CHANGES (window-invariant)
+    const insuranceDeltas = computeYoY(fullHistory, 'annualInsurance');
+    const insuranceStd = stddev(insuranceDeltas.map((d) => d.delta));
+    const insuranceShockThreshold = Math.max(insuranceStd * 2.0, 0.15); // >=15% jump baseline
+    for (const d of insuranceDeltas) {
+      if (Math.abs(d.delta) >= insuranceShockThreshold) {
+        eventsFull.push({
+          year: d.year,
+          type: 'INSURANCE_SHOCK',
+          description: 'Significant insurance repricing year detected.',
+        });
+      }
+    }
 
-    // Tax cadence score: cadence pressure + variance + event tag influence
-    const deltasTax = history.map((h) => (h.yoyTaxPct == null ? null : h.yoyTaxPct / 100));
-    const taxStd = stddev(deltasTax);
-    const taxVarianceScore = deltaStdToScore(taxStd, 0.18, 0);
+    // --- CLIMATE SHOCK YEARS (Phase-2 placeholder: infer from regional sensitivity only)
+    // No external dataset ingestion in Phase 2 drop-in; keep event list empty unless you add real sources.
+    // When you wire FEMA/NOAA later, push years here and keep the same event shape.
+    const climateShockYears: number[] = [];
+    for (const y of climateShockYears) {
+      eventsFull.push({
+        year: y,
+        type: 'CLIMATE_EVENT',
+        description: 'Regional climate-related repricing pressure.',
+      });
+    }
 
-    const cadence = this.taxCadenceAdapter.get(state);
-    const cadencePressure =
-      cadence.pattern === 'MULTI_YEAR_STEP'
-        ? clamp(55 + cadence.cadenceYears * 4, 0, 85)
-        : clamp(38, 0, 55);
+    // De-dupe events by (year,type) – keeps UI calm
+    const dedupKey = (e: CostVolatilityEvent) => `${e.year}:${e.type}`;
+    const dedupMap = new Map<string, CostVolatilityEvent>();
+    for (const e of eventsFull) dedupMap.set(dedupKey(e), e);
+    const eventsFullDedup = Array.from(dedupMap.values()).sort((a, b) => a.year - b.year);
 
-    const cadenceEventBoost = clamp(taxReassessmentEvents.length * 7, 0, 18);
-    const taxCadenceScore = clamp(Math.round(0.65 * taxVarianceScore + 0.35 * cadencePressure + cadenceEventBoost), 0, 100);
+    // 4) Filter events for requested window
+    const visibleYears = new Set(historyWindow.map((h) => h.year));
+    const events = eventsFullDedup.filter((e) => visibleYears.has(e.year));
 
-    // Climate shock score: risk environment + shock years
-    const climate = this.climateAdapter.get(state);
-    const shockBoost = clamp(climateShockYears.length * 10, 0, 25);
-    const climateShockScore = clamp(Math.round(0.75 * climate.score + shockBoost), 0, 100);
+    // 5) Optional note for hidden events
+    const hiddenEvents = eventsFullDedup.filter((e) => !visibleYears.has(e.year));
+    if (hiddenEvents.length) {
+      notes.push('Some volatility events fall outside the selected time range.');
+    }
 
-    // Regional sensitivity modifier: normalized pressure (not a "truth" claim)
-    const regionalSensitivityModifier = clamp(Math.round(0.6 * climate.score + 0.4 * cadencePressure), 0, 100);
+    // ============================
+    // Scoring (Phase 2 index; backward compatible fields)
+    // ============================
 
-    // Final Phase-2 index
+    const deltasInsWin = historyWindow.map((h) => (h.yoyInsurancePct == null ? null : h.yoyInsurancePct / 100));
+    const deltasTaxWin = historyWindow.map((h) => (h.yoyTaxPct == null ? null : h.yoyTaxPct / 100));
+    const deltasTotWin = historyWindow.map((h) => (h.yoyTotalPct == null ? null : h.yoyTotalPct / 100));
+
+    const insStdWin = stddev(deltasInsWin);
+    const taxStdWin2 = stddev(deltasTaxWin);
+
+    // insurance variance score (0..100)
+    const insuranceVolatility = deltaStdToScore(insStdWin, 0.25, insuranceStateBaseline(state));
+
+    // tax cadence score: blend variance + cadence pressure (kept conceptually from Phase 1)
+    const taxVarianceScore = deltaStdToScore(taxStdWin2, 0.20, 0);
+    const cadencePressure = taxCadence.pattern === 'MULTI_YEAR_STEP' ? 70 : 45;
+    const taxVolatility = clamp(Math.round(0.6 * taxVarianceScore + 0.4 * cadencePressure), 0, 100);
+
+    // regional sensitivity modifier (stored in zipVolatility for backward compatibility)
+    const regional = regionalSensitivityByState(state);
+    const zipVolatility = regional.score;
+
+    // climate shock score (not exposed as a separate field to keep DTO additive-only)
+    // We derive a low-intensity score based on event presence within window (future datasets will strengthen this).
+    const climateShockScore = clamp(events.filter((e) => e.type === 'CLIMATE_EVENT').length * 25, 0, 100);
+
+    // Phase-2 revised formula (as requested)
     const volatilityIndex = clamp(
-      Math.round(
-        0.45 * insuranceVarianceScore +
-          0.30 * taxCadenceScore +
-          0.15 * climateShockScore +
-          0.10 * regionalSensitivityModifier
-      ),
+      Math.round(0.45 * insuranceVolatility + 0.30 * taxVolatility + 0.15 * climateShockScore + 0.10 * zipVolatility),
       0,
       100
     );
 
-    // Backward-compatible Phase-1 band + Phase-2 bandLabel
-    const phase2Band = bandLabelForPhase2(volatilityIndex);
-    const band: 'LOW' | 'MEDIUM' | 'HIGH' = phase2Band.tier;
-
-    // Keep Phase-1 field names but align them to Phase-2 concepts
-    // (still 0..100, still interpretable)
-    const insuranceVolatility = insuranceVarianceScore;
-    const taxVolatility = taxCadenceScore;
-
-    // Keep Phase-1 zipVolatility field for compatibility:
-    // Phase-2: replace "ZIP prefix bucket" with "regional sensitivity modifier"
-    // (still "directional pressure", not "truth")
-    const zipVolatility = regionalSensitivityModifier;
-
-    // Dominant driver (weighted contribution)
-    const contrib = [
-      { k: 'INSURANCE' as const, v: 0.45 * insuranceVarianceScore },
-      { k: 'TAX' as const, v: 0.30 * taxCadenceScore },
-      { k: 'CLIMATE' as const, v: 0.15 * climateShockScore },
-    ].sort((a, b) => b.v - a.v);
-    const dominantDriver = contrib[0]?.k;
-
-    // Events (additive)
-    const events: CostVolatilityDTO['events'] = [];
-    for (const e of insuranceStepEvents) {
-      events.push({
-        year: e.year,
-        type: 'INSURANCE_SHOCK',
-        description: e.description,
-      });
-    }
-    for (const e of taxReassessmentEvents) {
-      events.push({
-        year: e.year,
-        type: 'TAX_RESET',
-        description: e.description,
-      });
-    }
-    for (const e of climateShockYears) {
-      events.push({
-        year: e.year,
-        type: 'CLIMATE_EVENT',
-        description: e.description,
-      });
-    }
-    events.sort((a, b) => a.year - b.year);
-
-    // Confidence + notes (Phase-2)
+    // Confidence rules (Phase 2)
     let confidence: 'HIGH' | 'MEDIUM' | 'LOW' = 'MEDIUM';
-
-    const hasValidState = !!state && state.length === 2;
-    const hasValidZip = !!zp;
-    const hasHistory = yearsSorted.length >= 4;
-
-    if (!hasValidState || !hasValidZip || !hasHistory) confidence = 'LOW';
-
-    // "HIGH only when real signals exist" (non-promisory: dataset adapters are still lightweight)
-    const realSignalCount = (insuranceStepEvents.length > 0 ? 1 : 0) + (taxReassessmentEvents.length > 0 ? 1 : 0) + (climateShockYears.length > 0 ? 1 : 0);
-    if (confidence !== 'LOW' && realSignalCount >= 2) confidence = 'HIGH';
-
-    if (!hasValidState) notes.push('State missing/invalid; cadence and climate sensitivity used conservative defaults.');
-    if (!hasValidZip) notes.push('ZIP missing/invalid; regional sensitivity uses state-only defaults.');
-    if (!hasHistory) notes.push('Insufficient history to measure volatility; index is conservative.');
-
-    if (years === 10) {
-      notes.push('10y view uses AnnualTotal = Insurance + Taxes baseline when True Cost history is not available.');
-    } else {
-      notes.push(trueCostHist.length ? 'AnnualTotal uses True Cost when available (cross-check).' : 'AnnualTotal uses Insurance + Taxes baseline.');
+    if (!state || state.length !== 2) {
+      confidence = 'LOW';
+      notes.push('State missing/invalid; cadence and sensitivity adjustments used conservative defaults.');
     }
-    notes.push('Phase-2 adds event detection (step-changes, cadence resets, climate sensitivity) for explainability.');
+    if (!zp) {
+      confidence = 'LOW';
+      notes.push('ZIP missing/invalid; localized messaging reduced.');
+    }
 
-    // Drivers (plain English, tied to state / cadence / sensitivity)
+    // Totals note (preserve Phase-1 behavior)
+    if (years === 10) {
+      notes.push('10y view uses AnnualTotal = Insurance + Taxes baseline (True Cost is 5y-only).');
+    } else {
+      notes.push('5y view blends True Cost totals when available; otherwise uses Insurance + Taxes baseline.');
+    }
+
+    // Dominant driver (Phase 2)
+    const contribution = [
+      { k: 'INSURANCE' as const, w: 0.45, s: insuranceVolatility },
+      { k: 'TAX' as const, w: 0.30, s: taxVolatility },
+      { k: 'CLIMATE' as const, w: 0.10, s: zipVolatility + climateShockScore * 0.5 }, // rolled climate pressure
+    ].sort((a, b) => b.w * b.s - a.w * a.s);
+
+    const dominantDriver = contribution[0]?.k ?? 'TAX';
+
+    // Drivers list (Phase 2 wording)
     const drivers: CostVolatilityDTO['drivers'] = [
       {
         factor: 'Insurance repricing volatility',
-        impact: impactForScore(insuranceVarianceScore),
+        impact: impactForScore(insuranceVolatility),
         explanation:
-          insuranceStepEvents.length > 0
-            ? `We detected ${insuranceStepEvents.length} repricing spike(s) in your insurance history in ${state || 'your state'}. ` +
-              `These step-changes increase year-to-year unpredictability beyond normal drift.`
-            : `Your insurance variability in ${state || 'your state'} is driven mostly by year-to-year premium changes (variance), without major spike years detected.`,
+          `Your insurance variability in ${state || 'your state'} is driven mostly by year-to-year premium changes (variance). ` +
+          `${events.some((e) => e.type === 'INSURANCE_SHOCK') ? 'We detected at least one repricing spike year.' : 'No major spike years were detected.'}`,
       },
       {
         factor: 'Tax reassessment cadence',
-        impact: impactForScore(taxCadenceScore),
+        impact: impactForScore(taxVolatility),
         explanation:
-          cadence.pattern === 'MULTI_YEAR_STEP'
-            ? `Your state tends to use a multi-year reassessment cadence (${cadence.cadenceYears}y), which can create step-change years. ` +
-              (taxReassessmentEvents.length ? `We flagged ${taxReassessmentEvents.length} potential cadence/reset year(s).` : `We did not detect strong reset years in your observed history.`)
-            : `Your tax environment is closer to annual adjustments, so volatility comes more from smaller rate/assessment drift than cadence resets.`,
+          `Your state tends to use a ${taxCadence.cadenceYears}y reassessment cadence (${taxCadence.pattern === 'MULTI_YEAR_STEP' ? 'step-change prone' : 'annual'}), ` +
+          `which can create step-change years. We flagged ${events.filter((e) => e.type === 'TAX_RESET').length} potential cadence/reset year(s).`,
       },
       {
         factor: 'Regional sensitivity (climate)',
-        impact: impactForScore(climate.score),
+        impact: regional.impact,
         explanation:
-          `${climate.label} in ${state || 'your region'}. ` +
-          (climateShockYears.length ? `We flagged ${climateShockYears.length} year(s) where repricing sensitivity likely increased.` : `No climate-linked shock years were flagged from your insurance history.`),
+          `Moderate repricing sensitivity (${regional.label}) in ${state || 'your region'}. ` +
+          `${events.some((e) => e.type === 'CLIMATE_EVENT') ? 'We flagged a potential climate-linked shock year.' : 'No climate-linked shock years were flagged from your current history.'}`,
       },
-    ];
+    ].sort((a, b) => (a.impact === 'HIGH' ? 3 : a.impact === 'MEDIUM' ? 2 : 1) - (b.impact === 'HIGH' ? 3 : b.impact === 'MEDIUM' ? 2 : 1));
 
-    // AI readiness hook (no calls, just structured text)
-    const aiSummary = {
-      shortExplanation: `Overall volatility is ${phase2Band.label.toLowerCase()} (${volatilityIndex}/100).`,
-      riskNarrative:
-        dominantDriver === 'INSURANCE'
-          ? 'Insurance repricing is the primary source of unpredictability, especially when step-change years occur.'
-          : dominantDriver === 'TAX'
-            ? 'Tax cadence and reassessment patterns are the primary source of unpredictability, creating step-change risk.'
-            : 'Regional repricing sensitivity (climate/region) is a meaningful contributor to unpredictability.',
-      whatToWatch: [
-        dominantDriver === 'INSURANCE' ? 'Large premium renewal jumps (≥15%)' : 'Assessment reset / millage changes',
-        climate.score >= 60 ? 'Storm/wildfire season pressure in your region' : 'Gradual drift rather than shocks',
-      ],
-    };
+    const band2 = bandLabelForPhase2(volatilityIndex);
+
+    // AI readiness hook (structured; no LLM call)
+    const aiSummary =
+      confidence === 'LOW'
+        ? undefined
+        : {
+            shortExplanation: `Volatility is ${band2.label.toLowerCase()} — driven mostly by ${dominantDriver.toLowerCase()} factors.`,
+            riskNarrative:
+              dominantDriver === 'TAX'
+                ? `Your area shows reassessment cadence that can create step-change years. Even if costs aren’t rising fast, surprise jumps can happen in reset years.`
+                : dominantDriver === 'INSURANCE'
+                  ? `Insurance repricing can create surprise premium jumps. Variability matters as much as the long-run trend.`
+                  : `Regional risk sensitivity can amplify repricing pressure during extreme years, even if your local trend is stable.`,
+            whatToWatch: [
+              dominantDriver === 'TAX' ? 'Upcoming reassessment/reset years' : 'Premium renewal and underwriting changes',
+              'Large year-over-year changes (≥15%)',
+              'Any new hazard or market shifts in your region',
+            ],
+          };
 
     return {
       input: { propertyId, years, addressLabel, state, zipCode },
-
       index: {
         volatilityIndex,
-        band, // Phase-1 compatible
+        band: band2.tier,
         insuranceVolatility,
         taxVolatility,
         zipVolatility,
-
-        // Phase-2 additive
-        bandLabel: `${phase2Band.label} volatility`,
+        bandLabel: band2.label,
         dominantDriver,
       },
-
-      history,
+      history: historyWindow,
       drivers,
-
-      // Phase-2 additive
-      events: events.length ? events : [],
-      aiSummary,
-
+      events,
       meta: {
         generatedAt: new Date().toISOString(),
         dataSources,
         notes,
         confidence,
+        aiSummary,
       },
     };
   }
