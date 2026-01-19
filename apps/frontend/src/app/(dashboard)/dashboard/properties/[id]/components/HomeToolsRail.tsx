@@ -5,7 +5,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, Shield, DollarSign, Info, PanelBottomOpen ,Calculator, Scale, Activity} from 'lucide-react';
+import { TrendingUp, Shield, DollarSign, Info, PanelBottomOpen ,Calculator, Scale, Activity, Target} from 'lucide-react';
 
 // shadcn/ui (already used elsewhere in your app)
 import {
@@ -80,6 +80,13 @@ const HOME_TOOLS: ToolDef[] = [
     href: (id) => `/dashboard/properties/${id}/tools/cost-volatility`,
     Icon: Activity,
     tooltip: 'How unpredictable your costs are year-to-year.',
+  },
+  {
+    key: 'break-even',
+    label: 'Break-Even',
+    href: (id) => `/dashboard/properties/${id}/tools/break-even`,
+    Icon: Target,
+    tooltip: 'Find the year when appreciation outweighs cumulative ownership costs.',
   },
   
 ];
