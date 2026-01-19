@@ -1,6 +1,7 @@
 // apps/backend/src/services/homeCostGrowth.service.ts
 import { prisma } from '../lib/prisma';
 import { PropertyTaxService } from './propertyTax.service';
+import { AppreciationIndexService } from './appreciationIndex.service';
 
 type ImpactLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 export type HomeCostGrowthConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
@@ -67,6 +68,19 @@ export type HomeCostGrowthDTO = {
     dataSources: string[];
     notes: string[];
     confidence: HomeCostGrowthConfidence;
+
+    // ✅ Phase-3 additive (safe)
+    appreciation?: {
+      source: 'FHFA' | 'HEURISTIC';
+      regionLevel: 'MSA' | 'STATE' | 'US';
+      regionLabel: string;
+      seriesKey?: string;
+      asOf: string;
+      annualizedRatePct: number;
+      confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+      fallbackChain: string[];
+      notes: string[];
+    };
   };
 };
 
@@ -81,7 +95,7 @@ function zipPrefix(zip: string) {
   return z.length >= 3 ? z.slice(0, 3) : z;
 }
 
-// Reuse same idea as propertyTax.service.ts, but keep independent map here (Phase 1).
+// Phase-1 value-per-sqft baseline
 const VALUE_PER_SQFT_BY_STATE: Record<string, number> = {
   TX: 180,
   CA: 380,
@@ -126,18 +140,18 @@ function estimateHomeValueNowUSD(args: {
   return { value: 350000, confidence: 'LOW', notes };
 }
 
-function estimateAppreciationRate(state: string): { rate: number; confidence: HomeCostGrowthConfidence; notes: string[] } {
+function estimateAppreciationRateHeuristic(state: string): { rate: number; confidence: HomeCostGrowthConfidence; notes: string[] } {
   const notes: string[] = [];
   const rate = DEFAULT_APPRECIATION_RATE_BY_STATE[state] ?? 0.035;
   if (DEFAULT_APPRECIATION_RATE_BY_STATE[state]) {
-    notes.push('Used state-level appreciation heuristic (Phase 1).');
+    notes.push('Used state-level appreciation heuristic (Phase 1 fallback).');
     return { rate, confidence: 'MEDIUM', notes };
   }
-  notes.push('Used generic appreciation fallback (Phase 1).');
+  notes.push('Used generic appreciation fallback (Phase 1 fallback).');
   return { rate, confidence: 'LOW', notes };
 }
 
-// Insurance heuristic: base percent of value, with state/coastal volatility adjustments.
+// Insurance heuristic
 function insuranceRateFactorByState(state: string): number {
   if (['FL', 'LA', 'TX'].includes(state)) return 1.45;
   if (['CA'].includes(state)) return 1.2;
@@ -152,12 +166,20 @@ function maintenanceRateFactorByState(state: string): number {
 }
 
 function inflationRateForState(state: string): number {
-  // simple Phase 1 knob (3–5%)
   if (['FL', 'TX', 'CA'].includes(state)) return 0.045;
   return 0.04;
 }
 
-function buildDrivers(state: string, zipCode: string, appreciationRate: number, insuranceAnnualNow: number, homeValueNow: number) {
+function buildDrivers(args: {
+  state: string;
+  zipCode: string;
+  appreciationRate: number;
+  insuranceAnnualNow: number;
+  homeValueNow: number;
+  appreciationMeta?: HomeCostGrowthDTO['meta']['appreciation'];
+}) {
+  const { state, zipCode, appreciationRate, insuranceAnnualNow, homeValueNow, appreciationMeta } = args;
+
   const zp = zipPrefix(zipCode);
 
   const appreciationImpact: ImpactLevel =
@@ -172,26 +194,23 @@ function buildDrivers(state: string, zipCode: string, appreciationRate: number, 
       ? `In ${state}, weather/peril exposure can make premiums more volatile year-to-year.`
       : `Premium growth tends to track inflation, but can spike due to insurer repricing or claims in-region.`;
 
-  const volatilityHint =
-    ['085', '900', '902', '940', '941', '943'].includes(zp)
-      ? 'HIGH'
-      : ['750', '787', '981', '021', '100'].includes(zp)
-        ? 'MEDIUM'
-        : 'LOW';
+  const appreciationSourceLine =
+    appreciationMeta?.source === 'FHFA'
+      ? `Based on FHFA repeat-sale index (${appreciationMeta.regionLevel}): ${appreciationMeta.regionLabel}.`
+      : `Modeled using state + ZIP prefix ${zp} heuristics (fallback).`;
 
   return [
     {
-      factor: `Appreciation sensitivity (ZIP prefix ${zp})`,
-      impact: (volatilityHint as ImpactLevel),
+      factor: `Local appreciation comps`,
+      impact: appreciationMeta?.source === 'FHFA' ? ('HIGH' as ImpactLevel) : ('MEDIUM' as ImpactLevel),
       explanation:
-        `ZIP prefix ${zp} is used for localized messaging in Phase 1. Volatility signal: ${volatilityHint}. ` +
-        `We’ll swap this for a real HPI series later without changing the UI.`,
+        `${appreciationSourceLine} Used as the default appreciation input unless you override it.`,
     },
     {
       factor: `State appreciation baseline (${state})`,
       impact: appreciationImpact,
       explanation:
-        `Your appreciation rate is modeled at ${(appreciationRate * 100).toFixed(1)}%/yr (Phase 1 heuristic). ` +
+        `Your appreciation rate is modeled at ${(appreciationRate * 100).toFixed(1)}%/yr. ` +
         `Higher appreciation can offset ownership costs more quickly.`,
     },
     {
@@ -212,6 +231,7 @@ function buildDrivers(state: string, zipCode: string, appreciationRate: number, 
 
 export class HomeCostGrowthService {
   private taxSvc = new PropertyTaxService();
+  private appreciationSvc = new AppreciationIndexService();
 
   async estimate(propertyId: string, opts: HomeCostGrowthInput = {}): Promise<HomeCostGrowthDTO> {
     const property = await prisma.property.findUnique({
@@ -257,20 +277,65 @@ export class HomeCostGrowthService {
       confidence = r.confidence;
     }
 
-    // Appreciation rate
+    // Appreciation rate (Phase-3: FHFA comps if no override)
     let appreciationRate: number;
+    let appreciationMeta: HomeCostGrowthDTO['meta']['appreciation'] | undefined;
+
     if (opts.appreciationRate !== undefined) {
       appreciationRate = opts.appreciationRate;
       notes.push('Appreciation rate override was provided by the client.');
       confidence = 'HIGH';
     } else {
-      const r = estimateAppreciationRate(state);
-      appreciationRate = r.rate;
-      notes.push(...r.notes);
-      confidence = confidence === 'HIGH' ? 'HIGH' : r.confidence;
+      try {
+        const comp = await this.appreciationSvc.getAnnualizedAppreciation({
+          city: String(property.city || ''),
+          state,
+          years,
+        });
+
+        if (Number.isFinite(comp.annualizedRate)) {
+          appreciationRate = comp.annualizedRate;
+          dataSources.push('FHFA HPI (repeat-sale) appreciation comps (Phase 3)');
+          notes.push(`Appreciation derived from FHFA ${comp.regionLevel} series: ${comp.regionLabel} (as of ${comp.asOf}).`);
+
+          appreciationMeta = {
+            source: 'FHFA',
+            regionLevel: comp.regionLevel,
+            regionLabel: comp.regionLabel,
+            seriesKey: comp.seriesKey,
+            asOf: comp.asOf,
+            annualizedRatePct: comp.annualizedRatePct,
+            confidence: comp.confidence,
+            fallbackChain: comp.fallbackChain,
+            notes: comp.notes,
+          };
+
+          // bump confidence when comps are strong
+          confidence = comp.confidence === 'HIGH' ? 'HIGH' : (confidence === 'HIGH' ? 'HIGH' : 'MEDIUM');
+        } else {
+          throw new Error('FHFA returned no usable rate');
+        }
+      } catch {
+        const r = estimateAppreciationRateHeuristic(state);
+        appreciationRate = r.rate;
+        notes.push(...r.notes);
+
+        appreciationMeta = {
+          source: 'HEURISTIC',
+          regionLevel: 'STATE',
+          regionLabel: state || 'Unknown',
+          asOf: new Date().toISOString(),
+          annualizedRatePct: Math.round(appreciationRate * 1000) / 10,
+          confidence: 'LOW',
+          fallbackChain: ['HomeCostGrowthService heuristic'],
+          notes: ['FHFA comps unavailable; using localized heuristic.'],
+        };
+
+        confidence = confidence === 'HIGH' ? 'HIGH' : r.confidence;
+      }
     }
 
-    // Taxes (reuse PropertyTaxService for consistency + history)
+    // Taxes
     const taxEstimate = await this.taxSvc.estimate(propertyId, {
       assessedValue: opts.assessedValue,
       taxRate: opts.taxRate,
@@ -317,26 +382,22 @@ export class HomeCostGrowthService {
     const nowYear = new Date().getFullYear();
     const history: HomeCostGrowthDTO['history'] = [];
 
-    // We anchor at "now" then backfill earlier years using inverse growth.
-    // For taxes we use PropertyTaxService history as the anchor to remain consistent with its assumed growth.
-    const taxByYear = new Map<number, number>(taxHistory.map((h) => [h.year, h.annualTax]));
+    const taxByYear = new Map<number, number>((taxHistory || []).map((h) => [h.year, h.annualTax]));
 
-    // Compute home value each year similarly: build from now backward using appreciationRate
-    const yearsCount = years;
+    // Home value series
     const homeValueByYear: { year: number; homeValue: number }[] = [];
-
-    for (let i = yearsCount - 1; i >= 0; i--) {
+    for (let i = years - 1; i >= 0; i--) {
       const year = nowYear - i;
       const factor = Math.pow(1 + appreciationRate, -i);
       homeValueByYear.push({ year, homeValue: toMoney(homeValueNow * factor) });
     }
 
-    // For insurance/maintenance: backfill using inflation inverse (so current is anchor)
-    for (let i = yearsCount - 1; i >= 0; i--) {
+    // Insurance/maintenance backfill via inflation
+    for (let i = years - 1; i >= 0; i--) {
       const year = nowYear - i;
 
       const homeValue = homeValueByYear.find((x) => x.year === year)?.homeValue ?? 0;
-      const annualTax = toMoney(taxByYear.get(year) ?? annualTaxNow * Math.pow(1 + inflation, -i)); // fallback if tax history missing
+      const annualTax = toMoney(taxByYear.get(year) ?? annualTaxNow * Math.pow(1 + inflation, -i));
       const annualInsurance = toMoney(annualInsuranceNow * Math.pow(1 + inflation, -i));
       const annualMaintenance = toMoney(annualMaintenanceNow * Math.pow(1 + inflation, -i));
 
@@ -358,7 +419,6 @@ export class HomeCostGrowthService {
       });
     }
 
-    // Rollups
     const totals = history.reduce(
       (acc, y) => {
         acc.taxes += y.annualTax;
@@ -372,9 +432,16 @@ export class HomeCostGrowthService {
       { taxes: 0, insurance: 0, maintenance: 0, expenses: 0, appreciation: 0, net: 0 }
     );
 
-    const drivers = buildDrivers(state, zipCode, appreciationRate, annualInsuranceNow, homeValueNow);
+    const drivers = buildDrivers({
+      state,
+      zipCode,
+      appreciationRate,
+      insuranceAnnualNow: annualInsuranceNow,
+      homeValueNow,
+      appreciationMeta,
+    });
 
-    const dto: HomeCostGrowthDTO = {
+    return {
       input: {
         propertyId,
         years,
@@ -422,12 +489,10 @@ export class HomeCostGrowthService {
         notes: [
           ...notes,
           `Insurance/maintenance use inflation ${(inflation * 100).toFixed(1)}%/yr (Phase 1).`,
-          'No external price/HPI datasets are used in Phase 1.',
         ],
         confidence,
+        appreciation: appreciationMeta,
       },
     };
-
-    return dto;
   }
 }
