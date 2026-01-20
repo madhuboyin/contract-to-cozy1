@@ -707,15 +707,52 @@ export default function WarrantiesPage() {
       return property ? property.name || property.address : 'N/A';
   }, [properties, homeAssets]);
   
-  // NEW: Helper to get Asset Info
-  const getAssetInfo = useCallback((assetId: string | null): string => {
-      if (!assetId) return 'N/A';
-      const asset = homeAssets.find(a => a.id === assetId);
-      if (asset) {
-        // Format the assetType from SNAKE_CASE to "Title Case"
-        const assetName = asset.assetType.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
-        return asset.modelNumber ? `${assetName} (${asset.modelNumber})` : assetName;
+// Categories that represent system-wide coverage (not tied to specific appliances)
+const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
+  'HVAC',
+  'PLUMBING', 
+  'ELECTRICAL',
+  'ROOFING',
+  'STRUCTURAL',
+  'HOME_WARRANTY_PLAN',
+];
+
+  // Helper to get Asset Info - now accepts the full warranty object
+  const getAssetInfo = useCallback((warranty: Warranty): string => {
+      const { homeAssetId, category } = warranty;
+      
+      // 1. If it's a system-wide warranty category, show that instead of N/A
+      if (SYSTEM_COVERAGE_CATEGORIES.includes(category)) {
+        // These warranties cover entire systems, not specific appliances
+        const categoryLabels: Record<string, string> = {
+          'HVAC': 'HVAC System',
+          'PLUMBING': 'Plumbing System',
+          'ELECTRICAL': 'Electrical System',
+          'ROOFING': 'Roof Coverage',
+          'STRUCTURAL': 'Structural Coverage',
+          'HOME_WARRANTY_PLAN': 'All Covered Systems',
+        };
+        return categoryLabels[category] || 'System Coverage';
       }
+      
+      // 2. Try to find the linked asset by ID
+      if (homeAssetId) {
+        const asset = homeAssets.find(a => a.id === homeAssetId);
+        if (asset) {
+          const assetName = asset.assetType
+            .replace(/_/g, ' ')
+            .toLowerCase()
+            .replace(/\b\w/g, l => l.toUpperCase());
+          return asset.modelNumber ? `${assetName} (${asset.modelNumber})` : assetName;
+        }
+        
+        // ID not found in current homeAssets - might be old HomeAsset ID
+        // Try to match by property (best effort)
+        // For now, return "Linked Asset" to indicate something was linked
+        return 'Linked Asset';
+      }
+      
+      // 3. For APPLIANCE or OTHER category with no link
       return 'N/A';
   }, [homeAssets]);
 
@@ -812,7 +849,7 @@ export default function WarrantiesPage() {
                       </div>
                       <div className="flex flex-wrap justify-between gap-2">
                         <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Asset</span>
-                        <span>{getAssetInfo(warranty.homeAssetId)}</span>
+                        <span>{getAssetInfo(warranty)}</span>
                       </div>
                       <div className="flex flex-wrap justify-between gap-2">
                         <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Expires</span>
@@ -904,7 +941,7 @@ export default function WarrantiesPage() {
                         {getPropertyInfo(warranty)}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                        {getAssetInfo(warranty.homeAssetId)}
+                        {getAssetInfo(warranty)}
                     </TableCell>
                     {/* ---------------- */}
                     <TableCell className="text-center">
