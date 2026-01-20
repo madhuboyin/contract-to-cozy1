@@ -178,4 +178,23 @@ export async function lookupBarcode(req: CustomRequest, res: Response, next: Nex
   }
 }
 
+export async function checkDuplicateAppliance(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const { propertyId } = req.params;
+    const { name, category } = req.query;
 
+    if (!name || typeof name !== 'string') {
+      return res.json({ success: true, data: { isDuplicate: false } });
+    }
+
+    const result = await service.checkDuplicateAppliance(
+      propertyId,
+      name,
+      String(category || 'APPLIANCE')
+    );
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+}

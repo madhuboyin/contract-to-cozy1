@@ -65,6 +65,46 @@ const MAJOR_APPLIANCE_KEYWORDS = [
 ];
 
 /**
+ * Map of keywords to canonical appliance types
+ */
+const KEYWORD_TO_TYPE: Record<string, string> = {
+  'dishwasher': 'DISHWASHER',
+  'refrigerator': 'REFRIGERATOR',
+  'fridge': 'REFRIGERATOR',
+  'freezer': 'REFRIGERATOR',
+  'oven': 'OVEN_RANGE',
+  'range': 'OVEN_RANGE',
+  'stove': 'OVEN_RANGE',
+  'cooktop': 'OVEN_RANGE',
+  'washer': 'WASHER_DRYER',
+  'dryer': 'WASHER_DRYER',
+  'laundry': 'WASHER_DRYER',
+  'microwave': 'MICROWAVE_HOOD',
+  'water softener': 'WATER_SOFTENER',
+  'softener': 'WATER_SOFTENER',
+};
+
+/**
+ * Infer major appliance type from name (client-side version)
+ */
+function inferApplianceType(name: string): string | null {
+  const normalized = name.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim();
+  
+  for (const [keyword, type] of Object.entries(KEYWORD_TO_TYPE)) {
+    if (normalized.includes(keyword)) {
+      return type;
+    }
+  }
+  return null;
+}
+
+/**
+ * Format appliance type for display
+ */
+function formatApplianceType(type: string): string {
+  return type.replace(/_/g, ' ').toLowerCase();
+}
+/**
  * Categories that use Install Year (year picker) vs Purchase Date (date picker)
  */
 const INSTALL_YEAR_CATEGORIES: InventoryItemCategory[] = ['APPLIANCE'];
@@ -243,6 +283,7 @@ export default function InventoryItemDrawer(props: {
   initialItem: InventoryItem | null;
   highlightRecallMatchId?: string | null;
   onSaved: () => void;
+  existingItems?: InventoryItem[];
 }) {
   const isEdit = !!props.initialItem;
 
@@ -323,7 +364,53 @@ export default function InventoryItemDrawer(props: {
   const [installYear, setInstallYear] = useState<string>('');
   const [purchaseDate, setPurchaseDate] = useState<string>('');
   
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
+
+  /**
+ * Check for duplicate major appliances (client-side)
+ */
+useEffect(() => {
+  // Skip for edit mode
+  if (isEdit) {
+    setDuplicateError(null);
+    return;
+  }
+
+  // Only check APPLIANCE category
+  if (category !== 'APPLIANCE') {
+    setDuplicateError(null);
+    return;
+  }
+
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    setDuplicateError(null);
+    return;
+  }
+
+  // Infer the appliance type from name
+  const inferredType = inferApplianceType(trimmedName);
+  if (!inferredType) {
+    setDuplicateError(null);
+    return;
+  }
+
+  // Check if any existing item has the same type
+  const existingItems = props.existingItems || [];
+  const sourceHashToFind = `property_appliance::${inferredType}`;
   
+  const duplicate = existingItems.find(item => 
+    item.sourceHash === sourceHashToFind ||
+    (item.category === 'APPLIANCE' && inferApplianceType(item.name || '') === inferredType)
+  );
+
+  if (duplicate) {
+    const friendlyName = formatApplianceType(inferredType);
+    setDuplicateError(`A ${friendlyName} already exists for this property.`);
+  } else {
+    setDuplicateError(null);
+  }
+}, [name, category, isEdit, props.existingItems]);
   // UPDATE the useEffect that initializes form from props.initialItem
   // Add these lines to handle date fields:
   // ----------------------------------------------------------------------------
@@ -442,7 +529,7 @@ export default function InventoryItemDrawer(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.open, props.propertyId]);
 
-  const canSave = name.trim().length > 0;
+  const canSave = name.trim().length > 0 && !duplicateError;
 
   function shouldAutofill(touchedField: boolean, currentValue: string, incoming: any) {
     if (!incoming) return false;
@@ -987,7 +1074,24 @@ export default function InventoryItemDrawer(props: {
               </select>
             </div>
           </div>
-
+          {duplicateError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 flex items-start gap-2">
+              <svg 
+                className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  strokeWidth={2} 
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" 
+                />
+              </svg>
+              <span className="text-sm text-red-700">{duplicateError}</span>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <div className="text-sm font-medium">Condition</div>
@@ -1076,34 +1180,6 @@ export default function InventoryItemDrawer(props: {
             </div>
           </div>
 
-          {isEdit && isPropertyManagedAppliance(props.initialItem) && (
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
-              <div className="flex items-center gap-2">
-                <svg 
-                  className="w-4 h-4 text-blue-600" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth={2} 
-                    d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" 
-                  />
-                </svg>
-                <span className="text-sm text-blue-800">
-                  Synced from Property Details • 
-                  <a 
-                    href={`/dashboard/properties/${props.propertyId}/edit`}
-                    className="underline hover:text-blue-900 ml-1"
-                  >
-                    Edit there
-                  </a>
-                </span>
-              </div>
-            </div>
-          )}
           {/* Existing recall panel behavior */}
           {isEdit && props.initialItem ? (
             <InventoryItemRecallPanel

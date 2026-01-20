@@ -381,6 +381,7 @@ export default function InventoryClient() {
           setDrawerOpen(false);
           await refreshAll();
         }}
+        existingItems={items}
       />
       <InventoryBulkUploadModal
         open={bulkOpen}

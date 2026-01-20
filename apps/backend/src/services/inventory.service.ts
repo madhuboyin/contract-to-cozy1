@@ -4,6 +4,7 @@ import { APIError } from '../middleware/error.middleware';
 import { InventoryItemCategory } from '@prisma/client';
 import crypto from 'crypto';
 import { HomeEventsAutoGen } from './homeEvents/homeEvents.autogen';
+import { NextFunction } from 'express';
 
 function normalize(v: any) {
   return String(v ?? '').trim().toLowerCase();
@@ -187,6 +188,45 @@ export class InventoryService {
       where: { propertyId },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
+  }
+  /**
+   * Check if a major appliance already exists for this property.
+   * Used for inline validation before save.
+   */
+  async checkDuplicateAppliance(
+    propertyId: string, 
+    name: string, 
+    category: string
+  ): Promise<{ isDuplicate: boolean; message?: string; applianceType?: string }> {
+    // Only check for APPLIANCE category
+    if (category !== 'APPLIANCE') {
+      return { isDuplicate: false };
+    }
+
+    const inferredType = inferMajorApplianceType(name);
+    
+    // Not a recognized major appliance type
+    if (!inferredType) {
+      return { isDuplicate: false };
+    }
+
+    const sourceHash = `${PROPERTY_APPLIANCE_PREFIX}${inferredType}`;
+
+    const existing = await prisma.inventoryItem.findFirst({
+      where: { propertyId, sourceHash },
+      select: { id: true, name: true },
+    });
+
+    if (existing) {
+      const friendlyName = formatApplianceType(inferredType);
+      return {
+        isDuplicate: true,
+        message: `A ${friendlyName} already exists for this property.`,
+        applianceType: friendlyName,
+      };
+    }
+
+    return { isDuplicate: false };
   }
 
   async createRoom(

@@ -9,7 +9,7 @@ import { CustomRequest } from '../types';
 import { prisma } from '../lib/prisma';
 import { detectCoverageGaps } from '../services/coverageGap.service';
 import { InventoryImportService } from '../services/inventoryImport.service';
-import { listImportBatches, rollbackImportBatch } from '../controllers/inventory.controller';
+import { checkDuplicateAppliance, listImportBatches, rollbackImportBatch } from '../controllers/inventory.controller';
 import { InventoryService } from '../services/inventory.service';
 
 import {
@@ -490,6 +490,13 @@ router.post(
   '/properties/:propertyId/inventory/drafts/:draftId/confirm',
   propertyAuthMiddleware,
   confirmDraft
+);
+
+router.get(
+  '/properties/:propertyId/inventory/items/check-duplicate',
+  authenticate,
+  propertyAuthMiddleware,
+  checkDuplicateAppliance
 );
 
 export default router;
