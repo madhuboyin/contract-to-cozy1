@@ -1007,82 +1007,6 @@ export default function InventoryItemDrawer(props: {
               </select>
             </div>
 
-            {/* Category-specific date field */}
-            <div className="rounded-2xl border border-black/10 p-4">
-              <div className="text-sm font-medium mb-3">
-                {INSTALL_YEAR_CATEGORIES.includes(category) ? 'Installation' : 'Purchase Information'}
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                {/* APPLIANCE category: Install Year (year picker) */}
-                {INSTALL_YEAR_CATEGORIES.includes(category) && (
-                  <div>
-                    <div className="text-xs opacity-70 mb-1">Install Year</div>
-                    <input
-                      type="number"
-                      min="1900"
-                      max={CURRENT_YEAR + 1}
-                      step="1"
-                      placeholder="e.g. 2019"
-                      value={installYear}
-                      onChange={(e) => setInstallYear(e.target.value)}
-                      disabled={isPropertyManagedAppliance(props.initialItem)}
-                      className={`w-full rounded-xl border border-black/10 px-3 py-2 text-sm ${
-                        isPropertyManagedAppliance(props.initialItem) 
-                          ? 'bg-gray-100 text-gray-500 cursor-not-allowed' 
-                          : ''
-                      }`}
-                    />
-                    {isPropertyManagedAppliance(props.initialItem) && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        Managed from Property Details
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* ELECTRONICS, FURNITURE, OTHER categories: Purchase Date (date picker) */}
-                {PURCHASE_DATE_CATEGORIES.includes(category) && (
-                  <div>
-                    <div className="text-xs opacity-70 mb-1">Purchase Date</div>
-                    <input
-                      type="date"
-                      value={purchaseDate}
-                      onChange={(e) => setPurchaseDate(e.target.value)}
-                      max={new Date().toISOString().split('T')[0]}
-                      className="w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-                    />
-                  </div>
-                )}
-
-                {/* Purchase/Replacement cost (shown for all categories) */}
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Purchase Cost ($)</div>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="0.00"
-                    value={purchaseCost}
-                    onChange={(e) => setPurchaseCost(e.target.value)}
-                    className="w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-                  />
-                </div>
-
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Replacement Cost ($)</div>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="0.00"
-                    value={replacementCost}
-                    onChange={(e) => setReplacementCost(e.target.value)}
-                    className="w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-                  />
-                </div>
-              </div>
-            </div>
             {majorApplianceWarning && (
               <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
                 <div className="flex items-start gap-3">
@@ -1260,25 +1184,78 @@ export default function InventoryItemDrawer(props: {
           )}
 
           {/* Costs */}
+          {/* Category-specific date field */}
           <div className="rounded-2xl border border-black/10 p-4">
-            <div className="text-sm font-medium">Costs</div>
-            <div className="grid grid-cols-2 gap-3 mt-3">
+            <div className="text-sm font-medium mb-3">
+              {INSTALL_YEAR_CATEGORIES.includes(category) ? 'Installation' : 'Purchase Information'}
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              {/* APPLIANCE category: Install Year (year picker) */}
+              {INSTALL_YEAR_CATEGORIES.includes(category) && (
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Install Year</div>
+                  <input
+                    type="number"
+                    min="1900"
+                    max={CURRENT_YEAR + 1}
+                    step="1"
+                    placeholder="e.g. 2019"
+                    value={installYear}
+                    onChange={(e) => setInstallYear(e.target.value)}
+                    disabled={isPropertyManagedAppliance(props.initialItem)}
+                    className={`w-full rounded-xl border border-black/10 px-3 py-2 text-sm ${
+                      isPropertyManagedAppliance(props.initialItem) 
+                        ? 'bg-gray-100 text-gray-500 cursor-not-allowed' 
+                        : ''
+                    }`}
+                  />
+                  {isPropertyManagedAppliance(props.initialItem) && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      Managed from Property Details
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ELECTRONICS, FURNITURE, OTHER categories: Purchase Date (date picker) */}
+              {PURCHASE_DATE_CATEGORIES.includes(category) && (
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Purchase Date</div>
+                  <input
+                    type="date"
+                    value={purchaseDate}
+                    onChange={(e) => setPurchaseDate(e.target.value)}
+                    max={new Date().toISOString().split('T')[0]}
+                    className="w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
+                  />
+                </div>
+              )}
+
+              {/* Purchase/Replacement cost (shown for all categories) */}
               <div>
-                <div className="text-xs opacity-70">Purchase cost ($)</div>
+                <div className="text-xs opacity-70 mb-1">Purchase Cost ($)</div>
                 <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
                   value={purchaseCost}
                   onChange={(e) => setPurchaseCost(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-                  placeholder="0.00"
+                  className="w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
                 />
               </div>
+
               <div>
-                <div className="text-xs opacity-70">Replacement cost ($)</div>
+                <div className="text-xs opacity-70 mb-1">Replacement Cost ($)</div>
                 <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
                   value={replacementCost}
                   onChange={(e) => setReplacementCost(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-                  placeholder="0.00"
+                  className="w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
                 />
               </div>
             </div>
