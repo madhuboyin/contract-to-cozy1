@@ -166,6 +166,9 @@ function mergeTags(
   ]));
 }
 
+function formatApplianceType(type: string): string {
+  return type.replace(/_/g, ' ').toLowerCase();
+}
 
 export class InventoryService {
   private roomDisplayNameFromType(type: string) {
@@ -316,118 +319,41 @@ export class InventoryService {
     const modelNumberNorm = norm(data.modelNumber);
   
     // ═══════════════════════════════════════════════════════════════════════════
-    // MAJOR APPLIANCE DUPLICATE PREVENTION
+    // MAJOR APPLIANCE HANDLING
+    // - Check if duplicate exists → simple error
+    // - If no duplicate → allow creation with canonical sourceHash
     // ═══════════════════════════════════════════════════════════════════════════
-    // 
-    // Major appliances (dishwasher, refrigerator, etc.) should be managed from
-    // the Property Details page, not manually created on Inventory page.
-    // This prevents duplicate entries and ensures consistent data.
-    // ═══════════════════════════════════════════════════════════════════════════
+  
+    let sourceHash: string | null = null;
+    let enforcedTags: string[] = [];
   
     if (String(data.category) === 'APPLIANCE') {
       const inferredType = inferMajorApplianceType(data.name);
       
       if (inferredType) {
-        const sourceHash = `${PROPERTY_APPLIANCE_PREFIX}${inferredType}`;
+        sourceHash = `${PROPERTY_APPLIANCE_PREFIX}${inferredType}`;
+        enforcedTags = [TAG_PROPERTY_APPLIANCE, `APPLIANCE_TYPE:${inferredType}`];
   
-        // Check if this major appliance already exists (from Property page)
+        // Check if this major appliance already exists
         const existingCanonical = await prisma.inventoryItem.findFirst({
           where: { propertyId, sourceHash },
-          select: { 
-            id: true, 
-            name: true,
-            tags: true,
-            installedOn: true,
-          },
+          select: { id: true, name: true },
         });
   
         if (existingCanonical) {
-          // ─────────────────────────────────────────────────────────────────────
-          // CASE A: Canonical item exists from Property page
-          // → Merge additional details into it (don't create duplicate)
-          // ─────────────────────────────────────────────────────────────────────
-          
-          const patch: any = {};
-          const enforcedTags = [TAG_PROPERTY_APPLIANCE, `APPLIANCE_TYPE:${inferredType}`];
-  
-          // Only update fields if caller provided them and they add value
-          if (data.condition && data.condition !== 'UNKNOWN') {
-            patch.condition = data.condition;
-          }
-          if (data.brand) patch.brand = data.brand;
-          if (data.model) patch.model = data.model;
-          if (data.serialNo) patch.serialNo = data.serialNo;
-          if (data.notes) patch.notes = data.notes;
-          
-          // Cost fields
-          if (data.purchaseCostCents) patch.purchaseCostCents = data.purchaseCostCents;
-          if (data.replacementCostCents) patch.replacementCostCents = data.replacementCostCents;
-          if (data.currency && data.currency !== 'USD') patch.currency = data.currency;
-  
-          // Date fields - don't overwrite installedOn if already set from Property
-          if (data.purchasedOn) patch.purchasedOn = new Date(data.purchasedOn);
-          if (data.lastServicedOn) patch.lastServicedOn = new Date(data.lastServicedOn);
-          // Only set installedOn if the existing item doesn't have it
-          if (data.installedOn && !existingCanonical.installedOn) {
-            patch.installedOn = new Date(data.installedOn);
-          }
-  
-          // Product identifiers (barcode/recall)
-          if (data.manufacturer) {
-            patch.manufacturer = data.manufacturer;
-            patch.manufacturerNorm = norm(data.manufacturer);
-          }
-          if (data.modelNumber) {
-            patch.modelNumber = data.modelNumber;
-            patch.modelNumberNorm = norm(data.modelNumber);
-          }
-          if (data.serialNumber) patch.serialNumber = data.serialNumber;
-          if (data.upc) patch.upc = data.upc;
-          if (data.sku) patch.sku = data.sku;
-  
-          // Coverage links
-          if (data.warrantyId) patch.warrantyId = data.warrantyId;
-          if (data.insurancePolicyId) patch.insurancePolicyId = data.insurancePolicyId;
-  
-          // Merge tags
-          patch.tags = mergeTags(existingCanonical.tags, data.tags, enforcedTags);
-  
-          // Update the canonical item
-          const merged = await prisma.inventoryItem.update({
-            where: { id: existingCanonical.id },
-            data: patch,
-            include: {
-              room: true,
-              warranty: true,
-              insurancePolicy: true,
-              homeAsset: true,
-              documents: { orderBy: { createdAt: 'desc' } },
-            },
-          });
-  
-          // Return the merged item (no duplicate created)
-          return merged;
-        } else {
-          // ─────────────────────────────────────────────────────────────────────
-          // CASE B: No canonical item exists yet
-          // → Block creation and direct user to Property page
-          // ─────────────────────────────────────────────────────────────────────
-          
-          const friendlyName = inferredType.replace(/_/g, ' ').toLowerCase();
-          
+          // Simple duplicate error - one liner
+          const friendlyName = formatApplianceType(inferredType);
           throw new APIError(
-            `"${friendlyName}" is a major appliance that should be added from Property Details page. ` +
-            `Go to Properties → Edit → Major Appliances section to add it there. ` +
-            `This ensures your appliance data stays in sync across the platform.`,
-            400,
-            'MAJOR_APPLIANCE_USE_PROPERTY_PAGE'
+            `A ${friendlyName} already exists for this property.`,
+            409,
+            'APPLIANCE_ALREADY_EXISTS'
           );
         }
       }
     }
   
     // ═══════════════════════════════════════════════════════════════════════════
-    // STANDARD ITEM CREATION (non-major appliances)
+    // CREATE THE ITEM
     // ═══════════════════════════════════════════════════════════════════════════
   
     const created = await prisma.inventoryItem.create({
@@ -446,7 +372,10 @@ export class InventoryService {
         model: data.model || null,
         serialNo: data.serialNo || null,
         notes: data.notes || null,
-        tags: data.tags || [],
+        
+        // Apply canonical sourceHash and tags for major appliances
+        sourceHash: sourceHash || null,
+        tags: mergeTags([], data.tags, enforcedTags),
   
         purchaseCostCents: data.purchaseCostCents || null,
         replacementCostCents: data.replacementCostCents || null,
@@ -498,7 +427,7 @@ export class InventoryService {
     }
   
     return created;
-  }  
+  }
   
   async updateItem(propertyId: string, itemId: string, patch: any) {
     const existing = await prisma.inventoryItem.findFirst({
@@ -516,54 +445,41 @@ export class InventoryService {
       throw new APIError('Inventory item not found', 404, 'ITEM_NOT_FOUND');
     }
   
-    // Check if this is a property-managed appliance
-    const isPropertyManaged = existing.sourceHash?.startsWith(PROPERTY_APPLIANCE_PREFIX);
-  
     // ═══════════════════════════════════════════════════════════════════════════
-    // PREVENT RENAMING PROPERTY-MANAGED APPLIANCES TO DIFFERENT TYPE
-    // ═══════════════════════════════════════════════════════════════════════════
-    
-    if (isPropertyManaged && patch.name) {
-      const currentType = existing.sourceHash?.replace(PROPERTY_APPLIANCE_PREFIX, '');
-      const newInferredType = inferMajorApplianceType(patch.name);
-      
-      if (newInferredType && newInferredType !== currentType) {
-        throw new APIError(
-          `Cannot change appliance type. This ${currentType?.replace(/_/g, ' ').toLowerCase()} ` +
-          `is managed from Property Details. To change appliance types, edit the Major Appliances ` +
-          `section on the Property page.`,
-          400,
-          'CANNOT_CHANGE_PROPERTY_APPLIANCE_TYPE'
-        );
-      }
-    }
-  
-    // ═══════════════════════════════════════════════════════════════════════════
-    // PREVENT MANUAL ITEMS BECOMING DUPLICATE MAJOR APPLIANCES
+    // PREVENT DUPLICATE MAJOR APPLIANCES ON UPDATE
     // ═══════════════════════════════════════════════════════════════════════════
   
     const nextName = ('name' in patch) ? patch.name : existing.name;
     const nextCategory = ('category' in patch) ? patch.category : existing.category;
     
-    if (String(nextCategory) === 'APPLIANCE' && !isPropertyManaged) {
+    if (String(nextCategory) === 'APPLIANCE') {
       const inferredType = inferMajorApplianceType(nextName);
       
       if (inferredType) {
         const sourceHash = `${PROPERTY_APPLIANCE_PREFIX}${inferredType}`;
         
+        // Check if another item with this type exists
         const canonical = await prisma.inventoryItem.findFirst({
           where: { propertyId, sourceHash },
           select: { id: true },
         });
   
         if (canonical && canonical.id !== itemId) {
-          const friendlyName = inferredType.replace(/_/g, ' ').toLowerCase();
+          const friendlyName = formatApplianceType(inferredType);
           throw new APIError(
-            `A ${friendlyName} already exists for this property (managed from Property Details). ` +
-            `Please edit that item instead, or use a different name for this item.`,
+            `A ${friendlyName} already exists for this property.`,
             409,
-            'MAJOR_APPLIANCE_ALREADY_EXISTS'
+            'APPLIANCE_ALREADY_EXISTS'
           );
+        }
+  
+        // Update sourceHash if this item is becoming a major appliance
+        if (!existing.sourceHash?.startsWith(PROPERTY_APPLIANCE_PREFIX)) {
+          (patch as any).sourceHash = sourceHash;
+          (patch as any).tags = mergeTags(existing.tags, patch.tags, [
+            TAG_PROPERTY_APPLIANCE,
+            `APPLIANCE_TYPE:${inferredType}`,
+          ]);
         }
       }
     }

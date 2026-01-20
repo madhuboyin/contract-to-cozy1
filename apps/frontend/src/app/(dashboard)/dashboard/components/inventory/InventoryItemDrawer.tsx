@@ -326,7 +326,6 @@ export default function InventoryItemDrawer(props: {
   // Warning state for major appliance detection
   const [majorApplianceWarning, setMajorApplianceWarning] = useState<string | null>(null);
   
-  
   // UPDATE the useEffect that initializes form from props.initialItem
   // Add these lines to handle date fields:
   // ----------------------------------------------------------------------------
@@ -351,7 +350,6 @@ export default function InventoryItemDrawer(props: {
       // Reset for new item
       setInstallYear('');
       setPurchaseDate('');
-      setMajorApplianceWarning(null);
     }
   }, [props.initialItem, props.open]);
   
@@ -824,12 +822,9 @@ export default function InventoryItemDrawer(props: {
     } catch (error: any) {
       console.error('Failed to save inventory item:', error);
       
-      // Show user-friendly error for major appliance redirection
-      if (error?.code === 'MAJOR_APPLIANCE_USE_PROPERTY_PAGE') {
-        alert(error.message);
-      } else {
-        alert(error?.message || 'Save failed. Check console logs.');
-      }
+      // Show simple error message for duplicate appliance
+      const message = error?.message || 'Save failed. Please try again.';
+      alert(message);
     } finally {
       setSaving(false);
     }
@@ -1183,7 +1178,6 @@ export default function InventoryItemDrawer(props: {
             </div>
           )}
 
-          {/* Costs */}
           {/* Category-specific date field */}
           <div className="rounded-2xl border border-black/10 p-4">
             <div className="text-sm font-medium mb-3">
@@ -1203,18 +1197,8 @@ export default function InventoryItemDrawer(props: {
                     placeholder="e.g. 2019"
                     value={installYear}
                     onChange={(e) => setInstallYear(e.target.value)}
-                    disabled={isPropertyManagedAppliance(props.initialItem)}
-                    className={`w-full rounded-xl border border-black/10 px-3 py-2 text-sm ${
-                      isPropertyManagedAppliance(props.initialItem) 
-                        ? 'bg-gray-100 text-gray-500 cursor-not-allowed' 
-                        : ''
-                    }`}
+                    className="w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
                   />
-                  {isPropertyManagedAppliance(props.initialItem) && (
-                    <div className="text-xs text-gray-500 mt-1">
-                      Managed from Property Details
-                    </div>
-                  )}
                 </div>
               )}
 
