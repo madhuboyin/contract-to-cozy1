@@ -389,9 +389,18 @@ export class InventoryService {
             'APPLIANCE_ALREADY_EXISTS'
           );
         }
+      }      
+    }
+    // Check if install year is required
+    if (String(data.category) === 'APPLIANCE') {
+      if (!data.installedOn) {
+        throw new APIError(
+          'Install Year is required for appliances.',
+          400,
+          'INSTALL_YEAR_REQUIRED'
+        );
       }
     }
-  
     // ═══════════════════════════════════════════════════════════════════════════
     // CREATE THE ITEM
     // ═══════════════════════════════════════════════════════════════════════════
@@ -523,7 +532,23 @@ export class InventoryService {
         }
       }
     }
-  
+    if (String(nextCategory) === 'APPLIANCE') {
+      // Check if installedOn is being set or already exists
+      const hasInstalledOn = 'installedOn' in patch 
+        ? !!patch.installedOn 
+        : !!(await prisma.inventoryItem.findFirst({
+            where: { id: itemId },
+            select: { installedOn: true }
+          }))?.installedOn;
+      
+      if (!hasInstalledOn && !patch.installedOn) {
+        throw new APIError(
+          'Install Year is required for appliances.',
+          400,
+          'INSTALL_YEAR_REQUIRED'
+        );
+      }
+    }
     // Validate relations
     if ('roomId' in patch) await this.assertRoomBelongs(propertyId, patch.roomId);
     if ('warrantyId' in patch) await this.assertWarrantyBelongs(propertyId, patch.warrantyId);

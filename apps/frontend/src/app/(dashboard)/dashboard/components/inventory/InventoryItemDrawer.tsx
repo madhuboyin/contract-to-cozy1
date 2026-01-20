@@ -813,7 +813,17 @@ useEffect(() => {
       alert('Name is required');
       return;
     }
-  
+    if (category === 'APPLIANCE') {
+      const year = Number(installYear);
+      if (!installYear || !Number.isFinite(year) || year < 1900 || year > CURRENT_YEAR + 1) {
+        alert('Install Year is required for appliances.');
+        return;
+      }
+    }
+
+    if (duplicateError) {
+      return;
+    }
     setSaving(true);
     try {
       // Determine which date field to send based on category
@@ -1204,7 +1214,9 @@ useEffect(() => {
               {/* APPLIANCE category: Install Year (year picker) */}
               {INSTALL_YEAR_CATEGORIES.includes(category) && (
                 <div>
-                  <div className="text-xs opacity-70 mb-1">Install Year</div>
+                  <div className="text-xs opacity-70 mb-1">
+                    Install Year {category === 'APPLIANCE' && <span className="text-red-500">*</span>}
+                  </div>
                   <input
                     type="number"
                     min="1900"
@@ -1213,8 +1225,16 @@ useEffect(() => {
                     placeholder="e.g. 2019"
                     value={installYear}
                     onChange={(e) => setInstallYear(e.target.value)}
-                    className="w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
+                    required={category === 'APPLIANCE'}
+                    className={`w-full rounded-xl border px-3 py-2 text-sm ${
+                      category === 'APPLIANCE' && !installYear 
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
+                        : 'border-black/10'
+                    }`}
                   />
+                  {category === 'APPLIANCE' && !installYear && (
+                    <div className="text-xs text-red-500 mt-1">Required for appliances</div>
+                  )}
                 </div>
               )}
 
