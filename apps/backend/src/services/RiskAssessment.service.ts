@@ -1,6 +1,15 @@
 // apps/backend/src/services/RiskAssessment.service.ts
 
-import { Prisma, Property, RiskAssessmentReport, Warranty, InsurancePolicy } from '@prisma/client'; 
+import {
+  Prisma,
+  Property,
+  RiskAssessmentReport,
+  Warranty,
+  InsurancePolicy,
+  InventoryItem,
+  InventoryRoom,
+} from '@prisma/client';
+
 import { prisma } from '../lib/prisma'; 
 import { calculateAssetRisk, calculateTotalRiskScore, filterRelevantAssets, AssetRiskDetail } from '../utils/riskCalculator.util';
 import { RISK_ASSET_CONFIG } from '../config/risk-constants';
@@ -13,7 +22,15 @@ interface PropertyWithRelations extends Property {
   warranties: Warranty[];
   insurancePolicies: InsurancePolicy[];
   riskReport: RiskAssessmentReport | null;
+
+  // ✅ New: Inventory source of truth
+  inventoryItems: Array<
+    InventoryItem & {
+      room?: Pick<InventoryRoom, 'id' | 'name'> | null;
+    }
+  >;
 }
+
 
 export type RiskSummaryDto = {
   propertyId: string;
@@ -190,36 +207,50 @@ class RiskAssessmentService {
                 }],
                 lastCalculatedAt: new Date(),
             };
+        } 
+        const currentYear = new Date().getFullYear();
+        const assetRisks: AssetRiskDetail[] = [];
+        
+        if (isBasicDataMissing) {
+          console.warn(`[RISK-CALC] Basic property data missing for ${propertyId}. Running inventory-only assessment.`);
         } else {
-            // --- STEP 2: Execute Complex Calculation ---
-            const currentYear = new Date().getFullYear();
-            const assetRisks: AssetRiskDetail[] = [];
-
-            console.log(`[RISK-SERVICE] Filtering assets for property ${propertyId}...`);
-            const relevantConfigs = filterRelevantAssets(property as PropertyWithRelations, RISK_ASSET_CONFIG);
-            console.log(`[RISK-SERVICE] Filtered from ${RISK_ASSET_CONFIG.length} to ${relevantConfigs.length} relevant assets`);
-
-            for (const config of relevantConfigs) {
-              const assetRisk = calculateAssetRisk(
-                config.systemType,
-                config,
-                property as PropertyWithRelations, 
-                currentYear
-              );
-              if (assetRisk) {
-                assetRisks.push(assetRisk);
-              }
-            }
-
-            console.log(`[RISK-SERVICE] Calculated risk for ${assetRisks.length} assets`);
-
-            const calculatedResult = calculateTotalRiskScore(property as PropertyWithRelations, assetRisks);
-            
-            reportData = {
-                ...calculatedResult,
-                lastCalculatedAt: new Date(),
-            };
+          console.log(`[RISK-SERVICE] Filtering assets for property ${propertyId}...`);
+          const relevantConfigs = filterRelevantAssets(property as PropertyWithRelations, RISK_ASSET_CONFIG);
+          console.log(`[RISK-SERVICE] Filtered from ${RISK_ASSET_CONFIG.length} to ${relevantConfigs.length} relevant assets`);
+        
+          for (const config of relevantConfigs) {
+            const assetRisk = calculateAssetRisk(
+              config.systemType,
+              config,
+              property as PropertyWithRelations,
+              currentYear
+            );
+            if (assetRisk) assetRisks.push(assetRisk);
+          }
         }
+        
+        // ✅ Always include inventory major appliances (single source of truth)
+        try {
+          const invRisks = this.buildMajorApplianceRisksFromInventory(
+            property as PropertyWithRelations,
+            currentYear
+          );
+          if (invRisks.length > 0) {
+            assetRisks.push(...invRisks);
+            console.log(`[RISK-SERVICE] Added ${invRisks.length} MAJOR_APPLIANCE inventory risks`);
+          }
+        } catch (e) {
+          console.warn('[RISK-SERVICE] Failed to build inventory major appliance risks', e);
+        }
+        
+        console.log(`[RISK-SERVICE] Calculated risk for ${assetRisks.length} assets`);
+        
+        const calculatedResult = calculateTotalRiskScore(property as PropertyWithRelations, assetRisks);
+        
+        reportData = {
+          ...calculatedResult,
+          lastCalculatedAt: new Date(),
+        };        
 
     } catch (error: any) {
         console.error(`RISK CALCULATION FAILED for property ${propertyId}:`, error);
@@ -278,6 +309,7 @@ class RiskAssessmentService {
         // Extract HIGH/CRITICAL risk recommendations
         const recommendations = (reportData.details as AssetRiskDetail[])
           .filter((c: AssetRiskDetail) => c.riskLevel === 'HIGH' || c.riskLevel === 'CRITICAL')
+          .filter((c: AssetRiskDetail) => !String(c.systemType || '').startsWith('MAJOR_APPLIANCE_'))
           .map((c: AssetRiskDetail) => ({
             assetType: c.systemType,
             systemType: c.systemType,
@@ -286,10 +318,10 @@ class RiskAssessmentService {
             description: c.actionCta || `Maintenance required for ${c.systemType}`,
             priority: (c.riskLevel === 'CRITICAL' ? 'URGENT' : 'HIGH') as 'URGENT' | 'HIGH' | 'MEDIUM' | 'LOW',
             riskLevel: c.riskLevel as 'CRITICAL' | 'HIGH' | 'ELEVATED' | 'MODERATE' | 'LOW',
-            estimatedCost: Number(c.replacementCost || 0),
+            estimatedCost: Number(c.outOfPocketCost ?? c.replacementCost ?? 0),
             age: c.age,
             expectedLife: c.expectedLife,
-            exposure: Number(c.outOfPocketCost || c.replacementCost || 0),
+            exposure: Number(c.outOfPocketCost ?? c.replacementCost ?? 0),
           }));
 
         if (recommendations.length > 0) {
@@ -330,17 +362,149 @@ class RiskAssessmentService {
 
     return mockPdfContent;
   }
-
+  private normUpperUnderscore(s: string) {
+    return String(s || '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  }
+  
+  private inferMajorApplianceType(item: InventoryItem): string | null {
+    const tags = Array.isArray((item as any).tags) ? (item as any).tags : [];
+  
+    // Preferred: TAG like "APPLIANCE_TYPE:FRIDGE"
+    const tag = tags.find((t: string) => String(t).startsWith('APPLIANCE_TYPE:'));
+    if (tag) {
+      const raw = String(tag).split('APPLIANCE_TYPE:')[1] || '';
+      const t = this.normUpperUnderscore(raw);
+      return t || null;
+    }
+  
+    // Fallback: keyword inference from name
+    const name = String(item.name || '').toLowerCase();
+  
+    if (name.includes('refrigerator') || name.includes('fridge')) return 'FRIDGE';
+    if (name.includes('dishwasher')) return 'DISHWASHER';
+    if (name.includes('washer') || name.includes('washing machine')) return 'WASHER';
+    if (name.includes('dryer')) return 'DRYER';
+    if (name.includes('range') || name.includes('stove') || name.includes('cooktop')) return 'RANGE';
+    if (name.includes('microwave')) return 'MICROWAVE';
+    if (name.includes('freezer')) return 'FREEZER';
+    if (name.includes('garbage disposal') || name.includes('disposal')) return 'DISPOSAL';
+  
+    return null;
+  }
+  
+  private expectedLifeYearsForAppliance(applianceType: string): number {
+    // Conservative defaults (tweak later)
+    const map: Record<string, number> = {
+      FRIDGE: 13,
+      DISHWASHER: 10,
+      WASHER: 10,
+      DRYER: 13,
+      RANGE: 15,
+      MICROWAVE: 9,
+      FREEZER: 11,
+      DISPOSAL: 10,
+    };
+  
+    return map[applianceType] ?? 12;
+  }
+  
+  private getItemAgeYears(item: InventoryItem, currentYear: number): number | null {
+    const d = item.installedOn ?? item.purchasedOn ?? null;
+    if (!d) return null;
+  
+    const dt = new Date(d as any);
+    if (Number.isNaN(dt.getTime())) return null;
+  
+    const year = dt.getFullYear();
+    if (!year || year < 1900 || year > currentYear) return null;
+  
+    return Math.max(0, currentYear - year);
+  }
+  
+  private buildMajorApplianceRisksFromInventory(
+    property: PropertyWithRelations,
+    currentYear: number
+  ): AssetRiskDetail[] {
+    const out: AssetRiskDetail[] = [];
+  
+    const items = Array.isArray(property.inventoryItems) ? property.inventoryItems : [];
+    for (const item of items) {
+      // Only appliances (and only if we have replacement cost)
+      if (String(item.category) !== 'APPLIANCE') continue;
+      if (!item.replacementCostCents || item.replacementCostCents <= 0) continue;
+  
+      const applianceType = this.inferMajorApplianceType(item);
+      if (!applianceType) continue;
+  
+      const expectedLife = this.expectedLifeYearsForAppliance(applianceType);
+      const age = this.getItemAgeYears(item, currentYear);
+  
+      // If we can't determine age at all, still include it as a LOW informational row
+      const ageYears = age ?? 0;
+  
+      const ratio = expectedLife > 0 ? ageYears / expectedLife : 0;
+      const riskLevel: 'LOW' | 'MODERATE' | 'HIGH' =
+        ratio >= 1 ? 'HIGH' : ratio >= 0.8 ? 'MODERATE' : 'LOW';
+  
+      // CoverageFactor: simple V1 heuristic:
+      // - insurancePolicyId or warrantyId reduces out-of-pocket exposure
+      const hasCoverage = Boolean(item.warrantyId || item.insurancePolicyId);
+      const coverageFactor = hasCoverage ? 0.7 : 0.0;
+  
+      const outOfPocketCost =
+        Math.round(item.replacementCostCents * (1 - coverageFactor)) / 100;
+  
+      // Normalized names used by the frontend (it replaces underscores)
+      const assetName = this.normUpperUnderscore(item.name);
+      const systemType = `MAJOR_APPLIANCE_${applianceType}`;
+  
+      out.push({
+        assetName,
+        systemType,
+        category: 'SYSTEMS' as any,
+  
+        age: ageYears,
+        expectedLife,
+  
+        replacementCost: Math.round(item.replacementCostCents / 100),
+        probability: Math.max(0.15, Math.min(1, ratio)), // simple signal
+  
+        coverageFactor,
+        outOfPocketCost,
+        riskDollar: outOfPocketCost,
+  
+        riskLevel,
+        actionCta: hasCoverage ? 'Schedule Maintenance' : 'Add Home Warranty',
+  
+        // If your AssetRiskDetail supports extra fields, these are useful
+        // roomName: (item as any).room?.name ?? null,
+        // inventoryItemId: item.id,
+      } as any);
+    }
+  
+    return out;
+  }  
   private async fetchPropertyDetails(propertyId: string): Promise<PropertyWithRelations | null> {
     return prisma.property.findUnique({
       where: { id: propertyId },
       include: {
         warranties: true,
         insurancePolicies: true,
-        riskReport: true, 
+        riskReport: true,
+  
+        // ✅ New: inventory items drive MAJOR_APPLIANCE risks
+        inventoryItems: {
+          include: {
+            room: { select: { id: true, name: true } },
+          },
+        },
       },
     }) as Promise<PropertyWithRelations | null>;
-  }
+  }  
 }
 
 export default new RiskAssessmentService();

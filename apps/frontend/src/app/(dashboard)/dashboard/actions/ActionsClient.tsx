@@ -159,7 +159,12 @@ export function ActionsClient() {
 
     // Mark action as handled (disable CTA)
     if (activeActionId) {
-      setHandledActions(prev => new Set(prev).add(activeActionId));
+      setHandledActions((prev) => {
+        const next = new Set(prev);
+        next.add(activeActionId);
+        return next;
+      });
+      
     }
 
     // Close modal and reset
@@ -406,32 +411,31 @@ export function ActionsClient() {
             </div>
           ) : (
             <div className="space-y-3">
-              {actions.map(action => {
+              {actions.map((action) => {
                 const isChecklistAction = action.source === 'CHECKLIST';
                 const isSuppressed = action.suppression?.suppressed;
-                
-                // 🔑 NEW: Check if task was created from this RISK action
+
+                // Task created server-side (preferred truth)
                 const hasTaskCreated = action.hasRelatedChecklistItem === true;
 
+                // ✅ FIX: handledActions is keyed by actionKey (fallback to id)
+                const handledKey = action.actionKey || action.id;
+                const isHandled = handledActions.has(handledKey);
+
                 return (
-                  <OrchestrationActionCard 
-                    key={action.id} 
+                  <OrchestrationActionCard
+                    key={action.id}
                     action={action}
                     onCtaClick={handleActionCta}
                     onOpenTrace={handleOpenDecisionTrace}
-                    ctaDisabled={
-                      handledActions.has(action.id) ||
-                      isSuppressed ||
-                      hasTaskCreated ||        // 🔑 NEW: Task already created
-                      isChecklistAction
-                    }
+                    ctaDisabled={isHandled || isSuppressed || hasTaskCreated || isChecklistAction}
                     ctaLabel={
-                      handledActions.has(action.id)
+                      isHandled
                         ? 'Task scheduled'
                         : isSuppressed
                           ? 'Suppressed'
                           : hasTaskCreated
-                            ? 'Already scheduled'  // 🔑 NEW: Show for created tasks
+                            ? 'Already scheduled'
                             : isChecklistAction
                               ? 'View in Maintenance'
                               : undefined
@@ -439,6 +443,7 @@ export function ActionsClient() {
                   />
                 );
               })}
+
             </div>
           )}
         </section>
