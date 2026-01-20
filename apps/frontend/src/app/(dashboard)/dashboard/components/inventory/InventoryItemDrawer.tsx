@@ -323,8 +323,6 @@ export default function InventoryItemDrawer(props: {
   const [installYear, setInstallYear] = useState<string>('');
   const [purchaseDate, setPurchaseDate] = useState<string>('');
   
-  // Warning state for major appliance detection
-  const [majorApplianceWarning, setMajorApplianceWarning] = useState<string | null>(null);
   
   // UPDATE the useEffect that initializes form from props.initialItem
   // Add these lines to handle date fields:
@@ -353,35 +351,6 @@ export default function InventoryItemDrawer(props: {
     }
   }, [props.initialItem, props.open]);
   
-  
-  // ADD this useEffect to detect major appliance names and show warning
-  // ----------------------------------------------------------------------------
-  
-  useEffect(() => {
-    // Only check for new items (not editing)
-    if (isEdit) {
-      setMajorApplianceWarning(null);
-      return;
-    }
-    
-    // Only check when category is APPLIANCE
-    if (category !== 'APPLIANCE') {
-      setMajorApplianceWarning(null);
-      return;
-    }
-    
-    // Check if name matches a major appliance
-    if (name && isMajorApplianceName(name)) {
-      setMajorApplianceWarning(
-        'This looks like a major appliance (dishwasher, refrigerator, etc.). ' +
-        'Major appliances should be added from the Property Details page under "Major Appliances" section. ' +
-        'This keeps your data in sync across the platform.'
-      );
-    } else {
-      setMajorApplianceWarning(null);
-    }
-  }, [name, category, isEdit]);
-
   useEffect(() => {
     if (!props.open) return;
     const item = props.initialItem;
@@ -1002,35 +971,6 @@ export default function InventoryItemDrawer(props: {
               </select>
             </div>
 
-            {majorApplianceWarning && (
-              <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
-                <div className="flex items-start gap-3">
-                  <svg 
-                    className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    viewBox="0 0 24 24"
-                  >
-                    <path 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                      strokeWidth={2} 
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" 
-                    />
-                  </svg>
-                  <div>
-                    <div className="text-sm font-medium text-amber-800">Major Appliance Detected</div>
-                    <div className="text-sm text-amber-700 mt-1">{majorApplianceWarning}</div>
-                    <a 
-                      href={`/dashboard/properties/${props.propertyId}/edit`}
-                      className="inline-block mt-2 text-sm font-medium text-amber-800 underline hover:text-amber-900"
-                    >
-                      Go to Property Details →
-                    </a>
-                  </div>
-                </div>
-              </div>
-            )}
             <div>
               <div className="text-sm font-medium">Room</div>
               <select
