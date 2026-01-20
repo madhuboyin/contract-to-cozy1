@@ -257,12 +257,20 @@ export async function createWarranty(
   data: CreateWarrantyDTO
 ): Promise<Warranty> {
   try {
+    // Support both old homeAssetId and new inventoryItemId for backward compatibility
+    const inventoryItemId = data.inventoryItemId || data.homeAssetId;
+    
     const rawWarranty = await prisma.warranty.create({
       data: {
         homeownerProfile: { connect: { id: homeownerProfileId } },
         property: data.propertyId && data.propertyId !== "" ? { connect: { id: data.propertyId } } : undefined,
         category: data.category, 
-        homeAsset: data.homeAssetId && data.homeAssetId !== "" ? { connect: { id: data.homeAssetId } } : undefined,
+        // NEW: Use inventoryItem relation instead of homeAsset
+        inventoryItem: inventoryItemId && inventoryItemId !== "" 
+          ? { connect: { id: inventoryItemId } } 
+          : undefined,
+        // DEPRECATED: Keep homeAsset null for new records
+        // homeAsset: undefined,
         providerName: data.providerName,
         policyNumber: data.policyNumber,
         coverageDetails: data.coverageDetails,
@@ -270,22 +278,12 @@ export async function createWarranty(
         startDate: new Date(data.startDate),
         expiryDate: new Date(data.expiryDate),
       } as Prisma.WarrantyCreateInput,
+      include: { documents: true }
     });
-
-    // 🔑 ADD THIS SECTION - Trigger risk report regeneration
-    if (data.propertyId) {
-      try {
-        console.log(`[WARRANTY-SERVICE] Triggering risk update for property ${data.propertyId}`);
-        await JobQueueService.enqueuePropertyIntelligenceJobs(data.propertyId);
-      } catch (error) {
-        console.error(`[WARRANTY-SERVICE] Failed to enqueue risk update job:`, error);
-      }
-    }
-    // 🔑 END NEW SECTION
 
     return mapRawWarrantyToWarranty(rawWarranty);
   } catch (error) {
-    console.error('FATAL ERROR (POST /warranties): Prisma operation failed.', error); 
+    console.error('Error creating warranty:', error);
     throw error;
   }
 }
@@ -312,6 +310,12 @@ export async function updateWarranty(
       ...data,
       ...(data.startDate && { startDate: new Date(data.startDate) }),
       ...(data.expiryDate && { expiryDate: new Date(data.expiryDate) }),
+      // Handle inventoryItemId update (supports both old and new field names)
+      ...((data.inventoryItemId || data.homeAssetId) && {
+        inventoryItem: { connect: { id: data.inventoryItemId || data.homeAssetId } }
+      }),
+      // Remove homeAssetId from spread to prevent it being set directly
+      homeAssetId: undefined,
     } as Prisma.WarrantyUpdateInput,
     include: { documents: true }
   });
@@ -369,6 +373,41 @@ export async function deleteWarranty(
  * This function enforces the business rule to only allow users to select 
  * assets that are verifiably linked to the current property.
  */
+/**
+ * Helper to infer asset type from InventoryItem
+ */
+function inferAssetTypeFromInventoryItem(item: any): string {
+  // 1. Check sourceHash (canonical appliances from Property page)
+  if (item.sourceHash?.startsWith('property_appliance::')) {
+    return item.sourceHash.replace('property_appliance::', '');
+  }
+  
+  // 2. Check tags for APPLIANCE_TYPE
+  const typeTag = (item.tags || []).find((t: string) => t.startsWith('APPLIANCE_TYPE:'));
+  if (typeTag) {
+    return typeTag.replace('APPLIANCE_TYPE:', '');
+  }
+  
+  // 3. Infer from name
+  const name = (item.name || '').toLowerCase();
+  if (name.includes('dishwasher')) return 'DISHWASHER';
+  if (name.includes('refrigerator') || name.includes('fridge')) return 'REFRIGERATOR';
+  if (name.includes('oven') || name.includes('range') || name.includes('stove')) return 'OVEN_RANGE';
+  if (name.includes('washer') || name.includes('dryer')) return 'WASHER_DRYER';
+  if (name.includes('microwave')) return 'MICROWAVE_HOOD';
+  if (name.includes('water softener')) return 'WATER_SOFTENER';
+  if (name.includes('disposal')) return 'GARBAGE_DISPOSAL';
+  if (name.includes('furnace') || name.includes('hvac')) return 'HVAC_FURNACE';
+  if (name.includes('water heater')) return 'WATER_HEATER';
+  
+  return 'OTHER';
+}
+
+/**
+ * Lists all appliance InventoryItems linked to a specific Property ID.
+ * MIGRATED: Now uses InventoryItem instead of deprecated HomeAsset table.
+ * Returns HomeAsset-compatible shape for backward compatibility with frontend.
+ */
 export async function listLinkedHomeAssets(
   homeownerProfileId: string,
   propertyId: string
@@ -379,17 +418,33 @@ export async function listLinkedHomeAssets(
   });
 
   if (!property) {
-      // Throwing a dedicated error for the controller to handle as 404/403
       throw new Error("Property not found or does not belong to homeowner.");
   }
 
-  // 2. Fetch all HomeAssets strictly filtered by that propertyId
-  const rawAssets = await prisma.homeAsset.findMany({
-      where: { propertyId },
-      orderBy: { assetType: 'asc' } // Sort for better user experience in the dropdown
+  // 2. Fetch APPLIANCE category InventoryItems instead of HomeAssets
+  const inventoryItems = await prisma.inventoryItem.findMany({
+      where: { 
+        propertyId,
+        category: 'APPLIANCE',
+      },
+      orderBy: { name: 'asc' }
   });
 
-  return rawAssets as HomeAsset[];
+  // 3. Transform to HomeAsset-compatible shape for backward compatibility
+  return inventoryItems.map(item => ({
+    id: item.id,
+    propertyId: item.propertyId,
+    assetType: inferAssetTypeFromInventoryItem(item),
+    installationYear: item.installedOn ? new Date(item.installedOn).getUTCFullYear() : null,
+    modelNumber: item.modelNumber || item.model || null,
+    serialNumber: item.serialNumber || item.serialNo || null,
+    lastServiced: item.lastServicedOn,
+    efficiencyRating: null,
+    manufacturer: item.manufacturer || null,
+    brand: item.brand || null,
+    manufacturerNorm: null,
+    modelNumberNorm: null,
+  })) as HomeAsset[];
 }
 
 // --- INSURANCE POLICY SERVICE LOGIC (USING MAPPED HELPERS) ---
