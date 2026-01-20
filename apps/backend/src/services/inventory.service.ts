@@ -280,9 +280,9 @@ export class InventoryService {
           if (data.serialNo !== undefined) patch.serialNo = data.serialNo || null;
           if (data.notes !== undefined) patch.notes = data.notes || null;
 
-          if (data.purchaseCostCents !== undefined) patch.purchaseCostCents = data.purchaseCostCents || null;
-          if (data.replacementCostCents !== undefined) patch.replacementCostCents = data.replacementCostCents || null;
-          if (data.currency !== undefined) patch.currency = data.currency || 'USD';
+          if (data.purchaseCostCents !== undefined) patch.purchaseCostCents = data.purchaseCostCents ?? null;
+          if (data.replacementCostCents !== undefined) patch.replacementCostCents = data.replacementCostCents ?? null;
+          if (data.currency !== undefined) patch.currency = data.currency ?? 'USD';
 
           // Keep semantics: installedOn = installed year (property page), purchasedOn = purchase date (inventory page)
           if (data.installedOn !== undefined) patch.installedOn = data.installedOn ? new Date(data.installedOn) : null;
@@ -401,25 +401,27 @@ export class InventoryService {
   async updateItem(propertyId: string, itemId: string, patch: any) {
     const existing = await prisma.inventoryItem.findFirst({
       where: { id: itemId, propertyId },
-      select: { id: true, category: true, tags: true, sourceHash: true },
+      select: { id: true, category: true, tags: true },
     });
-    // ✅ Prevent creating duplicate canonical major appliances via rename/update
+    if (!existing) throw new APIError('Inventory item not found', 404, 'ITEM_NOT_FOUND');
+    
+    // ✅ Prevent duplicates + adopt canonical identity for major appliances
     const nextName = ('name' in patch) ? patch.name : undefined;
     const nextCategory = ('category' in patch) ? patch.category : undefined;
-
-    const effectiveCategory = nextCategory ?? existing?.category;    // if you allow category patching
-    const effectiveName = nextName ?? undefined;
+    
+    const effectiveCategory = nextCategory ?? existing.category;
+    const effectiveName = nextName;
     
     if (String(effectiveCategory) === 'APPLIANCE' && typeof effectiveName === 'string' && effectiveName.trim()) {
       const inferred = inferMajorApplianceType(effectiveName);
       if (inferred) {
         const sourceHash = `${PROPERTY_APPLIANCE_PREFIX}${inferred}`;
+    
         const canonical = await prisma.inventoryItem.findFirst({
           where: { propertyId, sourceHash },
           select: { id: true },
         });
-
-        // If canonical exists and it's not this item -> block to avoid duplicates
+    
         if (canonical && canonical.id !== itemId) {
           throw new APIError(
             'This major appliance already exists for the property. Please edit the existing item instead.',
@@ -427,15 +429,14 @@ export class InventoryService {
             'MAJOR_APPLIANCE_ALREADY_EXISTS'
           );
         }
-
-        // If no canonical exists, "adopt" this item into canonical on update (nice behavior)
+    
         (patch as any).sourceHash = sourceHash;
-        (patch as any).tags = mergeTags(undefined, (patch as any).tags, [
+        (patch as any).tags = mergeTags(existing.tags, (patch as any).tags, [
           TAG_PROPERTY_APPLIANCE,
           `APPLIANCE_TYPE:${inferred}`,
         ]);
       }
-    }
+    }    
 
     if (!existing) throw new APIError('Inventory item not found', 404, 'ITEM_NOT_FOUND');
 
