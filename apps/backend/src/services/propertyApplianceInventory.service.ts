@@ -157,15 +157,102 @@ export type HomeAssetDTO = {
 
 export async function listPropertyAppliancesAsHomeAssets(propertyId: string): Promise<HomeAssetDTO[]> {
   const items = await prisma.inventoryItem.findMany({
-    where: { propertyId, sourceHash: { startsWith: SOURCE_HASH_PREFIX } },
-    select: { id: true, propertyId: true, sourceHash: true, installedOn: true, createdAt: true },
+    where: {
+      propertyId,
+      category: InventoryItemCategory.APPLIANCE,
+    },
+    select: {
+      id: true,
+      propertyId: true,
+      sourceHash: true,
+      installedOn: true,
+      name: true,
+      tags: true,
+      createdAt: true,
+    },
     orderBy: { createdAt: 'asc' },
   });
 
-  return items.map((it) => ({
-    id: it.id,
-    propertyId: it.propertyId,
-    assetType: String(it.sourceHash || '').replace(SOURCE_HASH_PREFIX, '') || 'UNKNOWN',
-    installationYear: it.installedOn ? it.installedOn.getUTCFullYear() : null,
-  }));
+  function normalize(s: string) {
+    return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+
+  function inferMajorType(it: { sourceHash: string | null; name: string | null; tags: string[] }) {
+    // 1) If created from property page, it’s authoritative
+    if (it.sourceHash?.startsWith(SOURCE_HASH_PREFIX)) {
+      return it.sourceHash.replace(SOURCE_HASH_PREFIX, '') || null;
+    }
+
+    // 2) If tagged with a canonical appliance type (we already add APPLIANCE_TYPE:* for property items)
+    const typeTag = (it.tags || []).find((t) => t.startsWith('APPLIANCE_TYPE:'));
+    if (typeTag) return typeTag.replace('APPLIANCE_TYPE:', '') || null;
+
+    // 3) Infer from name (manual inventory adds)
+    const n = normalize(it.name || '');
+
+    if (n.includes('dishwasher')) return 'DISHWASHER';
+    if (n.includes('refrigerator') || n.includes('fridge')) return 'REFRIGERATOR';
+
+    // Oven/Range/Stove/Cooktop
+    if (
+      n.includes('oven') ||
+      n.includes('range') ||
+      n.includes('stove') ||
+      n.includes('cooktop')
+    )
+      return 'OVEN_RANGE';
+
+    // Microwave + hood/vent
+    if (n.includes('microwave') && (n.includes('hood') || n.includes('vent'))) return 'MICROWAVE_HOOD';
+    if (n.includes('microwave')) return 'MICROWAVE_HOOD'; // fallback (still treat as major)
+
+    // Laundry
+    const hasWasher = n.includes('washer');
+    const hasDryer = n.includes('dryer');
+    if (hasWasher || hasDryer || n.includes('laundry')) return 'WASHER_DRYER';
+
+    if (n.includes('water softener') || (n.includes('softener') && n.includes('water')))
+      return 'WATER_SOFTENER';
+
+    return null;
+  }
+
+  // Build canonical list and dedupe (prefer property_appliance sourceHash items)
+  const byType = new Map<string, HomeAssetDTO>();
+
+  for (const it of items) {
+    const t = inferMajorType({ sourceHash: it.sourceHash, name: it.name, tags: it.tags || [] });
+    if (!t) continue;
+
+    const installationYear = it.installedOn ? it.installedOn.getUTCFullYear() : null;
+
+    const dto: HomeAssetDTO = {
+      id: it.id,
+      propertyId: it.propertyId,
+      assetType: t,
+      installationYear,
+    };
+
+    const existing = byType.get(t);
+
+    // Prefer property_appliance items if both exist
+    const isPropertyBacked = !!it.sourceHash?.startsWith(SOURCE_HASH_PREFIX);
+    const existingIsPropertyBacked = existing ? existing.id.startsWith('') : false; // placeholder
+
+    if (!existing) {
+      byType.set(t, dto);
+      continue;
+    }
+
+    // If current is property-backed, overwrite inferred/manual
+    if (isPropertyBacked) {
+      byType.set(t, dto);
+      continue;
+    }
+
+    // Otherwise keep existing (stable)
+  }
+
+  return Array.from(byType.values());
 }
+
