@@ -133,6 +133,7 @@ export type InventoryItem = {
 
   notes: string | null;
   tags: string[];
+  sourceHash: string | null;
 
   createdAt: string;
   updatedAt: string;

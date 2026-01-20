@@ -76,30 +76,94 @@ function normalizeNameLoose(s: string) {
   return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+/**
+ * Major appliance types that are managed from Property Details page.
+ * These should NOT be created manually on Inventory page.
+ */
+const MAJOR_APPLIANCE_TYPES = [
+  'DISHWASHER',
+  'REFRIGERATOR',
+  'OVEN_RANGE',
+  'WASHER_DRYER',
+  'MICROWAVE_HOOD',
+  'WATER_SOFTENER',
+] as const;
+
+type MajorApplianceType = typeof MAJOR_APPLIANCE_TYPES[number];
+
+/**
+ * Fuzzy matching patterns for detecting major appliance types from user input.
+ * Each pattern maps to a canonical appliance type.
+ */
+const APPLIANCE_PATTERNS: Record<MajorApplianceType, RegExp[]> = {
+  DISHWASHER: [
+    /dish\s*washer/i,
+    /dishwasher/i,
+  ],
+  REFRIGERATOR: [
+    /refrigerator/i,
+    /fridge/i,
+    /freezer/i,  // standalone freezers often grouped here
+  ],
+  OVEN_RANGE: [
+    /\boven\b/i,
+    /\brange\b/i,
+    /\bstove\b/i,
+    /cooktop/i,
+    /cook\s*top/i,
+  ],
+  WASHER_DRYER: [
+    /washer/i,
+    /dryer/i,
+    /laundry/i,
+    /washing\s*machine/i,
+  ],
+  MICROWAVE_HOOD: [
+    /microwave/i,
+    /micro\s*wave/i,
+    /range\s*hood/i,
+    /vent\s*hood/i,
+    /exhaust\s*hood/i,
+  ],
+  WATER_SOFTENER: [
+    /water\s*softener/i,
+    /softener/i,
+    /water\s*conditioner/i,
+  ],
+};
 // Canonical major appliance types
-function inferMajorApplianceType(name?: string | null): string | null {
-  const n = normalizeNameLoose(name || '');
-  if (!n) return null;
+function inferMajorApplianceType(name: string | null | undefined): MajorApplianceType | null {
+  if (!name) return null;
+  
+  const normalized = String(name)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  if (!normalized) return null;
 
-  if (n.includes('dishwasher')) return 'DISHWASHER';
-  if (n.includes('refrigerator') || n.includes('fridge')) return 'REFRIGERATOR';
-
-  if (n.includes('water softener') || (n.includes('softener') && n.includes('water')))
-    return 'WATER_SOFTENER';
-
-  if (n.includes('microwave')) return 'MICROWAVE_HOOD';
-
-  if (n.includes('oven') || n.includes('range') || n.includes('stove') || n.includes('cooktop'))
-    return 'OVEN_RANGE';
-
-  if (n.includes('washer') || n.includes('dryer') || n.includes('laundry'))
-    return 'WASHER_DRYER';
+  for (const [type, patterns] of Object.entries(APPLIANCE_PATTERNS)) {
+    for (const pattern of patterns) {
+      if (pattern.test(normalized)) {
+        return type as MajorApplianceType;
+      }
+    }
+  }
 
   return null;
 }
 
-function mergeTags(existing: string[] | null | undefined, incoming: string[] | null | undefined, extra: string[]) {
-  return Array.from(new Set([...(existing || []), ...(incoming || []), ...extra].filter(Boolean)));
+function mergeTags(
+  existing: string[] | null | undefined,
+  incoming: string[] | null | undefined,
+  enforced: string[]
+): string[] {
+  return Array.from(new Set([
+    ...(existing || []),
+    ...(incoming || []),
+    ...enforced,
+  ]));
 }
 
 
@@ -250,62 +314,87 @@ export class InventoryService {
   
     const manufacturerNorm = norm(data.manufacturer);
     const modelNumberNorm = norm(data.modelNumber);
-    // ✅ Canonicalize major appliances to prevent duplicates across Property + Inventory pages
+  
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MAJOR APPLIANCE DUPLICATE PREVENTION
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 
+    // Major appliances (dishwasher, refrigerator, etc.) should be managed from
+    // the Property Details page, not manually created on Inventory page.
+    // This prevents duplicate entries and ensures consistent data.
+    // ═══════════════════════════════════════════════════════════════════════════
+  
     if (String(data.category) === 'APPLIANCE') {
-      const inferred = inferMajorApplianceType(data.name);
-      if (inferred) {
-        const sourceHash = `${PROPERTY_APPLIANCE_PREFIX}${inferred}`;
-
-        const canonical = await prisma.inventoryItem.findFirst({
+      const inferredType = inferMajorApplianceType(data.name);
+      
+      if (inferredType) {
+        const sourceHash = `${PROPERTY_APPLIANCE_PREFIX}${inferredType}`;
+  
+        // Check if this major appliance already exists (from Property page)
+        const existingCanonical = await prisma.inventoryItem.findFirst({
           where: { propertyId, sourceHash },
-          select: { id: true, tags: true },
+          select: { 
+            id: true, 
+            name: true,
+            tags: true,
+            installedOn: true,
+          },
         });
-
-        const enforcedTags = [TAG_PROPERTY_APPLIANCE, `APPLIANCE_TYPE:${inferred}`];
-
-        if (canonical) {
-          // Merge into canonical item instead of creating a duplicate row.
+  
+        if (existingCanonical) {
+          // ─────────────────────────────────────────────────────────────────────
+          // CASE A: Canonical item exists from Property page
+          // → Merge additional details into it (don't create duplicate)
+          // ─────────────────────────────────────────────────────────────────────
+          
           const patch: any = {};
-
-          // Only set fields if caller actually provided them (don’t wipe installedOn etc.)
-          if (data.name) patch.name = data.name;
-          if (data.condition) patch.condition = data.condition;
-
-          if (data.roomId !== undefined) patch.roomId = data.roomId || null;
-          if (data.warrantyId !== undefined) patch.warrantyId = data.warrantyId || null;
-          if (data.insurancePolicyId !== undefined) patch.insurancePolicyId = data.insurancePolicyId || null;
-
-          if (data.brand !== undefined) patch.brand = data.brand || null;
-          if (data.model !== undefined) patch.model = data.model || null;
-          if (data.serialNo !== undefined) patch.serialNo = data.serialNo || null;
-          if (data.notes !== undefined) patch.notes = data.notes || null;
-
-          if (data.purchaseCostCents !== undefined) patch.purchaseCostCents = data.purchaseCostCents ?? null;
-          if (data.replacementCostCents !== undefined) patch.replacementCostCents = data.replacementCostCents ?? null;
-          if (data.currency !== undefined) patch.currency = data.currency ?? 'USD';
-
-          // Keep semantics: installedOn = installed year (property page), purchasedOn = purchase date (inventory page)
-          if (data.installedOn !== undefined) patch.installedOn = data.installedOn ? new Date(data.installedOn) : null;
-          if (data.purchasedOn !== undefined) patch.purchasedOn = data.purchasedOn ? new Date(data.purchasedOn) : null;
-          if (data.lastServicedOn !== undefined) patch.lastServicedOn = data.lastServicedOn ? new Date(data.lastServicedOn) : null;
-
-          // Barcode/recall identifiers
-          if (data.manufacturer !== undefined) patch.manufacturer = data.manufacturer || null;
-          if (data.modelNumber !== undefined) patch.modelNumber = data.modelNumber || null;
-          if (data.serialNumber !== undefined) patch.serialNumber = data.serialNumber || null;
-          if (data.upc !== undefined) patch.upc = data.upc || null;
-          if (data.sku !== undefined) patch.sku = data.sku || null;
-
-          // Normalized fields
-          if (data.manufacturer !== undefined) patch.manufacturerNorm = norm(data.manufacturer);
-          if (data.modelNumber !== undefined) patch.modelNumberNorm = norm(data.modelNumber);
-
-          patch.category = 'APPLIANCE';
-          patch.sourceHash = sourceHash;
-          patch.tags = mergeTags(canonical.tags, data.tags, enforcedTags);
-
+          const enforcedTags = [TAG_PROPERTY_APPLIANCE, `APPLIANCE_TYPE:${inferredType}`];
+  
+          // Only update fields if caller provided them and they add value
+          if (data.condition && data.condition !== 'UNKNOWN') {
+            patch.condition = data.condition;
+          }
+          if (data.brand) patch.brand = data.brand;
+          if (data.model) patch.model = data.model;
+          if (data.serialNo) patch.serialNo = data.serialNo;
+          if (data.notes) patch.notes = data.notes;
+          
+          // Cost fields
+          if (data.purchaseCostCents) patch.purchaseCostCents = data.purchaseCostCents;
+          if (data.replacementCostCents) patch.replacementCostCents = data.replacementCostCents;
+          if (data.currency && data.currency !== 'USD') patch.currency = data.currency;
+  
+          // Date fields - don't overwrite installedOn if already set from Property
+          if (data.purchasedOn) patch.purchasedOn = new Date(data.purchasedOn);
+          if (data.lastServicedOn) patch.lastServicedOn = new Date(data.lastServicedOn);
+          // Only set installedOn if the existing item doesn't have it
+          if (data.installedOn && !existingCanonical.installedOn) {
+            patch.installedOn = new Date(data.installedOn);
+          }
+  
+          // Product identifiers (barcode/recall)
+          if (data.manufacturer) {
+            patch.manufacturer = data.manufacturer;
+            patch.manufacturerNorm = norm(data.manufacturer);
+          }
+          if (data.modelNumber) {
+            patch.modelNumber = data.modelNumber;
+            patch.modelNumberNorm = norm(data.modelNumber);
+          }
+          if (data.serialNumber) patch.serialNumber = data.serialNumber;
+          if (data.upc) patch.upc = data.upc;
+          if (data.sku) patch.sku = data.sku;
+  
+          // Coverage links
+          if (data.warrantyId) patch.warrantyId = data.warrantyId;
+          if (data.insurancePolicyId) patch.insurancePolicyId = data.insurancePolicyId;
+  
+          // Merge tags
+          patch.tags = mergeTags(existingCanonical.tags, data.tags, enforcedTags);
+  
+          // Update the canonical item
           const merged = await prisma.inventoryItem.update({
-            where: { id: canonical.id },
+            where: { id: existingCanonical.id },
             data: patch,
             include: {
               room: true,
@@ -315,17 +404,32 @@ export class InventoryService {
               documents: { orderBy: { createdAt: 'desc' } },
             },
           });
-
-          // Optional: avoid generating “purchase moment” event for merges (prevents duplicate timeline noise)
+  
+          // Return the merged item (no duplicate created)
           return merged;
+        } else {
+          // ─────────────────────────────────────────────────────────────────────
+          // CASE B: No canonical item exists yet
+          // → Block creation and direct user to Property page
+          // ─────────────────────────────────────────────────────────────────────
+          
+          const friendlyName = inferredType.replace(/_/g, ' ').toLowerCase();
+          
+          throw new APIError(
+            `"${friendlyName}" is a major appliance that should be added from Property Details page. ` +
+            `Go to Properties → Edit → Major Appliances section to add it there. ` +
+            `This ensures your appliance data stays in sync across the platform.`,
+            400,
+            'MAJOR_APPLIANCE_USE_PROPERTY_PAGE'
+          );
         }
-
-        // Adopt: create as canonical (so Property page sees it + no future duplicates)
-        data.sourceHash = sourceHash;
-        data.tags = mergeTags([], data.tags, enforcedTags);
       }
     }
-
+  
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STANDARD ITEM CREATION (non-major appliances)
+    // ═══════════════════════════════════════════════════════════════════════════
+  
     const created = await prisma.inventoryItem.create({
       data: {
         propertyId,
@@ -352,14 +456,14 @@ export class InventoryService {
         purchasedOn: data.purchasedOn ? new Date(data.purchasedOn) : null,
         lastServicedOn: data.lastServicedOn ? new Date(data.lastServicedOn) : null,
   
-        // ✅ barcode/recall fields
+        // Barcode/recall fields
         manufacturer: data.manufacturer || null,
         modelNumber: data.modelNumber || null,
         serialNumber: data.serialNumber || null,
         upc: data.upc || null,
         sku: data.sku || null,
   
-        // ✅ normalized (future-proof for matching)
+        // Normalized (for matching)
         manufacturerNorm,
         modelNumberNorm,
       },
@@ -372,93 +476,125 @@ export class InventoryService {
       },
     });
   
-    // ✅ Home Timeline Replay™: auto-generate purchase moment (safe + idempotent)
+    // Home Timeline event generation
     try {
-    await HomeEventsAutoGen.onInventoryItemCreated({
-      propertyId,
-      itemId: created.id,
-      userId: userId ?? null,
-  
-      name: created.name,
-      category: String(created.category ?? ''),
-      roomId: created.roomId ?? null,
-      purchasedOn: created.purchasedOn ?? null,
-      purchaseCostCents: created.purchaseCostCents ?? null,
-      currency: created.currency ?? null,
-  
-      brand: created.brand ?? null,
-      model: created.model ?? null,
-      upc: created.upc ?? null,
-      sku: created.sku ?? null,
-    });
+      await HomeEventsAutoGen.onInventoryItemCreated({
+        propertyId,
+        itemId: created.id,
+        userId: userId ?? null,
+        name: created.name,
+        category: String(created.category ?? ''),
+        roomId: created.roomId ?? null,
+        purchasedOn: created.purchasedOn ?? null,
+        purchaseCostCents: created.purchaseCostCents ?? null,
+        currency: created.currency ?? null,
+        brand: created.brand ?? null,
+        model: created.model ?? null,
+        upc: created.upc ?? null,
+        sku: created.sku ?? null,
+      });
     } catch (e: any) {
       console.error('[HOME_EVENTS_AUTOGEN] onInventoryItemCreated failed:', e);
     }
   
     return created;
-  }
+  }  
   
   async updateItem(propertyId: string, itemId: string, patch: any) {
     const existing = await prisma.inventoryItem.findFirst({
       where: { id: itemId, propertyId },
-      select: { id: true, category: true, tags: true },
+      select: { 
+        id: true, 
+        category: true, 
+        tags: true,
+        sourceHash: true,
+        name: true,
+      },
     });
-    if (!existing) throw new APIError('Inventory item not found', 404, 'ITEM_NOT_FOUND');
     
-    // ✅ Prevent duplicates + adopt canonical identity for major appliances
-    const nextName = ('name' in patch) ? patch.name : undefined;
-    const nextCategory = ('category' in patch) ? patch.category : undefined;
+    if (!existing) {
+      throw new APIError('Inventory item not found', 404, 'ITEM_NOT_FOUND');
+    }
+  
+    // Check if this is a property-managed appliance
+    const isPropertyManaged = existing.sourceHash?.startsWith(PROPERTY_APPLIANCE_PREFIX);
+  
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PREVENT RENAMING PROPERTY-MANAGED APPLIANCES TO DIFFERENT TYPE
+    // ═══════════════════════════════════════════════════════════════════════════
     
-    const effectiveCategory = nextCategory ?? existing.category;
-    const effectiveName = nextName;
+    if (isPropertyManaged && patch.name) {
+      const currentType = existing.sourceHash?.replace(PROPERTY_APPLIANCE_PREFIX, '');
+      const newInferredType = inferMajorApplianceType(patch.name);
+      
+      if (newInferredType && newInferredType !== currentType) {
+        throw new APIError(
+          `Cannot change appliance type. This ${currentType?.replace(/_/g, ' ').toLowerCase()} ` +
+          `is managed from Property Details. To change appliance types, edit the Major Appliances ` +
+          `section on the Property page.`,
+          400,
+          'CANNOT_CHANGE_PROPERTY_APPLIANCE_TYPE'
+        );
+      }
+    }
+  
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PREVENT MANUAL ITEMS BECOMING DUPLICATE MAJOR APPLIANCES
+    // ═══════════════════════════════════════════════════════════════════════════
+  
+    const nextName = ('name' in patch) ? patch.name : existing.name;
+    const nextCategory = ('category' in patch) ? patch.category : existing.category;
     
-    if (String(effectiveCategory) === 'APPLIANCE' && typeof effectiveName === 'string' && effectiveName.trim()) {
-      const inferred = inferMajorApplianceType(effectiveName);
-      if (inferred) {
-        const sourceHash = `${PROPERTY_APPLIANCE_PREFIX}${inferred}`;
-    
+    if (String(nextCategory) === 'APPLIANCE' && !isPropertyManaged) {
+      const inferredType = inferMajorApplianceType(nextName);
+      
+      if (inferredType) {
+        const sourceHash = `${PROPERTY_APPLIANCE_PREFIX}${inferredType}`;
+        
         const canonical = await prisma.inventoryItem.findFirst({
           where: { propertyId, sourceHash },
           select: { id: true },
         });
-    
+  
         if (canonical && canonical.id !== itemId) {
+          const friendlyName = inferredType.replace(/_/g, ' ').toLowerCase();
           throw new APIError(
-            'This major appliance already exists for the property. Please edit the existing item instead.',
+            `A ${friendlyName} already exists for this property (managed from Property Details). ` +
+            `Please edit that item instead, or use a different name for this item.`,
             409,
             'MAJOR_APPLIANCE_ALREADY_EXISTS'
           );
         }
-    
-        (patch as any).sourceHash = sourceHash;
-        (patch as any).tags = mergeTags(existing.tags, (patch as any).tags, [
-          TAG_PROPERTY_APPLIANCE,
-          `APPLIANCE_TYPE:${inferred}`,
-        ]);
       }
-    }    
-
-    if (!existing) throw new APIError('Inventory item not found', 404, 'ITEM_NOT_FOUND');
-
+    }
+  
+    // Validate relations
     if ('roomId' in patch) await this.assertRoomBelongs(propertyId, patch.roomId);
     if ('warrantyId' in patch) await this.assertWarrantyBelongs(propertyId, patch.warrantyId);
     if ('insurancePolicyId' in patch) await this.assertInsuranceBelongs(propertyId, patch.insurancePolicyId);
     if ('homeAssetId' in patch) await this.assertHomeAssetBelongs(propertyId, patch.homeAssetId);
-
+  
+    // Build update payload
     const updateData: any = { ...patch };
-
-    if ('installedOn' in patch) updateData.installedOn = patch.installedOn ? new Date(patch.installedOn) : null;
-    if ('purchasedOn' in patch) updateData.purchasedOn = patch.purchasedOn ? new Date(patch.purchasedOn) : null;
-    if ('lastServicedOn' in patch) updateData.lastServicedOn = patch.lastServicedOn ? new Date(patch.lastServicedOn) : null;
-
+  
+    if ('installedOn' in patch) {
+      updateData.installedOn = patch.installedOn ? new Date(patch.installedOn) : null;
+    }
+    if ('purchasedOn' in patch) {
+      updateData.purchasedOn = patch.purchasedOn ? new Date(patch.purchasedOn) : null;
+    }
+    if ('lastServicedOn' in patch) {
+      updateData.lastServicedOn = patch.lastServicedOn ? new Date(patch.lastServicedOn) : null;
+    }
+  
     if ('warrantyId' in patch) updateData.warrantyId = patch.warrantyId || null;
     if ('insurancePolicyId' in patch) updateData.insurancePolicyId = patch.insurancePolicyId || null;
     if ('roomId' in patch) updateData.roomId = patch.roomId || null;
-
-    // ✅ keep normalized fields consistent if these change
+  
+    // Keep normalized fields consistent
     if ('manufacturer' in patch) updateData.manufacturerNorm = norm(patch.manufacturer);
     if ('modelNumber' in patch) updateData.modelNumberNorm = norm(patch.modelNumber);
-
+  
     return prisma.inventoryItem.update({
       where: { id: itemId },
       data: updateData,

@@ -43,6 +43,77 @@ const CATEGORIES: InventoryItemCategory[] = [
 
 const CONDITIONS: InventoryItemCondition[] = ['NEW', 'GOOD', 'FAIR', 'POOR', 'UNKNOWN'];
 
+const CURRENT_YEAR = new Date().getFullYear();
+
+/**
+ * Major appliance types managed from Property Details page
+ */
+const MAJOR_APPLIANCE_KEYWORDS = [
+  'dishwasher',
+  'refrigerator',
+  'fridge',
+  'freezer',
+  'oven',
+  'range',
+  'stove',
+  'cooktop',
+  'washer',
+  'dryer',
+  'laundry',
+  'microwave',
+  'water softener',
+];
+
+/**
+ * Categories that use Install Year (year picker) vs Purchase Date (date picker)
+ */
+const INSTALL_YEAR_CATEGORIES: InventoryItemCategory[] = ['APPLIANCE'];
+const PURCHASE_DATE_CATEGORIES: InventoryItemCategory[] = ['ELECTRONICS', 'FURNITURE', 'OTHER'];
+
+/**
+ * Check if an item is managed from Property Details page
+ */
+function isPropertyManagedAppliance(item: InventoryItem | null): boolean {
+  if (!item) return false;
+  return item.sourceHash?.startsWith('property_appliance::') ?? false;
+}
+
+/**
+ * Check if a name matches a major appliance type
+ */
+function isMajorApplianceName(name: string): boolean {
+  const normalized = name.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim();
+  return MAJOR_APPLIANCE_KEYWORDS.some(keyword => normalized.includes(keyword));
+}
+
+/**
+ * Convert DateTime to year number for display
+ */
+function dateToYear(date: Date | string | null | undefined): string {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return '';
+  return String(d.getUTCFullYear());
+}
+
+/**
+ * Convert year number to DateTime (Jan 1 UTC)
+ */
+function yearToDate(year: string | number): Date | null {
+  const y = Number(year);
+  if (!Number.isFinite(y) || y < 1900 || y > CURRENT_YEAR + 1) return null;
+  return new Date(Date.UTC(y, 0, 1));
+}
+
+/**
+ * Format date string for date input (YYYY-MM-DD)
+ */
+function formatDateForInput(date: Date | string | null | undefined): string {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return '';
+  return d.toISOString().split('T')[0];
+}
 function dollarsToCents(v: string) {
   const n = Number(v);
   if (!Number.isFinite(n)) return null;
@@ -249,6 +320,69 @@ export default function InventoryItemDrawer(props: {
   const [warrantyId, setWarrantyId] = useState<string | ''>('');
   const [insurancePolicyId, setInsurancePolicyId] = useState<string | ''>('');
   const [suggestions, setSuggestions] = useState<any | null>(null);
+  const [installYear, setInstallYear] = useState<string>('');
+  const [purchaseDate, setPurchaseDate] = useState<string>('');
+  
+  // Warning state for major appliance detection
+  const [majorApplianceWarning, setMajorApplianceWarning] = useState<string | null>(null);
+  
+  
+  // UPDATE the useEffect that initializes form from props.initialItem
+  // Add these lines to handle date fields:
+  // ----------------------------------------------------------------------------
+  
+  useEffect(() => {
+    if (props.initialItem) {
+      // ... existing field initialization ...
+      
+      // Initialize category-specific date fields
+      if (props.initialItem.installedOn) {
+        setInstallYear(dateToYear(props.initialItem.installedOn));
+      } else {
+        setInstallYear('');
+      }
+      
+      if (props.initialItem.purchasedOn) {
+        setPurchaseDate(formatDateForInput(props.initialItem.purchasedOn));
+      } else {
+        setPurchaseDate('');
+      }
+    } else {
+      // Reset for new item
+      setInstallYear('');
+      setPurchaseDate('');
+      setMajorApplianceWarning(null);
+    }
+  }, [props.initialItem, props.open]);
+  
+  
+  // ADD this useEffect to detect major appliance names and show warning
+  // ----------------------------------------------------------------------------
+  
+  useEffect(() => {
+    // Only check for new items (not editing)
+    if (isEdit) {
+      setMajorApplianceWarning(null);
+      return;
+    }
+    
+    // Only check when category is APPLIANCE
+    if (category !== 'APPLIANCE') {
+      setMajorApplianceWarning(null);
+      return;
+    }
+    
+    // Check if name matches a major appliance
+    if (name && isMajorApplianceName(name)) {
+      setMajorApplianceWarning(
+        'This looks like a major appliance (dishwasher, refrigerator, etc.). ' +
+        'Major appliances should be added from the Property Details page under "Major Appliances" section. ' +
+        'This keeps your data in sync across the platform.'
+      );
+    } else {
+      setMajorApplianceWarning(null);
+    }
+  }, [name, category, isEdit]);
 
   useEffect(() => {
     if (!props.open) return;
@@ -621,50 +755,81 @@ export default function InventoryItemDrawer(props: {
   }
   
   async function onSave() {
-    if (!canSave) return;
+    if (!name.trim()) {
+      alert('Name is required');
+      return;
+    }
+  
     setSaving(true);
     try {
-      const payload: any = {
+      // Determine which date field to send based on category
+      let installedOnValue: string | null = null;
+      let purchasedOnValue: string | null = null;
+      
+      if (INSTALL_YEAR_CATEGORIES.includes(category)) {
+        // APPLIANCE: use install year
+        const yearDate = yearToDate(installYear);
+        installedOnValue = yearDate ? yearDate.toISOString() : null;
+      } else {
+        // ELECTRONICS, FURNITURE, OTHER: use purchase date
+        purchasedOnValue = purchaseDate || null;
+      }
+  
+      const payload = {
         name: name.trim(),
         category,
         condition,
         roomId: roomId || null,
-
+  
+        // Legacy identity fields
         brand: brand || null,
         model: model || null,
         serialNo: serialNo || null,
-
+  
+        // Phase 2 product identifiers
         manufacturer: manufacturer || null,
         modelNumber: modelNumber || null,
         serialNumber: serialNumber || null,
         upc: upc || null,
         sku: sku || null,
-
+  
         notes: notes || null,
+        
+        // Category-specific date fields
+        installedOn: installedOnValue,
+        purchasedOn: purchasedOnValue,
+  
+        // Cost fields
         purchaseCostCents: purchaseCost ? dollarsToCents(purchaseCost) : null,
         replacementCostCents: replacementCost ? dollarsToCents(replacementCost) : null,
         currency: 'USD',
+        
         tags: [],
         warrantyId: warrantyId || null,
         insurancePolicyId: insurancePolicyId || null,
       };
-
+  
       if (isEdit && props.initialItem) {
         await updateInventoryItem(props.propertyId, props.initialItem.id, payload);
         await refreshItemDocs();
       } else {
         if (draftId) {
-          // confirm draft -> creates inventory item server-side
           await confirmInventoryDraft(props.propertyId, draftId);
         } else {
           await createInventoryItem(props.propertyId, payload);
         }
       }
-
+  
       props.onSaved();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save inventory item:', error);
-      alert('Save failed. Check console logs / API error message.');
+      
+      // Show user-friendly error for major appliance redirection
+      if (error?.code === 'MAJOR_APPLIANCE_USE_PROPERTY_PAGE') {
+        alert(error.message);
+      } else {
+        alert(error?.message || 'Save failed. Check console logs.');
+      }
     } finally {
       setSaving(false);
     }
@@ -842,6 +1007,111 @@ export default function InventoryItemDrawer(props: {
               </select>
             </div>
 
+            {/* Category-specific date field */}
+            <div className="rounded-2xl border border-black/10 p-4">
+              <div className="text-sm font-medium mb-3">
+                {INSTALL_YEAR_CATEGORIES.includes(category) ? 'Installation' : 'Purchase Information'}
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                {/* APPLIANCE category: Install Year (year picker) */}
+                {INSTALL_YEAR_CATEGORIES.includes(category) && (
+                  <div>
+                    <div className="text-xs opacity-70 mb-1">Install Year</div>
+                    <input
+                      type="number"
+                      min="1900"
+                      max={CURRENT_YEAR + 1}
+                      step="1"
+                      placeholder="e.g. 2019"
+                      value={installYear}
+                      onChange={(e) => setInstallYear(e.target.value)}
+                      disabled={isPropertyManagedAppliance(props.initialItem)}
+                      className={`w-full rounded-xl border border-black/10 px-3 py-2 text-sm ${
+                        isPropertyManagedAppliance(props.initialItem) 
+                          ? 'bg-gray-100 text-gray-500 cursor-not-allowed' 
+                          : ''
+                      }`}
+                    />
+                    {isPropertyManagedAppliance(props.initialItem) && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        Managed from Property Details
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ELECTRONICS, FURNITURE, OTHER categories: Purchase Date (date picker) */}
+                {PURCHASE_DATE_CATEGORIES.includes(category) && (
+                  <div>
+                    <div className="text-xs opacity-70 mb-1">Purchase Date</div>
+                    <input
+                      type="date"
+                      value={purchaseDate}
+                      onChange={(e) => setPurchaseDate(e.target.value)}
+                      max={new Date().toISOString().split('T')[0]}
+                      className="w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
+                    />
+                  </div>
+                )}
+
+                {/* Purchase/Replacement cost (shown for all categories) */}
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Purchase Cost ($)</div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={purchaseCost}
+                    onChange={(e) => setPurchaseCost(e.target.value)}
+                    className="w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Replacement Cost ($)</div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={replacementCost}
+                    onChange={(e) => setReplacementCost(e.target.value)}
+                    className="w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+            {majorApplianceWarning && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
+                <div className="flex items-start gap-3">
+                  <svg 
+                    className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth={2} 
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" 
+                    />
+                  </svg>
+                  <div>
+                    <div className="text-sm font-medium text-amber-800">Major Appliance Detected</div>
+                    <div className="text-sm text-amber-700 mt-1">{majorApplianceWarning}</div>
+                    <a 
+                      href={`/dashboard/properties/${props.propertyId}/edit`}
+                      className="inline-block mt-2 text-sm font-medium text-amber-800 underline hover:text-amber-900"
+                    >
+                      Go to Property Details →
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
             <div>
               <div className="text-sm font-medium">Room</div>
               <select
@@ -947,6 +1217,34 @@ export default function InventoryItemDrawer(props: {
             </div>
           </div>
 
+          {isEdit && isPropertyManagedAppliance(props.initialItem) && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+              <div className="flex items-center gap-2">
+                <svg 
+                  className="w-4 h-4 text-blue-600" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" 
+                  />
+                </svg>
+                <span className="text-sm text-blue-800">
+                  Synced from Property Details • 
+                  <a 
+                    href={`/dashboard/properties/${props.propertyId}/edit`}
+                    className="underline hover:text-blue-900 ml-1"
+                  >
+                    Edit there
+                  </a>
+                </span>
+              </div>
+            </div>
+          )}
           {/* Existing recall panel behavior */}
           {isEdit && props.initialItem ? (
             <InventoryItemRecallPanel
