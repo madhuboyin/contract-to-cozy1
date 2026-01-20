@@ -27,6 +27,32 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
+/**
+ * Infer appliance type from InventoryItem for HomeAsset compatibility
+ */
+function inferAssetTypeFromItem(item: any): string {
+  // 1. Check sourceHash first (canonical from Property page)
+  if (item.sourceHash?.startsWith('property_appliance::')) {
+    return item.sourceHash.replace('property_appliance::', '');
+  }
+  
+  // 2. Check tags
+  const typeTag = (item.tags || []).find((t: string) => t.startsWith('APPLIANCE_TYPE:'));
+  if (typeTag) {
+    return typeTag.replace('APPLIANCE_TYPE:', '');
+  }
+  
+  // 3. Infer from name
+  const name = (item.name || '').toLowerCase();
+  if (name.includes('dishwasher')) return 'DISHWASHER';
+  if (name.includes('refrigerator') || name.includes('fridge')) return 'REFRIGERATOR';
+  if (name.includes('oven') || name.includes('range') || name.includes('stove')) return 'OVEN_RANGE';
+  if (name.includes('washer') || name.includes('dryer')) return 'WASHER_DRYER';
+  if (name.includes('microwave')) return 'MICROWAVE_HOOD';
+  if (name.includes('softener')) return 'WATER_SOFTENER';
+  
+  return 'OTHER';
+}
 // ============================================================================
 // LOCAL TYPE DEFINITIONS AND ENUMS (TO RESOLVE COMPILE ERRORS)
 // ============================================================================
@@ -460,10 +486,9 @@ export default function WarrantiesPage() {
     setIsLoading(true);
     const [warrantiesRes, propertiesRes] = await Promise.all([
       api.listWarranties(),
-      // Assuming api.getProperties() now fetches nested homeAssets
       api.getProperties(),
     ]);
-
+  
     if (warrantiesRes.success) {
       setWarranties(warrantiesRes.data.warranties as Warranty[]);
     } else {
@@ -474,19 +499,44 @@ export default function WarrantiesPage() {
       });
       setWarranties([]);
     }
-
+  
     if (propertiesRes.success) {
       setProperties(propertiesRes.data.properties);
       
-      // NEW LOGIC: Flatten assets from all properties for easy lookup
-      const allAssets: HomeAsset[] = propertiesRes.data.properties
-          .flatMap((p: Property) => p.homeAssets || [])
-          .filter((asset): asset is HomeAsset => !!asset.id); 
-
+      // ✅ NEW: Fetch appliances directly from Inventory for each property
+      // This is more explicit and ensures we get the latest InventoryItem data
+      const allAssets: HomeAsset[] = [];
+      
+      for (const property of propertiesRes.data.properties) {
+        try {
+          const inventoryRes = await api.get(`/api/properties/${property.id}/inventory/items`, {
+            params: { category: 'APPLIANCE' }
+          });
+          
+          const items = inventoryRes.data?.data || inventoryRes.data || [];
+          
+          // Transform InventoryItem to HomeAsset shape
+          const transformed = items.map((item: any) => ({
+            id: item.id,
+            propertyId: item.propertyId,
+            assetType: inferAssetTypeFromItem(item),
+            installationYear: item.installedOn 
+              ? new Date(item.installedOn).getUTCFullYear() 
+              : null,
+            modelNumber: item.modelNumber || item.model || null,
+            name: item.name,
+          }));
+          
+          allAssets.push(...transformed);
+        } catch (error) {
+          console.error(`Failed to fetch appliances for property ${property.id}:`, error);
+        }
+      }
+  
       setHomeAssets(allAssets);
     }
     setIsLoading(false);
-  }, [toast]); 
+  }, [toast]);
 
     // NEW: Handle initial load based on query parameters
     useEffect(() => {

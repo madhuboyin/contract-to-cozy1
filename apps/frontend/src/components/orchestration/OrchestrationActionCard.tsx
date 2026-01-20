@@ -192,6 +192,15 @@ function signalBadge(action: OrchestratedActionDTO) {
     </span>
   );
 }
+function isCoverageGapAction(action: OrchestratedActionDTO) {
+  return typeof action.actionKey === 'string' &&
+    action.actionKey.startsWith('COVERAGE_GAP::');
+}
+
+function extractInventoryItemId(action: OrchestratedActionDTO): string | null {
+  if (!isCoverageGapAction(action)) return null;
+  return action.actionKey.split('COVERAGE_GAP::')[1] || null;
+}
 
 export const OrchestrationActionCard: React.FC<Props> = ({
   action,
@@ -220,7 +229,14 @@ export const OrchestrationActionCard: React.FC<Props> = ({
     confidence && Number.isFinite(confidence.score)
       ? Math.round(confidence.score)
       : null;
+  
+  const inventoryItemId = extractInventoryItemId(action);
 
+  const inventoryLink =
+    inventoryItemId && action.propertyId
+      ? `/dashboard/properties/${action.propertyId}/inventory?openItemId=${inventoryItemId}`
+      : null;
+  
   return (
     <div
       className={`rounded-lg border p-4 shadow-sm ${
@@ -241,6 +257,17 @@ export const OrchestrationActionCard: React.FC<Props> = ({
 
           {description && (
             <p className="text-sm text-gray-600">{description}</p>
+          )}
+          
+          {inventoryLink && (
+            <div className="mt-2">
+              <a
+                href={inventoryLink}
+                className="text-sm font-medium text-blue-600 hover:underline"
+              >
+                View item →
+              </a>
+            </div>
           )}
 
           {suppressed && suppressionCopy && (

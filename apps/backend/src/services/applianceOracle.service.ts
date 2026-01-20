@@ -7,6 +7,7 @@ import {
   LLM_MODEL_CONFIG, 
   ORACLE_RECOMMENDATION_PROMPT_TEMPLATE 
 } from '../config/ai-constants';
+import { listPropertyAppliancesAsHomeAssets } from './propertyApplianceInventory.service';
 
 interface ApplianceFailurePrediction {
   applianceName: string;
@@ -93,25 +94,19 @@ export class ApplianceOracleService {
   async generateOracleReport(propertyId: string, userId: string): Promise<OracleReport> {
     // Get property with all appliance data
     const property = await prisma.property.findFirst({
-      where: {
-        id: propertyId,
-        homeownerProfile: {
-          userId
-        }
-      },
+      where: { id: propertyId, homeownerProfile: { userId } },
       include: {
         homeownerProfile: true,
-        homeAssets: true
+        // REMOVED: homeAssets: true
       }
     });
 
     if (!property) {
       throw new Error('Property not found or access denied');
     }
-
-    // Get homeAssets (appliances)
-    const homeAssets = property.homeAssets || [];
     
+    const homeAssets = await listPropertyAppliancesAsHomeAssets(propertyId);  // ✅ NEW
+
     if (!Array.isArray(homeAssets) || homeAssets.length === 0) {
       return {
         propertyId,

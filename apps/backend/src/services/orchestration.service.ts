@@ -1048,13 +1048,18 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
     ...candidateChecklistActions,
   ];
     
-    // 4.5) Coverage Gap Detector → add candidate actions
+  // 4.5) Coverage Gap Detector → add candidate actions
   // NOTE: OrchestratedAction.source currently supports only 'RISK' | 'CHECKLIST'
   // So we set source='RISK' for now, and use actionKey prefix for identification.
   const gaps = await detectCoverageGaps(propertyId);
 
   for (const gap of gaps) {
     const actionKey = `COVERAGE_GAP::${gap.inventoryItemId}`;
+
+    // Build a human-friendly label for the UI (avoid generic/absurd titles)
+    // Example: "No coverage for Refrigerator (Kitchen)"
+    const roomSuffix = gap.roomName ? ` (${gap.roomName})` : '';
+    const itemLabel = `${gap.itemName}${roomSuffix}`;
 
     // Optional: attach snooze if present for this actionKey
     const snooze = snoozeMap.get(actionKey);
@@ -1071,6 +1076,9 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
         rule: 'COVERAGE_GAP_DETECTOR',
         outcome: 'APPLIED',
         details: {
+          inventoryItemId: gap.inventoryItemId,
+          itemName: gap.itemName,
+          roomName: gap.roomName ?? null,
           gapType: gap.gapType,
           exposureCents: gap.exposureCents,
           reasons: gap.reasons,
@@ -1078,7 +1086,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
         },
       },
     ];
-    
+
     const signalSources: SignalSourceBadge[] = [
       {
         sourceType: SignalSourceType.COVERAGE,
@@ -1097,11 +1105,12 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
       source: 'RISK', // keep as 'RISK' for V1 to avoid widening the union
       propertyId,
 
-      title: gap.gapType === 'NO_COVERAGE'
-        ? 'No coverage for high-value item'
-        : 'Coverage gap detected',
+      title:
+        gap.gapType === 'NO_COVERAGE'
+          ? `No coverage for ${itemLabel}`
+          : `Coverage issue for ${itemLabel}`,
 
-      description: gap.reasons.join('. '),
+      description: `${gap.reasons.join('. ')}${gap.roomName ? ` (Location: ${gap.roomName})` : ''}`,
 
       // keep these empty; this is not a risk-report system item
       systemType: null,
@@ -1112,12 +1121,8 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
       signalSources,
       primarySignalSource,
 
-      // This enables your UI to know what to link to
-      // (Your UI already uses related entity patterns elsewhere)
-      // If you don't have a typed field for this, keep it in decisionTrace.details or extend type later.
       // @ts-ignore
       relatedEntity: { type: 'INVENTORY_ITEM', id: gap.inventoryItemId },
-      
 
       coverage: { hasCoverage: false, type: 'NONE', expiresOn: null },
 
@@ -1150,6 +1155,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
       createdAt: null,
     });
   }
+
 
   // Resolve authoritative suppression for legacy data
   for (const action of candidates) {
