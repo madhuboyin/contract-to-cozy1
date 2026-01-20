@@ -356,6 +356,7 @@ model InventoryItem {
   room            InventoryRoom?  @relation(fields: [roomId], references: [id], onDelete: SetNull)
   homeAsset       HomeAsset?      @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
   warranty        Warranty?       @relation(fields: [warrantyId], references: [id], onDelete: SetNull)
+  linkedWarranties Warranty[]     @relation("WarrantyToInventoryItem")
   insurancePolicy InsurancePolicy? @relation(fields: [insurancePolicyId], references: [id], onDelete: SetNull)
   importBatch   InventoryImportBatch? @relation(fields: [sourceBatchId], references: [id], onDelete: SetNull)
 
@@ -1611,6 +1612,7 @@ model Warranty {
   category           WarrantyCategory @default(HOME_WARRANTY_PLAN)
   propertyId         String? // Link to a specific property (e.g., HVAC unit warranty is for the main home)
   homeAssetId        String?
+  inventoryItemId    String?  // NEW: Direct link to InventoryItem
   // Policy Details
   providerName       String
   policyNumber       String?
@@ -1626,6 +1628,7 @@ model Warranty {
   property           Property? @relation(fields: [propertyId], references: [id])
   documents          Document[]
   homeAsset          HomeAsset? @relation(fields: [homeAssetId], references: [id])
+  inventoryItem      InventoryItem? @relation("WarrantyToInventoryItem", fields: [inventoryItemId], references: [id], onDelete: SetNull)
   
   // PHASE 1: NEW RELATION
   maintenanceTasks PropertyMaintenanceTask[]
@@ -1638,6 +1641,7 @@ model Warranty {
   @@index([homeownerProfileId])
   @@index([expiryDate])
   @@index([homeAssetId])
+  @@index([inventoryItemId])
   @@map("warranties")
 }
 
