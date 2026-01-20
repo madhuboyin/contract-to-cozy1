@@ -5,6 +5,8 @@ import { DecisionTracePanel } from './DecisionTracePanel';
 import { ConfidenceBar } from './ConfidenceBar';
 import { ConfidencePopover } from './ConfidencePopover';
 import { TaskStatusBadge } from './TaskStatusBadge';
+import Link from 'next/link';
+import { Package } from 'lucide-react';
 
 
 type Props = {
@@ -199,8 +201,11 @@ function isCoverageGapAction(action: OrchestratedActionDTO) {
 
 function extractInventoryItemId(action: OrchestratedActionDTO): string | null {
   if (!isCoverageGapAction(action)) return null;
-  return action.actionKey.split('COVERAGE_GAP::')[1] || null;
+  const id = action.actionKey.split('COVERAGE_GAP::')[1];
+  const trimmed = String(id ?? '').trim();
+  return trimmed ? trimmed : null;
 }
+
 
 export const OrchestrationActionCard: React.FC<Props> = ({
   action,
@@ -233,10 +238,15 @@ export const OrchestrationActionCard: React.FC<Props> = ({
   const inventoryItemId = extractInventoryItemId(action);
 
   const inventoryLink =
-    inventoryItemId && action.propertyId
-      ? `/dashboard/properties/${action.propertyId}/inventory?openItemId=${inventoryItemId}`
-      : null;
-  
+  inventoryItemId && action.propertyId && isCoverageGapAction(action)
+    ? `/dashboard/properties/${action.propertyId}/inventory?openItemId=${encodeURIComponent(
+        inventoryItemId
+      )}&scrollToItemId=${encodeURIComponent(
+        inventoryItemId
+      )}#item-${encodeURIComponent(inventoryItemId)}`
+    : null;
+
+        
   return (
     <div
       className={`rounded-lg border p-4 shadow-sm ${
@@ -261,12 +271,13 @@ export const OrchestrationActionCard: React.FC<Props> = ({
           
           {inventoryLink && (
             <div className="mt-2">
-              <a
+              <Link
                 href={inventoryLink}
-                className="text-sm font-medium text-blue-600 hover:underline"
+                className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:underline"
               >
-                View item →
-              </a>
+                <Package className="h-4 w-4" />
+                View item
+              </Link>
             </div>
           )}
 

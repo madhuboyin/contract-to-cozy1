@@ -35,9 +35,11 @@ export default function InventoryItemCard(props: { item: InventoryItem; onClick:
 
   return (
     <button
+      id={`item-${item.id}`}
       onClick={props.onClick}
       className="text-left rounded-2xl border border-black/10 p-4 hover:bg-black/5 transition"
     >
+
       <div className="flex items-start justify-between gap-2">
         <div className="font-medium">{item.name}</div>
 

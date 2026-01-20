@@ -147,7 +147,31 @@ export default function InventoryClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, roomId, category, hasDocuments]);
   
-
+  const scrollToItemId = searchParams.get('scrollToItemId');
+  const [autoScrolledFromUrl, setAutoScrolledFromUrl] = useState(false);
+  const [highlightItemId, setHighlightItemId] = useState<string | null>(null);
+  
+  useEffect(() => {
+    if (autoScrolledFromUrl) return;
+  
+    const targetId = scrollToItemId || openItemId;
+    if (!targetId) return;
+    if (items.length === 0) return;
+  
+    const t = window.setTimeout(() => {
+      const el = document.getElementById(`item-${targetId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHighlightItemId(targetId);
+        window.setTimeout(() => setHighlightItemId(null), 1200);
+        setAutoScrolledFromUrl(true);
+      }
+    }, 250);
+  
+    return () => window.clearTimeout(t);
+  }, [scrollToItemId, openItemId, items.length, autoScrolledFromUrl]);
+  
+  
   const roomOptions = useMemo(
     () => [{ id: 'ALL', name: 'All Rooms' }, ...rooms.map((r) => ({ id: r.id, name: r.name }))],
     [rooms]
@@ -365,7 +389,16 @@ export default function InventoryClient() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {visibleItems.map((item) => (
-              <InventoryItemCard key={item.id} item={item} onClick={() => onEdit(item)} />
+              <div
+                key={item.id}
+                className={
+                  highlightItemId === item.id
+                    ? 'rounded-2xl ring-2 ring-amber-300 transition'
+                    : 'transition'
+                }
+              >
+                <InventoryItemCard item={item} onClick={() => onEdit(item)} />
+              </div>
             ))}
           </div>
         )}
