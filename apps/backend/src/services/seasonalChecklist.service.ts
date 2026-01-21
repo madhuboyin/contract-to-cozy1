@@ -171,6 +171,7 @@ export class SeasonalChecklistService {
         items: {
           include: {
             seasonalTaskTemplate: true,
+            maintenanceTask: true,
             checklistItem: true,
           },
           orderBy: [

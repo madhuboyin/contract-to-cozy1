@@ -125,7 +125,7 @@ export function SeasonalTaskCard({
   };
 
   const priorityIcon = getPriorityIcon(item.priority);
-  const isAdded = item.status === 'ADDED';
+  const isAdded = item.status === 'ADDED' || item.status === 'COMPLETED' || !!item.maintenanceTask;
   const isLoading = addToMaintenanceMutation.isPending || removeFromMaintenanceMutation.isPending;
 
   return (

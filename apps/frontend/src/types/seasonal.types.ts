@@ -61,6 +61,10 @@ export interface SeasonalChecklistItem {
   snoozedUntil?: string;
   checklistItemId?: string;
   seasonalTaskTemplate: SeasonalTaskTemplate;
+  maintenanceTask?: {                    // ADD THIS
+    id: string;
+    status: string;
+  } | null;
 }
 
 export interface ClimateInfo {
