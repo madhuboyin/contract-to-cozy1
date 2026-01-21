@@ -466,53 +466,44 @@ import {
     
       // Sync to seasonal checklist if this task is linked to one
       if (task.seasonalChecklistItemId) {
-        if (!wasCompleted && isNowCompleted) {
-          // Completing: update seasonal item and increment counter
+        // Fetch once, use for both update and getting checklistId
+        const seasonalItem = await prisma.seasonalChecklistItem.findUnique({
+          where: { id: task.seasonalChecklistItemId },
+        });
+
+        if (!seasonalItem) {
+          console.warn(`⚠️ Seasonal item ${task.seasonalChecklistItemId} not found`);
+        } else if (!wasCompleted && isNowCompleted) {
+          // Completing
           await prisma.seasonalChecklistItem.update({
             where: { id: task.seasonalChecklistItemId },
-            data: {
-              status: 'COMPLETED',
-              completedAt: new Date(),
-            },
+            data: { status: 'COMPLETED', completedAt: new Date() },
           });
-    
-          const seasonalItem = await prisma.seasonalChecklistItem.findUnique({
+
+          await prisma.seasonalChecklist.update({
+            where: { id: seasonalItem.seasonalChecklistId },
+            data: { tasksCompleted: { increment: 1 } },
+          });
+          console.log(`✅ Synced seasonal completion: checklist ${seasonalItem.seasonalChecklistId} tasks_completed++`);
+
+        } else if (wasCompleted && !isNowCompleted) {
+          // Uncompleting
+          await prisma.seasonalChecklistItem.update({
             where: { id: task.seasonalChecklistItemId },
+            data: { status: 'ADDED', completedAt: null },
           });
-    
-          if (seasonalItem) {
+
+          const checklist = await prisma.seasonalChecklist.findUnique({
+            where: { id: seasonalItem.seasonalChecklistId },
+            select: { tasksCompleted: true },
+          });
+
+          if (checklist && checklist.tasksCompleted > 0) {
             await prisma.seasonalChecklist.update({
               where: { id: seasonalItem.seasonalChecklistId },
-              data: { tasksCompleted: { increment: 1 } },
+              data: { tasksCompleted: { decrement: 1 } },
             });
-            console.log(`✅ Synced seasonal completion: checklist ${seasonalItem.seasonalChecklistId} tasks_completed++`);
-          }
-        } else if (wasCompleted && !isNowCompleted) {
-          // Uncompleting: revert seasonal item and decrement counter
-          await prisma.seasonalChecklistItem.update({
-            where: { id: task.seasonalChecklistItemId },
-            data: {
-              status: 'ADDED',
-              completedAt: null,
-            },
-          });
-    
-          const seasonalItem = await prisma.seasonalChecklistItem.findUnique({
-            where: { id: task.seasonalChecklistItemId },
-          });
-    
-          if (seasonalItem) {
-            const checklist = await prisma.seasonalChecklist.findUnique({
-              where: { id: seasonalItem.seasonalChecklistId },
-            });
-    
-            if (checklist && checklist.tasksCompleted > 0) {
-              await prisma.seasonalChecklist.update({
-                where: { id: seasonalItem.seasonalChecklistId },
-                data: { tasksCompleted: { decrement: 1 } },
-              });
-              console.log(`🔄 Synced seasonal uncomplete: checklist ${seasonalItem.seasonalChecklistId} tasks_completed--`);
-            }
+            console.log(`🔄 Synced seasonal uncomplete: checklist ${seasonalItem.seasonalChecklistId} tasks_completed--`);
           }
         }
       }
