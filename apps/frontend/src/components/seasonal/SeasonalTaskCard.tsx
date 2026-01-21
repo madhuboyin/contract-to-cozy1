@@ -125,7 +125,10 @@ export function SeasonalTaskCard({
   };
 
   const priorityIcon = getPriorityIcon(item.priority);
-  const isAdded = item.status === 'ADDED' || item.status === 'COMPLETED' || !!item.maintenanceTask;
+  // Determine task state
+  const isCompleted = item.status === 'COMPLETED' || item.maintenanceTask?.status === 'COMPLETED';
+  const isAdded = (item.status === 'ADDED' || !!item.maintenanceTask) && !isCompleted;
+  const isNotAdded = !isAdded && !isCompleted;
   const isLoading = addToMaintenanceMutation.isPending || removeFromMaintenanceMutation.isPending;
 
   return (
@@ -134,19 +137,22 @@ export function SeasonalTaskCard({
         <div className="space-y-4">
           {/* Header */}
           <div className="flex flex-col gap-2">
-            {/* Row 1: Priority badge + Added badge */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Badge className={getPriorityBadgeClass(item.priority)}>
-                  {item.priority}
+            {/* Row 1: Priority badge + Status badge */}
+            <div className="flex items-center gap-2">
+              <Badge className={getPriorityBadgeClass(item.priority)}>
+                {item.priority}
+              </Badge>
+              {isCompleted ? (
+                <Badge className="bg-green-100 text-green-800 border-green-300">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Completed
                 </Badge>
-                {isAdded && (
-                  <Badge className="bg-green-100 text-green-800 border-green-300">
-                    <CheckCircle2 className="h-3 w-3 mr-1" />
-                    Added
-                  </Badge>
-                )}
-              </div>
+              ) : isAdded ? (
+                <Badge className="bg-green-100 text-green-800 border-green-300">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Added
+                </Badge>
+              ) : null}
             </div>
             
             {/* Row 2: Icon + Title */}
@@ -241,7 +247,7 @@ export function SeasonalTaskCard({
 
           {/* Actions */}
           <div className="flex items-center gap-2 pt-2 border-t">
-            {!isAdded ? (
+            {isNotAdded ? (
               <>
                 <Button
                   onClick={handleAddToMaintenance}
@@ -274,7 +280,14 @@ export function SeasonalTaskCard({
                   <span className="sm:hidden">Skip</span>
                 </Button>
               </>
+            ) : isCompleted ? (
+              // COMPLETED STATE - No remove button
+              <div className="flex-1 flex items-center gap-1 text-xs sm:text-sm text-green-700">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                <span>Task completed</span>
+              </div>
             ) : (
+              // ADDED (PENDING) STATE - Show remove button
               <>
                 <div className="flex-1 flex items-center gap-1 text-xs sm:text-sm text-green-700">
                   <CheckCircle2 className="h-4 w-4 shrink-0" />
