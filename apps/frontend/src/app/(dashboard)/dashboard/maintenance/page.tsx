@@ -569,8 +569,208 @@ export default function MaintenancePage() {
         </div>
       )}
 
-      {/* ALL view: (unchanged tables) — apply same action logic there too if you use Actions in completed section */}
-      {/* NOTE: If your ALL-view has a Completed section with an Edit button, mirror the same isCompleted ? View : Edit logic there. */}
+      {/* ALL view: show two sections (Open first, then Completed) */}
+      {view === 'all' && (
+        <div className="space-y-6">
+          {/* Open section */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-gray-900">OPEN TASKS</h3>
+              <span className="text-xs text-gray-500">{openTasks.length} items</span>
+            </div>
+
+            {openTasks.length === 0 ? (
+              <Card className="text-center py-8">
+                <CardTitle>You’re all caught up 🎉</CardTitle>
+                <CardDescription>No open tasks right now.</CardDescription>
+              </Card>
+            ) : (
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Task</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Priority</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead className="hidden sm:table-cell">Frequency</TableHead>
+                      <TableHead>Last Completed</TableHead>
+                      <TableHead className="text-center">Next Due</TableHead>
+                      <TableHead className="text-center">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+
+                  <TableBody>
+                    {openTasks.map((task) => {
+                      const dueDateInfo = formatDueDate(task.nextDueDate);
+                      const frequencyDisplay =
+                        task.isRecurring && task.frequency
+                          ? formatEnumString(task.frequency)
+                          : 'One-time';
+
+                      return (
+                        <TableRow key={task.id}>
+                          <TableCell className="font-medium">{task.title}</TableCell>
+                          <TableCell className="text-sm text-gray-600">
+                            {task.description || 'No description'}
+                          </TableCell>
+                          <TableCell>
+                            <span
+                              className={cn(
+                                'px-2 py-1 rounded text-xs font-medium',
+                                task.priority === 'URGENT' && 'bg-red-100 text-red-700',
+                                task.priority === 'HIGH' && 'bg-orange-100 text-orange-700',
+                                task.priority === 'MEDIUM' && 'bg-yellow-100 text-yellow-700',
+                                task.priority === 'LOW' && 'bg-green-100 text-green-700'
+                              )}
+                            >
+                              {task.priority}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {formatCategory(task.serviceCategory)}
+                          </TableCell>
+                          <TableCell className="text-sm hidden sm:table-cell">
+                            {frequencyDisplay}
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-500">
+                            {task.lastCompletedDate
+                              ? format(new Date(task.lastCompletedDate), 'MMM dd, yyyy')
+                              : 'Never'}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <span className={cn('font-medium text-sm', dueDateInfo.color)}>
+                              {dueDateInfo.text}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <div className="flex justify-center space-x-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-gray-500 hover:text-green-600"
+                                onClick={() => handleMarkComplete.mutate(task)}
+                                title="Mark Complete"
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                              </Button>
+
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-gray-500 hover:text-blue-600"
+                                onClick={() => handleOpenModal(task)}
+                                title="Edit Task"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+
+          {/* Completed section */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-gray-900">COMPLETED TASKS</h3>
+              <span className="text-xs text-gray-500">{completedTasks.length} items</span>
+            </div>
+
+            {completedTasks.length === 0 ? (
+              <Card className="text-center py-8">
+                <CardTitle>No completed tasks in this period</CardTitle>
+                <CardDescription>Try expanding the completed time range.</CardDescription>
+              </Card>
+            ) : (
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Task</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Priority</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead className="hidden sm:table-cell">Frequency</TableHead>
+                      <TableHead>Last Completed</TableHead>
+                      <TableHead className="text-center">Next Due</TableHead>
+                      <TableHead className="text-center">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+
+                  <TableBody>
+                    {completedTasks.map((task) => {
+                      const dueDateInfo = formatDueDate(task.nextDueDate);
+                      const frequencyDisplay =
+                        task.isRecurring && task.frequency
+                          ? formatEnumString(task.frequency)
+                          : 'One-time';
+
+                      return (
+                        <TableRow key={task.id} className="opacity-80">
+                          <TableCell className="font-medium">{task.title}</TableCell>
+                          <TableCell className="text-sm text-gray-600">
+                            {task.description || 'No description'}
+                          </TableCell>
+                          <TableCell>
+                            <span
+                              className={cn(
+                                'px-2 py-1 rounded text-xs font-medium',
+                                task.priority === 'URGENT' && 'bg-red-100 text-red-700',
+                                task.priority === 'HIGH' && 'bg-orange-100 text-orange-700',
+                                task.priority === 'MEDIUM' && 'bg-yellow-100 text-yellow-700',
+                                task.priority === 'LOW' && 'bg-green-100 text-green-700'
+                              )}
+                            >
+                              {task.priority}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {formatCategory(task.serviceCategory)}
+                          </TableCell>
+                          <TableCell className="text-sm hidden sm:table-cell">
+                            {frequencyDisplay}
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-500">
+                            {task.lastCompletedDate
+                              ? format(new Date(task.lastCompletedDate), 'MMM dd, yyyy')
+                              : 'Never'}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <span className={cn('font-medium text-sm', dueDateInfo.color)}>
+                              {dueDateInfo.text}
+                            </span>
+                          </TableCell>
+
+                          {/* ✅ Completed: View only */}
+                          <TableCell className="text-center">
+                            <div className="flex justify-center space-x-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-gray-500 hover:text-gray-900"
+                                onClick={() => handleViewModal(task)}
+                                title="View Task"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <MaintenanceConfigModal
         isOpen={isModalOpen}
