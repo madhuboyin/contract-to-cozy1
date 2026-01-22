@@ -166,8 +166,15 @@ export default function RoomsHubClient() {
           const showDetect = !r.type && inferred !== 'OTHER';
 
           const insights = roomInsights[r.id];
-          const score = insights ? computeHealthScore(insights) : 0;
           const stats = insights?.stats;
+          
+          const backendScore = Number(insights?.healthScore?.score);
+          const score = insights
+            ? (Number.isFinite(backendScore) ? backendScore : computeHealthScore(insights)) // ✅ prefer backend
+            : 0;
+          
+          const scoreLabel =
+            (insights?.healthScore?.label as string) || 'Room health';          
 
           return (
             <div key={r.id} className="rounded-2xl border border-black/10 p-4 bg-white">
@@ -202,13 +209,25 @@ export default function RoomsHubClient() {
               <div className="mt-4">
                 {insightsLoading[r.id] ? (
                   <div className="rounded-xl border border-black/10 p-3 text-sm opacity-70">Loading insights…</div>
-                ) : insights ? (
-                  <RoomHealthScoreRing
-                    value={score}
-                    label="Room health"
-                    sublabel={`${stats?.itemCount ?? 0} items · ${stats?.docsLinkedCount ?? 0} docs · ${stats?.coverageGapsCount ?? 0} gaps`}
-                  />
-                ) : (
+                  ) : insights ? (
+                    <>
+                      <RoomHealthScoreRing
+                        value={score}
+                        label={scoreLabel}
+                        sublabel={`${stats?.itemCount ?? 0} items · ${stats?.docsLinkedCount ?? 0} docs · ${stats?.coverageGapsCount ?? 0} gaps`}
+                      />
+                  
+                      {Array.isArray(insights?.healthScore?.improvements) &&
+                        insights.healthScore.improvements.length > 0 && (
+                          <div className="mt-2 text-xs text-gray-500">
+                            Tip:{' '}
+                            <span className="font-medium text-gray-700">
+                              {insights.healthScore.improvements[0].title}
+                            </span>
+                          </div>
+                        )}
+                    </>
+                  ) : (                
                   <button
                     onClick={() => loadInsight(r.id)}
                     className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
