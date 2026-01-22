@@ -33,6 +33,20 @@ export default function SeasonalMaintenancePage() {
   const searchParams = useSearchParams();
   const { selectedPropertyId } = usePropertyContext();
   const propertyId = searchParams.get('propertyId') || selectedPropertyId;
+  const from = searchParams.get('from');
+  // Only show back link if entered from a valid parent page (not returning from maintenance)
+  const getBackLink = () => {
+    if (from === 'dashboard') {
+      return {
+        href: `/dashboard${propertyId ? `?propertyId=${propertyId}` : ''}`,
+        label: 'Back to Dashboard'
+      };
+    }
+    // Don't show back link when returning from maintenance or no 'from' param
+    return null;
+  };
+
+  const backLink = getBackLink();
 
   const { data: climateInfo } = useClimateInfo(propertyId!);
   const { data: checklistsData, isLoading } = useSeasonalChecklists(propertyId!);
@@ -102,13 +116,15 @@ export default function SeasonalMaintenancePage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
-      <Button 
-          variant="link" 
-          className="p-0 h-auto mb-2 text-sm text-muted-foreground"
-          onClick={() => router.back()}
-      >
-          <ArrowLeft className="h-4 w-4 mr-1" /> Back
-      </Button>
+      {backLink && (
+        <Link 
+          href={backLink.href}
+          className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 group"
+        >
+          <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
+          {backLink.label}
+        </Link>
+      )}
     {/* Page Content */}
       {/* Header */}
       <div className="mb-8">
