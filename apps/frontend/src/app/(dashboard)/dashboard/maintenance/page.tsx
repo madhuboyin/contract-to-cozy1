@@ -12,12 +12,13 @@ import {
   Plus,
   Edit,
   CheckCircle,
-  Eye, // ✅ NEW
+  Eye,
 } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import { api } from '@/lib/api/client';
 import { Card, CardDescription, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -102,6 +103,23 @@ function normalizeView(val: string | null): ViewMode {
 function normalizeRange(val: string | null): CompletedRange {
   if (val === '30d' || val === '90d' || val === '1y' || val === 'all') return val;
   return '30d';
+}
+function getTaskSourceBadge(task: PropertyMaintenanceTask): {
+  label: string;
+  variant: 'secondary' | 'outline';
+} | null {
+  if (task.seasonalChecklistItemId || task.source === 'SEASONAL') {
+    return { label: 'Seasonal', variant: 'secondary' };
+  }
+
+  if (task.source) {
+    return {
+      label: task.source.replace(/_/g, ' '),
+      variant: 'outline',
+    };
+  }
+
+  return null;
 }
 
 export default function MaintenancePage() {
@@ -792,10 +810,35 @@ export default function MaintenancePage() {
       <Dialog open={isViewOpen} onOpenChange={(open) => (open ? setIsViewOpen(true) : handleCloseView())}>
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
-            <DialogTitle className="truncate">
-              Task Details{viewTask?.title ? `: ${viewTask.title}` : ''}
-            </DialogTitle>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <DialogTitle className="truncate">
+                  Task Details{viewTask?.title ? `: ${viewTask.title}` : ''}
+                </DialogTitle>
+
+                <div className="mt-1 flex items-center gap-2">
+                  <DialogDescription className="m-0">
+                    Completed tasks are read-only.
+                  </DialogDescription>
+
+                  {viewTask && (() => {
+                    const badge = getTaskSourceBadge(viewTask);
+                    if (!badge) return null;
+
+                    return (
+                      <Badge
+                        variant={badge.variant}
+                        className="whitespace-nowrap"
+                      >
+                        {badge.label}
+                      </Badge>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
           </DialogHeader>
+
 
           {viewTask && (
             <div className="space-y-4">
