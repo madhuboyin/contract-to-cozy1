@@ -43,6 +43,16 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { ArrowLeft } from 'lucide-react';
 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+
+
 // --- Helper Functions ---
 
 function formatEnumString(val: string | null | undefined): string {
@@ -259,10 +269,18 @@ export default function MaintenancePage() {
   };
 
   // ✅ NEW: Open modal in view-only mode (completed tasks)
+
+  const [viewTask, setViewTask] = useState<PropertyMaintenanceTask | null>(null);
+  const [isViewOpen, setIsViewOpen] = useState(false);
+
   const handleViewModal = (task: PropertyMaintenanceTask) => {
-    setEditingTask(task);
-    setModalMode('view');
-    setIsModalOpen(true);
+    setViewTask(task);
+    setIsViewOpen(true);
+  };
+  
+  const handleCloseView = () => {
+    setIsViewOpen(false);
+    setViewTask(null);
   };
 
   const handleCloseModal = () => {
@@ -771,6 +789,75 @@ export default function MaintenancePage() {
           </div>
         </div>
       )}
+      <Dialog open={isViewOpen} onOpenChange={(open) => (open ? setIsViewOpen(true) : handleCloseView())}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Task Details</DialogTitle>
+            <DialogDescription>
+              Completed tasks are read-only.
+            </DialogDescription>
+          </DialogHeader>
+
+          {viewTask && (
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <div className="text-xs text-gray-500">Task</div>
+                <div className="text-sm font-medium text-gray-900">{viewTask.title}</div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="text-xs text-gray-500">Notes</div>
+                <div className="text-sm text-gray-700 whitespace-pre-wrap">
+                  {viewTask.description || '—'}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <div className="text-xs text-gray-500">Category</div>
+                  <div className="text-sm text-gray-900">{formatCategory(viewTask.serviceCategory)}</div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-xs text-gray-500">Priority</div>
+                  <div className="text-sm text-gray-900">{viewTask.priority}</div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-xs text-gray-500">Frequency</div>
+                  <div className="text-sm text-gray-900">
+                    {viewTask.isRecurring && viewTask.frequency
+                      ? formatEnumString(viewTask.frequency)
+                      : 'One-time'}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-xs text-gray-500">Last Completed</div>
+                  <div className="text-sm text-gray-900">
+                    {viewTask.lastCompletedDate
+                      ? format(new Date(viewTask.lastCompletedDate), 'MMM dd, yyyy')
+                      : '—'}
+                  </div>
+                </div>
+
+                <div className="space-y-1 sm:col-span-2">
+                  <div className="text-xs text-gray-500">Next Due</div>
+                  <div className="text-sm text-gray-900">
+                    {viewTask.nextDueDate ? format(new Date(viewTask.nextDueDate), 'MMM dd, yyyy') : '—'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCloseView}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <MaintenanceConfigModal
         isOpen={isModalOpen}
