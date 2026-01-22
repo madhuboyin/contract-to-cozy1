@@ -86,7 +86,22 @@ export default function RoomShowcaseClient() {
     return [];
   }, [template, insights]);
 
-  const score = useMemo(() => computeHealthScore(insights, items), [insights, items]);
+  // ✅ Prefer backend score; fallback to legacy client computation during rollout
+  const healthScore = insights?.healthScore;
+
+  const score = useMemo(() => {
+    const backend = Number(healthScore?.score);
+    if (Number.isFinite(backend)) return backend;
+    return computeHealthScore(insights, items); // fallback only
+  }, [healthScore?.score, insights, items]);
+
+  const scoreLabel = (healthScore?.label as string) || 'Room health';
+
+  const improvements: Array<{ title: string; detail?: string }> =
+    (healthScore?.improvements as any[]) || [];
+
+  const scoreBadges: string[] = (healthScore?.badges as string[]) || [];
+
 
   const missingAppliances: string[] = insights?.kitchen?.missingAppliances || [];
   const comfort = insights?.livingRoom?.comfortScoreHint;
@@ -129,7 +144,7 @@ export default function RoomShowcaseClient() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <RoomHealthScoreRing
             value={score}
-            label="Room health"
+            label={scoreLabel} // ✅ uses backend "Good / Needs attention / At risk" if provided
             sublabel={
               loading
                 ? 'Updating…'
@@ -138,7 +153,6 @@ export default function RoomShowcaseClient() {
                   : `${items.length} items tracked`
             }
           />
-
           <div className="flex flex-wrap items-center gap-2">
             <Badge>{template}</Badge>
             <Badge>{stats?.itemCount ?? items.length} items</Badge>
@@ -147,6 +161,27 @@ export default function RoomShowcaseClient() {
             <Badge>{stats?.coverageGapsCount ?? 0} coverage gaps</Badge>
             {template === 'LIVING_ROOM' && comfort && <Badge>Comfort: {comfort}</Badge>}
           </div>
+          {improvements.length > 0 && (
+            <div className="mt-3 rounded-xl bg-black/[0.02] p-4">
+              <div className="text-xs uppercase tracking-wide opacity-60">
+                Improve your room health
+              </div>
+
+              <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                {improvements.slice(0, 4).map((x, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-xl border border-black/10 bg-white p-3"
+                  >
+                    <div className="text-sm font-medium">{x.title}</div>
+                    {x.detail && (
+                      <div className="mt-0.5 text-sm opacity-75">{x.detail}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {template === 'KITCHEN' && missingAppliances.length > 0 && (

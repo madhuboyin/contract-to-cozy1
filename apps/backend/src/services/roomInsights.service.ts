@@ -2,6 +2,8 @@
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { RoomType } from '@prisma/client';
+import { computeRoomHealthScore } from './roomHealthScore.service';
+
 
 function centsToDollars(cents: number) {
   return cents / 100;
@@ -11,6 +13,23 @@ function keywordHas(name: string, words: string[]) {
   const t = (name || '').toLowerCase();
   return words.some((w) => t.includes(w));
 }
+
+export type RoomHealthBand = 'GOOD' | 'NEEDS_ATTENTION' | 'AT_RISK';
+
+export type RoomHealthScoreDTO = {
+  score: number; // 0..100
+  band: RoomHealthBand;
+  label: string; // "Good" | "Needs attention" | "At risk"
+  badges: string[]; // for small UI chips if you want (e.g., ["Coverage gaps", "Missing appliances"])
+  improvements: Array<{ title: string; detail?: string }>; // "how to improve"
+  factors: {
+    itemCount: number;
+    docsLinkedCount: number;
+    coverageGapsCount: number;
+    missingAppliancesCount: number;
+    comfortScoreHint: 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN';
+  };
+};
 
 export type RoomInsightsDTO = {
   room: {
@@ -34,6 +53,7 @@ export type RoomInsightsDTO = {
     comfortScoreHint: 'LOW' | 'MEDIUM' | 'HIGH';
     quickWins: { title: string; detail: string }[];
   };
+  healthScore: RoomHealthScoreDTO;
 };
 
 export class RoomInsightsService {
@@ -74,6 +94,20 @@ export class RoomInsightsService {
         coverageGapsCount,
         appliancesCount,
         docsLinkedCount,
+      },
+      healthScore: {
+        score: 0,
+        band: 'AT_RISK',
+        label: 'At risk',
+        badges: [],
+        improvements: [],
+        factors: {
+          itemCount: items.length,
+          docsLinkedCount,
+          coverageGapsCount,
+          missingAppliancesCount: 0,
+          comfortScoreHint: 'UNKNOWN',
+        },
       },
     };
 
@@ -135,6 +169,16 @@ export class RoomInsightsService {
       base.livingRoom = { comfortScoreHint, quickWins };
     }
 
+    base.healthScore = computeRoomHealthScore({
+      stats: {
+        itemCount: base.stats.itemCount,
+        docsLinkedCount: base.stats.docsLinkedCount,
+        coverageGapsCount: base.stats.coverageGapsCount,
+      },
+      kitchen: base.kitchen ? { missingAppliances: base.kitchen.missingAppliances } : undefined,
+      livingRoom: base.livingRoom ? { comfortScoreHint: base.livingRoom.comfortScoreHint } : undefined,
+    });
+    
     return base;
   }
 
