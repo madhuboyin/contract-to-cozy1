@@ -108,6 +108,14 @@ export default function RoomShowcaseClient() {
 
   const stats = insights?.stats;
 
+  const whyFactors =
+  (insights?.healthScore?.factors || []).map((f: any) => ({
+    label: String(f?.label || f?.key || 'Factor'),
+    detail: f?.detail ? String(f.detail) : undefined,
+    impact: (String(f?.impact || '').toUpperCase() as any) || undefined,
+  }));
+
+
   return (
     <div className="p-6 space-y-4">
       {/* Header */}
@@ -152,6 +160,8 @@ export default function RoomShowcaseClient() {
                   ? `${stats.itemCount ?? items.length} items · ${stats.docsLinkedCount ?? 0} docs · ${stats.coverageGapsCount ?? 0} gaps`
                   : `${items.length} items tracked`
             }
+            whyTitle="Why this score?"
+            whyFactors={whyFactors}
           />
           <div className="flex flex-wrap items-center gap-2">
             <Badge>{template}</Badge>

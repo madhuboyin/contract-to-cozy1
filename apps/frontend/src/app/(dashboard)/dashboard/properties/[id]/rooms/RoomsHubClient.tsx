@@ -173,6 +173,13 @@ export default function RoomsHubClient() {
             ? (Number.isFinite(backendScore) ? backendScore : computeHealthScore(insights)) // ✅ prefer backend
             : 0;
           
+          const whyFactors =
+          (insights?.healthScore?.factors || []).map((f: any) => ({
+            label: String(f?.label || f?.key || 'Factor'),
+            detail: f?.detail ? String(f.detail) : undefined,
+            impact: (String(f?.impact || '').toUpperCase() as any) || undefined,
+          }));
+          
           const scoreLabel =
             (insights?.healthScore?.label as string) || 'Room health';          
 
@@ -209,12 +216,14 @@ export default function RoomsHubClient() {
               <div className="mt-4">
                 {insightsLoading[r.id] ? (
                   <div className="rounded-xl border border-black/10 p-3 text-sm opacity-70">Loading insights…</div>
-                  ) : insights ? (
+                  ) : insights ? (                    
                     <>
                       <RoomHealthScoreRing
                         value={score}
                         label={scoreLabel}
                         sublabel={`${stats?.itemCount ?? 0} items · ${stats?.docsLinkedCount ?? 0} docs · ${stats?.coverageGapsCount ?? 0} gaps`}
+                        whyTitle="Why this score?"
+                        whyFactors={whyFactors}
                       />
                   
                       {Array.isArray(insights?.healthScore?.improvements) &&
