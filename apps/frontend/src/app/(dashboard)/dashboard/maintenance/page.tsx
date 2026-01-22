@@ -78,7 +78,8 @@ export default function MaintenancePage() {
   const priority = searchParams.get('priority') === 'true';
   const fromRiskAssessment = searchParams.get('from') === 'risk-assessment';
   const propertyId = searchParams.get('propertyId');
-
+  const from = searchParams.get('from');
+  const highlightTaskId = searchParams.get('taskId');
 
   const togglePriorityView = useCallback(
     (enabled: boolean) => {
@@ -165,6 +166,25 @@ export default function MaintenancePage() {
   const allMaintenanceTasks = Array.isArray(mainData?.maintenanceTasks) 
     ? mainData.maintenanceTasks 
     : [];
+
+  // Back link logic based on navigation source
+  const getBackLink = () => {
+    if (from === 'seasonal') {
+      return {
+        href: `/dashboard/seasonal${selectedPropertyId ? `?propertyId=${selectedPropertyId}` : ''}`,
+        label: 'Back to Seasonal Maintenance'
+      };
+    }
+    if (from === 'risk-assessment' && selectedPropertyId) {
+      return {
+        href: `/dashboard/properties/${selectedPropertyId}/risk-assessment`,
+        label: 'Back to Risk Assessment'
+      };
+    }
+    return null;
+  };
+
+  const backLink = getBackLink();
   
   const maintenanceItems = useMemo(() => {
     // 🔑 FIX 4: Double-check array before operations
@@ -193,7 +213,6 @@ export default function MaintenancePage() {
         return priorityItems;
       }
     }
-  
     // Default sort by next due date
     return items.sort((a, b) => {
       if (!a.nextDueDate) return 1;
@@ -334,18 +353,17 @@ export default function MaintenancePage() {
 
   return (
     <div className="space-y-6 pb-8 max-w-7xl mx-auto px-4 md:px-8">
-      {/* 🔑 NEW: Add back link here */}
-      {fromRiskAssessment && propertyId && (
-        <Button 
-          variant="ghost" 
-          size="sm"
-          onClick={() => router.push(`/dashboard/properties/${propertyId}/risk-assessment`)}
-          className="gap-2"
+      {/* Back Link - handles both seasonal and risk-assessment navigation */}
+      {backLink && (
+        <Link 
+          href={backLink.href}
+          className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 group"
         >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Risk Assessment
-        </Button>
+          <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
+          {backLink.label}
+        </Link>
       )}
+      
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
           <Wrench className="w-7 h-7 text-blue-600" /> Home Tasks & Reminders

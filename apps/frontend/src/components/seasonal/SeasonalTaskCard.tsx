@@ -3,7 +3,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, X, Clock, Info, DollarSign, Timer, CheckCircle2, Loader2 } from 'lucide-react';
+import { Check, X, Clock, Info, DollarSign, Timer, CheckCircle2, Loader2, Eye } from 'lucide-react';
 import { SeasonalChecklistItem } from '@/types/seasonal.types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +16,9 @@ import {
   getPriorityBadgeClass,
   formatCostRange,
 } from '@/lib/utils/seasonHelpers';
+
+// Add to imports at top of file
+import Link from 'next/link';
 
 interface SeasonalTaskCardProps {
   item: SeasonalChecklistItem;
@@ -286,36 +289,49 @@ export function SeasonalTaskCard({
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                 <span>Task completed</span>
               </div>
-            ) : (
-              // ADDED (PENDING) STATE - Show remove button
-              <>
-                <div className="flex-1 flex items-center gap-1 text-xs sm:text-sm text-green-700">
-                  <CheckCircle2 className="h-4 w-4 shrink-0" />
-                  <span className="hidden sm:inline">This task is in your maintenance schedule</span>
-                  <span className="sm:hidden">Scheduled</span>
-                </div>
+              ) : (
+                // ADDED (PENDING) STATE - Show view link and remove button
+                <>
+                  <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-1 text-xs sm:text-sm text-green-700">
+                    <div className="flex items-center gap-1">
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                      <span className="hidden sm:inline">This task is in your maintenance schedule</span>
+                      <span className="sm:hidden">Scheduled</span>
+                    </div>
+                    
+                    {/* View in Maintenance link */}
+                    {item.maintenanceTask?.id && (
+                      <Link 
+                        href={`/dashboard/maintenance?taskId=${item.maintenanceTask.id}&from=seasonal&propertyId=${item.seasonalChecklistId ? '' : ''}`}
+                        className="flex items-center gap-1 text-teal-600 hover:text-teal-800 hover:underline ml-0 sm:ml-2"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        <span>View in Maintenance</span>
+                      </Link>
+                    )}
+                  </div>
 
-                <Button
-                  variant="outline"
-                  onClick={handleRemoveFromMaintenance}
-                  disabled={isLoading}
-                  size="sm"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-1 animate-spin shrink-0" />
-                      <span>...</span>
-                    </>
-                  ) : (
-                    <>
-                      <X className="h-4 w-4 mr-1 shrink-0" />
-                      <span className="hidden sm:inline">Remove</span>
-                      <span className="sm:hidden">Undo</span>
-                    </>
-                  )}
-                </Button>
-              </>
-            )}
+                  <Button
+                    variant="outline"
+                    onClick={handleRemoveFromMaintenance}
+                    disabled={isLoading}
+                    size="sm"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin shrink-0" />
+                        <span>...</span>
+                      </>
+                    ) : (
+                      <>
+                        <X className="h-4 w-4 mr-1 shrink-0" />
+                        <span className="hidden sm:inline">Remove</span>
+                        <span className="sm:hidden">Undo</span>
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
           </div>
         </div>
       </CardContent>
