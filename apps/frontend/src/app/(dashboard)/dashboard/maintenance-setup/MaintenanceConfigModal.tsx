@@ -526,7 +526,7 @@ export function MaintenanceConfigModal({
         <DialogHeader>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <DialogTitle className="truncate">
+              <DialogTitle className="pr-8 break-words">
                 {isNew ? 'Add Task' : 'Edit Task'}: {title}
               </DialogTitle>
 
