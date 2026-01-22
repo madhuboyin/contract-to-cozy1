@@ -917,6 +917,8 @@ export default function MaintenancePage() {
                 nextDueDate: editingTask.nextDueDate ? new Date(editingTask.nextDueDate) : null,
                 serviceCategory: editingTask.serviceCategory as any,
                 propertyId: editingTask.propertyId,
+                source: editingTask.source,
+                seasonalChecklistItemId: editingTask.seasonalChecklistItemId,
               }
             : null
         }

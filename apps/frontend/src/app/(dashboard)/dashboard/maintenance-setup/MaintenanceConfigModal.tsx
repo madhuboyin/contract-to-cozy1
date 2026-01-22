@@ -43,6 +43,7 @@ import { CalendarIcon, Home, Loader2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client'; 
+import { Badge } from '@/components/ui/badge';
 
 // Manually define options
 const frequencyOptions: RecurrenceFrequency[] = [
@@ -76,6 +77,42 @@ function formatEnumString(val: string | null | undefined) {
   if (!val) return 'N/A';
   return val.toString().replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
+function getSourceBadge(input: {
+  isEditing: boolean;
+  orchestrationMode: boolean;
+  existingConfig?: any | null;
+  template?: any | null;
+}) {
+  // 1) Seasonal (edit flow)
+  if (input.isEditing) {
+    const src = input.existingConfig?.source;
+    const seasonalId = input.existingConfig?.seasonalChecklistItemId;
+
+    if (seasonalId || src === 'SEASONAL') {
+      return { label: 'Seasonal', variant: 'secondary' as const };
+    }
+
+    if (src) {
+      return { label: formatEnumString(src), variant: 'outline' as const };
+    }
+
+    return null;
+  }
+
+  // 2) Orchestration mode (Action Center)
+  if (input.orchestrationMode) {
+    return { label: 'Action Center', variant: 'outline' as const };
+  }
+
+  // 3) Creation from template (maintenance setup / seasonal add)
+  // If your template has a notion of seasonal source, you can map it later.
+  // For now, show "Template" badge in creation flow.
+  if (input.template) {
+    return { label: 'Template', variant: 'outline' as const };
+  }
+
+  return null;
+}
 
 // === Unified Props Interface ===
 interface MaintenanceConfigModalProps {
@@ -91,7 +128,14 @@ interface MaintenanceConfigModalProps {
   onPropertyChange?: (id: string) => void; // State setter for property ID
 
   // --- Editing Flow Props (Only required by maintenance/page.tsx) ---
-  existingConfig?: (MaintenanceTaskConfig & { propertyId: string | null }) | null; // Existing task data
+  existingConfig?: (MaintenanceTaskConfig & {
+    propertyId: string | null;
+  
+    // ✅ NEW (optional): lets edit modal show source badge
+    source?: string | null;
+    seasonalChecklistItemId?: string | null;
+  }) | null;
+  // Existing task data
   onSave?: (config: MaintenanceTaskConfig) => void; // Callback for saving edits
   onRemove?: (taskId: string) => void; // Callback for removing task
   orchestrationMode?: boolean;
@@ -480,13 +524,37 @@ export function MaintenanceConfigModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>
-            {isNew ? 'Add Task' : 'Edit Task'}: {title}
-          </DialogTitle>
-          <DialogDescription>
-            {isNew ? 'Set the next due date and recurrence.' : 'Update task details and schedule.'}
-          </DialogDescription>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <DialogTitle className="truncate">
+                {isNew ? 'Add Task' : 'Edit Task'}: {title}
+              </DialogTitle>
+
+              <div className="mt-1 flex items-center gap-2">
+                <DialogDescription className="m-0">
+                  {isNew ? 'Set the next due date and recurrence.' : 'Update task details and schedule.'}
+                </DialogDescription>
+
+                {(() => {
+                  const badge = getSourceBadge({
+                    isEditing,
+                    orchestrationMode,
+                    existingConfig,
+                    template,
+                  });
+                  if (!badge) return null;
+
+                  return (
+                    <Badge variant={badge.variant} className="whitespace-nowrap">
+                      {badge.label}
+                    </Badge>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
         </DialogHeader>
+
         <div className="grid gap-6 py-4">
 
             {/* --- Property Selection Field --- */}
