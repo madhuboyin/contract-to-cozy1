@@ -792,10 +792,9 @@ export default function MaintenancePage() {
       <Dialog open={isViewOpen} onOpenChange={(open) => (open ? setIsViewOpen(true) : handleCloseView())}>
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
-            <DialogTitle>Task Details</DialogTitle>
-            <DialogDescription>
-              Completed tasks are read-only.
-            </DialogDescription>
+            <DialogTitle className="truncate">
+              Task Details{viewTask?.title ? `: ${viewTask.title}` : ''}
+            </DialogTitle>
           </DialogHeader>
 
           {viewTask && (
