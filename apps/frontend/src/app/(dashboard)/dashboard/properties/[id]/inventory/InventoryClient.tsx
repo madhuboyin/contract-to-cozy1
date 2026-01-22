@@ -213,7 +213,7 @@ export default function InventoryClient() {
   const hasVisibleItems = visibleItems.length > 0;
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-6 space-y-4 max-w-7xl mx-auto">
       <div className="flex flex-col gap-4">
         {/* ROW 1: Title + Tabs */}
         <div className="flex flex-col sm:flex-row sm:items-start gap-4">
@@ -387,15 +387,14 @@ export default function InventoryClient() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-fr">
             {visibleItems.map((item) => (
               <div
                 key={item.id}
-                className={
-                  highlightItemId === item.id
-                    ? 'rounded-2xl ring-2 ring-amber-300 transition'
-                    : 'transition'
-                }
+                className={[
+                  "rounded-2xl transition",
+                  highlightItemId === item.id ? "ring-2 ring-amber-300" : "ring-1 ring-transparent",
+                ].join(' ')}
               >
                 <InventoryItemCard item={item} onClick={() => onEdit(item)} />
               </div>
