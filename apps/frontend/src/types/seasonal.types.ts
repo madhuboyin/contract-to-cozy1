@@ -50,6 +50,7 @@ export interface SeasonalChecklist {
 export interface SeasonalChecklistItem {
   id: string;
   seasonalChecklistId: string;
+  propertyId: string;
   title: string;
   description?: string;
   priority: TaskPriority;

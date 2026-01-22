@@ -302,7 +302,7 @@ export function SeasonalTaskCard({
                     {/* View in Maintenance link */}
                     {item.maintenanceTask?.id && (
                       <Link 
-                        href={`/dashboard/maintenance?taskId=${item.maintenanceTask.id}&from=seasonal&propertyId=${item.seasonalChecklistId ? '' : ''}`}
+                      href={`/dashboard/maintenance?taskId=${item.maintenanceTask.id}&from=seasonal&propertyId=${item.propertyId || ''}`}
                         className="flex items-center gap-1 text-teal-600 hover:text-teal-800 hover:underline ml-0 sm:ml-2"
                       >
                         <Eye className="h-3.5 w-3.5" />
