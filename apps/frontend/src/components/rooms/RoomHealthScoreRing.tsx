@@ -108,24 +108,19 @@ export default function RoomHealthScoreRing({
         <div className="flex items-center gap-2">
           <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
 
-          {hasWhy && (
-            <div className="relative inline-flex group">
+            {hasWhy && (
+            <div className="relative group">
               <button
                 type="button"
                 className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white px-2 py-0.5 text-[11px] text-gray-700 hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-black/10"
                 aria-label={whyTitle}
               >
-                ⓘ {whyTitle}
+                ⓘ Why this score?
               </button>
 
-              {/* Tooltip / Popover */}
               <div
                 className={[
-                  // mobile: show below
-                  'absolute left-0 top-full mt-2',
-                  // desktop: prefer to the right of the button
-                  'md:left-full md:top-1/2 md:mt-0 md:ml-2 md:-translate-y-1/2',
-                  'w-[320px] max-w-[calc(100vw-2rem)]',
+                  'absolute left-0 top-full mt-2 w-[320px] max-w-[80vw]',
                   'rounded-2xl border border-black/10 bg-white p-3 shadow-lg',
                   'opacity-0 pointer-events-none',
                   'group-hover:opacity-100 group-hover:pointer-events-auto',
@@ -142,12 +137,10 @@ export default function RoomHealthScoreRing({
                     return (
                       <div key={idx} className="text-xs">
                         <div className="flex items-start justify-between gap-2">
-                          <div className="font-medium text-gray-900">{f.label || 'Factor'}</div>
+                          <div className="font-medium text-gray-900">{f.label}</div>
                           {it && <div className="text-gray-500 whitespace-nowrap">{it}</div>}
                         </div>
-                        {f.detail ? (
-                          <div className="mt-0.5 text-gray-600">{f.detail}</div>
-                        ) : null}
+                        {f.detail && <div className="mt-0.5 text-gray-600">{f.detail}</div>}
                       </div>
                     );
                   })}
@@ -159,7 +152,7 @@ export default function RoomHealthScoreRing({
               </div>
             </div>
           )}
-        </div>
+          </div>
 
         {/* rating line */}
         {showRating ? (

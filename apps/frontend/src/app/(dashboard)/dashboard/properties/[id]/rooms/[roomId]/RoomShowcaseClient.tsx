@@ -151,72 +151,74 @@ export default function RoomShowcaseClient() {
 
       {/* Hero strip */}
       <div className="rounded-3xl border border-black/10 p-5 bg-gradient-to-b from-black/[0.03] to-transparent">
-        {/* Top row: Score (left) + badges (right) */}
-        <div className="grid grid-cols-1 md:grid-cols-[360px_1fr] gap-6 items-center">
-          <div className="min-w-0">
-            <RoomHealthScoreRing
-              value={score}
-              size={96}
-              strokeWidth={12}
-              label={scoreLabel}
-              sublabel={
-                loading
-                  ? 'Updating…'
-                  : stats
-                    ? `${stats.itemCount ?? items.length} items · ${stats.docsLinkedCount ?? 0} docs · ${stats.coverageGapsCount ?? 0} gaps`
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+          {/* LEFT: Score */}
+          <div className="lg:col-span-5">
+            <div className="rounded-2xl border border-black/10 bg-white p-4">
+              <RoomHealthScoreRing
+                value={score}
+                label={scoreLabel}
+                // ✅ Make ring feel “hero”
+                size={96}
+                strokeWidth={12}
+                // ✅ Keep sublabel minimal (avoid repeating badges)
+                sublabel={
+                  loading
+                    ? 'Updating…'
+                    : stats
+                    ? `${stats.itemCount ?? items.length} items • ${stats.docsLinkedCount ?? 0} docs • ${stats.coverageGapsCount ?? 0} gaps`
                     : `${items.length} items tracked`
-              }
-              whyTitle="Why this score?"
-              whyFactors={whyFactors}
-            />
+                }
+                whyTitle="Why this score?"
+                whyFactors={whyFactors}
+              />
 
-            {/* Optional 1-line “tip” under ring (non-repetitive) */}
-            {Array.isArray(healthScore?.improvements) && healthScore.improvements.length > 0 && (
-              <div className="mt-2 text-xs text-gray-500">
-                Tip:{' '}
-                <span className="font-medium text-gray-700">
-                  {healthScore.improvements[0]?.title}
-                </span>
+              {/* Optional: single line tip below, no huge padding */}
+              {improvements.length > 0 && improvements?.[0]?.title && (
+                <div className="mt-3 text-xs text-gray-500">
+                  Tip:{' '}
+                  <span className="font-medium text-gray-700">
+                    {String(improvements[0].title)}
+                  </span>
+                </div>
+              )}
+
+              {/* ✅ Keep badges minimal or remove entirely */}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Badge>{template}</Badge>
+                <Badge>{money(stats?.replacementTotalCents)} replacement</Badge>
+                {template === 'LIVING_ROOM' && comfort && <Badge>Comfort: {comfort}</Badge>}
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT: Improve your room health */}
+          <div className="lg:col-span-7">
+            {improvements.length > 0 ? (
+              <div className="rounded-2xl border border-black/10 bg-white p-4">
+                <div className="text-xs uppercase tracking-wide opacity-60">
+                  Improve your room health
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {improvements.slice(0, 4).map((x, idx) => (
+                    <div key={idx} className="rounded-xl border border-black/10 p-3">
+                      <div className="text-sm font-medium">{x.title}</div>
+                      {x.detail && <div className="mt-0.5 text-sm opacity-75">{x.detail}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-black/10 bg-white p-4">
+                <div className="text-xs uppercase tracking-wide opacity-60">Improve your room health</div>
+                <div className="mt-2 text-sm opacity-70">
+                  Add items, attach documents, and resolve coverage gaps to improve your score.
+                </div>
               </div>
             )}
           </div>
-
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge>{template}</Badge>
-
-              {/* backend badges if present (e.g. “Seasonal”, “Docs missing”) */}
-              {scoreBadges.slice(0, 3).map((b, idx) => (
-                <Badge key={`${b}-${idx}`}>{b}</Badge>
-              ))}
-
-              <Badge>{stats?.itemCount ?? items.length} items</Badge>
-              <Badge>{money(stats?.replacementTotalCents)} replacement</Badge>
-              <Badge>{stats?.docsLinkedCount ?? 0} docs</Badge>
-              <Badge>{stats?.coverageGapsCount ?? 0} gaps</Badge>
-              {template === 'LIVING_ROOM' && comfort && <Badge>Comfort: {comfort}</Badge>}
-            </div>
-          </div>
         </div>
-
-        {/* Improvements block goes BELOW top row (prevents flex-row distortion) */}
-        {improvements.length > 0 && (
-          <div className="mt-5 rounded-2xl border border-black/10 bg-white p-4">
-            <div className="text-xs uppercase tracking-wide text-gray-500">
-              Improve your room health
-            </div>
-
-            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-              {improvements.slice(0, 4).map((x, idx) => (
-                <div key={idx} className="rounded-2xl border border-black/10 p-4 bg-white">
-                  <div className="text-sm font-medium">{x.title}</div>
-                  {x.detail && <div className="mt-1 text-sm text-gray-600">{x.detail}</div>}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {template === 'KITCHEN' && missingAppliances.length > 0 && (
           <div className="mt-4 rounded-2xl border border-black/10 bg-white p-4">
             <div className="text-xs uppercase tracking-wide text-gray-500">
