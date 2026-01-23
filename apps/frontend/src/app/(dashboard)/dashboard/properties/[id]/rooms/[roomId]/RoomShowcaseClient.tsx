@@ -20,6 +20,49 @@ function money(cents: number | null | undefined, currency = 'USD') {
 function Badge({ children }: { children: React.ReactNode }) {
   return <span className="text-xs rounded-full border border-black/10 px-2 py-1 bg-white">{children}</span>;
 }
+function WhyScorePopover({
+  title,
+  factors,
+}: {
+  title: string;
+  factors: Array<{ label: string; detail?: string; impact?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' }>;
+}) {
+  return (
+    <div className="relative group">
+      <button
+        type="button"
+        className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white px-2 py-0.5 text-[11px] text-gray-700 hover:bg-black/5"
+      >
+        ⓘ {title}
+      </button>
+
+      <div
+        className={[
+          'absolute right-0 top-full mt-2 w-[340px] max-w-[80vw]',
+          'rounded-2xl border border-black/10 bg-white p-3 shadow-lg',
+          'opacity-0 pointer-events-none',
+          'group-hover:opacity-100 group-hover:pointer-events-auto',
+          'transition-opacity duration-150 z-50',
+        ].join(' ')}
+      >
+        <div className="text-sm font-medium">{title}</div>
+
+        <div className="mt-2 space-y-2">
+          {factors.slice(0, 6).map((f, idx) => (
+            <div key={idx} className="text-xs">
+              <div className="font-medium text-gray-900">{f.label}</div>
+              {f.detail && <div className="mt-0.5 text-gray-600">{f.detail}</div>}
+            </div>
+          ))}
+        </div>
+
+        {factors.length > 6 && (
+          <div className="mt-2 text-xs text-gray-500">+{factors.length - 6} more factors</div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function computeHealthScore(insights: any, itemsFallback: InventoryItem[]) {
   const stats = insights?.stats || {};
@@ -154,36 +197,48 @@ export default function RoomShowcaseClient() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
           {/* LEFT: Score */}
           <div className="lg:col-span-5">
-            <div className="rounded-2xl border border-black/10 bg-white p-4 h-full flex flex-col justify-between">
-              <RoomHealthScoreRing
-                value={score}
-                label={scoreLabel}
-                // ✅ Make ring feel “hero”
-                size={96}
-                strokeWidth={12}
-                // ✅ Keep sublabel minimal (avoid repeating badges)
-                sublabel={
-                  loading
+            <div className="relative rounded-2xl border border-black/10 bg-white p-4 h-full flex flex-col">
+              {/* Top-right: Why + stats line */}
+              <div className="absolute right-4 top-4 flex flex-col items-end gap-2">
+                {/* Why this score? */}
+                {whyFactors?.length > 0 && (
+                  <WhyScorePopover title="Why this score?" factors={whyFactors} />
+                )}
+
+                {/* Push the counts to the right (NOT under ring) */}
+                <div className="text-xs text-gray-500">
+                  {loading
                     ? 'Updating…'
                     : stats
                     ? `${stats.itemCount ?? items.length} items • ${stats.docsLinkedCount ?? 0} docs • ${stats.coverageGapsCount ?? 0} gaps`
-                    : `${items.length} items tracked`
-                }
-                whyTitle="Why this score?"
-                whyFactors={whyFactors}
-              />
+                    : `${items.length} items`}
+                </div>
+              </div>
 
-              {/* Optional: single line tip below, no huge padding */}
+              {/* Main ring area: big + centered vertically */}
+              <div className="flex-1 flex items-center justify-center">
+                <RoomHealthScoreRing
+                  value={score}
+                  // ✅ make it feel like the hero element
+                  size={170}
+                  strokeWidth={16}
+                  // ✅ keep label minimal (avoid repetition)
+                  label={scoreLabel}
+                  // ✅ sublabel rendered top-right instead
+                  sublabel={undefined}
+                  // ✅ tooltip handled outside (top-right)
+                  whyFactors={undefined}
+                />
+              </div>
+
+              {/* Tip: sit closer to badges (no huge gap) */}
               {improvements.length > 0 && improvements?.[0]?.title && (
-                <div className="mt-3 text-xs text-gray-500">
-                  Tip:{' '}
-                  <span className="font-medium text-gray-700">
-                    {String(improvements[0].title)}
-                  </span>
+                <div className="mt-2 text-xs text-gray-500">
+                  Tip: <span className="font-medium text-gray-700">{String(improvements[0].title)}</span>
                 </div>
               )}
 
-              {/* ✅ Keep badges minimal or remove entirely */}
+              {/* Badges: pinned to bottom */}
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Badge>{template}</Badge>
                 <Badge>{money(stats?.replacementTotalCents)} replacement</Badge>
