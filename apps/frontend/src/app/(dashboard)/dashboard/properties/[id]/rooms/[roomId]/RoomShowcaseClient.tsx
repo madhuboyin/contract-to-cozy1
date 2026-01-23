@@ -151,10 +151,10 @@ export default function RoomShowcaseClient() {
 
       {/* Hero strip */}
       <div className="rounded-3xl border border-black/10 p-5 bg-gradient-to-b from-black/[0.03] to-transparent">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
           {/* LEFT: Score */}
           <div className="lg:col-span-5">
-            <div className="rounded-2xl border border-black/10 bg-white p-4">
+            <div className="rounded-2xl border border-black/10 bg-white p-4 h-full flex flex-col justify-between">
               <RoomHealthScoreRing
                 value={score}
                 label={scoreLabel}
@@ -195,7 +195,7 @@ export default function RoomShowcaseClient() {
           {/* RIGHT: Improve your room health */}
           <div className="lg:col-span-7">
             {improvements.length > 0 ? (
-              <div className="rounded-2xl border border-black/10 bg-white p-4">
+              <div className="rounded-2xl border border-black/10 bg-white p-4 h-full">
                 <div className="text-xs uppercase tracking-wide opacity-60">
                   Improve your room health
                 </div>
@@ -210,7 +210,7 @@ export default function RoomShowcaseClient() {
                 </div>
               </div>
             ) : (
-              <div className="rounded-2xl border border-black/10 bg-white p-4">
+              <div className="rounded-2xl border border-black/10 bg-white p-4 h-full">
                 <div className="text-xs uppercase tracking-wide opacity-60">Improve your room health</div>
                 <div className="mt-2 text-sm opacity-70">
                   Add items, attach documents, and resolve coverage gaps to improve your score.
