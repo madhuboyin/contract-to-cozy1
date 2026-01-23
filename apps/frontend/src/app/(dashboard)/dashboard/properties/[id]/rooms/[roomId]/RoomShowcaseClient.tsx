@@ -103,11 +103,9 @@ export default function RoomShowcaseClient() {
 
   const scoreLabel = (healthScore?.label as string) || 'Room health';
 
-  const improvements: Array<{ title: string; detail?: string }> =
-    (healthScore?.improvements as any[]) || [];
+  const improvements: Array<{ title: string; detail?: string }> = asArray(healthScore?.improvements);
 
-  const scoreBadges: string[] = (healthScore?.badges as string[]) || [];
-
+  const scoreBadges: string[] = asArray<string>(healthScore?.badges);
 
   const missingAppliances: string[] = insights?.kitchen?.missingAppliances || [];
   const comfort = insights?.livingRoom?.comfortScoreHint;
@@ -153,64 +151,88 @@ export default function RoomShowcaseClient() {
 
       {/* Hero strip */}
       <div className="rounded-3xl border border-black/10 p-5 bg-gradient-to-b from-black/[0.03] to-transparent">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <RoomHealthScoreRing
-            value={score}
-            label={scoreLabel} // ✅ uses backend "Good / Needs attention / At risk" if provided
-            sublabel={
-              loading
-                ? 'Updating…'
-                : stats
-                  ? `${stats.itemCount ?? items.length} items · ${stats.docsLinkedCount ?? 0} docs · ${stats.coverageGapsCount ?? 0} gaps`
-                  : `${items.length} items tracked`
-            }
-            whyTitle="Why this score?"
-            whyFactors={whyFactors}
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge>{template}</Badge>
-            <Badge>{stats?.itemCount ?? items.length} items</Badge>
-            <Badge>{money(stats?.replacementTotalCents)} replacement</Badge>
-            <Badge>{stats?.docsLinkedCount ?? 0} docs</Badge>
-            <Badge>{stats?.coverageGapsCount ?? 0} coverage gaps</Badge>
-            {template === 'LIVING_ROOM' && comfort && <Badge>Comfort: {comfort}</Badge>}
-          </div>
-          {improvements.length > 0 && (
-            <div className="mt-3 rounded-xl bg-black/[0.02] p-4">
-              <div className="text-xs uppercase tracking-wide opacity-60">
-                Improve your room health
-              </div>
+        {/* Top row: Score (left) + badges (right) */}
+        <div className="grid grid-cols-1 md:grid-cols-[360px_1fr] gap-6 items-center">
+          <div className="min-w-0">
+            <RoomHealthScoreRing
+              value={score}
+              size={96}
+              strokeWidth={12}
+              label={scoreLabel}
+              sublabel={
+                loading
+                  ? 'Updating…'
+                  : stats
+                    ? `${stats.itemCount ?? items.length} items · ${stats.docsLinkedCount ?? 0} docs · ${stats.coverageGapsCount ?? 0} gaps`
+                    : `${items.length} items tracked`
+              }
+              whyTitle="Why this score?"
+              whyFactors={whyFactors}
+            />
 
-              <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
-                {improvements.slice(0, 4).map((x, idx) => (
-                  <div
-                    key={idx}
-                    className="rounded-xl border border-black/10 bg-white p-3"
-                  >
-                    <div className="text-sm font-medium">{x.title}</div>
-                    {x.detail && (
-                      <div className="mt-0.5 text-sm opacity-75">{x.detail}</div>
-                    )}
-                  </div>
-                ))}
+            {/* Optional 1-line “tip” under ring (non-repetitive) */}
+            {Array.isArray(healthScore?.improvements) && healthScore.improvements.length > 0 && (
+              <div className="mt-2 text-xs text-gray-500">
+                Tip:{' '}
+                <span className="font-medium text-gray-700">
+                  {healthScore.improvements[0]?.title}
+                </span>
               </div>
+            )}
+          </div>
+
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge>{template}</Badge>
+
+              {/* backend badges if present (e.g. “Seasonal”, “Docs missing”) */}
+              {scoreBadges.slice(0, 3).map((b, idx) => (
+                <Badge key={`${b}-${idx}`}>{b}</Badge>
+              ))}
+
+              <Badge>{stats?.itemCount ?? items.length} items</Badge>
+              <Badge>{money(stats?.replacementTotalCents)} replacement</Badge>
+              <Badge>{stats?.docsLinkedCount ?? 0} docs</Badge>
+              <Badge>{stats?.coverageGapsCount ?? 0} gaps</Badge>
+              {template === 'LIVING_ROOM' && comfort && <Badge>Comfort: {comfort}</Badge>}
             </div>
-          )}
+          </div>
         </div>
+
+        {/* Improvements block goes BELOW top row (prevents flex-row distortion) */}
+        {improvements.length > 0 && (
+          <div className="mt-5 rounded-2xl border border-black/10 bg-white p-4">
+            <div className="text-xs uppercase tracking-wide text-gray-500">
+              Improve your room health
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+              {improvements.slice(0, 4).map((x, idx) => (
+                <div key={idx} className="rounded-2xl border border-black/10 p-4 bg-white">
+                  <div className="text-sm font-medium">{x.title}</div>
+                  {x.detail && <div className="mt-1 text-sm text-gray-600">{x.detail}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {template === 'KITCHEN' && missingAppliances.length > 0 && (
           <div className="mt-4 rounded-2xl border border-black/10 bg-white p-4">
-            <div className="text-xs uppercase tracking-wide opacity-60">Kitchen completeness</div>
-            <div className="text-sm mt-1">
-              Missing common appliances: <span className="font-medium">{missingAppliances.join(', ')}</span>
+            <div className="text-xs uppercase tracking-wide text-gray-500">
+              Kitchen completeness
             </div>
-            <div className="text-xs opacity-60 mt-1">
+            <div className="text-sm mt-1">
+              Missing common appliances:{' '}
+              <span className="font-medium">{missingAppliances.join(', ')}</span>
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
               Add them as inventory items to strengthen warranty + recall + claims readiness.
             </div>
           </div>
         )}
 
-        {loading && <div className="mt-3 text-sm opacity-60">Loading room…</div>}
+        {loading && <div className="mt-3 text-sm text-gray-500">Loading room…</div>}
       </div>
 
       {/* Kitchen / Living “full page” layout sections */}
