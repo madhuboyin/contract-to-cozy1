@@ -47,6 +47,11 @@ function computeHealthScore(insights: any): number {
 
   return Math.max(0, Math.min(100, Math.round(score)));
 }
+function asArray<T = any>(v: any): T[] {
+  if (Array.isArray(v)) return v;
+  if (v && typeof v === 'object') return Object.values(v) as T[];
+  return [];
+}
 
 export default function RoomsHubClient() {
   const params = useParams<{ id: string }>();
@@ -173,12 +178,12 @@ export default function RoomsHubClient() {
             ? (Number.isFinite(backendScore) ? backendScore : computeHealthScore(insights)) // ✅ prefer backend
             : 0;
           
-          const whyFactors =
-          (insights?.healthScore?.factors || []).map((f: any) => ({
-            label: String(f?.label || f?.key || 'Factor'),
-            detail: f?.detail ? String(f.detail) : undefined,
-            impact: (String(f?.impact || '').toUpperCase() as any) || undefined,
-          }));
+            const whyFactors = asArray((insights as any)?.healthScore?.factors).map((f: any) => ({
+              label: String(f?.label || f?.key || 'Factor'),
+              detail: f?.detail ? String(f.detail) : undefined,
+              impact: (String(f?.impact || '').toUpperCase() as any) || undefined,
+            }));
+            
           
           const scoreLabel =
             (insights?.healthScore?.label as string) || 'Room health';          

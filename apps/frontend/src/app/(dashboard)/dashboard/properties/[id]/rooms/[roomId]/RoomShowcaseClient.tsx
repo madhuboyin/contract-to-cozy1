@@ -42,6 +42,12 @@ function computeHealthScore(insights: any, itemsFallback: InventoryItem[]) {
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
+function asArray<T = any>(v: any): T[] {
+  if (Array.isArray(v)) return v;
+  if (v && typeof v === 'object') return Object.values(v) as T[];
+  return [];
+}
+
 export default function RoomShowcaseClient() {
   const params = useParams<{ id: string; roomId: string }>();
   const propertyId = params.id;
@@ -108,14 +114,12 @@ export default function RoomShowcaseClient() {
 
   const stats = insights?.stats;
 
-  const whyFactors =
-  (insights?.healthScore?.factors || []).map((f: any) => ({
+  const whyFactors = asArray((insights as any)?.healthScore?.factors).map((f: any) => ({
     label: String(f?.label || f?.key || 'Factor'),
     detail: f?.detail ? String(f.detail) : undefined,
     impact: (String(f?.impact || '').toUpperCase() as any) || undefined,
   }));
-
-
+  
   return (
     <div className="p-6 space-y-4">
       {/* Header */}
