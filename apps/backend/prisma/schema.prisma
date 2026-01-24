@@ -275,6 +275,9 @@ model InventoryRoomScanSession {
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   room        InventoryRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
+  scanSessions   InventoryRoomScanSession[]
+  inventoryDrafts InventoryDraftItem[]
+
   drafts      InventoryDraftItem[]
 
   @@index([propertyId, createdAt])
@@ -874,6 +877,7 @@ model User {
 
   inventoryOcrSessions InventoryOcrSession[]
   inventoryDraftItems  InventoryDraftItem[]
+  inventoryRoomScanSessions InventoryRoomScanSession[]
   homeEvents HomeEvent[]
   
   @@index([email])
