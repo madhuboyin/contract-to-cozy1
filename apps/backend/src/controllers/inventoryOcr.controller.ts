@@ -140,7 +140,7 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
   const draft = await draftSvc.createDraftFromOcr({
     propertyId,
     userId,
-    sessionId: session.id,
+    scanSessionId: session.id,
     manufacturer,
     modelNumber,
     serialNumber,
