@@ -1,8 +1,20 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/inventory/RoomScanModal.tsx
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { startRoomScanAi, listInventoryDraftsFiltered, bulkConfirmInventoryDrafts, bulkDismissInventoryDrafts } from '../../inventory/inventoryApi';
+import React, { useMemo, useState } from 'react';
+import {
+  startRoomScanAi,
+  listInventoryDraftsFiltered,
+  bulkConfirmInventoryDrafts,
+  bulkDismissInventoryDrafts,
+} from '../../inventory/inventoryApi';
+
+function asArray<T = any>(v: any): T[] {
+  if (Array.isArray(v)) return v;
+  if (v && Array.isArray(v.data)) return v.data; // common axios wrapper
+  if (v && v.success && Array.isArray(v.data)) return v.data; // common APIResponse wrapper
+  return [];
+}
 
 type Props = {
   open: boolean;
@@ -20,13 +32,10 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
 
-  const selectedIds = useMemo(() => Object.entries(selected).filter(([, v]) => v).map(([k]) => k), [selected]);
-  
-  const cancelledRef = useRef(false);
-
-  useEffect(() => {
-    cancelledRef.current = !open;
-  }, [open]);
+  const selectedIds = useMemo(
+    () => Object.entries(selected).filter(([, v]) => v).map(([k]) => k),
+    [selected]
+  );
 
   function resetAll() {
     setFiles([]);
@@ -42,27 +51,28 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
     setBusy(true);
     try {
       const r = await startRoomScanAi(propertyId, roomId, files);
-      if (cancelledRef.current) return;
       setSessionId(r.sessionId);
 
-      const d = await listInventoryDraftsFiltered(propertyId, { scanSessionId: r.sessionId });
-      if (cancelledRef.current) return;
+      // ✅ prefer drafts from scan response (if backend returned them)
+      let d = asArray<any>(r?.drafts);
+
+      // ✅ if not included (or empty during async rollout), fetch drafts
+      if (!d.length) {
+        const resp = await listInventoryDraftsFiltered(propertyId, { scanSessionId: r.sessionId });
+        d = asArray<any>(resp);
+      }
+
       setDrafts(d);
 
       // default-select high confidence items; keep low confidence unchecked
       const next: Record<string, boolean> = {};
       for (const row of d) {
-        const conf = Number((row as any)?.confidenceJson?.name ?? 0.65);
+        const conf = Number(row?.confidenceJson?.name ?? 0.65);
         next[row.id] = conf >= 0.7;
       }
       setSelected(next);
     } catch (e: any) {
-        const msg =
-        e?.response?.data?.message ||
-        e?.response?.data?.error ||
-        e?.message ||
-        'Room scan failed';
-      setError(msg);
+      setError(e?.message || 'Room scan failed');
     } finally {
       setBusy(false);
     }
@@ -73,8 +83,8 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
     setError(null);
     try {
       await bulkConfirmInventoryDrafts(propertyId, selectedIds);
-        onClose();
-        resetAll();
+      onClose();
+      resetAll();
     } catch (e: any) {
       setError(e?.message || 'Bulk confirm failed');
     } finally {
@@ -87,10 +97,10 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
     setError(null);
     try {
       await bulkDismissInventoryDrafts(propertyId, selectedIds);
-      const d = sessionId ? await listInventoryDraftsFiltered(propertyId, { scanSessionId: sessionId }) : [];
-      if (cancelledRef.current) return;
+      const resp = sessionId ? await listInventoryDraftsFiltered(propertyId, { scanSessionId: sessionId }) : [];
+      const d = asArray<any>(resp);
       setDrafts(d);
-      // keep selection map in sync
+
       const next: Record<string, boolean> = {};
       for (const row of d) next[row.id] = false;
       setSelected(next);
