@@ -11,6 +11,8 @@ import { detectCoverageGaps } from '../services/coverageGap.service';
 import { InventoryImportService } from '../services/inventoryImport.service';
 import { checkDuplicateAppliance, listImportBatches, rollbackImportBatch } from '../controllers/inventory.controller';
 import { InventoryService } from '../services/inventory.service';
+import { startRoomScan, getRoomScanSession } from '../controllers/inventoryRoomScan.controller';
+import { bulkConfirmDrafts, bulkDismissDrafts } from '../controllers/inventoryOcr.controller';
 
 import {
   listRooms,
@@ -77,6 +79,18 @@ const uploadImage = multer({
   limits: {
     fileSize: 8 * 1024 * 1024, // ✅ 8MB images
     files: 1,
+  },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype?.startsWith('image/')) return cb(null, true);
+    return cb(new Error('Only image uploads are allowed'));
+  },
+});
+
+const uploadRoomScanImages = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: Number(process.env.INVENTORY_ROOM_SCAN_MAX_IMAGE_MB || 6) * 1024 * 1024,
+    files: Number(process.env.INVENTORY_ROOM_SCAN_MAX_IMAGES || 10),
   },
   fileFilter: (_req, file, cb) => {
     if (file.mimetype?.startsWith('image/')) return cb(null, true);
@@ -497,6 +511,36 @@ router.get(
   authenticate,
   propertyAuthMiddleware,
   checkDuplicateAppliance
+);
+// ----------------------------
+// AI Room Photo Scan -> Drafts
+// ----------------------------
+router.post(
+  '/properties/:propertyId/inventory/rooms/:roomId/scan-ai',
+  propertyAuthMiddleware,
+  uploadRoomScanImages.array('images'),
+  startRoomScan
+);
+
+router.get(
+  '/properties/:propertyId/inventory/rooms/:roomId/scan-ai/:sessionId',
+  propertyAuthMiddleware,
+  getRoomScanSession
+);
+
+// ----------------------------
+// Draft bulk actions (used by room scan review UX)
+// ----------------------------
+router.post(
+  '/properties/:propertyId/inventory/drafts/bulk-confirm',
+  propertyAuthMiddleware,
+  bulkConfirmDrafts
+);
+
+router.post(
+  '/properties/:propertyId/inventory/drafts/bulk-dismiss',
+  propertyAuthMiddleware,
+  bulkDismissDrafts
 );
 
 export default router;

@@ -160,16 +160,6 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
   });  
   
 }
-
-export async function listDrafts(req: CustomRequest, res: Response) {
-  const propertyId = req.params.propertyId;
-  const userId = req.user?.userId;
-  if (!userId) throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
-
-  const drafts = await draftSvc.listDrafts(propertyId, userId);
-  return res.json({ drafts });
-}
-
 export async function dismissDraft(req: CustomRequest, res: Response) {
   const propertyId = req.params.propertyId;
   const userId = req.user?.userId;
@@ -190,3 +180,37 @@ export async function confirmDraft(req: CustomRequest, res: Response) {
   return res.json({ item });
 }
 
+export async function listDrafts(req: CustomRequest, res: Response) {
+  const propertyId = req.params.propertyId;
+  const userId = req.user?.userId;
+  if (!userId) throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
+
+  const roomId = String((req as any).query?.roomId || '').trim() || null;
+  const scanSessionId = String((req as any).query?.scanSessionId || '').trim() || null;
+
+  const drafts = await (roomId || scanSessionId)
+    ? draftSvc.listDraftsFiltered({ propertyId, userId, roomId, scanSessionId })
+    : draftSvc.listDrafts(propertyId, userId);
+
+  return res.json({ drafts });
+}
+
+export async function bulkDismissDrafts(req: CustomRequest, res: Response) {
+  const propertyId = req.params.propertyId;
+  const userId = req.user?.userId;
+  if (!userId) throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
+
+  const draftIds = Array.isArray((req as any).body?.draftIds) ? (req as any).body.draftIds : [];
+  const out = await draftSvc.bulkDismiss(propertyId, userId, draftIds);
+  return res.json(out);
+}
+
+export async function bulkConfirmDrafts(req: CustomRequest, res: Response) {
+  const propertyId = req.params.propertyId;
+  const userId = req.user?.userId;
+  if (!userId) throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
+
+  const draftIds = Array.isArray((req as any).body?.draftIds) ? (req as any).body.draftIds : [];
+  const out = await draftSvc.bulkConfirm(propertyId, userId, draftIds);
+  return res.json(out);
+}

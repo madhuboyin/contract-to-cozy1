@@ -418,3 +418,40 @@ export async function updateInventoryRoomProfile(propertyId: string, roomId: str
   );
   return (res as any)?.data?.data?.room ?? (res as any)?.data?.room ?? (res as any)?.data;
 }
+
+export async function startRoomScanAi(propertyId: string, roomId: string, files: File[]) {
+  const form = new FormData();
+  for (const f of files) form.append('images', f);
+
+  const res: any = await api.post(`/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai`, form);
+
+  const raw = res?.data ?? res;
+  return (raw?.data ?? raw) as { sessionId: string; drafts: any[] };
+}
+
+export async function getRoomScanAiSession(propertyId: string, roomId: string, sessionId: string) {
+  const res = await api.get(`/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai/${sessionId}`);
+  return res.data;
+}
+
+export async function listInventoryDraftsFiltered(
+  propertyId: string,
+  opts: { roomId?: string; scanSessionId?: string }
+) {
+  const qs = new URLSearchParams();
+  if (opts.roomId) qs.set('roomId', opts.roomId);
+  if (opts.scanSessionId) qs.set('scanSessionId', opts.scanSessionId);
+
+  const res = await api.get(`/api/properties/${propertyId}/inventory/drafts?${qs.toString()}`);
+  return (res.data?.drafts ?? res.data) as InventoryDraftListItem[];
+}
+
+export async function bulkConfirmInventoryDrafts(propertyId: string, draftIds: string[]) {
+  const res = await api.post(`/api/properties/${propertyId}/inventory/drafts/bulk-confirm`, { draftIds });
+  return res.data;
+}
+
+export async function bulkDismissInventoryDrafts(propertyId: string, draftIds: string[]) {
+  const res = await api.post(`/api/properties/${propertyId}/inventory/drafts/bulk-dismiss`, { draftIds });
+  return res.data;
+}

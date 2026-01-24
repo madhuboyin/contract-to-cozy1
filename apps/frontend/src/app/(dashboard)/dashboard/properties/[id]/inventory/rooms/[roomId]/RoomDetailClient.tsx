@@ -22,6 +22,8 @@ import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
 import AnimatedTabPanel from '@/components/rooms/AnimatedTabPanel';
 import BathroomInsightsCard from '@/components/rooms/BathroomInsightsCard';
 import BasementInsightsCard from '@/components/rooms/BasementInsightsCard';
+import RoomScanModal from '@/app/(dashboard)/dashboard/components/inventory/RoomScanModal';
+
 
 type Tab = 'PROFILE' | 'CHECKLIST' | 'TIMELINE';
 
@@ -221,6 +223,8 @@ export default function RoomDetailClient() {
 
   const healthScore = useMemo(() => computeHealthScore(roomBase, profile, insights), [roomBase, profile, insights]);
 
+  const [scanOpen, setScanOpen] = useState(false);
+
   async function loadRoom() {
     const rooms = await listInventoryRooms(propertyId);
     const r = rooms.find((x: any) => x.id === roomId);
@@ -322,7 +326,20 @@ export default function RoomDetailClient() {
           </button>
         ))}
       </div>
+      <button
+      onClick={() => setScanOpen(true)}
+      className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+      >
+        AI Scan Room
+      </button>
 
+      <RoomScanModal
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        propertyId={propertyId}
+        roomId={roomId}
+        roomName={room?.name}
+      />
       <AnimatedTabPanel tabKey={tab}>
         {tab === 'PROFILE' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
