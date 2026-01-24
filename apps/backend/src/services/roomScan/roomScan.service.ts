@@ -111,7 +111,7 @@ export class RoomScanService {
   private maxImages = envInt('INVENTORY_ROOM_SCAN_MAX_IMAGES', 10);
   private maxImageMB = envInt('INVENTORY_ROOM_SCAN_MAX_IMAGE_MB', 6);
   private maxUserPerDay = envInt('INVENTORY_ROOM_SCAN_MAX_SCANS_PER_USER_PER_DAY', 100);
-  private maxPropertyPerDay = envInt('INVENTORY_ROOM_SCAN_MAX_SCANS_PER_PROPERTY_PER_DAY', 10);
+  private maxPropertyPerDay = envInt('INVENTORY_ROOM_SCAN_MAX_SCANS_PER_PROPERTY_PER_DAY', 50);
 
   private targetWidth = envInt('INVENTORY_ROOM_SCAN_TARGET_WIDTH', 1024);
   private jpegQuality = envInt('INVENTORY_ROOM_SCAN_JPEG_QUALITY', 72);
