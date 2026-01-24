@@ -1,7 +1,7 @@
 // apps/frontend/src/components/rooms/RoomHealthScoreRing.tsx
 'use client';
 
-import React from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 type WhyFactor = {
   label: string;
@@ -22,26 +22,23 @@ type Props = {
    */
   label?: string;
 
-  /** Subtext under rating (default variant only) */
+  /** Subtext under rating (default variant only, unless you want it in hero too) */
   sublabel?: string;
 
   whyTitle?: string;
   whyFactors?: WhyFactor[];
 
-  /** NEW: layout preset */
+  /** layout preset */
   variant?: Variant;
 
-  /**
-   * NEW: If true, render ONLY the ring (no label/rating/sublabel/tooltip).
-   * This is useful when the parent wants full layout control.
-   */
+  /** If true, render ONLY the ring */
   ringOnly?: boolean;
 
-  /**
-   * NEW (hero only): override rating text if parent wants (optional)
-   * If omitted, we compute from score.
-   */
+  /** Optional override for rating text */
   ratingOverride?: string;
+
+  /** Animation duration (ms) */
+  animateMs?: number;
 };
 
 function clamp(n: number, min = 0, max = 100) {
@@ -63,6 +60,71 @@ function norm(s?: string) {
   return String(s || '').trim().toLowerCase();
 }
 
+/** Subtle color banding */
+function ringToneClass(v: number) {
+  // subtle but clear
+  if (v >= 75) return 'text-emerald-600';
+  if (v >= 50) return 'text-amber-500';
+  return 'text-red-500';
+}
+
+function prefersReducedMotion(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
+}
+
+/** Tween number smoothly using rAF */
+function useAnimatedNumber(target: number, durationMs: number) {
+  const [animated, setAnimated] = useState(target);
+  const rafRef = useRef<number | null>(null);
+  const fromRef = useRef(target);
+  const startRef = useRef<number>(0);
+  const targetRef = useRef(target);
+
+  useEffect(() => {
+    const t = clamp(Number.isFinite(target) ? target : 0);
+    targetRef.current = t;
+
+    if (prefersReducedMotion() || durationMs <= 0) {
+      fromRef.current = t;
+      setAnimated(t);
+      return;
+    }
+
+    // Start from current displayed value to avoid jumps
+    const from = clamp(Number.isFinite(animated) ? animated : 0);
+    fromRef.current = from;
+    startRef.current = performance.now();
+
+    const tick = (now: number) => {
+      const elapsed = now - startRef.current;
+      const p = clamp(elapsed / durationMs, 0, 1);
+
+      // Ease-out cubic
+      const eased = 1 - Math.pow(1 - p, 3);
+      const next = from + (t - from) * eased;
+
+      setAnimated(next);
+
+      if (p < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        setAnimated(t);
+      }
+    };
+
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target, durationMs]);
+
+  return animated;
+}
+
 export default function RoomHealthScoreRing({
   value,
   size = 88,
@@ -74,18 +136,20 @@ export default function RoomHealthScoreRing({
   variant = 'default',
   ringOnly = false,
   ratingOverride,
+  animateMs = 650,
 }: Props) {
-  const v = clamp(Math.round(value));
+  const target = clamp(Math.round(Number.isFinite(value) ? value : 0));
+  const animatedValue = useAnimatedNumber(target, animateMs);
+  const v = clamp(Math.round(animatedValue)); // display int
 
-  // variant defaults
-  const resolvedSize = size ?? (variant === 'hero' ? 170 : 88);
-  const resolvedStrokeWidth = strokeWidth ?? (variant === 'hero' ? 16 : 12);
+  const resolvedSize = size ?? (variant === 'hero' ? 190 : 88);
+  const resolvedStrokeWidth = strokeWidth ?? (variant === 'hero' ? 18 : 12);
 
   const r = (resolvedSize - resolvedStrokeWidth) / 2;
   const c = 2 * Math.PI * r;
   const dash = (v / 100) * c;
 
-  const rating = ratingOverride || computeRating(v);
+  const rating = ratingOverride || computeRating(target);
 
   // ✅ avoid "At risk" appearing twice (label + rating)
   const showRating = norm(label) !== norm(rating);
@@ -93,89 +157,62 @@ export default function RoomHealthScoreRing({
   const factors = Array.isArray(whyFactors) ? whyFactors.filter(Boolean) : [];
   const hasWhy = factors.length > 0;
 
-  // HERO default: ring-first and bigger text
-  const valueTextClass = variant === 'hero' ? 'fill-black text-[22px] font-semibold' : 'fill-black text-[16px] font-semibold';
+  const valueTextClass =
+    variant === 'hero'
+      ? 'fill-black text-[26px] font-semibold'
+      : 'fill-black text-[16px] font-semibold';
 
-  // If parent wants *only* ring, return early
+  const ringClass = useMemo(() => ringToneClass(v), [v]);
+
+  // --- shared SVG ---
+  const RingSvg = (
+    <svg width={resolvedSize} height={resolvedSize} className="shrink-0">
+      <circle
+        cx={resolvedSize / 2}
+        cy={resolvedSize / 2}
+        r={r}
+        strokeWidth={resolvedStrokeWidth}
+        className="fill-none stroke-black/10"
+      />
+      <circle
+        cx={resolvedSize / 2}
+        cy={resolvedSize / 2}
+        r={r}
+        strokeWidth={resolvedStrokeWidth}
+        strokeLinecap="round"
+        className="fill-none stroke-current"
+        style={{
+          strokeDasharray: `${dash} ${c - dash}`,
+          transform: 'rotate(-90deg)',
+          transformOrigin: '50% 50%',
+          transition: prefersReducedMotion() ? undefined : 'stroke-dasharray 650ms ease',
+        }}
+      />
+      <text
+        x="50%"
+        y="50%"
+        dominantBaseline="middle"
+        textAnchor="middle"
+        className={valueTextClass}
+      >
+        {v}
+      </text>
+    </svg>
+  );
+
   if (ringOnly) {
-    return (
-      <svg width={resolvedSize} height={resolvedSize} className="shrink-0">
-        <circle
-          cx={resolvedSize / 2}
-          cy={resolvedSize / 2}
-          r={r}
-          strokeWidth={resolvedStrokeWidth}
-          className="fill-none stroke-black/10"
-        />
-        <circle
-          cx={resolvedSize / 2}
-          cy={resolvedSize / 2}
-          r={r}
-          strokeWidth={resolvedStrokeWidth}
-          strokeLinecap="round"
-          className="fill-none stroke-black"
-          style={{
-            strokeDasharray: `${dash} ${c - dash}`,
-            transform: 'rotate(-90deg)',
-            transformOrigin: '50% 50%',
-            transition: 'stroke-dasharray 500ms ease',
-          }}
-        />
-        <text
-          x="50%"
-          y="50%"
-          dominantBaseline="middle"
-          textAnchor="middle"
-          className={valueTextClass}
-        >
-          {v}
-        </text>
-      </svg>
-    );
+    return <div className={ringClass}>{RingSvg}</div>;
   }
 
   return (
     <div className={variant === 'hero' ? 'flex items-center gap-5' : 'flex items-center gap-4'}>
-      <svg width={resolvedSize} height={resolvedSize} className="shrink-0">
-        <circle
-          cx={resolvedSize / 2}
-          cy={resolvedSize / 2}
-          r={r}
-          strokeWidth={resolvedStrokeWidth}
-          className="fill-none stroke-black/10"
-        />
-        <circle
-          cx={resolvedSize / 2}
-          cy={resolvedSize / 2}
-          r={r}
-          strokeWidth={resolvedStrokeWidth}
-          strokeLinecap="round"
-          className="fill-none stroke-black"
-          style={{
-            strokeDasharray: `${dash} ${c - dash}`,
-            transform: 'rotate(-90deg)',
-            transformOrigin: '50% 50%',
-            transition: 'stroke-dasharray 500ms ease',
-          }}
-        />
-        <text
-          x="50%"
-          y="50%"
-          dominantBaseline="middle"
-          textAnchor="middle"
-          className={valueTextClass}
-        >
-          {v}
-        </text>
-      </svg>
+      {/* ring + color */}
+      <div className={ringClass}>{RingSvg}</div>
 
-      {/* Default + Hero both can render text, but hero is slightly larger */}
       <div className="min-w-0">
         {/* top row: label + why */}
         <div className="flex items-center gap-2">
-          <div className={variant === 'hero' ? 'text-xs uppercase tracking-wide text-gray-500' : 'text-xs uppercase tracking-wide text-gray-500'}>
-            {label}
-          </div>
+          <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
 
           {hasWhy && (
             <div className="relative group">
@@ -189,7 +226,7 @@ export default function RoomHealthScoreRing({
 
               <div
                 className={[
-                  'absolute left-0 top-full mt-2 w-[320px] max-w-[80vw]',
+                  'absolute left-0 top-full mt-2 w-[340px] max-w-[85vw]',
                   'rounded-2xl border border-black/10 bg-white p-3 shadow-lg',
                   'opacity-0 pointer-events-none',
                   'group-hover:opacity-100 group-hover:pointer-events-auto',
