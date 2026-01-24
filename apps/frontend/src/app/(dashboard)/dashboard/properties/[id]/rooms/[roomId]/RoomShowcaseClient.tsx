@@ -11,6 +11,7 @@ import InventoryItemCard from '../../../../components/inventory/InventoryItemCar
 import { getRoomInsights, listInventoryItems, listInventoryRooms } from '../../../../inventory/inventoryApi';
 
 import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
+import RoomScanModal from '@/app/(dashboard)/dashboard/components/inventory/RoomScanModal';
 
 function money(cents: number | null | undefined, currency = 'USD') {
   if (!cents) return '$0';
@@ -178,6 +179,8 @@ export default function RoomShowcaseClient() {
 
   const stats = insights?.stats;
 
+  const [scanOpen, setScanOpen] = useState(false);
+
   const whyFactors = asArray((insights as any)?.healthScore?.factors).map((f: any) => ({
     label: String(f?.label || f?.key || 'Factor'),
     detail: f?.detail ? String(f.detail) : undefined,
@@ -212,8 +215,23 @@ export default function RoomShowcaseClient() {
           >
             Edit room
           </Link>
+
+          {/* ✅ AI Scan */}
+          <button
+            onClick={() => setScanOpen(true)}
+            className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+          >
+            AI Scan
+          </button>
         </div>
       </div>
+      <RoomScanModal
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        propertyId={propertyId}
+        roomId={roomId}
+        roomName={room?.name}
+      />
 
       {/* Hero strip */}
       <div className="rounded-3xl border border-black/10 p-5 bg-gradient-to-b from-black/[0.03] to-transparent">
