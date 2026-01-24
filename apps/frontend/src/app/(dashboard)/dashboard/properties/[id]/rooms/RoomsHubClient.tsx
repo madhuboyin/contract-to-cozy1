@@ -9,6 +9,8 @@ import { InventoryRoom } from '@/types';
 import { listInventoryRooms, patchRoomMeta, getRoomInsights } from '../../../inventory/inventoryApi';
 import { SectionHeader } from '../../../components/SectionHeader';
 import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
+import RoomScanModal from '@/app/(dashboard)/dashboard/components/inventory/RoomScanModal';
+
 
 function guessRoomType(name: string) {
   const t = (name || '').toLowerCase();
@@ -96,6 +98,16 @@ export default function RoomsHubClient() {
   const [roomInsights, setRoomInsights] = useState<Record<string, any>>({});
   const [insightsLoading, setInsightsLoading] = useState<Record<string, boolean>>({});
 
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanRoomId, setScanRoomId] = useState<string | null>(null);
+  const [scanRoomName, setScanRoomName] = useState<string | null>(null);
+
+  function openScan(room: any) {
+    setScanRoomId(room.id);
+    setScanRoomName(room.name || null);
+    setScanOpen(true);
+  }
+
   async function refreshRooms() {
     setLoading(true);
     try {
@@ -146,6 +158,7 @@ export default function RoomsHubClient() {
   }
 
   // Lazy-load insights after rooms load (avoids blocking)
+  const sortedIdsKey = useMemo(() => sorted.map((r) => r.id).join(','), [sorted]);
   useEffect(() => {
     if (!propertyId || sorted.length === 0) return;
 
@@ -156,7 +169,7 @@ export default function RoomsHubClient() {
       loadInsight(id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [propertyId, sorted.map((r) => r.id).join(',')]);
+  }, [propertyId, sortedIdsKey]);
 
   return (
     <div className="p-6 space-y-4">
@@ -304,11 +317,35 @@ export default function RoomsHubClient() {
                 >
                   Items
                 </Link>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openScan(r);
+                  }}
+                  className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+                >
+                  AI Scan
+                </button>
+
               </div>
             </div>
           );
         })}
       </div>
+      {scanRoomId ? (
+        <RoomScanModal
+          open={scanOpen}
+          onClose={() => {
+            setScanOpen(false);
+            setScanRoomId(null);
+            setScanRoomName(null);
+          }}
+          propertyId={propertyId}
+          roomId={scanRoomId}
+          roomName={scanRoomName}
+        />
+      ) : null}
     </div>
   );
 }
