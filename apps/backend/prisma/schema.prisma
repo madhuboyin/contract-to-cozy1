@@ -246,6 +246,42 @@ enum ImportBatchStatus {
   ROLLED_BACK
 }
 
+enum InventoryDraftSource {
+  OCR_LABEL
+  ROOM_PHOTO_AI
+  ROOM_VIDEO_AI
+}
+
+model InventoryRoomScanSession {
+  id          String   @id @default(uuid())
+  propertyId  String
+  roomId      String
+  userId      String
+
+  status      String   @default("PROCESSING") // PROCESSING | COMPLETE | FAILED
+  provider    String?  // e.g. "openai", "gemini", "stub"
+
+  // S3 keys for raw uploads (optional)
+  imageKeys   Json?
+  // raw provider output for debugging (optional)
+  resultJson  Json?
+  error       String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  expiresAt   DateTime?
+
+  property    Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room        InventoryRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  drafts      InventoryDraftItem[]
+
+  @@index([propertyId, createdAt])
+  @@index([userId, createdAt])
+  @@index([roomId, createdAt])
+}
+
 model InventoryImportBatch {
   id              String   @id @default(uuid())
   propertyId       String
@@ -609,6 +645,16 @@ model InventoryDraftItem {
   property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   session     InventoryOcrSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  roomId        String?
+  scanSessionId String?
+  draftSource   InventoryDraftSource @default(OCR_LABEL)
+
+  scanSession   InventoryRoomScanSession? @relation(fields: [scanSessionId], references: [id], onDelete: SetNull)
+  room          InventoryRoom?            @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  @@index([scanSessionId])
+  @@index([roomId, status])
 
   @@index([propertyId, status])
   @@index([userId, status])
