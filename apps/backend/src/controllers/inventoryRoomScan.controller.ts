@@ -35,20 +35,32 @@ export async function startRoomScan(
     return res.json({
       sessionId: out.sessionId,
       drafts: out.drafts,
+      
     });
   } catch (err) {
     next(err); // ✅ CRITICAL
   }
 }
 
-export async function getRoomScanSession(req: CustomRequest, res: Response) {
-  const propertyId = req.params.propertyId;
-  const roomId = req.params.roomId;
-  const sessionId = req.params.sessionId;
-  const userId = req.user?.userId;
+export async function getRoomScanSession(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const propertyId = req.params.propertyId;
+    const roomId = req.params.roomId;
+    const sessionId = req.params.sessionId;
+    const userId = req.user?.userId;
 
-  if (!userId) throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
+    if (!userId) {
+      throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
+    }
 
-  const out = await svc.getSession({ propertyId, roomId, sessionId, userId });
-  return res.json(out);
+    const out = await svc.getSession({ propertyId, roomId, sessionId, userId });
+    return res.json(out);
+  } catch (err) {
+    next(err);
+  }
 }
+

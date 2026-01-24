@@ -36,6 +36,8 @@ function sha1(buf: Buffer) {
 
 function getS3(): { client: S3Client; bucket: string; prefix: string } | null {
   const bucket = process.env.S3_BUCKET;
+  if (process.env.INVENTORY_ROOM_SCAN_STORE_IMAGES !== 'true') return null;
+
   if (!bucket) return null;
 
   const endpoint = process.env.S3_ENDPOINT;
@@ -59,7 +61,7 @@ export class RoomScanService {
   // ----------------------------
   private maxImages = envInt('INVENTORY_ROOM_SCAN_MAX_IMAGES', 10);
   private maxImageMB = envInt('INVENTORY_ROOM_SCAN_MAX_IMAGE_MB', 6);
-  private maxUserPerDay = envInt('INVENTORY_ROOM_SCAN_MAX_SCANS_PER_USER_PER_DAY', 6);
+  private maxUserPerDay = envInt('INVENTORY_ROOM_SCAN_MAX_SCANS_PER_USER_PER_DAY', 100);
   private maxPropertyPerDay = envInt('INVENTORY_ROOM_SCAN_MAX_SCANS_PER_PROPERTY_PER_DAY', 10);
 
   private targetWidth = envInt('INVENTORY_ROOM_SCAN_TARGET_WIDTH', 1024);
