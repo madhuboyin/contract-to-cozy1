@@ -15,6 +15,14 @@ function asArray<T = any>(v: any): T[] {
   if (v && v.success && Array.isArray(v.data)) return v.data; // common APIResponse wrapper
   return [];
 }
+function normalizeDrafts(raw: any): any[] {
+  const top = raw?.data ?? raw;
+  const drafts = top?.drafts ?? top;
+
+  if (Array.isArray(drafts)) return drafts;
+  if (drafts && typeof drafts === 'object') return Object.values(drafts); // supports legacy shape
+  return [];
+}
 
 type Props = {
   open: boolean;
@@ -97,12 +105,17 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
     setError(null);
     try {
       await bulkDismissInventoryDrafts(propertyId, selectedIds);
-      const resp = sessionId ? await listInventoryDraftsFiltered(propertyId, { scanSessionId: sessionId }) : [];
-      const d = asArray<any>(resp);
+      if (!sessionId) return;
+      const resp = await listInventoryDraftsFiltered(propertyId, { scanSessionId: sessionId });
+      const d = normalizeDrafts(resp);
       setDrafts(d);
-
+      
       const next: Record<string, boolean> = {};
-      for (const row of d) next[row.id] = false;
+      for (const row of d) {
+        if (!row?.id) continue; // ✅ extra safety
+        const conf = Number(row?.confidenceJson?.name ?? 0.65);
+        next[row.id] = conf >= 0.7;
+      }
       setSelected(next);
     } catch (e: any) {
       setError(e?.message || 'Bulk dismiss failed');
