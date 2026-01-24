@@ -1247,6 +1247,10 @@ model Property {
   financeSnapshots  PropertyFinanceSnapshot[]
   toolOverrides     ToolOverride[]
 
+  roomScanSessions      InventoryRoomScanSession[]
+  inventoryOcrSessions  InventoryOcrSession[]
+  inventoryDraftItems   InventoryDraftItem[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
