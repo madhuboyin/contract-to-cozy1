@@ -5,13 +5,20 @@ import sharp from 'sharp';
 import crypto from 'crypto';
 import { getRoomScanProvider } from './provider';
 
-// Optional S3 upload (only if you set S3_BUCKET)
+// Optional S3 upload (only if you set S3_BUCKET + INVENTORY_ROOM_SCAN_STORE_IMAGES=true)
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { S3Client } from '@aws-sdk/client-s3';
 
 function envInt(key: string, dflt: number) {
   const n = Number(process.env[key]);
   return Number.isFinite(n) && n > 0 ? n : dflt;
+}
+
+function envBool(key: string, dflt = false) {
+  const v = String(process.env[key] ?? '').toLowerCase().trim();
+  if (v === 'true' || v === '1' || v === 'yes') return true;
+  if (v === 'false' || v === '0' || v === 'no') return false;
+  return dflt;
 }
 
 function clamp01(x: number) {
@@ -34,10 +41,35 @@ function sha1(buf: Buffer) {
   return crypto.createHash('sha1').update(buf).digest('hex');
 }
 
+/**
+ * Prevent Prisma validation errors when AI returns a category that isn't in the enum.
+ * IMPORTANT: Update allowed values to match your Prisma InventoryItemCategory enum exactly.
+ */
+function normalizeInventoryCategory(v: any): any | null {
+  const up = String(v ?? '').toUpperCase().trim();
+
+  // ✅ Keep in sync with your Prisma enum values
+  const allowed = new Set([
+    'APPLIANCE',
+    'ELECTRONICS',
+    'FURNITURE',
+    'HVAC',
+    'PLUMBING',
+    'SECURITY',
+    'TOOL',
+    'DOCUMENT',
+    'OTHER',
+  ]);
+
+  if (!up) return null;
+  return allowed.has(up) ? up : 'OTHER'; // fallback to OTHER to avoid 400 VALIDATION_ERROR
+}
+
 function getS3(): { client: S3Client; bucket: string; prefix: string } | null {
-  const bucket = process.env.S3_BUCKET;
+  // ✅ only store images when explicitly enabled
   if (process.env.INVENTORY_ROOM_SCAN_STORE_IMAGES !== 'true') return null;
 
+  const bucket = process.env.S3_BUCKET;
   if (!bucket) return null;
 
   const endpoint = process.env.S3_ENDPOINT;
@@ -67,6 +99,9 @@ export class RoomScanService {
   private targetWidth = envInt('INVENTORY_ROOM_SCAN_TARGET_WIDTH', 1024);
   private jpegQuality = envInt('INVENTORY_ROOM_SCAN_JPEG_QUALITY', 72);
 
+  // ✅ operational escape hatch
+  private disableDailyCaps = envBool('INVENTORY_ROOM_SCAN_DISABLE_DAILY_CAPS', false);
+
   async assertEnabled() {
     if (process.env.INVENTORY_ROOM_SCAN_ENABLED === 'false') {
       throw new APIError('Room scan is disabled', 403, 'ROOM_SCAN_DISABLED');
@@ -74,6 +109,9 @@ export class RoomScanService {
   }
 
   async assertDailyCaps(propertyId: string, userId: string) {
+    // ✅ allow temporary bypass in staging / debugging
+    if (this.disableDailyCaps) return;
+
     const since = new Date(Date.now() - 24 * 3600 * 1000);
 
     const [userCount, propCount] = await Promise.all([
@@ -105,11 +143,7 @@ export class RoomScanService {
   validateUpload(files: Express.Multer.File[]) {
     if (!files?.length) throw new APIError('At least one image is required', 400, 'ROOM_SCAN_IMAGES_REQUIRED');
     if (files.length > this.maxImages) {
-      throw new APIError(
-        `Too many images. Max allowed is ${this.maxImages}.`,
-        400,
-        'ROOM_SCAN_TOO_MANY_IMAGES'
-      );
+      throw new APIError(`Too many images. Max allowed is ${this.maxImages}.`, 400, 'ROOM_SCAN_TOO_MANY_IMAGES');
     }
 
     const maxBytes = this.maxImageMB * 1024 * 1024;
@@ -142,12 +176,7 @@ export class RoomScanService {
     return out;
   }
 
-  async uploadToS3IfConfigured(args: {
-    propertyId: string;
-    roomId: string;
-    sessionId: string;
-    images: Buffer[];
-  }) {
+  async uploadToS3IfConfigured(args: { propertyId: string; roomId: string; sessionId: string; images: Buffer[] }) {
     const s3 = getS3();
     if (!s3) return null;
 
@@ -176,12 +205,7 @@ export class RoomScanService {
    * Main entry: create session + run provider + create drafts
    * (Sync implementation; can be moved to worker later without changing API.)
    */
-  async runRoomScan(args: {
-    propertyId: string;
-    roomId: string;
-    userId: string;
-    files: Express.Multer.File[];
-  }) {
+  async runRoomScan(args: { propertyId: string; roomId: string; userId: string; files: Express.Multer.File[] }) {
     await this.assertEnabled();
     await this.assertDailyCaps(args.propertyId, args.userId);
     this.validateUpload(args.files);
@@ -247,7 +271,6 @@ export class RoomScanService {
         bytesTotal,
         avgBytes: imagesCount ? Math.round(bytesTotal / imagesCount) : 0,
         latencyMs,
-        // usageMetadata (if available)
         promptTokenCount: usage?.promptTokenCount ?? usage?.promptTokens ?? undefined,
         candidatesTokenCount: usage?.candidatesTokenCount ?? usage?.completionTokens ?? undefined,
         totalTokenCount: usage?.totalTokenCount ?? usage?.totalTokens ?? undefined,
@@ -283,9 +306,9 @@ export class RoomScanService {
               draftSource: 'ROOM_PHOTO_AI',
 
               name: it.label,
-              // best-effort: map to enum if valid; else null => UI can set
-              // If your enum includes OTHER, you can set default 'OTHER'
-              category: (it.category as any) || null,
+
+              // ✅ prevent Prisma enum validation error
+              category: normalizeInventoryCategory(it.category),
 
               confidenceJson: {
                 name: it.confidence,
@@ -302,7 +325,7 @@ export class RoomScanService {
         data: {
           status: 'COMPLETE',
           imageKeys: s3Info ? { bucket: s3Info.bucket, keys: s3Info.keys } : undefined,
-          resultJson: result.raw ?? undefined,
+          resultJson: (result as any).raw ?? undefined,
         },
       });
 
