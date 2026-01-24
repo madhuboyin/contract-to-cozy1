@@ -6,7 +6,7 @@ export class InventoryDraftService {
   async createDraftFromOcr(args: {
     propertyId: string;
     userId: string;
-    sessionId: string;
+    scanSessionId: string; // ✅ rename
     manufacturer?: string | null;
     modelNumber?: string | null;
     serialNumber?: string | null;
@@ -14,12 +14,11 @@ export class InventoryDraftService {
     sku?: string | null;
     confidenceJson?: any;
   }) {
-
     return prisma.inventoryDraftItem.create({
       data: {
         propertyId: args.propertyId,
         userId: args.userId,
-        sessionId: args.sessionId,
+        scanSessionId: args.scanSessionId, // ✅ use same field as room scan
         status: 'DRAFT',
 
         manufacturer: args.manufacturer || null,

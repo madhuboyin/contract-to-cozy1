@@ -42,14 +42,30 @@ export type InventoryDraftListItem = {
   // allow unknown extra fields
   [k: string]: any;
 };
-function normalizeDraftsPayload(raw: any): any[] {
-  const top = raw?.data ?? raw;
-  const drafts = top?.drafts ?? top?.items ?? top;
 
-  if (Array.isArray(drafts)) return drafts;
-  if (drafts && typeof drafts === 'object') return Object.values(drafts);
+export function normalizeDraftsPayload(input: any): any[] {
+  // 1) If someone already passed an array
+  if (Array.isArray(input)) return input;
+
+  // 2) Unwrap Axios-like shapes: res.data or res.data.data
+  const a = input?.data ?? input;
+  const b = a?.data ?? a;
+
+  // 3) Accept { drafts: [...] }
+  if (Array.isArray(b?.drafts)) return b.drafts;
+
+  // 4) Accept { drafts: { id1: {...}, id2: {...} } } (your current backend response)
+  if (b?.drafts && typeof b.drafts === 'object') {
+    const values = Object.values(b.drafts);
+    return Array.isArray(values) ? values : [];
+  }
+
+  // 5) Some endpoints might return the drafts array directly under `b`
+  if (Array.isArray(b)) return b;
+
   return [];
 }
+
 /**
  * ----------------------------
  * Rooms
@@ -426,27 +442,22 @@ export async function updateInventoryRoomProfile(propertyId: string, roomId: str
 }
 
 export async function startRoomScanAi(propertyId: string, roomId: string, files: File[]) {
-
-  const MAX_IMAGES = 10;
-  const MAX_BYTES = 5 * 1024 * 1024; // 5MB per image
-
-  if (files.length > MAX_IMAGES) {
-    throw new Error(`You can upload up to ${MAX_IMAGES} photos.`);
-  }
-
-  for (const f of files) {
-    if (f.size > MAX_BYTES) {
-      throw new Error(`"${f.name}" is too large. Max size is 5MB.`);
-    }
-  }
-
   const form = new FormData();
-  for (const f of files) form.append('images', f, f.name || `room-${roomId}.jpg`);
+  for (const f of files) form.append('images', f);
 
   const res: any = await api.post(`/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai`, form);
 
+  // ✅ Normalize common axios shapes: {data: ...} and {success:..., data:...}
   const raw = res?.data ?? res;
-  return (raw?.data ?? raw) as { sessionId: string; drafts: any[] };
+  const payload = raw?.data ?? raw;
+
+  const sessionId = payload?.sessionId;
+  const drafts = payload?.drafts;
+
+  return {
+    sessionId: typeof sessionId === 'string' ? sessionId : null,
+    drafts: Array.isArray(drafts) ? drafts : [],
+  } as { sessionId: string | null; drafts: any[] };
 }
 
 export async function getRoomScanAiSession(propertyId: string, roomId: string, sessionId: string) {
@@ -454,14 +465,20 @@ export async function getRoomScanAiSession(propertyId: string, roomId: string, s
   return res.data;
 }
 
-// --- add these exports near your draft functions ---
 export async function listInventoryDraftsFiltered(
   propertyId: string,
   params: { scanSessionId?: string; status?: string; roomId?: string } = {}
 ): Promise<any[]> {
-  const res: any = await api.get(`/api/properties/${propertyId}/inventory/drafts`, { params });
+  // ✅ drop undefined keys (prevents scanSessionId=undefined)
+  const cleanParams: Record<string, any> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && String(v) !== 'undefined') cleanParams[k] = v;
+  }
+
+  const res: any = await api.get(`/api/properties/${propertyId}/inventory/drafts`, { params: cleanParams });
   return normalizeDraftsPayload(res);
 }
+
 
 export async function bulkConfirmInventoryDrafts(propertyId: string, draftIds: string[]) {
   const res: any = await api.post(`/api/properties/${propertyId}/inventory/drafts/bulk/confirm`, { draftIds });

@@ -59,22 +59,19 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
     setBusy(true);
     try {
       const r = await startRoomScanAi(propertyId, roomId, files);
-      setSessionId(r.sessionId);
-
-      // ✅ prefer drafts from scan response (if backend returned them)
-      let d = asArray<any>(r?.drafts);
-
-      // ✅ if not included (or empty during async rollout), fetch drafts
-      if (!d.length) {
-        const resp = await listInventoryDraftsFiltered(propertyId, { scanSessionId: r.sessionId });
-        d = asArray<any>(resp);
+      const sid = r?.sessionId;
+      
+      if (!sid) {
+        throw new Error('Room scan did not return a sessionId');
       }
-
-      setDrafts(d);
-
-      // default-select high confidence items; keep low confidence unchecked
+      
+      setSessionId(sid);
+      const d = await listInventoryDraftsFiltered(propertyId, { scanSessionId: sid });
+      setDrafts(d);    
+  
       const next: Record<string, boolean> = {};
       for (const row of d) {
+        if (!row?.id) continue; // ✅ guard
         const conf = Number(row?.confidenceJson?.name ?? 0.65);
         next[row.id] = conf >= 0.7;
       }
@@ -84,7 +81,7 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
     } finally {
       setBusy(false);
     }
-  }
+  }  
 
   async function confirmSelected() {
     setBusy(true);
