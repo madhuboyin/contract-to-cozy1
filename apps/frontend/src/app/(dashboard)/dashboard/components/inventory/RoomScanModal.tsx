@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/inventory/RoomScanModal.tsx
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { startRoomScanAi, listInventoryDraftsFiltered, bulkConfirmInventoryDrafts, bulkDismissInventoryDrafts } from '../../inventory/inventoryApi';
 
 type Props = {
@@ -21,6 +21,12 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
   const [error, setError] = useState<string | null>(null);
 
   const selectedIds = useMemo(() => Object.entries(selected).filter(([, v]) => v).map(([k]) => k), [selected]);
+  
+  const cancelledRef = useRef(false);
+
+  useEffect(() => {
+    cancelledRef.current = !open;
+  }, [open]);
 
   function resetAll() {
     setFiles([]);
@@ -36,9 +42,11 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
     setBusy(true);
     try {
       const r = await startRoomScanAi(propertyId, roomId, files);
+      if (cancelledRef.current) return;
       setSessionId(r.sessionId);
 
       const d = await listInventoryDraftsFiltered(propertyId, { scanSessionId: r.sessionId });
+      if (cancelledRef.current) return;
       setDrafts(d);
 
       // default-select high confidence items; keep low confidence unchecked
@@ -60,8 +68,8 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
     setError(null);
     try {
       await bulkConfirmInventoryDrafts(propertyId, selectedIds);
-      onClose();
-      resetAll();
+        onClose();
+        resetAll();
     } catch (e: any) {
       setError(e?.message || 'Bulk confirm failed');
     } finally {
@@ -75,6 +83,7 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
     try {
       await bulkDismissInventoryDrafts(propertyId, selectedIds);
       const d = sessionId ? await listInventoryDraftsFiltered(propertyId, { scanSessionId: sessionId }) : [];
+      if (cancelledRef.current) return;
       setDrafts(d);
       // keep selection map in sync
       const next: Record<string, boolean> = {};
@@ -102,8 +111,8 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
 
           <button
             onClick={() => {
-              onClose();
               resetAll();
+              onClose();             
             }}
             className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
             disabled={busy}
@@ -133,7 +142,11 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
                   type="file"
                   accept="image/*"
                   multiple
-                  onChange={(e) => setFiles(Array.from(e.target.files || []))}
+                  capture="environment"
+                  onChange={(e) => {
+                    const next = Array.from(e.target.files || []);
+                    setFiles((prev) => [...prev, ...next].slice(0, 10)); // cap
+                  }}                  
                   className="text-sm"
                   disabled={busy}
                 />

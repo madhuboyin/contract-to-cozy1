@@ -420,8 +420,22 @@ export async function updateInventoryRoomProfile(propertyId: string, roomId: str
 }
 
 export async function startRoomScanAi(propertyId: string, roomId: string, files: File[]) {
+
+  const MAX_IMAGES = 10;
+  const MAX_BYTES = 5 * 1024 * 1024; // 5MB per image
+
+  if (files.length > MAX_IMAGES) {
+    throw new Error(`You can upload up to ${MAX_IMAGES} photos.`);
+  }
+
+  for (const f of files) {
+    if (f.size > MAX_BYTES) {
+      throw new Error(`"${f.name}" is too large. Max size is 5MB.`);
+    }
+  }
+
   const form = new FormData();
-  for (const f of files) form.append('images', f);
+  for (const f of files) form.append('images', f, f.name || `room-${roomId}.jpg`);
 
   const res: any = await api.post(`/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai`, form);
 
