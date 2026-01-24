@@ -86,6 +86,23 @@ function getS3(): { client: S3Client; bucket: string; prefix: string } | null {
 
   return { client, bucket, prefix: process.env.S3_PREFIX || 'inventory-room-scan' };
 }
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function isTransientGeminiError(e: any) {
+  const status = Number(e?.statusCode || e?.status || e?.response?.status);
+  if (status === 429 || status === 503) return true;
+
+  const msg = String(e?.message || '').toLowerCase();
+  return msg.includes('rate limit') || msg.includes('quota') || msg.includes('temporarily') || msg.includes('unavailable');
+}
+
+function normalizeItems(v: any): any[] {
+  if (Array.isArray(v)) return v;
+  if (v && typeof v === 'object') return Object.values(v);
+  return [];
+}
 
 export class RoomScanService {
   // ----------------------------
@@ -101,6 +118,9 @@ export class RoomScanService {
 
   // ✅ operational escape hatch
   private disableDailyCaps = envBool('INVENTORY_ROOM_SCAN_DISABLE_DAILY_CAPS', false);
+
+  private maxAttempts = envInt('INVENTORY_ROOM_SCAN_GEMINI_MAX_RETRIES', 4); // total attempts = 1 + retries
+  private baseBackoffMs = envInt('INVENTORY_ROOM_SCAN_GEMINI_BACKOFF_MS', 500);
 
   async assertEnabled() {
     if (process.env.INVENTORY_ROOM_SCAN_ENABLED === 'false') {
@@ -248,14 +268,38 @@ export class RoomScanService {
 
       const t0 = Date.now();
 
-      // Provider call (single call for all images)
-      const result = await provider.extractItemsFromImages({
-        images,
-        roomType: room.type || null,
-      });
+      let result: any = null;
+      let attempt = 0;
+      
+      while (true) {
+        try {
+          attempt++;
+          result = await provider.extractItemsFromImages({
+            images,
+            roomType: room.type || null,
+          });
+          break;
+        } catch (e: any) {
+          if (!isTransientGeminiError(e) || attempt >= this.maxAttempts) throw e;
+      
+          const jitter = Math.floor(Math.random() * 150);
+          const backoff = Math.min(8000, this.baseBackoffMs * Math.pow(2, attempt - 1)) + jitter;
+      
+          console.warn('[room-scan][retry]', {
+            sessionId: session.id,
+            attempt,
+            backoffMs: backoff,
+            statusCode: e?.statusCode || e?.status || e?.response?.status,
+            message: e?.message,
+          });
+      
+          await sleep(backoff);
+        }
+      }
+      
+      const latencyMs = Date.now() - t0;      
 
-      const latencyMs = Date.now() - t0;
-
+      const items = normalizeItems(result?.items);
       // Token usage if provider returns it (Gemini may return usageMetadata)
       const usage = (result as any)?.raw?.usageMetadata || null;
 
@@ -278,7 +322,7 @@ export class RoomScanService {
 
       // Dedupe within session (prevents “3 sofas” from 3 angles)
       const seen = new Map<string, { label: string; category?: string; confidence: number }>();
-      for (const it of result.items || []) {
+      for (const it of items) {
         const label = String(it?.label || '').trim();
         if (!label) continue;
 
@@ -294,7 +338,10 @@ export class RoomScanService {
       const deduped = Array.from(seen.values());
 
       // Create drafts
-      const drafts = await prisma.$transaction(
+      const drafts =
+      deduped.length === 0
+        ? []
+        : await prisma.$transaction(
         deduped.map((it) =>
           prisma.inventoryDraftItem.create({
             data: {

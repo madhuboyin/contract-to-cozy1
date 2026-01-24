@@ -42,13 +42,19 @@ export type InventoryDraftListItem = {
   // allow unknown extra fields
   [k: string]: any;
 };
+function normalizeDraftsPayload(raw: any): any[] {
+  const top = raw?.data ?? raw;
+  const drafts = top?.drafts ?? top?.items ?? top;
 
+  if (Array.isArray(drafts)) return drafts;
+  if (drafts && typeof drafts === 'object') return Object.values(drafts);
+  return [];
+}
 /**
  * ----------------------------
  * Rooms
  * ----------------------------
  */
-
 export async function listInventoryRooms(propertyId: string) {
   const res = await api.get<{ rooms: InventoryRoom[] }>(`/api/properties/${propertyId}/inventory/rooms`);
   return res.data.rooms;
@@ -448,24 +454,21 @@ export async function getRoomScanAiSession(propertyId: string, roomId: string, s
   return res.data;
 }
 
+// --- add these exports near your draft functions ---
 export async function listInventoryDraftsFiltered(
   propertyId: string,
-  opts: { roomId?: string; scanSessionId?: string }
-) {
-  const qs = new URLSearchParams();
-  if (opts.roomId) qs.set('roomId', opts.roomId);
-  if (opts.scanSessionId) qs.set('scanSessionId', opts.scanSessionId);
-
-  const res = await api.get(`/api/properties/${propertyId}/inventory/drafts?${qs.toString()}`);
-  return (res.data?.drafts ?? res.data) as InventoryDraftListItem[];
+  params: { scanSessionId?: string; status?: string; roomId?: string } = {}
+): Promise<any[]> {
+  const res: any = await api.get(`/api/properties/${propertyId}/inventory/drafts`, { params });
+  return normalizeDraftsPayload(res);
 }
 
 export async function bulkConfirmInventoryDrafts(propertyId: string, draftIds: string[]) {
-  const res = await api.post(`/api/properties/${propertyId}/inventory/drafts/bulk-confirm`, { draftIds });
-  return res.data;
+  const res: any = await api.post(`/api/properties/${propertyId}/inventory/drafts/bulk/confirm`, { draftIds });
+  return res?.data ?? res;
 }
 
 export async function bulkDismissInventoryDrafts(propertyId: string, draftIds: string[]) {
-  const res = await api.post(`/api/properties/${propertyId}/inventory/drafts/bulk-dismiss`, { draftIds });
-  return res.data;
+  const res: any = await api.post(`/api/properties/${propertyId}/inventory/drafts/bulk/dismiss`, { draftIds });
+  return res?.data ?? res;
 }
