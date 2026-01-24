@@ -278,7 +278,8 @@ model InventoryRoomScanSession {
   scanSessions   InventoryRoomScanSession[]
   inventoryDrafts InventoryDraftItem[]
 
-  drafts      InventoryDraftItem[]
+  inventoryDrafts InventoryDraftItem[] @relation("SessionInventoryDrafts")
+  drafts          InventoryDraftItem[] @relation("SessionDrafts")
 
   @@index([propertyId, createdAt])
   @@index([userId, createdAt])
