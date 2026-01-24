@@ -524,6 +524,7 @@ router.post(
 
 router.get(
   '/properties/:propertyId/inventory/rooms/:roomId/scan-ai/:sessionId',
+  authenticate,
   propertyAuthMiddleware,
   getRoomScanSession
 );

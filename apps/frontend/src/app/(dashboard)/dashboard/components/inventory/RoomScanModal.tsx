@@ -57,7 +57,12 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
       }
       setSelected(next);
     } catch (e: any) {
-      setError(e?.message || 'Room scan failed');
+        const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        'Room scan failed';
+      setError(msg);
     } finally {
       setBusy(false);
     }
