@@ -218,8 +218,9 @@ export default function RoomShowcaseClient() {
 
           {/* ✅ AI Scan */}
           <button
+            type="button"
             onClick={() => setScanOpen(true)}
-            className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+            className="text-sm underline opacity-80 hover:opacity-100"
           >
             AI Scan
           </button>

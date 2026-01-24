@@ -323,7 +323,7 @@ export default function RoomsHubClient() {
                     e.stopPropagation();
                     openScan(r);
                   }}
-                  className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+                  className="rounded-xl px-4 py-2 text-sm border border-black/10 hover:bg-black/5"
                 >
                   AI Scan
                 </button>
