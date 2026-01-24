@@ -57,31 +57,42 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
   async function runScan() {
     setError(null);
     setBusy(true);
+  
     try {
-      const r = await startRoomScanAi(propertyId, roomId, files);
-      const sid = r?.sessionId;
-      
-      if (!sid) {
+      const result = await startRoomScanAi(propertyId, roomId, files);
+  
+      // ✅ normalize once
+      const sessionId =
+        (result as any)?.sessionId ??
+        (result as any)?.data?.sessionId;
+  
+      if (!sessionId) {
         throw new Error('Room scan did not return a sessionId');
       }
-      
-      setSessionId(sid);
-      const d = await listInventoryDraftsFiltered(propertyId, { scanSessionId: sid });
-      setDrafts(d);    
   
+      setSessionId(sessionId);
+  
+      const drafts = await listInventoryDraftsFiltered(propertyId, {
+        scanSessionId: sessionId,
+      });
+  
+      setDrafts(drafts);
+  
+      // default-select high confidence
       const next: Record<string, boolean> = {};
-      for (const row of d) {
-        if (!row?.id) continue; // ✅ guard
+      for (const row of drafts) {
+        if (!row?.id) continue;
         const conf = Number(row?.confidenceJson?.name ?? 0.65);
         next[row.id] = conf >= 0.7;
       }
       setSelected(next);
     } catch (e: any) {
+      console.error('[room-scan] failed', e);
       setError(e?.message || 'Room scan failed');
     } finally {
       setBusy(false);
     }
-  }  
+  }   
 
   async function confirmSelected() {
     setBusy(true);

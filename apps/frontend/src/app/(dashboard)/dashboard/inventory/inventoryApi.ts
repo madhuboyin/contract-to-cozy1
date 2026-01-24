@@ -469,17 +469,14 @@ export async function listInventoryDraftsFiltered(
   propertyId: string,
   params: { scanSessionId?: string; status?: string; roomId?: string } = {}
 ): Promise<any[]> {
-  // ✅ drop undefined keys (prevents scanSessionId=undefined)
-  const cleanParams: Record<string, any> = {};
-  for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== null && String(v) !== 'undefined') cleanParams[k] = v;
-  }
+  const res: any = await api.get(
+    `/api/properties/${propertyId}/inventory/drafts`,
+    { params }
+  );
 
-  const res: any = await api.get(`/api/properties/${propertyId}/inventory/drafts`, { params: cleanParams });
-  return normalizeDraftsPayload(res);
+  const raw = res?.data ?? res;
+  return Array.isArray(raw?.drafts) ? raw.drafts : [];
 }
-
-
 export async function bulkConfirmInventoryDrafts(propertyId: string, draftIds: string[]) {
   const res: any = await api.post(`/api/properties/${propertyId}/inventory/drafts/bulk/confirm`, { draftIds });
   return res?.data ?? res;
