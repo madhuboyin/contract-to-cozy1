@@ -4,6 +4,7 @@ import { InventoryItemCategory } from '@prisma/client';
 import { CustomRequest } from '../types';
 import { InventoryService } from '../services/inventory.service';
 import { prisma } from '../lib/prisma';
+import { APIError } from '../middleware/error.middleware';
 
 const service = new InventoryService();
 
@@ -11,6 +12,10 @@ function parseBool(v: any): boolean | undefined {
   if (v === undefined) return undefined;
   if (typeof v === 'boolean') return v;
   return String(v) === 'true';
+}
+function asString(v: any): string | undefined {
+  const s = String(v ?? '').trim();
+  return s ? s : undefined;
 }
 
 export async function listRooms(req: CustomRequest, res: Response, next: NextFunction) {
@@ -197,4 +202,40 @@ export async function checkDuplicateAppliance(req: CustomRequest, res: Response,
   } catch (error) {
     next(error);
   }
+}
+export async function listInventoryDrafts(req: CustomRequest, res: Response) {
+  const propertyId = req.params.propertyId;
+  const userId = req.user?.userId;
+  if (!userId) {
+    throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
+  }
+
+  const scanSessionId = asString(req.query.scanSessionId);
+  const status = asString(req.query.status);
+  const roomId = asString(req.query.roomId);
+
+  const drafts = await prisma.inventoryDraftItem.findMany({
+    where: {
+      propertyId,
+      userId,
+      ...(scanSessionId ? { scanSessionId } : {}),
+      ...(status ? { status: status as any } : {}),
+      ...(roomId ? { roomId } : {}),
+    },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      name: true,
+      category: true,
+      status: true,
+      roomId: true,
+      scanSessionId: true,
+      draftSource: true,
+      confidenceJson: true,
+      createdAt: true,
+    },
+  });
+
+  // ✅ CRITICAL: always an array
+  return res.json({ drafts });
 }
