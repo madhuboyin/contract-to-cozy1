@@ -9,6 +9,8 @@ type WhyFactor = {
   impact?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
 };
 
+type Variant = 'default' | 'hero';
+
 type Props = {
   value: number; // 0..100
   size?: number; // px
@@ -20,11 +22,26 @@ type Props = {
    */
   label?: string;
 
-  /** Subtext under rating */
+  /** Subtext under rating (default variant only) */
   sublabel?: string;
 
   whyTitle?: string;
   whyFactors?: WhyFactor[];
+
+  /** NEW: layout preset */
+  variant?: Variant;
+
+  /**
+   * NEW: If true, render ONLY the ring (no label/rating/sublabel/tooltip).
+   * This is useful when the parent wants full layout control.
+   */
+  ringOnly?: boolean;
+
+  /**
+   * NEW (hero only): override rating text if parent wants (optional)
+   * If omitted, we compute from score.
+   */
+  ratingOverride?: string;
 };
 
 function clamp(n: number, min = 0, max = 100) {
@@ -54,13 +71,21 @@ export default function RoomHealthScoreRing({
   sublabel,
   whyTitle = 'Why this score?',
   whyFactors,
+  variant = 'default',
+  ringOnly = false,
+  ratingOverride,
 }: Props) {
   const v = clamp(Math.round(value));
-  const r = (size - strokeWidth) / 2;
+
+  // variant defaults
+  const resolvedSize = size ?? (variant === 'hero' ? 170 : 88);
+  const resolvedStrokeWidth = strokeWidth ?? (variant === 'hero' ? 16 : 12);
+
+  const r = (resolvedSize - resolvedStrokeWidth) / 2;
   const c = 2 * Math.PI * r;
   const dash = (v / 100) * c;
 
-  const rating = computeRating(v);
+  const rating = ratingOverride || computeRating(v);
 
   // ✅ avoid "At risk" appearing twice (label + rating)
   const showRating = norm(label) !== norm(rating);
@@ -68,21 +93,25 @@ export default function RoomHealthScoreRing({
   const factors = Array.isArray(whyFactors) ? whyFactors.filter(Boolean) : [];
   const hasWhy = factors.length > 0;
 
-  return (
-    <div className="flex items-center gap-4">
-      <svg width={size} height={size} className="shrink-0">
+  // HERO default: ring-first and bigger text
+  const valueTextClass = variant === 'hero' ? 'fill-black text-[22px] font-semibold' : 'fill-black text-[16px] font-semibold';
+
+  // If parent wants *only* ring, return early
+  if (ringOnly) {
+    return (
+      <svg width={resolvedSize} height={resolvedSize} className="shrink-0">
         <circle
-          cx={size / 2}
-          cy={size / 2}
+          cx={resolvedSize / 2}
+          cy={resolvedSize / 2}
           r={r}
-          strokeWidth={strokeWidth}
+          strokeWidth={resolvedStrokeWidth}
           className="fill-none stroke-black/10"
         />
         <circle
-          cx={size / 2}
-          cy={size / 2}
+          cx={resolvedSize / 2}
+          cy={resolvedSize / 2}
           r={r}
-          strokeWidth={strokeWidth}
+          strokeWidth={resolvedStrokeWidth}
           strokeLinecap="round"
           className="fill-none stroke-black"
           style={{
@@ -97,18 +126,58 @@ export default function RoomHealthScoreRing({
           y="50%"
           dominantBaseline="middle"
           textAnchor="middle"
-          className="fill-black text-[16px] font-semibold"
+          className={valueTextClass}
+        >
+          {v}
+        </text>
+      </svg>
+    );
+  }
+
+  return (
+    <div className={variant === 'hero' ? 'flex items-center gap-5' : 'flex items-center gap-4'}>
+      <svg width={resolvedSize} height={resolvedSize} className="shrink-0">
+        <circle
+          cx={resolvedSize / 2}
+          cy={resolvedSize / 2}
+          r={r}
+          strokeWidth={resolvedStrokeWidth}
+          className="fill-none stroke-black/10"
+        />
+        <circle
+          cx={resolvedSize / 2}
+          cy={resolvedSize / 2}
+          r={r}
+          strokeWidth={resolvedStrokeWidth}
+          strokeLinecap="round"
+          className="fill-none stroke-black"
+          style={{
+            strokeDasharray: `${dash} ${c - dash}`,
+            transform: 'rotate(-90deg)',
+            transformOrigin: '50% 50%',
+            transition: 'stroke-dasharray 500ms ease',
+          }}
+        />
+        <text
+          x="50%"
+          y="50%"
+          dominantBaseline="middle"
+          textAnchor="middle"
+          className={valueTextClass}
         >
           {v}
         </text>
       </svg>
 
+      {/* Default + Hero both can render text, but hero is slightly larger */}
       <div className="min-w-0">
         {/* top row: label + why */}
         <div className="flex items-center gap-2">
-          <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
+          <div className={variant === 'hero' ? 'text-xs uppercase tracking-wide text-gray-500' : 'text-xs uppercase tracking-wide text-gray-500'}>
+            {label}
+          </div>
 
-            {hasWhy && (
+          {hasWhy && (
             <div className="relative group">
               <button
                 type="button"
@@ -152,11 +221,13 @@ export default function RoomHealthScoreRing({
               </div>
             </div>
           )}
-          </div>
+        </div>
 
         {/* rating line */}
         {showRating ? (
-          <div className="text-sm font-medium leading-tight">{rating}</div>
+          <div className={variant === 'hero' ? 'text-base font-semibold leading-tight' : 'text-sm font-medium leading-tight'}>
+            {rating}
+          </div>
         ) : null}
 
         {/* sublabel */}
