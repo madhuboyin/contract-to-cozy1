@@ -656,6 +656,19 @@ model InventoryDraftItem {
   scanSession   InventoryRoomScanSession? @relation(fields: [scanSessionId], references: [id], onDelete: SetNull)
   room          InventoryRoom?            @relation(fields: [roomId], references: [id], onDelete: SetNull)
 
+  autoSelected       Boolean? @default(false)
+  groupKey           String?
+  groupLabel         String?
+
+  // Duplicate detection (room-aware)
+  duplicateOfItemId  String?
+  duplicateScore     Float?
+  duplicateReason    String?
+
+  // Optional audit/debug
+  aiRawJson          Json?
+  editsJson          Json?
+
   @@index([scanSessionId])
   @@index([roomId, status])
 
