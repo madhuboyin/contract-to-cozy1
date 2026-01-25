@@ -488,34 +488,13 @@ router.post(
   ocrLabelToDraft
 );
 
-// ✅ Drafts
-router.get(
-  '/properties/:propertyId/inventory/drafts',
-  propertyAuthMiddleware,
-  listDrafts
-);
-
-router.post(
-  '/properties/:propertyId/inventory/drafts/:draftId/dismiss',
-  propertyAuthMiddleware,
-  dismissDraft
-);
-
-router.post(
-  '/properties/:propertyId/inventory/drafts/:draftId/confirm',
-  propertyAuthMiddleware,
-  confirmDraft
-);
-
 router.get(
   '/properties/:propertyId/inventory/items/check-duplicate',
   authenticate,
   propertyAuthMiddleware,
   checkDuplicateAppliance
 );
-// ----------------------------
-// AI Room Photo Scan -> Drafts
-// ----------------------------
+
 router.post(
   '/properties/:propertyId/inventory/rooms/:roomId/scan-ai',
   propertyAuthMiddleware,
@@ -530,26 +509,34 @@ router.get(
   getRoomScanSession
 );
 
-// ----------------------------
-// Draft bulk actions (used by room scan review UX)
-// ----------------------------
+router.get(
+  '/properties/:propertyId/inventory/drafts', 
+  propertyAuthMiddleware, 
+  listDrafts
+);
+
 router.post(
-  '/properties/:propertyId/inventory/drafts/bulk-confirm',
-  propertyAuthMiddleware,
+  '/properties/:propertyId/inventory/drafts/:draftId/dismiss', 
+  propertyAuthMiddleware, 
+  dismissDraft
+);
+
+router.post(
+  '/properties/:propertyId/inventory/drafts/:draftId/confirm', 
+  propertyAuthMiddleware, 
+  confirmDraft
+);
+
+router.post(
+  '/properties/:propertyId/inventory/drafts/bulk/confirm',
+  propertyAuthMiddleware, 
   bulkConfirmDrafts
 );
 
 router.post(
-  '/properties/:propertyId/inventory/drafts/bulk-dismiss',
-  propertyAuthMiddleware,
+  '/properties/:propertyId/inventory/drafts/bulk/dismiss', 
+  propertyAuthMiddleware, 
   bulkDismissDrafts
-);
-
-router.get(
-  '/properties/:propertyId/inventory/drafts',
-  authenticate,
-  propertyAuthMiddleware,
-  listInventoryDrafts
 );
 
 export default router;

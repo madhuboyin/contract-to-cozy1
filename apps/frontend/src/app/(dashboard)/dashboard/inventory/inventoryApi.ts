@@ -43,25 +43,49 @@ export type InventoryDraftListItem = {
   [k: string]: any;
 };
 
+function unwrap<T = any>(input: any): T {
+  let cur = input;
+
+  for (let i = 0; i < 3; i++) {
+    if (!cur || typeof cur !== 'object') break;
+
+    // If this looks like an APIResponse wrapper, unwrap .data
+    const hasSuccess = Object.prototype.hasOwnProperty.call(cur, 'success');
+    const hasData = Object.prototype.hasOwnProperty.call(cur, 'data');
+
+    if (hasData && (hasSuccess || Object.prototype.hasOwnProperty.call(cur, 'message') || Object.prototype.hasOwnProperty.call(cur, 'error'))) {
+      cur = (cur as any).data;
+      continue;
+    }
+
+    // If it's axios-like { data: ... } (some callsites still treat it that way), unwrap once
+    if (hasData && !hasSuccess) {
+      // Only unwrap if it's not already the domain shape (avoid stripping {drafts:...})
+      const d = (cur as any).data;
+      if (d && typeof d === 'object') {
+        cur = d;
+        continue;
+      }
+    }
+
+    break;
+  }
+
+  return cur as T;
+}
 export function normalizeDraftsPayload(input: any): any[] {
-  // 1) If someone already passed an array
   if (Array.isArray(input)) return input;
 
-  // 2) Unwrap Axios-like shapes: res.data or res.data.data
-  const a = input?.data ?? input;
-  const b = a?.data ?? a;
+  const payload = unwrap<any>(input);
 
-  // 3) Accept { drafts: [...] }
-  if (Array.isArray(b?.drafts)) return b.drafts;
+  if (Array.isArray(payload?.drafts)) return payload.drafts;
 
-  // 4) Accept { drafts: { id1: {...}, id2: {...} } } (your current backend response)
-  if (b?.drafts && typeof b.drafts === 'object') {
-    const values = Object.values(b.drafts);
+  if (payload?.drafts && typeof payload.drafts === 'object') {
+    const values = Object.values(payload.drafts);
     return Array.isArray(values) ? values : [];
   }
 
-  // 5) Some endpoints might return the drafts array directly under `b`
-  if (Array.isArray(b)) return b;
+  if (Array.isArray(payload)) return payload;
 
   return [];
 }
@@ -447,16 +471,20 @@ export async function startRoomScanAi(propertyId: string, roomId: string, files:
 
   const res: any = await api.post(`/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai`, form);
 
-  // ✅ Normalize common axios shapes: {data: ...} and {success:..., data:...}
-  const raw = res?.data ?? res;
-  const payload = raw?.data ?? raw;
+  const payload = unwrap<any>(res);
 
-  const sessionId = payload?.sessionId;
-  const drafts = payload?.drafts;
+  const sessionId =
+    typeof payload?.sessionId === 'string'
+      ? payload.sessionId
+      : typeof payload?.data?.sessionId === 'string'
+        ? payload.data.sessionId
+        : null;
+
+  const drafts = normalizeDraftsPayload(payload?.drafts ?? payload);
 
   return {
-    sessionId: typeof sessionId === 'string' ? sessionId : null,
-    drafts: Array.isArray(drafts) ? drafts : [],
+    sessionId,
+    drafts,
   } as { sessionId: string | null; drafts: any[] };
 }
 
@@ -469,20 +497,23 @@ export async function listInventoryDraftsFiltered(
   propertyId: string,
   params: { scanSessionId?: string; status?: string; roomId?: string } = {}
 ): Promise<any[]> {
-  const res: any = await api.get(
-    `/api/properties/${propertyId}/inventory/drafts`,
-    { params }
-  );
+  // ✅ Never send scanSessionId=undefined
+  const clean: any = { ...params };
+  if (!clean.scanSessionId) delete clean.scanSessionId;
+  if (!clean.status) delete clean.status;
+  if (!clean.roomId) delete clean.roomId;
 
-  const raw = res?.data ?? res;
-  return Array.isArray(raw?.drafts) ? raw.drafts : [];
+  const res: any = await api.get(`/api/properties/${propertyId}/inventory/drafts`, { params: clean });
+
+  return normalizeDraftsPayload(res);
 }
 export async function bulkConfirmInventoryDrafts(propertyId: string, draftIds: string[]) {
-  const res: any = await api.post(`/api/properties/${propertyId}/inventory/drafts/bulk/confirm`, { draftIds });
-  return res?.data ?? res;
+  // ✅ match backend canonical route (aliases also exist)
+  const res: any = await api.post(`/api/properties/${propertyId}/inventory/drafts/bulk-confirm`, { draftIds });
+  return unwrap(res);
 }
 
 export async function bulkDismissInventoryDrafts(propertyId: string, draftIds: string[]) {
-  const res: any = await api.post(`/api/properties/${propertyId}/inventory/drafts/bulk/dismiss`, { draftIds });
-  return res?.data ?? res;
+  const res: any = await api.post(`/api/properties/${propertyId}/inventory/drafts/bulk-dismiss`, { draftIds });
+  return unwrap(res);
 }

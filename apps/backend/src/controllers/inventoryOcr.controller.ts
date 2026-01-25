@@ -1,5 +1,5 @@
 // apps/backend/src/controllers/inventoryOcr.controller.ts
-import { Response } from 'express';
+import { NextFunction, Response } from 'express';
 import { CustomRequest } from '../types';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
@@ -179,20 +179,33 @@ export async function confirmDraft(req: CustomRequest, res: Response) {
   const item = await draftSvc.confirmDraftToInventoryItem(propertyId, userId, draftId);
   return res.json({ item });
 }
+export async function listDrafts(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const propertyId = req.params.propertyId;
+    const userId = req.user?.userId;
+    if (!userId) throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
 
-export async function listDrafts(req: CustomRequest, res: Response) {
-  const propertyId = req.params.propertyId;
-  const userId = req.user?.userId;
-  if (!userId) throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
+    const roomId = typeof (req as any).query?.roomId === 'string' ? String((req as any).query.roomId).trim() : '';
+    const scanSessionId =
+      typeof (req as any).query?.scanSessionId === 'string' ? String((req as any).query.scanSessionId).trim() : '';
 
-  const roomId = String((req as any).query?.roomId || '').trim() || null;
-  const scanSessionId = String((req as any).query?.scanSessionId || '').trim() || null;
+    const hasFilters = Boolean(roomId) || Boolean(scanSessionId);
 
-  const drafts = await (roomId || scanSessionId)
-    ? draftSvc.listDraftsFiltered({ propertyId, userId, roomId, scanSessionId })
-    : draftSvc.listDrafts(propertyId, userId);
+    // ✅ IMPORTANT: await must be inside each branch (or you return a Promise which JSON serializes to {})
+    const drafts = hasFilters
+      ? await draftSvc.listDraftsFiltered({
+          propertyId,
+          userId,
+          roomId: roomId || null,
+          scanSessionId: scanSessionId || null,
+        })
+      : await draftSvc.listDrafts(propertyId, userId);
 
-  return res.json({ drafts });
+    // ✅ ALWAYS an array
+    return res.json({ drafts: Array.isArray(drafts) ? drafts : [] });
+  } catch (err) {
+    next(err);
+  }
 }
 
 export async function bulkDismissDrafts(req: CustomRequest, res: Response) {

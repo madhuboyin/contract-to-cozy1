@@ -217,13 +217,16 @@ export default function RoomShowcaseClient() {
           </Link>
 
           {/* ✅ AI Scan */}
-          <button
-            type="button"
-            onClick={() => setScanOpen(true)}
+          <Link
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              setScanOpen(true);
+            }}
             className="text-sm underline opacity-80 hover:opacity-100"
           >
             AI Scan
-          </button>
+          </Link>
         </div>
       </div>
       <RoomScanModal

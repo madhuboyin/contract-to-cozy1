@@ -18,17 +18,8 @@ export async function listInventoryDrafts(req: CustomRequest, res: Response, nex
         : undefined;
 
     const roomId =
-      typeof req.query.roomId === 'string' && req.query.roomId.trim()
-        ? req.query.roomId.trim()
-        : undefined;
+      typeof req.query.roomId === 'string' && req.query.roomId.trim() ? req.query.roomId.trim() : undefined;
 
-    const status =
-      typeof req.query.status === 'string' && req.query.status.trim()
-        ? req.query.status.trim()
-        : undefined;
-
-    // ✅ keep “filtered” endpoint behavior
-    // if you want status filtering, add it in service; right now service always uses DRAFT
     const drafts = await svc.listDraftsFiltered({
       propertyId,
       userId,
@@ -36,8 +27,7 @@ export async function listInventoryDrafts(req: CustomRequest, res: Response, nex
       scanSessionId,
     });
 
-    // ✅ ALWAYS return an array
-    return res.json({ drafts });
+    return res.json({ drafts: Array.isArray(drafts) ? drafts : [] });
   } catch (err) {
     next(err);
   }

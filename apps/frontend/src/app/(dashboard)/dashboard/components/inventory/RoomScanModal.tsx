@@ -9,21 +9,6 @@ import {
   bulkDismissInventoryDrafts,
 } from '../../inventory/inventoryApi';
 
-function asArray<T = any>(v: any): T[] {
-  if (Array.isArray(v)) return v;
-  if (v && Array.isArray(v.data)) return v.data; // common axios wrapper
-  if (v && v.success && Array.isArray(v.data)) return v.data; // common APIResponse wrapper
-  return [];
-}
-function normalizeDrafts(raw: any): any[] {
-  const top = raw?.data ?? raw;
-  const drafts = top?.drafts ?? top;
-
-  if (Array.isArray(drafts)) return drafts;
-  if (drafts && typeof drafts === 'object') return Object.values(drafts); // supports legacy shape
-  return [];
-}
-
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -31,6 +16,14 @@ type Props = {
   roomId: string;
   roomName?: string | null;
 };
+
+function isDev() {
+  return process.env.NODE_ENV !== 'production';
+}
+
+function safeArray(v: any): any[] {
+  return Array.isArray(v) ? v : [];
+}
 
 export default function RoomScanModal({ open, onClose, propertyId, roomId, roomName }: Props) {
   const [files, setFiles] = useState<File[]>([]);
@@ -54,45 +47,62 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
     setError(null);
   }
 
+  function seedSelection(rows: any[]) {
+    const next: Record<string, boolean> = {};
+    for (const row of rows) {
+      if (!row?.id) continue;
+      const conf = Number(row?.confidenceJson?.name ?? 0.65);
+      next[row.id] = conf >= 0.7;
+    }
+    setSelected(next);
+  }
+
   async function runScan() {
     setError(null);
+
+    // Basic guardrails (also enforced server-side)
+    if (!propertyId || !roomId) {
+      setError('Missing propertyId or roomId');
+      return;
+    }
+    if (!files.length) {
+      setError('Please upload at least 1 photo.');
+      return;
+    }
+
     setBusy(true);
-  
     try {
       const result = await startRoomScanAi(propertyId, roomId, files);
-  
-      // ✅ normalize once
-      const sessionId =
-        (result as any)?.sessionId ??
-        (result as any)?.data?.sessionId;
-  
-      if (!sessionId) {
-        throw new Error('Room scan did not return a sessionId');
+
+      if (isDev()) {
+        // ✅ helps you confirm shape immediately without guessing
+        // eslint-disable-next-line no-console
+        console.log('[room-scan] startRoomScanAi result:', result);
       }
-  
-      setSessionId(sessionId);
-  
-      const drafts = await listInventoryDraftsFiltered(propertyId, {
-        scanSessionId: sessionId,
-      });
-  
-      setDrafts(drafts);
-  
-      // default-select high confidence
-      const next: Record<string, boolean> = {};
-      for (const row of drafts) {
-        if (!row?.id) continue;
-        const conf = Number(row?.confidenceJson?.name ?? 0.65);
-        next[row.id] = conf >= 0.7;
+
+      const sid = typeof (result as any)?.sessionId === 'string' ? (result as any).sessionId : null;
+
+      if (!sid) {
+        throw new Error('Room scan did not return a sessionId (response shape mismatch)');
       }
-      setSelected(next);
+
+      setSessionId(sid);
+
+      // ✅ never call drafts endpoint with undefined
+      const rows = safeArray(await listInventoryDraftsFiltered(propertyId, { scanSessionId: sid }));
+
+      setDrafts(rows);
+      seedSelection(rows);
     } catch (e: any) {
+      // Your api client throws APIError with message already extracted from backend {success:false,error:{message}}
+      // so don’t mask it.
+      // eslint-disable-next-line no-console
       console.error('[room-scan] failed', e);
       setError(e?.message || 'Room scan failed');
     } finally {
       setBusy(false);
     }
-  }   
+  }
 
   async function confirmSelected() {
     setBusy(true);
@@ -113,18 +123,18 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
     setError(null);
     try {
       await bulkDismissInventoryDrafts(propertyId, selectedIds);
-      if (!sessionId) return;
-      const resp = await listInventoryDraftsFiltered(propertyId, { scanSessionId: sessionId });
-      const d = normalizeDrafts(resp);
-      setDrafts(d);
-      
-      const next: Record<string, boolean> = {};
-      for (const row of d) {
-        if (!row?.id) continue; // ✅ extra safety
-        const conf = Number(row?.confidenceJson?.name ?? 0.65);
-        next[row.id] = conf >= 0.7;
+
+      if (!sessionId) {
+        // If somehow called without session, just reset safely
+        setDrafts([]);
+        setSelected({});
+        return;
       }
-      setSelected(next);
+
+      const rows = safeArray(await listInventoryDraftsFiltered(propertyId, { scanSessionId: sessionId }));
+
+      setDrafts(rows);
+      seedSelection(rows);
     } catch (e: any) {
       setError(e?.message || 'Bulk dismiss failed');
     } finally {
@@ -148,7 +158,7 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
           <button
             onClick={() => {
               resetAll();
-              onClose();             
+              onClose();
             }}
             className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
             disabled={busy}
@@ -181,8 +191,8 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
                   capture="environment"
                   onChange={(e) => {
                     const next = Array.from(e.target.files || []);
-                    setFiles((prev) => [...prev, ...next].slice(0, 10)); // cap
-                  }}                  
+                    setFiles((prev) => [...prev, ...next].slice(0, 10));
+                  }}
                   className="text-sm"
                   disabled={busy}
                 />
@@ -201,9 +211,7 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
               <div className="flex items-center gap-2 text-xs opacity-70">
                 <span className="rounded-full border border-black/10 px-2 py-1">Session: {sessionId.slice(0, 8)}…</span>
                 <span className="rounded-full border border-black/10 px-2 py-1">Drafts: {drafts.length}</span>
-                <span className="ml-auto rounded-full border border-black/10 px-2 py-1">
-                  Selected: {selectedIds.length}
-                </span>
+                <span className="ml-auto rounded-full border border-black/10 px-2 py-1">Selected: {selectedIds.length}</span>
               </div>
 
               <div className="max-h-[45vh] overflow-auto rounded-xl border border-black/10">
@@ -212,15 +220,18 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
                 ) : (
                   <div className="divide-y divide-black/10">
                     {drafts.map((d: any) => {
+                      const id = d?.id;
+                      if (!id) return null;
+
                       const conf = Number(d?.confidenceJson?.name ?? 0.65);
                       const low = conf < 0.7;
 
                       return (
-                        <label key={d.id} className="flex items-start gap-3 p-3 cursor-pointer hover:bg-black/[0.02]">
+                        <label key={id} className="flex items-start gap-3 p-3 cursor-pointer hover:bg-black/[0.02]">
                           <input
                             type="checkbox"
-                            checked={!!selected[d.id]}
-                            onChange={(e) => setSelected((m) => ({ ...m, [d.id]: e.target.checked }))}
+                            checked={!!selected[id]}
+                            onChange={(e) => setSelected((m) => ({ ...m, [id]: e.target.checked }))}
                             className="mt-1"
                           />
                           <div className="min-w-0">
