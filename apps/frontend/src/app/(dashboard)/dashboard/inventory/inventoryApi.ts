@@ -465,28 +465,32 @@ export async function updateInventoryRoomProfile(propertyId: string, roomId: str
   return (res as any)?.data?.data?.room ?? (res as any)?.data?.room ?? (res as any)?.data;
 }
 
-export async function startRoomScanAi(propertyId: string, roomId: string, files: File[]) {
+export async function startRoomScanAi(
+  propertyId: string,
+  roomId: string,
+  files: File[]
+): Promise<{ sessionId: string; drafts: any[] }> {
   const form = new FormData();
   for (const f of files) form.append('images', f);
 
-  const res: any = await api.post(`/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai`, form);
+  // IMPORTANT:
+  // api.post() already returns the response body (not AxiosResponse)
+  const res: any = await api.post(
+    `/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai`,
+    form
+  );
 
-  const payload = unwrap<any>(res);
+  // 🔴 DO NOT over-unwrap — the backend returns the body directly
+  const sessionId = res?.sessionId;
+  const drafts = Array.isArray(res?.drafts) ? res.drafts : [];
 
-  const sessionId =
-    typeof payload?.sessionId === 'string'
-      ? payload.sessionId
-      : typeof payload?.data?.sessionId === 'string'
-        ? payload.data.sessionId
-        : null;
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[startRoomScanAi] raw response:', res);
+  }
 
-  const drafts = normalizeDraftsPayload(payload?.drafts ?? payload);
-
-  return {
-    sessionId,
-    drafts,
-  } as { sessionId: string | null; drafts: any[] };
+  return { sessionId, drafts };
 }
+
 
 export async function getRoomScanAiSession(propertyId: string, roomId: string, sessionId: string) {
   const res = await api.get(`/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai/${sessionId}`);

@@ -80,10 +80,10 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
         console.log('[room-scan] startRoomScanAi result:', result);
       }
 
-      const sid = typeof (result as any)?.sessionId === 'string' ? (result as any).sessionId : null;
+      const sid = result?.sessionId;
 
       if (!sid) {
-        throw new Error('Room scan did not return a sessionId (response shape mismatch)');
+        throw new Error('Room scan did not return a sessionId');
       }
 
       setSessionId(sid);
