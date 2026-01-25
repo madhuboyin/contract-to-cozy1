@@ -534,8 +534,20 @@ router.post(
 );
 
 router.post(
+  '/properties/:propertyId/inventory/drafts/bulk-confirm',
+  propertyAuthMiddleware,
+  bulkConfirmDrafts
+);
+
+router.post(
   '/properties/:propertyId/inventory/drafts/bulk/dismiss', 
   propertyAuthMiddleware, 
+  bulkDismissDrafts
+);
+
+router.post(
+  '/properties/:propertyId/inventory/drafts/bulk-dismiss',
+  propertyAuthMiddleware,
   bulkDismissDrafts
 );
 
