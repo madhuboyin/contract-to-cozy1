@@ -70,6 +70,11 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: ROOM_SCAN_PROVIDER
+            - name: ROOM_SCAN_GEMINI_DEBUG
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: ROOM_SCAN_GEMINI_DEBUG                  
             - name: GEMINI_API_KEY
               valueFrom:
                 secretKeyRef:
