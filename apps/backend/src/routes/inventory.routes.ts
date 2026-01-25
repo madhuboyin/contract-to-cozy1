@@ -11,9 +11,9 @@ import { detectCoverageGaps } from '../services/coverageGap.service';
 import { InventoryImportService } from '../services/inventoryImport.service';
 import { checkDuplicateAppliance, listImportBatches, rollbackImportBatch } from '../controllers/inventory.controller';
 import { InventoryService } from '../services/inventory.service';
-import { startRoomScan, getRoomScanSession } from '../controllers/inventoryRoomScan.controller';
+import { startRoomScan, getRoomScanSession,listRoomScanSessions } from '../controllers/inventoryRoomScan.controller';
 import { bulkConfirmDrafts, bulkDismissDrafts } from '../controllers/inventoryOcr.controller';
-import { listInventoryDrafts, updateInventoryDraft } from '../controllers/inventoryDraft.controller';
+import { listInventoryDrafts, updateInventoryDraft, exportInventoryDraftsCsv} from '../controllers/inventoryDraft.controller';
 
 import {
   listRooms,
@@ -563,5 +563,16 @@ router.patch(
   updateInventoryDraft
 );
 
+router.get(
+  '/properties/:propertyId/inventory/rooms/:roomId/scan-ai/sessions',
+  propertyAuthMiddleware,
+  listRoomScanSessions
+);
+
+router.get(
+  '/properties/:propertyId/inventory/drafts/export',
+  propertyAuthMiddleware,
+  exportInventoryDraftsCsv
+);
 
 export default router;

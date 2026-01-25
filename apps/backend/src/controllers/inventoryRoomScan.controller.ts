@@ -58,3 +58,32 @@ export async function getRoomScanSession(req: CustomRequest, res: Response, next
     next(err);
   }
 }
+
+export async function listRoomScanSessions(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const propertyId = req.params.propertyId;
+    const roomId = req.params.roomId;
+    const userId = req.user?.userId;
+
+    if (!userId) throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
+
+    const limit =
+      typeof req.query.limit === 'string' && req.query.limit.trim()
+        ? Number(req.query.limit)
+        : 12;
+
+    const sessions = await svc.listRoomSessions({
+      propertyId,
+      roomId,
+      userId,
+      limit,
+    });
+
+    return res.json({
+      success: true,
+      data: { sessions },
+    });
+  } catch (err) {
+    next(err);
+  }
+}

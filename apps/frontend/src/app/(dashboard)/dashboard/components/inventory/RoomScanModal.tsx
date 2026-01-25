@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/inventory/RoomScanModal.tsx
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   startRoomScanAi,
   listInventoryDraftsFiltered,
@@ -16,6 +16,7 @@ type Props = {
   propertyId: string;
   roomId: string;
   roomName?: string | null;
+  initialSessionId?: string | null;
 };
 
 function safeArray(v: any): any[] {
@@ -34,7 +35,8 @@ const CATEGORY_OPTIONS = [
   'OTHER',
 ] as const;
 
-export default function RoomScanModal({ open, onClose, propertyId, roomId, roomName }: Props) {
+export default function RoomScanModal({ open, onClose, propertyId, roomId, roomName, initialSessionId }: Props) {
+  
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -81,6 +83,20 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
     }));
   }, [drafts]);
 
+  useEffect(() => {
+    if (!open) return;
+    if (!initialSessionId) return;
+
+    // If modal is opened from history, load that session drafts
+    if (!sessionId) {
+      setSessionId(initialSessionId);
+      loadDraftsForSession(initialSessionId).catch(() => {
+        // ignore; UI will show error if you set it
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialSessionId]);
+  
   function resetAll() {
     setFiles([]);
     setBusy(false);
@@ -215,6 +231,7 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
       setBusy(false);
     }
   }
+
 
   if (!open) return null;
 

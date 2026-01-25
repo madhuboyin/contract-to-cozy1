@@ -518,3 +518,27 @@ export async function updateInventoryDraft(propertyId: string, draftId: string, 
   const res: any = await api.patch(`/api/properties/${propertyId}/inventory/drafts/${draftId}`, patch);
   return unwrap(res);
 }
+export async function listRoomScanSessions(propertyId: string, roomId: string, limit = 12) {
+  const res: any = await api.get(
+    `/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai/sessions`,
+    { params: { limit } }
+  );
+
+  const payload = res?.data ?? res;
+  const sessions = payload?.sessions;
+  return Array.isArray(sessions) ? sessions : [];
+}
+
+export function getDraftsCsvExportUrl(args: {
+  propertyId: string;
+  scanSessionId?: string;
+  roomId?: string;
+  status?: string; // optional
+}) {
+  const q = new URLSearchParams();
+  q.set('format', 'csv');
+  if (args.scanSessionId) q.set('scanSessionId', args.scanSessionId);
+  if (args.roomId) q.set('roomId', args.roomId);
+  if (args.status) q.set('status', args.status);
+  return `/api/properties/${args.propertyId}/inventory/drafts/export?${q.toString()}`;
+}

@@ -528,4 +528,67 @@ export class RoomScanService {
 
     return { ...s, draftCount };
   }
+
+  async listRoomSessions(args: {
+    propertyId: string;
+    roomId: string;
+    userId: string;
+    limit?: number;
+  }) {
+    const limit = Math.max(1, Math.min(50, Number(args.limit ?? 12)));
+
+    const sessions = await prisma.inventoryRoomScanSession.findMany({
+      where: {
+        propertyId: args.propertyId,
+        roomId: args.roomId,
+        userId: args.userId,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        status: true,
+        provider: true,
+        error: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    const ids = sessions.map((s) => s.id);
+    if (!ids.length) return [];
+
+    // Count drafts by sessionId + status (DRAFT/CONFIRMED/DISMISSED)
+    const grouped = await prisma.inventoryDraftItem.groupBy({
+      by: ['scanSessionId', 'status'],
+      where: { scanSessionId: { in: ids } },
+      _count: { _all: true },
+    });
+
+    const bySession: Record<
+      string,
+      { drafts: number; confirmed: number; dismissed: number; total: number }
+    > = {};
+
+    for (const g of grouped as any[]) {
+      const sid = String(g.scanSessionId || '');
+      if (!sid) continue;
+
+      if (!bySession[sid]) bySession[sid] = { drafts: 0, confirmed: 0, dismissed: 0, total: 0 };
+
+      const n = Number(g?._count?._all || 0);
+      const st = String(g.status || '');
+
+      bySession[sid].total += n;
+      if (st === 'DRAFT') bySession[sid].drafts += n;
+      if (st === 'CONFIRMED') bySession[sid].confirmed += n;
+      if (st === 'DISMISSED') bySession[sid].dismissed += n;
+    }
+
+    return sessions.map((s) => ({
+      ...s,
+      counts: bySession[s.id] || { drafts: 0, confirmed: 0, dismissed: 0, total: 0 },
+    }));
+  }
+
 }
