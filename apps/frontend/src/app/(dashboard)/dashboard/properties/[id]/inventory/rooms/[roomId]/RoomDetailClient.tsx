@@ -22,7 +22,7 @@ import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
 import AnimatedTabPanel from '@/components/rooms/AnimatedTabPanel';
 import BathroomInsightsCard from '@/components/rooms/BathroomInsightsCard';
 import BasementInsightsCard from '@/components/rooms/BasementInsightsCard';
-import { RoomScanModal } from '@/app/(dashboard)/dashboard/components/inventory/RoomScanModal';
+import RoomScanModal from '@/app/(dashboard)/dashboard/components/inventory/RoomScanModal';
 
 
 type Tab = 'PROFILE' | 'CHECKLIST' | 'TIMELINE';

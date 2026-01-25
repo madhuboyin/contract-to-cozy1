@@ -22,46 +22,21 @@ export async function listInventoryDrafts(req: CustomRequest, res: Response, nex
         ? req.query.roomId.trim()
         : undefined;
 
-    const status =
-      typeof req.query.status === 'string' && req.query.status.trim()
-        ? (req.query.status.trim().toUpperCase() as any)
-        : undefined;
-
+    // NOTE: service always filters status='DRAFT'
     const drafts = await svc.listDraftsFiltered({
       propertyId,
       userId,
       roomId,
       scanSessionId,
-      status,
     });
 
-    return res.json({ drafts });
-  } catch (err) {
-    next(err);
-  }
-}
-
-export async function updateInventoryDraft(req: CustomRequest, res: Response, next: NextFunction) {
-  try {
-    const propertyId = req.params.propertyId;
-    const draftId = req.params.draftId;
-    const userId = req.user?.userId;
-    if (!userId) throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
-
-    const patch = req.body || {};
-
-    const updated = await svc.updateDraft({
-      propertyId,
-      userId,
-      draftId,
-      patch: {
-        name: patch?.name,
-        category: patch?.category,
-        roomId: patch?.roomId,
+    // ✅ IMPORTANT: return APISuccess envelope for frontend APIClient.get()
+    return res.json({
+      success: true,
+      data: {
+        drafts: Array.isArray(drafts) ? drafts : [],
       },
     });
-
-    return res.json({ draft: updated });
   } catch (err) {
     next(err);
   }

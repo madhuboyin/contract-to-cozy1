@@ -74,46 +74,6 @@ function unwrap<T = any>(input: any): T {
 
   return cur as T;
 }
-
-function unwrapApi(res: any) {
-  // Handles:
-  // - Axios response: { data, status, headers, ... }
-  // - API envelope: { success: true/false, data, error }
-  // - Direct payload
-  let v: any = res;
-
-  // unwrap axios-like
-  for (let i = 0; i < 3; i++) {
-    if (!v || typeof v !== 'object') break;
-    if ('data' in v && ('status' in v || 'headers' in v || 'config' in v || 'request' in v)) {
-      v = (v as any).data;
-      continue;
-    }
-    break;
-  }
-
-  // unwrap {success,data}
-  for (let i = 0; i < 3; i++) {
-    if (!v || typeof v !== 'object') break;
-    if ('success' in v && 'data' in v) {
-      v = (v as any).data;
-      continue;
-    }
-    break;
-  }
-
-  // some wrappers return {data:{...}} as the only meaningful field
-  if (v && typeof v === 'object' && 'data' in v && !('drafts' in v) && !('sessionId' in v)) {
-    const inner = (v as any).data;
-    if (inner && (typeof inner === 'object' || Array.isArray(inner))) v = inner;
-  }
-
-  return v;
-}
-
-function asArray<T = any>(v: any): T[] {
-  return Array.isArray(v) ? v : [];
-}
 export function normalizeDraftsPayload(input: any): any[] {
   if (Array.isArray(input)) return input;
 
@@ -136,26 +96,30 @@ export function normalizeDraftsPayload(input: any): any[] {
  * Rooms
  * ----------------------------
  */
-export async function listInventoryRooms(propertyId: string): Promise<InventoryRoom[]> {
-  const res: any = await api.get(`/api/properties/${propertyId}/inventory/rooms`);
-  const payload = unwrapApi(res);
-  if (payload && typeof payload === 'object' && Array.isArray((payload as any).rooms)) return (payload as any).rooms;
-  return asArray(payload);
+export async function listInventoryRooms(propertyId: string) {
+  const res = await api.get<{ rooms: InventoryRoom[] }>(`/api/properties/${propertyId}/inventory/rooms`);
+  return res.data.rooms;
 }
 
-export async function createInventoryRoom(propertyId: string, data: any): Promise<InventoryRoom> {
-  const res: any = await api.post(`/api/properties/${propertyId}/inventory/rooms`, data);
-  return unwrapApi(res);
+export async function createInventoryRoom(
+  propertyId: string,
+  body: { type: any; name?: string; floorLevel?: number | null; sortOrder?: number; profile?: any | null }
+) {
+  const res = await api.post<{ room: InventoryRoom }>(`/api/properties/${propertyId}/inventory/rooms`, body);
+  return (res as any)?.data?.room ?? (res as any)?.data?.data?.room;
 }
 
-export async function updateInventoryRoom(propertyId: string, roomId: string, data: any): Promise<InventoryRoom> {
-  const res: any = await api.put(`/api/properties/${propertyId}/inventory/rooms/${roomId}`, data);
-  return unwrapApi(res);
+export async function updateInventoryRoom(
+  propertyId: string,
+  roomId: string,
+  body: { name?: string; floorLevel?: number | null; sortOrder?: number }
+) {
+  const res = await api.patch<{ room: InventoryRoom }>(`/api/properties/${propertyId}/inventory/rooms/${roomId}`, body);
+  return res.data.room;
 }
 
 export async function deleteInventoryRoom(propertyId: string, roomId: string) {
-  const res: any = await api.delete(`/api/properties/${propertyId}/inventory/rooms/${roomId}`);
-  return unwrapApi(res);
+  await api.delete(`/api/properties/${propertyId}/inventory/rooms/${roomId}`);
 }
 
 /**
@@ -163,42 +127,48 @@ export async function deleteInventoryRoom(propertyId: string, roomId: string) {
  * Items
  * ----------------------------
  */
+
 export async function listInventoryItems(
   propertyId: string,
-  params?: { roomId?: string; category?: string; q?: string; hasDocuments?: boolean }
-): Promise<InventoryItem[]> {
-  const queryParams = new URLSearchParams();
-  if (params?.roomId) queryParams.set('roomId', params.roomId);
-  if (params?.category) queryParams.set('category', params.category);
-  if (params?.q) queryParams.set('q', params.q);
-  if (params?.hasDocuments !== undefined) queryParams.set('hasDocuments', String(params.hasDocuments));
-  
-  const queryString = queryParams.toString();
-  const url = `/api/properties/${propertyId}/inventory/items${queryString ? `?${queryString}` : ''}`;
-  const res: any = await api.get(url);
-  const payload = unwrapApi(res);
-  if (payload && typeof payload === 'object' && Array.isArray((payload as any).items)) return (payload as any).items;
-  return asArray(payload);
+  params: {
+    q?: string;
+    roomId?: string;
+    category?: InventoryItemCategory;
+    hasDocuments?: boolean;
+    hasRecallAlerts?: boolean;
+  }
+) {
+  const cleanParams: any = { ...params };
+
+  // roomId='ALL' => treat as no room filter
+  if (!cleanParams.roomId || cleanParams.roomId === 'ALL') {
+    delete cleanParams.roomId;
+  }
+
+  const res = await api.get<{ items: InventoryItem[] }>(`/api/properties/${propertyId}/inventory/items`, {
+    params: cleanParams,
+  });
+
+  return res.data.items;
 }
 
-export async function getInventoryItem(propertyId: string, itemId: string): Promise<InventoryItem> {
-  const res: any = await api.get(`/api/properties/${propertyId}/inventory/items/${itemId}`);
-  return unwrapApi(res);
+export async function createInventoryItem(propertyId: string, body: any) {
+  const res = await api.post<{ item: InventoryItem }>(`/api/properties/${propertyId}/inventory/items`, body);
+  return res.data.item;
 }
 
-export async function createInventoryItem(propertyId: string, data: any): Promise<InventoryItem> {
-  const res: any = await api.post(`/api/properties/${propertyId}/inventory/items`, data);
-  return unwrapApi(res);
-}
-
-export async function updateInventoryItem(propertyId: string, itemId: string, data: any): Promise<InventoryItem> {
-  const res: any = await api.put(`/api/properties/${propertyId}/inventory/items/${itemId}`, data);
-  return unwrapApi(res);
+export async function updateInventoryItem(propertyId: string, itemId: string, body: any) {
+  const res = await api.patch<{ item: InventoryItem }>(`/api/properties/${propertyId}/inventory/items/${itemId}`, body);
+  return res.data.item;
 }
 
 export async function deleteInventoryItem(propertyId: string, itemId: string) {
-  const res: any = await api.delete(`/api/properties/${propertyId}/inventory/items/${itemId}`);
-  return unwrapApi(res);
+  await api.delete(`/api/properties/${propertyId}/inventory/items/${itemId}`);
+}
+
+export async function getInventoryItem(propertyId: string, itemId: string) {
+  const res = await api.get<{ item: InventoryItem }>(`/api/properties/${propertyId}/inventory/items/${itemId}`);
+  return res.data.item;
 }
 
 /**
@@ -489,91 +459,57 @@ export async function getRoomTimeline(propertyId: string, roomId: string) {
 }
 
 export async function updateInventoryRoomProfile(propertyId: string, roomId: string, profile: any) {
-  const res: any = await api.put(
+  const res = await api.patch(
     `/api/properties/${propertyId}/inventory/rooms/${roomId}/profile`,
     { profile }
   );
-  const payload = unwrapApi(res);
-  return (payload as any)?.room ?? payload;
+  return (res as any)?.data?.data?.room ?? (res as any)?.data?.room ?? (res as any)?.data;
 }
 
 export async function startRoomScanAi(propertyId: string, roomId: string, files: File[]) {
   const form = new FormData();
   for (const f of files) form.append('images', f);
 
-  const res: any = await api.post(
-    `/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai`,
-    form
-  );
+  // Backend now returns APISuccess => api.post().data contains { sessionId, drafts }
+  const res: any = await api.post(`/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai`, form);
 
-  const payload = unwrapApi(res) || {};
-  const sessionId = (payload as any)?.sessionId;
-  const drafts = (payload as any)?.drafts;
+  const payload = res?.data ?? res;
+
+  const sessionId = payload?.sessionId;
+  const drafts = payload?.drafts;
 
   return {
     sessionId: typeof sessionId === 'string' ? sessionId : null,
-    drafts: asArray(drafts),
+    drafts: Array.isArray(drafts) ? drafts : [],
   } as { sessionId: string | null; drafts: any[] };
 }
 
+
 export async function getRoomScanAiSession(propertyId: string, roomId: string, sessionId: string) {
-  const res: any = await api.get(
-    `/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai/${sessionId}`
-  );
-  return unwrapApi(res);
+  const res = await api.get(`/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai/${sessionId}`);
+  return res.data;
 }
 
 export async function listInventoryDraftsFiltered(
   propertyId: string,
   params: { scanSessionId?: string; status?: string; roomId?: string } = {}
-): Promise<InventoryDraftListItem[]> {
-  const res: any = await api.get(
-    `/api/properties/${propertyId}/inventory/drafts`,
-    { params }
-  );
+): Promise<any[]> {
+  const res: any = await api.get(`/api/properties/${propertyId}/inventory/drafts`, { params });
 
-  const payload = unwrapApi(res);
+  // Backend now returns APISuccess => api.get().data contains { drafts: [...] }
+  const payload = res?.data ?? res;
+  const drafts = payload?.drafts;
 
-  // server contract: {drafts: []}
-  if (payload && typeof payload === 'object' && Array.isArray((payload as any).drafts)) {
-    return (payload as any).drafts;
-  }
-
-  // older contracts might return drafts array directly
-  return asArray(payload);
+  return Array.isArray(drafts) ? drafts : [];
 }
 
 export async function bulkConfirmInventoryDrafts(propertyId: string, draftIds: string[]) {
-  // ✅ canonical route (matches backend)
-  const res: any = await api.post(
-    `/api/properties/${propertyId}/inventory/drafts/bulk-confirm`,
-    { draftIds }
-  );
-  return unwrapApi(res);
+  // ✅ match backend canonical route (aliases also exist)
+  const res: any = await api.post(`/api/properties/${propertyId}/inventory/drafts/bulk-confirm`, { draftIds });
+  return unwrap(res);
 }
 
 export async function bulkDismissInventoryDrafts(propertyId: string, draftIds: string[]) {
-  // ✅ canonical route (matches backend)
-  const res: any = await api.post(
-    `/api/properties/${propertyId}/inventory/drafts/bulk-dismiss`,
-    { draftIds }
-  );
-  return unwrapApi(res);
-}
-
-export async function updateInventoryDraft(
-  propertyId: string,
-  draftId: string,
-  patch: { name?: string | null; category?: string | null; roomId?: string | null }
-) {
-  const res: any = await api.patch(
-    `/api/properties/${propertyId}/inventory/drafts/${draftId}`,
-    patch
-  );
-
-  const payload = unwrapApi(res);
-
-  // controller: {draft: {...}}
-  if (payload && typeof payload === 'object' && (payload as any).draft) return (payload as any).draft;
-  return payload;
+  const res: any = await api.post(`/api/properties/${propertyId}/inventory/drafts/bulk-dismiss`, { draftIds });
+  return unwrap(res);
 }

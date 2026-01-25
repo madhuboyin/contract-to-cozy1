@@ -11,7 +11,7 @@ import InventoryItemCard from '../../../../components/inventory/InventoryItemCar
 import { getRoomInsights, listInventoryItems, listInventoryRooms } from '../../../../inventory/inventoryApi';
 
 import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
-import { RoomScanModal } from '@/app/(dashboard)/dashboard/components/inventory/RoomScanModal';
+import RoomScanModal from '@/app/(dashboard)/dashboard/components/inventory/RoomScanModal';
 
 function money(cents: number | null | undefined, currency = 'USD') {
   if (!cents) return '$0';

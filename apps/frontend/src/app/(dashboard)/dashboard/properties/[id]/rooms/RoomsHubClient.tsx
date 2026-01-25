@@ -9,7 +9,7 @@ import { InventoryRoom } from '@/types';
 import { listInventoryRooms, patchRoomMeta, getRoomInsights } from '../../../inventory/inventoryApi';
 import { SectionHeader } from '../../../components/SectionHeader';
 import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
-import { RoomScanModal } from '@/app/(dashboard)/dashboard/components/inventory/RoomScanModal';
+import RoomScanModal from '@/app/(dashboard)/dashboard/components/inventory/RoomScanModal';
 
 
 function guessRoomType(name: string) {
