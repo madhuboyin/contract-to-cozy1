@@ -15,11 +15,7 @@ function pickUploadedFiles(req: CustomRequest): Express.Multer.File[] {
   return Array.isArray(fromImages) ? fromImages : [];
 }
 
-export async function startRoomScan(
-  req: CustomRequest,
-  res: Response,
-  next: NextFunction
-) {
+export async function startRoomScan(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const propertyId = req.params.propertyId;
     const roomId = req.params.roomId;
@@ -32,21 +28,17 @@ export async function startRoomScan(
     const files = pickUploadedFiles(req);
     const out = await svc.runRoomScan({ propertyId, roomId, userId, files });
 
+    // ✅ Consistent contract (raw payload): { sessionId, drafts: [] }
     return res.json({
       sessionId: out.sessionId,
-      drafts: out.drafts,
-      
+      drafts: Array.isArray(out.drafts) ? out.drafts : [],
     });
   } catch (err) {
-    next(err); // ✅ CRITICAL
+    next(err);
   }
 }
 
-export async function getRoomScanSession(
-  req: CustomRequest,
-  res: Response,
-  next: NextFunction
-) {
+export async function getRoomScanSession(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const propertyId = req.params.propertyId;
     const roomId = req.params.roomId;
@@ -63,4 +55,3 @@ export async function getRoomScanSession(
     next(err);
   }
 }
-

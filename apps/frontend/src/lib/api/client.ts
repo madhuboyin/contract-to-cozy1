@@ -335,7 +335,11 @@ class APIClient {
         const data = await response.json();
 
         if (!response.ok || data.success === false) {
-          const errorMessage = (data && data.error) || (data && data.message) || `HTTP Error: ${response.status}`;
+          const errorMessage =
+            (data?.error && (typeof data.error === 'string' ? data.error : data.error.message)) ||
+            data?.message ||
+            `HTTP Error: ${response.status}`;
+
           // FIX: Throw error
           throw new APIError(errorMessage, response.status, data);
         }
@@ -462,11 +466,14 @@ class APIClient {
   /**
    * Generic GET request
    */
-  async get<T = any>(endpoint: string, options?: { params?: Record<string, any>; responseType?: 'blob' }): Promise<{ data: T }> {
-    const url = options?.params 
+  async get<T = any>(
+    endpoint: string,
+    options?: { params?: Record<string, any>; responseType?: 'blob' }
+  ): Promise<{ data: T }> {
+    const url = options?.params
       ? `${endpoint}?${new URLSearchParams(options.params).toString()}`
       : endpoint;
-    
+
     // Handle blob responses separately
     if (options?.responseType === 'blob') {
       const token = this.getToken();
@@ -474,56 +481,65 @@ class APIClient {
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
-      
+
       const response = await fetch(`${this.baseURL}${url}`, {
         method: 'GET',
         headers,
       });
-      
+
       if (!response.ok) {
         throw new APIError(`Request failed (${response.status})`, response.status);
       }
-      
+
       const blob = await response.blob();
       return { data: blob as T };
     }
-    
-    const response = await this.request<T>(url, { method: 'GET' });
-    // request() throws on error, so response is always APISuccess<T>
-    return { data: (response as APISuccess<T>).data };
+
+    const response: any = await this.request<any>(url, { method: 'GET' });
+
+    // ✅ Robust unwrap: if response has .data use it, otherwise treat response as payload
+    const payload = (response && typeof response === 'object' && 'data' in response) ? response.data : response;
+
+    return { data: payload as T };
   }
 
   /**
    * Generic POST request
    */
   async post<T = any>(endpoint: string, data?: any): Promise<{ data: T }> {
-    const response = await this.request<T>(endpoint, {
+    const response: any = await this.request<any>(endpoint, {
       method: 'POST',
       body: data as unknown as BodyInit,
     });
-    // request() throws on error, so response is always APISuccess<T>
-    return { data: (response as APISuccess<T>).data };
+
+    const payload = (response && typeof response === 'object' && 'data' in response) ? response.data : response;
+
+    return { data: payload as T };
   }
 
   /**
    * Generic PUT request
    */
   async put<T = any>(endpoint: string, data?: any): Promise<{ data: T }> {
-    const response = await this.request<T>(endpoint, {
+    const response: any = await this.request<any>(endpoint, {
       method: 'PUT',
       body: data as unknown as BodyInit,
     });
-    // request() throws on error, so response is always APISuccess<T>
-    return { data: (response as APISuccess<T>).data };
+
+    const payload = (response && typeof response === 'object' && 'data' in response) ? response.data : response;
+
+    return { data: payload as T };
   }
 
   /**
    * Generic DELETE request
    */
   async delete<T = any>(endpoint: string): Promise<{ data: T }> {
-    const response = await this.request<T>(endpoint, { method: 'DELETE' });
-    // request() throws on error, so response is always APISuccess<T>
-    return { data: (response as APISuccess<T>).data };
+    const response: any = await this.request<any>(endpoint, { method: 'DELETE' });
+
+    const payload = (response && typeof response === 'object' && 'data' in response) ? response.data : response;
+
+    return { data: payload as T };
   }
 
   // ==========================================================================

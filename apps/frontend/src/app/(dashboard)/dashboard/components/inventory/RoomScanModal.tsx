@@ -9,6 +9,20 @@ import {
   bulkDismissInventoryDrafts,
 } from '../../inventory/inventoryApi';
 
+function safeArray(v: any): any[] {
+  return Array.isArray(v) ? v : [];
+}
+
+function getErrorMessage(e: any): string {
+  return (
+    e?.message ||
+    e?.data?.error?.message ||
+    e?.response?.data?.error?.message ||
+    e?.response?.data?.message ||
+    'Room scan failed'
+  );
+}
+
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -16,14 +30,6 @@ type Props = {
   roomId: string;
   roomName?: string | null;
 };
-
-function isDev() {
-  return process.env.NODE_ENV !== 'production';
-}
-
-function safeArray(v: any): any[] {
-  return Array.isArray(v) ? v : [];
-}
 
 export default function RoomScanModal({ open, onClose, propertyId, roomId, roomName }: Props) {
   const [files, setFiles] = useState<File[]>([]);
@@ -47,7 +53,7 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
     setError(null);
   }
 
-  function seedSelection(rows: any[]) {
+  function autoSelectDefaults(rows: any[]) {
     const next: Record<string, boolean> = {};
     for (const row of rows) {
       if (!row?.id) continue;
@@ -59,41 +65,32 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
 
   async function runScan() {
     setError(null);
-
-    // Basic guardrails (also enforced server-side)
-    if (!propertyId || !roomId) {
-      setError('Missing propertyId or roomId');
-      return;
-    }
-    if (!files.length) {
-      setError('Please upload at least 1 photo.');
-      return;
-    }
-
     setBusy(true);
+
     try {
       const result = await startRoomScanAi(propertyId, roomId, files);
-      console.log('[RoomScanModal] startRoomScanAi result:', result);
+
+      if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console
+        console.log('[RoomScanModal] startRoomScanAi result:', result);
+      }
 
       const sid = (result as any)?.sessionId;
 
       if (!sid) {
-        throw new Error('Room scan did not return a sessionId');
+        throw new Error('Room scan did not return a sessionId (response shape mismatch)');
       }
 
       setSessionId(sid);
 
-      // ✅ never call drafts endpoint with undefined
+      // ✅ Never call drafts endpoint with undefined
       const rows = safeArray(await listInventoryDraftsFiltered(propertyId, { scanSessionId: sid }));
-
       setDrafts(rows);
-      seedSelection(rows);
+      autoSelectDefaults(rows);
     } catch (e: any) {
-      // Your api client throws APIError with message already extracted from backend {success:false,error:{message}}
-      // so don’t mask it.
       // eslint-disable-next-line no-console
       console.error('[room-scan] failed', e);
-      setError(e?.message || 'Room scan failed');
+      setError(getErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -107,7 +104,7 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
       onClose();
       resetAll();
     } catch (e: any) {
-      setError(e?.message || 'Bulk confirm failed');
+      setError(getErrorMessage(e) || 'Bulk confirm failed');
     } finally {
       setBusy(false);
     }
@@ -119,19 +116,13 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
     try {
       await bulkDismissInventoryDrafts(propertyId, selectedIds);
 
-      if (!sessionId) {
-        // If somehow called without session, just reset safely
-        setDrafts([]);
-        setSelected({});
-        return;
-      }
+      if (!sessionId) return;
 
       const rows = safeArray(await listInventoryDraftsFiltered(propertyId, { scanSessionId: sessionId }));
-
       setDrafts(rows);
-      seedSelection(rows);
+      autoSelectDefaults(rows);
     } catch (e: any) {
-      setError(e?.message || 'Bulk dismiss failed');
+      setError(getErrorMessage(e) || 'Bulk dismiss failed');
     } finally {
       setBusy(false);
     }
@@ -206,7 +197,9 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
               <div className="flex items-center gap-2 text-xs opacity-70">
                 <span className="rounded-full border border-black/10 px-2 py-1">Session: {sessionId.slice(0, 8)}…</span>
                 <span className="rounded-full border border-black/10 px-2 py-1">Drafts: {drafts.length}</span>
-                <span className="ml-auto rounded-full border border-black/10 px-2 py-1">Selected: {selectedIds.length}</span>
+                <span className="ml-auto rounded-full border border-black/10 px-2 py-1">
+                  Selected: {selectedIds.length}
+                </span>
               </div>
 
               <div className="max-h-[45vh] overflow-auto rounded-xl border border-black/10">
@@ -215,18 +208,17 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
                 ) : (
                   <div className="divide-y divide-black/10">
                     {drafts.map((d: any) => {
-                      const id = d?.id;
-                      if (!id) return null;
+                      if (!d?.id) return null;
 
                       const conf = Number(d?.confidenceJson?.name ?? 0.65);
                       const low = conf < 0.7;
 
                       return (
-                        <label key={id} className="flex items-start gap-3 p-3 cursor-pointer hover:bg-black/[0.02]">
+                        <label key={d.id} className="flex items-start gap-3 p-3 cursor-pointer hover:bg-black/[0.02]">
                           <input
                             type="checkbox"
-                            checked={!!selected[id]}
-                            onChange={(e) => setSelected((m) => ({ ...m, [id]: e.target.checked }))}
+                            checked={!!selected[d.id]}
+                            onChange={(e) => setSelected((m) => ({ ...m, [d.id]: e.target.checked }))}
                             className="mt-1"
                           />
                           <div className="min-w-0">
@@ -246,7 +238,7 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
                 )}
               </div>
 
-              <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center justify-between gap-3 pt-2 flex-wrap">
                 <button
                   onClick={dismissSelected}
                   disabled={busy || selectedIds.length === 0}
@@ -255,15 +247,13 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
                   Dismiss selected
                 </button>
 
-                <div className="flex items-center gap-2 ml-auto">
-                  <button
-                    onClick={confirmSelected}
-                    disabled={busy || selectedIds.length === 0}
-                    className="rounded-xl px-4 py-2 text-sm font-medium border border-black/10 hover:bg-black/5 disabled:opacity-50"
-                  >
-                    Add selected to inventory
-                  </button>
-                </div>
+                <button
+                  onClick={confirmSelected}
+                  disabled={busy || selectedIds.length === 0}
+                  className="rounded-xl px-4 py-2 text-sm font-medium border border-black/10 hover:bg-black/5 disabled:opacity-50"
+                >
+                  Confirm selected
+                </button>
               </div>
             </>
           )}

@@ -470,23 +470,24 @@ export async function startRoomScanAi(propertyId: string, roomId: string, files:
   const form = new FormData();
   for (const f of files) form.append('images', f);
 
-  const res: any = await api.post(`/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai`, form);
+  const res: any = await api.post(
+    `/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai`,
+    form
+  );
 
-  // ✅ Log the *exact* object the UI receives
-  if (process.env.NODE_ENV !== 'production') {
-    console.log('[startRoomScanAi] api.post returned:', res);
-    console.log('[startRoomScanAi] typeof res:', typeof res, 'keys:', res && typeof res === 'object' ? Object.keys(res) : null);
-  }
+  // After client.ts fix: res = { data: payload }, where payload can be:
+  //   - { sessionId, drafts }
+  //   - { success:true, data:{ sessionId, drafts } }  (if backend wraps later)
+  const payload = res?.data ?? res;
+  const inner = payload?.data ?? payload;
 
-  // ✅ Support both shapes safely:
-  // - raw: { sessionId, drafts }
-  // - wrapped: { data: { sessionId, drafts } }
-  const payload = res?.sessionId ? res : res?.data?.sessionId ? res.data : res;
+  const sessionId = inner?.sessionId;
+  const drafts = inner?.drafts;
 
-  const sessionId = payload?.sessionId;
-  const drafts = Array.isArray(payload?.drafts) ? payload.drafts : [];
-
-  return { sessionId, drafts } as { sessionId: string | null; drafts: any[] };
+  return {
+    sessionId: typeof sessionId === 'string' ? sessionId : null,
+    drafts: Array.isArray(drafts) ? drafts : [],
+  } as { sessionId: string | null; drafts: any[] };
 }
 
 export async function getRoomScanAiSession(propertyId: string, roomId: string, sessionId: string) {
@@ -498,15 +499,22 @@ export async function listInventoryDraftsFiltered(
   propertyId: string,
   params: { scanSessionId?: string; status?: string; roomId?: string } = {}
 ): Promise<any[]> {
-  // ✅ Never send scanSessionId=undefined
+  // ✅ never send scanSessionId=undefined or scanSessionId="undefined"
   const clean: any = { ...params };
-  if (!clean.scanSessionId) delete clean.scanSessionId;
-  if (!clean.status) delete clean.status;
-  if (!clean.roomId) delete clean.roomId;
+  if (!clean.scanSessionId || clean.scanSessionId === 'undefined') delete clean.scanSessionId;
+  if (!clean.roomId || clean.roomId === 'undefined') delete clean.roomId;
+  if (!clean.status || clean.status === 'undefined') delete clean.status;
 
-  const res: any = await api.get(`/api/properties/${propertyId}/inventory/drafts`, { params: clean });
+  const res: any = await api.get(
+    `/api/properties/${propertyId}/inventory/drafts`,
+    { params: clean }
+  );
 
-  return normalizeDraftsPayload(res);
+  const payload = res?.data ?? res;
+  const inner = payload?.data ?? payload;
+
+  // Accept { drafts: [...] } or legacy { drafts: { ... } }
+  return normalizeDraftsPayload(inner);
 }
 export async function bulkConfirmInventoryDrafts(propertyId: string, draftIds: string[]) {
   // ✅ match backend canonical route (aliases also exist)
