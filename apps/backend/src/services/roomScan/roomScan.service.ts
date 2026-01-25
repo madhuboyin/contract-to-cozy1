@@ -25,6 +25,17 @@ function envBool(key: string, dflt = false) {
   return dflt;
 }
 
+function envFloat(key: string, dflt: number) {
+  const n = Number(process.env[key]);
+  return Number.isFinite(n) ? n : dflt;
+}
+
+function simpleNameNorm(s: string) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
 function clamp01(x: number) {
   if (!Number.isFinite(x)) return 0;
   return Math.max(0, Math.min(1, x));
@@ -45,6 +56,29 @@ function sha1(buf: Buffer) {
   return crypto.createHash('sha1').update(buf).digest('hex');
 }
 
+function groupForLabel(label: string): { groupKey: string; groupLabel: string } {
+  const n = simpleNameNorm(label);
+
+  // Bedding
+  if (n.includes('pillow') || n.includes('cushion')) return { groupKey: 'BEDDING', groupLabel: 'Bedding' };
+  if (n.includes('blanket') || n.includes('comforter') || n.includes('duvet')) return { groupKey: 'BEDDING', groupLabel: 'Bedding' };
+
+  // Seating
+  if (n.includes('sofa') || n.includes('couch') || n.includes('armchair') || n.includes('chair')) {
+    return { groupKey: 'SEATING', groupLabel: 'Seating' };
+  }
+
+  // Storage
+  if (n.includes('dresser') || n.includes('cabinet') || n.includes('shelf') || n.includes('bookcase')) {
+    return { groupKey: 'STORAGE', groupLabel: 'Storage' };
+  }
+
+  // Lighting
+  if (n.includes('lamp') || n.includes('light')) return { groupKey: 'LIGHTING', groupLabel: 'Lighting' };
+
+  // Default: stable-ish key from label
+  return { groupKey: `ITEM_${dedupeKey(label)}`, groupLabel: 'Other' };
+}
 /**
  * Prevent Prisma validation errors when AI returns a category that isn't in the enum.
  * IMPORTANT: Update allowed values to match your Prisma InventoryItemCategory enum exactly.
@@ -354,35 +388,97 @@ export class RoomScanService {
 
       const deduped = Array.from(seen.values());
 
-      // Create drafts
+      // Phase 2 thresholds (env-tunable)
+      const autoSelectThreshold = envFloat('INVENTORY_ROOM_SCAN_AUTOSELECT_THRESHOLD', 0.72);
+      const dupeThreshold = envFloat('INVENTORY_ROOM_SCAN_DUPLICATE_THRESHOLD', 0.92);
+
+      // ✅ Room-aware duplicate detection: compare against existing items in *this room*
+      const existingRoomItems = await prisma.inventoryItem.findMany({
+        where: { propertyId: args.propertyId, roomId: args.roomId },
+        select: { id: true, name: true, category: true, brand: true, model: true },
+      });
+
+      function duplicateMatch(label: string) {
+        const ln = simpleNameNorm(label);
+        if (!ln) return null;
+
+        let best: { id: string; score: number; reason: string } | null = null;
+
+        for (const it of existingRoomItems) {
+          const inorm = simpleNameNorm(it.name || '');
+          if (!inorm) continue;
+
+          // Simple but reliable v1:
+          // exact normalized name match => 1.0
+          // (can be upgraded later without changing API)
+          const score = ln === inorm ? 1.0 : 0.0;
+
+          if (!best || score > best.score) {
+            best = { id: it.id, score, reason: score === 1.0 ? 'NAME_EXACT_MATCH' : 'NONE' };
+          }
+        }
+
+        if (best && best.score >= dupeThreshold) return best;
+        return null;
+      }
+
+      // Create drafts (Phase 2 enriched)
       const drafts =
-      deduped.length === 0
-        ? []
-        : await prisma.$transaction(
-        deduped.map((it) =>
-          prisma.inventoryDraftItem.create({
-            data: {
-              propertyId: args.propertyId,
-              userId: args.userId,
-              status: 'DRAFT',
-              roomId: args.roomId,
-              scanSessionId: session.id,
-              draftSource: 'ROOM_PHOTO_AI',
+        deduped.length === 0
+          ? []
+          : await prisma.$transaction(
+              deduped.map((it) => {
+                const conf = clamp01(Number(it.confidence ?? 0.6));
+                const g = groupForLabel(it.label);
+                const dupe = duplicateMatch(it.label);
 
-              name: it.label,
+                return prisma.inventoryDraftItem.create({
+                  data: {
+                    propertyId: args.propertyId,
+                    userId: args.userId,
+                    status: 'DRAFT',
+                    roomId: args.roomId,
+                    scanSessionId: session.id,
+                    draftSource: 'ROOM_PHOTO_AI',
 
-              // ✅ prevent Prisma enum validation error
-              category: normalizeInventoryCategory(it.category),
+                    name: it.label,
 
-              confidenceJson: {
-                name: it.confidence,
-                category: typeof it.category === 'string' ? it.confidence : undefined,
-              },
-            },
-            select: { id: true, name: true, category: true },
-          })
-        )
-      );
+                    // ✅ prevent Prisma enum validation error
+                    category: normalizeInventoryCategory(it.category),
+
+                    // ✅ Phase 2 fields
+                    autoSelected: conf >= autoSelectThreshold,
+                    groupKey: g.groupKey,
+                    groupLabel: g.groupLabel,
+
+                    duplicateOfItemId: dupe?.id ?? null,
+                    duplicateScore: dupe?.score ?? null,
+                    duplicateReason: dupe?.reason ?? null,
+
+                    // Confidence snapshot
+                    confidenceJson: {
+                      name: conf,
+                      category: typeof it.category === 'string' ? conf : undefined,
+                    },
+
+                    // optional debug
+                    aiRawJson: envTrue('INVENTORY_ROOM_SCAN_STORE_AI_RAW') ? (result as any)?.raw ?? undefined : undefined,
+                  },
+                  select: {
+                    id: true,
+                    name: true,
+                    category: true,
+                    autoSelected: true,
+                    groupKey: true,
+                    groupLabel: true,
+                    duplicateOfItemId: true,
+                    duplicateScore: true,
+                    duplicateReason: true,
+                    confidenceJson: true,
+                  },
+                });
+              })
+            );
 
       await prisma.inventoryRoomScanSession.update({
         where: { id: session.id },

@@ -169,5 +169,60 @@ export class InventoryDraftService {
 
     return { created: items.length, itemIds: items };
   }
+  async updateDraft(args: {
+    propertyId: string;
+    userId: string;
+    draftId: string;
+    patch: {
+      name?: string;
+      category?: string;
+      roomId?: string | null;
+
+      condition?: string;
+      brand?: string | null;
+      model?: string | null;
+      serialNo?: string | null;
+
+      manufacturer?: string | null;
+      modelNumber?: string | null;
+      serialNumber?: string | null;
+      upc?: string | null;
+      sku?: string | null;
+    };
+  }) {
+    const d = await prisma.inventoryDraftItem.findFirst({
+      where: { id: args.draftId, propertyId: args.propertyId, userId: args.userId },
+    });
+    if (!d) throw new APIError('Draft not found', 404, 'DRAFT_NOT_FOUND');
+    if (d.status !== 'DRAFT') throw new APIError('Draft not editable', 409, 'DRAFT_NOT_EDITABLE');
+
+    if (args.patch.roomId) {
+      const room = await prisma.inventoryRoom.findFirst({
+        where: { id: args.patch.roomId, propertyId: args.propertyId },
+        select: { id: true },
+      });
+      if (!room) throw new APIError('Room not found', 404, 'ROOM_NOT_FOUND');
+    }
+
+    // Track edits (optional)
+    const edits = {
+      at: new Date().toISOString(),
+      patch: args.patch,
+    };
+
+    return prisma.inventoryDraftItem.update({
+      where: { id: args.draftId },
+      data: {
+        ...args.patch,
+
+        // Optional “legacy sync” for consistency with your item model conventions
+        ...(args.patch.manufacturer !== undefined ? { brand: args.patch.manufacturer } : {}),
+        ...(args.patch.modelNumber !== undefined ? { model: args.patch.modelNumber } : {}),
+        ...(args.patch.serialNumber !== undefined ? { serialNo: args.patch.serialNumber } : {}),
+
+        editsJson: edits as any,
+      } as any,
+    });
+  }
 
 }

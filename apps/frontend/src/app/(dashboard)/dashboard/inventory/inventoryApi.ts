@@ -513,3 +513,8 @@ export async function bulkDismissInventoryDrafts(propertyId: string, draftIds: s
   const res: any = await api.post(`/api/properties/${propertyId}/inventory/drafts/bulk-dismiss`, { draftIds });
   return unwrap(res);
 }
+
+export async function updateInventoryDraft(propertyId: string, draftId: string, patch: any) {
+  const res: any = await api.patch(`/api/properties/${propertyId}/inventory/drafts/${draftId}`, patch);
+  return unwrap(res);
+}

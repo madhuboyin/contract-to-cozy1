@@ -13,7 +13,7 @@ import { checkDuplicateAppliance, listImportBatches, rollbackImportBatch } from 
 import { InventoryService } from '../services/inventory.service';
 import { startRoomScan, getRoomScanSession } from '../controllers/inventoryRoomScan.controller';
 import { bulkConfirmDrafts, bulkDismissDrafts } from '../controllers/inventoryOcr.controller';
-import { listInventoryDrafts } from '../controllers/inventoryDraft.controller';
+import { listInventoryDrafts, updateInventoryDraft } from '../controllers/inventoryDraft.controller';
 
 import {
   listRooms,
@@ -550,5 +550,18 @@ router.post(
   propertyAuthMiddleware,
   bulkDismissDrafts
 );
+
+router.get(
+  '/properties/:propertyId/inventory/drafts',
+  propertyAuthMiddleware,
+  listInventoryDrafts
+);
+
+router.patch(
+  '/properties/:propertyId/inventory/drafts/:draftId',
+  propertyAuthMiddleware,
+  updateInventoryDraft
+);
+
 
 export default router;

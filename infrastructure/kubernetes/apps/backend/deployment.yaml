@@ -74,7 +74,22 @@ spec:
               valueFrom:
                 configMapKeyRef:
                   name: app-config
-                  key: ROOM_SCAN_GEMINI_DEBUG                  
+                  key: ROOM_SCAN_GEMINI_DEBUG
+            - name: INVENTORY_ROOM_SCAN_AUTOSELECT_THRESHOLD
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: INVENTORY_ROOM_SCAN_AUTOSELECT_THRESHOLD
+            - name: INVENTORY_ROOM_SCAN_STORE_AI_RAW
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: INVENTORY_ROOM_SCAN_STORE_AI_RAW
+            - name: INVENTORY_ROOM_SCAN_DUPLICATE_THRESHOLD
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: INVENTORY_ROOM_SCAN_DUPLICATE_THRESHOLD
             - name: GEMINI_API_KEY
               valueFrom:
                 secretKeyRef:

@@ -41,3 +41,40 @@ export async function listInventoryDrafts(req: CustomRequest, res: Response, nex
     next(err);
   }
 }
+
+export async function updateInventoryDraft(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const propertyId = req.params.propertyId;
+    const draftId = req.params.draftId;
+    const userId = req.user?.userId;
+    if (!userId) throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
+
+    const body = req.body || {};
+
+    const updated = await svc.updateDraft({
+      propertyId,
+      userId,
+      draftId,
+      patch: {
+        name: typeof body.name === 'string' ? body.name : undefined,
+        category: typeof body.category === 'string' ? body.category : undefined,
+        roomId: typeof body.roomId === 'string' ? body.roomId : undefined,
+
+        condition: typeof body.condition === 'string' ? body.condition : undefined,
+        brand: typeof body.brand === 'string' ? body.brand : undefined,
+        model: typeof body.model === 'string' ? body.model : undefined,
+        serialNo: typeof body.serialNo === 'string' ? body.serialNo : undefined,
+
+        manufacturer: typeof body.manufacturer === 'string' ? body.manufacturer : undefined,
+        modelNumber: typeof body.modelNumber === 'string' ? body.modelNumber : undefined,
+        serialNumber: typeof body.serialNumber === 'string' ? body.serialNumber : undefined,
+        upc: typeof body.upc === 'string' ? body.upc : undefined,
+        sku: typeof body.sku === 'string' ? body.sku : undefined,
+      },
+    });
+
+    return res.json({ success: true, data: { draft: updated } });
+  } catch (err) {
+    next(err);
+  }
+}
