@@ -8,10 +8,17 @@ import { useParams } from 'next/navigation';
 import { InventoryItem, InventoryRoom } from '@/types';
 import { SectionHeader } from '../../../../components/SectionHeader';
 import InventoryItemCard from '../../../../components/inventory/InventoryItemCard';
-import { getRoomInsights, listInventoryItems, listInventoryRooms } from '../../../../inventory/inventoryApi';
 
 import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
 import RoomScanModal from '@/app/(dashboard)/dashboard/components/inventory/RoomScanModal';
+import {
+  getRoomInsights,
+  listInventoryItems,
+  listInventoryRooms,
+  listRoomScanSessions,
+  getDraftsCsvExportUrl,
+} from '../../../../inventory/inventoryApi';
+
 
 function money(cents: number | null | undefined, currency = 'USD') {
   if (!cents) return '$0';
@@ -143,7 +150,10 @@ export default function RoomShowcaseClient() {
   }
 
   useEffect(() => {
-    if (propertyId && roomId) refresh();
+    if (propertyId && roomId) {
+      refresh();
+      loadScanSessions();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, roomId]);
 
@@ -180,6 +190,22 @@ export default function RoomShowcaseClient() {
   const stats = insights?.stats;
 
   const [scanOpen, setScanOpen] = useState(false);
+  const [scanSessions, setScanSessions] = useState<any[]>([]);
+  const [scanSessionsLoading, setScanSessionsLoading] = useState(false);
+  const [historySessionId, setHistorySessionId] = useState<string | null>(null);
+
+  async function loadScanSessions() {
+    setScanSessionsLoading(true);
+    try {
+      const sessions = await listRoomScanSessions(propertyId, roomId, 8);
+      setScanSessions(Array.isArray(sessions) ? sessions : []);
+    } catch (e) {
+      console.error('[RoomShowcaseClient] listRoomScanSessions failed', e);
+      setScanSessions([]);
+    } finally {
+      setScanSessionsLoading(false);
+    }
+  }
 
   const whyFactors = asArray((insights as any)?.healthScore?.factors).map((f: any) => ({
     label: String(f?.label || f?.key || 'Factor'),
@@ -231,11 +257,87 @@ export default function RoomShowcaseClient() {
       </div>
       <RoomScanModal
         open={scanOpen}
-        onClose={() => setScanOpen(false)}
+        onClose={() => {
+          setScanOpen(false);
+          setHistorySessionId(null);
+          loadScanSessions(); // refresh counts after confirm/dismiss
+        }}
         propertyId={propertyId}
         roomId={roomId}
         roomName={room?.name}
+        initialSessionId={historySessionId}
       />
+
+      {/* ✅ Scan history */}
+      <div className="rounded-2xl border border-black/10 bg-white p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold">Scan history</div>
+            <div className="text-xs opacity-70">Reopen a scan or export the drafts.</div>
+          </div>
+
+          <button
+            onClick={loadScanSessions}
+            disabled={scanSessionsLoading}
+            className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
+          >
+            {scanSessionsLoading ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
+
+        {scanSessions.length === 0 ? (
+          <div className="mt-3 text-sm opacity-70">No scans yet for this room.</div>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {scanSessions.slice(0, 6).map((s) => {
+              const created = s?.createdAt ? new Date(s.createdAt) : null;
+              const label = created ? created.toLocaleString() : '—';
+              const c = s?.counts || {};
+              const exportUrl = getDraftsCsvExportUrl({ propertyId, scanSessionId: s.id });
+
+              return (
+                <div
+                  key={s.id}
+                  className="rounded-xl border border-black/10 p-3 flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium truncate">
+                      {label}{' '}
+                      <span className="ml-2 text-xs rounded-full border border-black/10 px-2 py-0.5 opacity-70">
+                        {String(s.status || '—')}
+                      </span>
+                    </div>
+                    <div className="text-xs opacity-70 mt-0.5">
+                      Drafts: <span className="font-medium">{c.drafts ?? 0}</span> · Confirmed:{' '}
+                      <span className="font-medium">{c.confirmed ?? 0}</span> · Dismissed:{' '}
+                      <span className="font-medium">{c.dismissed ?? 0}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => {
+                        setHistorySessionId(s.id);
+                        setScanOpen(true);
+                      }}
+                      className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+                    >
+                      Reopen
+                    </button>
+
+                    <a
+                      href={exportUrl}
+                      className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+                    >
+                      Export CSV
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Hero strip */}
       <div className="rounded-3xl border border-black/10 p-5 bg-gradient-to-b from-black/[0.03] to-transparent">
