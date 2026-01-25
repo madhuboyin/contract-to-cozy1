@@ -14,6 +14,10 @@ function envInt(key: string, dflt: number) {
   return Number.isFinite(n) && n > 0 ? n : dflt;
 }
 
+function envTrue(name: string) {
+  return String(process.env[name] || '').toLowerCase() === 'true';
+}
+
 function envBool(key: string, dflt = false) {
   const v = String(process.env[key] ?? '').toLowerCase().trim();
   if (v === 'true' || v === '1' || v === 'yes') return true;
@@ -300,6 +304,19 @@ export class RoomScanService {
       const latencyMs = Date.now() - t0;      
 
       const items = normalizeItems(result?.items);
+      if (items.length === 0) {
+        const isProd = process.env.NODE_ENV === 'production';
+        const preview = String((result as any)?.raw?.text || '').slice(0, 500);
+
+        console.warn('[room-scan][empty-items]', {
+          sessionId: session.id,
+          provider: provider.name,
+          roomType: room.type || null,
+          imagesCount,
+          latencyMs,
+          textPreview: isProd ? undefined : preview,
+        });
+      }
       // Token usage if provider returns it (Gemini may return usageMetadata)
       const usage = (result as any)?.raw?.usageMetadata || null;
 

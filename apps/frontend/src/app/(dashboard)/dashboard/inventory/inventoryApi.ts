@@ -470,25 +470,20 @@ export async function startRoomScanAi(propertyId: string, roomId: string, files:
   const form = new FormData();
   for (const f of files) form.append('images', f);
 
-  const res: any = await api.post(
-    `/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai`,
-    form
-  );
+  // Backend now returns APISuccess => api.post().data contains { sessionId, drafts }
+  const res: any = await api.post(`/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai`, form);
 
-  // After client.ts fix: res = { data: payload }, where payload can be:
-  //   - { sessionId, drafts }
-  //   - { success:true, data:{ sessionId, drafts } }  (if backend wraps later)
   const payload = res?.data ?? res;
-  const inner = payload?.data ?? payload;
 
-  const sessionId = inner?.sessionId;
-  const drafts = inner?.drafts;
+  const sessionId = payload?.sessionId;
+  const drafts = payload?.drafts;
 
   return {
     sessionId: typeof sessionId === 'string' ? sessionId : null,
     drafts: Array.isArray(drafts) ? drafts : [],
   } as { sessionId: string | null; drafts: any[] };
 }
+
 
 export async function getRoomScanAiSession(propertyId: string, roomId: string, sessionId: string) {
   const res = await api.get(`/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai/${sessionId}`);
@@ -499,23 +494,15 @@ export async function listInventoryDraftsFiltered(
   propertyId: string,
   params: { scanSessionId?: string; status?: string; roomId?: string } = {}
 ): Promise<any[]> {
-  // ✅ never send scanSessionId=undefined or scanSessionId="undefined"
-  const clean: any = { ...params };
-  if (!clean.scanSessionId || clean.scanSessionId === 'undefined') delete clean.scanSessionId;
-  if (!clean.roomId || clean.roomId === 'undefined') delete clean.roomId;
-  if (!clean.status || clean.status === 'undefined') delete clean.status;
+  const res: any = await api.get(`/api/properties/${propertyId}/inventory/drafts`, { params });
 
-  const res: any = await api.get(
-    `/api/properties/${propertyId}/inventory/drafts`,
-    { params: clean }
-  );
-
+  // Backend now returns APISuccess => api.get().data contains { drafts: [...] }
   const payload = res?.data ?? res;
-  const inner = payload?.data ?? payload;
+  const drafts = payload?.drafts;
 
-  // Accept { drafts: [...] } or legacy { drafts: { ... } }
-  return normalizeDraftsPayload(inner);
+  return Array.isArray(drafts) ? drafts : [];
 }
+
 export async function bulkConfirmInventoryDrafts(propertyId: string, draftIds: string[]) {
   // ✅ match backend canonical route (aliases also exist)
   const res: any = await api.post(`/api/properties/${propertyId}/inventory/drafts/bulk-confirm`, { draftIds });

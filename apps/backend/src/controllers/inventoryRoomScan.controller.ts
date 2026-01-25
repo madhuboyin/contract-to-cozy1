@@ -21,17 +21,18 @@ export async function startRoomScan(req: CustomRequest, res: Response, next: Nex
     const roomId = req.params.roomId;
     const userId = req.user?.userId;
 
-    if (!userId) {
-      throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
-    }
+    if (!userId) throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
 
     const files = pickUploadedFiles(req);
     const out = await svc.runRoomScan({ propertyId, roomId, userId, files });
 
-    // ✅ Consistent contract (raw payload): { sessionId, drafts: [] }
+    // ✅ IMPORTANT: return APISuccess envelope for frontend APIClient.post()
     return res.json({
-      sessionId: out.sessionId,
-      drafts: Array.isArray(out.drafts) ? out.drafts : [],
+      success: true,
+      data: {
+        sessionId: out.sessionId,
+        drafts: out.drafts || [],
+      },
     });
   } catch (err) {
     next(err);
@@ -45,12 +46,14 @@ export async function getRoomScanSession(req: CustomRequest, res: Response, next
     const sessionId = req.params.sessionId;
     const userId = req.user?.userId;
 
-    if (!userId) {
-      throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
-    }
+    if (!userId) throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
 
     const out = await svc.getSession({ propertyId, roomId, sessionId, userId });
-    return res.json(out);
+
+    return res.json({
+      success: true,
+      data: out,
+    });
   } catch (err) {
     next(err);
   }

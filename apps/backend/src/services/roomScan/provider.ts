@@ -4,137 +4,132 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 export type RoomScanItem = {
   label: string;
   category?: string;
-  confidence?: number; // 0..1
+  confidence?: number;
+};
+
+export type ExtractItemsArgs = {
+  images: Buffer[];
+  roomType?: string | null;
 };
 
 export type RoomScanProviderResult = {
   items: RoomScanItem[];
-  raw?: any;
+  raw?: {
+    model?: string;
+    usageMetadata?: any;
+    text?: string;
+  };
 };
 
 export interface RoomScanVisionProvider {
   name: string;
-  extractItemsFromImages(args: {
-    images: Buffer[];
-    roomType?: string | null;
-  }): Promise<RoomScanProviderResult>;
-}
-
-export class StubRoomScanProvider implements RoomScanVisionProvider {
-  name = 'stub';
-  async extractItemsFromImages(): Promise<RoomScanProviderResult> {
-    return {
-      items: [
-        { label: 'Sofa', category: 'FURNITURE', confidence: 0.8 },
-        { label: 'TV', category: 'ELECTRONICS', confidence: 0.75 },
-        { label: 'Coffee table', category: 'FURNITURE', confidence: 0.7 },
-        { label: 'Lamp', category: 'DECOR', confidence: 0.65 },
-      ],
-      raw: { provider: 'stub' },
-    };
-  }
+  extractItemsFromImages(args: ExtractItemsArgs): Promise<RoomScanProviderResult>;
 }
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function envInt(key: string, dflt: number) {
-  const n = Number(process.env[key]);
+function envInt(name: string, dflt: number) {
+  const n = Number(process.env[name]);
   return Number.isFinite(n) && n >= 0 ? n : dflt;
 }
 
-function isGeminiRetryableError(e: any): boolean {
-  const msg = String(e?.message || '').toLowerCase();
-  const code = Number(e?.status || e?.code || e?.response?.status);
-
-  // Explicit transient statuses
+function isGeminiRetryableError(e: any) {
+  const code = e?.status || e?.code || e?.response?.status;
   if (code === 429 || code === 503) return true;
 
-  // Common transient/network hints
-  if (
-    msg.includes('rate limit') ||
-    msg.includes('quota') ||
-    msg.includes('too many requests') ||
-    msg.includes('temporarily unavailable') ||
-    msg.includes('timeout') ||
-    msg.includes('timed out') ||
-    msg.includes('econnreset') ||
-    msg.includes('socket hang up') ||
-    msg.includes('etimedout') ||
-    msg.includes('fetch failed')
-  ) {
-    return true;
-  }
+  const msg = String(e?.message || '').toLowerCase();
+  if (msg.includes('overloaded') || msg.includes('timeout') || msg.includes('temporarily')) return true;
 
   return false;
 }
 
 function backoffMs(attempt: number, baseMs: number, capMs: number) {
-  // exponential backoff with full jitter
   const exp = Math.min(capMs, baseMs * Math.pow(2, attempt));
   return Math.floor(Math.random() * exp);
 }
 
-/**
- * Gemini provider: multi-image request with inlineData parts.
- * Official docs: "Image understanding" + inline image data in generateContent. :contentReference[oaicite:4]{index=4}
- */
+export class StubRoomScanProvider implements RoomScanVisionProvider {
+  name = 'stub';
+
+  async extractItemsFromImages(_: ExtractItemsArgs): Promise<RoomScanProviderResult> {
+    return {
+      items: [
+        { label: 'Sofa', category: 'FURNITURE', confidence: 0.74 },
+        { label: 'TV', category: 'ELECTRONICS', confidence: 0.78 },
+        { label: 'Coffee table', category: 'FURNITURE', confidence: 0.71 },
+        { label: 'Lamp', category: 'OTHER', confidence: 0.65 },
+      ],
+      raw: { model: 'stub', text: '{"items":[...]}', usageMetadata: null },
+    };
+  }
+}
+
 export class GeminiRoomScanProvider implements RoomScanVisionProvider {
   name = 'gemini';
 
-  private apiKey = process.env.GEMINI_API_KEY || '';
-  private modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  private apiKey: string;
+  private modelName: string;
 
   constructor() {
+    this.apiKey = process.env.GEMINI_API_KEY || '';
+    this.modelName = process.env.ROOM_SCAN_GEMINI_MODEL || 'gemini-1.5-flash';
     if (!this.apiKey) {
-      throw new Error('GEMINI_API_KEY is required when ROOM_SCAN_PROVIDER=gemini');
+      throw new Error('GEMINI_API_KEY missing (required for ROOM_SCAN_PROVIDER=gemini)');
     }
   }
 
-  private safeJsonParse(text: string): any | null {
+  private safeJsonParseLoose(text: string): any | null {
     const t = String(text || '').trim();
+    if (!t) return null;
 
-    // Try direct JSON
+    // 1) direct parse
     try {
       return JSON.parse(t);
     } catch {}
 
-    // Try to extract fenced ```json ... ```
-    const m = t.match(/```json\s*([\s\S]*?)```/i) || t.match(/```\s*([\s\S]*?)```/i);
-    if (m?.[1]) {
+    // 2) fenced ```json ... ```
+    const fenced = t.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (fenced?.[1]) {
       try {
-        return JSON.parse(m[1].trim());
+        return JSON.parse(fenced[1].trim());
       } catch {}
     }
 
-    // Try first {...} block
-    const start = t.indexOf('{');
-    const end = t.lastIndexOf('}');
-    if (start >= 0 && end > start) {
+    // 3) try extract first {...} block
+    const firstObj = t.indexOf('{');
+    const lastObj = t.lastIndexOf('}');
+    if (firstObj >= 0 && lastObj > firstObj) {
       try {
-        return JSON.parse(t.slice(start, end + 1));
+        return JSON.parse(t.slice(firstObj, lastObj + 1));
+      } catch {}
+    }
+
+    // 4) try extract first [...] block (top-level array case)
+    const firstArr = t.indexOf('[');
+    const lastArr = t.lastIndexOf(']');
+    if (firstArr >= 0 && lastArr > firstArr) {
+      const arrSlice = t.slice(firstArr, lastArr + 1);
+      try {
+        const arr = JSON.parse(arrSlice);
+        // If it’s an array of items, wrap it into expected shape
+        if (Array.isArray(arr)) return { items: arr };
       } catch {}
     }
 
     return null;
   }
 
-  async extractItemsFromImages(args: { images: Buffer[]; roomType?: string | null }): Promise<RoomScanProviderResult> {
+  async extractItemsFromImages(args: ExtractItemsArgs): Promise<RoomScanProviderResult> {
     const genAI = new GoogleGenerativeAI(this.apiKey);
     const model = genAI.getGenerativeModel({ model: this.modelName });
 
-    const roomHint = args.roomType ? `Room type: ${args.roomType}` : 'Room type: unknown';
-
     const schemaHint = {
-      items: [
-        {
-          label: 'string (short)',
-          category: 'one of: APPLIANCE|ELECTRONICS|FURNITURE|FIXTURE|DECOR|TOOL|SAFETY|OTHER',
-          confidence: 'number 0..1',
-        },
-      ],
+      items: [{ label: 'Sofa', category: 'FURNITURE', confidence: 0.72 }],
     };
+
+    const roomHint = args.roomType ? `Room type hint: ${args.roomType}` : 'Room type hint: unknown';
 
     const prompt = [
       'You are an expert home-inventory assistant.',
@@ -159,10 +154,7 @@ export class GeminiRoomScanProvider implements RoomScanVisionProvider {
       });
     }
 
-    // ----------------------------
-    // Retry/backoff (cost guard + resiliency)
-    // ----------------------------
-    const maxRetries = envInt('ROOM_SCAN_GEMINI_MAX_RETRIES', 3); // retries after first attempt
+    const maxRetries = envInt('ROOM_SCAN_GEMINI_MAX_RETRIES', 3);
     const baseMs = envInt('ROOM_SCAN_GEMINI_BACKOFF_BASE_MS', 500);
     const capMs = envInt('ROOM_SCAN_GEMINI_BACKOFF_CAP_MS', 6000);
 
@@ -185,7 +177,6 @@ export class GeminiRoomScanProvider implements RoomScanVisionProvider {
         if (!isGeminiRetryableError(e) || attempt === maxRetries) break;
 
         const wait = backoffMs(attempt, baseMs, capMs);
-        // lightweight retry log (avoid noisy stack)
         console.warn('[room-scan][gemini] transient error; retrying', {
           model: this.modelName,
           attempt: attempt + 1,
@@ -202,12 +193,18 @@ export class GeminiRoomScanProvider implements RoomScanVisionProvider {
     if (lastErr) throw lastErr;
 
     const text = resp?.response?.text?.() ?? '';
-
-    // Usage metadata (SDK may provide this; keep it optional)
-    // Some Gemini responses include usageMetadata: { promptTokenCount, candidatesTokenCount, totalTokenCount }
     const usage = resp?.response?.usageMetadata || resp?.usageMetadata || null;
 
-    const parsed = this.safeJsonParse(text);
+    const parsed = this.safeJsonParseLoose(text);
+
+    if (!parsed) {
+      const isProd = process.env.NODE_ENV === 'production';
+      console.warn('[room-scan][gemini] JSON parse failed', {
+        model: this.modelName,
+        textPreview: isProd ? undefined : String(text || '').slice(0, 500),
+      });
+    }
+
     const itemsRaw = Array.isArray(parsed?.items) ? parsed.items : [];
 
     const items: RoomScanItem[] = itemsRaw
@@ -227,14 +224,11 @@ export class GeminiRoomScanProvider implements RoomScanVisionProvider {
       },
     };
   }
-
 }
 
 export function getRoomScanProvider(): RoomScanVisionProvider {
   const choice = String(process.env.ROOM_SCAN_PROVIDER || 'stub').toLowerCase();
-
   if (choice === 'gemini') return new GeminiRoomScanProvider();
   if (choice === 'stub') return new StubRoomScanProvider();
-
   return new StubRoomScanProvider();
 }

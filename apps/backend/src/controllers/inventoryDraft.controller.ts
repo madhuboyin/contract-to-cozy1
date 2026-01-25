@@ -12,16 +12,17 @@ export async function listInventoryDrafts(req: CustomRequest, res: Response, nex
     const userId = req.user?.userId;
     if (!userId) throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
 
-    const scanSessionIdRaw = typeof req.query.scanSessionId === 'string' ? req.query.scanSessionId.trim() : '';
-    const roomIdRaw = typeof req.query.roomId === 'string' ? req.query.roomId.trim() : '';
-
-    // ✅ Treat "undefined" as absent (frontend bug / bad callers)
     const scanSessionId =
-      scanSessionIdRaw && scanSessionIdRaw !== 'undefined' ? scanSessionIdRaw : undefined;
+      typeof req.query.scanSessionId === 'string' && req.query.scanSessionId.trim()
+        ? req.query.scanSessionId.trim()
+        : undefined;
 
     const roomId =
-      roomIdRaw && roomIdRaw !== 'undefined' ? roomIdRaw : undefined;
+      typeof req.query.roomId === 'string' && req.query.roomId.trim()
+        ? req.query.roomId.trim()
+        : undefined;
 
+    // NOTE: service always filters status='DRAFT'
     const drafts = await svc.listDraftsFiltered({
       propertyId,
       userId,
@@ -29,8 +30,13 @@ export async function listInventoryDrafts(req: CustomRequest, res: Response, nex
       scanSessionId,
     });
 
-    // ✅ Always return array
-    return res.json({ drafts: Array.isArray(drafts) ? drafts : [] });
+    // ✅ IMPORTANT: return APISuccess envelope for frontend APIClient.get()
+    return res.json({
+      success: true,
+      data: {
+        drafts: Array.isArray(drafts) ? drafts : [],
+      },
+    });
   } catch (err) {
     next(err);
   }
