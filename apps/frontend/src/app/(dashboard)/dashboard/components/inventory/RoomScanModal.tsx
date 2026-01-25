@@ -73,14 +73,9 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
     setBusy(true);
     try {
       const result = await startRoomScanAi(propertyId, roomId, files);
+      console.log('[RoomScanModal] startRoomScanAi result:', result);
 
-      if (isDev()) {
-        // ✅ helps you confirm shape immediately without guessing
-        // eslint-disable-next-line no-console
-        console.log('[room-scan] startRoomScanAi result:', result);
-      }
-
-      const sid = result?.sessionId;
+      const sid = (result as any)?.sessionId;
 
       if (!sid) {
         throw new Error('Room scan did not return a sessionId');

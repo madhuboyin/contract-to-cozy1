@@ -7,6 +7,7 @@ import type { InventoryItem, InventoryRoom, InventoryItemCategory } from '@/type
  * Types (Phase 2 / Phase 3)
  * ----------------------------
  */
+console.log('[inventoryApi.ts] loaded from dashboard/inventory/inventoryApi.ts');
 
 export type BarcodeLookupResult = {
   name?: string;
@@ -465,32 +466,28 @@ export async function updateInventoryRoomProfile(propertyId: string, roomId: str
   return (res as any)?.data?.data?.room ?? (res as any)?.data?.room ?? (res as any)?.data;
 }
 
-export async function startRoomScanAi(
-  propertyId: string,
-  roomId: string,
-  files: File[]
-): Promise<{ sessionId: string; drafts: any[] }> {
+export async function startRoomScanAi(propertyId: string, roomId: string, files: File[]) {
   const form = new FormData();
   for (const f of files) form.append('images', f);
 
-  // IMPORTANT:
-  // api.post() already returns the response body (not AxiosResponse)
-  const res: any = await api.post(
-    `/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai`,
-    form
-  );
+  const res: any = await api.post(`/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai`, form);
 
-  // 🔴 DO NOT over-unwrap — the backend returns the body directly
-  const sessionId = res?.sessionId;
-  const drafts = Array.isArray(res?.drafts) ? res.drafts : [];
-
+  // ✅ Log the *exact* object the UI receives
   if (process.env.NODE_ENV !== 'production') {
-    console.log('[startRoomScanAi] raw response:', res);
+    console.log('[startRoomScanAi] api.post returned:', res);
+    console.log('[startRoomScanAi] typeof res:', typeof res, 'keys:', res && typeof res === 'object' ? Object.keys(res) : null);
   }
 
-  return { sessionId, drafts };
-}
+  // ✅ Support both shapes safely:
+  // - raw: { sessionId, drafts }
+  // - wrapped: { data: { sessionId, drafts } }
+  const payload = res?.sessionId ? res : res?.data?.sessionId ? res.data : res;
 
+  const sessionId = payload?.sessionId;
+  const drafts = Array.isArray(payload?.drafts) ? payload.drafts : [];
+
+  return { sessionId, drafts } as { sessionId: string | null; drafts: any[] };
+}
 
 export async function getRoomScanAiSession(propertyId: string, roomId: string, sessionId: string) {
   const res = await api.get(`/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai/${sessionId}`);
