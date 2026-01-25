@@ -15,46 +15,56 @@ function pickUploadedFiles(req: CustomRequest): Express.Multer.File[] {
   return Array.isArray(fromImages) ? fromImages : [];
 }
 
-export async function startRoomScan(req: CustomRequest, res: Response, next: NextFunction) {
+export async function startRoomScan(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction
+) {
   try {
     const propertyId = req.params.propertyId;
     const roomId = req.params.roomId;
     const userId = req.user?.userId;
 
-    if (!userId) throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
+    if (!userId) {
+      throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
+    }
 
     const files = pickUploadedFiles(req);
-    const out = await svc.runRoomScan({ propertyId, roomId, userId, files });
+    if (!files.length || !files[0]?.buffer) {
+      throw new APIError('At least one image file is required', 400, 'VALIDATION_ERROR');
+    }
+    const images = files.map((f) => f.buffer);
+    const out = await svc.startScan({ propertyId, roomId, userId, images });
 
-    // ✅ IMPORTANT: return APISuccess envelope for frontend APIClient.post()
     return res.json({
-      success: true,
-      data: {
-        sessionId: out.sessionId,
-        drafts: out.drafts || [],
-      },
+      sessionId: out.sessionId,
+      drafts: out.drafts,
+      
     });
   } catch (err) {
-    next(err);
+    next(err); // ✅ CRITICAL
   }
 }
 
-export async function getRoomScanSession(req: CustomRequest, res: Response, next: NextFunction) {
+export async function getRoomScanSession(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction
+) {
   try {
     const propertyId = req.params.propertyId;
     const roomId = req.params.roomId;
     const sessionId = req.params.sessionId;
     const userId = req.user?.userId;
 
-    if (!userId) throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
+    if (!userId) {
+      throw new APIError('Authentication required', 401, 'AUTH_REQUIRED');
+    }
 
     const out = await svc.getSession({ propertyId, roomId, sessionId, userId });
-
-    return res.json({
-      success: true,
-      data: out,
-    });
+    return res.json(out);
   } catch (err) {
     next(err);
   }
 }
+
