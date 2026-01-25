@@ -163,8 +163,19 @@ export async function deleteInventoryRoom(propertyId: string, roomId: string) {
  * Items
  * ----------------------------
  */
-export async function listInventoryItems(propertyId: string): Promise<InventoryItem[]> {
-  const res: any = await api.get(`/api/properties/${propertyId}/inventory/items`);
+export async function listInventoryItems(
+  propertyId: string,
+  params?: { roomId?: string; category?: string; q?: string; hasDocuments?: boolean }
+): Promise<InventoryItem[]> {
+  const queryParams = new URLSearchParams();
+  if (params?.roomId) queryParams.set('roomId', params.roomId);
+  if (params?.category) queryParams.set('category', params.category);
+  if (params?.q) queryParams.set('q', params.q);
+  if (params?.hasDocuments !== undefined) queryParams.set('hasDocuments', String(params.hasDocuments));
+  
+  const queryString = queryParams.toString();
+  const url = `/api/properties/${propertyId}/inventory/items${queryString ? `?${queryString}` : ''}`;
+  const res: any = await api.get(url);
   const payload = unwrapApi(res);
   if (payload && typeof payload === 'object' && Array.isArray((payload as any).items)) return (payload as any).items;
   return asArray(payload);
