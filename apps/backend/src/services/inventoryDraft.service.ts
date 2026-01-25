@@ -18,7 +18,7 @@ export class InventoryDraftService {
       data: {
         propertyId: args.propertyId,
         userId: args.userId,
-        scanSessionId: args.scanSessionId, // ✅ use same field as room scan
+        scanSessionId: args.scanSessionId,
         status: 'DRAFT',
 
         manufacturer: args.manufacturer || null,
@@ -44,6 +44,68 @@ export class InventoryDraftService {
     });
   }
 
+  async listDraftsFiltered(args: {
+    propertyId: string;
+    userId: string;
+    roomId?: string | null;
+    scanSessionId?: string | null;
+    status?: 'DRAFT' | 'DISMISSED' | 'CONFIRMED' | null;
+  }) {
+    const status = args.status || 'DRAFT';
+
+    return prisma.inventoryDraftItem.findMany({
+      where: {
+        propertyId: args.propertyId,
+        userId: args.userId,
+        status,
+        ...(args.roomId ? { roomId: args.roomId } : {}),
+        ...(args.scanSessionId ? { scanSessionId: args.scanSessionId } : {}),
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+  }
+
+  async updateDraft(args: {
+    propertyId: string;
+    userId: string;
+    draftId: string;
+    patch: {
+      name?: string | null;
+      category?: string | null;
+      roomId?: string | null;
+    };
+  }) {
+    const d = await prisma.inventoryDraftItem.findFirst({
+      where: { id: args.draftId, propertyId: args.propertyId, userId: args.userId },
+    });
+    if (!d) throw new APIError('Draft not found', 404, 'DRAFT_NOT_FOUND');
+    if (d.status !== 'DRAFT') throw new APIError('Draft not editable', 409, 'DRAFT_NOT_EDITABLE');
+
+    const data: any = {};
+
+    if (args.patch.name !== undefined) {
+      const v = String(args.patch.name || '').trim();
+      data.name = v ? v : null;
+    }
+
+    if (args.patch.category !== undefined) {
+      const v = String(args.patch.category || '').toUpperCase().trim();
+      data.category = v ? v : null;
+    }
+
+    if (args.patch.roomId !== undefined) {
+      const v = String(args.patch.roomId || '').trim();
+      data.roomId = v ? v : null;
+    }
+
+    if (!Object.keys(data).length) return d;
+
+    return prisma.inventoryDraftItem.update({
+      where: { id: args.draftId },
+      data,
+    });
+  }
+
   async dismissDraft(propertyId: string, userId: string, draftId: string) {
     const d = await prisma.inventoryDraftItem.findFirst({ where: { id: draftId, propertyId, userId } });
     if (!d) throw new APIError('Draft not found', 404, 'DRAFT_NOT_FOUND');
@@ -52,16 +114,18 @@ export class InventoryDraftService {
       where: { id: draftId },
       data: { status: 'DISMISSED' },
     });
-  }  
+  }
+
   async confirmDraftToInventoryItem(propertyId: string, userId: string, draftId: string) {
     const d = await prisma.inventoryDraftItem.findFirst({ where: { id: draftId, propertyId, userId } });
     if (!d) throw new APIError('Draft not found', 404, 'DRAFT_NOT_FOUND');
     if (d.status !== 'DRAFT') throw new APIError('Draft not in DRAFT state', 409, 'DRAFT_NOT_CONFIRMABLE');
 
-    // Create inventory item from draft
     const item = await prisma.inventoryItem.create({
       data: {
         propertyId,
+        roomId: d.roomId || null,
+
         name: d.name || d.modelNumber || d.manufacturer || 'New item',
         category: d.category || 'OTHER',
         condition: d.condition || 'UNKNOWN',
@@ -88,26 +152,6 @@ export class InventoryDraftService {
     return item;
   }
 
-  // ADD these methods to InventoryDraftService
-
-  async listDraftsFiltered(args: {
-    propertyId: string;
-    userId: string;
-    roomId?: string | null;
-    scanSessionId?: string | null;
-  }) {
-    return prisma.inventoryDraftItem.findMany({
-      where: {
-        propertyId: args.propertyId,
-        userId: args.userId,
-        status: 'DRAFT',
-        ...(args.roomId ? { roomId: args.roomId } : {}),
-        ...(args.scanSessionId ? { scanSessionId: args.scanSessionId } : {}),
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
-  }
-
   async bulkDismiss(propertyId: string, userId: string, draftIds: string[]) {
     if (!draftIds.length) return { updated: 0 };
 
@@ -122,7 +166,6 @@ export class InventoryDraftService {
   async bulkConfirm(propertyId: string, userId: string, draftIds: string[]) {
     if (!draftIds.length) return { created: 0, itemIds: [] as string[] };
 
-    // Confirm each draft into an InventoryItem (transaction keeps state consistent)
     const items = await prisma.$transaction(async (tx) => {
       const drafts = await tx.inventoryDraftItem.findMany({
         where: { id: { in: draftIds }, propertyId, userId, status: 'DRAFT' },
@@ -169,5 +212,4 @@ export class InventoryDraftService {
 
     return { created: items.length, itemIds: items };
   }
-
 }

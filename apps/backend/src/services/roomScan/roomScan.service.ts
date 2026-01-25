@@ -1,6 +1,7 @@
 // apps/backend/src/services/roomScan/roomScan.service.ts
 import { prisma } from '../../lib/prisma';
 import { APIError } from '../../middleware/error.middleware';
+import { InventoryItemCategory } from '@prisma/client';
 import sharp from 'sharp';
 import crypto from 'crypto';
 import { getRoomScanProvider } from './provider';
@@ -38,203 +39,190 @@ function normLabel(s: string) {
 }
 
 function dedupeKey(label: string) {
-  return normLabel(label).replace(/\s+/g, '_');
+  const cleaned = normLabel(label);
+  return cleaned.replace(/\b(the|a|an|with|and|for|of)\b/g, '').replace(/\s+/g, ' ').trim();
 }
 
-function sha1(buf: Buffer) {
-  return crypto.createHash('sha1').update(buf).digest('hex');
-}
-
-/**
- * Prevent Prisma validation errors when AI returns a category that isn't in the enum.
- * IMPORTANT: Update allowed values to match your Prisma InventoryItemCategory enum exactly.
- */
-function normalizeInventoryCategory(v: any): any | null {
-  const up = String(v ?? '').toUpperCase().trim();
-
-  // ✅ Keep in sync with your Prisma enum values
+function normalizeInventoryCategory(cat: any) {
+  const v = String(cat || '').toUpperCase().trim();
   const allowed = new Set([
     'APPLIANCE',
     'ELECTRONICS',
     'FURNITURE',
-    'HVAC',
     'PLUMBING',
-    'SECURITY',
-    'TOOL',
-    'DOCUMENT',
+    'HVAC',
     'OTHER',
   ]);
-
-  if (!up) return null;
-  return allowed.has(up) ? up : 'OTHER'; // fallback to OTHER to avoid 400 VALIDATION_ERROR
+  return allowed.has(v) ? v : 'OTHER';
 }
 
-function getS3(): { client: S3Client; bucket: string; prefix: string } | null {
-  // ✅ only store images when explicitly enabled
-  if (process.env.INVENTORY_ROOM_SCAN_STORE_IMAGES !== 'true') return null;
-
-  const bucket = process.env.S3_BUCKET;
-  if (!bucket) return null;
-
-  const endpoint = process.env.S3_ENDPOINT;
-  const region = process.env.S3_REGION || 'us-east-1';
-
-  const client = new S3Client({
-    region,
-    ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
-    credentials: {
-      accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
-      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
-    },
-  });
-
-  return { client, bucket, prefix: process.env.S3_PREFIX || 'inventory-room-scan' };
-}
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
 function isTransientGeminiError(e: any) {
-  const status = Number(e?.statusCode || e?.status || e?.response?.status);
-  if (status === 429 || status === 503) return true;
-
-  const msg = String(e?.message || '').toLowerCase();
-  return msg.includes('rate limit') || msg.includes('quota') || msg.includes('temporarily') || msg.includes('unavailable');
+  const msg = String(e?.message || '');
+  const status = e?.statusCode || e?.status || e?.response?.status;
+  if (status === 429 || status === 503 || status === 504) return true;
+  if (msg.includes('ECONNRESET') || msg.includes('ETIMEDOUT') || msg.includes('socket hang up')) return true;
+  return false;
 }
 
-function normalizeItems(v: any): any[] {
-  if (Array.isArray(v)) return v;
-  if (v && typeof v === 'object') return Object.values(v);
-  return [];
+function getS3(): S3Client | null {
+  if (process.env.INVENTORY_ROOM_SCAN_STORE_IMAGES !== 'true') return null;
+  const bucket = process.env.S3_BUCKET;
+  if (!bucket) return null;
+
+  return new S3Client({
+    region: process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1',
+    credentials: process.env.AWS_ACCESS_KEY_ID
+      ? {
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+        }
+      : undefined,
+  });
+}
+
+async function compressImageToJpeg(buf: Buffer) {
+  // keep it small + fast for provider
+  return sharp(buf)
+    .rotate()
+    .resize({ width: 1280, withoutEnlargement: true })
+    .jpeg({ quality: 78 })
+    .toBuffer();
+}
+
+function normalizeItems(items: any): Array<{ label: string; category?: string; confidence?: number }> {
+  const arr = Array.isArray(items) ? items : [];
+  return arr
+    .map((x: any) => ({
+      label: String(x?.label || x?.name || '').trim(),
+      category: x?.category,
+      confidence: Number(x?.confidence),
+    }))
+    .filter((x) => x.label);
+}
+
+function jaccard(a: string, b: string) {
+  const A = new Set(normLabel(a).split(' ').filter(Boolean));
+  const B = new Set(normLabel(b).split(' ').filter(Boolean));
+  if (A.size === 0 || B.size === 0) return 0;
+  let inter = 0;
+  for (const t of A) if (B.has(t)) inter++;
+  const union = A.size + B.size - inter;
+  return union ? inter / union : 0;
+}
+
+async function loadInventoryCandidates(propertyId: string, roomId: string) {
+  // Keep it cheap: room items + a small slice of property items
+  const [roomItems, propertyItems] = await Promise.all([
+    prisma.inventoryItem.findMany({
+      where: { propertyId, roomId },
+      select: { id: true, name: true, category: true, roomId: true },
+      orderBy: { updatedAt: 'desc' as any },
+      take: 250,
+    }),
+    prisma.inventoryItem.findMany({
+      where: { propertyId },
+      select: { id: true, name: true, category: true, roomId: true },
+      orderBy: { updatedAt: 'desc' as any },
+      take: 400,
+    }),
+  ]);
+
+  // avoid dup ids
+  const seen = new Set<string>();
+  const merged: Array<{ id: string; name: string | null; category: string | null; roomId: string | null }> = [];
+  for (const it of [...roomItems, ...propertyItems]) {
+    if (!it?.id || seen.has(it.id)) continue;
+    seen.add(it.id);
+    merged.push(it as any);
+  }
+  return merged;
+}
+
+function bestDuplicateMatch(
+  draftName: string,
+  roomId: string,
+  candidates: Array<{ id: string; name: string | null; roomId: string | null }>
+) {
+  const dn = normLabel(draftName);
+  if (!dn) return null;
+
+  let best: { id: string; score: number; sameRoom: boolean } | null = null;
+
+  for (const c of candidates) {
+    const cn = normLabel(c.name || '');
+    if (!cn) continue;
+
+    // strong signals
+    let score = 0;
+    if (cn === dn) score = 1;
+    else {
+      const jac = jaccard(draftName, c.name || '');
+      score = jac;
+      // small boost if one contains the other
+      if (dn.length >= 6 && cn.includes(dn)) score = Math.max(score, 0.92);
+      if (cn.length >= 6 && dn.includes(cn)) score = Math.max(score, 0.92);
+    }
+
+    if (score < 0.82) continue;
+
+    const sameRoom = String(c.roomId || '') === String(roomId || '');
+    const adjusted = score + (sameRoom ? 0.02 : 0);
+
+    if (!best || adjusted > best.score) {
+      best = { id: c.id, score: Math.min(1, adjusted), sameRoom };
+    }
+  }
+
+  return best;
 }
 
 export class RoomScanService {
-  // ----------------------------
-  // Cost guards
-  // ----------------------------
-  private maxImages = envInt('INVENTORY_ROOM_SCAN_MAX_IMAGES', 10);
-  private maxImageMB = envInt('INVENTORY_ROOM_SCAN_MAX_IMAGE_MB', 6);
-  private maxUserPerDay = envInt('INVENTORY_ROOM_SCAN_MAX_SCANS_PER_USER_PER_DAY', 100);
-  private maxPropertyPerDay = envInt('INVENTORY_ROOM_SCAN_MAX_SCANS_PER_PROPERTY_PER_DAY', 50);
+  private maxAttempts = envInt('INVENTORY_ROOM_SCAN_PROVIDER_MAX_ATTEMPTS', 3);
+  private baseBackoffMs = envInt('INVENTORY_ROOM_SCAN_PROVIDER_BACKOFF_MS', 800);
 
-  private targetWidth = envInt('INVENTORY_ROOM_SCAN_TARGET_WIDTH', 1024);
-  private jpegQuality = envInt('INVENTORY_ROOM_SCAN_JPEG_QUALITY', 72);
+  async startScan(args: { propertyId: string; roomId: string; userId: string; images: Buffer[] }) {
+    const imagesCount = args.images?.length || 0;
+    if (imagesCount < 1) throw new APIError('At least one image is required', 400, 'VALIDATION_ERROR');
 
-  // ✅ operational escape hatch
-  private disableDailyCaps = envBool('INVENTORY_ROOM_SCAN_DISABLE_DAILY_CAPS', false);
+    // caps
+    const disableCaps = envBool('INVENTORY_ROOM_SCAN_DISABLE_CAPS', false);
+    const userDailyCap = envInt('INVENTORY_ROOM_SCAN_MAX_SCANS_PER_USER_PER_DAY', 6);
+    const propertyDailyCap = envInt('INVENTORY_ROOM_SCAN_MAX_SCANS_PER_PROPERTY_PER_DAY', 20);
 
-  private maxAttempts = envInt('INVENTORY_ROOM_SCAN_GEMINI_MAX_RETRIES', 4); // total attempts = 1 + retries
-  private baseBackoffMs = envInt('INVENTORY_ROOM_SCAN_GEMINI_BACKOFF_MS', 500);
+    const now = new Date();
+    const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
+    const dayEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59));
 
-  async assertEnabled() {
-    if (process.env.INVENTORY_ROOM_SCAN_ENABLED === 'false') {
-      throw new APIError('Room scan is disabled', 403, 'ROOM_SCAN_DISABLED');
-    }
-  }
+    if (!disableCaps) {
+      const [userCount, propCount] = await Promise.all([
+        prisma.inventoryRoomScanSession.count({
+          where: { userId: args.userId, createdAt: { gte: dayStart, lte: dayEnd } },
+        }),
+        prisma.inventoryRoomScanSession.count({
+          where: { propertyId: args.propertyId, createdAt: { gte: dayStart, lte: dayEnd } },
+        }),
+      ]);
 
-  async assertDailyCaps(propertyId: string, userId: string) {
-    // ✅ allow temporary bypass in staging / debugging
-    if (this.disableDailyCaps) return;
-
-    const since = new Date(Date.now() - 24 * 3600 * 1000);
-
-    const [userCount, propCount] = await Promise.all([
-      prisma.inventoryRoomScanSession.count({
-        where: { userId, createdAt: { gte: since } },
-      }),
-      prisma.inventoryRoomScanSession.count({
-        where: { propertyId, createdAt: { gte: since } },
-      }),
-    ]);
-
-    if (userCount >= this.maxUserPerDay) {
-      throw new APIError(
-        `Daily room scan limit reached (${this.maxUserPerDay}/day). Try again tomorrow.`,
-        429,
-        'ROOM_SCAN_USER_DAILY_LIMIT'
-      );
-    }
-
-    if (propCount >= this.maxPropertyPerDay) {
-      throw new APIError(
-        `This property reached its daily room scan limit (${this.maxPropertyPerDay}/day). Try again tomorrow.`,
-        429,
-        'ROOM_SCAN_PROPERTY_DAILY_LIMIT'
-      );
-    }
-  }
-
-  validateUpload(files: Express.Multer.File[]) {
-    if (!files?.length) throw new APIError('At least one image is required', 400, 'ROOM_SCAN_IMAGES_REQUIRED');
-    if (files.length > this.maxImages) {
-      throw new APIError(`Too many images. Max allowed is ${this.maxImages}.`, 400, 'ROOM_SCAN_TOO_MANY_IMAGES');
-    }
-
-    const maxBytes = this.maxImageMB * 1024 * 1024;
-    for (const f of files) {
-      if (!f.mimetype?.startsWith('image/')) {
-        throw new APIError('Only image uploads are allowed', 400, 'ROOM_SCAN_IMAGE_ONLY');
-      }
-      if (f.size > maxBytes) {
+      if (userCount >= userDailyCap) {
         throw new APIError(
-          `Image too large (${Math.round(f.size / 1024 / 1024)}MB). Max is ${this.maxImageMB}MB.`,
-          400,
-          'ROOM_SCAN_IMAGE_TOO_LARGE'
+          `Daily room scan limit reached (${userDailyCap}/day). Try again tomorrow.`,
+          429,
+          'ROOM_SCAN_USER_DAILY_LIMIT'
+        );
+      }
+      if (propCount >= propertyDailyCap) {
+        throw new APIError(
+          `Daily property room scan limit reached (${propertyDailyCap}/day). Try again tomorrow.`,
+          429,
+          'ROOM_SCAN_PROPERTY_DAILY_LIMIT'
         );
       }
     }
-  }
 
-  async preprocessImages(files: Express.Multer.File[]) {
-    // Downscale + compress BEFORE any AI call (cost guard + speed)
-    const out: Buffer[] = [];
-    for (const f of files) {
-      const buf = await sharp(f.buffer, { failOn: 'none' })
-        .rotate()
-        .resize({ width: this.targetWidth, withoutEnlargement: true })
-        .jpeg({ quality: this.jpegQuality, mozjpeg: true })
-        .toBuffer();
-
-      out.push(buf);
-    }
-    return out;
-  }
-
-  async uploadToS3IfConfigured(args: { propertyId: string; roomId: string; sessionId: string; images: Buffer[] }) {
-    const s3 = getS3();
-    if (!s3) return null;
-
-    const keys: string[] = [];
-    for (let i = 0; i < args.images.length; i++) {
-      const img = args.images[i];
-      const digest = sha1(img).slice(0, 12);
-      const key = `${s3.prefix}/${args.propertyId}/${args.roomId}/${args.sessionId}/${i}-${digest}.jpg`;
-
-      await s3.client.send(
-        new PutObjectCommand({
-          Bucket: s3.bucket,
-          Key: key,
-          Body: img,
-          ContentType: 'image/jpeg',
-        })
-      );
-
-      keys.push(key);
-    }
-
-    return { bucket: s3.bucket, keys };
-  }
-
-  /**
-   * Main entry: create session + run provider + create drafts
-   * (Sync implementation; can be moved to worker later without changing API.)
-   */
-  async runRoomScan(args: { propertyId: string; roomId: string; userId: string; files: Express.Multer.File[] }) {
-    await this.assertEnabled();
-    await this.assertDailyCaps(args.propertyId, args.userId);
-    this.validateUpload(args.files);
-
-    // Verify room belongs to property (security & correctness)
     const room = await prisma.inventoryRoom.findFirst({
       where: { id: args.roomId, propertyId: args.propertyId },
       select: { id: true, type: true, name: true },
@@ -250,34 +238,47 @@ export class RoomScanService {
         userId: args.userId,
         status: 'PROCESSING',
         provider: provider.name,
-        expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
       },
       select: { id: true },
     });
 
+    let s3Info: { bucket: string; keys: string[] } | null = null;
+
     try {
-      const images = await this.preprocessImages(args.files);
+      // compress images
+      const compressed = await Promise.all(args.images.map((b) => compressImageToJpeg(b)));
 
-      // Budget meter inputs
-      const imagesCount = images.length;
-      const bytesTotal = images.reduce((sum, b) => sum + (b?.byteLength || 0), 0);
+      // optional s3 store
+      const s3 = getS3();
+      if (s3) {
+        const bucket = process.env.S3_BUCKET!;
+        const keys: string[] = [];
 
-      // Optional: store preprocessed JPEGs for debugging/auditing (not required)
-      const s3Info = await this.uploadToS3IfConfigured({
-        propertyId: args.propertyId,
-        roomId: args.roomId,
-        sessionId: session.id,
-        images,
-      });
+        for (let i = 0; i < compressed.length; i++) {
+          const key = `inventory-room-scan/${session.id}/${i}-${crypto.randomUUID()}.jpg`;
+          await s3.send(
+            new PutObjectCommand({
+              Bucket: bucket,
+              Key: key,
+              Body: compressed[i],
+              ContentType: 'image/jpeg',
+            })
+          );
+          keys.push(key);
+        }
+
+        s3Info = { bucket, keys };
+      }
+
+      const images = compressed;
+      const bytesTotal = images.reduce((a, b) => a + (b?.length || 0), 0);
 
       const t0 = Date.now();
-
       let result: any = null;
-      let attempt = 0;
-      
-      while (true) {
+
+      // provider call with retry
+      for (let attempt = 1; attempt <= this.maxAttempts; attempt++) {
         try {
-          attempt++;
           result = await provider.extractItemsFromImages({
             images,
             roomType: room.type || null,
@@ -285,10 +286,10 @@ export class RoomScanService {
           break;
         } catch (e: any) {
           if (!isTransientGeminiError(e) || attempt >= this.maxAttempts) throw e;
-      
+
           const jitter = Math.floor(Math.random() * 150);
           const backoff = Math.min(8000, this.baseBackoffMs * Math.pow(2, attempt - 1)) + jitter;
-      
+
           console.warn('[room-scan][retry]', {
             sessionId: session.id,
             attempt,
@@ -296,12 +297,12 @@ export class RoomScanService {
             statusCode: e?.statusCode || e?.status || e?.response?.status,
             message: e?.message,
           });
-      
+
           await sleep(backoff);
         }
       }
-      
-      const latencyMs = Date.now() - t0;      
+
+      const latencyMs = Date.now() - t0;
 
       const items = normalizeItems(result?.items);
       if (items.length === 0) {
@@ -317,10 +318,9 @@ export class RoomScanService {
           textPreview: isProd ? undefined : preview,
         });
       }
-      // Token usage if provider returns it (Gemini may return usageMetadata)
+
       const usage = (result as any)?.raw?.usageMetadata || null;
 
-      // ✅ Budget meter log (structured)
       console.info('[room-scan][budget]', {
         sessionId: session.id,
         provider: provider.name,
@@ -354,35 +354,54 @@ export class RoomScanService {
 
       const deduped = Array.from(seen.values());
 
+      // Duplicate detection vs inventory (room-aware)
+      const dupCheckEnabled = envBool('INVENTORY_ROOM_SCAN_DUP_CHECK', true);
+      const candidates = dupCheckEnabled ? await loadInventoryCandidates(args.propertyId, args.roomId) : [];
+
+      const enriched = deduped.map((it) => {
+        const dup = dupCheckEnabled ? bestDuplicateMatch(it.label, args.roomId, candidates as any) : null;
+        return {
+          ...it,
+          duplicate: dup
+            ? {
+                inventoryItemId: dup.id,
+                score: dup.score,
+                sameRoom: dup.sameRoom,
+              }
+            : null,
+        };
+      });
+
       // Create drafts
       const drafts =
-      deduped.length === 0
-        ? []
-        : await prisma.$transaction(
-        deduped.map((it) =>
-          prisma.inventoryDraftItem.create({
-            data: {
-              propertyId: args.propertyId,
-              userId: args.userId,
-              status: 'DRAFT',
-              roomId: args.roomId,
-              scanSessionId: session.id,
-              draftSource: 'ROOM_PHOTO_AI',
+        enriched.length === 0
+          ? []
+          : await prisma.$transaction(
+              enriched.map((it) =>
+                prisma.inventoryDraftItem.create({
+                  data: {
+                    propertyId: args.propertyId,
+                    userId: args.userId,
+                    status: 'DRAFT',
+                    roomId: args.roomId,
+                    scanSessionId: session.id,
+                    draftSource: 'ROOM_PHOTO_AI',
 
-              name: it.label,
+                    name: it.label,
 
-              // ✅ prevent Prisma enum validation error
-              category: normalizeInventoryCategory(it.category),
+                    // prevent Prisma enum validation error
+                    category: normalizeInventoryCategory(it.category) as InventoryItemCategory,
 
-              confidenceJson: {
-                name: it.confidence,
-                category: typeof it.category === 'string' ? it.confidence : undefined,
-              },
-            },
-            select: { id: true, name: true, category: true },
-          })
-        )
-      );
+                    confidenceJson: {
+                      name: it.confidence,
+                      category: typeof it.category === 'string' ? it.confidence : undefined,
+                      duplicate: it.duplicate || undefined,
+                    },
+                  },
+                  select: { id: true, name: true, category: true, confidenceJson: true },
+                })
+              )
+            );
 
       await prisma.inventoryRoomScanSession.update({
         where: { id: session.id },
@@ -430,6 +449,14 @@ export class RoomScanService {
       where: { scanSessionId: args.sessionId, status: 'DRAFT' },
     });
 
-    return { ...s, draftCount };
+    return {
+      sessionId: s.id,
+      status: s.status,
+      provider: s.provider,
+      error: s.error,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+      draftCount,
+    };
   }
 }
