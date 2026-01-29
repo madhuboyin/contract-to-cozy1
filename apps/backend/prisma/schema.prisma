@@ -684,6 +684,9 @@ model InventoryDraftItem {
   firstSeenSession      InventoryRoomScanSession? @relation("DraftFirstSeen", fields: [firstSeenSessionId], references: [id], onDelete: SetNull)
   lastSeenSession       InventoryRoomScanSession? @relation("DraftLastSeen", fields: [lastSeenSessionId], references: [id], onDelete: SetNull)
 
+  boxes       InventoryDraftBox[]
+  scanDeltas  InventoryScanDelta[]
+
   @@index([scanSessionId])
   @@index([roomId, status])
 
