@@ -32,97 +32,258 @@ class GeminiService {
     this.ai = new GoogleGenAI({ apiKey });
   }
 
-  /**
-   * Helper to serialize key property facts into a concise string, now including Risk Score, Maintenance, and Renewals.
-   */
   private getPropertyContext(property: PropertyAIGuidance): string {
     const contextLines: string[] = [];
-
-    // Address details
+  
+    // PROPERTY BASICS
+    contextLines.push('=== PROPERTY OVERVIEW ===');
     contextLines.push(`Address: ${property.address}, ${property.city}, ${property.state} ${property.zipCode}`);
-
-    // Core facts
     if (property.propertyType) contextLines.push(`Type: ${property.propertyType}`);
     if (property.yearBuilt) contextLines.push(`Built: ${property.yearBuilt}`);
-
-    // System details (HVAC, Roof)
     if (property.heatingType) contextLines.push(`Heating: ${property.heatingType}`);
     if (property.coolingType) contextLines.push(`Cooling: ${property.coolingType}`);
     if (property.hvacInstallYear) contextLines.push(`HVAC Installed: ${property.hvacInstallYear}`);
     if (property.roofType) contextLines.push(`Roof Type: ${property.roofType}`);
-
-    // === START FIX: ADDED RISK ASSESSMENT CONTEXT ===
+  
+    // RISK ASSESSMENT
     if (property.riskReport) {
-        contextLines.push('--- Risk Assessment Summary ---');
-        // NOTE: financialExposureTotal is a Prisma.Decimal, convert to string/number
-        const exposure = (property.riskReport.financialExposureTotal as any)?.toString() || '0';
-        
-        contextLines.push(`Risk Score: ${property.riskReport.riskScore} (0-100)`);
-        contextLines.push(`Total Financial Exposure: $${exposure}`);
-        contextLines.push(`Last Calculated: ${new Date(property.riskReport.lastCalculatedAt).toLocaleDateString()}`);
-        
-        // Deserialize and summarize top risky assets
-        const assetDetails = property.riskReport.details as any[] | undefined;
-        if (assetDetails && Array.isArray(assetDetails) && assetDetails.length > 0) {
-            
-            // Sort to focus on the highest risk assets first (Risk Dollar)
-            const sortedAssets = assetDetails
-                .filter(asset => asset.riskLevel !== 'LOW')
-                .sort((a, b) => (b.riskDollar || 0) - (a.riskDollar || 0))
-                .slice(0, 5); // Take top 5 non-low risk items
-
-            if (sortedAssets.length > 0) {
-                contextLines.push('High Risk Assets:');
-                sortedAssets.forEach(asset => {
-                    contextLines.push(
-                        `- ${asset.assetName}: Level ${asset.riskLevel}, Exposure $${Math.round(asset.riskDollar)}, Age ${asset.age} yrs (Life ${asset.expectedLife} yrs). Action: ${asset.actionCta || 'None'}`
-                    );
-                });
-            } else {
-                contextLines.push('All assessed assets are currently LOW risk.');
-            }
-        } else {
-            contextLines.push('Risk detail data is unavailable or empty.');
+      contextLines.push('=== RISK ASSESSMENT ===');
+      const exposure = (property.riskReport.financialExposureTotal as any)?.toString() || '0';
+      contextLines.push(`Risk Score: ${property.riskReport.riskScore}/100 (100=lowest risk)`);
+      contextLines.push(`Financial Exposure: $${exposure}`);
+      
+      const assetDetails = property.riskReport.details as any[] | undefined;
+      if (assetDetails && Array.isArray(assetDetails) && assetDetails.length > 0) {
+        const highRisk = assetDetails.filter(a => a.riskLevel !== 'LOW').slice(0, 5);
+        if (highRisk.length > 0) {
+          contextLines.push('High Risk Items:');
+          highRisk.forEach(asset => {
+            contextLines.push(`- ${asset.assetName}: ${asset.riskLevel}, $${Math.round(asset.riskDollar)} exposure`);
+          });
         }
-    } else {
-        contextLines.push('Risk Report is unavailable for this property.');
-    }
-    // === END FIX: ADDED RISK ASSESSMENT CONTEXT ===
-
-    // === START FIX: RESTORED MAINTENANCE AND RENEWAL CONTEXT ===
-    // This resolves the compilation errors and ensures the AI has this context.
-
-    // Maintenance Context
-    contextLines.push('--- Maintenance Summary ---');
-    if (property.maintenanceTasks && property.maintenanceTasks.length > 0) {
-      const now = new Date();
-      const pendingCount = property.maintenanceTasks.filter(t => t.status === 'PENDING').length;
-      const overdueCount = property.maintenanceTasks.filter(t => 
-        t.status === 'PENDING' && t.nextDueDate && new Date(t.nextDueDate) < now
-      ).length;
-
-      if (overdueCount > 0) {
-        contextLines.push(`CRITICAL: You have ${overdueCount} overdue maintenance tasks.`);
       }
-      contextLines.push(`Total pending maintenance tasks: ${pendingCount}.`);
-    } else {
-      contextLines.push('No maintenance tasks configured.');
     }
-
-    // Renewal Context
-    contextLines.push('--- Renewal Summary ---');
+  
+    // INVENTORY ROOMS
+    if (property.inventoryRooms && property.inventoryRooms.length > 0) {
+      contextLines.push('=== ROOMS ===');
+      property.inventoryRooms.forEach(room => {
+        contextLines.push(`- ${room.name} (${room.type}): ${room.itemCount} items`);
+      });
+    }
+  
+    // INVENTORY ITEMS - grouped by room
+    if (property.inventoryItems && property.inventoryItems.length > 0) {
+      contextLines.push('=== INVENTORY ITEMS ===');
+      
+      const byRoom = new Map<string, typeof property.inventoryItems>();
+      property.inventoryItems.forEach(item => {
+        const roomKey = item.roomName || 'Unassigned';
+        if (!byRoom.has(roomKey)) byRoom.set(roomKey, []);
+        byRoom.get(roomKey)!.push(item);
+      });
+  
+      byRoom.forEach((items, roomName) => {
+        contextLines.push(`[${roomName}]`);
+        items.forEach(item => {
+          let itemDesc = `- ${item.name}`;
+          if (item.brand) itemDesc += ` (${item.brand}`;
+          if (item.model) itemDesc += ` ${item.model}`;
+          if (item.brand) itemDesc += ')';
+          if (item.category) itemDesc += ` [${item.category}]`;
+          // FIXED: Convert cents to dollars for display
+          if (item.replacementCostCents) {
+            itemDesc += ` Value: $${(item.replacementCostCents / 100).toFixed(2)}`;
+          }
+          contextLines.push(itemDesc);
+        });
+      });
+    }
+  
+    // HOME ASSETS / APPLIANCES
+    if (property.homeAssets && property.homeAssets.length > 0) {
+      contextLines.push('=== MAJOR APPLIANCES ===');
+      property.homeAssets.forEach(asset => {
+        let assetDesc = `- ${asset.assetType.replace(/_/g, ' ')}`;
+        if (asset.installationYear) assetDesc += ` (installed ${asset.installationYear})`;
+        contextLines.push(assetDesc);
+      });
+    }
+  
+    // DOCUMENTS
+    if (property.documents && property.documents.length > 0) {
+      contextLines.push('=== DOCUMENTS ===');
+      contextLines.push(`Total documents: ${property.documents.length}`);
+      
+      const byType = new Map<string, number>();
+      property.documents.forEach(doc => {
+        byType.set(doc.type, (byType.get(doc.type) || 0) + 1);
+      });
+      byType.forEach((count, type) => {
+        contextLines.push(`- ${type}: ${count} documents`);
+      });
+    }
+  
+    // EXPENSES
+    if (property.expenseSummary && property.expenseSummary.totalAmount > 0) {
+      contextLines.push('=== EXPENSES (Last 12 months) ===');
+      contextLines.push(`Total Spent: $${property.expenseSummary.totalAmount.toFixed(2)}`);
+      
+      Object.entries(property.expenseSummary.categoryBreakdown).forEach(([cat, amount]) => {
+        contextLines.push(`- ${cat}: $${(amount as number).toFixed(2)}`);
+      });
+      
+      if (property.expenses && property.expenses.length > 0) {
+        contextLines.push('Recent expenses:');
+        property.expenses.slice(0, 10).forEach(exp => {
+          contextLines.push(`- ${exp.description}: $${exp.amount} (${exp.category})`);
+        });
+      }
+    }
+  
+    // MAINTENANCE TASKS
+    if (property.maintenanceTasks && property.maintenanceTasks.length > 0) {
+      contextLines.push('=== MAINTENANCE TASKS ===');
+      const now = new Date();
+      const pending = property.maintenanceTasks.filter(t => t.status === 'PENDING');
+      const overdue = pending.filter(t => t.nextDueDate && new Date(t.nextDueDate) < now);
+      
+      if (overdue.length > 0) {
+        contextLines.push(`OVERDUE: ${overdue.length} tasks`);
+        overdue.slice(0, 5).forEach(t => contextLines.push(`- ${t.title}`));
+      }
+      contextLines.push(`Pending: ${pending.length}, Completed: ${property.maintenanceTasks.filter(t => t.status === 'COMPLETED').length}`);
+    }
+  
+    // SEASONAL TASKS
+    if (property.seasonalTasks && property.seasonalTasks.length > 0) {
+      contextLines.push('=== SEASONAL MAINTENANCE ===');
+      const bySeason = new Map<string, typeof property.seasonalTasks>();
+      property.seasonalTasks.forEach(task => {
+        if (!bySeason.has(task.season)) bySeason.set(task.season, []);
+        bySeason.get(task.season)!.push(task);
+      });
+  
+      bySeason.forEach((tasks, season) => {
+        const completed = tasks.filter(t => t.status === 'COMPLETED').length;
+        contextLines.push(`${season}: ${completed}/${tasks.length} completed`);
+        tasks.filter(t => t.status !== 'COMPLETED' && t.priority === 'CRITICAL').forEach(t => {
+          contextLines.push(`- CRITICAL: ${t.title}`);
+        });
+      });
+    }
+  
+    // WARRANTIES & INSURANCE
     if (property.renewals && property.renewals.length > 0) {
-      const nextRenewal = property.renewals.sort((a, b) => a.expiryDate.getTime() - b.expiryDate.getTime())[0];
-      contextLines.push(`Next renewal is on ${new Date(nextRenewal.expiryDate).toLocaleDateString()}. Type: ${nextRenewal.type}.`);
-      contextLines.push(`Total upcoming renewals: ${property.renewals.length}.`);
-    } else {
-      contextLines.push('No upcoming insurance or warranty renewals recorded.');
+      contextLines.push('=== WARRANTIES & INSURANCE ===');
+      const sorted = property.renewals.sort((a, b) => 
+        new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime()
+      );
+      sorted.slice(0, 10).forEach(r => {
+        const expiry = new Date(r.expiryDate).toLocaleDateString();
+        contextLines.push(`- ${r.type}: expires ${expiry}`);
+      });
     }
-    // === END FIX: RESTORED MAINTENANCE AND RENEWAL CONTEXT ===
-
-    // Rejoin the context lines with semicolons for a clean string
+  
+    // SERVICE BOOKINGS
+    if (property.bookings && property.bookings.length > 0) {
+      contextLines.push('=== SERVICE HISTORY ===');
+      const pending = property.bookings.filter(b => ['PENDING', 'CONFIRMED'].includes(b.status));
+      const completed = property.bookings.filter(b => b.status === 'COMPLETED');
+      
+      if (pending.length > 0) {
+        contextLines.push(`Upcoming: ${pending.length}`);
+        pending.slice(0, 3).forEach(b => {
+          contextLines.push(`- ${b.serviceName || b.category} (${b.status})`);
+        });
+      }
+      contextLines.push(`Completed services: ${completed.length}`);
+    }
+  
+    // CLAIMS
+    if (property.claims && property.claims.length > 0) {
+      contextLines.push('=== INSURANCE/WARRANTY CLAIMS ===');
+      
+      const activeClaims = property.claims.filter(c => !['CLOSED', 'DENIED'].includes(c.status));
+      const closedClaims = property.claims.filter(c => ['CLOSED', 'DENIED'].includes(c.status));
+      
+      if (activeClaims.length > 0) {
+        contextLines.push(`Active Claims: ${activeClaims.length}`);
+        activeClaims.forEach(c => {
+          let claimDesc = `- ${c.title} (${c.type}) - Status: ${c.status}`;
+          if (c.providerName) claimDesc += ` with ${c.providerName}`;
+          if (c.estimatedLossAmount) claimDesc += ` - Est. Loss: $${c.estimatedLossAmount}`;
+          if (c.checklistCompletionPct) claimDesc += ` - ${c.checklistCompletionPct}% complete`;
+          contextLines.push(claimDesc);
+        });
+      }
+      
+      if (closedClaims.length > 0) {
+        contextLines.push(`Closed Claims: ${closedClaims.length}`);
+        closedClaims.slice(0, 5).forEach(c => {
+          let claimDesc = `- ${c.title} (${c.type}) - ${c.status}`;
+          if (c.settlementAmount) claimDesc += ` - Settlement: $${c.settlementAmount}`;
+          contextLines.push(claimDesc);
+        });
+      }
+    }
+  
+    // INCIDENTS
+    if (property.incidents && property.incidents.length > 0) {
+      contextLines.push('=== INCIDENTS & ALERTS ===');
+      
+      const activeIncidents = property.incidents.filter(i => 
+        ['DETECTED', 'EVALUATED', 'ACTIVE', 'ACTIONED'].includes(i.status)
+      );
+      const resolvedIncidents = property.incidents.filter(i => 
+        ['RESOLVED', 'MITIGATED'].includes(i.status)
+      );
+      
+      if (activeIncidents.length > 0) {
+        contextLines.push(`Active Incidents: ${activeIncidents.length}`);
+        activeIncidents.forEach(i => {
+          let incDesc = `- ${i.title}`;
+          if (i.severity) incDesc += ` [${i.severity}]`;
+          incDesc += ` - ${i.status}`;
+          if (i.category) incDesc += ` (${i.category})`;
+          if (i.summary) incDesc += `: ${i.summary}`;
+          contextLines.push(incDesc);
+        });
+      }
+      
+      contextLines.push(`Resolved Incidents: ${resolvedIncidents.length}`);
+    }
+  
+    // RECALL ALERTS
+    if (property.recallMatches && property.recallMatches.length > 0) {
+      contextLines.push('=== SAFETY RECALLS ===');
+      
+      const openRecalls = property.recallMatches.filter(r => r.status === 'OPEN');
+      const needsConfirmation = property.recallMatches.filter(r => r.status === 'NEEDS_CONFIRMATION');
+      const resolved = property.recallMatches.filter(r => r.status === 'RESOLVED');
+      
+      if (openRecalls.length > 0) {
+        contextLines.push(`ACTIVE RECALLS: ${openRecalls.length}`);
+        openRecalls.forEach(r => {
+          let recallDesc = `- ${r.itemName || 'Unknown Item'}`;
+          // FIXED: Use recallSeverity from the recall relation
+          if (r.recallSeverity) recallDesc += ` [${r.recallSeverity}]`;
+          if (r.recallTitle) recallDesc += `: ${r.recallTitle}`;
+          if (r.hazard) recallDesc += ` - Hazard: ${r.hazard}`;
+          if (r.remedy) recallDesc += ` - Remedy: ${r.remedy}`;
+          contextLines.push(recallDesc);
+        });
+      }
+      
+      if (needsConfirmation.length > 0) {
+        contextLines.push(`Potential Recalls (needs confirmation): ${needsConfirmation.length}`);
+      }
+      
+      contextLines.push(`Resolved Recalls: ${resolved.length}`);
+    }
+  
     return contextLines.join('; ');
-  }
+  }  
 
   /**
    * Retrieves or creates a new chat session, optionally injecting property context.

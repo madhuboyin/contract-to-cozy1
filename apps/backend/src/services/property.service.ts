@@ -59,7 +59,75 @@ interface CreatePropertyData {
 }
 
 interface UpdatePropertyData extends Partial<CreatePropertyData> {
-  // All fields are optional for update
+
+}
+
+interface InventoryItemForAI {
+  name: string;
+  brand?: string | null;
+  model?: string | null;
+  category?: string | null;
+  roomName?: string | null;
+  purchaseCostCents?: number | null;      // FIXED: correct field name
+  replacementCostCents?: number | null;   // FIXED: correct field name
+}
+
+interface ExpenseForAI {
+  description: string;
+  category: string;
+  amount: number;
+  transactionDate: Date;
+}
+
+interface DocumentForAI {
+  name: string;
+  type: string;
+  createdAt: Date;
+}
+
+interface SeasonalTaskForAI {
+  title: string;
+  season: string;
+  priority: string;
+  status: string;
+}
+
+interface BookingForAI {
+  serviceName?: string;
+  category: string;
+  status: string;
+  scheduledDate?: Date | null;
+}
+
+interface ClaimForAI {
+  title: string;
+  type: string;
+  status: string;
+  providerName?: string | null;
+  incidentAt?: Date | null;
+  estimatedLossAmount?: number | null;
+  settlementAmount?: number | null;
+  checklistCompletionPct?: number | null;
+}
+
+interface IncidentForAI {
+  title: string;
+  category?: string | null;
+  status: string;
+  severity?: string | null;
+  sourceType: string;
+  summary?: string | null;
+  openedAt: Date;
+}
+
+interface RecallMatchForAI {
+  status: string;
+  confidencePct: number;                  // FIXED: correct field name
+  itemName?: string | null;
+  recallTitle?: string | null;
+  recallSeverity?: string | null;         // FIXED: from recall relation
+  hazard?: string | null;
+  remedy?: string | null;
 }
 
 // === INJECT MISSING INTERFACE DEFINITIONS ===
@@ -88,7 +156,6 @@ export interface Renewal {
   type: string;
 }
 
-// [UPDATED INTERFACE] Defines the minimal subset of data needed for AI context.
 export interface PropertyAIGuidance {
   id: string;
   address: string;
@@ -101,13 +168,23 @@ export interface PropertyAIGuidance {
   coolingType: CoolingType | null;
   roofType: RoofType | null;
   hvacInstallYear: number | null;
-  // FIX 1: Add Risk Report relation
-  riskReport: RiskAssessmentReportForAI | null; 
-  // FIX 2: Add missing relations for maintenance and renewals
+  riskReport: RiskAssessmentReportForAI | null;
   maintenanceTasks: ChecklistItem[];
   renewals: Renewal[];
+  // Comprehensive property context
+  inventoryRooms: { name: string; type: string; itemCount: number }[];
+  inventoryItems: InventoryItemForAI[];
+  homeAssets: { assetType: string; installationYear?: number | null }[];
+  documents: DocumentForAI[];
+  expenses: ExpenseForAI[];
+  expenseSummary: { totalAmount: number; categoryBreakdown: Record<string, number> };
+  seasonalTasks: SeasonalTaskForAI[];
+  bookings: BookingForAI[];
+  // Claims, Incidents, Recalls
+  claims: ClaimForAI[];
+  incidents: IncidentForAI[];
+  recallMatches: RecallMatchForAI[];
 }
-// ===============================================
 
 async function hydrateHomeAssetsFromInventory<T extends { id: string }>(
   property: T
@@ -337,9 +414,9 @@ export async function getPropertyContextForAI(propertyId: string, userId: string
   const property = await prisma.property.findFirst({
     where: {
       id: propertyId,
-      homeownerProfileId, // Ownership verification
+      homeownerProfileId,
     },
-    select: { // Select only fields relevant for AI personalization
+    select: {
       id: true,
       address: true,
       city: true,
@@ -351,17 +428,16 @@ export async function getPropertyContextForAI(propertyId: string, userId: string
       coolingType: true,
       roofType: true,
       hvacInstallYear: true,
-      // === FIX 1: Add riskReport selection here ===
       riskReport: {
         select: {
           riskScore: true,
           financialExposureTotal: true,
-          details: true, // Fetch the asset risk details JSON
+          details: true,
           lastCalculatedAt: true,
         }
       },
-      // === FIX 2: Add missing relations for maintenance and renewals ===
       checklistItems: true,
+      // FIXED: Added warranties
       warranties: {
         select: {
           id: true,
@@ -377,6 +453,94 @@ export async function getPropertyContextForAI(propertyId: string, userId: string
           coverageType: true,
         }
       },
+      documents: {
+        select: {
+          name: true,
+          type: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      },
+      seasonalChecklists: {
+        where: {
+          year: new Date().getFullYear(),
+        },
+        select: {
+          season: true,
+          items: {
+            select: {
+              title: true,
+              priority: true,
+              status: true,
+            }
+          }
+        }
+      },
+      bookings: {
+        select: {
+          category: true,
+          status: true,
+          scheduledDate: true,
+          service: {
+            select: { name: true }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      },
+      // Claims
+      claims: {
+        select: {
+          title: true,
+          type: true,
+          status: true,
+          providerName: true,
+          incidentAt: true,
+          estimatedLossAmount: true,
+          settlementAmount: true,
+          checklistCompletionPct: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      },
+      // Incidents
+      incidents: {
+        select: {
+          title: true,
+          category: true,
+          status: true,
+          severity: true,
+          sourceType: true,
+          summary: true,
+          openedAt: true,
+        },
+        orderBy: { openedAt: 'desc' },
+        take: 30,
+      },
+      // FIXED: Recall Matches - corrected field names
+      recallMatches: {
+        select: {
+          status: true,
+          confidencePct: true,              // FIXED: not severity
+          inventoryItem: {
+            select: { name: true }
+          },
+          homeAsset: {
+            select: { assetType: true }
+          },
+          recall: {
+            select: {
+              title: true,
+              severity: true,               // FIXED: severity is on RecallRecord
+              hazard: true,
+              remedy: true,
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      },
     }
   });
 
@@ -384,7 +548,61 @@ export async function getPropertyContextForAI(propertyId: string, userId: string
     return null;
   }
 
-  // Transform to match PropertyAIGuidance interface
+  // Fetch inventory rooms with item counts
+  const inventoryRooms = await prisma.inventoryRoom.findMany({
+    where: { propertyId },
+    select: {
+      name: true,
+      type: true,
+      _count: { select: { items: true } }
+    }
+  });
+
+  // FIXED: Fetch inventory items with correct field names
+  const inventoryItems = await prisma.inventoryItem.findMany({
+    where: { propertyId },
+    select: {
+      name: true,
+      brand: true,
+      model: true,
+      category: true,
+      purchaseCostCents: true,           // FIXED: correct field name
+      replacementCostCents: true,        // FIXED: correct field name
+      room: { select: { name: true } }
+    },
+    take: 200,
+  });
+
+  // Fetch home assets
+  const homeAssets = await listPropertyAppliancesAsHomeAssets(propertyId);
+
+  // Fetch expenses (last 12 months)
+  const twelveMonthsAgo = new Date();
+  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+  
+  const expenses = await prisma.expense.findMany({
+    where: {
+      propertyId,
+      transactionDate: { gte: twelveMonthsAgo }
+    },
+    select: {
+      description: true,
+      category: true,
+      amount: true,
+      transactionDate: true,
+    },
+    orderBy: { transactionDate: 'desc' },
+    take: 50,
+  });
+
+  // Calculate expense summary
+  const expenseSummary = expenses.reduce((acc, exp) => {
+    acc.totalAmount += Number(exp.amount) || 0;
+    acc.categoryBreakdown[exp.category] = (acc.categoryBreakdown[exp.category] || 0) + (Number(exp.amount) || 0);
+    return acc;
+  }, { totalAmount: 0, categoryBreakdown: {} as Record<string, number> });
+
+  // Transform renewals
   const renewals: Renewal[] = [
     ...property.warranties.map(w => ({
       id: w.id,
@@ -398,13 +616,110 @@ export async function getPropertyContextForAI(propertyId: string, userId: string
     })),
   ];
 
+  // Transform seasonal tasks
+  const seasonalTasks: SeasonalTaskForAI[] = property.seasonalChecklists.flatMap(checklist =>
+    checklist.items.map(item => ({
+      title: item.title,
+      season: checklist.season,
+      priority: item.priority,
+      status: item.status,
+    }))
+  );
+
   return {
-    ...property,
+    id: property.id,
+    address: property.address,
+    city: property.city,
+    state: property.state,
+    zipCode: property.zipCode,
+    propertyType: property.propertyType,
+    yearBuilt: property.yearBuilt,
+    heatingType: property.heatingType,
+    coolingType: property.coolingType,
+    roofType: property.roofType,
+    hvacInstallYear: property.hvacInstallYear,
+    // Normalize risk report shape for AI (ensure `details` is a non-null InputJsonValue)
+    riskReport: property.riskReport
+      ? {
+          riskScore: property.riskReport.riskScore,
+          financialExposureTotal: property.riskReport.financialExposureTotal,
+          details: (property.riskReport.details ?? {}) as Prisma.InputJsonValue,
+          lastCalculatedAt: property.riskReport.lastCalculatedAt,
+        }
+      : null,
     maintenanceTasks: property.checklistItems,
     renewals,
-  } as PropertyAIGuidance; 
+    inventoryRooms: inventoryRooms.map(r => ({
+      name: r.name,
+      type: r.type || 'OTHER',
+      itemCount: r._count.items,
+    })),
+    // FIXED: Use correct field names for inventory items
+    inventoryItems: inventoryItems.map(i => ({
+      name: i.name,
+      brand: i.brand,
+      model: i.model,
+      category: i.category,
+      roomName: i.room?.name || null,
+      purchaseCostCents: i.purchaseCostCents,
+      replacementCostCents: i.replacementCostCents,
+    })),
+    homeAssets: homeAssets.map(a => ({
+      assetType: a.assetType,
+      installationYear: a.installationYear,
+    })),
+    documents: property.documents.map(d => ({
+      name: d.name,
+      type: d.type,
+      createdAt: d.createdAt,
+    })),
+    expenses: expenses.map(e => ({
+      description: e.description,
+      category: e.category,
+      amount: Number(e.amount),
+      transactionDate: e.transactionDate,
+    })),
+    expenseSummary,
+    seasonalTasks,
+    bookings: property.bookings.map(b => ({
+      serviceName: b.service?.name,
+      category: b.category,
+      status: b.status,
+      scheduledDate: b.scheduledDate,
+    })),
+    // Claims
+    claims: property.claims.map(c => ({
+      title: c.title,
+      type: c.type,
+      status: c.status,
+      providerName: c.providerName,
+      incidentAt: c.incidentAt,
+      estimatedLossAmount: c.estimatedLossAmount ? Number(c.estimatedLossAmount) : null,
+      settlementAmount: c.settlementAmount ? Number(c.settlementAmount) : null,
+      checklistCompletionPct: c.checklistCompletionPct,
+    })),
+    // Incidents
+    incidents: property.incidents.map(i => ({
+      title: i.title,
+      category: i.category,
+      status: i.status,
+      severity: i.severity,
+      sourceType: i.sourceType,
+      summary: i.summary,
+      openedAt: i.openedAt,
+    })),
+    // FIXED: Recall Matches with correct field mapping
+    recallMatches: property.recallMatches.map(r => ({
+      status: r.status,
+      confidencePct: r.confidencePct,
+      itemName: r.inventoryItem?.name || r.homeAsset?.assetType || null,
+      recallTitle: r.recall?.title || null,
+      recallSeverity: r.recall?.severity || null,
+      hazard: r.recall?.hazard || null,
+      remedy: r.recall?.remedy || null,
+    })),
+  };
 }
-
 /**
  * Update a property
  */
