@@ -276,6 +276,13 @@ model InventoryRoomScanSession {
   room        InventoryRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
   drafts      InventoryDraftItem[]
+  images      InventoryScanImage[]
+
+  deltas      InventoryScanDelta[] @relation("ScanDeltaSession")
+  deltaPrevOf InventoryScanDelta[] @relation("ScanDeltaPrevious")
+
+  firstSeenDrafts InventoryDraftItem[] @relation("DraftFirstSeen")
+  lastSeenDrafts  InventoryDraftItem[] @relation("DraftLastSeen")
 
   @@index([propertyId, createdAt])
   @@index([userId, createdAt])
@@ -669,12 +676,89 @@ model InventoryDraftItem {
   aiRawJson          Json?
   editsJson          Json?
 
+    // Phase 3 — explainability + scan lineage
+  explanationJson       Json?
+  firstSeenSessionId    String?
+  lastSeenSessionId     String?
+
+  firstSeenSession      InventoryRoomScanSession? @relation("DraftFirstSeen", fields: [firstSeenSessionId], references: [id], onDelete: SetNull)
+  lastSeenSession       InventoryRoomScanSession? @relation("DraftLastSeen", fields: [lastSeenSessionId], references: [id], onDelete: SetNull)
+
   @@index([scanSessionId])
   @@index([roomId, status])
+
+  @@index([firstSeenSessionId])
+  @@index([lastSeenSessionId])
 
   @@index([propertyId, status])
   @@index([userId, status])
   @@index([createdAt])
+}
+
+enum InventoryScanDeltaType {
+  NEW
+  DUPLICATE
+  REMOVED
+  UNCHANGED
+}
+
+model InventoryScanImage {
+  id            String   @id @default(uuid())
+  scanSessionId String
+
+  bucket        String?
+  key           String
+
+  width         Int
+  height        Int
+  createdAt     DateTime @default(now())
+
+  scanSession   InventoryRoomScanSession @relation(fields: [scanSessionId], references: [id], onDelete: Cascade)
+  boxes         InventoryDraftBox[]
+
+  @@index([scanSessionId])
+}
+
+model InventoryDraftBox {
+  id          String   @id @default(uuid())
+  draftItemId String
+  imageId     String
+
+  x           Float
+  y           Float
+  w           Float
+  h           Float
+
+  confidence  Float?
+  source      String?
+
+  createdAt   DateTime @default(now())
+
+  draftItem   InventoryDraftItem @relation(fields: [draftItemId], references: [id], onDelete: Cascade)
+  image       InventoryScanImage @relation(fields: [imageId], references: [id], onDelete: Cascade)
+
+  @@index([draftItemId])
+  @@index([imageId])
+}
+
+model InventoryScanDelta {
+  id                String   @id @default(uuid())
+  scanSessionId      String
+  previousSessionId  String?
+  draftItemId        String?
+
+  deltaType          InventoryScanDeltaType
+  metaJson           Json?
+
+  createdAt          DateTime @default(now())
+
+  scanSession        InventoryRoomScanSession  @relation("ScanDeltaSession", fields: [scanSessionId], references: [id], onDelete: Cascade)
+  previousSession    InventoryRoomScanSession? @relation("ScanDeltaPrevious", fields: [previousSessionId], references: [id], onDelete: SetNull)
+  draftItem          InventoryDraftItem?       @relation(fields: [draftItemId], references: [id], onDelete: SetNull)
+
+  @@index([scanSessionId])
+  @@index([previousSessionId])
+  @@index([draftItemId])
 }
 
 
