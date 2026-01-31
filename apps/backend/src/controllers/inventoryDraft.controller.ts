@@ -109,7 +109,14 @@ export async function exportInventoryDraftsCsv(req: CustomRequest, res: Response
       ...(roomId ? { roomId } : {}),
       ...(status ? { status } : {}),
     };
-
+    const deltaRows = scanSessionId
+    ? await prisma.inventoryScanDelta.findMany({
+        where: { scanSessionId: String(scanSessionId) },
+        select: { draftItemId: true, deltaType: true },
+      })
+    : [];
+  
+    const deltaByDraftId = new Map(deltaRows.map((d) => [d.draftItemId || '', d.deltaType]));
     const drafts = await prisma.inventoryDraftItem.findMany({
       where,
       orderBy: [{ createdAt: 'desc' }],
@@ -141,6 +148,7 @@ export async function exportInventoryDraftsCsv(req: CustomRequest, res: Response
         duplicateOfItemId: true,
         duplicateScore: true,
         duplicateReason: true,
+        explanationJson: true,
       } as any,
     });
 
@@ -166,13 +174,18 @@ export async function exportInventoryDraftsCsv(req: CustomRequest, res: Response
       'Duplicate Of Item ID',
       'Duplicate Score',
       'Duplicate Reason',
+      'Delta Type',
+      'Explanation Tier',
+      'Explanation Why',
     ];
 
     const escape = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const date = (d?: Date | null) => (d ? d.toISOString() : '');
-
     const rows = drafts.map((d: any) => {
       const nameConf = d?.confidenceJson?.name ?? '';
+      const deltaType = deltaByDraftId.get(d.id) ?? '';
+      const tier = d?.explanationJson?.tier ?? '';
+      const why = Array.isArray(d?.explanationJson?.why) ? d.explanationJson.why.join('; ') : '';
       return [
         d.id,
         d.status,
@@ -195,13 +208,16 @@ export async function exportInventoryDraftsCsv(req: CustomRequest, res: Response
         d.duplicateOfItemId ?? '',
         d.duplicateScore ?? '',
         d.duplicateReason ?? '',
+        deltaType,
+        tier,
+        why,
       ]
         .map(escape)
         .join(',');
     });
 
     const csv = [headers.map(escape).join(','), ...rows].join('\n');
-
+  
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader(
       'Content-Disposition',

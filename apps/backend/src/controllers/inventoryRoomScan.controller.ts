@@ -32,7 +32,8 @@ export async function startRoomScan(req: CustomRequest, res: Response, next: Nex
       data: {
         sessionId: out.sessionId,
         drafts: out.drafts || [],
-      },
+        images: (out as any).images || [],
+      },     
     });
   } catch (err) {
     next(err);

@@ -1,4 +1,3 @@
-// apps/frontend/src/app/(dashboard)/dashboard/components/inventory/RoomScanModal.tsx
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -8,6 +7,10 @@ import {
   bulkConfirmInventoryDrafts,
   bulkDismissInventoryDrafts,
   updateInventoryDraft,
+  // OPTIONAL Phase-3 helper:
+  // If your inventoryApi already has this, the modal will automatically load boxes + images + deltas.
+  // If not present, this import will fail — see NOTE below.
+  // getRoomScanSession,
 } from '../../inventory/inventoryApi';
 
 type Props = {
@@ -35,8 +38,55 @@ const CATEGORY_OPTIONS = [
   'OTHER',
 ] as const;
 
+function TierBadge({ tier }: { tier?: string | null }) {
+  const t = String(tier || '').toUpperCase();
+  if (!t) return null;
+
+  const cls =
+    t === 'HIGH'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+      : t === 'MEDIUM'
+      ? 'border-amber-200 bg-amber-50 text-amber-800'
+      : 'border-red-200 bg-red-50 text-red-800';
+
+  return <span className={`ml-2 text-[11px] rounded-full px-2 py-0.5 border ${cls}`}>{t}</span>;
+}
+
+function DraftBoxesOverlay({
+  image,
+  boxes,
+  active,
+}: {
+  image: any;
+  boxes: any[];
+  active: boolean;
+}) {
+  if (!image?.url) return null;
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-black/10 bg-black/[0.02]">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={image.url} alt="" className="block w-full h-auto" />
+      {active
+        ? (boxes || []).map((b, idx) => (
+            <div
+              key={idx}
+              className="absolute border-2 border-white/90 shadow-sm rounded-md"
+              style={{
+                left: `${(Number(b?.x) || 0) * 100}%`,
+                top: `${(Number(b?.y) || 0) * 100}%`,
+                width: `${(Number(b?.w) || 0) * 100}%`,
+                height: `${(Number(b?.h) || 0) * 100}%`,
+              }}
+              title={b?.confidence != null ? `Box confidence: ${Math.round(Number(b.confidence) * 100)}%` : undefined}
+            />
+          ))
+        : null}
+    </div>
+  );
+}
+
 export default function RoomScanModal({ open, onClose, propertyId, roomId, roomName, initialSessionId }: Props) {
-  
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -52,6 +102,11 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
   const [editName, setEditName] = useState('');
   const [editCategory, setEditCategory] = useState<string>('OTHER');
 
+  // Phase 3: images + box overlays
+  const [scanImages, setScanImages] = useState<any[]>([]);
+  const [boxes, setBoxes] = useState<any[]>([]);
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
+
   const selectedIds = useMemo(
     () => Object.entries(selected).filter(([, v]) => v).map(([k]) => k),
     [selected]
@@ -64,13 +119,11 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
   }, [drafts]);
 
   const effectiveSelectedIds = useMemo(() => {
-    // If duplicates toggle is off, filter duplicates out at the last moment
     if (includeDuplicates) return selectedIds;
     return selectedIds.filter((id) => !draftsById[id]?.duplicateOfItemId);
   }, [selectedIds, includeDuplicates, draftsById]);
 
   const grouped = useMemo(() => {
-    // Group by groupLabel/groupKey; fallback to "Detected items"
     const groups = new Map<string, any[]>();
     for (const d of drafts) {
       const key = String(d?.groupLabel || d?.groupKey || 'Detected items');
@@ -83,20 +136,16 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
     }));
   }, [drafts]);
 
-  useEffect(() => {
-    if (!open) return;
-    if (!initialSessionId) return;
-
-    // If modal is opened from history, load that session drafts
-    if (!sessionId) {
-      setSessionId(initialSessionId);
-      loadDraftsForSession(initialSessionId).catch(() => {
-        // ignore; UI will show error if you set it
-      });
+  const boxesByDraft = useMemo(() => {
+    const m: Record<string, any[]> = {};
+    for (const b of boxes) {
+      const did = b?.draftItemId;
+      if (!did) continue;
+      (m[did] ||= []).push(b);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialSessionId]);
-  
+    return m;
+  }, [boxes]);
+
   function resetAll() {
     setFiles([]);
     setBusy(false);
@@ -106,13 +155,14 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
     setError(null);
     setIncludeDuplicates(false);
     setEditingId(null);
+
+    setScanImages([]);
+    setBoxes([]);
+    setActiveDraftId(null);
   }
 
   function defaultSelectedForDraft(row: any): boolean {
-    // Phase 2: backend-driven autoSelected if present
     if (typeof row?.autoSelected === 'boolean') return row.autoSelected;
-
-    // Backward compatibility fallback
     const conf = Number(row?.confidenceJson?.name ?? 0.65);
     return conf >= 0.7;
   }
@@ -130,11 +180,66 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
       const isDuplicate = !!row?.duplicateOfItemId;
       const auto = defaultSelectedForDraft(row);
 
-      // duplicates default OFF (safer): only select if toggle is enabled
       next[row.id] = isDuplicate ? false : auto;
     }
     setSelected(next);
   }
+
+  /**
+   * Phase 3: best-effort session hydrate.
+   * If you have a "getRoomScanSession" API, uncomment the import above and this will
+   * automatically pull images+boxes+drafts for the session.
+   *
+   * If it doesn't exist yet, this function safely no-ops.
+   */
+  async function hydrateSessionPhase3(sid: string) {
+    try {
+      const anyApi: any = await import('../../inventory/inventoryApi');
+      const fn = anyApi?.getRoomScanSession;
+      if (typeof fn !== 'function') return;
+
+      const session = await fn(propertyId, roomId, sid);
+
+      // Expect shape: { images, drafts, boxes, deltas, ... }
+      const imgs = safeArray(session?.images);
+      const ds = safeArray(session?.drafts);
+      const bx = safeArray(session?.boxes);
+
+      if (imgs.length) setScanImages(imgs);
+      if (bx.length) setBoxes(bx);
+
+      if (ds.length) {
+        setDrafts(ds);
+
+        const next: Record<string, boolean> = {};
+        for (const row of ds) {
+          if (!row?.id) continue;
+          const isDuplicate = !!row?.duplicateOfItemId;
+          const auto = defaultSelectedForDraft(row);
+          next[row.id] = isDuplicate ? false : auto;
+        }
+        setSelected(next);
+      }
+    } catch {
+      // ignore: Phase 3 hydration is optional
+    }
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    if (!initialSessionId) return;
+
+    if (!sessionId) {
+      setSessionId(initialSessionId);
+
+      // Phase 2 drafts
+      loadDraftsForSession(initialSessionId).catch(() => {});
+
+      // Phase 3 hydrate (optional)
+      hydrateSessionPhase3(initialSessionId).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialSessionId]);
 
   async function runScan() {
     setError(null);
@@ -155,7 +260,11 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
 
       setSessionId(sid);
 
-      // drafts can be returned inline OR fetched via drafts endpoint (do both safely)
+      // Phase 3: images can be returned inline
+      const inlineImages = safeArray((result as any)?.images);
+      if (inlineImages.length) setScanImages(inlineImages);
+
+      // drafts can be returned inline OR fetched
       const inlineDrafts = safeArray((result as any)?.drafts);
       if (inlineDrafts.length > 0) {
         setDrafts(inlineDrafts);
@@ -171,6 +280,9 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
       } else {
         await loadDraftsForSession(sid);
       }
+
+      // Phase 3: best-effort hydrate boxes + explanations (if API exists)
+      await hydrateSessionPhase3(sid);
     } catch (e: any) {
       console.error('[room-scan] failed', e);
       setError(e?.message || 'Room scan failed');
@@ -199,8 +311,11 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
     try {
       await bulkDismissInventoryDrafts(propertyId, effectiveSelectedIds);
 
-      if (!sessionId) return; // never call drafts with undefined
+      if (!sessionId) return;
       await loadDraftsForSession(sessionId);
+
+      // Phase 3: refresh boxes/drafts if session API exists
+      await hydrateSessionPhase3(sessionId);
     } catch (e: any) {
       setError(e?.message || 'Bulk dismiss failed');
     } finally {
@@ -223,7 +338,10 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
         category: editCategory,
       });
 
-      if (sessionId) await loadDraftsForSession(sessionId);
+      if (sessionId) {
+        await loadDraftsForSession(sessionId);
+        await hydrateSessionPhase3(sessionId);
+      }
       setEditingId(null);
     } catch (e: any) {
       setError(e?.message || 'Failed to update draft');
@@ -232,10 +350,24 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
     }
   }
 
-
   if (!open) return null;
 
   const dupCount = drafts.filter((d) => !!d?.duplicateOfItemId).length;
+
+  // For overlay: show boxes for active draft on up to first 2 images
+  const imagesToShow = scanImages.slice(0, 2);
+  const activeBoxes = activeDraftId ? boxesByDraft[activeDraftId] || [] : [];
+
+  // group boxes by imageId so we can overlay per image
+  const boxesByImage = useMemo(() => {
+    const m: Record<string, any[]> = {};
+    for (const b of activeBoxes) {
+      const iid = b?.imageId;
+      if (!iid) continue;
+      (m[iid] ||= []).push(b);
+    }
+    return m;
+  }, [activeBoxes]);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
@@ -318,6 +450,35 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
                 </span>
               </div>
 
+              {/* Phase 3: Visual Trust - images + overlay (best-effort) */}
+              {imagesToShow.length > 0 ? (
+                <div className="rounded-2xl border border-black/10 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-medium">Visual explainability</div>
+                    <div className="text-xs opacity-70">
+                      Tap an item to highlight where it was detected.
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {imagesToShow.map((img) => (
+                      <DraftBoxesOverlay
+                        key={img.id || img.key}
+                        image={img}
+                        boxes={boxesByImage[img.id] || []}
+                        active={!!activeDraftId}
+                      />
+                    ))}
+                  </div>
+
+                  {!activeDraftId ? (
+                    <div className="mt-2 text-xs opacity-70">
+                      Tip: click an item in the list to see bounding boxes.
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
               {dupCount > 0 ? (
                 <label className="flex items-center gap-2 text-sm rounded-xl border border-black/10 p-3">
                   <input
@@ -354,8 +515,18 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
 
                             const isEditing = editingId === d.id;
 
+                            const tier = d?.explanationJson?.tier;
+                            const why: string[] = Array.isArray(d?.explanationJson?.why) ? d.explanationJson.why : [];
+
                             return (
-                              <div key={d.id} className="p-3 hover:bg-black/[0.02]">
+                              <div
+                                key={d.id}
+                                className="p-3 hover:bg-black/[0.02] cursor-pointer"
+                                onClick={() => {
+                                  if (!d?.id) return;
+                                  setActiveDraftId(d.id);
+                                }}
+                              >
                                 <div className="flex items-start gap-3">
                                   <input
                                     type="checkbox"
@@ -363,6 +534,7 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
                                     disabled={disabled}
                                     onChange={(e) => setSelected((m) => ({ ...m, [d.id]: e.target.checked }))}
                                     className="mt-1"
+                                    onClick={(e) => e.stopPropagation()}
                                   />
 
                                   <div className="min-w-0 flex-1">
@@ -375,6 +547,7 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
                                               Possible duplicate
                                             </span>
                                           ) : null}
+                                          <TierBadge tier={tier} />
                                         </div>
 
                                         <div className="text-xs opacity-70 mt-0.5">
@@ -393,9 +566,16 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
                                             </span>
                                           ) : null}
                                         </div>
+
+                                        {/* Phase 3: Why detected */}
+                                        {why.length > 0 ? (
+                                          <div className="mt-1 text-[12px] text-gray-600">
+                                            <span className="font-medium">Why:</span> {why.slice(0, 2).join(' · ')}
+                                          </div>
+                                        ) : null}
                                       </>
                                     ) : (
-                                      <div className="space-y-2">
+                                      <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                           <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
                                             <div className="text-xs uppercase tracking-wide opacity-60">Name</div>
@@ -444,7 +624,10 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
 
                                   {!isEditing ? (
                                     <button
-                                      onClick={() => beginEdit(d)}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        beginEdit(d);
+                                      }}
                                       disabled={busy}
                                       className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
                                     >
