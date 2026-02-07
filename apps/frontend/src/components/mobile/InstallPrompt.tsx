@@ -29,27 +29,32 @@ export function InstallPrompt() {
     // Check if iOS
     setIsIOSDevice(isIOS());
 
+    const timeoutIds: ReturnType<typeof setTimeout>[] = [];
+
     // For Android/Chrome
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      
+
       // Show prompt after 30 seconds
-      setTimeout(() => {
+      timeoutIds.push(setTimeout(() => {
         setShowPrompt(true);
-      }, 30000);
+      }, 30000));
     };
 
     window.addEventListener('beforeinstallprompt', handler);
 
     // For iOS, show prompt after 1 minute if not dismissed
     if (isIOS() && !wasDismissed) {
-      setTimeout(() => {
+      timeoutIds.push(setTimeout(() => {
         setShowPrompt(true);
-      }, 60000);
+      }, 60000));
     }
 
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+      timeoutIds.forEach(clearTimeout);
+    };
   }, []);
 
   const handleInstall = async () => {

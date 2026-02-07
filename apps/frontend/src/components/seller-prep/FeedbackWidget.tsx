@@ -1,7 +1,7 @@
 // apps/frontend/src/components/seller-prep/FeedbackWidget.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,8 @@ export function FeedbackWidget({ propertyId }: FeedbackWidgetProps) {
   const [selectedRating, setSelectedRating] = useState<"helpful" | "not-helpful" | null>(null);
   const [comment, setComment] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const mountedRef = useRef(true);
+  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
   const mutation = useMutation({
     mutationFn: async (data: { rating: string; comment?: string }) => {
@@ -38,6 +40,7 @@ export function FeedbackWidget({ propertyId }: FeedbackWidgetProps) {
         description: "Your feedback helps us improve.",
       });
       setTimeout(() => {
+        if (!mountedRef.current) return;
         setIsOpen(false);
         setSubmitted(false);
         setSelectedRating(null);

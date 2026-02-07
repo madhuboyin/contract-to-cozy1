@@ -132,6 +132,25 @@ class APIClient {
     this.baseURL = baseURL;
   }
 
+  private validateFile(file: File, options?: { maxSizeMB?: number; allowedTypes?: string[] }) {
+    const maxSize = (options?.maxSizeMB ?? 10) * 1024 * 1024;
+    const allowedTypes = options?.allowedTypes ?? [
+      'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ];
+
+    if (file.size > maxSize) {
+      throw new APIError(`File too large. Maximum size is ${options?.maxSizeMB ?? 10}MB.`, 400);
+    }
+    if (allowedTypes.length > 0 && !allowedTypes.includes(file.type)) {
+      throw new APIError(`File type "${file.type || 'unknown'}" is not allowed.`, 400);
+    }
+  }
+
   // --- HELPER TO PROCESS WAITING REQUESTS ---
   private processFailedQueue(error: Error | null, token: string | null = null) {
     this.failedQueue.forEach(prom => {
@@ -1023,6 +1042,7 @@ class APIClient {
   // ==========================================================================
 
   async uploadDocument(file: File, data: DocumentUploadInput): Promise<APIResponse<Document>> {
+      this.validateFile(file);
       const formData = new FormData();
       
       // Append file as 'file' - MUST match the backend multer field name
@@ -1318,6 +1338,7 @@ class APIClient {
     insights: any;
     warranty: any | null;
   }>> {
+    this.validateFile(file);
     const formData = new FormData();
     formData.append('file', file);
     formData.append('propertyId', propertyId);
@@ -1906,6 +1927,10 @@ class APIClient {
     file: File,
     orderIndex: number
   ): Promise<APIResponse<{ success: boolean; photo: CompletionPhotoDTO }>> {
+    this.validateFile(file, {
+      maxSizeMB: 5,
+      allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+    });
     const formData = new FormData();
     formData.append('file', file);
     formData.append('actionKey', actionKey);

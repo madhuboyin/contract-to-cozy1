@@ -13,18 +13,20 @@ export function OfflineBanner() {
   const [wasOffline, setWasOffline] = useState(false);
 
   useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout>;
     if (!isOnline) {
       setShowBanner(true);
       setWasOffline(true);
     } else if (wasOffline) {
       // Show "back online" message briefly
-      setTimeout(() => {
+      timeoutId = setTimeout(() => {
         setShowBanner(false);
         setWasOffline(false);
       }, 3000);
     } else {
       setShowBanner(false);
     }
+    return () => clearTimeout(timeoutId);
   }, [isOnline, wasOffline]);
 
   if (!showBanner) return null;
