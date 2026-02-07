@@ -29,19 +29,20 @@ import {
   FileText,
   Globe,
   AlertTriangle,
-  Box
+  Box,
+  MessageSquare
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { User } from '@/types';
 import { PropertySetupBanner } from '@/components/PropertySetupBanner';
 import { api } from '@/lib/api/client';
-// --- NEW IMPORT ---
 import { AIChat } from '@/components/AIChat';
 import { PropertyProvider } from '@/lib/property/PropertyContext';
 import { NotificationProvider } from '@/lib/notifications/NotificationContext';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
-
-
+// Mobile-first imports
+import { BottomNav } from '@/components/mobile/BottomNav';
+import { PullToRefresh } from '@/components/mobile/PullToRefresh';
 
 interface NavLink {
   name: string;
@@ -62,6 +63,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth() as { user: User | null, loading: boolean };
   const [propertyCount, setPropertyCount] = useState<number | null>(null);
   const [showBanner, setShowBanner] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const fetchPropertyCount = async () => {
@@ -97,7 +99,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
           console.log('📦 localStorage skip flag:', localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY));
           console.log('✅ Has skipped?', hasSkipped);
           
-          const shouldShowBanner = count === 0 && hasSkipped;
+          const shouldShowBanner = count === 0 && !hasSkipped;
           console.log('');
           console.log('🎌 BANNER DECISION:');
           console.log('   ├─ Property count === 0?', count === 0);
@@ -114,8 +116,8 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
             if (count > 0) {
               console.log('   Reason: User has properties');
             }
-            if (!hasSkipped) {
-              console.log('   Reason: User has not skipped');
+            if (hasSkipped) {
+              console.log('   Reason: User has skipped');
             }
           }
         } else {
@@ -132,10 +134,24 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
     }
   }, [user, loading]);
 
+  const handleDismissBanner = () => {
+    localStorage.setItem(PROPERTY_SETUP_SKIPPED_KEY, 'true');
+    setShowBanner(false);
+  };
+
+  const handleRefresh = async () => {
+    setRefreshKey(prev => prev + 1);
+    // Optionally refetch property count or other data
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  };
+
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <p>Loading user data...</p>
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
       </div>
     );
   }
@@ -151,45 +167,39 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   console.log('🎌 Banner showBanner state:', showBanner);
 
   return (
-  <NotificationProvider>
-    <PropertyProvider> 
-    <div className="flex min-h-screen w-full flex-col">
-      <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-white px-4 sm:px-6">
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-2 font-semibold shrink-0"
-        >
-          <Image
-            src="/favicon.svg"
-            alt="Cozy Logo"
-            width={24}
-            height={24}
-            className="h-6 w-6"
-          />
-          <span className="text-xl font-bold text-blue-600">Contract to Cozy</span>
-        </Link>
+    <NotificationProvider>
+      <PropertyProvider>
+        <div className="flex min-h-screen w-full flex-col">
+          {/* Property Setup Banner - Shows at top */}
+          {showBanner && (
+            <PropertySetupBanner show={showBanner} onDismiss={handleDismissBanner} />
+          )}
 
-        <DesktopNav user={user} />
-        <div className="flex-1" />
-        <DesktopUserNav user={user} />
-
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button
-              variant="outline"
-              size="icon"
-              className="shrink-0 lg:hidden" 
+          {/* Desktop Header - Hidden on mobile */}
+          <header className="sticky top-0 z-10 hidden lg:flex h-16 items-center gap-4 border-b bg-white px-4 sm:px-6">
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-2 font-semibold shrink-0"
             >
-              <PanelLeft className="h-5 w-5" />
-              <span className="sr-only">Toggle navigation menu</span>
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-[280px] p-0 flex flex-col">
-            <div className="flex h-16 items-center border-b px-6">
-              <Link
-                href="/dashboard"
-                className="flex items-center gap-2 font-semibold"
-              >
+              <Image
+                src="/favicon.svg"
+                alt="Cozy Logo"
+                width={24}
+                height={24}
+                className="h-6 w-6"
+              />
+              <span className="text-xl font-bold text-blue-600">Contract to Cozy</span>
+            </Link>
+
+            <DesktopNav user={user} />
+            <div className="flex-1" />
+            <DesktopUserNav user={user} />
+          </header>
+
+          {/* Mobile Header - Shown only on mobile */}
+          <header className="lg:hidden sticky top-0 z-40 bg-white border-b border-gray-200">
+            <div className="px-4 py-3 flex items-center justify-between">
+              <Link href="/dashboard" className="flex items-center gap-2">
                 <Image
                   src="/favicon.svg"
                   alt="Cozy Logo"
@@ -197,33 +207,70 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
                   height={24}
                   className="h-6 w-6"
                 />
-                <span className="text-xl font-bold text-blue-600">Contract to Cozy</span>
+                <span className="font-bold text-blue-600 text-lg">C2C</span>
               </Link>
-            </div>
-            
-            <div className="py-2 flex-1 overflow-auto">
-              <SidebarNav user={user} />
-            </div>
+              
+              <div className="flex items-center gap-3">
+                <NotificationBell />
+                
+                <Sheet>
+                  <SheetTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="shrink-0"
+                    >
+                      <PanelLeft className="h-5 w-5" />
+                      <span className="sr-only">Toggle navigation menu</span>
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="w-[280px] p-0 flex flex-col">
+                    <div className="flex h-16 items-center border-b px-6">
+                      <Link
+                        href="/dashboard"
+                        className="flex items-center gap-2 font-semibold"
+                      >
+                        <Image
+                          src="/favicon.svg"
+                          alt="Cozy Logo"
+                          width={24}
+                          height={24}
+                          className="h-6 w-6"
+                        />
+                        <span className="text-xl font-bold text-blue-600">Contract to Cozy</span>
+                      </Link>
+                    </div>
+                    
+                    <div className="py-2 flex-1 overflow-auto">
+                      <SidebarNav user={user} />
+                    </div>
 
-            <MobileUserNav user={user} />
-          </SheetContent>
-        </Sheet>
-      </header>
+                    <MobileUserNav user={user} />
+                  </SheetContent>
+                </Sheet>
+              </div>
+            </div>
+          </header>
 
-      {/* [MODIFICATION] Wrap main content with PropertyProvider */}
-      <main className="flex-1 bg-gray-50">
-        <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
-          {children}
+          {/* Main content with pull-to-refresh */}
+          <main className="flex-1 bg-gray-50 pb-20 lg:pb-0">
+            <PullToRefresh onRefresh={handleRefresh}>
+              <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
+                <div key={refreshKey}>
+                  {children}
+                </div>
+              </div>
+            </PullToRefresh>
+          </main>
+
+          {/* Mobile Bottom Navigation - Hidden on desktop */}
+          <BottomNav />
+
+          {/* AI Chat Widget - Available on all screen sizes */}
+          <AIChat />
         </div>
-      </main>
-
-      {/* --- NEW: FLOATING AI CHAT WIDGET --- */}
-      {/* Renders the chat widget in a fixed position across all dashboard pages */}
-      <AIChat />
-      {/* ------------------------------------ */}
-    </div>
-    </PropertyProvider>
-  </NotificationProvider>
+      </PropertyProvider>
+    </NotificationProvider>
   );
 }
 
@@ -286,6 +333,7 @@ function SidebarNav({ user }: { user: User | null }) {
 
   const allLinks: NavLink[] = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
+    { name: 'Actions', href: '/dashboard/actions', icon: AlertTriangle },
     { name: 'Properties', href: '/dashboard/properties', icon: Building },
     { name: 'Inventory', href: '/dashboard/inventory', icon: Box },
     { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
@@ -380,7 +428,6 @@ function DesktopUserNav({ user }: { user: User | null }) {
   );
 }
 
-
 function MobileUserNav({ user }: { user: User | null }) {
   const { logout } = useAuth();
 
@@ -416,7 +463,6 @@ function MobileUserNav({ user }: { user: User | null }) {
         <Button 
           onClick={handleLogout} 
           variant="ghost" 
-          // FIX: Replaced hardcoded red classes with destructive color utilities
           className="font-body font-semibold text-destructive justify-start hover:bg-destructive/10 hover:text-destructive tracking-wide transition-colors duration-200 -mx-3"
         >
           <LogOut className="mr-3 h-4 w-4" />

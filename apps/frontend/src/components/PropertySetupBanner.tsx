@@ -9,9 +9,10 @@ const BANNER_DISMISSED_KEY = 'propertyBannerDismissed';
 
 interface PropertySetupBannerProps {
   show: boolean;
+  onDismiss?: () => void;
 }
 
-export function PropertySetupBanner({ show }: PropertySetupBannerProps) {
+export function PropertySetupBanner({ show, onDismiss }: PropertySetupBannerProps) {
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
@@ -41,8 +42,12 @@ export function PropertySetupBanner({ show }: PropertySetupBannerProps) {
 
   const handleDismiss = () => {
     console.log('🎌 BANNER DISMISSED by user');
-    localStorage.setItem(BANNER_DISMISSED_KEY, 'true');
-    setDismissed(true);
+    if (onDismiss) {
+      onDismiss();
+    } else {
+      localStorage.setItem(BANNER_DISMISSED_KEY, 'true');
+      setDismissed(true);
+    }
   };
 
   // Don't render if show is false or if user dismissed it
