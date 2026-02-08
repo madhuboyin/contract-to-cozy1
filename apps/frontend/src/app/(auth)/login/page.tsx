@@ -1,18 +1,16 @@
 // apps/frontend/src/app/(auth)/login/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthContext';
 
 export default function LoginPage() {
   const router = useRouter();
-  // IMPORTANT: We use the 'user' from useAuth as the source of truth after login() succeeds
-  const { login, user } = useAuth(); 
+  const { login, user } = useAuth();
   const [loading, setLoading] = useState(false);
-  // Changed error state to hold null or a message string
-  const [error, setError] = useState<string | null>(null); 
+  const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -20,19 +18,21 @@ export default function LoginPage() {
     password: '',
   });
 
-  // Redirect instantly if already authenticated
-  // NOTE: This check should handle the case where 'user' is populated on mount
-  if (user) {
-    // If user state is already available, redirect based on their role
-    if (user.role === 'PROVIDER') {
-      router.push('/providers/dashboard');
-    } else if (user.role === 'ADMIN') {
-      router.push('/admin/dashboard');
-    } else {
-      router.push('/dashboard');
+  // Redirect if already authenticated — in useEffect to avoid render-time side effects
+  useEffect(() => {
+    if (user) {
+      if (user.role === 'PROVIDER') {
+        router.push('/providers/dashboard');
+      } else if (user.role === 'ADMIN') {
+        router.push('/admin/dashboard');
+      } else {
+        router.push('/dashboard');
+      }
     }
-    return null; 
-  }
+  }, [user, router]);
+
+  // Show nothing while redirecting
+  if (user) return null;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({

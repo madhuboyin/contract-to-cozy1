@@ -56,6 +56,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
     }
 
     const filesToUpload = Array.from(files).slice(0, remainingSlots);
+    let orderIndex = photos.length;
 
     for (const file of filesToUpload) {
       // Validate file type
@@ -87,19 +88,21 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
         uploading: true,
       };
 
+      const currentIndex = orderIndex++;
       setPhotos((prev) => [...prev, tempPhoto]);
 
       // Upload
       try {
-        const result = await onUpload(file, photos.length);
-        
+        const result = await onUpload(file, currentIndex);
+
         setPhotos((prev) => {
           const next = prev.map((p) =>
             p.id === tempPhoto.id
               ? { ...p, id: result.id, thumbnailUrl: result.thumbnailUrl, uploading: false }
               : p
           );
-          onPhotosChange(next.map((p) => p.id));
+          // Notify parent after state update resolves
+          queueMicrotask(() => onPhotosChange(next.filter(p => !p.id.startsWith('temp-')).map(p => p.id)));
           return next;
         });
       } catch (error: any) {

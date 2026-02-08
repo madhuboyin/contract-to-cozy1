@@ -215,7 +215,7 @@ class APIClient {
     const token = this.getToken();
 
     let body = options.body;
-    
+
     // ✅ Detect FormData / binary payloads
     const isFormData =
       typeof FormData !== 'undefined' && body instanceof FormData;
@@ -223,11 +223,16 @@ class APIClient {
       typeof Blob !== 'undefined' && body instanceof Blob;
     const isArrayBuffer =
       typeof ArrayBuffer !== 'undefined' && body instanceof ArrayBuffer;
-    
+
     // ✅ Only JSON stringify plain objects (NOT FormData / Blob / ArrayBuffer)
     if (body && typeof body !== 'string' && !isFormData && !isBlob && !isArrayBuffer) {
       body = JSON.stringify(body);
     }
+
+    // Save the original body so token-refresh retry can re-send it.
+    // FormData/Blob streams are consumed by fetch, so we keep the reference
+    // to the original (unconsumed) value for the retry path.
+    const originalBody = body;
     
     // ✅ Only set JSON Content-Type when body is JSON (not FormData)
     const headers: Record<string, string> = {
@@ -272,7 +277,7 @@ class APIClient {
           const newHeaders = { ...headers, 'Authorization': `Bearer ${newToken}` };
           response = await fetch(`${this.baseURL}${endpoint}`, {
             ...options,
-            body,
+            body: originalBody,
             headers: newHeaders,
           });
         } else {
@@ -1049,7 +1054,7 @@ class APIClient {
   // ==========================================================================
 
   async uploadDocument(file: File, data: DocumentUploadInput): Promise<APIResponse<Document>> {
-      this.validateFile(file);
+      try { this.validateFile(file); } catch (e) { return Promise.reject(e); }
       const formData = new FormData();
       
       // Append file as 'file' - MUST match the backend multer field name
@@ -1345,7 +1350,7 @@ class APIClient {
     insights: any;
     warranty: any | null;
   }>> {
-    this.validateFile(file);
+    try { this.validateFile(file); } catch (e) { return Promise.reject(e); }
     const formData = new FormData();
     formData.append('file', file);
     formData.append('propertyId', propertyId);
@@ -1934,10 +1939,12 @@ class APIClient {
     file: File,
     orderIndex: number
   ): Promise<APIResponse<{ success: boolean; photo: CompletionPhotoDTO }>> {
-    this.validateFile(file, {
-      maxSizeMB: 5,
-      allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
-    });
+    try {
+      this.validateFile(file, {
+        maxSizeMB: 5,
+        allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+      });
+    } catch (e) { return Promise.reject(e); }
     const formData = new FormData();
     formData.append('file', file);
     formData.append('actionKey', actionKey);

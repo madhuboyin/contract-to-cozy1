@@ -13,23 +13,25 @@ export function registerServiceWorker(): (() => void) | undefined {
   }
 
   let intervalId: ReturnType<typeof setInterval> | undefined;
+  let swRegistration: ServiceWorkerRegistration | undefined;
+  let updateFoundHandler: (() => void) | undefined;
 
   const onLoad = async () => {
     try {
-      const registration = await navigator.serviceWorker.register('/sw.js', {
+      swRegistration = await navigator.serviceWorker.register('/sw.js', {
         scope: '/'
       });
 
-      console.log('Service Worker registered:', registration.scope);
+      console.log('Service Worker registered:', swRegistration.scope);
 
       // Check for updates every hour
       intervalId = setInterval(() => {
-        registration.update();
+        swRegistration!.update();
       }, 60 * 60 * 1000);
 
-      // Handle updates
-      registration.addEventListener('updatefound', () => {
-        const newWorker = registration.installing;
+      // Handle updates — store reference so it can be removed on cleanup
+      updateFoundHandler = () => {
+        const newWorker = swRegistration!.installing;
         if (!newWorker) return;
 
         newWorker.addEventListener('statechange', () => {
@@ -39,7 +41,8 @@ export function registerServiceWorker(): (() => void) | undefined {
             }
           }
         });
-      });
+      };
+      swRegistration.addEventListener('updatefound', updateFoundHandler);
 
     } catch (error) {
       console.error('Service Worker registration failed:', error);
@@ -50,6 +53,9 @@ export function registerServiceWorker(): (() => void) | undefined {
 
   return () => {
     if (intervalId !== undefined) clearInterval(intervalId);
+    if (swRegistration && updateFoundHandler) {
+      swRegistration.removeEventListener('updatefound', updateFoundHandler);
+    }
     window.removeEventListener('load', onLoad);
   };
 }

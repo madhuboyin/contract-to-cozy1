@@ -43,17 +43,22 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
 
   const refresh = async () => {
-    try {
-      const [listRes, countRes] = await Promise.all([
-        api.listNotifications(),
-        api.getUnreadNotificationCount(),
-      ]);
+    // Use Promise.allSettled so one failing call doesn't prevent the other
+    const [listResult, countResult] = await Promise.allSettled([
+      api.listNotifications(),
+      api.getUnreadNotificationCount(),
+    ]);
 
-      // Force state update from fresh API data
-      if (listRes.success) setNotifications(listRes.data);
-      if (countRes.success) setUnreadCount(countRes.data.count);
-    } catch (err) {
-      console.error("Refresh failed, count may be stale", err);
+    if (listResult.status === 'fulfilled' && listResult.value.success) {
+      setNotifications(listResult.value.data);
+    } else if (listResult.status === 'rejected') {
+      console.error("Failed to fetch notifications", listResult.reason);
+    }
+
+    if (countResult.status === 'fulfilled' && countResult.value.success) {
+      setUnreadCount(countResult.value.data.count);
+    } else if (countResult.status === 'rejected') {
+      console.error("Failed to fetch unread count", countResult.reason);
     }
   };
 

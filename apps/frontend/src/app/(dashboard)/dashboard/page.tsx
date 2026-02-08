@@ -239,41 +239,24 @@ export default function DashboardPage() {
     setData(prev => ({ ...prev, isLoading: true }));
     
     try {
-      // FIX: Add cache busting for checklist endpoint
-      console.log('📊 Dashboard: Fetching data...');
-      
       const [bookingsRes, propertiesRes, checklistRes, warrantiesRes, policiesRes] = await Promise.all([
         api.listBookings({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' }),
         api.getProperties(),
-        // FIX: Force fresh checklist data
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/checklist?_=${Date.now()}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          },
-        }).then(r => r.json()).then(data => {
-          console.log('📊 Dashboard: Raw checklist response:', data);
-          // Handle both wrapped and unwrapped responses
-          if (data.success && data.data) {
-            return { success: true, data: data.data };
-          } else if (data.id && data.items) {
-            return { success: true, data: data };
+        api.getChecklist().then(res => {
+          if (res.success && res.data) {
+            return { success: true, data: res.data };
           }
           return { success: false, data: null };
-        }),
+        }).catch(() => ({ success: false, data: null })),
         api.listWarranties(),
         api.listInsurancePolicies(),
       ]);
-  
-      console.log('📊 Dashboard: Checklist result:', checklistRes);
   
       const bookings = bookingsRes.success ? bookingsRes.data.bookings : [];
       const properties = propertiesRes.success ? propertiesRes.data.properties : [];
       const checklist = checklistRes.success ? checklistRes.data : null;
       const warranties = warrantiesRes.success ? warrantiesRes.data.warranties : [];
       const policies = policiesRes.success ? policiesRes.data.policies : [];
-  
-      console.log('📊 Dashboard: Checklist items count:', checklist?.items?.length || 0);
-      console.log('📊 Dashboard: Checklist items:', checklist?.items || []);
   
       const scoredProperties = properties.map(p => ({
         ...p,

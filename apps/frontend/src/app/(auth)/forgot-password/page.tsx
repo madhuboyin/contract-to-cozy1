@@ -5,9 +5,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 
-// NOTE: Using native fetch for simplicity, as an API client utility was not provided.
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+
 async function requestPasswordReset(email: string) {
-  const response = await fetch('/api/auth/forgot-password', {
+  const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),

@@ -86,16 +86,19 @@ export const seasonalAPI = {
     }
   ) => {
     const response = await apiClient.post(`/api/seasonal-checklist-items/${itemId}/add-to-tasks`, options);
+    if (!response.data) throw new Error('Failed to add task to checklist');
     return response.data;
   },
 
   dismissTask: async (itemId: string) => {
     const response = await apiClient.post(`/api/seasonal-checklist-items/${itemId}/dismiss`);
+    if (!response.data) throw new Error('Failed to dismiss task');
     return response.data;
   },
 
   snoozeTask: async (itemId: string, days: number = 7) => {
     const response = await apiClient.post(`/api/seasonal-checklist-items/${itemId}/snooze`, { days });
+    if (!response.data) throw new Error('Failed to snooze task');
     return response.data;
   },
 };

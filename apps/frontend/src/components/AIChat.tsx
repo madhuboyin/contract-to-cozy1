@@ -1,7 +1,7 @@
 // apps/frontend/src/components/AIChat.tsx
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { X, Send, Sparkles } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
@@ -48,6 +48,10 @@ export const AIChat: React.FC = () => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   
+  // Memoize welcome message so it only changes when user.segment changes
+  const welcomeMessage = useMemo(() => getWelcomeMessage(user), [user]);
+  const welcomeInitRef = useRef(false);
+
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     { role: 'model', text: getWelcomeMessage(user) }
   ]);
@@ -56,13 +60,20 @@ export const AIChat: React.FC = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOpen]);
-    
+
+  // Update welcome message when user changes, but only if conversation hasn't started
   useEffect(() => {
-      if (messages.length === 1 && user && messages[0].text !== getWelcomeMessage(user)) {
-          setMessages([{ role: 'model', text: getWelcomeMessage(user) }]);
+    if (!welcomeInitRef.current) {
+      welcomeInitRef.current = true;
+      return; // Skip first run — initial state already set
+    }
+    setMessages(prev => {
+      if (prev.length === 1 && prev[0].role === 'model') {
+        return [{ role: 'model', text: welcomeMessage }];
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]); // Only run when user object changes
+      return prev;
+    });
+  }, [welcomeMessage]);
 
   const handleSend = useCallback(async () => {
     if (!input.trim() || loading) return;

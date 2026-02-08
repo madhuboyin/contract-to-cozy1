@@ -286,12 +286,12 @@ export default function BookingDetailsPage() {
                 <div className="space-y-4">
                   {booking.timeline.map((entry, index) => (
                     <div key={entry.id} className="relative">
-                      {index !== booking.timeline!.length - 1 && (
+                      {index !== (booking.timeline?.length ?? 0) - 1 && (
                         <div className="absolute left-2 top-8 bottom-0 w-px bg-gray-200" />
                       )}
                       <div className="flex gap-3">
                         <div className={`w-4 h-4 rounded-full mt-0.5 flex-shrink-0 ${
-                          index === booking.timeline!.length - 1 
+                          index === (booking.timeline?.length ?? 0) - 1
                             ? 'bg-blue-500 ring-4 ring-blue-100' 
                             : 'bg-gray-300'
                         }`} />
