@@ -108,7 +108,7 @@ export default function BookingDetailsPage() {
             <p className="text-gray-600">Booking not found</p>
             <button
               onClick={() => router.push('/dashboard/bookings')}
-              className="text-blue-600 hover:text-blue-700 mt-4"
+              className="text-blue-600 hover:text-blue-700 mt-4 min-h-[44px] inline-flex items-center"
             >
               ← Back to bookings
             </button>
@@ -119,36 +119,58 @@ export default function BookingDetailsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-gray-50 py-4 sm:py-8">
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
         {/* Back Button */}
         <button
           onClick={() => router.back()}
-          className="flex items-center text-sm text-gray-600 hover:text-gray-900 mb-6 transition-colors"
+          className="flex items-center text-sm text-gray-600 hover:text-gray-900 mb-6 transition-colors min-h-[44px]"
         >
           <ChevronLeft className="w-4 h-4 mr-1" />
           Back to bookings
         </button>
 
         {/* Page Header */}
-        <div className="mb-8">
-          <div className="flex items-start justify-between">
+        <div className="mb-6 sm:mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Booking Details</h1>
-              <p className="text-sm text-gray-500 mt-2">{booking.bookingNumber}</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Booking Details</h1>
+              <p className="text-sm text-gray-500 mt-1 sm:mt-2">{booking.bookingNumber}</p>
             </div>
-            <span className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium border ${getStatusColor(booking.status)}`}>
+            <span className={`self-start inline-flex items-center px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-sm font-medium border ${getStatusColor(booking.status)}`}>
               {booking.status.replace('_', ' ')}
             </span>
           </div>
         </div>
 
-        {/* Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Mobile-only: Compact pricing summary so users see cost immediately */}
+        <div className="lg:hidden mb-4">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs text-gray-500">
+                {booking.finalPrice ? 'Final Price' : 'Estimated Price'}
+              </p>
+              <p className={`text-xl font-bold ${booking.finalPrice ? 'text-green-600' : 'text-gray-900'}`}>
+                ${parseFloat(booking.finalPrice || booking.estimatedPrice).toFixed(2)}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-gray-500">Scheduled</p>
+              <p className="text-sm font-medium text-gray-900">
+                {booking.scheduledDate
+                  ? new Date(booking.scheduledDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                  : 'TBD'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Content Grid — explicit order ensures main content always appears first on mobile */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Main Content - 2/3 width */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="order-1 lg:col-span-2 space-y-4 sm:space-y-6">
             {/* Service Card */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Service Information</h2>
               <div className="space-y-4">
                 <div>
@@ -168,7 +190,7 @@ export default function BookingDetailsPage() {
             </div>
 
             {/* Provider Card */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Provider</h2>
               <div className="space-y-4">
                 <div>
@@ -191,7 +213,7 @@ export default function BookingDetailsPage() {
             </div>
 
             {/* Property Card */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Property</h2>
               <div className="space-y-2">
                 {booking.property.name && (
@@ -206,7 +228,7 @@ export default function BookingDetailsPage() {
 
             {/* Description & Requests */}
             {(booking.description || booking.specialRequests) && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Additional Details</h2>
                 <div className="space-y-4">
                   {booking.description && (
@@ -226,10 +248,10 @@ export default function BookingDetailsPage() {
             )}
           </div>
 
-          {/* Sidebar - 1/3 width */}
-          <div className="space-y-6">
+          {/* Sidebar - 1/3 width, appears after main content on mobile */}
+          <div className="order-2 space-y-4 sm:space-y-6">
             {/* Pricing Card */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Pricing</h2>
               <div className="space-y-4">
                 <div>
@@ -259,7 +281,7 @@ export default function BookingDetailsPage() {
 
             {/* Timeline Card */}
             {booking.timeline && booking.timeline.length > 0 && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Timeline</h2>
                 <div className="space-y-4">
                   {booking.timeline.map((entry, index) => (
@@ -293,7 +315,7 @@ export default function BookingDetailsPage() {
 
             {/* Cancellation Card */}
             {booking.cancelledAt && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 sm:p-6">
                 <h3 className="text-base font-semibold text-red-900 mb-2">Cancelled</h3>
                 <p className="text-sm text-red-700 mb-3">
                   {formatDateTime(booking.cancelledAt.toString())}
