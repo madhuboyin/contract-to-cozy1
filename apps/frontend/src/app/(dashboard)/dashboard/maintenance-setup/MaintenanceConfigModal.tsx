@@ -522,8 +522,8 @@ export function MaintenanceConfigModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[500px] max-h-[90dvh] flex flex-col overflow-hidden p-0">
+        <DialogHeader className="px-4 pt-4 sm:px-6 sm:pt-6 pb-0 shrink-0">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <DialogTitle className="pr-8 break-words">
@@ -555,7 +555,8 @@ export function MaintenanceConfigModal({
           </div>
         </DialogHeader>
 
-        <div className="grid gap-6 py-4">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6">
+        <div className="grid gap-4 sm:gap-6 py-4">
 
             {/* --- Property Selection Field --- */}
             <div className="grid gap-2">
@@ -567,7 +568,7 @@ export function MaintenanceConfigModal({
                     <Input
                         value={currentProperty?.name || currentProperty?.address || 'Property Not Linked'}
                         disabled
-                        className="bg-gray-100 text-gray-700"
+                        className="bg-gray-100 text-gray-700 text-base min-h-[44px]"
                     />
                 ) : (
                     <Select 
@@ -575,12 +576,12 @@ export function MaintenanceConfigModal({
                         onValueChange={handlePropertyChange}
                         disabled={properties.length <= 1} 
                     >
-                        <SelectTrigger className="w-full">
+                        <SelectTrigger className="w-full text-base min-h-[44px]">
                             <SelectValue placeholder="Select a Property" />
                         </SelectTrigger>
                         <SelectContent>
                             {properties.map((property) => (
-                                <SelectItem key={property.id} value={property.id}>
+                                <SelectItem key={property.id} value={property.id} className="min-h-[44px]">
                                     {property.name || property.address}
                                 </SelectItem>
                             ))}
@@ -601,6 +602,7 @@ export function MaintenanceConfigModal({
               id="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              className="text-base min-h-[44px]"
             />
           </div>
 
@@ -612,6 +614,7 @@ export function MaintenanceConfigModal({
               value={description || ''}
               onChange={(e) => setDescription(e.target.value || null)}
               placeholder="e.g., Filter size is 20x20x1"
+              className="text-base min-h-[80px]"
             />
           </div>
 
@@ -622,8 +625,7 @@ export function MaintenanceConfigModal({
                 <Input
                     value={formatEnumString(category)}
                     disabled
-                    // Highlight categories that result in an immediate post-save action
-                    className={cn("font-medium", isConfigRedirectTask ? "bg-blue-50/50 text-blue-700" : "bg-gray-100 text-gray-700")}
+                    className={cn("font-medium text-base min-h-[44px]", isConfigRedirectTask ? "bg-blue-50/50 text-blue-700" : "bg-gray-100 text-gray-700")}
                 />
             ) : ( 
                 <Select
@@ -632,13 +634,13 @@ export function MaintenanceConfigModal({
                     setCategory(val === 'NONE' ? null : (val as ServiceCategory))
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="text-base min-h-[44px]">
                     <SelectValue placeholder="Select a category" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="NONE">None</SelectItem>
+                    <SelectItem value="NONE" className="min-h-[44px]">None</SelectItem>
                     {categoryOptions.map((cat) => (
-                      <SelectItem key={cat} value={cat}>
+                      <SelectItem key={cat} value={cat} className="min-h-[44px]">
                         {formatEnumString(cat)}
                       </SelectItem>
                     ))}
@@ -663,13 +665,16 @@ export function MaintenanceConfigModal({
           
           {/* Is Recurring Checkbox (Visible for Service/FINANCE, Hidden for ADMIN) */}
           {showRecurrenceCheckbox && (
-              <div className="flex items-center space-x-2">
+              <div className="flex items-start gap-3 p-3 -mx-3 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-colors">
                   <Checkbox
                     id="isRecurring"
                     checked={isRecurring}
                     onCheckedChange={(checked) => setIsRecurring(!!checked)}
+                    className="mt-0.5 h-5 w-5"
                   />
-                  <Label htmlFor="isRecurring">Make this a recurring task?</Label>
+                  <Label htmlFor="isRecurring" className="flex-1 cursor-pointer text-sm leading-snug">
+                    Make this a recurring task?
+                  </Label>
               </div>
           )}
 
@@ -686,12 +691,12 @@ export function MaintenanceConfigModal({
                         setFrequency(val as RecurrenceFrequency)
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="text-base min-h-[44px]">
                         <SelectValue placeholder="Select a frequency" />
                       </SelectTrigger>
                       <SelectContent>
                         {frequencyOptions.map((freq) => (
-                          <SelectItem key={freq} value={freq}>
+                          <SelectItem key={freq} value={freq} className="min-h-[44px]">
                             {formatEnumString(freq)}
                           </SelectItem>
                         ))}
@@ -709,11 +714,11 @@ export function MaintenanceConfigModal({
                     <Button
                       variant={'outline'}
                       className={cn(
-                        'w-full justify-start text-left font-normal',
+                        'w-full justify-start text-left font-normal text-base min-h-[44px]',
                         !nextDueDate && 'text-muted-foreground'
                       )}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
                       {nextDueDate ? (
                         format(nextDueDate, 'PPP')
                       ) : (
@@ -721,7 +726,7 @@ export function MaintenanceConfigModal({
                       )}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
+                  <PopoverContent className="w-auto p-0" align="start" side="bottom" avoidCollisions>
                     <Calendar
                       mode="single"
                       selected={nextDueDate || undefined}
@@ -740,21 +745,22 @@ export function MaintenanceConfigModal({
                 {serverError}
             </p>
         )}
+        </div>
 
-        <DialogFooter className="sm:justify-between">
+        <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-between gap-2 px-4 pb-4 sm:px-6 sm:pb-6 pt-2 shrink-0 border-t">
           {/* Remove Button (Editing Only) */}
           {!isNew && (
-            <Button variant="destructive" onClick={handleRemove} disabled={isSubmitting}>
+            <Button variant="destructive" onClick={handleRemove} disabled={isSubmitting} className="min-h-[44px] w-full sm:w-auto">
               Remove Task
             </Button>
           )}
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button variant="ghost" onClick={onClose} disabled={isSubmitting} className="min-h-[44px] flex-1 sm:flex-initial">
               Cancel
             </Button>
             
             {/* Save Button (used for Service, FINANCE, and ADMIN config) */}
-            <Button onClick={handleSubmit} disabled={isSubmitting || !title.trim()}>
+            <Button onClick={handleSubmit} disabled={isSubmitting || !title.trim()} className="min-h-[44px] flex-1 sm:flex-initial">
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Save Task'}
             </Button>
           </div>

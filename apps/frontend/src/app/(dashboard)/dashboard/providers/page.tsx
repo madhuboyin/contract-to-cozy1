@@ -70,7 +70,7 @@ const ServiceFilter = React.memo(({ onFilterChange, defaultCategory, isHomeBuyer
 
   return (
     <Card className="shadow-lg">
-      <CardHeader>
+      <CardHeader className="p-4 sm:p-6">
         <CardTitle className="text-xl flex items-center gap-2">
           <Search className="h-5 w-5 text-blue-600" />
           Find Local Providers
@@ -79,23 +79,21 @@ const ServiceFilter = React.memo(({ onFilterChange, defaultCategory, isHomeBuyer
           Search for trusted professionals based on service and location.
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="md:col-span-2">
-            <label className="text-sm font-medium mb-1 block">Service Category</label>
+      <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
+        <form onSubmit={handleSearch} className="space-y-4 sm:space-y-0 sm:grid sm:grid-cols-4 sm:gap-4">
+          <div className="sm:col-span-2">
+            <label className="text-sm font-medium mb-1.5 block">Service Category</label>
             <Select 
               value={selectedCategory} 
               onValueChange={setSelectedCategory}
             >
-              <SelectTrigger className="w-full">
-                {/* When selectedCategory is 'ALL', the value of the corresponding SelectItem ("All Categories") will be shown */}
+              <SelectTrigger className="w-full text-base min-h-[44px]">
                 <SelectValue placeholder={isHomeBuyer ? "Inspection (Required)" : "Select a Category"} />
               </SelectTrigger>
               <SelectContent>
-                {/* FIX 3: Change value="" to value="ALL" */}
-                <SelectItem value="ALL" className="text-gray-500">All Categories</SelectItem>
+                <SelectItem value="ALL" className="text-gray-500 min-h-[44px]">All Categories</SelectItem>
                 {displayCategories.map((cat) => (
-                  <SelectItem key={cat.value} value={cat.value}>
+                  <SelectItem key={cat.value} value={cat.value} className="min-h-[44px]">
                     <div className="flex items-center">
                       <ServiceCategoryIcon icon={cat.value} className="h-4 w-4 mr-2" />
                       {cat.label}
@@ -107,18 +105,18 @@ const ServiceFilter = React.memo(({ onFilterChange, defaultCategory, isHomeBuyer
           </div>
 
           <div>
-            <label className="text-sm font-medium mb-1 block">Zip Code</label>
+            <label className="text-sm font-medium mb-1.5 block">Zip Code</label>
             <Input
               type="text"
               placeholder="e.g., 78701"
               value={zipCode}
               onChange={(e) => setZipCode(e.target.value)}
-              className="w-full"
+              className="w-full text-base min-h-[44px]"
             />
           </div>
           
           <div className="flex items-end">
-            <Button type="submit" className="w-full">
+            <Button type="submit" className="w-full min-h-[44px]">
               <Search className="h-4 w-4 mr-2" />
               Search
             </Button>
@@ -143,22 +141,22 @@ const ProviderList = ({
   targetPropertyId, 
   insightContext, 
   category,
-  fromSource  // ✅ Add as prop
+  fromSource
 }: { 
   providers: Provider[]; 
   targetPropertyId?: string;
   insightContext?: string;
   category?: string;
-  fromSource?: string;  // ✅ Add type
+  fromSource?: string;
 }) => {
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
       {providers.map((provider) => {
         const queryParams = new URLSearchParams();
         if (targetPropertyId) queryParams.append('propertyId', targetPropertyId);
         if (insightContext) queryParams.append('insightFactor', insightContext);
         if (category) queryParams.append('category', category);
-        if (fromSource) queryParams.append('from', fromSource);  // ✅ Use prop
+        if (fromSource) queryParams.append('from', fromSource);
         
         const profileLink = queryParams.toString() 
           ? `/dashboard/providers/${provider.id}?${queryParams.toString()}`
@@ -167,22 +165,22 @@ const ProviderList = ({
         return (
           <Card 
             key={provider.id} 
-            className="group relative hover:shadow-xl transition-shadow duration-300"
+            className="group relative flex flex-col hover:shadow-xl transition-shadow duration-300"
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xl font-bold truncate">
+              <CardTitle className="text-lg sm:text-xl font-bold truncate pr-2">
                 {provider.businessName}
               </CardTitle>
-              <div className="flex items-center text-yellow-500 text-sm">
+              <div className="flex items-center text-yellow-500 text-sm shrink-0">
                 <Star className="h-4 w-4 fill-yellow-500 mr-1" />
                 {provider.averageRating.toFixed(1)}
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1 flex flex-col">
               <p className="text-sm text-muted-foreground mb-3">
                 {provider.totalReviews} reviews • {provider.totalCompletedJobs} jobs completed
               </p>
-              <div className="flex flex-wrap gap-2 mb-4">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-4">
                 {provider.serviceCategories.slice(0, 3).map(category => (
                   <Badge key={category} variant="secondary" className="text-xs">
                     <ServiceCategoryIcon icon={category} className="h-3 w-3 mr-1" />
@@ -191,26 +189,28 @@ const ProviderList = ({
                 ))}
               </div>
 
-              <div className="flex items-center text-sm text-gray-600">
-                <MapPin className="h-4 w-4 mr-2 text-red-500" />
+              <div className="flex items-center text-sm text-gray-600 mb-3">
+                <MapPin className="h-4 w-4 mr-2 text-red-500 shrink-0" />
                 Serves up to {provider.serviceRadius} miles
               </div>
 
+              {/* Spacer pushes button to bottom for equal-height cards */}
+              <div className="flex-1" />
+
+              <Button 
+                asChild
+                variant="default" 
+                size="sm" 
+                className="w-full sm:w-auto self-end min-h-[44px] mt-2"
+              >
+                <Link href={profileLink}>View Profile</Link>
+              </Button>
+
+              {/* Full-card clickable overlay */}
               <Link href={profileLink} className="absolute inset-0">
                 <span className="sr-only">View Provider Profile: {provider.businessName}</span>
               </Link>
-              
             </CardContent>
-            <div className="absolute bottom-4 right-4">
-                <Button 
-                  asChild
-                  variant="default" 
-                  size="sm" 
-                  className="group-hover:translate-x-0 translate-x-2 transition-transform duration-300"
-                >
-                  <Link href={profileLink}>View Profile</Link>
-                </Button>
-              </div>
           </Card>
         );
       })}
@@ -340,13 +340,13 @@ export default function ProvidersPage() {
 
   // --- Render ---
   return (
-    <div className="space-y-8">
-      <h1 className="text-3xl font-bold tracking-tight">Provider Search</h1>
+    <div className="space-y-6 sm:space-y-8">
+      <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Provider Search</h1>
   
       {/* Context Banner - Show when arriving from Health Insights */}
       {insightContext && (
         <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center gap-3">
               <Info className="h-5 w-5 text-blue-600 flex-shrink-0" />
               <div>
@@ -370,7 +370,7 @@ export default function ProvidersPage() {
         isHomeBuyer={isHomeBuyer}
       />
 
-      <h2 className="text-2xl font-bold tracking-tight border-b pb-2">
+      <h2 className="text-xl sm:text-2xl font-bold tracking-tight border-b pb-2">
         {dataLoading 
           ? 'Searching...' 
           : providers.length > 0
@@ -386,7 +386,7 @@ export default function ProvidersPage() {
           <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
         </div>
       ) : error ? (
-        <div className="text-center p-8 bg-red-50 border border-red-200 rounded-lg">
+        <div className="text-center p-6 sm:p-8 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-red-600 font-medium">Error: {error}</p>
           <p className="text-sm text-red-500 mt-1">Please refine your search criteria.</p>
         </div>
@@ -399,7 +399,7 @@ export default function ProvidersPage() {
           fromSource={fromSource}
         />
       ) : (
-        <div className="text-center p-8 bg-gray-50 border rounded-lg">
+        <div className="text-center p-6 sm:p-8 bg-gray-50 border rounded-lg">
           <p className="text-lg font-medium text-gray-700">No providers found matching your criteria.</p>
           <p className="text-sm text-gray-500 mt-2">Try widening the service category or removing the zip code.</p>
         </div>
