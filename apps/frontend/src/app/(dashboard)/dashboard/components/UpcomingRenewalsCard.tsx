@@ -18,7 +18,7 @@ interface RenewalItem {
   expiryDate: Date;
   type: 'warranty' | 'insurance';
   status: 'expired' | 'due_30d' | 'active';
-  propertyId: string | null; // ✅ FIXED: Allow null to match API response
+  propertyId: string | null;
   daysUntilExpiry: number;
 }
 
@@ -98,7 +98,8 @@ export const UpcomingRenewalsCard: React.FC<UpcomingRenewalsCardProps> = ({ prop
   const totalRenewals = renewalItems.length;
 
   return (
-    <Card className="h-[320px] flex flex-col border-2 border-gray-100 rounded-2xl shadow-sm hover:border-blue-300 hover:shadow-lg hover:-translate-y-0.5 transition-all">
+    /* FIXED: Changed h-[320px] to min-h-[320px] and added h-full for mobile vertical expansion */
+    <Card className="min-h-[320px] h-full flex flex-col border-2 border-gray-100 rounded-2xl shadow-sm hover:border-blue-300 hover:shadow-lg hover:-translate-y-0.5 transition-all overflow-hidden">
       <CardContent className="p-5 flex flex-col h-full">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
@@ -120,7 +121,7 @@ export const UpcomingRenewalsCard: React.FC<UpcomingRenewalsCardProps> = ({ prop
               <div className="h-16 rounded-lg bg-gray-100 animate-pulse" />
             </div>
           ) : !propertyId ? (
-            <div className="flex flex-col items-center justify-center h-full">
+            <div className="flex flex-col items-center justify-center h-full py-8">
               <span className="text-4xl mb-3">🏠</span>
               <p className="text-sm text-gray-600 mb-4">Select a property</p>
               <Link href="/dashboard/properties">
@@ -130,7 +131,7 @@ export const UpcomingRenewalsCard: React.FC<UpcomingRenewalsCardProps> = ({ prop
               </Link>
             </div>
           ) : displayItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full">
+            <div className="flex flex-col items-center justify-center h-full py-8">
               <span className="text-4xl mb-3">📋</span>
               <p className="text-sm text-gray-600 mb-4">No upcoming renewals</p>
               <Link href={propertyId ? `/dashboard/properties/${propertyId}` : '/dashboard/properties'}>
@@ -154,15 +155,19 @@ export const UpcomingRenewalsCard: React.FC<UpcomingRenewalsCardProps> = ({ prop
                     className="block"
                   >
                     <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 hover:border-blue-300 hover:shadow-sm hover:bg-white transition-all cursor-pointer">
+                      {/* FIXED: Added truncate to title and min-w-0 to parent if needed */}
                       <h4 className="text-sm font-semibold text-gray-900 mb-1.5 truncate">
                         {renewal.title}
                       </h4>
-                      <p className="text-xs text-gray-600 mb-1.5">
-                        Expires: {format(renewal.expiryDate, 'MMM dd, yyyy')}
-                      </p>
-                      <Badge variant="secondary" className={`text-xs font-medium ${badge.className}`}>
-                        {badge.label}
-                      </Badge>
+                      {/* FIXED: Added min-w-0 for flex safety */}
+                      <div className="min-w-0">
+                        <p className="text-xs text-gray-600 mb-1.5 truncate">
+                          Expires: {format(renewal.expiryDate, 'MMM dd, yyyy')}
+                        </p>
+                        <Badge variant="secondary" className={`text-xs font-medium shrink-0 ${badge.className}`}>
+                          {badge.label}
+                        </Badge>
+                      </div>
                     </div>
                   </Link>
                 );
