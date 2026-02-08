@@ -98,7 +98,7 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
                 <div key={task.id} className="flex items-start justify-between p-3 rounded-lg bg-gray-50">
                   {/* FIXED: min-w-0 is required for truncate to work inside a flex parent */}
                   <div className="flex-1 min-w-0 pr-2">
-                    <p className="text-sm font-medium text-gray-900 truncate">
+                    <p className="text-sm font-medium text-gray-900 truncate" title={task.title}>
                       {task.title}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">

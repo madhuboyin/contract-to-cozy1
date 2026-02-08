@@ -35,32 +35,16 @@ export function MaintenanceNudgeCard({
         return null;
     }
 
-    // Determine severity and colors
-    const getSeverityStyles = () => {
-        if (healthScore < 70) {
-            return {
-                background: 'bg-gradient-to-r from-orange-50 to-yellow-50',
-                border: 'border-orange-200',
-                borderLeft: 'border-l-orange-500',
-                icon: 'text-orange-600',
-                badge: 'bg-orange-600',
-                buttonBorder: 'border-orange-300 hover:border-orange-400 hover:bg-orange-50',
-                buttonText: 'text-orange-700'
-            };
-        } else {
-            return {
-                background: 'bg-gradient-to-r from-yellow-50 to-amber-50',
-                border: 'border-yellow-200',
-                borderLeft: 'border-l-yellow-500',
-                icon: 'text-yellow-600',
-                badge: 'bg-yellow-600',
-                buttonBorder: 'border-yellow-300 hover:border-yellow-400 hover:bg-yellow-50',
-                buttonText: 'text-yellow-700'
-            };
-        }
+    // Severity styles — card only renders when healthScore < 70
+    const styles = {
+        background: 'bg-gradient-to-r from-orange-50 to-yellow-50',
+        border: 'border-orange-200',
+        borderLeft: 'border-l-orange-500',
+        icon: 'text-orange-600',
+        badge: 'bg-orange-600',
+        buttonBorder: 'border-orange-300 hover:border-orange-400 hover:bg-orange-50',
+        buttonText: 'text-orange-700'
     };
-
-    const styles = getSeverityStyles();
     const actionText = consolidatedActionCount === 1 ? 'action' : 'actions';
     const badgeText = consolidatedActionCount > 5 ? '5+ PENDING' : `${consolidatedActionCount} PENDING`;
 

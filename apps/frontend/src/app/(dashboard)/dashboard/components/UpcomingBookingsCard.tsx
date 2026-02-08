@@ -33,14 +33,12 @@ export const UpcomingBookingsCard: React.FC<UpcomingBookingsCardProps> = ({
   isPropertySelected,
   selectedPropertyId
 }) => {
-  const displayBookings = React.useMemo(() => {
-    return bookings
+  const { displayBookings, totalUpcoming } = React.useMemo(() => {
+    const upcoming = bookings
       .filter(b => b.scheduledDate && !isPast(new Date(b.scheduledDate)))
-      .sort((a, b) => new Date(a.scheduledDate!).getTime() - new Date(b.scheduledDate!).getTime())
-      .slice(0, 3);
+      .sort((a, b) => new Date(a.scheduledDate!).getTime() - new Date(b.scheduledDate!).getTime());
+    return { displayBookings: upcoming.slice(0, 3), totalUpcoming: upcoming.length };
   }, [bookings]);
-
-  const totalUpcoming = bookings.filter(b => b.scheduledDate && !isPast(new Date(b.scheduledDate))).length;
 
   return (
     <Card className="w-full min-h-[320px] h-full flex flex-col border-2 border-gray-100 rounded-2xl shadow-sm hover:border-blue-300 hover:shadow-lg hover:-translate-y-0.5 transition-all overflow-hidden">

@@ -56,8 +56,7 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
       }
       throw new Error(response.message || 'Failed to fetch favorites.');
     },
-    // FIX: Set staleTime to 0 to force a network request (and guarantee data freshness) every time the component mounts/re-renders.
-    staleTime: 0, 
+    staleTime: 5 * 60_000,
   });
 
   // Replace placeholder data with fetched data
@@ -85,7 +84,7 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
             </CardDescription>
         </CardHeader>
         <CardContent className="flex-1 text-center py-6 text-destructive">
-          <p className="font-body text-sm">Error loading favorites: {(error as Error).message}</p>
+          <p className="font-body text-sm">Error loading favorites: {error instanceof Error ? error.message : 'Unknown error'}</p>
         </CardContent>
         {/* Persistent footer with the link, even on error */}
         <div className="p-4 border-t border-gray-200">

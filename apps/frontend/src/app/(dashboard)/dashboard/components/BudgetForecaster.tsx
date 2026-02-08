@@ -95,7 +95,9 @@ export default function BudgetForecaster({ propertyId }: BudgetForecasterProps) 
     return null;
   }
 
-  const maxMonthly = Math.max(...forecast.monthlyForecasts.map(m => m.total));
+  const maxMonthly = forecast.monthlyForecasts.length > 0
+    ? Math.max(...forecast.monthlyForecasts.map(m => m.total))
+    : 1;
 
   return (
     <div className="space-y-6">
@@ -326,7 +328,7 @@ export default function BudgetForecaster({ propertyId }: BudgetForecasterProps) 
         <CardContent className="p-4">
           <p className="text-xs text-gray-600 text-center">
             Forecast based on property type, age, and location. Actual costs may vary. 
-            Generated on {new Date(forecast.generatedAt).toLocaleString()}
+            Generated on {forecast.generatedAt ? new Date(forecast.generatedAt).toLocaleString() : 'Unknown'}
           </p>
         </CardContent>
       </Card>

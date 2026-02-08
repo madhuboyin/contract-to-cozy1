@@ -190,7 +190,7 @@ export const SeasonalChecklistCard: React.FC<SeasonalChecklistCardProps> = ({
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-lg font-semibold flex items-center gap-2 min-w-0">
-            <span className="text-2xl">{SEASON_EMOJI[checklist.season]}</span>
+            <span className="text-2xl" aria-hidden="true">{SEASON_EMOJI[checklist.season]}</span>
             {checklist.season} {checklist.year}
           </CardTitle>
           <Badge variant="outline" className="text-xs shrink-0 truncate max-w-[80px] sm:max-w-none">

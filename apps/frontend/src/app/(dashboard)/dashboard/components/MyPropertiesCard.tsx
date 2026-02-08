@@ -59,7 +59,7 @@ export const MyPropertiesCard = ({ properties, className }: MyPropertiesCardProp
                   <p className="font-body text-sm text-gray-500 truncate">{property.address}</p>
                   <div className="font-body flex items-center mt-1 text-xs text-gray-400">
                     <MapPin className="mr-1 h-3 w-3" />
-                    {property.city}, {property.state}
+                    {property.city || 'Unknown'}, {property.state || 'Unknown'}
                   </div>
                 </div>
               </div>
