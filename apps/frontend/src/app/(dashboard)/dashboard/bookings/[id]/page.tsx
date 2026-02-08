@@ -69,6 +69,10 @@ export default function BookingDetailsPage() {
   const router = useRouter();
   const [booking, setBooking] = useState<Booking | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errorState, setErrorState] = useState<{
+    kind: 'NOT_FOUND' | 'REQUEST_FAILED';
+    message?: string;
+  } | null>(null);
 
   useEffect(() => {
     fetchBooking();
@@ -77,12 +81,23 @@ export default function BookingDetailsPage() {
   const fetchBooking = async () => {
     try {
       setLoading(true);
+      setErrorState(null);
       const response = await api.getBooking(params.id as string);
       if (response.success) {
         setBooking(response.data);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching booking:', error);
+      setBooking(null);
+      const status = error?.status;
+      if (status === 404) {
+        setErrorState({ kind: 'NOT_FOUND' });
+      } else {
+        setErrorState({
+          kind: 'REQUEST_FAILED',
+          message: typeof error?.message === 'string' ? error.message : undefined,
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -101,17 +116,30 @@ export default function BookingDetailsPage() {
   }
 
   if (!booking) {
+    const isRequestFailure = errorState?.kind === 'REQUEST_FAILED';
     return (
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="text-center py-12">
-            <p className="text-gray-600">Booking not found</p>
-            <button
-              onClick={() => router.push('/dashboard/bookings')}
-              className="text-blue-600 hover:text-blue-700 mt-4 min-h-[44px] inline-flex items-center"
-            >
-              ← Back to bookings
-            </button>
+            <p className="text-gray-600">
+              {isRequestFailure ? 'Unable to load booking details right now.' : 'Booking not found'}
+            </p>
+            {isRequestFailure && errorState?.message && (
+              <p className="text-sm text-gray-500 mt-2">{errorState.message}</p>
+            )}
+            <div className="mt-4 flex items-center justify-center gap-3">
+              {isRequestFailure && (
+                <Button onClick={fetchBooking} variant="default">
+                  Retry
+                </Button>
+              )}
+              <Button
+                onClick={() => router.push('/dashboard/bookings')}
+                variant={isRequestFailure ? 'outline' : 'default'}
+              >
+                Back to bookings
+              </Button>
+            </div>
           </div>
         </div>
       </div>
