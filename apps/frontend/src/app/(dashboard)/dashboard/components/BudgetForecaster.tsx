@@ -183,12 +183,12 @@ export default function BudgetForecaster({ propertyId }: BudgetForecasterProps) 
       {/* Monthly View */}
       {view === 'monthly' && (
         <div className="space-y-3">
-          {forecast.monthlyForecasts.map((month, index) => {
+          {forecast.monthlyForecasts.map((month) => {
             const isExpanded = expandedMonth === month.month;
             const barWidth = (month.total / maxMonthly) * 100;
 
             return (
-              <Card key={index} className="hover:shadow-md transition-shadow">
+              <Card key={month.month} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3 flex-1">
@@ -236,9 +236,9 @@ export default function BudgetForecaster({ propertyId }: BudgetForecasterProps) 
                         <div className="mt-3">
                           <p className="text-xs font-semibold text-gray-600 mb-2">Seasonal Tasks:</p>
                           <div className="flex flex-wrap gap-2">
-                            {month.tasks.map((task, i) => (
+                            {month.tasks.map((task) => (
                               <span
-                                key={i}
+                                key={`${month.month}:${task}`}
                                 className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs"
                               >
                                 {task}
@@ -259,8 +259,8 @@ export default function BudgetForecaster({ propertyId }: BudgetForecasterProps) 
       {/* Category View */}
       {view === 'category' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {forecast.categoryBreakdowns.map((category, index) => (
-            <Card key={index}>
+          {forecast.categoryBreakdowns.map((category) => (
+            <Card key={category.category}>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center justify-between">
                   <span>{category.category}</span>
@@ -285,8 +285,8 @@ export default function BudgetForecaster({ propertyId }: BudgetForecasterProps) 
                 <div>
                   <p className="text-xs font-semibold text-gray-600 mb-2">Typical Items:</p>
                   <ul className="space-y-1">
-                    {category.items.map((item, i) => (
-                      <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
+                    {category.items.map((item) => (
+                      <li key={`${category.category}:${item}`} className="text-sm text-gray-700 flex items-start gap-2">
                         <span className="text-blue-600 mt-1">•</span>
                         <span>{item}</span>
                       </li>
@@ -310,7 +310,7 @@ export default function BudgetForecaster({ propertyId }: BudgetForecasterProps) 
         <CardContent>
           <ul className="space-y-3">
             {forecast.recommendations.map((rec, index) => (
-              <li key={index} className="flex items-start gap-3">
+              <li key={rec} className="flex items-start gap-3">
                 <span className="flex-shrink-0 w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
                   {index + 1}
                 </span>

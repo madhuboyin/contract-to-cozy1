@@ -44,8 +44,8 @@ export function HealthInsightList({ property }: HealthInsightListProps) {
                 </p>
                 
                 <ul className="space-y-3">
-                    {criticalInsights.map((insight, index) => (
-                        <li key={index} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-white rounded-lg shadow-sm border border-blue-100">
+                    {criticalInsights.map((insight) => (
+                        <li key={`${insight.factor}:${insight.status}:${insight.score}:${(insight.details || []).join('|')}`} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-white rounded-lg shadow-sm border border-blue-100">
                             <div className="flex-1 pr-4 mb-2 sm:mb-0">
                                 <p className="font-semibold text-gray-800">
                                     {insight.factor}
@@ -57,8 +57,8 @@ export function HealthInsightList({ property }: HealthInsightListProps) {
                                 {/* FIX 3: Display appliance details if available */}
                                 {insight.details && insight.details.length > 0 && (
                                     <ul className="text-xs text-gray-600 mt-2 ml-4 list-disc space-y-1">
-                                        {insight.details.map((detail, idx) => (
-                                            <li key={idx}>{detail}</li>
+                                        {insight.details.map((detail) => (
+                                            <li key={`${insight.factor}:${detail}`}>{detail}</li>
                                         ))}
                                     </ul>
                                 )}

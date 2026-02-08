@@ -15,10 +15,13 @@ import { api } from '@/lib/api/client';
  * A basic chat window component that talks to the secure backend proxy.
  */
 export const AIChatWindow = () => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  type UIChatMessage = ChatMessage & { id: string };
+
+  const [messages, setMessages] = useState<UIChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const messageCounterRef = useRef(0);
 
   // Generates a simple, unique session ID for the current client lifecycle
   const [sessionId] = useState(() => Date.now().toString());
@@ -33,10 +36,16 @@ export const AIChatWindow = () => {
     }
   }, [messages]);
 
+  const nextMessageId = useCallback(() => {
+    messageCounterRef.current += 1;
+    return `${sessionId}-${messageCounterRef.current}`;
+  }, [sessionId]);
+
   const handleSendMessage = useCallback(async () => {
     if (!inputMessage.trim() || isLoading) return;
 
-    const userMessage: ChatMessage = { role: 'user', text: inputMessage.trim() };
+    const userMessageText = inputMessage.trim();
+    const userMessage: UIChatMessage = { id: nextMessageId(), role: 'user', text: userMessageText };
 
     // 1. Optimistic UI update with user message
     setMessages((prev) => [...prev, userMessage]);
@@ -47,13 +56,14 @@ export const AIChatWindow = () => {
       // 2. Call the secure backend proxy
       const response = await api.sendMessageToChat({
         sessionId,
-        message: userMessage.text,
+        message: userMessageText,
       });
 
       // 3. Handle the model's response
       // Check if response is successful and extract the text
       if (response.success && response.data) {
-        const modelMessage: ChatMessage = {
+        const modelMessage: UIChatMessage = {
+          id: nextMessageId(),
           role: 'model',
           text: response.data.text,
         };
@@ -62,7 +72,8 @@ export const AIChatWindow = () => {
         setMessages((prev) => [...prev, modelMessage]);
       } else {
         // Handle error response
-        const errorMessage: ChatMessage = {
+        const errorMessage: UIChatMessage = {
+          id: nextMessageId(),
           role: 'model',
           text: `Error: The AI service could not process your request. Please try again later.`
         };
@@ -71,7 +82,8 @@ export const AIChatWindow = () => {
 
     } catch (error: any) {
       console.error("Error communicating with AI service:", error);
-      const errorMessage: ChatMessage = {
+      const errorMessage: UIChatMessage = {
+        id: nextMessageId(),
         role: 'model',
         text: `Error: The AI service could not process your request. ${error.response?.data?.message || 'Please try again later.'}`
       }
@@ -79,7 +91,7 @@ export const AIChatWindow = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [inputMessage, isLoading, sessionId]);
+  }, [inputMessage, isLoading, nextMessageId, sessionId]);
   
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -88,7 +100,7 @@ export const AIChatWindow = () => {
     }
   };
 
-  const MessageBubble = ({ message }: { message: ChatMessage }) => {
+  const MessageBubble = ({ message }: { message: UIChatMessage }) => {
     const isUser = message.role === 'user';
     
     return (
@@ -131,8 +143,8 @@ export const AIChatWindow = () => {
                 <p className="text-sm mt-1">Ask me about your homeowner checklist, maintenance plans, or general property advice.</p>
               </div>
             ) : (
-              messages.map((msg, index) => (
-                <MessageBubble key={index} message={msg} />
+              messages.map((msg) => (
+                <MessageBubble key={msg.id} message={msg} />
               ))
             )}
           </div>
