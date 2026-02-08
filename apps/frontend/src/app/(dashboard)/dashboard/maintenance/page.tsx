@@ -512,97 +512,156 @@ export default function MaintenancePage() {
       )}
 
       {view !== 'all' && maintenanceItems.length > 0 && (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Task</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Priority</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead className="hidden sm:table-cell">Frequency</TableHead>
-                <TableHead>Last Completed</TableHead>
-                <TableHead className="text-center">Next Due</TableHead>
-                <TableHead className="text-center">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
+        <>
+          <div className="hidden md:block rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Task</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Priority</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Frequency</TableHead>
+                  <TableHead>Last Completed</TableHead>
+                  <TableHead className="text-center">Next Due</TableHead>
+                  <TableHead className="text-center">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {maintenanceItems.map((task) => {
+                  const dueDateInfo = formatDueDate(task.nextDueDate);
+                  const frequencyDisplay = task.isRecurring && task.frequency ? formatEnumString(task.frequency) : 'One-time';
+                  const isCompleted = task.status === 'COMPLETED';
+                  return (
+                    <TableRow key={task.id} className={cn(isCompleted && 'opacity-80')}>
+                      <TableCell className="font-medium">{task.title}</TableCell>
+                      <TableCell className="text-sm text-gray-600">{task.description || 'No description'}</TableCell>
+                      <TableCell>
+                        <span
+                          className={cn(
+                            'px-2 py-1 rounded text-xs font-medium',
+                            task.priority === 'URGENT' && 'bg-red-100 text-red-700',
+                            task.priority === 'HIGH' && 'bg-orange-100 text-orange-700',
+                            task.priority === 'MEDIUM' && 'bg-yellow-100 text-yellow-700',
+                            task.priority === 'LOW' && 'bg-green-100 text-green-700'
+                          )}
+                        >
+                          {task.priority}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-sm">{formatCategory(task.serviceCategory)}</TableCell>
+                      <TableCell className="text-sm hidden sm:table-cell">{frequencyDisplay}</TableCell>
+                      <TableCell className="text-sm text-gray-500">
+                        {task.lastCompletedDate ? format(new Date(task.lastCompletedDate), 'MMM dd, yyyy') : 'Never'}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className={cn('font-medium text-sm', dueDateInfo.color)}>{dueDateInfo.text}</span>
+                      </TableCell>
 
-            <TableBody>
-              {maintenanceItems.map((task) => {
-                const dueDateInfo = formatDueDate(task.nextDueDate);
-                const frequencyDisplay = task.isRecurring && task.frequency ? formatEnumString(task.frequency) : 'One-time';
-                const isCompleted = task.status === 'COMPLETED';
+                      <TableCell className="text-center">
+                        <div className="flex justify-center space-x-1">
+                          {!isCompleted && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-gray-500 hover:text-green-600"
+                              onClick={() => handleMarkComplete.mutate(task)}
+                              title="Mark Complete"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </Button>
+                          )}
 
-                return (
-                  <TableRow key={task.id} className={cn(isCompleted && 'opacity-80')}>
-                    <TableCell className="font-medium">{task.title}</TableCell>
-                    <TableCell className="text-sm text-gray-600">{task.description || 'No description'}</TableCell>
-                    <TableCell>
-                      <span
-                        className={cn(
-                          'px-2 py-1 rounded text-xs font-medium',
-                          task.priority === 'URGENT' && 'bg-red-100 text-red-700',
-                          task.priority === 'HIGH' && 'bg-orange-100 text-orange-700',
-                          task.priority === 'MEDIUM' && 'bg-yellow-100 text-yellow-700',
-                          task.priority === 'LOW' && 'bg-green-100 text-green-700'
-                        )}
+                          {/* ✅ Option A: Completed rows show "View" instead of "Edit" */}
+                          {isCompleted ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-gray-500 hover:text-gray-900"
+                              onClick={() => handleViewModal(task)}
+                              title="View Task"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-gray-500 hover:text-blue-600"
+                              onClick={() => handleOpenModal(task)}
+                              title="Edit Task"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+          {/* 2. Mobile View: Visible on mobile, hidden on desktop (md:hidden) */}
+          <div className="md:hidden space-y-4">
+          {maintenanceItems.map((task) => {
+            const dueDateInfo = formatDueDate(task.nextDueDate);
+            const isCompleted = task.status === 'COMPLETED';
+            
+            return (
+              <Card key={task.id} className={cn("p-4 border", isCompleted && "opacity-80")}>
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h3 className="font-bold text-base leading-tight">{task.title}</h3>
+                    <p className="text-xs text-muted-foreground">{formatCategory(task.serviceCategory)}</p>
+                  </div>
+                  <Badge 
+                    className={cn(
+                      task.priority === 'URGENT' && 'bg-red-100 text-red-700',
+                      task.priority === 'HIGH' && 'bg-orange-100 text-orange-700',
+                      'text-[10px] px-1.5 py-0'
+                    )}
+                  >
+                    {task.priority}
+                  </Badge>
+                </div>
+
+                <p className="text-sm text-gray-600 line-clamp-2 mb-3">
+                  {task.description || 'No description'}
+                </p>
+
+                <div className="flex justify-between items-center text-sm border-t pt-3">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase text-muted-foreground">Next Due</span>
+                    <span className={cn("font-semibold", dueDateInfo.color)}>{dueDateInfo.text}</span>
+                  </div>
+                  
+                  <div className="flex gap-1">
+                    {!isCompleted && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9 w-9 text-green-600"
+                        onClick={() => handleMarkComplete.mutate(task)}
                       >
-                        {task.priority}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-sm">{formatCategory(task.serviceCategory)}</TableCell>
-                    <TableCell className="text-sm hidden sm:table-cell">{frequencyDisplay}</TableCell>
-                    <TableCell className="text-sm text-gray-500">
-                      {task.lastCompletedDate ? format(new Date(task.lastCompletedDate), 'MMM dd, yyyy') : 'Never'}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className={cn('font-medium text-sm', dueDateInfo.color)}>{dueDateInfo.text}</span>
-                    </TableCell>
-
-                    <TableCell className="text-center">
-                      <div className="flex justify-center space-x-1">
-                        {!isCompleted && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-gray-500 hover:text-green-600"
-                            onClick={() => handleMarkComplete.mutate(task)}
-                            title="Mark Complete"
-                          >
-                            <CheckCircle className="w-4 h-4" />
-                          </Button>
-                        )}
-
-                        {/* ✅ Option A: Completed rows show "View" instead of "Edit" */}
-                        {isCompleted ? (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-gray-500 hover:text-gray-900"
-                            onClick={() => handleViewModal(task)}
-                            title="View Task"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-gray-500 hover:text-blue-600"
-                            onClick={() => handleOpenModal(task)}
-                            title="Edit Task"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+                        <CheckCircle className="w-5 h-5" />
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 w-9"
+                      onClick={() => isCompleted ? handleViewModal(task) : handleOpenModal(task)}
+                    >
+                      {isCompleted ? <Eye className="w-5 h-5" /> : <Edit className="w-5 h-5" />}
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+          </div>
+        </>
       )}
 
       {/* ALL view: show two sections (Open first, then Completed) */}

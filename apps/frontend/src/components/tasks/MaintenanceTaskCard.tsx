@@ -98,14 +98,14 @@ export function MaintenanceTaskCard({
   const sourceBadge = getSourceBadge();
 
   return (
-    <Card className={`hover:shadow-md transition-shadow ${compact ? 'mb-2' : 'mb-4'}`}>
-      <CardContent className={`${compact ? 'p-4' : 'p-6'}`}>
-        <div className="space-y-3">
+    <Card className={`hover:shadow-md transition-shadow active:scale-[0.99] ${compact ? 'mb-2' : 'mb-4'}`}>
+      <CardContent className={`${compact ? 'p-4' : 'p-5 sm:p-6'}`}>
+        <div className="space-y-4">
           {/* Header Row */}
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="font-semibold text-lg truncate">{task.title}</h3>
+              <div className="flex items-center gap-2 mb-1.5">
+                <h3 className="font-bold text-base sm:text-lg truncate leading-tight">{task.title}</h3>
                 {task.isRecurring && (
                   <span title="Recurring task">
                     <Repeat className="h-4 w-4 text-blue-600 flex-shrink-0" />
@@ -113,16 +113,16 @@ export function MaintenanceTaskCard({
                 )}
               </div>
               
-              {/* Badges Row */}
-              <div className="flex flex-wrap items-center gap-2">
+              {/* Badges Row - Optimized for wrapping on mobile */}
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                 <TaskStatusBadge status={task.status} variant="compact" />
                 <TaskPriorityBadge priority={task.priority} variant="compact" />
-                <Badge variant="outline" className={`${sourceBadge.className} text-xs`}>
+                <Badge variant="outline" className={`${sourceBadge.className} text-[10px] sm:text-xs px-1.5 py-0`}>
                   {sourceBadge.label}
                 </Badge>
                 
                 {task.serviceCategory && (
-                  <Badge variant="outline" className="text-xs bg-gray-50">
+                  <Badge variant="outline" className="text-[10px] sm:text-xs bg-gray-50 px-1.5 py-0">
                     <Wrench className="h-3 w-3 mr-1" />
                     {task.serviceCategory}
                   </Badge>
@@ -133,11 +133,11 @@ export function MaintenanceTaskCard({
             {/* Actions Menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                  <MoreVertical className="h-4 w-4" />
+                <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0">
+                  <MoreVertical className="h-5 w-5 text-gray-500" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="w-48">
                 {onEdit && (
                   <DropdownMenuItem onClick={() => onEdit(task)}>
                     <Edit className="h-4 w-4 mr-2" />
@@ -182,55 +182,70 @@ export function MaintenanceTaskCard({
 
           {/* Description */}
           {task.description && (
-            <p className="text-sm text-gray-600 line-clamp-2">
+            <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">
               {task.description}
             </p>
           )}
 
-          {/* Details Row */}
-          <div className="flex flex-wrap items-center gap-4 text-sm">
+          {/* Details Row - Stacked on mobile for readability */}
+          <div className="grid grid-cols-1 xs:grid-cols-2 gap-y-3 gap-x-4 text-sm border-t sm:border-t-0 pt-3 sm:pt-0">
             {/* Due Date */}
             {task.nextDueDate && (
-              <div className={`flex items-center gap-1 ${dueDateStatus?.className}`}>
-                <Calendar className="h-4 w-4" />
-                <span className="font-medium">
+              <div className={`flex items-center gap-2 ${dueDateStatus?.className}`}>
+                <Calendar className="h-4 w-4 shrink-0" />
+                <span className="font-medium whitespace-nowrap">
                   {format(parseISO(task.nextDueDate), 'MMM d, yyyy')}
                 </span>
                 {dueDateStatus && dueDateStatus.type !== 'upcoming' && (
-                  <span className="text-xs ml-1">({dueDateStatus.label})</span>
+                  <span className="text-[10px] px-1 bg-current/10 rounded uppercase font-bold">{dueDateStatus.label}</span>
                 )}
               </div>
             )}
 
             {/* Estimated Cost */}
             {task.estimatedCost && (
-              <div className="flex items-center gap-1 text-gray-600">
-                <DollarSign className="h-4 w-4" />
-                <span>${task.estimatedCost.toLocaleString()}</span>
+              <div className="flex items-center gap-2 text-gray-600">
+                <DollarSign className="h-4 w-4 shrink-0" />
+                <span>Est: ${task.estimatedCost.toLocaleString()}</span>
               </div>
             )}
 
             {/* Recurring Info */}
             {task.isRecurring && task.frequency && (
-              <div className="flex items-center gap-1 text-gray-600">
-                <Clock className="h-4 w-4" />
+              <div className="flex items-center gap-2 text-gray-600">
+                <Clock className="h-4 w-4 shrink-0" />
                 <span className="capitalize">{task.frequency.toLowerCase().replace('_', ' ')}</span>
               </div>
             )}
 
             {/* Booking Link */}
             {task.bookingId && (
-              <div className="flex items-center gap-1 text-blue-600">
-                <LinkIcon className="h-4 w-4" />
-                <span className="text-xs">Booking linked</span>
+              <div className="flex items-center gap-2 text-blue-600">
+                <LinkIcon className="h-4 w-4 shrink-0" />
+                <span className="font-medium">Booking linked</span>
               </div>
             )}
           </div>
 
+          {/* Quick Action Buttons - Visible on mobile for better touch UX */}
+          <div className="flex flex-col sm:hidden gap-2 pt-2">
+             {!onStatusChange || task.status !== 'COMPLETED' ? (
+                <Button 
+                  onClick={() => onStatusChange?.(task, 'COMPLETED')}
+                  className="w-full bg-green-600 hover:bg-green-700 h-11"
+                >
+                  Mark Complete
+                </Button>
+             ) : null}
+             <Button variant="outline" onClick={() => onEdit?.(task)} className="w-full h-11">
+                Edit Details
+             </Button>
+          </div>
+
           {/* Risk Level Warning */}
           {task.riskLevel && (task.riskLevel === 'CRITICAL' || task.riskLevel === 'HIGH') && (
-            <div className="flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-800">
-              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-800">
+              <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
               <span>
                 <strong>{task.riskLevel} Risk:</strong> Immediate attention recommended
               </span>
@@ -239,38 +254,40 @@ export function MaintenanceTaskCard({
 
           {/* Expandable Details */}
           {!compact && (task.assetType || task.actualCost || task.lastCompletedDate) && (
-            <div>
+            <div className="pt-1">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="text-xs text-gray-600 hover:text-gray-900"
+                className="w-full text-xs text-gray-500 hover:text-gray-900 h-8"
               >
                 {isExpanded ? 'Show Less' : 'Show More Details'}
               </Button>
               
               {isExpanded && (
-                <div className="mt-2 p-3 bg-gray-50 rounded text-sm space-y-2">
+                <div className="mt-2 p-3 bg-gray-50/50 rounded-lg text-sm space-y-2 border border-gray-100 animate-in fade-in slide-in-from-top-1">
                   {task.assetType && (
-                    <div>
-                      <span className="font-medium">Asset:</span> {task.assetType}
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Asset:</span> 
+                      <span className="font-medium">{task.assetType}</span>
                     </div>
                   )}
                   {task.actualCost && (
-                    <div>
-                      <span className="font-medium">Actual Cost:</span> ${task.actualCost.toLocaleString()}
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Actual Cost:</span>
+                      <span className="font-medium">${task.actualCost.toLocaleString()}</span>
                     </div>
                   )}
                   {task.lastCompletedDate && (
-                    <div>
-                      <span className="font-medium">Last Completed:</span>{' '}
-                      {format(parseISO(task.lastCompletedDate), 'MMM d, yyyy')}
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Last Completed:</span>
+                      <span className="font-medium">{format(parseISO(task.lastCompletedDate), 'MMM d, yyyy')}</span>
                     </div>
                   )}
                   {task.createdAt && (
-                    <div>
-                      <span className="font-medium">Created:</span>{' '}
-                      {format(new Date(task.createdAt), 'MMM d, yyyy')}
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Created:</span>
+                      <span className="font-medium">{format(new Date(task.createdAt), 'MMM d, yyyy')}</span>
                     </div>
                   )}
                 </div>
