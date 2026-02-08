@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/inventory/DocumentPickerModal.tsx
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { listUserDocuments } from '../../inventory/inventoryApi';
 
 type Doc = {
@@ -24,7 +24,7 @@ export default function DocumentPickerModal(props: {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -38,13 +38,12 @@ export default function DocumentPickerModal(props: {
     } finally {
       setLoading(false);
     }
-  }
+  }, [props.propertyId]);
 
   useEffect(() => {
     if (!props.open) return;
     refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.open]);
+  }, [props.open, props.propertyId, refresh]);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
