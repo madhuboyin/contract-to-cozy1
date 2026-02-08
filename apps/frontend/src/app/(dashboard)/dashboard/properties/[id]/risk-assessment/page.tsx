@@ -645,7 +645,6 @@ export default function RiskAssessmentPage() {
     React.useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('refreshed') === 'true') {
-            console.log('🔄 Returned from booking/warranty creation, refreshing data...');
             // Invalidate queries to refetch with updated data
             queryClient.invalidateQueries({ queryKey: ['riskReport', propertyId] });
             queryClient.invalidateQueries({ queryKey: ['maintenance-tasks', propertyId] });
@@ -673,28 +672,11 @@ export default function RiskAssessmentPage() {
     const riskQuery = useQuery<RiskQueryData>({
         queryKey: ["riskReport", propertyId],
         queryFn: async () => {
-            console.log('🔵 QUERY FN: Starting getRiskReportSummary for', propertyId);
-            
-            try {
-                const result = await api.getRiskReportSummary(propertyId);
-                
-                console.log('🔵 QUERY FN: getRiskReportSummary returned:', result);
-                console.log('🔵 QUERY FN: result type:', typeof result);
-                console.log('🔵 QUERY FN: result === "QUEUED":', result === 'QUEUED');
-                
-                if (result === 'QUEUED') {
-                    console.log('🔵 QUERY FN: Returning QUEUED status');
-                    return 'QUEUED';
-                }
-                
-                console.log('🔵 QUERY FN: Returning report object:', result);
-                // The API returns the raw report object
-                return result;
-                
-            } catch (error) {
-                console.error('❌ QUERY FN ERROR:', error);
-                throw error;
+            const result = await api.getRiskReportSummary(propertyId);
+            if (result === 'QUEUED') {
+                return 'QUEUED';
             }
+            return result;
         },
         // The result of the queryFn is either RiskReportFull or 'QUEUED'
         refetchInterval: (query) => (query.state.data === 'QUEUED' ? 5000 : false), 
@@ -703,34 +685,10 @@ export default function RiskAssessmentPage() {
         staleTime: 0, // Always consider data stale
         gcTime: 0, // Don't cache results (renamed from cacheTime in v5+)
     });
-
-    // --- ADDED: Expose API for debugging ---
-    React.useEffect(() => {
-        if (typeof window !== 'undefined') {
-            (window as any).testApi = api;
-            console.log('🔧 DEBUG: API exposed as window.testApi');
-            console.log('🔧 TEST: Run this in console:');
-            console.log('   window.testApi.getRiskReportSummary("' + propertyId + '").then(r => console.log("API Result:", r))');
-        }
-    }, [propertyId]);
     
-    // --- ADDED: Track when query data changes ---
-    React.useEffect(() => {
-        console.log('🔄 EFFECT: riskQuery.data changed =', riskQuery.data);
-        console.log('🔄 EFFECT: riskQuery.isLoading =', riskQuery.isLoading);
-        console.log('🔄 EFFECT: riskQuery.isFetching =', riskQuery.isFetching);
-        console.log('🔄 EFFECT: riskQuery.isError =', riskQuery.isError);
-        console.log('🔄 EFFECT: riskQuery.error =', riskQuery.error);
-    }, [riskQuery.data, riskQuery.isLoading, riskQuery.isFetching, riskQuery.isError, riskQuery.error]);
-    
-    // --- Data Extraction and Status Determination (COMPREHENSIVE DEBUG FIX) ---
+    // --- Data Extraction and Status Determination ---
     const riskQueryPayload = riskQuery.data; 
-    
-    console.log('🔍 COMPONENT: riskQueryPayload =', riskQueryPayload);
-    console.log('🔍 COMPONENT: typeof riskQueryPayload =', typeof riskQueryPayload);
-    console.log('🔍 COMPONENT: riskQuery.isLoading =', riskQuery.isLoading);
-    console.log('🔍 COMPONENT: riskQuery.isFetching =', riskQuery.isFetching);
-    
+
     // Determine the status and safely extract the report object
     let currentStatus: 'QUEUED' | 'CALCULATED' | undefined = undefined;
     let report: RiskAssessmentReport | undefined;
@@ -738,61 +696,37 @@ export default function RiskAssessmentPage() {
     // Handle the two possible return values: 'QUEUED' or RiskAssessmentReport object
     if (riskQueryPayload === 'QUEUED') {
         currentStatus = 'QUEUED';
-        console.log('🔍 COMPONENT: Status is QUEUED');
     } else if (typeof riskQueryPayload === 'object' && riskQueryPayload !== null) {
         // This is the RiskAssessmentReport object
         report = riskQueryPayload;
         currentStatus = 'CALCULATED';
-        
-        console.log('🔍 COMPONENT: Status is CALCULATED, report =', report);
-        
+
         // CRITICAL: Validate and fix the details array
-        if (report && report.details) {
-            console.log('🔍 COMPONENT: report.details exists');
-            console.log('🔍 COMPONENT: typeof report.details =', typeof report.details);
-            console.log('🔍 COMPONENT: Array.isArray(report.details) =', Array.isArray(report.details));
-            
-            if (Array.isArray(report.details)) {
-                console.log('✅ COMPONENT: details is array, length =', report.details.length);
-                if (report.details.length > 0) {
-                    console.log('✅ COMPONENT: First item =', report.details[0]);
-                }
-            } else {
-                console.warn('⚠️ COMPONENT: details is NOT an array, attempting conversion...');
-                
-                // Try to convert from object to array
-                if (typeof report.details === 'object' && report.details !== null) {
-                    const detailsArray = Object.values(report.details);
-                    if (Array.isArray(detailsArray) && detailsArray.length > 0) {
-                        report = { ...report, details: detailsArray as AssetRiskDetail[] };
-                        console.log('✅ COMPONENT: Converted object to array, new length =', report.details.length);
-                    }
-                }
-                // Try to parse from string
-                else if (typeof report.details === 'string') {
-                    try {
-                        const parsed = JSON.parse(report.details);
-                        if (Array.isArray(parsed)) {
-                            report = { ...report, details: parsed as AssetRiskDetail[] };
-                            console.log('✅ COMPONENT: Parsed string to array, new length =', report.details.length);
-                        }
-                    } catch (e) {
-                        console.error('❌ COMPONENT: Failed to parse details string:', e);
-                    }
+        if (report && report.details && !Array.isArray(report.details)) {
+            // Try to convert from object to array
+            if (typeof report.details === 'object' && report.details !== null) {
+                const detailsArray = Object.values(report.details);
+                if (Array.isArray(detailsArray) && detailsArray.length > 0) {
+                    report = { ...report, details: detailsArray as AssetRiskDetail[] };
                 }
             }
-        } else {
-            console.log('⚠️ COMPONENT: No report.details field found');
+            // Try to parse from string
+            else if (typeof report.details === 'string') {
+                try {
+                    const parsed = JSON.parse(report.details);
+                    if (Array.isArray(parsed)) {
+                        report = { ...report, details: parsed as AssetRiskDetail[] };
+                    }
+                } catch (e) {
+                    console.error('Failed to parse risk details string:', e);
+                }
+            }
         }
     } else {
         // Handle initial undefined state or other unhandled types
         currentStatus = undefined;
-        console.log('🔍 COMPONENT: Status is undefined (initial load)');
     }
-    
-    console.log('🔍 COMPONENT: Final - currentStatus =', currentStatus, ', report =', report);
-    console.log('🔍 COMPONENT: Final - report?.details type =', report?.details ? (Array.isArray(report.details) ? 'array' : typeof report.details) : 'undefined');
-    
+
     const isQueued = currentStatus === 'QUEUED';
     const isLoadingReport = riskQuery.isLoading;
     

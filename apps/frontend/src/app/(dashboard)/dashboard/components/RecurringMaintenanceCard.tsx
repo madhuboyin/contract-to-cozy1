@@ -58,7 +58,8 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
     : '/dashboard/maintenance';
 
   return (
-    <Card className="h-[320px] flex flex-col border-2 border-gray-100 rounded-2xl shadow-sm hover:border-blue-300 hover:shadow-lg hover:-translate-y-0.5 transition-all">
+    /* FIXED: Changed h-[320px] to min-h-[320px] and added h-full for mobile flexibility */
+    <Card className="min-h-[320px] h-full flex flex-col border-2 border-gray-100 rounded-2xl shadow-sm hover:border-blue-300 hover:shadow-lg hover:-translate-y-0.5 transition-all overflow-hidden">
       <CardContent className="p-5 flex flex-col h-full">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
@@ -99,7 +100,8 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
                     key={task.id}
                     className="flex items-start justify-between p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
                   >
-                    <div className="flex-1 min-w-0">
+                    {/* FIXED: Added min-w-0 to allow title truncation on small screens */}
+                    <div className="flex-1 min-w-0 pr-2">
                       <p className="text-sm font-medium text-gray-900 truncate">
                         {task.title}
                       </p>
@@ -110,7 +112,8 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
                         }
                       </p>
                     </div>
-                    <Badge className={statusBadge.className}>
+                    {/* FIXED: Added shrink-0 to badge */}
+                    <Badge className={`shrink-0 ${statusBadge.className}`}>
                       {statusBadge.label}
                     </Badge>
                   </div>

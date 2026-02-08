@@ -32,24 +32,20 @@ interface UpcomingBookingsCardProps {
 export const UpcomingBookingsCard: React.FC<UpcomingBookingsCardProps> = ({ 
   bookings,
   isPropertySelected,
-  selectedPropertyId 
+  selectedPropertyId
 }) => {
-  
-  const upcomingBookings = React.useMemo(() => {
-    const nonUpcomingStatuses = ['COMPLETED', 'CANCELLED', 'DRAFT'];
-
+  const displayBookings = React.useMemo(() => {
     return bookings
-      .filter(b => b.scheduledDate) 
-      .filter(b => !isPast(new Date(b.scheduledDate!))) 
-      .filter(b => !nonUpcomingStatuses.includes(b.status)) 
-      .sort((a, b) => new Date(a.scheduledDate || 0).getTime() - new Date(b.scheduledDate || 0).getTime());
+      .filter(b => b.scheduledDate && !isPast(new Date(b.scheduledDate)))
+      .sort((a, b) => new Date(a.scheduledDate!).getTime() - new Date(b.scheduledDate!).getTime())
+      .slice(0, 3);
   }, [bookings]);
 
-  const displayBookings = upcomingBookings.slice(0, 3);
-  const totalUpcoming = upcomingBookings.length;
+  const totalUpcoming = bookings.filter(b => b.scheduledDate && !isPast(new Date(b.scheduledDate))).length;
 
   return (
-    <Card className="h-[320px] flex flex-col border-2 border-gray-100 rounded-2xl shadow-sm hover:border-blue-300 hover:shadow-lg hover:-translate-y-0.5 transition-all">
+    /* FIXED: Changed h-[320px] to min-h-[320px] and added h-full for mobile flexibility */
+    <Card className="min-h-[320px] h-full flex flex-col border-2 border-gray-100 rounded-2xl shadow-sm hover:border-blue-300 hover:shadow-lg hover:-translate-y-0.5 transition-all overflow-hidden">
       <CardContent className="p-5 flex flex-col h-full">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
@@ -65,22 +61,19 @@ export const UpcomingBookingsCard: React.FC<UpcomingBookingsCardProps> = ({
         {/* Items List */}
         <div className="flex-1 overflow-hidden">
           {!isPropertySelected ? (
-            <div className="flex flex-col items-center justify-center h-full">
-              <span className="text-4xl mb-3">🏠</span>
-              <p className="text-sm text-gray-600 mb-4">Select a property</p>
-              <Link href="/dashboard/properties">
-                <Button variant="outline" size="sm" className="gap-2">
-                  View Properties <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
+            <div className="flex flex-col items-center justify-center h-full py-8 text-center">
+              <Calendar className="h-10 w-10 text-gray-300 mb-3" />
+              <p className="text-sm text-gray-500">
+                Select a property to view upcoming bookings
+              </p>
             </div>
           ) : displayBookings.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full">
-              <span className="text-4xl mb-3">🎉</span>
-              <p className="text-sm text-gray-600 mb-4">No upcoming bookings</p>
+            <div className="flex flex-col items-center justify-center h-full py-8 text-center">
+              <Calendar className="h-10 w-10 text-gray-300 mb-3" />
+              <p className="text-sm text-gray-500">No upcoming bookings found</p>
               <Link href="/dashboard/providers">
-                <Button variant="outline" size="sm" className="gap-2">
-                  Book Service <ArrowRight className="h-4 w-4" />
+                <Button variant="link" className="mt-2 text-blue-600">
+                  Browse Providers <ArrowRight className="ml-1 h-3 w-3" />
                 </Button>
               </Link>
             </div>
@@ -98,12 +91,13 @@ export const UpcomingBookingsCard: React.FC<UpcomingBookingsCardProps> = ({
                       <h4 className="text-sm font-semibold text-gray-900 mb-1.5 truncate">
                         {booking.service?.name || 'Service Booking'}
                       </h4>
-                      <p className="text-xs text-gray-600 mb-1.5 flex items-center gap-2">
-                        <span>{format(new Date(booking.scheduledDate!), 'MMM dd, yyyy')}</span>
-                        <span>•</span>
+                      {/* FIXED: Added min-w-0 and shrink-0 to prevent text from pushing card off-screen */}
+                      <p className="text-xs text-gray-600 mb-1.5 flex items-center gap-2 min-w-0">
+                        <span className="shrink-0">{format(new Date(booking.scheduledDate!), 'MMM dd, yyyy')}</span>
+                        <span className="shrink-0">•</span>
                         <span className="truncate">{booking.property?.name || 'Property'}</span>
                       </p>
-                      <Badge {...badge} className={`text-xs font-medium ${badge.className}`}>
+                      <Badge {...badge} className={`text-xs font-medium shrink-0 ${badge.className}`}>
                         {booking.status}
                       </Badge>
                     </div>

@@ -291,8 +291,6 @@ export default function DashboardPage() {
       // Extract user type from first property
       if (scoredProperties.length > 0) {
         const firstProperty = scoredProperties[0] as any;
-        console.log('🔍 First Property:', firstProperty);
-        console.log('🔍 Homeowner Profile:', firstProperty.homeownerProfile);
         
         let detectedUserType = null;
         
@@ -301,9 +299,7 @@ export default function DashboardPage() {
         } else if (firstProperty.user?.homeownerProfile?.userType) {
           detectedUserType = firstProperty.user.homeownerProfile.userType;
         }
-        
-        console.log('🎯 Detected User Type:', detectedUserType);
-        
+
         if (detectedUserType) {
           setUserType(detectedUserType);
         }
@@ -401,10 +397,7 @@ export default function DashboardPage() {
   // Derived property values using the context state
   const properties = data.properties;
   const selectedProperty = properties.find(p => p.id === selectedPropertyId); 
-  console.log('🔍 Selected property:', selectedProperty);
   const isMultiProperty = properties.length > 1;
-
-  console.log('🎨 Rendering dashboard for', userSegment);
   
   if (userSegment === 'HOME_BUYER') {
     return (

@@ -229,17 +229,6 @@ export default function ProvidersPage() {
   const insightContext = searchParams.get('insightFactor') || undefined;
   const targetPropertyId = searchParams.get('propertyId') || undefined;
 
-  // Debug: Log extracted parameters
-  console.log('🔍 URL Parameters Extracted:', {
-    category: searchParams.get('category'),
-    service: searchParams.get('service'),
-    insightFactor: searchParams.get('insightFactor'),
-    propertyId: searchParams.get('propertyId'),
-    defaultCategory: defaultCategory || 'none',
-    insightContext: insightContext || 'none',
-    targetPropertyId: targetPropertyId || 'none'
-  });
-
   const [providers, setProviders] = useState<Provider[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -275,16 +264,8 @@ export default function ProvidersPage() {
       if (currentFilters.zipCode) {
         params.zipCode = currentFilters.zipCode;
       }
-      
-      console.log('🚀 Calling API with params:', params);
-      
-      const response = await api.searchProviders(params);
 
-      console.log('📥 API Response:', {
-        success: response.success,
-        providerCount: response.success ? response.data?.providers?.length || 0 : 0,
-        message: 'message' in response ? response.message : undefined
-      });
+      const response = await api.searchProviders(params);
 
       if (response.success && response.data) {
         setProviders(response.data.providers);
@@ -318,8 +299,6 @@ export default function ProvidersPage() {
   useEffect(() => {
     // Only fetch once on mount if we have a category from URL
     if (initialCategory && !hasInitialFetchedRef.current) {
-      console.log('⚡ Initial fetch triggered with category:', initialCategory);
-      
       hasInitialFetchedRef.current = true;
       fetchProviders({ 
         zipCode: '', 
