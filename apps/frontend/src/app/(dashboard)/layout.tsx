@@ -68,69 +68,38 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const fetchPropertyCount = async () => {
-      console.log('🎌 BANNER CHECK - Starting...');
-      console.log('👤 User:', user ? 'exists' : 'null');
-      console.log('👤 User segment:', user?.segment);
-      console.log('⏳ Loading:', loading);
-
       if (!user) {
-        console.log('❌ No user, banner hidden');
         setShowBanner(false);
         return;
       }
 
       if (user.segment !== 'EXISTING_OWNER') {
-        console.log('❌ Not EXISTING_OWNER, banner hidden');
         setShowBanner(false);
         return;
       }
 
-      console.log('✅ User is EXISTING_OWNER, checking properties...');
-
       try {
         const response = await api.getProperties();
-        console.log('📦 Properties API response:', response);
         
         if (response.success) {
           const count = response.data.properties.length;
           setPropertyCount(count);
-          console.log('🏠 Property count:', count);
           
           const hasSkipped = localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY) === 'true';
-          console.log('📦 localStorage skip flag:', localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY));
-          console.log('✅ Has skipped?', hasSkipped);
           
           const shouldShowBanner = count === 0 && !hasSkipped;
-          console.log('');
-          console.log('🎌 BANNER DECISION:');
-          console.log('   ├─ Property count === 0?', count === 0);
-          console.log('   ├─ Has skipped?', hasSkipped);
-          console.log('   └─ Show banner?', shouldShowBanner);
-          console.log('');
-          
           setShowBanner(shouldShowBanner);
-          
-          if (shouldShowBanner) {
-            console.log('✅ BANNER WILL BE SHOWN');
-          } else {
-            console.log('❌ Banner will NOT be shown');
-            if (count > 0) {
-              console.log('   Reason: User has properties');
-            }
-            if (hasSkipped) {
-              console.log('   Reason: User has skipped');
-            }
-          }
         } else {
-          console.error('❌ Properties API failed:', response);
+          setShowBanner(false);
+          console.error('Properties API failed while checking banner visibility:', response);
         }
       } catch (error) {
-        console.error('❌ Failed to fetch properties for banner:', error);
+        setShowBanner(false);
+        console.error('Failed to fetch properties for banner visibility:', error);
       }
     };
 
     if (!loading && user) {
-      console.log('🎌 User loaded, fetching property count for banner...');
       fetchPropertyCount();
     }
   }, [user, loading]);
@@ -166,9 +135,6 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   if (user && user.role === 'PROVIDER') {
     return null;
   }
-
-  console.log('🎨 RENDERING LAYOUT');
-  console.log('🎌 Banner showBanner state:', showBanner);
 
   return (
     <NotificationProvider>

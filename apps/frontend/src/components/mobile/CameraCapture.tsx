@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Camera, Upload, X, RotateCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -21,8 +21,17 @@ export function CameraCapture({
   className 
 }: CameraCaptureProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const restoreCaptureTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (restoreCaptureTimeoutRef.current) {
+        clearTimeout(restoreCaptureTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -130,8 +139,15 @@ export function CameraCapture({
                 input.removeAttribute('capture');
                 input.click();
                 // Re-add capture attribute after click
-                setTimeout(() => {
-                  input.setAttribute('capture', 'environment');
+                if (restoreCaptureTimeoutRef.current) {
+                  clearTimeout(restoreCaptureTimeoutRef.current);
+                }
+                restoreCaptureTimeoutRef.current = setTimeout(() => {
+                  const currentInput = fileInputRef.current;
+                  if (currentInput) {
+                    currentInput.setAttribute('capture', 'environment');
+                  }
+                  restoreCaptureTimeoutRef.current = null;
                 }, 100);
               }
             }}

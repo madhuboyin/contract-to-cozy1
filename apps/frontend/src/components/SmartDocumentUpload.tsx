@@ -1,7 +1,7 @@
 // apps/frontend/src/components/SmartDocumentUpload.tsx
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, X, FileCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -40,6 +40,15 @@ export default function SmartDocumentUpload({
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
+  const successResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (successResetTimeoutRef.current) {
+        clearTimeout(successResetTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -109,9 +118,13 @@ export default function SmartDocumentUpload({
         }
 
         // Clear file after 3 seconds on success
-        setTimeout(() => {
+        if (successResetTimeoutRef.current) {
+          clearTimeout(successResetTimeoutRef.current);
+        }
+        successResetTimeoutRef.current = setTimeout(() => {
           setFile(null);
           setPreview(null);
+          successResetTimeoutRef.current = null;
         }, 3000);
       } else {
         setError(data.message || 'Upload failed');
@@ -124,6 +137,10 @@ export default function SmartDocumentUpload({
   };
 
   const clearFile = () => {
+    if (successResetTimeoutRef.current) {
+      clearTimeout(successResetTimeoutRef.current);
+      successResetTimeoutRef.current = null;
+    }
     setFile(null);
     setPreview(null);
     setInsights(null);
