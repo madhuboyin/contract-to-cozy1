@@ -54,8 +54,6 @@ export class AuthService {
       },
     });
 
-    // Determine the segment
-    // @ts-ignore
     const segment = data.segment || 'EXISTING_OWNER';
 
     // Auto-create role-specific profile
@@ -259,11 +257,6 @@ export class AuthService {
     }
 
     const resetToken = generatePasswordResetToken(user.id, user.email);
-
-    // TODO: Send password reset email
-    // await emailService.sendPasswordResetEmail(user.email, resetToken);
-
-    console.log(`Password reset token for ${user.email}: ${resetToken}`);
     
     // Return token only in development for easy testing
     if (process.env.NODE_ENV === 'development') {
@@ -351,7 +344,6 @@ export class AuthService {
     });
 
     if (!user) {
-      // Don't reveal if user exists or not
       return;
     }
 
@@ -361,10 +353,6 @@ export class AuthService {
 
     const emailVerificationToken = generateEmailVerificationToken(user.id, user.email);
 
-    // TODO: Send verification email
-    // await emailService.sendVerificationEmail(user.email, emailVerificationToken);
-
-    console.log(`Verification token for ${user.email}: ${emailVerificationToken}`);
   }
 }
 

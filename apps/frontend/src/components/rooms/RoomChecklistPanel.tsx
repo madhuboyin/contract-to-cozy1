@@ -110,8 +110,11 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
     setMutating(true);
     try {
       const nextStatus = item.status === 'DONE' ? 'OPEN' : 'DONE';
-      const updated = await updateRoomChecklistItem(propertyId, roomId, item.id, { status: nextStatus });
-      setItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
+      const raw = await updateRoomChecklistItem(propertyId, roomId, item.id, { status: nextStatus });
+      const updated = (raw as any)?.data ?? raw;
+      if (updated) {
+        setItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
+      }
     } finally {
       setMutating(false);
     }

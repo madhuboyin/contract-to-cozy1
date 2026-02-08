@@ -408,7 +408,7 @@ export default function SignupPage() {
                       value="EXISTING_OWNER"
                       checked={formData.segment === 'EXISTING_OWNER'}
                       onChange={handleChange}
-                      className="h-4 w-4 text-blue-600 border-gray-30f0 focus:ring-blue-500"
+                      className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
                     />
                     <span className="ml-3 text-sm font-medium text-gray-800">
                       I'm an existing homeowner

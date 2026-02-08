@@ -18,13 +18,6 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
   const [dismissing, setDismissing] = useState(false);
 
   const { data, isLoading, error } = useSeasonalChecklistDetails(checklistId);
-  console.log('🔍 Modal data:', data);
-  console.log('🔍 Modal error:', error);
-  console.log('🔍 Modal isLoading:', isLoading);
-  console.log('🔍 Modal checklistId:', checklistId);
-  console.log('🔍 Modal onClose:', onClose);
-  console.log('🔍 Modal activeTab:', activeTab);
-  console.log('🔍 Modal dismissing:', dismissing);
   const dismissChecklistMutation = useDismissChecklist();
   const addAllCriticalMutation = useAddAllCriticalTasks();
 
@@ -39,14 +32,10 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
   }
 
   if (error || !data) {
-    console.log('❌ RETURNING NULL');
     return null;
   }
-  console.log('✅ PAST THE CHECK, WILL RENDER MODAL');
+
   const { checklist, tasks } = data?.data || data;
-  console.log('🔍 Destructured checklist:', checklist);
-  console.log('🔍 Destructured tasks:', tasks);
-  console.log('🔍 About to call getSeasonName with:', checklist?.season);
   const seasonName = getSeasonName(checklist.season);
   const seasonIcon = getSeasonIcon(checklist.season);
   const climateName = getClimateRegionName(checklist.climateRegion);
@@ -78,14 +67,7 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
   };
 
   return (
-    //<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <div 
-        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-        onClick={(e) => {
-          console.log('🔍 Overlay clicked');
-          e.stopPropagation();
-        }}
-      >
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">

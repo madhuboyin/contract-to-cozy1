@@ -229,13 +229,13 @@ function HealthInsightList({ property }: { property: ScoredProperty }) {
 // NEW: Compact Selling Prep Banner Component
 const SellingPrepBanner = ({ propertyId }: { propertyId: string }) => (
   <div className="w-full bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-500 rounded-lg px-4 py-3 mb-4">
-    <div className="flex items-center justify-between gap-4">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
       <div className="flex items-center gap-3 flex-1 min-w-0">
         <div className="flex-shrink-0">
           <TrendingUp className="h-5 w-5 text-green-600" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-heading text-base font-semibold text-gray-900 truncate">
+          <p className="font-heading text-sm sm:text-base font-semibold text-gray-900">
             Ready to sell? Get your AI-powered preparation plan
           </p>
           <p className="font-body text-xs text-gray-600 hidden sm:block">
@@ -245,7 +245,7 @@ const SellingPrepBanner = ({ propertyId }: { propertyId: string }) => (
       </div>
       <div className="flex-shrink-0">
         <Link href={`/dashboard/properties/${propertyId}/seller-prep`} passHref>
-          <Button size="sm" className="font-semibold">
+          <Button size="sm" className="font-semibold min-h-[44px] w-full sm:w-auto">
             Start Now
             <ArrowRight className="ml-1.5 h-4 w-4" />
           </Button>
@@ -475,7 +475,7 @@ const MaintenancePlanTab = ({ property }: { property: ScoredProperty }) => {
             This section displays recurring tasks, future appointments, and your long-term maintenance calendar.
           </p>
           <Link href={`/dashboard/maintenance?propertyId=${property.id}`} passHref>
-            <Button variant="default">
+            <Button variant="default" className="min-h-[44px]">
               <Zap className="mr-2 h-4 w-4" />
               Manage Maintenance Tasks
             </Button>
@@ -700,7 +700,7 @@ export default function PropertyDetailPage() {
       <div className="mb-2">
         <button
           onClick={() => router.back()}
-          className="font-body text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center transition-colors bg-transparent border-none p-0 cursor-pointer"
+          className="font-body text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center transition-colors bg-transparent border-none p-0 cursor-pointer min-h-[44px]"
         >
           <ArrowLeft className="h-4 w-4 mr-1.5" />
           Back
@@ -708,17 +708,17 @@ export default function PropertyDetailPage() {
       </div>
 
       {/* Header row */}
-      <div className="flex items-start justify-between gap-4 mb-3">
-        <PageHeader className="pt-2 pb-2 gap-1 flex-1">
-          <PageHeaderHeading>{property.name || "My Property"}</PageHeaderHeading>
-          <PageHeaderDescription>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 mb-3">
+        <PageHeader className="pt-2 pb-2 gap-1 flex-1 min-w-0">
+          <PageHeaderHeading className="truncate">{property.name || "My Property"}</PageHeaderHeading>
+          <PageHeaderDescription className="truncate">
             {property.address}, {property.city}
           </PageHeaderDescription>
         </PageHeader>
 
-        <div className="flex-shrink-0 pt-2">
+        <div className="flex-shrink-0 sm:pt-2">
           <Link href={`/dashboard/properties/${property.id}/edit`} passHref>
-            <Button variant="outline" size="sm" className="gap-2">
+            <Button variant="outline" size="sm" className="gap-2 min-h-[44px]">
               <Edit className="h-4 w-4" />
               Edit Details
             </Button>
@@ -735,72 +735,76 @@ export default function PropertyDetailPage() {
       <SellingPrepBanner propertyId={property.id} />
 
       <Tabs defaultValue={defaultTab} className="w-full">
-        <div className="overflow-x-auto">
-          <TabsList className="inline-flex w-max">
-            <TabsTrigger value="overview" className="flex items-center gap-1 sm:gap-2">
-              <Home className="h-4 w-4" />
-              <span className="hidden sm:inline">Overview</span>
-              <span className="sm:hidden">Info</span>
-            </TabsTrigger>
+        {/* Scrollable tab container with fade indicators */}
+        <div className="relative -mx-4 px-4 sm:-mx-6 sm:px-6 md:mx-0 md:px-0">
+          {/* Left fade indicator (mobile only) */}
+          <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none md:hidden" />
+          {/* Right fade indicator (mobile only) */}
+          <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none md:hidden" />
 
-            <TabsTrigger value="maintenance" className="flex items-center gap-1 sm:gap-2">
-              <Zap className="h-4 w-4" />
-              <span className="hidden sm:inline">Maintenance Plan</span>
-              <span className="sm:hidden">Maint.</span>
-            </TabsTrigger>
+          <div className="overflow-x-auto scrollbar-hide">
+            <TabsList className="inline-flex w-max">
+              <TabsTrigger value="overview" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
+                <Home className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Overview</span>
+                <span className="sm:hidden">Info</span>
+              </TabsTrigger>
 
-            <TabsTrigger
-              value="timeline"
-              className="flex items-center gap-1 sm:gap-2"
-              onClick={() => router.push(`/dashboard/properties/${property.id}/timeline`)}
-            >
-              <Calendar className="h-4 w-4" />
-              <span className="hidden sm:inline">Timeline</span>
-              <span className="sm:hidden">Time</span>
-            </TabsTrigger>
+              <TabsTrigger value="maintenance" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
+                <Zap className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Maintenance Plan</span>
+                <span className="sm:hidden">Maint.</span>
+              </TabsTrigger>
 
-            <TabsTrigger value="rooms" className="flex items-center gap-1 sm:gap-2">
-              <LayoutGrid className="h-4 w-4" />
-              <span className="hidden sm:inline">Rooms</span>
-              <span className="sm:hidden">Rooms</span>
-            </TabsTrigger>
+              <TabsTrigger
+                value="timeline"
+                className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]"
+                onClick={() => router.push(`/dashboard/properties/${property.id}/timeline`)}
+              >
+                <Calendar className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Timeline</span>
+                <span className="sm:hidden">Time</span>
+              </TabsTrigger>
 
-            <TabsTrigger value="incidents" className="flex items-center gap-1 sm:gap-2">
-              <ShieldAlert className="h-4 w-4" />
-              <span className="hidden sm:inline">Incidents</span>
-              <span className="sm:hidden">Alerts</span>
-            </TabsTrigger>
+              <TabsTrigger value="rooms" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
+                <LayoutGrid className="h-4 w-4 shrink-0" />
+                Rooms
+              </TabsTrigger>
 
-            <TabsTrigger value="risk-protection" className="flex items-center gap-1 sm:gap-2">
-              <Shield className="h-4 w-4" />
-              <span className="hidden sm:inline">Risk & Protection</span>
-              <span className="sm:hidden">Risk</span>
-            </TabsTrigger>
+              <TabsTrigger value="incidents" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
+                <ShieldAlert className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Incidents</span>
+                <span className="sm:hidden">Alerts</span>
+              </TabsTrigger>
 
-            <TabsTrigger value="financial-efficiency" className="flex items-center gap-1 sm:gap-2">
-              <DollarSign className="h-4 w-4" />
-              <span className="hidden sm:inline">Financial Efficiency</span>
-              <span className="sm:hidden">Finance</span>
-            </TabsTrigger>
+              <TabsTrigger value="risk-protection" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
+                <Shield className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Risk & Protection</span>
+                <span className="sm:hidden">Risk</span>
+              </TabsTrigger>
 
-            <TabsTrigger value="documents" className="flex items-center gap-1 sm:gap-2">
-              <FileText className="h-4 w-4" />
-              <span className="hidden sm:inline">Documents</span>
-              <span className="sm:hidden">Docs</span>
-            </TabsTrigger>
+              <TabsTrigger value="financial-efficiency" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
+                <DollarSign className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Financial Efficiency</span>
+                <span className="sm:hidden">Finance</span>
+              </TabsTrigger>
 
-            <TabsTrigger value="reports" className="flex items-center gap-1 sm:gap-2">
-              <FileDown className="h-4 w-4" />
-              <span className="hidden sm:inline">Reports</span>
-              <span className="sm:hidden">Reports</span>
-            </TabsTrigger>
+              <TabsTrigger value="documents" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
+                <FileText className="h-4 w-4 shrink-0" />
+                Docs
+              </TabsTrigger>
 
-            <TabsTrigger value="claims" className="flex items-center gap-1 sm:gap-2">
-              <ClipboardCheck className="h-4 w-4" />
-              <span className="hidden sm:inline">Claims</span>
-              <span className="sm:hidden">Claims</span>
-            </TabsTrigger>
-          </TabsList>
+              <TabsTrigger value="reports" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
+                <FileDown className="h-4 w-4 shrink-0" />
+                Reports
+              </TabsTrigger>
+
+              <TabsTrigger value="claims" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
+                <ClipboardCheck className="h-4 w-4 shrink-0" />
+                Claims
+              </TabsTrigger>
+            </TabsList>
+          </div>
         </div>
 
         <TabsContent value="overview" className="mt-4">

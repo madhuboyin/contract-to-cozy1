@@ -23,6 +23,13 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// TODO: Migrate tokens from localStorage to httpOnly cookies set by the backend.
+// localStorage tokens are readable by any JS on the page, making them exfiltrable
+// via XSS. Migration requires:
+//   1. Backend sets httpOnly, Secure, SameSite=Strict cookies on login/refresh
+//   2. Frontend stops reading/writing tokens to localStorage
+//   3. API client removes Authorization header (browser sends cookies automatically)
+//   4. Add CSRF protection (double-submit cookie or Synchronizer Token)
 const USER_STORAGE_KEY = 'user';
 const TOKEN_STORAGE_KEY = 'accessToken';
 const REFRESH_TOKEN_KEY = 'refreshToken';

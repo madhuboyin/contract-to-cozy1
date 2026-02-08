@@ -111,6 +111,13 @@ interface ChatResponse {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
+/** Safely coerce Prisma Decimal / string values to a JS number. */
+function toNumber(value: unknown): number {
+  if (typeof value === 'number') return value;
+  const n = Number(value);
+  return Number.isNaN(n) ? 0 : n;
+}
+
 /**
  * API Client for Contract to Cozy Backend
  * Uses a class structure for token refresh logic and state management.
@@ -203,7 +210,7 @@ class APIClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: Omit<RequestInit, 'body'> & { body?: any } = {}
   ): Promise<APIResponse<T>> {
     const token = this.getToken();
 
@@ -385,7 +392,7 @@ class APIClient {
   async register(input: RegisterInput): Promise<APIResponse<RegisterResponse>> {
     return this.request<RegisterResponse>('/api/auth/register', {
       method: 'POST',
-      body: input as unknown as BodyInit,
+      body: input,
     });
   }
 
@@ -395,7 +402,7 @@ class APIClient {
   async login(input: LoginInput): Promise<APIResponse<LoginResponse>> {
     const response = await this.request<LoginResponse>('/api/auth/login', {
       method: 'POST',
-      body: input as unknown as BodyInit,
+      body: input,
     });
 
     if (response.success) {
@@ -528,7 +535,7 @@ class APIClient {
   async post<T = any>(endpoint: string, data?: any): Promise<{ data: T }> {
     const response: any = await this.request<any>(endpoint, {
       method: 'POST',
-      body: data as unknown as BodyInit,
+      body: data,
     });
 
     const payload = (response && typeof response === 'object' && 'data' in response) ? response.data : response;
@@ -542,7 +549,7 @@ class APIClient {
   async put<T = any>(endpoint: string, data?: any): Promise<{ data: T }> {
     const response: any = await this.request<any>(endpoint, {
       method: 'PUT',
-      body: data as unknown as BodyInit,
+      body: data,
     });
 
     const payload = (response && typeof response === 'object' && 'data' in response) ? response.data : response;
@@ -581,7 +588,7 @@ class APIClient {
   ): Promise<APIResponse<ChecklistItem>> {
     return this.request<ChecklistItem>(`/api/checklist/items/${id}`, {
       method: 'PATCH', // Use PATCH for partial updates
-      body: data as unknown as BodyInit,
+      body: data,
     });
   }
 
@@ -600,7 +607,7 @@ class APIClient {
   async sendMessageToChat(payload: SendMessageToChatPayload): Promise<APIResponse<ChatResponse>> {
     return this.request<ChatResponse>('/api/gemini/chat', {
       method: 'POST',
-      body: payload as unknown as BodyInit,
+      body: payload,
     });
   }
   // ==========================================================================
@@ -667,7 +674,7 @@ class APIClient {
   async createBooking(input: CreateBookingInput): Promise<APIResponse<Booking>> {
     return this.request<Booking>('/api/bookings', {
       method: 'POST',
-      body: input as unknown as BodyInit,
+      body: input,
     });
   }
 
@@ -718,7 +725,7 @@ class APIClient {
   ): Promise<APIResponse<Booking>> {
     return this.request<Booking>(`/api/bookings/${id}`, {
       method: 'PUT',
-      body: updates as unknown as BodyInit,
+      body: updates,
     });
   }
 
@@ -754,7 +761,7 @@ class APIClient {
   ): Promise<APIResponse<Booking>> {
     return this.request<Booking>(`/api/bookings/${id}/complete`, {
       method: 'POST',
-      body: data as unknown as BodyInit,
+      body: data,
     });
   }
 
@@ -764,7 +771,7 @@ class APIClient {
   async cancelBooking(id: string, reason: string): Promise<APIResponse<Booking>> {
     return this.request<Booking>(`/api/bookings/${id}/cancel`, {
       method: 'POST',
-      body: { reason } as unknown as BodyInit,
+      body: { reason },
     });
   }
 
@@ -795,7 +802,7 @@ class APIClient {
   }): Promise<APIResponse<Property>> {
     return this.request('/api/properties', {
       method: 'POST',
-      body: data as unknown as BodyInit,
+      body: data,
     });
   }
 
@@ -844,7 +851,7 @@ class APIClient {
   ): Promise<APIResponse<Property>> {
     return this.request(`/api/properties/${id}`, {
       method: 'PUT',
-      body: data as unknown as BodyInit,
+      body: data,
     });
   }
 
@@ -880,7 +887,7 @@ class APIClient {
   }): Promise<APIResponse<{ count: number }>> {
     return this.request('/api/checklist/maintenance-items', {
       method: 'POST',
-      body: data as unknown as BodyInit,
+      body: data,
     });
   }
 
@@ -893,7 +900,7 @@ class APIClient {
   }): Promise<APIResponse<{ count: number }>> {
     return this.request('/api/maintenance-templates/custom-items', {
       method: 'POST',
-      body: data as unknown as BodyInit,
+      body: data,
     });
   }
 
@@ -925,7 +932,7 @@ class APIClient {
   }): Promise<APIResponse<Service>> {
     return this.request<Service>('/api/providers/services', {
       method: 'POST',
-      body: data as unknown as BodyInit,
+      body: data,
     });
   }
 
@@ -949,7 +956,7 @@ class APIClient {
   ): Promise<APIResponse<Service>> {
     return this.request<Service>(`/api/providers/services/${id}`, {
       method: 'PATCH',
-      body: data as unknown as BodyInit,
+      body: data,
     });
   }
 
@@ -983,7 +990,7 @@ class APIClient {
 
   // --- EXPENSES ---
   async createExpense(data: CreateExpenseInput): Promise<APIResponse<Expense>> {
-    return this.request<Expense>('/api/home-management/expenses', { method: 'POST', body: data as unknown as BodyInit });
+    return this.request<Expense>('/api/home-management/expenses', { method: 'POST', body: data });
   }
   
   async listExpenses(propertyId?: string): Promise<APIResponse<{ expenses: Expense[] }>> {
@@ -992,7 +999,7 @@ class APIClient {
   }
 
   async updateExpense(expenseId: string, data: UpdateExpenseInput): Promise<APIResponse<Expense>> {
-    return this.request<Expense>(`/api/home-management/expenses/${expenseId}`, { method: 'PATCH', body: data as unknown as BodyInit });
+    return this.request<Expense>(`/api/home-management/expenses/${expenseId}`, { method: 'PATCH', body: data });
   }
 
   async deleteExpense(expenseId: string): Promise<APIResponse<void>> {
@@ -1000,7 +1007,7 @@ class APIClient {
   }
   // --- WARRANTIES ---
   async createWarranty(data: CreateWarrantyInput): Promise<APIResponse<Warranty>> {
-    return this.request<Warranty>('/api/home-management/warranties', { method: 'POST', body: data as unknown as BodyInit });
+    return this.request<Warranty>('/api/home-management/warranties', { method: 'POST', body: data });
   }
   /**
    * List warranties
@@ -1012,7 +1019,7 @@ class APIClient {
   }
 
   async updateWarranty(warrantyId: string, data: UpdateWarrantyInput): Promise<APIResponse<Warranty>> {
-    return this.request<Warranty>(`/api/home-management/warranties/${warrantyId}`, { method: 'PATCH', body: data as unknown as BodyInit });
+    return this.request<Warranty>(`/api/home-management/warranties/${warrantyId}`, { method: 'PATCH', body: data });
   }
 
   async deleteWarranty(warrantyId: string): Promise<APIResponse<void>> {
@@ -1021,7 +1028,7 @@ class APIClient {
 
   // --- INSURANCE POLICIES ---
   async createInsurancePolicy(data: CreateInsurancePolicyInput): Promise<APIResponse<InsurancePolicy>> {
-    return this.request<InsurancePolicy>('/api/home-management/insurance-policies', { method: 'POST', body: data as unknown as BodyInit });
+    return this.request<InsurancePolicy>('/api/home-management/insurance-policies', { method: 'POST', body: data });
   }
 
   async listInsurancePolicies(propertyId?: string): Promise<APIResponse<{ policies: InsurancePolicy[] }>> {
@@ -1030,7 +1037,7 @@ class APIClient {
   }
 
   async updateInsurancePolicy(policyId: string, data: UpdateInsurancePolicyInput): Promise<APIResponse<InsurancePolicy>> {
-    return this.request<InsurancePolicy>(`/api/home-management/insurance-policies/${policyId}`, { method: 'PATCH', body: data as unknown as BodyInit });
+    return this.request<InsurancePolicy>(`/api/home-management/insurance-policies/${policyId}`, { method: 'PATCH', body: data });
   }
 
   async deleteInsurancePolicy(policyId: string): Promise<APIResponse<void>> {
@@ -1105,7 +1112,7 @@ class APIClient {
       id: rawReport.id,
       propertyId: rawReport.propertyId,
       riskScore: rawReport.riskScore,
-      financialExposureTotal: parseFloat(rawReport.financialExposureTotal as unknown as string), 
+      financialExposureTotal: toNumber(rawReport.financialExposureTotal),
       lastCalculatedAt: rawReport.lastCalculatedAt,
       createdAt: rawReport.createdAt,
       updatedAt: rawReport.updatedAt,
@@ -1125,7 +1132,7 @@ class APIClient {
     if (response.success && response.data) {
         const processedData: PrimaryRiskSummary = {
             ...response.data,
-            financialExposureTotal: parseFloat(response.data.financialExposureTotal.toString()),
+            financialExposureTotal: toNumber(response.data.financialExposureTotal),
         };
         return processedData;
     }
@@ -1149,7 +1156,7 @@ class APIClient {
       // Convert the financialExposureTotal back to a number since the controller converted it from Decimal
       const processedData: PrimaryRiskSummary = {
           ...response.data,
-          financialExposureTotal: parseFloat(response.data.financialExposureTotal.toString()),
+          financialExposureTotal: toNumber(response.data.financialExposureTotal),
       };
       
       return processedData;
@@ -1171,7 +1178,7 @@ class APIClient {
         // Wrapped response format
         const processedData: FinancialReportSummary = {
             ...response.data,
-            financialExposureTotal: parseFloat(response.data.financialExposureTotal.toString()),
+            financialExposureTotal: toNumber(response.data.financialExposureTotal),
         };
         return processedData;
     } else if ((response as any).propertyId) {
@@ -1179,7 +1186,7 @@ class APIClient {
         const directResponse = response as any as FinancialReportSummary;
         return {
             ...directResponse,
-            financialExposureTotal: parseFloat(directResponse.financialExposureTotal.toString()),
+            financialExposureTotal: toNumber(directResponse.financialExposureTotal),
         };
     }
     return null;
@@ -1207,10 +1214,10 @@ class APIClient {
         propertyId: rawReport.propertyId,
         financialEfficiencyScore: rawReport.financialEfficiencyScore,
         // Convert all relevant decimal-based fields to number
-        actualInsuranceCost: parseFloat((rawReport as any).actualInsuranceCost.toString()), 
-        actualUtilityCost: parseFloat((rawReport as any).actualUtilityCost.toString()), 
-        actualWarrantyCost: parseFloat((rawReport as any).actualWarrantyCost.toString()), 
-        marketAverageTotal: parseFloat((rawReport as any).marketAverageTotal.toString()), 
+        actualInsuranceCost: toNumber((rawReport as any).actualInsuranceCost),
+        actualUtilityCost: toNumber((rawReport as any).actualUtilityCost),
+        actualWarrantyCost: toNumber((rawReport as any).actualWarrantyCost),
+        marketAverageTotal: toNumber((rawReport as any).marketAverageTotal), 
         lastCalculatedAt: rawReport.lastCalculatedAt,
         createdAt: rawReport.createdAt,
         updatedAt: rawReport.updatedAt,
@@ -1229,7 +1236,7 @@ class APIClient {
   async recalculateFES(propertyId: string): Promise<APIResponse<{ success: boolean; status: 'QUEUED' }>> {
     return this.request<{ success: boolean; status: 'QUEUED' }>(`/api/v1/properties/${propertyId}/financial-efficiency/recalculate`, {
       method: 'POST',
-      body: {} as unknown as BodyInit,
+      body: {},
     });
   }
   
@@ -1248,7 +1255,7 @@ class APIClient {
     // NOTE: This relies on the request method correctly throwing the APIError
     const response = await this.request('/api/users/favorites', {
       method: 'POST',
-      body: { providerProfileId } as unknown as BodyInit,
+      body: { providerProfileId },
     });
     return response;
   }
@@ -1592,7 +1599,7 @@ class APIClient {
   ): Promise<APIResponse<void>> {
     return this.request(`/api/seller-prep/item/${itemId}`, {
       method: 'PATCH',
-      body: { status } as unknown as BodyInit,
+      body: { status },
     });
   }
 
@@ -1657,7 +1664,7 @@ class APIClient {
         leadType,
         context: JSON.stringify(context),
         ...contactInfo,
-      } as unknown as BodyInit,
+      },
     });
   }
 
@@ -1676,7 +1683,7 @@ class APIClient {
   ): Promise<APIResponse<any>> {
     return this.request(`/api/seller-prep/preferences/${propertyId}`, {
       method: 'POST',
-      body: preferences as unknown as BodyInit,
+      body: preferences,
     });
   }
 
@@ -1696,7 +1703,7 @@ class APIClient {
         rating,
         comment,
         page: page || 'seller-prep',
-      } as unknown as BodyInit,
+      },
     });
   }
 
@@ -1814,7 +1821,7 @@ class APIClient {
   }): Promise<APIResponse<ChecklistItem>> {
     return this.request<ChecklistItem>('/api/checklist/items', {
       method: 'POST',
-      body: data as unknown as BodyInit,
+      body: data,
     });
   }
 
@@ -2006,7 +2013,7 @@ class APIClient {
   async patch<T = any>(endpoint: string, data?: any): Promise<{ data: T }> {
     const response = await this.request<T>(endpoint, {
       method: 'PATCH',
-      body: data as unknown as BodyInit,
+      body: data,
     });
     return { data: (response as APISuccess<T>).data };
   }

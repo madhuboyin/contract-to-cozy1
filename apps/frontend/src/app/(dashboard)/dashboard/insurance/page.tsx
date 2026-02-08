@@ -89,10 +89,10 @@ const DocumentUploadModal = ({ parentEntityId, parentEntityType, onUploadSuccess
       toast({ title: 'Document Uploaded', description: `"${res.data.name}" linked successfully.` });
       onUploadSuccess();
     } else {
-      toast({ 
-        title: 'Upload Failed', 
-        description: (res as APIError).message, 
-        variant: 'destructive' 
+      toast({
+        title: 'Upload Failed',
+        description: (res as any)?.message || 'An unexpected error occurred.',
+        variant: 'destructive'
       });
     }
     setIsUploading(false);

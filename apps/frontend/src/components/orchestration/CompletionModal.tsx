@@ -50,7 +50,7 @@ export const CompletionModal: React.FC<CompletionModalProps> = ({
   const [photoIds, setPhotoIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
-  const showProviderFields = !didItMyself && (cost && parseFloat(cost) > 0);
+  const showProviderFields = !didItMyself;
 
   const handleSubmit = async () => {
     setSubmitting(true);

@@ -115,6 +115,11 @@ export default function HomeownerBookingsPage() {
 
   useEffect(() => {
     fetchBookings();
+
+    // Refetch when the tab regains focus so data is fresh after navigation
+    const onFocus = () => fetchBookings();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, []);
 
   const fetchBookings = async () => {

@@ -58,14 +58,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   };
 
   const markRead = async (id: string) => {
-    // Optimistic UI Update
-    setNotifications(prev =>
-      prev.map(n => (n.id === id ? { ...n, isRead: true, readAt: n.readAt ?? new Date().toISOString() } : n))
-    );
-    
-    setUnreadCount(prev => {
-      const wasUnread = notifications.find(n => n.id === id)?.isRead === false; // ⚠️ but uses stale closure
-      return wasUnread ? Math.max(0, prev - 1) : prev;
+    // Optimistic UI Update — derive unread decrement from current state
+    setNotifications(prev => {
+      const target = prev.find(n => n.id === id);
+      if (target && !target.isRead) {
+        setUnreadCount(c => Math.max(0, c - 1));
+      }
+      return prev.map(n => (n.id === id ? { ...n, isRead: true, readAt: n.readAt ?? new Date().toISOString() } : n));
     });
     
 

@@ -3,7 +3,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useRef } from 'react';
 
 interface TouchCardProps {
   children: ReactNode;
@@ -65,54 +65,72 @@ export function TouchCard({
 }
 
 // Swipeable card for dismissible items
-export function SwipeCard({ 
-  children, 
-  onSwipeLeft, 
+export function SwipeCard({
+  children,
+  onSwipeLeft,
   onSwipeRight,
-  className 
+  className
 }: {
   children: ReactNode;
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
   className?: string;
 }) {
+  // Track active document listeners so we can remove them on unmount
+  const cleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => {
+      cleanupRef.current?.();
+    };
+  }, []);
+
   const handleTouchStart = (e: React.TouchEvent) => {
     const touch = e.touches[0];
     const startX = touch.clientX;
-    
+
     const handleTouchMove = (e: TouchEvent) => {
       const touch = e.touches[0];
       const currentX = touch.clientX;
       const diff = currentX - startX;
-      
+
       // Visual feedback during swipe
       const element = e.target as HTMLElement;
       element.style.transform = `translateX(${diff}px)`;
       element.style.opacity = String(1 - Math.abs(diff) / 300);
     };
-    
+
     const handleTouchEnd = (e: TouchEvent) => {
       const touch = e.changedTouches[0];
       const endX = touch.clientX;
       const diff = endX - startX;
-      
+
       const element = e.target as HTMLElement;
       element.style.transform = '';
       element.style.opacity = '1';
-      
+
       // Trigger callbacks based on swipe direction
       if (diff < -100 && onSwipeLeft) {
         onSwipeLeft();
       } else if (diff > 100 && onSwipeRight) {
         onSwipeRight();
       }
-      
+
+      removeListeners();
+    };
+
+    const removeListeners = () => {
       document.removeEventListener('touchmove', handleTouchMove);
       document.removeEventListener('touchend', handleTouchEnd);
+      cleanupRef.current = null;
     };
-    
+
+    // Remove any leftover listeners from a previous swipe
+    cleanupRef.current?.();
+
     document.addEventListener('touchmove', handleTouchMove);
     document.addEventListener('touchend', handleTouchEnd);
+    cleanupRef.current = removeListeners;
   };
 
   return (
