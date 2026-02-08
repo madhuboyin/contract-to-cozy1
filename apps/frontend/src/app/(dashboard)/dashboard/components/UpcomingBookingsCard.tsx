@@ -1,4 +1,3 @@
-// apps/frontend/src/app/(dashboard)/dashboard/components/UpcomingBookingsCard.tsx
 'use client';
 
 import * as React from 'react';
@@ -44,8 +43,7 @@ export const UpcomingBookingsCard: React.FC<UpcomingBookingsCardProps> = ({
   const totalUpcoming = bookings.filter(b => b.scheduledDate && !isPast(new Date(b.scheduledDate))).length;
 
   return (
-    /* FIXED: Changed h-[320px] to min-h-[320px] and added h-full for mobile flexibility */
-    <Card className="min-h-[320px] h-full flex flex-col border-2 border-gray-100 rounded-2xl shadow-sm hover:border-blue-300 hover:shadow-lg hover:-translate-y-0.5 transition-all overflow-hidden">
+    <Card className="w-full min-h-[320px] h-full flex flex-col border-2 border-gray-100 rounded-2xl shadow-sm hover:border-blue-300 hover:shadow-lg hover:-translate-y-0.5 transition-all overflow-hidden">
       <CardContent className="p-5 flex flex-col h-full">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
@@ -91,7 +89,6 @@ export const UpcomingBookingsCard: React.FC<UpcomingBookingsCardProps> = ({
                       <h4 className="text-sm font-semibold text-gray-900 mb-1.5 truncate">
                         {booking.service?.name || 'Service Booking'}
                       </h4>
-                      {/* FIXED: Added min-w-0 and shrink-0 to prevent text from pushing card off-screen */}
                       <p className="text-xs text-gray-600 mb-1.5 flex items-center gap-2 min-w-0">
                         <span className="shrink-0">{format(new Date(booking.scheduledDate!), 'MMM dd, yyyy')}</span>
                         <span className="shrink-0">•</span>
