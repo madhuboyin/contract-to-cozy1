@@ -473,7 +473,8 @@ export default function HomeownerBookingsPage() {
                 <h2 className="text-2xl font-bold text-gray-900">Edit Booking</h2>
                 <button
                   onClick={() => setShowEditModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="h-11 w-11 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                  aria-label="Close edit booking modal"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -526,18 +527,18 @@ export default function HomeownerBookingsPage() {
                   </div>
                 </div>
 
-                <div className="mt-6 flex justify-end space-x-3">
+                <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                   <button
                     type="button"
                     onClick={() => setShowEditModal(false)}
-                    className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                    className="w-full sm:w-auto px-4 py-2.5 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={saving}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                    className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                   >
                     {saving ? 'Saving...' : 'Save Changes'}
                   </button>
@@ -557,7 +558,8 @@ export default function HomeownerBookingsPage() {
                 <h2 className="text-2xl font-bold text-gray-900">Cancel Booking</h2>
                 <button
                   onClick={() => setShowCancelModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="h-11 w-11 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                  aria-label="Close cancel booking modal"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -589,18 +591,18 @@ export default function HomeownerBookingsPage() {
                   />
                 </div>
 
-                <div className="mt-6 flex justify-end space-x-3">
+                <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                   <button
                     type="button"
                     onClick={() => setShowCancelModal(false)}
-                    className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                    className="w-full sm:w-auto px-4 py-2.5 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
                   >
                     Keep Booking
                   </button>
                   <button
                     type="submit"
                     disabled={cancelling || cancelReason.length < 10}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                    className="w-full sm:w-auto px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
                   >
                     {cancelling ? 'Cancelling...' : 'Cancel Booking'}
                   </button>
