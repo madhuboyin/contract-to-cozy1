@@ -179,7 +179,6 @@ function HealthInsightList({ property }: { property: ScoredProperty }) {
   const criticalInsights = property.healthScore.insights.filter(i =>
     HIGH_PRIORITY_STATUSES.includes(i.status)
   );
-  console.log('🔍 INSIGHTS DATA:', JSON.stringify(criticalInsights, null, 2));
   if (criticalInsights.length === 0) {
     return null;
   }
@@ -690,6 +689,14 @@ export default function PropertyDetailPage() {
             The requested property could not be loaded or does not exist.
           </PageHeaderDescription>
         </PageHeader>
+        <div className="mt-4">
+          <Button variant="outline" asChild>
+            <Link href="/dashboard/properties">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Properties
+            </Link>
+          </Button>
+        </div>
       </DashboardShell>
     );
   }

@@ -150,11 +150,11 @@ export default function ClimateRiskPredictor({ propertyId }: ClimateRiskPredicto
       <div>
         <h3 className="text-xl font-bold text-gray-900 mb-4">Climate Risk Categories</h3>
         <div className="space-y-4">
-          {report.risks.map((risk, index) => {
+          {report.risks.map((risk) => {
             const isExpanded = expandedRisk === risk.category;
 
             return (
-              <Card key={index} className={`border-2 ${getRiskColor(risk.riskLevel)}`}>
+              <Card key={risk.category} className={`border-2 ${getRiskColor(risk.riskLevel)}`}>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3 flex-1">

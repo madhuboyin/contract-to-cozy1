@@ -103,13 +103,13 @@ export const ActionCenter: React.FC<Props> = ({
      CTA Handler
   ------------------------------------------------------------------- */
 
-  const handleActionCta = (action: OrchestratedActionDTO) => {
+  const handleActionCta = useCallback((action: OrchestratedActionDTO) => {
     if (action.suppression?.suppressed) return;
     if (isModalOpen) return;
     if (activeActionKey === action.actionKey) return;
-  
+
     setActiveActionKey(action.actionKey);
-  
+
     // 🔑 FIX: Map riskLevel to priority (same as backend does)
     const priorityMap: Record<string, string> = {
       'CRITICAL': 'URGENT',
@@ -118,10 +118,10 @@ export const ActionCenter: React.FC<Props> = ({
       'MODERATE': 'MEDIUM',
       'LOW': 'LOW',
     };
-    const derivedPriority = action.riskLevel 
+    const derivedPriority = action.riskLevel
       ? priorityMap[action.riskLevel.toUpperCase()] || 'MEDIUM'
       : 'MEDIUM';
-  
+
     setTemplate({
       id: `orchestration:${action.actionKey}`,
       title: action.title,
@@ -138,9 +138,9 @@ export const ActionCenter: React.FC<Props> = ({
       riskLevel: action.riskLevel,
       estimatedCost: action.exposure,       // exposure → estimatedCost
     } as any);
-  
+
     setIsModalOpen(true);
-  };
+  }, [isModalOpen, activeActionKey]);
 
   /* ------------------------------------------------------------------
      Maintenance Modal Success

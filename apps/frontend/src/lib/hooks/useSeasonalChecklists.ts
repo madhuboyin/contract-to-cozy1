@@ -137,6 +137,6 @@ export function useInvalidateSeasonalCache() {
     queryClient.invalidateQueries({ queryKey: ['seasonal-checklists'] });
     queryClient.invalidateQueries({ queryKey: ['seasonal-checklist'] });
     queryClient.invalidateQueries({ queryKey: ['climate-info'] });
-    console.log('✅ Seasonal cache invalidated');
+    // cache invalidated
   };
 }

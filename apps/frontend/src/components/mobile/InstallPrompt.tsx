@@ -7,9 +7,14 @@ import { X, Download, Share } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { isPWA, isIOS, isAndroid } from '@/lib/pwa';
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
 export function InstallPrompt() {
   const [showPrompt, setShowPrompt] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isIOSDevice, setIsIOSDevice] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
@@ -34,7 +39,7 @@ export function InstallPrompt() {
     // For Android/Chrome
     const handler = (e: Event) => {
       e.preventDefault();
-      setDeferredPrompt(e);
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
 
       // Show prompt after 30 seconds
       timeoutIds.push(setTimeout(() => {
@@ -64,7 +69,6 @@ export function InstallPrompt() {
     const { outcome } = await deferredPrompt.userChoice;
     
     if (outcome === 'accepted') {
-      console.log('User accepted the install prompt');
       setShowPrompt(false);
       localStorage.setItem('install-prompt-dismissed', 'true');
     }
@@ -138,7 +142,7 @@ export function InstallPrompt() {
 // Compact version for in-app placement
 export function InstallBanner() {
   const [show, setShow] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
     if (isPWA()) return;
@@ -148,7 +152,7 @@ export function InstallBanner() {
 
     const handler = (e: Event) => {
       e.preventDefault();
-      setDeferredPrompt(e);
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
       setShow(true);
     };
 

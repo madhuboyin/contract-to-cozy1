@@ -65,8 +65,12 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [propertyCount, setPropertyCount] = useState<number | null>(null);
   const [showBanner, setShowBanner] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const bannerFetchedRef = React.useRef(false);
 
   useEffect(() => {
+    // Guard against duplicate fetches on re-renders
+    if (bannerFetchedRef.current) return;
+
     const fetchPropertyCount = async () => {
       if (!user) {
         setShowBanner(false);
@@ -78,24 +82,24 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      bannerFetchedRef.current = true;
+
       try {
         const response = await api.getProperties();
-        
+
         if (response.success) {
           const count = response.data.properties.length;
           setPropertyCount(count);
-          
+
           const hasSkipped = localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY) === 'true';
-          
+
           const shouldShowBanner = count === 0 && !hasSkipped;
           setShowBanner(shouldShowBanner);
         } else {
           setShowBanner(false);
-          console.error('Properties API failed while checking banner visibility:', response);
         }
       } catch (error) {
         setShowBanner(false);
-        console.error('Failed to fetch properties for banner visibility:', error);
       }
     };
 

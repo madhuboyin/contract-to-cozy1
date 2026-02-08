@@ -44,6 +44,7 @@ function ResetPasswordForm() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [redirectTimer, setRedirectTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     // Basic check to guide users if they landed here without a token
@@ -51,6 +52,13 @@ function ResetPasswordForm() {
       setError('Missing or invalid password reset token. Please request a new link.');
     }
   }, [token, success]);
+
+  // Cleanup redirect timer on unmount
+  useEffect(() => {
+    return () => {
+      if (redirectTimer) clearTimeout(redirectTimer);
+    };
+  }, [redirectTimer]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -83,7 +91,7 @@ function ResetPasswordForm() {
       if (result.success) {
         setSuccess(true);
         // Redirect to login after a short delay
-        setTimeout(() => router.push('/login'), 3000);
+        setRedirectTimer(setTimeout(() => router.push('/login'), 3000));
       } else {
         setError(result.error || 'Password reset failed. Please ensure the token is still valid.');
       }
