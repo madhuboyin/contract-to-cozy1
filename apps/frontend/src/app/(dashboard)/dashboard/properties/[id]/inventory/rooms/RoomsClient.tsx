@@ -51,12 +51,19 @@ export default function RoomsClient() {
 
   const [roomType, setRoomType] = useState<RoomTypeValue>('KITCHEN');
   const [label, setLabel] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
 
   const suggestedLabel = useMemo(() => defaultLabelForType(roomType), [roomType]);
 
   async function refresh() {
-    const r = await listInventoryRooms(propertyId);
-    setRooms(r);
+    try {
+      const r = await listInventoryRooms(propertyId);
+      setRooms(r);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to load rooms:', err);
+      setError('Failed to load rooms. Please try again.');
+    }
   }
 
   useEffect(() => {
@@ -73,6 +80,9 @@ export default function RoomsClient() {
       await createInventoryRoom(propertyId, { type: roomType, name: nameToSend });
       setLabel('');
       await refresh();
+    } catch (err) {
+      console.error('Failed to add room:', err);
+      setError('Failed to add room. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -81,15 +91,25 @@ export default function RoomsClient() {
   async function onRename(room: InventoryRoom, nextName: string) {
     const name = nextName.trim();
     if (!name) return;
-    await updateInventoryRoom(propertyId, room.id, { name });
-    await refresh();
+    try {
+      await updateInventoryRoom(propertyId, room.id, { name });
+      await refresh();
+    } catch (err) {
+      console.error('Failed to rename room:', err);
+      setError('Failed to rename room. Please try again.');
+    }
   }
 
   async function onDelete(room: InventoryRoom) {
     const ok = confirm(`Delete room "${room.name}"? Items in this room will become unassigned.`);
     if (!ok) return;
-    await deleteInventoryRoom(propertyId, room.id);
-    await refresh();
+    try {
+      await deleteInventoryRoom(propertyId, room.id);
+      await refresh();
+    } catch (err) {
+      console.error('Failed to delete room:', err);
+      setError('Failed to delete room. Please try again.');
+    }
   }
 
   return (
@@ -103,6 +123,12 @@ export default function RoomsClient() {
           Back to inventory
         </Link>
       </div>
+
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
       <div className="rounded-2xl border border-black/10 bg-white p-4">
         <div className="text-sm font-medium">Add room</div>

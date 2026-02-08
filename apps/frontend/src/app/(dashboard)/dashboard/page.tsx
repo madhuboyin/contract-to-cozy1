@@ -437,10 +437,8 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mt-6 mb-8">
-          {selectedProperty ? (
-            <PropertyHealthScoreCard property={selectedProperty} /> 
-          ) : (
-            <PropertyHealthScoreCard property={{} as any} />
+          {selectedProperty && (
+            <PropertyHealthScoreCard property={selectedProperty} />
           )}
           <PropertyRiskScoreCard propertyId={selectedPropertyId} />
           <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />

@@ -160,8 +160,87 @@ interface DocumentUploadModalProps {
 }
 
 const DocumentUploadModal = ({ parentEntityId, parentEntityType, onUploadSuccess, onClose }: DocumentUploadModalProps) => {
-    // ... (component code omitted for brevity)
-    return null;
+    const [file, setFile] = useState<File | null>(null);
+    const [docType, setDocType] = useState<DocumentType>('OTHER');
+    const [uploading, setUploading] = useState(false);
+    const [uploadError, setUploadError] = useState<string | null>(null);
+    const { toast } = useToast();
+
+    const handleUpload = async () => {
+        if (!file) return;
+        setUploading(true);
+        setUploadError(null);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('documentType', docType);
+            formData.append('parentEntityId', parentEntityId);
+            formData.append('parentEntityType', parentEntityType);
+
+            const res = await api.uploadDocument(formData);
+
+            if (res.success) {
+                toast({ title: 'Document Uploaded', description: 'File uploaded successfully.' });
+                onUploadSuccess();
+            } else {
+                setUploadError(res.message || 'Upload failed');
+            }
+        } catch (err: unknown) {
+            setUploadError(err instanceof Error ? err.message : 'Upload failed');
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    return (
+        <div className="space-y-4">
+            <DialogHeader>
+                <DialogTitle>Upload Document</DialogTitle>
+            </DialogHeader>
+
+            <div className="grid gap-2">
+                <Label htmlFor="docType">Document Type</Label>
+                <Select value={docType} onValueChange={(v) => setDocType(v as DocumentType)}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {DOCUMENT_TYPES.map(dt => (
+                            <SelectItem key={dt} value={dt}>
+                                {dt.replace(/_/g, ' ')}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+
+            <div className="grid gap-2">
+                <Label htmlFor="file">File</Label>
+                <Input
+                    id="file"
+                    type="file"
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                />
+            </div>
+
+            {uploadError && (
+                <p className="text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" /> {uploadError}
+                </p>
+            )}
+
+            <DialogFooter>
+                <Button variant="outline" onClick={onClose} disabled={uploading}>
+                    Cancel
+                </Button>
+                <Button onClick={handleUpload} disabled={!file || uploading}>
+                    {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+                    Upload
+                </Button>
+            </DialogFooter>
+        </div>
+    );
 }
 
 

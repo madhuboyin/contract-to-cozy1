@@ -156,7 +156,7 @@ export default function BookProviderPage() {
     const endDateTime = endTime ? toISODateTime(scheduledDate, endTime) : undefined;
 
     const bookingData: CreateBookingInput = {
-      providerId: provider.user.id,
+      providerId,
       serviceId: selectedServiceId,
       propertyId: selectedPropertyId,
       scheduledDate: scheduledDateTime,

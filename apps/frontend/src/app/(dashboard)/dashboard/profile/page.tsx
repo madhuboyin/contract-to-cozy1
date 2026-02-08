@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
 
 export default function ProfilePage() {
@@ -20,6 +20,9 @@ export default function ProfilePage() {
     zipCode: '',
   });
 
+  // Store the last saved profile data for cancel/reset
+  const savedFormData = useRef(formData);
+
   useEffect(() => {
     const loadProfile = async () => {
       try {
@@ -34,7 +37,7 @@ export default function ProfilePage() {
           const result = await response.json();
           const profileData = result.data;
           
-          setFormData({
+          const loaded = {
             firstName: profileData.firstName || '',
             lastName: profileData.lastName || '',
             email: profileData.email || '',
@@ -43,7 +46,9 @@ export default function ProfilePage() {
             city: profileData.city || '',
             state: profileData.state || '',
             zipCode: profileData.zipCode || '',
-          });
+          };
+          setFormData(loaded);
+          savedFormData.current = loaded;
         }
       } catch (error) {
         console.error('Failed to load profile:', error);
@@ -83,7 +88,7 @@ export default function ProfilePage() {
         
         // Update form with returned data
         if (data.data) {
-          setFormData({
+          const updated = {
             firstName: data.data.firstName || '',
             lastName: data.data.lastName || '',
             email: data.data.email || '',
@@ -92,7 +97,9 @@ export default function ProfilePage() {
             city: data.data.city || '',
             state: data.data.state || '',
             zipCode: data.data.zipCode || '',
-          });
+          };
+          setFormData(updated);
+          savedFormData.current = updated;
         }
         
         await refreshUser();
@@ -121,8 +128,9 @@ export default function ProfilePage() {
   };
 
   const handleCancel = () => {
-    // Reset form - will reload on next useEffect
-    window.location.reload();
+    setFormData(savedFormData.current);
+    setIsEditing(false);
+    setMessage(null);
   };
 
   const states = [

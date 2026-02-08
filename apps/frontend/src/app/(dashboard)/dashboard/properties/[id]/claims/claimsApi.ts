@@ -69,25 +69,9 @@ export async function createClaim(propertyId: string, input: CreateClaimInput): 
   return res.data;
 }
 
-// apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/claims/claimsApi.ts
-
-export async function updateClaim(propertyId: string, claimId: string, patch: any) {
-  const res = await fetch(`/api/properties/${propertyId}/claims/${claimId}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(patch),
-  });
-
-  const payload = await res.json().catch(() => null);
-
-  if (!res.ok) {
-    const err: any = new Error(payload?.message || `Failed to update claim (${res.status})`);
-    err.status = res.status;
-    err.payload = payload;
-    throw err;
-  }
-
-  return payload?.data ?? payload; // keep consistent with your API response shape
+export async function updateClaim(propertyId: string, claimId: string, patch: UpdateClaimInput): Promise<ClaimDTO> {
+  const res = await api.patch<ClaimDTO>(claim(propertyId, claimId), patch);
+  return res.data;
 }
 
 

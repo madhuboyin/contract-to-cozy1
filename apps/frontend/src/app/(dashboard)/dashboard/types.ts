@@ -83,9 +83,11 @@ export interface RiskReportSummary {
   details: AssetRiskDetail[];
 }
 
-export interface DashboardData {
+// Note: DashboardData is defined above (line 41). This extended version is available
+// as DashboardDataWithProfile for components that need profile/risk data.
+export interface DashboardDataWithProfile {
   profile: HomeownerProfile;
   properties: Property[];
   primaryProperty: Property | null;
-  riskReportSummary: RiskReportSummary | null; // NEW FIELD
+  riskReportSummary: RiskReportSummary | null;
 }

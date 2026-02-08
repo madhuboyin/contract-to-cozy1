@@ -329,7 +329,7 @@ export function MaintenanceConfigModal({
         return;
     }
     if (!nextDueDate) {
-        const dateFieldError = isCurrentCategoryAdmin ? "Please select a reminder date." : "Please select the next due date.";
+        const dateFieldError = (category === 'ADMIN') ? "Please select a reminder date." : "Please select the next due date.";
         setServerError(dateFieldError);
         return;
     }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 type Series = {
   key: string;
@@ -88,8 +88,16 @@ export default function MultiLineChart(props: {
 
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [hoverXPct, setHoverXPct] = useState(0);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   function onMove(e: React.MouseEvent<SVGSVGElement>) {
+    if (!isMounted.current) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const px = clamp(e.clientX - rect.left, 0, rect.width);
     const t = (px / rect.width);

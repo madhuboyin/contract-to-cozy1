@@ -103,10 +103,10 @@ function EnergyContent() {
       )}
 
       {/* Energy Auditor Component */}
-      {selectedPropertyId ? (
-        <EnergyAuditor 
+      {selectedPropertyId && selectedProperty ? (
+        <EnergyAuditor
           propertyId={selectedPropertyId}
-          squareFootage={selectedProperty?.squareFootage}
+          squareFootage={selectedProperty.squareFootage}
         />
       ) : (
         <div className="text-center py-12 bg-gray-50 rounded-lg">

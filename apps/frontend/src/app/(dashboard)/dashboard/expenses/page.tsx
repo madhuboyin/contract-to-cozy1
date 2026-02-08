@@ -410,19 +410,6 @@ export default function ExpensesPage() {
           </div>
         </Card>
       )}
-      <Dialog open={editingExpense !== undefined && isModalOpen} onOpenChange={closeModal}>
-        <DialogContent className="sm:max-w-[500px]">
-          {(editingExpense !== undefined || !editingExpense) && (
-            <ExpenseForm 
-                initialData={editingExpense}
-                properties={properties}
-                onSave={handleSave}
-                onClose={closeModal}
-                isSubmitting={isSubmitting}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

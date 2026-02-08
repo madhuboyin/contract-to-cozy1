@@ -10,6 +10,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { api } from '@/lib/api/client';
 import {
   Card,
   CardContent,
@@ -93,49 +94,17 @@ export default function ChecklistPage() {
     const fetchChecklist = async () => {
       try {
         setLoading(true);
-        const token = localStorage.getItem('accessToken');
-        
-        // FIX: Add cache busting to ensure fresh data
-        const cacheBuster = `?_=${Date.now()}`;
-        
-        console.log('📋 Fetching checklist...');
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/checklist${cacheBuster}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
 
-        if (!response.ok) {
+        const res = await api.getChecklist();
+
+        if (res.success && res.data) {
+          setChecklist(res.data);
+        } else {
           throw new Error('Failed to fetch your checklist.');
         }
-        
-        const data = await response.json();
-        console.log('📋 Checklist API response:', data);
-        
-        // FIX: Handle both wrapped and unwrapped responses
-        // API should return: {id, items: [...]} directly
-        // But let's handle both cases for safety
-        let checklistData;
-        if (data.success && data.data) {
-          // Wrapped response: {success: true, data: {id, items}}
-          checklistData = data.data;
-        } else if (data.id && data.items) {
-          // Direct response: {id, items}
-          checklistData = data;
-        } else {
-          throw new Error('Invalid checklist response format');
-        }
-        
-        console.log('📋 Parsed checklist data:', checklistData);
-        console.log('📋 Items count:', checklistData.items?.length || 0);
-        
-        setChecklist(checklistData);
-      } catch (err: any) {
-        console.error('📋 Checklist fetch error:', err);
-        setError(err.message);
+      } catch (err: unknown) {
+        console.error('Checklist fetch error:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load checklist');
       } finally {
         setLoading(false);
       }
@@ -157,8 +126,6 @@ export default function ChecklistPage() {
     const originalItem = checklist.items.find((item) => item.id === itemId);
     if (!originalItem || originalItem.status === status) return;
 
-    console.log('✏️ Updating item:', itemId, 'to status:', status);
-
     // Optimistic update
     const optimisticItems = checklist.items.map((item) =>
       item.id === itemId ? { ...item, status: status, isUpdating: true } : item
@@ -166,56 +133,27 @@ export default function ChecklistPage() {
     setChecklist({ ...checklist, items: optimisticItems as any });
 
     try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/checklist/items/${itemId}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ status }),
-        }
-      );
+      const res = await api.updateChecklistItem(itemId, { status });
 
-      if (!response.ok) {
+      if (res.success && res.data) {
+        const updatedItem = res.data;
+
+        setChecklist((prev) => ({
+          ...prev!,
+          items: prev!.items.map((item) =>
+            item.id === itemId ? updatedItem : item
+          ),
+        }));
+
+        queryClient.invalidateQueries({ queryKey: ['seasonal-checklists'] });
+        queryClient.invalidateQueries({ queryKey: ['seasonal-checklist'] });
+      } else {
         throw new Error('Failed to update item.');
       }
-
-      const responseData = await response.json();
-      console.log('✏️ Update response:', responseData);
-
-      // FIX: Handle wrapped response from API
-      // Backend returns: {success: true, data: updatedItem}
-      let updatedItem;
-      if (responseData.success && responseData.data) {
-        updatedItem = responseData.data;
-      } else if (responseData.id) {
-        // Unwrapped item
-        updatedItem = responseData;
-      } else {
-        throw new Error('Invalid update response format');
-      }
-
-      console.log('✏️ Updated item:', updatedItem);
-
-      // Final update with server response
-      setChecklist((prev) => ({
-        ...prev!,
-        items: prev!.items.map((item) =>
-          item.id === itemId ? updatedItem : item
-        ),
-      }));
-
-      console.log('✅ Item updated successfully');
-      queryClient.invalidateQueries({ queryKey: ['seasonal-checklists'] });
-      queryClient.invalidateQueries({ queryKey: ['seasonal-checklist'] });
-      console.log('📅 Invalidated seasonal cache');
-    } catch (err: any) {
-      console.error('❌ Update failed:', err);
+    } catch (err: unknown) {
+      console.error('Update failed:', err);
       setError('Failed to update. Please try again.');
-      
+
       // Rollback on error
       setChecklist((prev) => ({
         ...prev!,

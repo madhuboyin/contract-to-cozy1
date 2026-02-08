@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api/client';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -113,16 +113,7 @@ export default function HomeownerBookingsPage() {
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
 
-  useEffect(() => {
-    fetchBookings();
-
-    // Refetch when the tab regains focus so data is fresh after navigation
-    const onFocus = () => fetchBookings();
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, []);
-
-  const fetchBookings = async () => {
+  const fetchBookings = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -137,7 +128,16 @@ export default function HomeownerBookingsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchBookings();
+
+    // Refetch when the tab regains focus so data is fresh after navigation
+    const onFocus = () => fetchBookings();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [fetchBookings]);
 
   const filteredBookings = filter === 'all' 
     ? bookings 
