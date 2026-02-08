@@ -22,11 +22,11 @@ export default function LoginPage() {
   useEffect(() => {
     if (user) {
       if (user.role === 'PROVIDER') {
-        router.push('/providers/dashboard');
+        router.replace('/providers/dashboard');
       } else if (user.role === 'ADMIN') {
-        router.push('/admin/dashboard');
+        router.replace('/admin/dashboard');
       } else {
-        router.push('/dashboard');
+        router.replace('/dashboard');
       }
     }
   }, [user, router]);
@@ -53,11 +53,11 @@ export default function LoginPage() {
         const userRole = result.user.role; 
 
         if (userRole === 'PROVIDER') {
-          router.push('/providers/dashboard');
+          router.replace('/providers/dashboard');
         } else if (userRole === 'ADMIN') {
-          router.push('/admin/dashboard');
+          router.replace('/admin/dashboard');
         } else {
-          router.push('/dashboard');
+          router.replace('/dashboard');
         }
 
       } else {

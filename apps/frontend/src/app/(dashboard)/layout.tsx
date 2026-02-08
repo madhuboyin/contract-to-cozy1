@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -61,6 +61,7 @@ function getUserTypeLabel(user: User | null): string {
 
 function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth() as { user: User | null, loading: boolean };
+  const router = useRouter();
   const [propertyCount, setPropertyCount] = useState<number | null>(null);
   const [showBanner, setShowBanner] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -134,6 +135,12 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
     }
   }, [user, loading]);
 
+  useEffect(() => {
+    if (!loading && user?.role === 'PROVIDER') {
+      router.replace('/providers/dashboard');
+    }
+  }, [loading, user, router]);
+
   const handleDismissBanner = () => {
     localStorage.setItem(PROPERTY_SETUP_SKIPPED_KEY, 'true');
     setShowBanner(false);
@@ -157,9 +164,6 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (user && user.role === 'PROVIDER') {
-    if (typeof window !== 'undefined') {
-      window.location.href = '/providers/dashboard';
-    }
     return null;
   }
 
