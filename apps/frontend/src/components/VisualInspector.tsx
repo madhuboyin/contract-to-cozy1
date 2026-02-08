@@ -1,7 +1,7 @@
 // apps/frontend/src/components/VisualInspector.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Camera, 
   AlertTriangle, 
@@ -80,6 +80,14 @@ export default function VisualInspector({ propertyId }: VisualInspectorProps) {
   const [error, setError] = useState('');
   
   const [images, setImages] = useState<{ file: File; preview: string; roomType: string }[]>([]);
+
+  // Revoke all object URLs on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      images.forEach((img) => URL.revokeObjectURL(img.preview));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {

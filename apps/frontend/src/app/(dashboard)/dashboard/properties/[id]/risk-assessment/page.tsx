@@ -226,8 +226,8 @@ const AssetMatrixTable = ({
     details, 
     tasksBySystemType,
     bookingsByInsightFactor,
-    warrantiesBySystemType, // 🔑 NEW
-    propertyId, // 🔑 NEW
+    warrantiesBySystemType,
+    propertyId,
     onScheduleInspection, 
     onViewTask,
     onViewBooking,
@@ -235,8 +235,8 @@ const AssetMatrixTable = ({
     details: AssetRiskDetail[];
     tasksBySystemType: Map<string, PropertyMaintenanceTask>;
     bookingsByInsightFactor: Map<string, any>;
-    warrantiesBySystemType: Map<string, any>; // 🔑 NEW
-    propertyId: string; // 🔑 NEW
+    warrantiesBySystemType: Map<string, any>;
+    propertyId: string;
     onScheduleInspection: (asset: AssetRiskDetail) => void;
     onViewTask: (task: PropertyMaintenanceTask) => void;
     onViewBooking: (booking: any) => void;
@@ -249,14 +249,197 @@ const AssetMatrixTable = ({
         return <Badge variant="secondary">N/A</Badge>;
     };
 
+    // Shared logic to derive CTA text/variant and status flags per asset
+    const getAssetRowData = (item: AssetRiskDetail) => {
+        const insightFactor = item.assetName.replace(/_/g, ' ');
+        const existingBooking = bookingsByInsightFactor.get(insightFactor);
+        const hasBooking = !!existingBooking;
+        const existingTask = tasksBySystemType.get(item.systemType);
+        const hasTask = !!existingTask;
+        const existingWarranty = warrantiesBySystemType.get(item.systemType);
+        const hasWarranty = !!existingWarranty;
+        const isPastLife = item.age > item.expectedLife;
+
+        let ctaText = '';
+        let ctaVariant: 'default' | 'secondary' | 'destructive' | 'outline' = 'secondary';
+
+        if (hasBooking) {
+            ctaText = 'View Booking';
+            ctaVariant = 'outline';
+        } else if (hasTask) {
+            ctaText = 'View Task';
+            ctaVariant = 'outline';
+        } else if (hasWarranty) {
+            if (isPastLife) {
+                ctaText = 'Schedule Replacement';
+                ctaVariant = item.riskLevel === 'HIGH' ? 'destructive' : 'default';
+            } else {
+                ctaText = 'Schedule Inspection';
+                ctaVariant = 'secondary';
+            }
+        } else {
+            if (item.riskLevel === 'HIGH' && item.outOfPocketCost > 1000) {
+                ctaText = 'Add Home Warranty';
+                ctaVariant = 'destructive';
+            } else if (item.actionCta) {
+                ctaText = item.actionCta;
+                ctaVariant = item.riskLevel === 'HIGH' ? 'destructive' : 'secondary';
+            } else {
+                ctaText = 'Schedule Maintenance';
+                ctaVariant = item.riskLevel === 'HIGH' ? 'destructive' : 'secondary';
+            }
+        }
+
+        return { insightFactor, existingBooking, hasBooking, existingTask, hasTask, existingWarranty, hasWarranty, isPastLife, ctaText, ctaVariant };
+    };
+
+    // Shared CTA button renderer
+    const renderCtaButton = (item: AssetRiskDetail, data: ReturnType<typeof getAssetRowData>, fullWidth = false) => {
+        const { ctaText, ctaVariant, hasBooking, hasTask, existingBooking, existingTask } = data;
+        const sizeClass = fullWidth ? 'w-full min-h-[44px]' : '';
+
+        if (ctaText === 'Schedule Inspection' || ctaText === 'Schedule Replacement') {
+            return (
+                <Button 
+                    size="sm" 
+                    variant={ctaVariant}
+                    asChild
+                    className={`gap-1 ${sizeClass}`}
+                >
+                    <Link href={{
+                        pathname: '/dashboard/providers',
+                        query: {
+                            category: getServiceCategoryForAsset(item.systemType),
+                            insightFactor: item.assetName.replace(/_/g, ' '),
+                            propertyId: propertyId
+                        }
+                    }}>
+                        {ctaText}
+                    </Link>
+                </Button>
+            );
+        }
+
+        return (
+            <Button 
+                size="sm" 
+                variant={ctaVariant}
+                onClick={() => {
+                    if (hasBooking) {
+                        onViewBooking(existingBooking);
+                    } else if (hasTask && existingTask) {
+                        onViewTask(existingTask);
+                    } else if (ctaText === 'Add Home Warranty') {
+                        window.location.href = `/dashboard/warranties?action=new&from=risk-assessment`;
+                    } else {
+                        onScheduleInspection(item);
+                    }
+                }}
+                className={`gap-1 ${sizeClass}`}
+            >
+                {(hasBooking || hasTask) && <Calendar className="h-3 w-3" />}
+                {ctaText}
+            </Button>
+        );
+    };
+
+    // Shared status badges renderer
+    const renderStatusBadges = (data: ReturnType<typeof getAssetRowData>) => {
+        const { hasBooking, hasWarranty, hasTask, isPastLife, existingTask } = data;
+        return (
+            <div className="flex items-center gap-1.5 flex-wrap">
+                {hasBooking && (
+                    <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-50 border border-blue-200">
+                        <Calendar className="h-3 w-3 text-blue-600" />
+                        <span className="text-xs font-medium text-blue-700">Booked</span>
+                    </div>
+                )}
+                {hasWarranty && (
+                    <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-purple-50 border border-purple-200">
+                        <svg className="h-3 w-3 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
+                        <span className="text-xs font-medium text-purple-700">
+                            Warranty{isPastLife ? ' (won\'t cover)' : ''}
+                        </span>
+                    </div>
+                )}
+                {!hasBooking && !hasWarranty && hasTask && existingTask && <ScheduledBadge task={existingTask} />}
+            </div>
+        );
+    };
+
     return (
         <Card>
             <CardHeader>
                 <CardTitle>Detailed Asset Risk Matrix</CardTitle>
-                <CardDescription>A component-by-component breakdown of your home's risks, exposure, and potential actions.</CardDescription>
+                <CardDescription>A component-by-component breakdown of your home&apos;s risks, exposure, and potential actions.</CardDescription>
             </CardHeader>
             <CardContent>
-                <div className="w-full overflow-x-auto">
+                {/* ===== MOBILE: Card Layout (<md) ===== */}
+                <div className="md:hidden space-y-4">
+                    {details.map((item, index) => {
+                        const data = getAssetRowData(item);
+                        return (
+                            <div
+                                key={index}
+                                className={`rounded-lg border p-4 space-y-3 ${
+                                    item.riskLevel === 'HIGH'
+                                        ? 'border-red-200 bg-red-50/50 dark:border-red-800 dark:bg-red-900/10'
+                                        : 'border-border'
+                                }`}
+                            >
+                                {/* Row 1: Asset name + risk badge */}
+                                <div className="flex justify-between items-start gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <h4 className="font-semibold text-sm leading-tight">
+                                            {item.assetName.replace(/_/g, ' ')}
+                                        </h4>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                            {item.category.replace(/_/g, ' ')} · {item.systemType.replace(/_/g, ' ')}
+                                        </p>
+                                    </div>
+                                    {getRiskBadge(item.riskLevel)}
+                                </div>
+
+                                {/* Row 2: Status badges */}
+                                {(data.hasBooking || data.hasWarranty || data.hasTask) && (
+                                    renderStatusBadges(data)
+                                )}
+
+                                {/* Row 3: Key metrics in 2-col grid */}
+                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                    <div>
+                                        <span className="text-xs text-muted-foreground block">Age / Life</span>
+                                        <span className="font-semibold">{item.age} yrs</span>
+                                        <span className="text-muted-foreground"> / {item.expectedLife} yrs</span>
+                                        {data.isPastLife && (
+                                            <span className="text-red-500 text-xs block">(Past Life)</span>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <span className="text-xs text-muted-foreground block">Out-of-Pocket</span>
+                                        <span className="font-bold text-red-600">{formatCurrency(item.outOfPocketCost)}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs text-muted-foreground block">Probability</span>
+                                        <span className="font-medium">{item.probability.toFixed(2)}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs text-muted-foreground block">Coverage</span>
+                                        <span className="font-medium">{(item.coverageFactor * 100).toFixed(0)}%</span>
+                                    </div>
+                                </div>
+
+                                {/* Row 4: CTA button (full width) */}
+                                {renderCtaButton(item, data, true)}
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* ===== DESKTOP: Table Layout (md+) ===== */}
+                <div className="hidden md:block w-full overflow-x-auto">
                     <Table className="w-full table-auto">
                         <TableHeader>
                             <TableRow>
@@ -270,52 +453,7 @@ const AssetMatrixTable = ({
                         </TableHeader>
                         <TableBody>
                             {details.map((item, index) => {
-                                // 🔑 Check if booking exists for this asset
-                                const insightFactor = item.assetName.replace(/_/g, ' ');
-                                const existingBooking = bookingsByInsightFactor.get(insightFactor);
-                                const hasBooking = !!existingBooking;
-                                
-                                // 🔑 Check if task exists for this asset
-                                const existingTask = tasksBySystemType.get(item.systemType);
-                                const hasTask = !!existingTask;
-
-                                // 🔑 NEW: Check if warranty exists for this asset
-                                const existingWarranty = warrantiesBySystemType.get(item.systemType);
-                                const hasWarranty = !!existingWarranty;
-                                const isPastLife = item.age > item.expectedLife;
-                                
-                                // 🔑 NEW: Determine CTA based on warranty status
-                                let ctaText = '';
-                                let ctaVariant: 'default' | 'secondary' | 'destructive' | 'outline' = 'secondary';
-                                
-                                if (hasBooking) {
-                                    ctaText = 'View Booking';
-                                    ctaVariant = 'outline';
-                                } else if (hasTask) {
-                                    ctaText = 'View Task';
-                                    ctaVariant = 'outline';
-                                } else if (hasWarranty) {
-                                    // Has warranty
-                                    if (isPastLife) {
-                                        ctaText = 'Schedule Replacement';
-                                        ctaVariant = item.riskLevel === 'HIGH' ? 'destructive' : 'default';
-                                    } else {
-                                        ctaText = 'Schedule Inspection';
-                                        ctaVariant = 'secondary';
-                                    }
-                                } else {
-                                    // No warranty
-                                    if (item.riskLevel === 'HIGH' && item.outOfPocketCost > 1000) {
-                                        ctaText = 'Add Home Warranty';
-                                        ctaVariant = 'destructive';
-                                    } else if (item.actionCta) {
-                                        ctaText = item.actionCta;
-                                        ctaVariant = item.riskLevel === 'HIGH' ? 'destructive' : 'secondary';
-                                    } else {
-                                        ctaText = 'Schedule Maintenance';
-                                        ctaVariant = item.riskLevel === 'HIGH' ? 'destructive' : 'secondary';
-                                    }
-                                }
+                                const data = getAssetRowData(item);
 
                                 return (
                                     <TableRow key={index} className={item.riskLevel === 'HIGH' ? 'bg-red-50/50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20' : ''}>
@@ -325,24 +463,7 @@ const AssetMatrixTable = ({
                                                     {item.assetName.replace(/_/g, ' ')}
                                                     <div className="text-xs text-muted-foreground">{item.systemType.replace(/_/g, ' ')}</div>
                                                 </div>
-                                                {/* 🔑 Show BOTH booking and warranty badges when both exist */}
-                                                {hasBooking && (
-                                                    <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-50 border border-blue-200">
-                                                        <Calendar className="h-3 w-3 text-blue-600" />
-                                                        <span className="text-xs font-medium text-blue-700">Booked</span>
-                                                    </div>
-                                                )}
-                                                {hasWarranty && (  // ✅ Shows regardless of booking status
-                                                    <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-purple-50 border border-purple-200">
-                                                        <svg className="h-3 w-3 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                                                        </svg>
-                                                        <span className="text-xs font-medium text-purple-700">
-                                                            Warranty{isPastLife ? ' (won\'t cover)' : ''}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                                {!hasBooking && !hasWarranty && hasTask && <ScheduledBadge task={existingTask} />}
+                                                {renderStatusBadges(data)}
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
@@ -350,7 +471,7 @@ const AssetMatrixTable = ({
                                         </TableCell>
                                         <TableCell className="whitespace-nowrap">
                                             <span className="font-semibold">{item.age} yrs</span> / {item.expectedLife} yrs
-                                            {isPastLife && <span className="text-red-500 text-xs ml-2">(Past Life)</span>}
+                                            {data.isPastLife && <span className="text-red-500 text-xs ml-2">(Past Life)</span>}
                                         </TableCell>
                                         <TableCell className="whitespace-nowrap">
                                             {getRiskBadge(item.riskLevel)}
@@ -360,45 +481,7 @@ const AssetMatrixTable = ({
                                             <div className="text-xs text-muted-foreground whitespace-normal">P: {item.probability.toFixed(2)} / C: {(item.coverageFactor * 100).toFixed(0)}%</div>
                                         </TableCell>
                                         <TableCell className="whitespace-nowrap">
-                                            {(ctaText === 'Schedule Inspection' || ctaText === 'Schedule Replacement') ? (
-                                                <Button 
-                                                    size="sm" 
-                                                    variant={ctaVariant}
-                                                    asChild
-                                                    className="gap-1"
-                                                >
-                                                    <Link href={{
-                                                        pathname: '/dashboard/providers',
-                                                        query: {
-                                                            category: getServiceCategoryForAsset(item.systemType),
-                                                            insightFactor: item.assetName.replace(/_/g, ' '),
-                                                            propertyId: propertyId
-                                                        }
-                                                    }}>
-                                                        {ctaText}
-                                                    </Link>
-                                                </Button>
-                                            ) : (
-                                                <Button 
-                                                    size="sm" 
-                                                    variant={ctaVariant}
-                                                    onClick={() => {
-                                                        if (hasBooking) {
-                                                            onViewBooking(existingBooking);
-                                                        } else if (hasTask) {
-                                                            onViewTask(existingTask);
-                                                        } else if (ctaText === 'Add Home Warranty') {
-                                                            window.location.href = `/dashboard/warranties?action=new&from=risk-assessment`;
-                                                        } else {
-                                                            onScheduleInspection(item);
-                                                        }
-                                                    }}
-                                                    className="gap-1"
-                                                >
-                                                    {(hasBooking || hasTask) && <Calendar className="h-3 w-3" />}
-                                                    {ctaText}
-                                                </Button>
-                                            )}
+                                            {renderCtaButton(item, data)}
                                         </TableCell>
                                     </TableRow>
                                 );
@@ -863,7 +946,7 @@ export default function RiskAssessmentPage() {
     const renderDetailedSections = () => {
         if (isCalculating || isQueued) {
             return (
-                <Card className="md:col-span-3">
+                <Card className="col-span-full">
                     <CardHeader className="flex flex-row items-center justify-start space-y-0 pb-2">
                         <Loader2 className="h-5 w-5 animate-spin mr-3 text-primary" />
                         <CardTitle>Calculating Risks...</CardTitle>
@@ -892,7 +975,7 @@ export default function RiskAssessmentPage() {
                         onViewBooking={handleViewBooking}
                     />
                     
-                    <div className="grid gap-4 md:grid-cols-4">
+                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
                         <RiskCategorySummaryCard 
                             category={'STRUCTURE'} 
                             details={report.details} 
@@ -920,7 +1003,7 @@ export default function RiskAssessmentPage() {
 
         // Default fallback when not loading and no data found
         return (
-            <Card className="md:col-span-4">
+            <Card className="col-span-full">
                 <CardHeader><CardTitle>No Detailed Risk Data</CardTitle></CardHeader>
                 <CardContent><CardDescription>Update your property details (like HVAC install year, roof type, appliance ages) to generate component risk summaries. The score displayed above (if any) is based on general property attributes and defaults.</CardDescription></CardContent>
             </Card>
@@ -932,7 +1015,7 @@ export default function RiskAssessmentPage() {
             <PageHeader>
                 <Button 
                     variant="link" 
-                    className="p-0 h-auto mb-2 text-sm text-muted-foreground"
+                    className="p-0 h-auto mb-2 text-sm text-muted-foreground min-h-[44px] flex items-center"
                     onClick={() => router.back()}
                 >
                     <ArrowLeft className="h-4 w-4 mr-1" /> Back
@@ -943,8 +1026,8 @@ export default function RiskAssessmentPage() {
             </PageHeader>
 
             {/* --- Risk Summary Banner --- */}
-            <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-4">
-                <Card className="md:col-span-1 border-2 border-primary/50">
+            <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                <Card className="sm:col-span-1 border-2 border-primary/50">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-base font-medium">Risk Score</CardTitle>
                         <Shield className="h-5 w-5 text-muted-foreground" />
@@ -969,7 +1052,7 @@ export default function RiskAssessmentPage() {
                     </CardContent>
                 </Card>
 
-                <Card className="md:col-span-2 lg:col-span-2">
+                <Card className="sm:col-span-2 lg:col-span-2">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-base font-medium">Total Financial Exposure (5-Year)</CardTitle>
                         <DollarSign className="h-5 w-5 text-red-600" />
@@ -990,14 +1073,14 @@ export default function RiskAssessmentPage() {
                     </CardContent>
                 </Card>
                 
-                <Card className="md:col-span-3 lg:col-span-1 flex flex-col justify-between">
+                <Card className="sm:col-span-2 lg:col-span-1 flex flex-col justify-between">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium">Tools & Export</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-2">
                             <Button 
-                                className="w-full" 
+                                className="w-full min-h-[44px]" 
                                 disabled={isCalculating || isQueued}
                                 onClick={handleDownloadPdf}
                                 variant={isPremium ? 'default' : 'secondary'}
@@ -1016,7 +1099,7 @@ export default function RiskAssessmentPage() {
                             {isQueued ? (
                                 <Button 
                                     variant="outline" 
-                                    className="w-full" 
+                                    className="w-full min-h-[44px]" 
                                     onClick={() => riskQuery.refetch()} 
                                     disabled={riskQuery.isFetching}
                                 >
@@ -1026,7 +1109,7 @@ export default function RiskAssessmentPage() {
                             ) : (
                                 <Button 
                                     variant="secondary" 
-                                    className="w-full" 
+                                    className="w-full min-h-[44px]" 
                                     onClick={() => riskQuery.refetch()} 
                                     disabled={riskQuery.isFetching || isCalculating} // Disabled if initiating a fetch
                                 >

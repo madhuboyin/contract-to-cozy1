@@ -10,7 +10,8 @@ import { registerServiceWorker } from '@/lib/pwa';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
-    registerServiceWorker();
+    const cleanup = registerServiceWorker();
+    return cleanup;
   }, []);
 
   return (

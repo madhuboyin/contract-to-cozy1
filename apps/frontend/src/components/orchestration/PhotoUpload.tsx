@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Upload, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -33,6 +33,14 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
   const [photos, setPhotos] = useState<UploadedPhoto[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // Revoke all object URLs on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      photos.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleFileSelect = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -85,16 +93,15 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
       try {
         const result = await onUpload(file, photos.length);
         
-        setPhotos((prev) =>
-          prev.map((p) =>
+        setPhotos((prev) => {
+          const next = prev.map((p) =>
             p.id === tempPhoto.id
               ? { ...p, id: result.id, thumbnailUrl: result.thumbnailUrl, uploading: false }
               : p
-          )
-        );
-
-        // Update parent with photo IDs
-        onPhotosChange([...photos.map(p => p.id), result.id]);
+          );
+          onPhotosChange(next.map((p) => p.id));
+          return next;
+        });
       } catch (error: any) {
         setPhotos((prev) =>
           prev.map((p) =>
@@ -113,8 +120,13 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
   };
 
   const handleRemove = (photoId: string) => {
-    setPhotos((prev) => prev.filter((p) => p.id !== photoId));
-    onPhotosChange(photos.filter(p => p.id !== photoId).map(p => p.id));
+    setPhotos((prev) => {
+      const removed = prev.find((p) => p.id === photoId);
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      const next = prev.filter((p) => p.id !== photoId);
+      onPhotosChange(next.map((p) => p.id));
+      return next;
+    });
   };
 
   const handleDrop = (e: React.DragEvent) => {

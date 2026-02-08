@@ -1,26 +1,29 @@
 // apps/frontend/src/lib/pwa.ts
 
 /**
- * Register the service worker for PWA functionality
+ * Register the service worker for PWA functionality.
+ * Returns a cleanup function that clears the update interval.
  */
-export function registerServiceWorker() {
-  if (typeof window === 'undefined') return;
-  
+export function registerServiceWorker(): (() => void) | undefined {
+  if (typeof window === 'undefined') return undefined;
+
   if (!('serviceWorker' in navigator)) {
     console.log('Service workers not supported');
-    return;
+    return undefined;
   }
 
-  window.addEventListener('load', async () => {
+  let intervalId: ReturnType<typeof setInterval> | undefined;
+
+  const onLoad = async () => {
     try {
       const registration = await navigator.serviceWorker.register('/sw.js', {
         scope: '/'
       });
 
-      console.log('✅ Service Worker registered:', registration.scope);
+      console.log('Service Worker registered:', registration.scope);
 
       // Check for updates every hour
-      setInterval(() => {
+      intervalId = setInterval(() => {
         registration.update();
       }, 60 * 60 * 1000);
 
@@ -31,8 +34,6 @@ export function registerServiceWorker() {
 
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            console.log('🔄 New service worker available');
-            // Optionally show update notification to user
             if (window.confirm('A new version is available. Reload to update?')) {
               window.location.reload();
             }
@@ -41,9 +42,16 @@ export function registerServiceWorker() {
       });
 
     } catch (error) {
-      console.error('❌ Service Worker registration failed:', error);
+      console.error('Service Worker registration failed:', error);
     }
-  });
+  };
+
+  window.addEventListener('load', onLoad, { once: true });
+
+  return () => {
+    if (intervalId !== undefined) clearInterval(intervalId);
+    window.removeEventListener('load', onLoad);
+  };
 }
 
 /**
@@ -105,7 +113,9 @@ export function isPWA(): boolean {
 }
 
 /**
- * Get install prompt event
+ * Get install prompt event.
+ * Listens for the beforeinstallprompt event and resolves with it,
+ * or resolves with null after 3 seconds. Cleans up the listener in both cases.
  */
 export function getInstallPrompt(): Promise<any> {
   return new Promise((resolve) => {
@@ -114,17 +124,24 @@ export function getInstallPrompt(): Promise<any> {
       return;
     }
 
-    let deferredPrompt: any = null;
+    let settled = false;
 
-    window.addEventListener('beforeinstallprompt', (e) => {
+    const handler = (e: Event) => {
       e.preventDefault();
-      deferredPrompt = e;
-      resolve(deferredPrompt);
-    });
+      if (!settled) {
+        settled = true;
+        window.removeEventListener('beforeinstallprompt', handler);
+        resolve(e);
+      }
+    };
+
+    window.addEventListener('beforeinstallprompt', handler);
 
     // Timeout after 3 seconds
     setTimeout(() => {
-      if (!deferredPrompt) {
+      if (!settled) {
+        settled = true;
+        window.removeEventListener('beforeinstallprompt', handler);
         resolve(null);
       }
     }, 3000);

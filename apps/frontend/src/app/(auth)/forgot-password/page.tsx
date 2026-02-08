@@ -13,15 +13,14 @@ async function requestPasswordReset(email: string) {
     body: JSON.stringify({ email }),
   });
 
-  const data = await response.json();
-  
-  // Follows security best practice: client-side success is independent of email existence.
-  if (!response.ok) {
-    // If the API call itself fails (network, server error), still show generic success message to user.
-    console.error('API Error:', data);
+  // Server errors (5xx) should surface to the user so they can retry
+  if (response.status >= 500) {
+    throw new Error('Server error. Please try again later.');
   }
 
-  return { success: true, message: data.data?.message || 'If an account with that email exists, a password reset link has been sent.' };
+  // For 4xx responses (including "user not found"), show generic success
+  // to prevent email enumeration attacks.
+  return { success: true, message: 'If an account with that email exists, a password reset link has been sent.' };
 }
 
 export default function ForgotPasswordPage() {
@@ -42,13 +41,10 @@ export default function ForgotPasswordPage() {
 
     setLoading(true);
     try {
-      // The result is intentionally ignored if there was a success message,
-      // as we always display the generic message for security.
       await requestPasswordReset(email);
       setSuccess(true);
     } catch (err: any) {
-        // Fallback catch for network errors, still sets success to true for security.
-        setSuccess(true);
+      setError(err.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }

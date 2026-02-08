@@ -4,31 +4,49 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 /**
- * Helper function to decode JWT and extract user role
+ * Decode JWT payload and extract user role.
+ *
+ * IMPORTANT: This is an UNVERIFIED decode — it reads the payload without
+ * checking the signature. It is used ONLY for client-side routing hints
+ * (e.g. redirecting providers to /providers/dashboard). It is NOT a security
+ * boundary. All actual authorization is enforced by the backend API which
+ * verifies the JWT signature on every request.
+ *
+ * We also reject obviously expired tokens so stale cookies don't cause
+ * redirect loops.
  */
 function getUserRoleFromToken(token: string | undefined): string | null {
   if (!token) return null;
-  
+
   try {
-    // JWT structure: header.payload.signature
-    const base64Url = token.split('.')[1];
-    if (!base64Url) return null;
-    
-    // Decode base64url to base64
+    const parts = token.split('.');
+    // A valid JWT has exactly 3 parts
+    if (parts.length !== 3) return null;
+
+    const base64Url = parts[1];
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    
-    // Decode base64 to string
+
     const jsonPayload = decodeURIComponent(
       atob(base64)
         .split('')
         .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
         .join('')
     );
-    
+
     const decoded = JSON.parse(jsonPayload);
-    return decoded.role || null;
-  } catch (error) {
-    console.error('Error decoding token:', error);
+
+    // Reject expired tokens
+    if (decoded.exp && decoded.exp * 1000 < Date.now()) {
+      return null;
+    }
+
+    const role = decoded.role;
+    // Only accept known roles
+    if (role === 'HOMEOWNER' || role === 'PROVIDER' || role === 'ADMIN') {
+      return role;
+    }
+    return null;
+  } catch {
     return null;
   }
 }
