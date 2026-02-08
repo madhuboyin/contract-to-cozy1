@@ -1383,8 +1383,13 @@ class APIClient {
   async listDocuments(propertyId?: string): Promise<APIResponse<{
     documents: Document[];
   }>> {
-    const queryParams = propertyId ? `?propertyId=${propertyId}` : '';
-    return this.request<{ documents: Document[] }>(`/api/documents${queryParams}`);
+    const queryParams = new URLSearchParams();
+    if (propertyId) {
+      queryParams.append('propertyId', propertyId);
+    }
+    const query = queryParams.toString();
+    const url = query ? `/api/documents?${query}` : '/api/documents';
+    return this.request<{ documents: Document[] }>(url);
   }
 
   /**
@@ -1505,6 +1510,7 @@ class APIClient {
     }
   ): Promise<APIResponse<CommunityEventsResponse>> {
     const queryParams = new URLSearchParams();
+    const encodedPropertyId = encodeURIComponent(propertyId);
     
     if (params?.limit) {
       queryParams.append('limit', params.limit.toString());
@@ -1516,8 +1522,8 @@ class APIClient {
   
     const query = queryParams.toString();
     const url = query
-      ? `/api/v1/properties/${propertyId}/community/events?${query}`
-      : `/api/v1/properties/${propertyId}/community/events`;
+      ? `/api/v1/properties/${encodedPropertyId}/community/events?${query}`
+      : `/api/v1/properties/${encodedPropertyId}/community/events`;
   
     return this.request<CommunityEventsResponse>(url, {
       method: 'GET',
