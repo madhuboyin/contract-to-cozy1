@@ -236,6 +236,42 @@ export default function HomeownerBookingsPage() {
     }
   };
 
+  const renderActionsMenu = (booking: Booking) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Booking actions for ${booking.bookingNumber}`}
+          className="h-11 w-11 inline-flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <MoreVertical className="w-5 h-5 text-gray-500" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem asChild>
+          <Link href={`/dashboard/bookings/${booking.id}`} className="w-full cursor-pointer">
+            View Details
+          </Link>
+        </DropdownMenuItem>
+
+        {canEditBooking(booking.status) && (
+          <DropdownMenuItem onClick={() => handleEditClick(booking)}>
+            Edit Booking
+          </DropdownMenuItem>
+        )}
+
+        {canCancelBooking(booking.status) && (
+          <DropdownMenuItem
+            onClick={() => handleCancelClick(booking)}
+            className="text-red-600 focus:text-red-600"
+          >
+            Cancel Booking
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -313,23 +349,69 @@ export default function HomeownerBookingsPage() {
         ) : (
           <div className="bg-white rounded-lg shadow overflow-hidden">
             {/* Table Header */}
-            <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wider">
-              <div className="col-span-3">Service</div>
-              <div className="col-span-2">Date & Time</div>
-              <div className="col-span-3">Property</div>
-              <div className="col-span-2">Status</div>
-              <div className="col-span-2 text-right">Actions</div>
+            <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <div className="md:col-span-3">Service</div>
+              <div className="md:col-span-2">Date & Time</div>
+              <div className="md:col-span-3">Property</div>
+              <div className="md:col-span-2">Status</div>
+              <div className="md:col-span-2 text-right">Actions</div>
             </div>
 
-            {/* Table Rows */}
+            {/* Mobile cards + desktop rows */}
             <div className="divide-y divide-gray-100">
               {filteredBookings.map((booking) => (
                 <div
                   key={booking.id}
-                  className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-gray-50 transition-colors items-center"
+                  className="p-4 md:grid md:grid-cols-12 md:gap-4 md:px-6 md:py-4 md:hover:bg-gray-50 md:transition-colors md:items-center"
                 >
+                  {/* Mobile top row */}
+                  <div className="flex items-start justify-between gap-4 md:hidden">
+                    <div className="min-w-0">
+                      <div className="font-medium text-gray-900 text-sm truncate">
+                        {booking.service?.name || 'Service'}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1 truncate">
+                        {booking.provider?.businessName || 'Provider'}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        #{booking.bookingNumber}
+                      </div>
+                    </div>
+                    <div className="shrink-0">{renderActionsMenu(booking)}</div>
+                  </div>
+
+                  {/* Mobile details */}
+                  <div className="mt-4 space-y-2 md:hidden">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Date</span>
+                      <span className="text-sm text-gray-900">{formatDate(booking.scheduledDate)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Time</span>
+                      <span className="text-sm text-gray-900">{formatTime(booking.scheduledDate)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Price</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        ${parseFloat(booking.estimatedPrice).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="pt-1">
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Property</span>
+                      <div className="mt-1 text-sm text-gray-900 break-words">
+                        {formatProperty(booking.property)}
+                      </div>
+                    </div>
+                    <div className="pt-1">
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Status</span>
+                      <div className="mt-1">
+                        <StatusDot status={booking.status} />
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Service Column */}
-                  <div className="col-span-3">
+                  <div className="hidden md:block md:col-span-3">
                     <div className="font-medium text-gray-900 text-sm">
                       {booking.service?.name || 'Service'}
                     </div>
@@ -342,7 +424,7 @@ export default function HomeownerBookingsPage() {
                   </div>
 
                   {/* Date & Time Column */}
-                  <div className="col-span-2">
+                  <div className="hidden md:block md:col-span-2">
                     <div className="text-sm text-gray-900">
                       {formatDate(booking.scheduledDate)}
                     </div>
@@ -355,7 +437,7 @@ export default function HomeownerBookingsPage() {
                   </div>
 
                   {/* Property Column */}
-                  <div className="col-span-3">
+                  <div className="hidden md:block md:col-span-3">
                     <div className="text-sm text-gray-900 truncate">
                       {booking.property?.address || 'N/A'}
                     </div>
@@ -367,41 +449,13 @@ export default function HomeownerBookingsPage() {
                   </div>
 
                   {/* Status Column */}
-                  <div className="col-span-2">
+                  <div className="hidden md:block md:col-span-2">
                     <StatusDot status={booking.status} />
                   </div>
 
                   {/* Actions Column */}
-                  <div className="col-span-2 text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                          <MoreVertical className="w-5 h-5 text-gray-500" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuItem asChild>
-                          <Link href={`/dashboard/bookings/${booking.id}`} className="w-full cursor-pointer">
-                            View Details
-                          </Link>
-                        </DropdownMenuItem>
-                        
-                        {canEditBooking(booking.status) && (
-                          <DropdownMenuItem onClick={() => handleEditClick(booking)}>
-                            Edit Booking
-                          </DropdownMenuItem>
-                        )}
-                        
-                        {canCancelBooking(booking.status) && (
-                          <DropdownMenuItem 
-                            onClick={() => handleCancelClick(booking)}
-                            className="text-red-600 focus:text-red-600"
-                          >
-                            Cancel Booking
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                  <div className="hidden md:block md:col-span-2 text-right">
+                    <div className="inline-flex">{renderActionsMenu(booking)}</div>
                   </div>
                 </div>
               ))}
@@ -412,7 +466,7 @@ export default function HomeownerBookingsPage() {
 
       {/* Edit Modal - Keep existing modal code */}
       {showEditModal && editingBooking && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start sm:items-center justify-center overflow-y-auto p-4 sm:py-6 z-50">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
@@ -496,8 +550,8 @@ export default function HomeownerBookingsPage() {
 
       {/* Cancel Modal - Keep existing modal code */}
       {showCancelModal && cancellingBooking && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start sm:items-center justify-center overflow-y-auto p-4 sm:py-6 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">Cancel Booking</h2>
