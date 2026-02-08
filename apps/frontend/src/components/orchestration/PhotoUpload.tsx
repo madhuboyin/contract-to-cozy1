@@ -32,6 +32,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
 }) => {
   const [photos, setPhotos] = useState<UploadedPhoto[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const nextOrderIndexRef = useRef(0);
   const { toast } = useToast();
 
   // Revoke all object URLs on unmount to prevent memory leaks
@@ -41,6 +42,19 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Keep order indexes monotonic even if state changes during async uploads.
+  useEffect(() => {
+    nextOrderIndexRef.current = Math.max(nextOrderIndexRef.current, photos.length);
+  }, [photos.length]);
+
+  // Notify parent from committed state instead of inside setState callbacks.
+  useEffect(() => {
+    const uploadedPhotoIds = photos
+      .filter((photo) => !photo.id.startsWith('temp-') && !photo.uploading && !photo.error)
+      .map((photo) => photo.id);
+    onPhotosChange(uploadedPhotoIds);
+  }, [photos, onPhotosChange]);
 
   const handleFileSelect = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -56,8 +70,6 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
     }
 
     const filesToUpload = Array.from(files).slice(0, remainingSlots);
-    let orderIndex = photos.length;
-
     for (const file of filesToUpload) {
       // Validate file type
       if (!['image/jpeg', 'image/png', 'image/heic'].includes(file.type)) {
@@ -88,7 +100,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
         uploading: true,
       };
 
-      const currentIndex = orderIndex++;
+      const currentIndex = nextOrderIndexRef.current++;
       setPhotos((prev) => [...prev, tempPhoto]);
 
       // Upload
@@ -96,14 +108,11 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
         const result = await onUpload(file, currentIndex);
 
         setPhotos((prev) => {
-          const next = prev.map((p) =>
+          return prev.map((p) =>
             p.id === tempPhoto.id
               ? { ...p, id: result.id, thumbnailUrl: result.thumbnailUrl, uploading: false }
               : p
           );
-          // Notify parent after state update resolves
-          queueMicrotask(() => onPhotosChange(next.filter(p => !p.id.startsWith('temp-')).map(p => p.id)));
-          return next;
         });
       } catch (error: any) {
         setPhotos((prev) =>
@@ -126,9 +135,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
     setPhotos((prev) => {
       const removed = prev.find((p) => p.id === photoId);
       if (removed) URL.revokeObjectURL(removed.previewUrl);
-      const next = prev.filter((p) => p.id !== photoId);
-      onPhotosChange(next.map((p) => p.id));
-      return next;
+      return prev.filter((p) => p.id !== photoId);
     });
   };
 

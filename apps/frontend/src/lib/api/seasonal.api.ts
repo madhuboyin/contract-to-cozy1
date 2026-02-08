@@ -2,6 +2,25 @@
 import { api as apiClient } from './client';
 import { Season, ClimateRegion, NotificationTiming } from '@/types/seasonal.types';
 
+function assertMutationData<T>(response: { data?: T }, action: string): T {
+  const payload = response?.data;
+  if (payload == null) {
+    throw new Error(`Failed to ${action}`);
+  }
+
+  // Some endpoints may still return an inner success envelope.
+  if (
+    typeof payload === 'object' &&
+    payload !== null &&
+    'success' in (payload as Record<string, unknown>) &&
+    (payload as { success?: boolean }).success === false
+  ) {
+    throw new Error(`Failed to ${action}`);
+  }
+
+  return payload;
+}
+
 export const seasonalAPI = {
   /**
    * FIX: Added /api prefix to all endpoints to match backend mounting in index.ts
@@ -86,19 +105,16 @@ export const seasonalAPI = {
     }
   ) => {
     const response = await apiClient.post(`/api/seasonal-checklist-items/${itemId}/add-to-tasks`, options);
-    if (!response.data) throw new Error('Failed to add task to checklist');
-    return response.data;
+    return assertMutationData(response, 'add task to checklist');
   },
 
   dismissTask: async (itemId: string) => {
     const response = await apiClient.post(`/api/seasonal-checklist-items/${itemId}/dismiss`);
-    if (!response.data) throw new Error('Failed to dismiss task');
-    return response.data;
+    return assertMutationData(response, 'dismiss task');
   },
 
   snoozeTask: async (itemId: string, days: number = 7) => {
     const response = await apiClient.post(`/api/seasonal-checklist-items/${itemId}/snooze`, { days });
-    if (!response.data) throw new Error('Failed to snooze task');
-    return response.data;
+    return assertMutationData(response, 'snooze task');
   },
 };
