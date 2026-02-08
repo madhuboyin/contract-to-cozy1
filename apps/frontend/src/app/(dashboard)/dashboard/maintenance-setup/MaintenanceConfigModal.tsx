@@ -747,12 +747,27 @@ export function MaintenanceConfigModal({
         )}
         </div>
 
-        <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-between gap-2 px-4 pb-4 sm:px-6 sm:pb-6 pt-2 shrink-0 border-t">
+        <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-between gap-2 px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:pb-6 shrink-0 border-t">
           {/* Remove Button (Editing Only) */}
           {!isNew && (
-            <Button variant="destructive" onClick={handleRemove} disabled={isSubmitting} className="min-h-[44px] w-full sm:w-auto">
-              Remove Task
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                onClick={handleRemove}
+                disabled={isSubmitting}
+                className="min-h-[44px] w-full sm:hidden border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+              >
+                Remove Task
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleRemove}
+                disabled={isSubmitting}
+                className="min-h-[44px] hidden sm:inline-flex sm:w-auto"
+              >
+                Remove Task
+              </Button>
+            </>
           )}
           <div className="flex gap-2 w-full sm:w-auto">
             <Button variant="ghost" onClick={onClose} disabled={isSubmitting} className="min-h-[44px] flex-1 sm:flex-initial">
