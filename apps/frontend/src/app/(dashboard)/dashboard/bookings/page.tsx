@@ -316,8 +316,8 @@ export default function HomeownerBookingsPage() {
 
         {/* FULL MODAL IMPLEMENTATIONS (PRESERVING ALL ORIGINAL LOGIC) */}
         {showEditModal && editingBooking && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto animate-in fade-in zoom-in duration-200">
               <div className="flex items-center justify-between p-6 border-b">
                 <h2 className="text-xl font-bold">Edit Booking</h2>
                 <button onClick={() => setShowEditModal(false)} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
@@ -353,8 +353,8 @@ export default function HomeownerBookingsPage() {
         )}
 
         {showCancelModal && cancellingBooking && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto animate-in fade-in zoom-in duration-200">
               <div className="p-6 text-center">
                 <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
                   <X className="w-8 h-8 text-red-600" />
