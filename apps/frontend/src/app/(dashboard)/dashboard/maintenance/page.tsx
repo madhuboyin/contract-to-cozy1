@@ -438,7 +438,7 @@ export default function MaintenancePage() {
         </Link>
       )}
 
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
           <Wrench className="w-7 h-7 text-blue-600" /> Home Tasks & Reminders
         </h2>
@@ -641,7 +641,7 @@ export default function MaintenancePage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-9 w-9 text-green-600"
+                        className="h-11 w-11 text-green-600"
                         onClick={() => handleMarkComplete.mutate(task)}
                       >
                         <CheckCircle className="w-5 h-5" />
@@ -650,7 +650,7 @@ export default function MaintenancePage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-9 w-9"
+                      className="h-11 w-11"
                       onClick={() => isCompleted ? handleViewModal(task) : handleOpenModal(task)}
                     >
                       {isCompleted ? <Eye className="w-5 h-5" /> : <Edit className="w-5 h-5" />}
@@ -680,7 +680,8 @@ export default function MaintenancePage() {
                 <CardDescription>No open tasks right now.</CardDescription>
               </Card>
             ) : (
-              <div className="rounded-md border">
+              <>
+              <div className="hidden md:block rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -767,6 +768,64 @@ export default function MaintenancePage() {
                   </TableBody>
                 </Table>
               </div>
+              <div className="md:hidden space-y-4">
+                {openTasks.map((task) => {
+                  const dueDateInfo = formatDueDate(task.nextDueDate);
+
+                  return (
+                    <Card key={task.id} className="p-4 border">
+                      <div className="flex justify-between items-start mb-2 gap-2">
+                        <div className="min-w-0">
+                          <h3 className="font-bold text-base leading-tight">{task.title}</h3>
+                          <p className="text-xs text-muted-foreground">{formatCategory(task.serviceCategory)}</p>
+                        </div>
+                        <Badge
+                          className={cn(
+                            task.priority === 'URGENT' && 'bg-red-100 text-red-700',
+                            task.priority === 'HIGH' && 'bg-orange-100 text-orange-700',
+                            'text-[10px] px-1.5 py-0 shrink-0'
+                          )}
+                        >
+                          {task.priority}
+                        </Badge>
+                      </div>
+
+                      <p className="text-sm text-gray-600 line-clamp-2 mb-3">
+                        {task.description || 'No description'}
+                      </p>
+
+                      <div className="flex justify-between items-center text-sm border-t pt-3">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] uppercase text-muted-foreground">Next Due</span>
+                          <span className={cn('font-semibold', dueDateInfo.color)}>{dueDateInfo.text}</span>
+                        </div>
+
+                        <div className="flex gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-11 w-11 text-green-600"
+                            onClick={() => handleMarkComplete.mutate(task)}
+                            title="Mark Complete"
+                          >
+                            <CheckCircle className="w-5 h-5" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-11 w-11"
+                            onClick={() => handleOpenModal(task)}
+                            title="Edit Task"
+                          >
+                            <Edit className="w-5 h-5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+              </>
             )}
           </div>
 
@@ -783,7 +842,8 @@ export default function MaintenancePage() {
                 <CardDescription>Try expanding the completed time range.</CardDescription>
               </Card>
             ) : (
-              <div className="rounded-md border">
+              <>
+              <div className="hidden md:block rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -862,12 +922,58 @@ export default function MaintenancePage() {
                   </TableBody>
                 </Table>
               </div>
+              <div className="md:hidden space-y-4">
+                {completedTasks.map((task) => {
+                  const dueDateInfo = formatDueDate(task.nextDueDate);
+                  return (
+                    <Card key={task.id} className="p-4 border opacity-80">
+                      <div className="flex justify-between items-start mb-2 gap-2">
+                        <div className="min-w-0">
+                          <h3 className="font-bold text-base leading-tight">{task.title}</h3>
+                          <p className="text-xs text-muted-foreground">{formatCategory(task.serviceCategory)}</p>
+                        </div>
+                        <Badge
+                          className={cn(
+                            task.priority === 'URGENT' && 'bg-red-100 text-red-700',
+                            task.priority === 'HIGH' && 'bg-orange-100 text-orange-700',
+                            'text-[10px] px-1.5 py-0 shrink-0'
+                          )}
+                        >
+                          {task.priority}
+                        </Badge>
+                      </div>
+
+                      <p className="text-sm text-gray-600 line-clamp-2 mb-3">
+                        {task.description || 'No description'}
+                      </p>
+
+                      <div className="flex justify-between items-center text-sm border-t pt-3">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] uppercase text-muted-foreground">Next Due</span>
+                          <span className={cn('font-semibold', dueDateInfo.color)}>{dueDateInfo.text}</span>
+                        </div>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-11 w-11"
+                          onClick={() => handleViewModal(task)}
+                          title="View Task"
+                        >
+                          <Eye className="w-5 h-5" />
+                        </Button>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+              </>
             )}
           </div>
         </div>
       )}
       <Dialog open={isViewOpen} onOpenChange={(open) => (open ? setIsViewOpen(true) : handleCloseView())}>
-        <DialogContent className="sm:max-w-[560px]">
+        <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
