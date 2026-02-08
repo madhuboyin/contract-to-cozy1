@@ -15,35 +15,14 @@ interface HomeBuyerChecklistCardProps {
 }
 
 export const HomeBuyerChecklistCard = ({ items, className }: HomeBuyerChecklistCardProps) => {
-  // DEBUG: Log what we received to understand the filtering issue
-  console.log('🏠 HomeBuyerChecklistCard - Received items:', items?.length || 0);
-  
-  if (!items || items.length === 0) {
-    console.warn('⚠️ HomeBuyerChecklistCard received NO ITEMS - This is the bug!');
-    console.log('🏠 Items value:', items);
-  } else {
-    console.log('🏠 Items breakdown:', items.map(i => ({
-      id: i.id,
-      title: i.title,
-      isRecurring: i.isRecurring,
-      status: i.status,
-      propertyId: i.propertyId
-    })));
-  }
-  
   // Filter only items relevant to the home buyer (non-recurring maintenance/renewal items)
   const buyerItems = (items || []).filter(item => !item.isRecurring);
-  
-  console.log('🏠 After isRecurring filter - buyerItems:', buyerItems.length);
-  console.log('🏠 Filtered items:', buyerItems.map(i => ({ title: i.title, status: i.status })));
   
   // Calculate counts
   const completedCount = buyerItems.filter(i => i.status === 'COMPLETED').length;
   const totalCount = buyerItems.length;
   const pendingCount = totalCount - completedCount;
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
-  
-  console.log('🏠 Stats:', { totalCount, completedCount, pendingCount, progress: Math.round(progress) + '%' });
   
   // Determine card state
   const allComplete = totalCount > 0 && completedCount === totalCount;

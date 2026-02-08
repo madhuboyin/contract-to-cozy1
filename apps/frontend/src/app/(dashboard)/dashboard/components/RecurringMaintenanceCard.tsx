@@ -94,25 +94,21 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
               {displayTasks.map((task) => {
                 const statusBadge = getStatusBadge(task);
                 return (
-                  <div 
-                    key={task.id}
-                    className="flex items-start justify-between p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
-                  >
-                    <div className="flex-1 min-w-0 pr-2">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {task.title}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {task.nextDueDate 
-                          ? `Due ${format(new Date(task.nextDueDate), 'MMM dd, yyyy')}`
-                          : 'No due date set'
-                        }
-                      </p>
-                    </div>
-                    <Badge className={`shrink-0 ${statusBadge.className}`}>
-                      {statusBadge.label}
-                    </Badge>
+                // Inside displayTasks.map:
+                <div key={task.id} className="flex items-start justify-between p-3 rounded-lg bg-gray-50">
+                  {/* FIXED: min-w-0 is required for truncate to work inside a flex parent */}
+                  <div className="flex-1 min-w-0 pr-2">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {task.title}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Due {task.nextDueDate ? format(new Date(task.nextDueDate), 'MMM dd') : 'N/A'}
+                    </p>
                   </div>
+                  <Badge className={`shrink-0 ${statusBadge.className}`}>
+                    {statusBadge.label}
+                  </Badge>
+                </div>
                 );
               })}
             </div>

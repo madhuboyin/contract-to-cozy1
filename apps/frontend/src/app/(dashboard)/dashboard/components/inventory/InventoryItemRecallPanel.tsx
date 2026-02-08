@@ -34,9 +34,7 @@ export default function InventoryItemRecallPanel(props: {
         props.propertyId,
         props.inventoryItemId
       );
-  
-      console.log('[InventoryItemRecallPanel] matches:', res?.matches);
-  
+
       setRows(res?.matches ?? []);
     } catch (e: any) {
       console.error('Recall fetch error:', e);
@@ -46,9 +44,6 @@ export default function InventoryItemRecallPanel(props: {
       setLoading(false);
     }
   }
-  
-  console.log('rows', rows);
-
   useEffect(() => {
     if (!props.open) return;
 
@@ -107,8 +102,6 @@ export default function InventoryItemRecallPanel(props: {
   // Optional: if you only want to show actionable statuses in this panel:
   // const visibleRows = safeRows.filter(m => m.status === 'OPEN' || m.status === 'DETECTED' || m.status === 'NEEDS_CONFIRMATION');
   const visibleRows = safeRows;
-  console.log('safeRows', safeRows);
-  console.log('visibleRows', visibleRows);
 
   return (
     

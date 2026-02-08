@@ -441,8 +441,6 @@ useEffect(() => {
   useEffect(() => {
     if (!props.open) return;
     const item = props.initialItem;
-    console.log('[InventoryItemDrawer] reset effect fired', { open: props.open, initialItem: props.initialItem });
-    console.log('[InventoryItemDrawer] initialItem:', props.initialItem);
     setName(item?.name ?? '');
     setCategory(item?.category ?? 'OTHER');
     setCondition(item?.condition ?? 'UNKNOWN');
@@ -671,8 +669,6 @@ useEffect(() => {
       // IMPORTANT: backend returns {success:true,data:{...}} now
       const data = unwrapBarcodeLookupResponse(raw);
   
-      console.log('[InventoryItemDrawer] barcode lookup response:', data);
-  
       setLastScannedCode(trimmed);
   
       // name/category (best-effort)
@@ -745,9 +741,8 @@ useEffect(() => {
     if (!draftId) return;
     try {
       await dismissInventoryDraft(props.propertyId, draftId);
-    } catch (e) {
+    } catch {
       // non-blocking; still clear local state so user can retry cleanly
-      console.warn('Dismiss draft failed', e);
     } finally {
       setDraftId('');
       setConfidenceByField({});
