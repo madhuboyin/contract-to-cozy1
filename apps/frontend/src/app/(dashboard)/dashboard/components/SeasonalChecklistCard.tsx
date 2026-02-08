@@ -72,9 +72,9 @@ export const SeasonalChecklistCard: React.FC<SeasonalChecklistCardProps> = ({
         } else {
           setChecklist(null);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Error fetching seasonal checklist:', err);
-        setError(err.message || 'Failed to load seasonal checklist');
+        setError(err instanceof Error ? err.message : 'Failed to load seasonal checklist');
         setChecklist(null);
       } finally {
         setLoading(false);

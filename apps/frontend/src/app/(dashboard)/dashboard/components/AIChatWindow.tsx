@@ -11,11 +11,36 @@ import { Send, Bot, User } from 'lucide-react';
 import { ChatMessage } from '@/types'; // Import the new ChatMessage type
 import { api } from '@/lib/api/client';
 
+type UIChatMessage = ChatMessage & { id: string };
+
+const MessageBubble = ({ message }: { message: UIChatMessage }) => {
+  const isUser = message.role === 'user';
+
+  return (
+    <div className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
+      <div className={`flex max-w-[80%] ${isUser ? 'flex-row-reverse' : 'flex-row'} gap-3 items-start`}>
+        <Avatar className={isUser ? 'order-1' : 'order-2'}>
+          <AvatarFallback className={`${isUser ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>
+            {isUser ? <User size={16} /> : <Bot size={16} />}
+          </AvatarFallback>
+        </Avatar>
+        <div
+          className={`p-3 rounded-lg shadow-md ${isUser
+            ? 'bg-primary text-primary-foreground rounded-br-none'
+            : 'bg-secondary text-secondary-foreground rounded-tl-none'
+          }`}
+        >
+          <p className="whitespace-pre-wrap">{message.text}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /**
  * A basic chat window component that talks to the secure backend proxy.
  */
 export const AIChatWindow = () => {
-  type UIChatMessage = ChatMessage & { id: string };
 
   const [messages, setMessages] = useState<UIChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -80,12 +105,13 @@ export const AIChatWindow = () => {
         setMessages((prev) => [...prev, errorMessage]);
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error communicating with AI service:", error);
+      const detail = error instanceof Error ? error.message : 'Please try again later.';
       const errorMessage: UIChatMessage = {
         id: nextMessageId(),
         role: 'model',
-        text: `Error: The AI service could not process your request. ${error.response?.data?.message || 'Please try again later.'}`
+        text: `Error: The AI service could not process your request. ${detail}`
       }
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -98,30 +124,6 @@ export const AIChatWindow = () => {
       e.preventDefault();
       handleSendMessage();
     }
-  };
-
-  const MessageBubble = ({ message }: { message: UIChatMessage }) => {
-    const isUser = message.role === 'user';
-    
-    return (
-      <div className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
-        <div className={`flex max-w-[80%] ${isUser ? 'flex-row-reverse' : 'flex-row'} gap-3 items-start`}>
-          <Avatar className={isUser ? 'order-1' : 'order-2'}>
-            <AvatarFallback className={`${isUser ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>
-              {isUser ? <User size={16} /> : <Bot size={16} />}
-            </AvatarFallback>
-          </Avatar>
-          <div 
-            className={`p-3 rounded-lg shadow-md ${isUser 
-              ? 'bg-primary text-primary-foreground rounded-br-none' 
-              : 'bg-secondary text-secondary-foreground rounded-tl-none'
-            }`}
-          >
-            <p className="whitespace-pre-wrap">{message.text}</p>
-          </div>
-        </div>
-      </div>
-    );
   };
 
   return (

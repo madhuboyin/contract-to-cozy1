@@ -202,7 +202,7 @@ function HealthInsightList({ property }: { property: ScoredProperty }) {
                   {insight.factor}
                 </p>
                 <p className="text-sm text-blue-600 font-medium mt-1">
-                  Status: **{insight.status}**
+                  Status: <strong>{insight.status}</strong>
                 </p>
                 {insight.details && insight.details.length > 0 && (
                   <ul className="text-xs text-gray-600 mt-2 ml-4 list-disc space-y-1">

@@ -62,8 +62,8 @@ export default function BudgetForecaster({ propertyId }: BudgetForecasterProps) 
       } else {
         setError(response.message || 'Failed to load forecast');
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load forecast');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load forecast');
     } finally {
       setLoading(false);
     }

@@ -51,7 +51,7 @@ export function HealthInsightList({ property }: HealthInsightListProps) {
                                     {insight.factor}
                                 </p>
                                 <p className="text-sm text-blue-600 font-medium mt-1">
-                                    Status: **{insight.status}**
+                                    Status: <strong>{insight.status}</strong>
                                 </p>
                                 
                                 {/* FIX 3: Display appliance details if available */}
@@ -75,7 +75,7 @@ export function HealthInsightList({ property }: HealthInsightListProps) {
 }
 
 // Helper function to render a button based on the insight factor/status
-const renderContextualButton = (insight: any, propertyId: string) => {
+const renderContextualButton = (insight: { factor: string; status: string; score: number; details?: string[] }, propertyId: string) => {
     
     // Appliance warranty actions - redirect to warranties page
     if (insight.factor.includes('Appliances') && insight.status === 'Needs Warranty') {

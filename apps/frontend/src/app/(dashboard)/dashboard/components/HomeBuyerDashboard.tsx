@@ -205,7 +205,7 @@ export const HomeBuyerDashboard = ({
 
         {/* Inspection Report Intelligence - Featured for Home Buyers */}
         <div className="lg:col-span-2">
-          <Link href={`/dashboard/inspection-report?propertyId=${primaryPropertyId}`}>
+          <Link href={primaryPropertyId ? `/dashboard/inspection-report?propertyId=${primaryPropertyId}` : '/dashboard/inspection-report'}>
             <div className="relative bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-xl p-6 hover:shadow-xl transition-all cursor-pointer group overflow-hidden">
               <div className="absolute top-4 right-4">
                 <Sparkles className="w-6 h-6 text-purple-500 animate-pulse" />

@@ -66,7 +66,9 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
                 propertyId: report.propertyId,
                 propertyName: null,
                 riskScore: report.riskScore,
-                financialExposureTotal: parseFloat(report.financialExposureTotal as unknown as string),
+                financialExposureTotal: typeof report.financialExposureTotal === 'number'
+                    ? report.financialExposureTotal
+                    : parseFloat(String(report.financialExposureTotal || 0)) || 0,
                 lastCalculatedAt: report.lastCalculatedAt,
                 status: 'CALCULATED' as RiskSummaryStatus,
             } as PrimaryRiskSummary;
@@ -77,8 +79,8 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
             const currentStatus = (query.state.data as PrimaryRiskSummary)?.status;
             return currentStatus === 'QUEUED' ? 10000 : false;
         },
-        staleTime: 0, 
-        gcTime: 0,
+        staleTime: 60_000,
+        gcTime: 5 * 60_000,
         enabled: enabled,
     });
     
