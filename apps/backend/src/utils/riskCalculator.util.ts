@@ -285,7 +285,10 @@ export const calculateAssetRisk = (
     expectedLife,
     replacementCost,
     probability: Math.round(P * 100) / 100,
-    coverageFactor: Math.round(1 - (outOfPocketCost / replacementCost) * 100) / 100, // C is derivative
+    coverageFactor:
+      replacementCost > 0
+        ? Math.round(clamp(1 - outOfPocketCost / replacementCost, 0, 1) * 100) / 100
+        : 0, // C is derivative
     outOfPocketCost: Math.round(outOfPocketCost),
     riskDollar: Math.round(riskDollar),
     riskLevel,

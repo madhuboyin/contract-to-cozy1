@@ -6,7 +6,12 @@
     "dev": "NODE_ENV=development nodemon src/index.ts",
     "build": "tsc",
     "start": "NODE_ENV=production node src/index.ts",
-    "seed": "npx prisma db seed"
+    "seed": "npx prisma db seed",
+    "test": "node --test $(find tests -type f -name '*.test.js')",
+    "test:unit": "node --test $(find tests/unit -type f -name '*.test.js')",
+    "test:integration": "node --test $(find tests/integration -type f -name '*.test.js')",
+    "test:e2e": "node --test $(find tests/e2e -type f -name '*.test.js')",
+    "test:watch": "node --test --watch $(find tests -type f -name '*.test.js')"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

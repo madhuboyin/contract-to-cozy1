@@ -526,11 +526,16 @@ export function MaintenanceConfigModal({
         <DialogHeader className="px-4 pt-4 sm:px-6 sm:pt-6 pb-0 shrink-0">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <DialogTitle className="pr-8 break-words">
-                {isNew ? 'Add Task' : 'Edit Task'}: {title}
+              <DialogTitle className="pr-8 break-words text-xl sm:text-2xl leading-tight">
+                {isNew ? 'Add Task' : 'Edit Task'}
               </DialogTitle>
+              {!!title && (
+                <p className="mt-1 text-sm text-gray-700 break-words line-clamp-2">
+                  {title}
+                </p>
+              )}
 
-              <div className="mt-1 flex items-center gap-2">
+              <div className="mt-1 flex flex-wrap items-center gap-2">
                 <DialogDescription className="m-0">
                   {isNew ? 'Set the next due date and recurrence.' : 'Update task details and schedule.'}
                 </DialogDescription>
@@ -597,12 +602,21 @@ export function MaintenanceConfigModal({
 
           {/* Title */}
           <div className="grid gap-2">
-            <Label htmlFor="title">Task Name</Label>
+            <Label>Task Name</Label>
+            <div className="sm:hidden">
+              <Textarea
+                id="title-mobile"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                rows={2}
+                className="text-base min-h-[44px] leading-tight resize-none"
+              />
+            </div>
             <Input
               id="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="text-base min-h-[44px]"
+              className="hidden sm:block text-base min-h-[44px]"
             />
           </div>
 
@@ -752,10 +766,10 @@ export function MaintenanceConfigModal({
           {!isNew && (
             <>
               <Button
-                variant="outline"
+                variant="ghost"
                 onClick={handleRemove}
                 disabled={isSubmitting}
-                className="min-h-[44px] w-full sm:hidden border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                className="sm:hidden text-red-600 hover:text-red-700 hover:bg-red-50 min-h-[36px] px-2"
               >
                 Remove Task
               </Button>
