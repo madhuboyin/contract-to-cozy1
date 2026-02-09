@@ -84,7 +84,7 @@ export const AddClaimDocumentSchema = z.object({
   fileUrl: z.string().url(),
   fileSize: z.number().int().positive(),
   mimeType: z.string().min(1),
-  metadata: z.any().optional(),
+  metadata: z.unknown().optional(),
 
   // claim-specific metadata
   claimDocumentType: ClaimDocumentTypeSchema.optional(),
@@ -100,7 +100,7 @@ export const AddTimelineEventSchema = z.object({
   title: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
   occurredAt: IsoDateSchema,
-  meta: z.any().optional(),
+  meta: z.unknown().optional(),
   claimDocumentId: z.string().uuid().optional().nullable(),
 });
 

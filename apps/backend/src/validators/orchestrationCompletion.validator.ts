@@ -13,7 +13,7 @@ export const completionCreateSchema = z.object({
 export const completionUpdateSchema = completionCreateSchema.partial();
 
 export const photoUploadSchema = z.object({
-  file: z.any(), // Will validate in controller
+  file: z.unknown(), // Validated in controller
   propertyId: z.string().uuid(),
-  actionKey: z.string(),
+  actionKey: z.string().trim().min(1).max(120),
 });

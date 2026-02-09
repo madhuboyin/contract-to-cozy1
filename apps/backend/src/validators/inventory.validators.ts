@@ -16,7 +16,7 @@ export const createRoomBodySchema = z
     sortOrder: z.number().int().min(0).max(10000).optional(),
 
     // Optional flexible profile payload (JSON)
-    profile: z.record(z.string(), z.any()).optional().nullable(),
+    profile: z.record(z.string(), z.unknown()).optional().nullable(),
   })
   .superRefine((v, ctx) => {
     if (v.type === RoomType.OTHER && (!v.name || !v.name.trim())) {
@@ -36,19 +36,8 @@ export const updateRoomBodySchema = z.object({
   heroImage: z.string().url().optional().nullable(),
 
   // ✅ NEW: questionnaire payload (flexible)
-  profile: z.record(z.string(), z.any()).optional().nullable(),
+  profile: z.record(z.string(), z.unknown()).optional().nullable(),
 });
-
-const jsonValue: z.ZodType<any> = z.lazy(() =>
-  z.union([
-    z.string(),
-    z.number(),
-    z.boolean(),
-    z.null(),
-    z.array(jsonValue),
-    z.record(z.any(), jsonValue), // ✅ keyType + valueType
-  ])
-);
 
 export const updateRoomProfileBodySchema = z.object({
   profile: z.unknown().nullable(), // stored as JSONB (required key)

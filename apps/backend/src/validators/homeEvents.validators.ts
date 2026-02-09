@@ -33,7 +33,7 @@ export const createHomeEventBodySchema = z.object({
   claimId: z.string().uuid().optional().nullable(),
   expenseId: z.string().uuid().optional().nullable(),
 
-  meta: z.any().optional().nullable(),
+  meta: z.unknown().optional().nullable(),
   groupKey: z.string().max(120).optional().nullable(),
   idempotencyKey: z.string().max(160).optional().nullable(),
 });
@@ -56,4 +56,16 @@ export const listHomeEventsQuerySchema = z.object({
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
+}).superRefine((query, ctx) => {
+  if (!query.from || !query.to) return;
+
+  const from = Date.parse(query.from);
+  const to = Date.parse(query.to);
+  if (!Number.isNaN(from) && !Number.isNaN(to) && from > to) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['from'],
+      message: '"from" must be less than or equal to "to"',
+    });
+  }
 });
