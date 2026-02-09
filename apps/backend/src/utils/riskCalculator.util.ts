@@ -252,7 +252,10 @@ export const calculateAssetRisk = (
   const P = calculateProbability(age, expectedLife, warningBump);
 
   // 4. Calculate Coverage Status (C)
-  const hasActiveWarranty = property.warranties.some(w => new Date(w.expiryDate).getFullYear() >= currentYear);
+  const now = new Date();
+  const hasActiveWarranty = property.warranties.some(
+    (w) => Boolean(w.expiryDate && new Date(w.expiryDate) >= now)
+  );
   const hasDwellingInsurance = property.insurancePolicies.length > 0; // Simplified check
   
   // 5. Calculate Out-of-Pocket Cost

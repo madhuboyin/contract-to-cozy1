@@ -1,22 +1,7 @@
 // apps/backend/src/utils/ClimateRiskAnalyzer.util.ts
 
-import { Prisma, Property } from '@prisma/client';
-// Assuming a structure for AssetRiskDetail from riskCalculator.util
-// Note: In a real implementation, this import would be from a shared types file or riskCalculator.util
-interface AssetRiskDetail {
-    assetName: string;
-    systemType: string;
-    category: 'SAFETY' | 'FINANCIAL' | 'MAINTENANCE';
-    age: number;
-    expectedLife: number;
-    replacementCost: number;
-    probability: number;
-    coverageFactor: number;
-    outOfPocketCost: number;
-    riskDollar: number;
-    riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-    actionCta: string;
-}
+import { Prisma, Property, RiskCategory } from '@prisma/client';
+import type { AssetRiskDetail } from './riskCalculator.util';
 
 export interface ClimateRiskInsight {
     riskType: 'FLOOD' | 'FIRE' | 'HEAT' | 'WIND';
@@ -79,19 +64,30 @@ export function analyzeClimateRisk(property: Property): ClimateRiskInsight[] {
  * Transforms the structured climate insights into the generic AssetRiskDetail array
  * for seamless integration into the core risk report JSON data structure.
  */
+function mapClimateScoreToRiskLevel(riskScoreIncrease: number): AssetRiskDetail['riskLevel'] {
+    if (riskScoreIncrease > 20) return 'CRITICAL';
+    if (riskScoreIncrease > 15) return 'HIGH';
+    if (riskScoreIncrease > 10) return 'ELEVATED';
+    if (riskScoreIncrease > 5) return 'MODERATE';
+    return 'LOW';
+}
+
 export function mapClimateToAssetRisk(insights: ClimateRiskInsight[]): AssetRiskDetail[] {
-    return insights.map(i => ({
-        assetName: `Climate Risk: ${i.riskType}`,
-        systemType: i.systemType,
-        category: 'FINANCIAL' as any, // Treat future risk as Financial/Safety exposure
-        age: 0, 
-        expectedLife: 10,
-        replacementCost: 0, 
-        probability: i.riskScoreIncrease / 100, // Probability derived from model score
-        coverageFactor: 0,    
-        outOfPocketCost: i.financialExposureIncrease.toNumber(), 
-        riskDollar: i.financialExposureIncrease.toNumber(),        
-        riskLevel: i.riskScoreIncrease > 20 ? 'CRITICAL' : i.riskScoreIncrease > 10 ? 'HIGH' : 'MEDIUM',
-        actionCta: i.actionCta,
-    })) as AssetRiskDetail[];
+    return insights.map((i): AssetRiskDetail => {
+        const exposure = i.financialExposureIncrease.toNumber();
+        return {
+            assetName: `Climate Risk: ${i.riskType}`,
+            systemType: i.systemType,
+            category: RiskCategory.FINANCIAL_GAP, // Treat future risk as financial exposure
+            age: 0,
+            expectedLife: 10,
+            replacementCost: 0,
+            probability: i.riskScoreIncrease / 100, // Probability derived from model score
+            coverageFactor: 0,
+            outOfPocketCost: exposure,
+            riskDollar: exposure,
+            riskLevel: mapClimateScoreToRiskLevel(i.riskScoreIncrease),
+            actionCta: i.actionCta,
+        };
+    });
 }

@@ -39,12 +39,6 @@ const EXTRA_WEIGHTS = {
   APPLIANCES: 5,
 };
 
-// Interface extension reflecting how property.service.ts sends the data
-interface PropertyWithAssetsForScore extends Property {
-    homeAssets: HomeAsset[];
-    warranties: Warranty[];
-}
-
 /**
  * Helper: Check if a specific insight is being addressed by an active booking
  * UPDATED: Now uses insightFactor field for precise matching
@@ -73,9 +67,15 @@ export function calculateHealthScore(
   let extraScore = 0;
   let maxUnlockableScore = 0;
   const insights: { factor: string; status: string; score: number }[] = [];
-  
-  // Cast the property to access the homeAssets and warranties relation
-  const propertyWithAssets = property as PropertyWithAssetsForScore;
+
+  // Relations are optional at runtime depending on how the caller loaded Property.
+  // Default to empty arrays to avoid runtime crashes when relations are omitted.
+  const relatedHomeAssets = Array.isArray((property as { homeAssets?: HomeAsset[] }).homeAssets)
+    ? ((property as { homeAssets?: HomeAsset[] }).homeAssets ?? [])
+    : [];
+  const relatedWarranties = Array.isArray((property as { warranties?: Warranty[] }).warranties)
+    ? ((property as { warranties?: Warranty[] }).warranties ?? [])
+    : [];
 
   // --- BASE SCORE CALCULATION (MANDATORY FIELDS: MAX 55) ---
 
@@ -290,13 +290,13 @@ export function calculateHealthScore(
   }
   
   // 7. Appliance Ages (Max 5) - FIX 3: Add detailed appliance list
-  const assetCount = propertyWithAssets.homeAssets?.length || 0;
+  const assetCount = relatedHomeAssets.length;
   const maxAssetsForScore = 3; // Define completeness threshold
   
   // Check for active home warranty coverage for any appliance
-  const currentYearCheck = new Date().getFullYear();
-  const hasActiveHomeWarranty = propertyWithAssets.warranties.some(w => 
-      w.expiryDate && new Date(w.expiryDate).getFullYear() >= currentYearCheck
+  const now = new Date();
+  const hasActiveHomeWarranty = relatedWarranties.some(w => 
+      w.expiryDate && new Date(w.expiryDate) >= now
   );
 
   if (assetCount > 0) {
@@ -305,12 +305,12 @@ export function calculateHealthScore(
     let appScore = Math.min(maxScore, assetCount * (maxScore / maxAssetsForScore)); 
     
     // Determine Age Risk: Flag if any primary asset is over 15 years old.
-    const criticallyAging = propertyWithAssets.homeAssets.some(
+    const criticallyAging = relatedHomeAssets.some(
         (a: HomeAsset) => a.installationYear !== null && currentYear - a.installationYear > 15 
     );
     
     // Count appliances needing warranty
-    const appliancesNeedingWarranty = propertyWithAssets.homeAssets.filter((a: HomeAsset) => {
+    const appliancesNeedingWarranty = relatedHomeAssets.filter((a: HomeAsset) => {
         const age = a.installationYear ? currentYear - a.installationYear : 0;
         return age > 15; // Critically aging appliance
     });
