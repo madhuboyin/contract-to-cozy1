@@ -1,28 +1,22 @@
 // apps/backend/src/validators/homeEvents.validators.ts
 import { z } from 'zod';
+import {
+  HomeEventDocumentKind,
+  HomeEventImportance,
+  HomeEventType,
+  HomeEventVisibility,
+} from '@prisma/client';
 
-const HomeEventType = z.enum([
-  'PURCHASE',
-  'REPAIR',
-  'MAINTENANCE',
-  'CLAIM',
-  'IMPROVEMENT',
-  'VALUE_UPDATE',
-  'INSPECTION',
-  'NOTE',
-  'MILESTONE',
-  'OTHER',
-]);
-
-const HomeEventImportance = z.enum(['LOW', 'NORMAL', 'HIGH', 'HIGHLIGHT']);
-const HomeEventVisibility = z.enum(['PRIVATE', 'HOUSEHOLD', 'SHARE_LINK', 'RESALE_PACK']);
-const HomeEventDocumentKind = z.enum(['PHOTO', 'RECEIPT', 'INVOICE', 'PDF', 'BEFORE', 'AFTER', 'OTHER']);
+const HomeEventTypeSchema = z.nativeEnum(HomeEventType);
+const HomeEventImportanceSchema = z.nativeEnum(HomeEventImportance);
+const HomeEventVisibilitySchema = z.nativeEnum(HomeEventVisibility);
+const HomeEventDocumentKindSchema = z.nativeEnum(HomeEventDocumentKind);
 
 export const createHomeEventBodySchema = z.object({
-  type: HomeEventType,
+  type: HomeEventTypeSchema,
   subtype: z.string().min(1).max(80).optional().nullable(),
-  importance: HomeEventImportance.optional(),
-  visibility: HomeEventVisibility.optional(),
+  importance: HomeEventImportanceSchema.optional(),
+  visibility: HomeEventVisibilitySchema.optional(),
 
   occurredAt: z.string().datetime(),
   endAt: z.string().datetime().optional().nullable(),
@@ -48,14 +42,14 @@ export const updateHomeEventBodySchema = createHomeEventBodySchema.partial();
 
 export const attachHomeEventDocumentBodySchema = z.object({
   documentId: z.string().uuid(),
-  kind: HomeEventDocumentKind.optional(),
+  kind: HomeEventDocumentKindSchema.optional(),
   caption: z.string().max(160).optional().nullable(),
   sortOrder: z.number().int().min(0).max(999).optional(),
 });
 
 export const listHomeEventsQuerySchema = z.object({
-  type: HomeEventType.optional(),
-  importance: HomeEventImportance.optional(),
+  type: HomeEventTypeSchema.optional(),
+  importance: HomeEventImportanceSchema.optional(),
   roomId: z.string().uuid().optional(),
   inventoryItemId: z.string().uuid().optional(),
   claimId: z.string().uuid().optional(),

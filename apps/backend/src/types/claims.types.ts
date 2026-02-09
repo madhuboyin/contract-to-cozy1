@@ -55,6 +55,7 @@ export type ClaimTimelineEventType =
   | 'SETTLEMENT_ISSUED'
   | 'CLOSED'
   | 'NOTE'
+  | 'STATUS_CHANGE'
   | 'OTHER';
 
 export type CreateClaimInput = {

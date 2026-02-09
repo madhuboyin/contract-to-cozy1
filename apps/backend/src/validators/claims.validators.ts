@@ -1,67 +1,25 @@
 // apps/backend/src/validators/claims.validators.ts
 import { z } from 'zod';
+import {
+  ClaimChecklistStatus,
+  ClaimDocumentType,
+  ClaimSourceType,
+  ClaimStatus,
+  ClaimTimelineEventType,
+  ClaimType,
+} from '@prisma/client';
 
-export const ClaimTypeSchema = z.enum([
-  'WATER_DAMAGE',
-  'FIRE_SMOKE',
-  'STORM_WIND_HAIL',
-  'THEFT_VANDALISM',
-  'LIABILITY',
-  'HVAC',
-  'PLUMBING',
-  'ELECTRICAL',
-  'APPLIANCE',
-  'OTHER',
-]);
+export const ClaimTypeSchema = z.nativeEnum(ClaimType);
 
-export const ClaimSourceTypeSchema = z.enum([
-  'INSURANCE',
-  'HOME_WARRANTY',
-  'MANUFACTURER_WARRANTY',
-  'OUT_OF_POCKET',
-  'UNKNOWN',
-]);
+export const ClaimSourceTypeSchema = z.nativeEnum(ClaimSourceType);
 
-export const ClaimStatusSchema = z.enum([
-  'DRAFT',
-  'IN_PROGRESS',
-  'SUBMITTED',
-  'UNDER_REVIEW',
-  'APPROVED',
-  'DENIED',
-  'CLOSED',
-]);
+export const ClaimStatusSchema = z.nativeEnum(ClaimStatus);
 
-export const ClaimChecklistStatusSchema = z.enum(['OPEN', 'DONE', 'NOT_APPLICABLE']);
+export const ClaimChecklistStatusSchema = z.nativeEnum(ClaimChecklistStatus);
 
-export const ClaimDocumentTypeSchema = z.enum([
-  'PHOTO',
-  'VIDEO',
-  'INVOICE',
-  'ESTIMATE',
-  'REPORT',
-  'POLICY',
-  'COMMUNICATION',
-  'RECEIPT',
-  'OTHER',
-]);
+export const ClaimDocumentTypeSchema = z.nativeEnum(ClaimDocumentType);
 
-export const ClaimTimelineEventTypeSchema = z.enum([
-  'CREATED',
-  'CHECKLIST_GENERATED',
-  'DOCUMENT_ADDED',
-  'SUBMITTED',
-  'INSPECTION_SCHEDULED',
-  'INSPECTION_COMPLETED',
-  'ESTIMATE_RECEIVED',
-  'FOLLOW_UP',
-  'APPROVED',
-  'DENIED',
-  'SETTLEMENT_ISSUED',
-  'CLOSED',
-  'NOTE',
-  'OTHER',
-]);
+export const ClaimTimelineEventTypeSchema = z.nativeEnum(ClaimTimelineEventType);
 
 const IsoDateSchema = z
   .string()
