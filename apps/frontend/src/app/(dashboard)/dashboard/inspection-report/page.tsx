@@ -9,12 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { api } from '@/lib/api/client';
+import { Property } from '@/types';
 
 function InspectionReportContent() {
   const searchParams = useSearchParams();
   const propertyIdFromUrl = searchParams.get('propertyId');
   
-  const [properties, setProperties] = useState<any[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
   const [selectedPropertyId, setSelectedPropertyId] = useState(propertyIdFromUrl || '');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

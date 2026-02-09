@@ -246,7 +246,7 @@ function RoomRow({
           )}
 
           <div className="text-xs opacity-60 mt-1">
-            Template: <span className="font-medium">{(room as any)?.type || '—'}</span>
+            Template: <span className="font-medium">{('type' in room ? (room as Record<string, unknown>).type as string : null) || '—'}</span>
           </div>
         </div>
 

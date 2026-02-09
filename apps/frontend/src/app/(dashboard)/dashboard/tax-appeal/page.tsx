@@ -8,6 +8,7 @@ import { Scale, Loader2, ArrowLeft } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api/client';
+import { Property } from '@/types';
 import { Button } from '@/components/ui/button';
 
 function TaxAppealContent() {
@@ -15,7 +16,7 @@ function TaxAppealContent() {
   const searchParams = useSearchParams();
   const propertyIdFromUrl = searchParams.get('propertyId');
   
-  const [properties, setProperties] = useState<any[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
   const [selectedPropertyId, setSelectedPropertyId] = useState(propertyIdFromUrl || '');
   const [loading, setLoading] = useState(true);
 

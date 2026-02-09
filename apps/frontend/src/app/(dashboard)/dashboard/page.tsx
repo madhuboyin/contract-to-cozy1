@@ -260,15 +260,15 @@ export default function DashboardPage() {
   
       const scoredProperties = properties.map(p => ({
         ...p,
-        healthScore: (p as any).healthScore || { 
-          totalScore: 0, 
-          baseScore: 0, 
-          unlockedScore: 0, 
-          maxPotentialScore: 100, 
-          maxBaseScore: 70, 
-          maxExtraScore: 30, 
-          insights: [], 
-          ctaNeeded: false 
+        healthScore: (p as unknown as ScoredProperty).healthScore || {
+          totalScore: 0,
+          baseScore: 0,
+          unlockedScore: 0,
+          maxPotentialScore: 100,
+          maxBaseScore: 70,
+          maxExtraScore: 30,
+          insights: [],
+          ctaNeeded: false
         },
       })) as ScoredProperty[];
   
@@ -290,14 +290,17 @@ export default function DashboardPage() {
   
       // Extract user type from first property
       if (scoredProperties.length > 0) {
-        const firstProperty = scoredProperties[0] as any;
-        
+        const firstProperty = scoredProperties[0] as ScoredProperty & Record<string, unknown>;
+
         let detectedUserType = null;
-        
-        if (firstProperty.homeownerProfile?.userType) {
-          detectedUserType = firstProperty.homeownerProfile.userType;
-        } else if (firstProperty.user?.homeownerProfile?.userType) {
-          detectedUserType = firstProperty.user.homeownerProfile.userType;
+
+        const profile = (firstProperty as Record<string, unknown>).homeownerProfile as Record<string, unknown> | undefined;
+        const userProfile = ((firstProperty as Record<string, unknown>).user as Record<string, unknown> | undefined)?.homeownerProfile as Record<string, unknown> | undefined;
+
+        if (profile?.userType) {
+          detectedUserType = profile.userType as string;
+        } else if (userProfile?.userType) {
+          detectedUserType = userProfile.userType as string;
         }
 
         if (detectedUserType) {

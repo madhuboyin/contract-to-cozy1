@@ -94,7 +94,7 @@ export type SellHoldRentDTO = {
     rentNetDelta: number;
 
     // (Optional future fields ok)
-    [k: string]: any;
+    [k: string]: unknown;
   }>;
 
   recommendation: {
@@ -215,7 +215,12 @@ export async function getSellHoldRent(propertyId: string, input: SellHoldRentInp
   // IMPORTANT:
   // This controller returns a keyed payload: { sellHoldRent: dto }
   // NOT { success, data: { sellHoldRent: dto } }
-  const json = await authedFetchJson<any>(
+  type RawResponse = {
+    sellHoldRent?: SellHoldRentDTO;
+    data?: { sellHoldRent?: SellHoldRentDTO; sell_hold_rent?: SellHoldRentDTO };
+  };
+
+  const json = await authedFetchJson<RawResponse>(
     `/api/properties/${propertyId}/tools/sell-hold-rent?${params.toString()}`
   );
 

@@ -103,7 +103,7 @@ export default function CommunityPage() {
         </p>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as 'events' | 'trash' | 'alerts')}>
         <TabsList>
           <TabsTrigger value="events">
             <Calendar className="w-4 h-4 mr-2" />

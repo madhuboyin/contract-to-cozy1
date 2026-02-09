@@ -91,7 +91,7 @@ const DocumentUploadModal = ({ parentEntityId, parentEntityType, onUploadSuccess
     } else {
       toast({
         title: 'Upload Failed',
-        description: (res as any)?.message || 'An unexpected error occurred.',
+        description: res && typeof res === 'object' && 'message' in res ? (res as {message: string}).message : 'Operation failed',
         variant: 'destructive'
       });
     }

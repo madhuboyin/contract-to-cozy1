@@ -79,8 +79,8 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
             const currentStatus = (query.state.data as PrimaryRiskSummary)?.status;
             return currentStatus === 'QUEUED' ? 10000 : false;
         },
-        staleTime: 60_000,
-        gcTime: 5 * 60_000,
+        staleTime: 5 * 60 * 1000,
+        gcTime: 10 * 60 * 1000,
         enabled: enabled,
     });
     

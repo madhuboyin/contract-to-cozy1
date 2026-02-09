@@ -40,8 +40,8 @@ export default function HomeCostGrowthClient() {
       const r = await getHomeCostGrowth(propertyId, { years });
       if (reqId !== reqRef.current) return;
       setData(r);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load cost growth estimate');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load cost growth estimate');
     } finally {
       setLoading(false);
     }

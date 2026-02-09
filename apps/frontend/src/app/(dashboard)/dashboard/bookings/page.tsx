@@ -393,7 +393,7 @@ export default function HomeownerBookingsPage() {
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Price</span>
                       <span className="text-sm font-medium text-gray-900">
-                        ${parseFloat(booking.estimatedPrice).toFixed(2)}
+                        ${Number(booking.estimatedPrice || 0).toFixed(2)}
                       </span>
                     </div>
                     <div className="pt-1">
@@ -432,7 +432,7 @@ export default function HomeownerBookingsPage() {
                       {formatTime(booking.scheduledDate)}
                     </div>
                     <div className="text-xs text-gray-900 font-medium mt-1">
-                      ${parseFloat(booking.estimatedPrice).toFixed(2)}
+                      ${Number(booking.estimatedPrice || 0).toFixed(2)}
                     </div>
                   </div>
 

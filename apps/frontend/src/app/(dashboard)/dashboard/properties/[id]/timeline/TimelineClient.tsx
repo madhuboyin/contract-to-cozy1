@@ -5,7 +5,7 @@ import React, { useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 
-import { listHomeEvents } from './homeEventsApi';
+import { listHomeEvents, HomeEvent } from './homeEventsApi';
 
 // Optional: if you have shared UI components already, feel free to swap these out.
 // Keeping it plain + drop-in.
@@ -39,7 +39,7 @@ function iconForType(type?: string) {
 
 export type TimelineClientProps = {
   // Controlled mode (provided by parent to avoid double-fetch)
-  events?: any[];
+  events?: HomeEvent[];
   isLoading?: boolean;
   error?: unknown;
   isFetching?: boolean;
@@ -65,23 +65,19 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
     queryKey,
     enabled: !!propertyId && !isControlled,
     queryFn: async () => {
-      const res: any = await listHomeEvents(propertyId, {
+      const res = await listHomeEvents(propertyId, {
         type: type || undefined,
         limit,
       });
 
-      // Support multiple shapes:
-      // 1) AxiosResponse -> res.data = { success, data: { events } }
-      // 2) Wrapper-unwrapped -> res = { success, data: { events } }
-      // 3) Fully unwrapped -> res = { events }
       const payload = res?.data ?? res;
-      const inner = payload?.data ?? payload;
-      const events = inner?.events ?? [];
-      return Array.isArray(events) ? events : [];
+      const inner = (payload as Record<string, unknown>)?.data ?? payload;
+      const events = (inner as Record<string, unknown>)?.events ?? [];
+      return Array.isArray(events) ? (events as HomeEvent[]) : [];
     },
   });
 
-  const events = (isControlled ? props.events : (query.data ?? [])) as any[];
+  const events: HomeEvent[] = isControlled ? (props.events ?? []) : (query.data ?? []);
   const isLoading = isControlled ? !!props.isLoading : query.isLoading;
   const error = isControlled ? props.error : query.error;
   const isFetching = isControlled ? !!props.isFetching : query.isFetching;
@@ -167,7 +163,7 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
         <div className="rounded-lg border p-4 text-sm">
           Failed to load timeline.
           <div className="mt-2 text-xs text-muted-foreground">
-            {(error as any)?.message ?? 'Unknown error'}
+            {error instanceof Error ? error.message : 'Unknown error'}
           </div>
         </div>
       ) : events.length === 0 ? (
@@ -176,7 +172,7 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
         </div>
       ) : (
         <div className="space-y-3">
-          {events.map((e: any) => (
+          {events.map((e) => (
             <div key={e.id} className="rounded-lg border p-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
@@ -199,7 +195,7 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
                   {/* Attachments preview */}
                   {Array.isArray(e.documents) && e.documents.length > 0 ? (
                     <div className="mt-3 flex flex-wrap gap-2">
-                      {e.documents.slice(0, 6).map((d: any) => (
+                      {e.documents.slice(0, 6).map((d) => (
                         <Badge key={d.id}>
                           {d.kind || 'DOC'}: {d.document?.name || 'Attachment'}
                         </Badge>
@@ -216,13 +212,16 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
               </div>
 
               {/* Semantic promotion debug (optional) */}
-              {e?.meta?.semantic ? (
-                <div className="mt-3 text-xs text-muted-foreground">
-                  Semantic: {e.meta.semantic.promoted ? 'promoted' : 'not promoted'}
-                  {e.meta.semantic.confidence != null ? ` · conf=${e.meta.semantic.confidence}` : ''}
-                  {e.meta.semantic.reason ? ` · ${e.meta.semantic.reason}` : ''}
-                </div>
-              ) : null}
+              {e?.meta?.semantic && typeof e.meta.semantic === 'object' ? (() => {
+                const sem = e.meta.semantic as Record<string, unknown>;
+                return (
+                  <div className="mt-3 text-xs text-muted-foreground">
+                    Semantic: {sem.promoted ? 'promoted' : 'not promoted'}
+                    {sem.confidence != null ? ` · conf=${sem.confidence}` : ''}
+                    {sem.reason ? ` · ${String(sem.reason)}` : ''}
+                  </div>
+                );
+              })() : null}
             </div>
           ))}
         </div>

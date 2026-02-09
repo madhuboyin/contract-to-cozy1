@@ -39,8 +39,8 @@ export default function InsuranceTrendClient() {
       const r = await getInsuranceTrend(propertyId, { years });
       if (reqId !== reqRef.current) return;
       setData(r);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load insurance trend');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load insurance trend');
     } finally {
       setLoading(false);
     }

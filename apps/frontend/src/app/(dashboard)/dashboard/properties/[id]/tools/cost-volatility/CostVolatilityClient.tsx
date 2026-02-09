@@ -56,8 +56,8 @@ export default function CostVolatilityClient() {
       const r = await getCostVolatility(propertyId, { years: nextYears });
       if (reqId !== reqRef.current) return;
       setData(r);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load cost volatility');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load cost volatility');
     } finally {
       setLoading(false);
     }

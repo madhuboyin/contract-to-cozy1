@@ -40,16 +40,19 @@ export const HomeBuyerDashboard = ({
     notNeeded: number;
     progressPercentage: number;
   } | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
+        setStatsError(null);
         const response = await api.getHomeBuyerTaskStats();
         if (response.success) {
           setStats(response.data);
         }
       } catch (error) {
         console.error('Failed to fetch stats:', error);
+        setStatsError(error instanceof Error ? error.message : 'Unknown error');
       }
     };
 

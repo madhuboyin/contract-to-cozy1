@@ -30,8 +30,8 @@ export default function TrueCostClient() {
     try {
       const r = await getTrueCostOwnership(propertyId);
       setData(r);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load true cost');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load true cost');
     } finally {
       setLoading(false);
     }

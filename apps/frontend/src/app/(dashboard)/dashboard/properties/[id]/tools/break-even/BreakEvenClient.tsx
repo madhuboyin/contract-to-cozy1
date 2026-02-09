@@ -51,8 +51,8 @@ export default function BreakEvenClient() {
       const r = await getBreakEven(propertyId, { years: nextYears });
       if (reqId !== reqRef.current) return;
       setData(r);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load break-even estimate');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load break-even estimate');
     } finally {
       setLoading(false);
     }

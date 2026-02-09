@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { Booking } from '@/types';
@@ -74,11 +74,7 @@ export default function BookingDetailsPage() {
     message?: string;
   } | null>(null);
 
-  useEffect(() => {
-    fetchBooking();
-  }, [params.id]);
-
-  const fetchBooking = async () => {
+  const fetchBooking = useCallback(async () => {
     try {
       setLoading(true);
       setErrorState(null);
@@ -86,22 +82,27 @@ export default function BookingDetailsPage() {
       if (response.success) {
         setBooking(response.data);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching booking:', error);
       setBooking(null);
-      const status = error?.status;
+      const status = (error as { status?: number })?.status;
       if (status === 404) {
         setErrorState({ kind: 'NOT_FOUND' });
       } else {
+        const message = error instanceof Error ? error.message : undefined;
         setErrorState({
           kind: 'REQUEST_FAILED',
-          message: typeof error?.message === 'string' ? error.message : undefined,
+          message,
         });
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, [params.id]);
+
+  useEffect(() => {
+    fetchBooking();
+  }, [fetchBooking]);
 
   if (loading) {
     return (
@@ -179,7 +180,7 @@ export default function BookingDetailsPage() {
                 {booking.finalPrice ? 'Final Price' : 'Estimated Price'}
               </p>
               <p className={`text-xl font-bold ${booking.finalPrice ? 'text-green-600' : 'text-gray-900'}`}>
-                ${parseFloat(booking.finalPrice || booking.estimatedPrice).toFixed(2)}
+                ${Number(booking.finalPrice || booking.estimatedPrice || 0).toFixed(2)}
               </p>
             </div>
             <div className="text-right">
@@ -285,14 +286,14 @@ export default function BookingDetailsPage() {
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Estimated Price</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    ${parseFloat(booking.estimatedPrice).toFixed(2)}
+                    ${Number(booking.estimatedPrice || 0).toFixed(2)}
                   </p>
                 </div>
                 {booking.finalPrice && (
                   <div className="pt-4 border-t border-gray-200">
                     <p className="text-sm text-gray-500 mb-1">Final Price</p>
                     <p className="text-2xl font-bold text-green-600">
-                      ${parseFloat(booking.finalPrice).toFixed(2)}
+                      ${Number(booking.finalPrice || 0).toFixed(2)}
                     </p>
                   </div>
                 )}
@@ -300,7 +301,7 @@ export default function BookingDetailsPage() {
                   <div>
                     <p className="text-sm text-gray-500 mb-1">Deposit Paid</p>
                     <p className="text-base font-medium text-gray-900">
-                      ${parseFloat(booking.depositAmount).toFixed(2)}
+                      ${Number(booking.depositAmount || 0).toFixed(2)}
                     </p>
                   </div>
                 )}

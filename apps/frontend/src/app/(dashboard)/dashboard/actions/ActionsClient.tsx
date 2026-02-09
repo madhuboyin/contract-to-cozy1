@@ -56,7 +56,7 @@ export function ActionsClient() {
   const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false);
   const [completionAction, setCompletionAction] = useState<OrchestratedActionDTO | null>(null);
 
-  const loadActions = async () => {
+  const loadActions = useCallback(async () => {
     if (!propertyId) {
       setError('No property selected.');
       setLoading(false);
@@ -94,11 +94,11 @@ export function ActionsClient() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [propertyId]);
 
   useEffect(() => {
     loadActions();
-  }, [propertyId]);
+  }, [loadActions]);
 
   // CTA handler - opens modal
   const handleActionCta = (action: OrchestratedActionDTO) => {

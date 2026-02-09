@@ -40,8 +40,8 @@ export default function CostExplainerClient() {
       const r = await getCostExplainer(propertyId, { years: nextYears });
       if (reqId !== reqRef.current) return;
       setData(r);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load explainer');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load explainer');
     } finally {
       setLoading(false);
     }

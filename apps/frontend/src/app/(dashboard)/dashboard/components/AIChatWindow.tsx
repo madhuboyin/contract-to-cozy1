@@ -49,7 +49,7 @@ export const AIChatWindow = () => {
   const messageCounterRef = useRef(0);
 
   // Generates a simple, unique session ID for the current client lifecycle
-  const [sessionId] = useState(() => Date.now().toString());
+  const [sessionId] = useState(() => crypto.randomUUID());
 
   // Auto-scroll to the bottom on new message
   useEffect(() => {

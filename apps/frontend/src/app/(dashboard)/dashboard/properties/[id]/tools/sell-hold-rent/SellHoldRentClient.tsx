@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/sell-hold-rent/SellHoldRentClient.tsx
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { SectionHeader } from '@/app/(dashboard)/dashboard/components/SectionHeader';
 import HomeToolsRail from '../../components/HomeToolsRail';
@@ -62,7 +62,7 @@ export default function SellHoldRentClient() {
     monthlyPayment: '',
   });
 
-  async function loadSimulator(y: 5 | 10) {
+  const loadSimulator = useCallback(async (y: 5 | 10) => {
     if (!propertyId) return;
     setLoading(true);
     setError(null);
@@ -70,14 +70,14 @@ export default function SellHoldRentClient() {
     try {
       const dto = await getSellHoldRent(propertyId, { years: y });
       setData(dto);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load simulator');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load simulator');
     } finally {
       setLoading(false);
     }
-  }
+  }, [propertyId]);
 
-  async function loadOverrides() {
+  const loadOverrides = useCallback(async () => {
     if (!propertyId) return;
     setOvLoading(true);
     try {
@@ -97,9 +97,9 @@ export default function SellHoldRentClient() {
     } finally {
       setOvLoading(false);
     }
-  }
+  }, [propertyId]);
 
-  async function loadSnapshot() {
+  const loadSnapshot = useCallback(async () => {
     if (!propertyId) return;
     setSnapLoading(true);
     try {
@@ -115,14 +115,13 @@ export default function SellHoldRentClient() {
     } finally {
       setSnapLoading(false);
     }
-  }
+  }, [propertyId]);
 
   useEffect(() => {
     loadSimulator(years);
     loadOverrides();
     loadSnapshot();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [propertyId]);
+  }, [loadSimulator, loadOverrides, loadSnapshot, years]);
 
   const hasScenarioData =
     !!data?.scenarios?.sell &&
@@ -280,7 +279,7 @@ export default function SellHoldRentClient() {
               <div>Projected sale: <span className="font-medium">{money(data?.scenarios?.sell?.projectedSalePrice)}</span></div>
               <div>Selling costs: <span className="font-medium">{money(data?.scenarios?.sell?.sellingCosts)}</span></div>
               {'mortgagePayoff' in (data?.scenarios?.sell || {}) && (
-                <div>Mortgage payoff: <span className="font-medium">{money((data?.scenarios as any)?.sell?.mortgagePayoff)}</span></div>
+                <div>Mortgage payoff: <span className="font-medium">{money(data?.scenarios?.sell?.mortgagePayoff)}</span></div>
               )}
             </div>
 
@@ -299,10 +298,10 @@ export default function SellHoldRentClient() {
               <div>Appreciation gain: <span className="font-medium">{money(data?.scenarios?.hold?.appreciationGain)}</span></div>
               <div>Ownership costs: <span className="font-medium">{money(data?.scenarios?.hold?.totalOwnershipCosts)}</span></div>
               {'mortgageInterestCost' in (data?.scenarios?.hold || {}) && (
-                <div>Mortgage interest: <span className="font-medium">{money((data?.scenarios as any)?.hold?.mortgageInterestCost)}</span></div>
+                <div>Mortgage interest: <span className="font-medium">{money(data?.scenarios?.hold?.mortgageInterestCost)}</span></div>
               )}
               {'principalToEquity' in (data?.scenarios?.hold || {}) && (
-                <div>Principal to equity: <span className="font-medium">{money((data?.scenarios as any)?.hold?.principalToEquity)}</span></div>
+                <div>Principal to equity: <span className="font-medium">{money(data?.scenarios?.hold?.principalToEquity)}</span></div>
               )}
             </div>
 
@@ -329,10 +328,10 @@ export default function SellHoldRentClient() {
                 </span>
               </div>
               {'mortgageInterestCost' in (data?.scenarios?.rent || {}) && (
-                <div>Mortgage interest: <span className="font-medium">{money((data?.scenarios as any)?.rent?.mortgageInterestCost)}</span></div>
+                <div>Mortgage interest: <span className="font-medium">{money(data?.scenarios?.rent?.mortgageInterestCost)}</span></div>
               )}
               {'principalToEquity' in (data?.scenarios?.rent || {}) && (
-                <div>Principal to equity: <span className="font-medium">{money((data?.scenarios as any)?.rent?.principalToEquity)}</span></div>
+                <div>Principal to equity: <span className="font-medium">{money(data?.scenarios?.rent?.principalToEquity)}</span></div>
               )}
             </div>
 
@@ -459,7 +458,7 @@ export default function SellHoldRentClient() {
 
                   for (const k of keys) {
                     const n = toNum(overrideDraft[k] || '');
-                    if (n !== undefined) (patch as any)[k] = n;
+                    if (n !== undefined) patch[k] = n;
                   }
 
                   setOvSaving(true);

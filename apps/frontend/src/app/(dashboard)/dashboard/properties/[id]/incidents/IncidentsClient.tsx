@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/incidents/IncidentsClient.tsx
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 
 import { SectionHeader } from '../../../components/SectionHeader';
@@ -51,9 +51,9 @@ export default function IncidentsClient() {
       // ✅ FIX: Added optional chaining and nullish coalescing to ensure we never 
       // set items to anything other than an array, even if the API structure changes.
       setItems(res?.items ?? []);
-    } catch (e: any) {
+    } catch (e: unknown) {
       // ✅ Better error extraction for Axios/API responses
-      const errorMessage = e?.response?.data?.message || e?.message || 'Failed to load incidents';
+      const errorMessage = e instanceof Error ? e.message : 'Failed to load incidents';
       setErr(errorMessage);
     } finally {
       setLoading(false);
