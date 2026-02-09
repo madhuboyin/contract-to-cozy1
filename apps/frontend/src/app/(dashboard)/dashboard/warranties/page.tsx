@@ -172,13 +172,21 @@ const DocumentUploadModal = ({ parentEntityId, parentEntityType, onUploadSuccess
         setUploadError(null);
 
         try {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('documentType', docType);
-            formData.append('parentEntityId', parentEntityId);
-            formData.append('parentEntityType', parentEntityType);
+            const inputData: DocumentUploadInput = {
+                type: docType,
+                name: file.name,
+            };
+            
+            // Dynamically assign the correct parent ID
+            if (parentEntityType === 'warranty') {
+                inputData.warrantyId = parentEntityId;
+            } else if (parentEntityType === 'policy') {
+                inputData.policyId = parentEntityId;
+            } else if (parentEntityType === 'property') {
+                inputData.propertyId = parentEntityId;
+            }
 
-            const res = await api.uploadDocument(formData);
+            const res = await api.uploadDocument(file, inputData);
 
             if (res.success) {
                 toast({ title: 'Document Uploaded', description: 'File uploaded successfully.' });
