@@ -1,15 +1,14 @@
 // apps/backend/src/utils/FinancialCalculator.util.ts
 
-import { Decimal } from '@prisma/client/runtime/library';
-import { Property, InsurancePolicy, Warranty, Expense, FinancialEfficiencyConfig } from '@prisma/client';
+import { Prisma, Property, InsurancePolicy, Warranty, Expense, FinancialEfficiencyConfig } from '@prisma/client';
 
 // --- Internal Types for Calculation Results ---
 export interface FinancialCalculationResult {
     score: number;
-    actualInsuranceCost: Decimal;
-    actualUtilityCost: Decimal;
-    actualWarrantyCost: Decimal;
-    marketAverageTotal: Decimal;
+    actualInsuranceCost: Prisma.Decimal;
+    actualUtilityCost: Prisma.Decimal;
+    actualWarrantyCost: Prisma.Decimal;
+    marketAverageTotal: Prisma.Decimal;
 }
 
 // --- Input type for the calculation ---
@@ -23,19 +22,16 @@ export interface CalculationInputs {
 
 // --- Main Calculation Logic (Pure Function) ---
 export function calculateFinancialEfficiency(inputs: CalculationInputs): FinancialCalculationResult {
-    const { property, insurancePolicies, warranties, utilityExpenses, benchmark } = inputs;
-
-    console.log(`[FES-CALC] Starting calculation for property: ${property.id}`);
+    const { insurancePolicies, warranties, utilityExpenses, benchmark } = inputs;
 
     // If no benchmark is found, we cannot calculate the score.
     if (!benchmark) {
-        console.log(`[FES-CALC] No benchmark found for property ${property.id}`);
         return {
             score: 0, 
-            actualInsuranceCost: new Decimal(0),
-            actualUtilityCost: new Decimal(0),
-            actualWarrantyCost: new Decimal(0),
-            marketAverageTotal: new Decimal(0),
+            actualInsuranceCost: new Prisma.Decimal(0),
+            actualUtilityCost: new Prisma.Decimal(0),
+            actualWarrantyCost: new Prisma.Decimal(0),
+            marketAverageTotal: new Prisma.Decimal(0),
         };
     }
 
@@ -43,29 +39,25 @@ export function calculateFinancialEfficiency(inputs: CalculationInputs): Financi
 
     const actualInsuranceCost = insurancePolicies.reduce(
         (sum, policy) => sum.plus(policy.premiumAmount),
-        new Decimal(0)
+        new Prisma.Decimal(0)
     );
 
     const actualWarrantyCost = warranties.reduce(
         (sum, warranty) => sum.plus(warranty.cost || 0),
-        new Decimal(0)
+        new Prisma.Decimal(0)
     );
 
     const actualUtilityCost = utilityExpenses.reduce(
         (sum, expense) => sum.plus(expense.amount),
-        new Decimal(0)
+        new Prisma.Decimal(0)
     );
 
     const actualTotalCost = actualInsuranceCost.plus(actualUtilityCost).plus(actualWarrantyCost);
-    
-    console.log(`[FES-CALC] Actual costs - Insurance: $${actualInsuranceCost}, Utility: $${actualUtilityCost}, Warranty: $${actualWarrantyCost}`);
 
     // --- 2. Determine Market Average Cost ($MA) ---
     const marketAverageTotal = benchmark.avgInsurancePremium
         .plus(benchmark.avgUtilityCost)
         .plus(benchmark.avgWarrantyCost);
-
-    console.log(`[FES-CALC] Actual Total: $${actualTotalCost}, Market Average: $${marketAverageTotal}`);
 
     // --- 3. Calculate Final Score (FES) ---
     let finalScore = 0;
@@ -83,8 +75,6 @@ export function calculateFinancialEfficiency(inputs: CalculationInputs): Financi
     } else {
         finalScore = 0; // Cannot calculate or MA is zero
     }
-
-    console.log(`[FES-CALC] Calculated score: ${finalScore}`);
 
     return {
         score: parseFloat(finalScore.toFixed(2)),

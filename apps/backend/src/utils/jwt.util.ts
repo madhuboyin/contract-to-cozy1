@@ -14,6 +14,12 @@ export interface TokenPair {
   refreshToken: string;
 }
 
+interface PurposeTokenPayload extends jwt.JwtPayload {
+  userId: string;
+  email: string;
+  purpose: 'email_verification' | 'password_reset';
+}
+
 // CRITICAL HELPER: Ensures we get the secret directly from the environment
 const getJwtSecret = (): string => {
   const secret = process.env.JWT_SECRET;
@@ -22,6 +28,41 @@ const getJwtSecret = (): string => {
     throw new Error('FATAL: JWT_SECRET environment variable is missing.');
   }
   return secret;
+};
+
+const parseAuthPayload = (decoded: string | jwt.JwtPayload): JWTPayload => {
+  if (typeof decoded === 'string') {
+    throw new Error('Invalid token payload');
+  }
+
+  const { userId, email, role } = decoded;
+  if (typeof userId !== 'string' || typeof email !== 'string' || typeof role !== 'string') {
+    throw new Error('Invalid token payload');
+  }
+
+  return { userId, email, role };
+};
+
+const verifyPurposeToken = (
+  token: string,
+  secret: string,
+  expectedPurpose: PurposeTokenPayload['purpose']
+): { userId: string; email: string } => {
+  const decoded = jwt.verify(token, secret);
+  if (typeof decoded === 'string') {
+    throw new Error('Invalid token payload');
+  }
+
+  const payload = decoded as jwt.JwtPayload;
+  if (
+    payload.purpose !== expectedPurpose ||
+    typeof payload.userId !== 'string' ||
+    typeof payload.email !== 'string'
+  ) {
+    throw new Error('Invalid token purpose');
+  }
+
+  return { userId: payload.userId, email: payload.email };
 };
 
 
@@ -59,8 +100,8 @@ export const generateTokenPair = (payload: JWTPayload): TokenPair => {
  */
 export const verifyAccessToken = (token: string): JWTPayload => {
   try {
-    const decoded = jwt.verify(token, getJwtSecret()) as JWTPayload;
-    return decoded;
+    const decoded = jwt.verify(token, getJwtSecret());
+    return parseAuthPayload(decoded);
   } catch (error) {
     throw new Error('Invalid or expired access token');
   }
@@ -71,8 +112,8 @@ export const verifyAccessToken = (token: string): JWTPayload => {
  */
 export const verifyRefreshToken = (token: string): JWTPayload => {
   try {
-    const decoded = jwt.verify(token, getJwtSecret()) as JWTPayload;
-    return decoded;
+    const decoded = jwt.verify(token, getJwtSecret());
+    return parseAuthPayload(decoded);
   } catch (error) {
     throw new Error('Invalid or expired refresh token');
   }
@@ -94,11 +135,7 @@ export const generateEmailVerificationToken = (userId: string, email: string): s
  */
 export const verifyEmailVerificationToken = (token: string): { userId: string; email: string } => {
   try {
-    const decoded = jwt.verify(token, jwtConfig.emailVerificationToken.secret) as any;
-    if (decoded.purpose !== 'email_verification') {
-      throw new Error('Invalid token purpose');
-    }
-    return { userId: decoded.userId, email: decoded.email };
+    return verifyPurposeToken(token, jwtConfig.emailVerificationToken.secret, 'email_verification');
   } catch (error) {
     throw new Error('Invalid or expired email verification token');
   }
@@ -120,11 +157,7 @@ export const generatePasswordResetToken = (userId: string, email: string): strin
  */
 export const verifyPasswordResetToken = (token: string): { userId: string; email: string } => {
   try {
-    const decoded = jwt.verify(token, jwtConfig.passwordResetToken.secret) as any;
-    if (decoded.purpose !== 'password_reset') {
-      throw new Error('Invalid token purpose');
-    }
-    return { userId: decoded.userId, email: decoded.email };
+    return verifyPurposeToken(token, jwtConfig.passwordResetToken.secret, 'password_reset');
   } catch (error) {
     throw new Error('Invalid or expired password reset token');
   }
@@ -133,6 +166,6 @@ export const verifyPasswordResetToken = (token: string): { userId: string; email
 /**
  * Decode token without verification (useful for debugging)
  */
-export const decodeToken = (token: string): any => {
+export const decodeToken = (token: string): jwt.JwtPayload | string | null => {
   return jwt.decode(token);
 };

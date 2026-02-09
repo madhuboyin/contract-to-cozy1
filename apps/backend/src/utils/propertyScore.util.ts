@@ -165,7 +165,12 @@ export function calculateHealthScore(
   if (property.propertySize) {
     let sizeScore = 0;
     if (property.propertySize >= 1000 && property.propertySize <= 3500) sizeScore = 5;
-    else if (property.propertySize > 3500 && property.propertySize < 5000 || property.propertySize < 1000) sizeScore = 3;
+    else if (
+      (property.propertySize > 3500 && property.propertySize < 5000) ||
+      property.propertySize < 1000
+    ) {
+      sizeScore = 3;
+    }
     
     baseScore += sizeScore;
     insights.push({ factor: 'Size Factor', status: sizeScore === 5 ? 'Optimal' : 'Standard', score: sizeScore });

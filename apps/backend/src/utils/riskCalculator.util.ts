@@ -78,40 +78,26 @@ const calculateOutofPocket = (
   let uncoveredCost = replacementCost;
   const standardDeductible = 1000; // Assume a typical deductible for insurance
   const warrantyDeductible = 150; // Assume a typical service fee/deductible for home warranty
-  
-  // [RISK-CALC-DEBUG] Log input parameters
-  console.log(`[RISK-CALC-DEBUG] Asset: R-Cost=${replacementCost}, P=${probability.toFixed(2)}, Warranty=${hasActiveWarranty}, Insur=${hasDwellingInsurance}`);
 
   // 1. Coverage for High Probability Failures (W&T, Age-related):
   if (probability > 0.7) {
     // FIX: For high probability failures (end-of-life/W&T), assume NO coverage (full replacement cost)
     // as standard insurance and home warranties typically exclude these.
     uncoveredCost = replacementCost;
-    // [RISK-CALC-DEBUG] Log execution path 1 (The fixed logic)
-    console.log(`[RISK-CALC-DEBUG] Path 1 (P > 0.7, END-OF-LIFE): Setting Out-of-Pocket to FULL cost: ${uncoveredCost}`);
   } 
   // 2. Coverage for Low/Moderate Probability Failures (Accident/Sudden Loss):
   else {
     if (hasActiveWarranty) {
       // FIX: Prefer the lower Home Warranty deductible for sudden failures/accidents.
       uncoveredCost = warrantyDeductible;
-      // [RISK-CALC-DEBUG] Log execution path 2
-      console.log(`[RISK-CALC-DEBUG] Path 2 (P <= 0.7, ACCIDENT/WARRANTY): Using Warranty Deductible: ${uncoveredCost}`);
     } else if (hasDwellingInsurance) {
       // If no warranty, insurance covers sudden loss (higher deductible).
       uncoveredCost = standardDeductible;
-      // [RISK-CALC-DEBUG] Log execution path 3
-      console.log(`[RISK-CALC-DEBUG] Path 3 (P <= 0.7, ACCIDENT/INSURANCE): Using Insurance Deductible: ${uncoveredCost}`);
     } else {
       // No coverage for accidental damage. Full exposure.
       uncoveredCost = replacementCost;
-      // [RISK-CALC-DEBUG] Log execution path 4
-      console.log(`[RISK-CALC-DEBUG] Path 4 (P <= 0.7, ACCIDENT/NO COVERAGE): Using FULL cost (No Coverage): ${uncoveredCost}`);
     }
   }
-
-  // [RISK-CALC-DEBUG] Log final output
-  console.log(`[RISK-CALC-DEBUG] Final Out-of-Pocket Cost: ${uncoveredCost}`);
   
   return clamp(uncoveredCost, 0, replacementCost);
 };
@@ -193,8 +179,6 @@ export const filterRelevantAssets = (
       relevantConfigs.push(config);
     }
   }
-
-  console.log(`[RISK-UTIL:FILTER] Filtered from ${allConfigs.length} to ${relevantConfigs.length} assets for property`);
   return relevantConfigs;
 };
 
@@ -332,11 +316,15 @@ export const calculateTotalRiskScore = (
 
   // --- STEP 6: COLOR BUCKETS (Final Score Status) ---
   const finalScore = Math.round(score);
+  const serializedDetails = assetRisks.map((risk) => ({
+    ...risk,
+    actionCta: risk.actionCta ?? null,
+  })) as Prisma.JsonArray;
 
   return {
     riskScore: finalScore,
     financialExposureTotal: new Prisma.Decimal(totalRiskDollar),
-    details: assetRisks as any, // Cast to any because Prisma's Json type is flexible
+    details: serializedDetails,
     lastCalculatedAt: new Date(),
   };
 };
