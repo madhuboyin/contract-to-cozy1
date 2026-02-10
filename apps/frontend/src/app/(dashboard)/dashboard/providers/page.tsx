@@ -255,7 +255,7 @@ export default function ProvidersPage() {
     setDataLoading(true);
     setError(null);
     try {
-      const params: any = {
+      const params: { category?: string; radius: number; zipCode?: string } = {
         // Ensure category is undefined if it's 'ALL' or empty
         category: (currentFilters.category === 'ALL' || !currentFilters.category) ? undefined : currentFilters.category,
         radius: DEFAULT_RADIUS,
@@ -275,7 +275,6 @@ export default function ProvidersPage() {
         setProviders([]);
       }
     } catch (err) {
-      console.error(err);
       setError('An unexpected error occurred during search.');
       setProviders([]);
     } finally {

@@ -138,9 +138,9 @@ export default function CommunityPage() {
                 />
               ) : (
                 <div className="space-y-4">
-                  {eventsQuery.data.data.events.map((ev: any) => (
+                  {eventsQuery.data.data.events.map((ev) => (
                     <div
-                      key={ev.externalId}
+                      key={ev.id}
                       className="flex justify-between items-start border-b pb-3"
                     >
                       <div>
@@ -151,7 +151,7 @@ export default function CommunityPage() {
                       </div>
                       <Button size="sm" variant="link" asChild>
                         <a
-                          href={ev.externalUrl}
+                          href={ev.externalUrl ?? undefined}
                           target="_blank"
                           rel="noopener noreferrer"
                         >
@@ -182,7 +182,7 @@ export default function CommunityPage() {
                 />
               ) : (
                 <div className="space-y-4">
-                  {trashQuery.data.data.items.map((item: any, idx: number) => (
+                  {trashQuery.data.data.items.map((item: { title: string; description?: string; url?: string }, idx: number) => (
                     <div key={idx}>
                       <p className="font-medium">{item.title}</p>
                       {item.description && (
@@ -221,7 +221,7 @@ export default function CommunityPage() {
                 />
               ) : (
                 <div className="space-y-4">
-                  {alertsQuery.data.data.items.map((item: any, idx: number) => (
+                  {alertsQuery.data.data.items.map((item: { title: string; description?: string; url?: string }, idx: number) => (
                     <div
                       key={idx}
                       className="border-l-4 border-yellow-400 pl-3"

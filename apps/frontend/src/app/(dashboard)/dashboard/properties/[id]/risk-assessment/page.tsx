@@ -747,8 +747,8 @@ export default function RiskAssessmentPage() {
 
     // FIX: Ensure financialExposureTotal is parsed as a number from the string API returns
     const exposureString = report?.financialExposureTotal;
-    const exposure = (exposureString && typeof exposureString === 'string') 
-        ? parseFloat(exposureString) 
+    const exposure = (exposureString && typeof exposureString === 'string')
+        ? Number(exposureString)
         : (typeof exposureString === 'number' ? exposureString : 0);
     
     const formattedExposure = formatCurrency(exposure);

@@ -5,6 +5,7 @@ import { useState, FormEvent, ChangeEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
 
@@ -63,18 +64,13 @@ const MAJOR_APPLIANCE_OPTIONS = [
 
 export default function NewPropertyPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // NEW STATE: Structured input for appliances (empty array initially)
-  const [majorAppliances, setMajorAppliances] = useState<ApplianceInput[]>([]); 
-
-  // Log on mount
-  useEffect(() => {
-    console.log('🏠 PROPERTY PAGE MOUNTED');
-    console.log('🏠 Current localStorage skip flag:', localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY));
-  }, []);
+  const [majorAppliances, setMajorAppliances] = useState<ApplianceInput[]>([]);
 
   const [formData, setFormData] = useState<PropertyFormData>({
     name: '',
@@ -216,38 +212,24 @@ export default function NewPropertyPage() {
       const response = await api.createProperty(payload);
 
       if (response.success) {
-        console.log('✅ PROPERTY CREATED: Removing skip flag');
         localStorage.removeItem(PROPERTY_SETUP_SKIPPED_KEY);
-        alert('Property created successfully!');
+        toast({ title: 'Property created successfully!' });
         router.push('/dashboard/properties');
       } else {
         setError(response.message || 'Failed to create property');
       }
-    } catch (error: any) {
-      console.error('Failed to create property:', error);
-      setError(error.message || 'An error occurred. Please try again.');
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : 'An error occurred. Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleSkipNow = () => {
-    console.log('╔════════════════════════════════════════════════════════════╗');
-    console.log('║                   SKIP BUTTON CLICKED!                     ║');
-    console.log('╚════════════════════════════════════════════════════════════╝');
-    console.log('⏰ Time:', new Date().toISOString());
-    console.log('🔑 Setting localStorage key:', PROPERTY_SETUP_SKIPPED_KEY);
-    
     localStorage.setItem(PROPERTY_SETUP_SKIPPED_KEY, 'true');
-    
-    console.log('✅ localStorage SET!');
-    console.log('📦 Current value:', localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY));
-    console.log('🚀 Initiating navigation to /dashboard...');
-    console.log('╔════════════════════════════════════════════════════════════╗');
-    
+
     // Use both methods to be absolutely sure
     setTimeout(() => {
-      console.log('🔄 Navigating NOW with window.location.href');
       window.location.href = '/dashboard';
     }, 100);
   };

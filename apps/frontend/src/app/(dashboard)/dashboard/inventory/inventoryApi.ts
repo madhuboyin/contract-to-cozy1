@@ -7,7 +7,6 @@ import type { InventoryItem, InventoryRoom, InventoryItemCategory } from '@/type
  * Types (Phase 2 / Phase 3)
  * ----------------------------
  */
-console.log('[inventoryApi.ts] loaded from dashboard/inventory/inventoryApi.ts');
 
 export type BarcodeLookupResult = {
   name?: string;

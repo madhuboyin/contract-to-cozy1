@@ -110,7 +110,7 @@ export default function MaintenanceSetupPage() {
                   <Home className="w-10 h-10 mx-auto text-gray-400 mb-4" />
                   <p className="font-heading text-lg font-medium">No Properties Found</p>
                   <p className="font-body text-sm text-gray-500 mb-4">Maintenance tasks must be linked to a home.</p>
-                  <Link href="/dashboard/properties/new" passHref>
+                  <Link href="/dashboard/properties/new">
                       <Button>Add Your First Property</Button>
                   </Link>
               </Card>

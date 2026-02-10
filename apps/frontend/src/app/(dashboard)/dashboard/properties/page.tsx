@@ -6,9 +6,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { Property } from '@/types';
+import { useToast } from '@/components/ui/use-toast';
 
 export default function PropertiesPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -41,13 +43,12 @@ export default function PropertiesPage() {
       const response = await api.deleteProperty(id);
       if (response.success) {
         setProperties(properties.filter(p => p.id !== id));
-        alert('Property deleted successfully');
+        toast({ title: 'Property deleted successfully' });
       } else {
-        alert(response.message || 'Failed to delete property');
+        toast({ title: response.message || 'Failed to delete property', variant: 'destructive' });
       }
     } catch (error) {
-      console.error('Failed to delete property:', error);
-      alert('Failed to delete property. It may have active bookings.');
+      toast({ title: 'Failed to delete property. It may have active bookings.', variant: 'destructive' });
     } finally {
       setDeleting(null);
     }

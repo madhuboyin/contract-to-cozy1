@@ -53,7 +53,7 @@ const ExpenseForm = ({ initialData, properties, onSave, onClose, isSubmitting }:
     const { id, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [id]: id === 'amount' ? (value ? parseFloat(value) : 0) : value,
+      [id]: id === 'amount' ? (Number(value) || 0) : value,
     }));
   };
 

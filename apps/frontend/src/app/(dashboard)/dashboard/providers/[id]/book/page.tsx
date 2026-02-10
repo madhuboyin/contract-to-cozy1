@@ -6,8 +6,9 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api/client';
 import { Provider, Service, Property, CreateBookingInput } from '@/types';
+import { useToast } from '@/components/ui/use-toast';
 // FIX: Import useQueryClient for cache invalidation
-import { useQueryClient } from '@tanstack/react-query'; 
+import { useQueryClient } from '@tanstack/react-query';
 
 // --- Helper Function ---
 function formatServiceCategory(category: string | null): string {
@@ -22,6 +23,7 @@ function formatServiceCategory(category: string | null): string {
 export default function BookProviderPage() {
   const params = useParams();
   const router = useRouter();
+  const { toast } = useToast();
   const queryClient = useQueryClient();
   
   const searchParams = useSearchParams();
@@ -89,7 +91,7 @@ export default function BookProviderPage() {
           // ---
 
           setSelectedServiceId(defaultService.id);
-          setEstimatedPrice(parseFloat(defaultService.basePrice));
+          setEstimatedPrice(Number(defaultService.basePrice));
         }
       }
 
@@ -114,7 +116,7 @@ export default function BookProviderPage() {
     setSelectedServiceId(serviceId);
     const service = services.find(s => s.id === serviceId);
     if (service) {
-      setEstimatedPrice(parseFloat(service.basePrice));
+      setEstimatedPrice(Number(service.basePrice));
     }
   };
 
@@ -188,7 +190,7 @@ export default function BookProviderPage() {
             queryClient.invalidateQueries({ queryKey: ['property', selectedPropertyId] }),
         ]);
       
-        alert('Booking created successfully!');
+        toast({ title: 'Booking created successfully!' });
         
         // 🔑 Check if we came from risk assessment page
         const fromParam = searchParams.get('from');
@@ -421,7 +423,7 @@ export default function BookProviderPage() {
             <input
               type="number"
               value={estimatedPrice}
-              onChange={(e) => setEstimatedPrice(parseFloat(e.target.value) || 0)}
+              onChange={(e) => setEstimatedPrice(Number(e.target.value) || 0)}
               min="0"
               step="0.01"
               className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"

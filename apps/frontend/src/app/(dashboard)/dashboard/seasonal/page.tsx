@@ -21,11 +21,8 @@ import { SettingsIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function SeasonalMaintenancePage() {
-  const router = useRouter(); 
+  const router = useRouter();
   const [selectedChecklistId, setSelectedChecklistId] = useState<string | null>(null);
-  useEffect(() => {
-    console.log('🔍 selectedChecklistId changed to:', selectedChecklistId);
-  }, [selectedChecklistId]);
   const [expandedSeasons, setExpandedSeasons] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'current' | 'all' | 'completed'>('current');
 
@@ -50,14 +47,6 @@ export default function SeasonalMaintenancePage() {
 
   const { data: climateInfo } = useClimateInfo(propertyId!);
   const { data: checklistsData, isLoading } = useSeasonalChecklists(propertyId!);
-  console.log('=== SEASONAL PAGE DEBUG ===');
-  console.log('URL propertyId:', searchParams.get('propertyId'));
-  console.log('Context propertyId:', selectedPropertyId);
-  console.log('Final propertyId:', propertyId);
-  console.log('Checklists data:', checklistsData);
-  console.log('Checklists array:', checklistsData?.data?.checklists);
-  console.log('Is loading:', isLoading);
-  console.log('=========================');
 
   // FIX: Handle no property selected
   if (!propertyId) {
@@ -79,7 +68,7 @@ export default function SeasonalMaintenancePage() {
     );
   }
 
-  const checklists = checklistsData?.checklists || [];
+  const checklists: SeasonalChecklist[] = checklistsData?.checklists || [];
   const currentSeason = climateInfo?.currentSeason;
   const currentYear = new Date().getFullYear();
 
@@ -95,7 +84,7 @@ export default function SeasonalMaintenancePage() {
   });
 
   // Group checklists by season and year
-  const groupedChecklists = filteredChecklists.reduce((acc: any, checklist: SeasonalChecklist) => {
+  const groupedChecklists = filteredChecklists.reduce<Record<string, SeasonalChecklist[]>>((acc, checklist) => {
     const key = `${checklist.season}-${checklist.year}`;
     if (!acc[key]) {
       acc[key] = [];
@@ -272,7 +261,6 @@ export default function SeasonalMaintenancePage() {
                           </div>
                             <button
                               onClick={() => {
-                                console.log('🔍 Opening modal for checklist ID:', checklist.id);
                                 setSelectedChecklistId(checklist.id);
                               }}
                               className="text-sm text-green-600 hover:text-green-700 font-medium"

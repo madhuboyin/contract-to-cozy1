@@ -188,7 +188,7 @@ const PolicyForm = ({ initialData, properties, onSave, onClose, isSubmitting }: 
     const { id, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [id]: id === 'premiumAmount' ? (value ? parseFloat(value) : 0) : value,
+      [id]: id === 'premiumAmount' ? (Number(value) || 0) : value,
     }));
   };
 

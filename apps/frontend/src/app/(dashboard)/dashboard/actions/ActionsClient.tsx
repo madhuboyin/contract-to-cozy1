@@ -24,13 +24,10 @@ import { useSearchParams } from 'next/navigation';
 export function ActionsClient() {
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   const searchParams = useSearchParams();
-  
+
   // 1. Prioritize URL parameter, fallback to context
   const urlPropertyId = searchParams.get('propertyId');
   const propertyId = urlPropertyId || selectedPropertyId;
-  console.log('🔍 ActionsClient propertyId:', propertyId);
-  console.log('🔍 URL propertyId:', urlPropertyId);
-  console.log('🔍 selectedPropertyId:', selectedPropertyId);
   const { toast } = useToast();
 
   const [actions, setActions] = useState<OrchestratedActionDTO[]>([]);
@@ -89,7 +86,6 @@ export function ActionsClient() {
         setProperties(propertiesRes.data.properties || []);
       }
     } catch (err) {
-      console.error('ActionsClient error:', err);
       setError('Unable to load actions.');
     } finally {
       setLoading(false);
@@ -226,40 +222,20 @@ export function ActionsClient() {
     }
   }, [traceAction, propertyId, toast]);
   const handleSnoozeFromTrace = useCallback(() => {
-    console.log('🔍 SNOOZE BUTTON CLICKED IN TRACE MODAL');
-    console.log('🔍 traceAction:', traceAction);
-    
     if (!traceAction) {
-      console.log('🔍 ABORT: No traceAction');
       return;
     }
-    
-    console.log('🔍 Opening SnoozeModal...');
+
     setIsSnoozeModalOpen(true);
-    console.log('🔍 isSnoozeModalOpen set to true');
   }, [traceAction]);
   
   const handleSnooze = useCallback(
     async (snoozeUntil: Date, snoozeReason?: string) => {
-      console.log('🔍 SNOOZE HANDLER CALLED:', { 
-        hasTraceAction: !!traceAction, 
-        hasPropertyId: !!propertyId,
-        snoozeUntil, 
-        snoozeReason 
-      });
-
       if (!traceAction || !propertyId) {
-        console.log('🔍 SNOOZE ABORTED: Missing traceAction or propertyId');
         return;
       }
-  
-      try {
-        console.log('🔍 CALLING API snoozeOrchestrationAction:', {
-          propertyId,
-          actionKey: traceAction.actionKey,
-          snoozeUntil: snoozeUntil.toISOString(),
-        });
 
+      try {
         await api.snoozeOrchestrationAction(
           propertyId,
           traceAction.actionKey,
@@ -267,18 +243,15 @@ export function ActionsClient() {
           snoozeReason
         );
 
-        console.log('🔍 SNOOZE API SUCCESS');
-  
         toast({
           title: 'Action snoozed',
           description: `We'll remind you about this on ${snoozeUntil.toLocaleDateString()}.`,
         });
-  
+
         setTraceAction(null);
         setIsSnoozeModalOpen(false);
         loadActions();
       } catch (e: any) {
-        console.error('🔍 SNOOZE API ERROR:', e);
         toast({
           title: 'Unable to snooze action',
           description: e?.message || 'Please try again.',

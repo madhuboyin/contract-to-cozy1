@@ -52,6 +52,7 @@ interface ChecklistItemType {
   serviceCategory: string | null;
   createdAt: string;
   orchestrationActionId?: string | null;
+  isUpdating?: boolean;
 }
 
 interface ChecklistType {
@@ -80,10 +81,9 @@ export default function ChecklistPage() {
   // Redirect EXISTING_OWNER users to maintenance page
   useEffect(() => {
     if (user && user.segment === 'EXISTING_OWNER') {
-      console.log('Redirecting EXISTING_OWNER to maintenance page');
       const searchParams = new URLSearchParams(window.location.search);
       const queryString = searchParams.toString();
-      const redirectUrl = queryString 
+      const redirectUrl = queryString
         ? `/dashboard/maintenance?${queryString}`
         : '/dashboard/maintenance';
       router.replace(redirectUrl);
@@ -103,7 +103,6 @@ export default function ChecklistPage() {
           throw new Error('Failed to fetch your checklist.');
         }
       } catch (err: unknown) {
-        console.error('Checklist fetch error:', err);
         setError(err instanceof Error ? err.message : 'Failed to load checklist');
       } finally {
         setLoading(false);
@@ -130,7 +129,7 @@ export default function ChecklistPage() {
     const optimisticItems = checklist.items.map((item) =>
       item.id === itemId ? { ...item, status: status, isUpdating: true } : item
     );
-    setChecklist({ ...checklist, items: optimisticItems as any });
+    setChecklist({ ...checklist, items: optimisticItems });
 
     try {
       const res = await api.updateChecklistItem(itemId, { status });
@@ -151,7 +150,6 @@ export default function ChecklistPage() {
         throw new Error('Failed to update item.');
       }
     } catch (err: unknown) {
-      console.error('Update failed:', err);
       setError('Failed to update. Please try again.');
 
       // Rollback on error
@@ -211,8 +209,6 @@ export default function ChecklistPage() {
   const totalItems = checklist.items.length;
   const progressPercent = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
 
-  console.log('📊 Progress:', { completedItems, totalItems, progressPercent });
-
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <Button asChild variant="link" className="pl-0 text-blue-600">
@@ -249,7 +245,7 @@ export default function ChecklistPage() {
             {checklist.items.map((item) => (
               <ChecklistItemRow
                 key={item.id}
-                item={item as any}
+                item={item}
                 onUpdateStatus={handleUpdateStatus}
               />
             ))}

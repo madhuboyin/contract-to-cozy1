@@ -243,7 +243,7 @@ const SellingPrepBanner = ({ propertyId }: { propertyId: string }) => (
         </div>
       </div>
       <div className="flex-shrink-0">
-        <Link href={`/dashboard/properties/${propertyId}/seller-prep`} passHref>
+        <Link href={`/dashboard/properties/${propertyId}/seller-prep`}>
           <Button size="sm" className="font-semibold min-h-[44px] w-full sm:w-auto">
             Start Now
             <ArrowRight className="ml-1.5 h-4 w-4" />
@@ -473,7 +473,7 @@ const MaintenancePlanTab = ({ property }: { property: ScoredProperty }) => {
           <p className="font-body text-base text-gray-700">
             This section displays recurring tasks, future appointments, and your long-term maintenance calendar.
           </p>
-          <Link href={`/dashboard/maintenance?propertyId=${property.id}`} passHref>
+          <Link href={`/dashboard/maintenance?propertyId=${property.id}`}>
             <Button variant="default" className="min-h-[44px]">
               <Zap className="mr-2 h-4 w-4" />
               Manage Maintenance Tasks
@@ -502,7 +502,7 @@ const RiskProtectionTab = ({ propertyId }: { propertyId: string }) => (
         Access the comprehensive risk report to view calculated risk scores, financial exposure,
         and a detailed breakdown of your home's systems and structure health.
       </p>
-      <Link href={`/dashboard/properties/${propertyId}/risk-assessment`} passHref>
+      <Link href={`/dashboard/properties/${propertyId}/risk-assessment`}>
         <Button variant="default">
           <Shield className="mr-2 h-4 w-4" />
           View Risk & Protection Report
@@ -529,7 +529,7 @@ const FinancialEfficiencyTab = ({ propertyId }: { propertyId: string }) => (
         Access the Financial Efficiency Score (FES) report to analyze your annual spending on insurance,
         utilities, and warranties relative to market averages.
       </p>
-      <Link href={`/dashboard/properties/${propertyId}/financial-efficiency`} passHref>
+      <Link href={`/dashboard/properties/${propertyId}/financial-efficiency`}>
         <Button variant="default">
           <DollarSign className="mr-2 h-4 w-4" />
           View Financial Efficiency Report
@@ -557,7 +557,7 @@ const DocumentsTab = ({ propertyId }: { propertyId: string }) => (
         Documents associated with this property will be listed here, including warranties,
         insurance policies, inspection reports, and more.
       </p>
-      <Link href={`/dashboard/documents?propertyId=${propertyId}`} passHref>
+      <Link href={`/dashboard/documents?propertyId=${propertyId}`}>
         <Button variant="outline">
           <FileText className="mr-2 h-4 w-4" />
           Manage Documents
@@ -584,7 +584,7 @@ const ReportsTab = ({ propertyId }: { propertyId: string }) => (
         Create a Home Report Pack including summary, inventory replacement values, maintenance outlook, and coverage snapshot.
       </p>
 
-      <Link href={`/dashboard/properties/${propertyId}/reports`} passHref>
+      <Link href={`/dashboard/properties/${propertyId}/reports`}>
         <Button variant="default">
           <FileText className="mr-2 h-4 w-4" />
           Open Reports
@@ -612,13 +612,13 @@ const ClaimsTab = ({ propertyId }: { propertyId: string }) => (
       </p>
 
       <div className="flex flex-wrap gap-2">
-        <Link href={`/dashboard/properties/${propertyId}/claims`} passHref>
+        <Link href={`/dashboard/properties/${propertyId}/claims`}>
           <Button variant="default">
             Open Claims
           </Button>
         </Link>
 
-        <Link href={`/dashboard/properties/${propertyId}/claims?create=1`} passHref>
+        <Link href={`/dashboard/properties/${propertyId}/claims?create=1`}>
           <Button variant="outline">
             Create Claim
           </Button>
@@ -724,7 +724,7 @@ export default function PropertyDetailPage() {
         </PageHeader>
 
         <div className="flex-shrink-0 sm:pt-2">
-          <Link href={`/dashboard/properties/${property.id}/edit`} passHref>
+          <Link href={`/dashboard/properties/${property.id}/edit`}>
             <Button variant="outline" size="sm" className="gap-2 min-h-[44px]">
               <Edit className="h-4 w-4" />
               Edit Details
@@ -864,7 +864,7 @@ export default function PropertyDetailPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4 pt-0">
-              <Link href={`/dashboard/properties/${property.id}/timeline`} passHref>
+              <Link href={`/dashboard/properties/${property.id}/timeline`}>
                 <Button variant="default">Open Timeline</Button>
               </Link>
             </CardContent>

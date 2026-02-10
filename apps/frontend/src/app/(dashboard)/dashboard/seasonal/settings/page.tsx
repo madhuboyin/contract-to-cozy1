@@ -19,13 +19,6 @@ export default function SeasonalSettingsPage() {
 
   const { data: climateData, isLoading } = useClimateInfo(propertyId!);
   const updateSettingsMutation = useUpdateClimateSettings();
-  console.log('=== SEASONAL SETTINGS PAGE DEBUG ===');
-  console.log('URL propertyId:', searchParams.get('propertyId'));
-  console.log('Context propertyId:', selectedPropertyId);
-  console.log('Final propertyId:', propertyId);
-  console.log('Climate data:', climateData);
-  console.log('Is loading:', isLoading);
-  console.log('=========================');
 
   const [formData, setFormData] = useState({
     climateRegion: 'MODERATE' as ClimateRegion,
@@ -50,9 +43,8 @@ export default function SeasonalSettingsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!propertyId) {
-      console.error('No property selected');
       return;
     }
 
@@ -64,7 +56,7 @@ export default function SeasonalSettingsPage() {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (error) {
-      console.error('Failed to save settings:', error);
+      // Error already handled by mutation
     }
   };
 

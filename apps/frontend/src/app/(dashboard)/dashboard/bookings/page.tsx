@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api/client';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { Booking, BookingStatus } from '@/types';
+import { Booking, BookingStatus, CreateBookingInput } from '@/types';
 import { MoreVertical, Calendar, MapPin, DollarSign } from 'lucide-react';
 import {
   DropdownMenu,
@@ -83,7 +83,7 @@ const formatTime = (dateString: string | null) => {
 };
 
 // Shorten property address
-const formatProperty = (property: any) => {
+const formatProperty = (property: Booking['property'] | null | undefined) => {
   if (!property) return 'N/A';
   const parts = [property.address, property.city, property.state];
   return parts.filter(Boolean).join(', ');
@@ -122,8 +122,7 @@ export default function HomeownerBookingsPage() {
       if (response.success) {
         setBookings(response.data.bookings);
       }
-    } catch (err: any) {
-      console.error('Error fetching bookings:', err);
+    } catch (err: unknown) {
       setError('Failed to load bookings');
     } finally {
       setLoading(false);
@@ -169,7 +168,7 @@ export default function HomeownerBookingsPage() {
       setSaving(true);
       setError(null);
 
-      const updates: any = {
+      const updates: Partial<CreateBookingInput> = {
         description: editFormData.description,
       };
 
@@ -190,9 +189,8 @@ export default function HomeownerBookingsPage() {
         fetchBookings();
         setTimeout(() => setSuccess(null), 3000);
       }
-    } catch (err: any) {
-      console.error('Error updating booking:', err);
-      setError(err.message || 'Failed to update booking');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update booking');
     } finally {
       setSaving(false);
     }
@@ -228,9 +226,8 @@ export default function HomeownerBookingsPage() {
         fetchBookings();
         setTimeout(() => setSuccess(null), 3000);
       }
-    } catch (err: any) {
-      console.error('Error cancelling booking:', err);
-      setError(err.message || 'Failed to cancel booking');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to cancel booking');
     } finally {
       setCancelling(false);
     }

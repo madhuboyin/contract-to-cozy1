@@ -775,7 +775,7 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Bathrooms</FormLabel>
-                                    <FormControl><Input placeholder="e.g., 2.5" type="number" step="0.5" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseFloat(e.target.value))} /></FormControl>
+                                    <FormControl><Input placeholder="e.g., 2.5" type="number" step="0.5" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl>
                                     <FormMessage />
                                 </FormItem>
                             )}

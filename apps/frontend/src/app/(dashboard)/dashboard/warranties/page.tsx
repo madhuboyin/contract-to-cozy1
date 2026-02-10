@@ -281,7 +281,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
     const { id, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [id]: id === 'cost' ? (value ? parseFloat(value) : undefined) : value,
+      [id]: id === 'cost' ? (value ? Number(value) : undefined) : value,
     }));
   };
   
