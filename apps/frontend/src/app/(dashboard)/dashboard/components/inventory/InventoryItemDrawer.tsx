@@ -896,7 +896,7 @@ useEffect(() => {
   return (
     <div className="fixed inset-0 z-50 flex">
       <div className="flex-1 bg-black/30" onClick={props.onClose} />
-      <div className="w-full max-w-xl bg-white h-full shadow-xl p-6 pb-[calc(5rem+env(safe-area-inset-bottom))] overflow-y-auto flex flex-col">
+      <div className="w-full max-w-xl bg-white h-full shadow-xl p-6 pb-[max(1rem,env(safe-area-inset-bottom))] overflow-y-auto">
         <div className="flex items-start justify-between">
           <div>
             <div className="text-lg font-semibold">{isEdit ? 'Edit item' : 'Add item'}</div>
@@ -907,7 +907,7 @@ useEffect(() => {
           </button>
         </div>
 
-        <div className="mt-6 flex-1 flex flex-col gap-4">
+        <div className="mt-6 space-y-4">
           {/* ✅ Unified "Smart scan" section */}
           {!isEdit ? (
             <div className="rounded-2xl border border-black/10 p-4">
@@ -1237,13 +1237,16 @@ useEffect(() => {
               {PURCHASE_DATE_CATEGORIES.includes(category) && (
                 <div className="min-w-0">
                   <div className="text-xs opacity-70 mb-1">Purchase Date</div>
-                  <input
-                    type="date"
-                    value={purchaseDate}
-                    onChange={(e) => setPurchaseDate(e.target.value)}
-                    max={new Date().toISOString().split('T')[0]}
-                    className="block w-full min-w-0 max-w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-                  />
+                  <div className="w-full max-w-full overflow-hidden rounded-xl border border-black/10 bg-white">
+                    <input
+                      type="date"
+                      value={purchaseDate}
+                      onChange={(e) => setPurchaseDate(e.target.value)}
+                      max={new Date().toISOString().split('T')[0]}
+                      className="block w-full min-w-0 max-w-full border-0 px-3 py-2 text-sm bg-transparent"
+                      style={{ width: '100%', maxWidth: '100%', minWidth: 0 }}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -1433,7 +1436,7 @@ useEffect(() => {
             />
           </div>
 
-          <div className="mt-auto pt-3 border-t border-black/10">
+          <div className="pt-3 border-t border-black/10">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               {isEdit ? (
                 <button
