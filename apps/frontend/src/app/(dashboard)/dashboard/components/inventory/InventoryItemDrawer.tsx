@@ -896,7 +896,7 @@ useEffect(() => {
   return (
     <div className="fixed inset-0 z-50 flex">
       <div className="flex-1 bg-black/30" onClick={props.onClose} />
-      <div className="w-full max-w-xl bg-white h-full shadow-xl p-6 overflow-y-auto">
+      <div className="w-full max-w-xl bg-white h-full shadow-xl p-6 pb-[calc(8rem+env(safe-area-inset-bottom))] overflow-y-auto">
         <div className="flex items-start justify-between">
           <div>
             <div className="text-lg font-semibold">{isEdit ? 'Edit item' : 'Add item'}</div>
@@ -1044,7 +1044,7 @@ useEffect(() => {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <div className="text-sm font-medium">Category</div>
               <select
@@ -1097,7 +1097,7 @@ useEffect(() => {
               <span className="text-sm text-red-700">{duplicateError}</span>
             </div>
           )}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <div className="text-sm font-medium">Condition</div>
               <select
@@ -1112,7 +1112,7 @@ useEffect(() => {
                 ))}
               </select>
             </div>
-            <div />
+            <div className="hidden sm:block" />
           </div>
 
           {/* OCR modal */}
@@ -1121,8 +1121,8 @@ useEffect(() => {
           {/* Phase 2 fields */}
           <div className="rounded-2xl border border-black/10 p-4">
             <div className="text-sm font-medium">Product identifiers</div>
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+              <div className="min-w-0">
                 <div className="text-xs opacity-70">Manufacturer</div>
                 <input
                   value={manufacturer}
@@ -1134,7 +1134,7 @@ useEffect(() => {
                   className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
                 />
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="text-xs opacity-70">Model number</div>
                 <input
                   value={modelNumber}
@@ -1145,7 +1145,7 @@ useEffect(() => {
                   className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
                 />
               </div>
-              <div className="col-span-2">
+              <div className="min-w-0 sm:col-span-2">
                 <div className="text-xs opacity-70">Serial number</div>
                 <input
                   value={serialNumber}
@@ -1156,7 +1156,7 @@ useEffect(() => {
                   className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
                 />
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="text-xs opacity-70">SKU</div>
                 <input
                   value={sku}
@@ -1167,7 +1167,7 @@ useEffect(() => {
                   className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
                 />
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="text-xs opacity-70">UPC</div>
                 <input
                   value={upc}
@@ -1205,10 +1205,10 @@ useEffect(() => {
               {INSTALL_YEAR_CATEGORIES.includes(category) ? 'Installation' : 'Purchase Information'}
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* APPLIANCE category: Install Year (year picker) */}
               {INSTALL_YEAR_CATEGORIES.includes(category) && (
-                <div>
+                <div className="min-w-0">
                   <div className="text-xs opacity-70 mb-1">
                     Install Year {category === 'APPLIANCE' && <span className="text-red-500">*</span>}
                   </div>
@@ -1235,7 +1235,7 @@ useEffect(() => {
 
               {/* ELECTRONICS, FURNITURE, OTHER categories: Purchase Date (date picker) */}
               {PURCHASE_DATE_CATEGORIES.includes(category) && (
-                <div>
+                <div className="min-w-0">
                   <div className="text-xs opacity-70 mb-1">Purchase Date</div>
                   <input
                     type="date"
@@ -1248,7 +1248,7 @@ useEffect(() => {
               )}
 
               {/* Purchase/Replacement cost (shown for all categories) */}
-              <div>
+              <div className="min-w-0">
                 <div className="text-xs opacity-70 mb-1">Purchase Cost ($)</div>
                 <input
                   type="number"
@@ -1261,7 +1261,7 @@ useEffect(() => {
                 />
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <div className="text-xs opacity-70 mb-1">Replacement Cost ($)</div>
                 <input
                   type="number"
