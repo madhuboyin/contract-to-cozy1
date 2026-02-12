@@ -314,6 +314,14 @@ export const ExistingOwnerDashboard = ({
         <FavoriteProvidersCard />
       </div>
 
+      {/* Activity Center */}
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900">Activity Center</h2>
+        <p className="text-sm text-gray-600">
+          Track upcoming bookings, maintenance, and renewals for your home.
+        </p>
+      </div>
+
       {/* Activity Cards (Original 3 cards) */}
       <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 overflow-hidden">  
         <UpcomingBookingsCard 
