@@ -896,7 +896,7 @@ useEffect(() => {
   return (
     <div className="fixed inset-0 z-50 flex">
       <div className="flex-1 bg-black/30" onClick={props.onClose} />
-      <div className="w-full max-w-xl bg-white h-full shadow-xl p-6 pb-[calc(8rem+env(safe-area-inset-bottom))] overflow-y-auto">
+      <div className="w-full max-w-xl bg-white h-full shadow-xl p-6 pb-[calc(5rem+env(safe-area-inset-bottom))] overflow-y-auto flex flex-col">
         <div className="flex items-start justify-between">
           <div>
             <div className="text-lg font-semibold">{isEdit ? 'Edit item' : 'Add item'}</div>
@@ -907,7 +907,7 @@ useEffect(() => {
           </button>
         </div>
 
-        <div className="mt-6 space-y-4">
+        <div className="mt-6 flex-1 flex flex-col gap-4">
           {/* ✅ Unified "Smart scan" section */}
           {!isEdit ? (
             <div className="rounded-2xl border border-black/10 p-4">
@@ -1119,7 +1119,7 @@ useEffect(() => {
           <LabelOcrModal open={labelOpen} onClose={() => setLabelOpen(false)} onCaptured={runLabelOcr} />
 
           {/* Phase 2 fields */}
-          <div className="rounded-2xl border border-black/10 p-4">
+          <div className="rounded-2xl border border-black/10 p-4 overflow-hidden">
             <div className="text-sm font-medium">Product identifiers</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
               <div className="min-w-0">
@@ -1242,7 +1242,7 @@ useEffect(() => {
                     value={purchaseDate}
                     onChange={(e) => setPurchaseDate(e.target.value)}
                     max={new Date().toISOString().split('T')[0]}
-                    className="w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
+                    className="block w-full min-w-0 max-w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
                   />
                 </div>
               )}
@@ -1333,7 +1333,7 @@ useEffect(() => {
               <button
                 onClick={() => setDocPickerOpen(true)}
                 disabled={!isEdit || saving}
-                className="text-sm underline opacity-80 hover:opacity-100 disabled:opacity-50"
+                className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
                 title={!isEdit ? 'Save the item first to attach documents' : undefined}
               >
                 Attach existing
@@ -1433,37 +1433,35 @@ useEffect(() => {
             />
           </div>
 
-          <div className="flex items-center justify-between gap-3 pt-2">
-            {isEdit ? (
-              <button
-                onClick={onDelete}
-                disabled={saving}
-                className="text-sm underline text-red-600 hover:text-red-700 disabled:opacity-50"
-              >
-                Delete
-              </button>
-            ) : (
-              <span />
-            )}
+          <div className="mt-auto pt-3 border-t border-black/10">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              {isEdit ? (
+                <button
+                  onClick={onDelete}
+                  disabled={saving}
+                  className="rounded-xl px-4 py-2 text-sm border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                >
+                  Delete
+                </button>
+              ) : (
+                <span className="hidden sm:block" />
+              )}
 
-            <div className="flex gap-2">
-              <button onClick={props.onClose} className="rounded-xl px-4 py-2 text-sm border border-black/10 hover:bg-black/5">
-                Cancel
-              </button>
-              <button
-                onClick={onSave}
-                disabled={saving || !canSave}
-                className="rounded-xl px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
-              >
-                {saving ? 'Saving…' : draftId ? 'Save (confirm draft)' : 'Save'}
-              </button>
-              <button
-                onClick={() => setDocPickerOpen(true)}
-                disabled={!isEdit || saving}
-                className="text-sm underline opacity-80 hover:opacity-100 disabled:opacity-50"
-              >
-                Attach existing
-              </button>
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-2">
+                <button
+                  onClick={props.onClose}
+                  className="rounded-xl px-4 py-2 text-sm border border-black/10 hover:bg-black/5"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={onSave}
+                  disabled={saving || !canSave}
+                  className="rounded-xl px-4 py-2 text-sm font-medium bg-black text-white hover:bg-black/90 disabled:opacity-50"
+                >
+                  {saving ? 'Saving…' : draftId ? 'Save (confirm draft)' : 'Save'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
