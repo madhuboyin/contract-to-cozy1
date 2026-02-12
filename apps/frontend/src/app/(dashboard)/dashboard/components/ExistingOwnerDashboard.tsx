@@ -10,7 +10,7 @@ import { RecurringMaintenanceCard } from './RecurringMaintenanceCard';
 import { UpcomingRenewalsCard } from './UpcomingRenewalsCard';
 import { FavoriteProvidersCard } from './FavoriteProvidersCard';
 import { SeasonalChecklistCard } from '@/app/(dashboard)/dashboard/components/SeasonalChecklistCard';
-import { ArrowRight, AlertTriangle, Calendar, DollarSign, Clock, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, AlertTriangle, Calendar, DollarSign, Clock, CheckCircle2, Activity } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 // Local Home Updates
@@ -315,11 +315,16 @@ export const ExistingOwnerDashboard = ({
       </div>
 
       {/* Activity Center */}
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900">Activity Center</h2>
-        <p className="text-sm text-gray-600">
-          Track upcoming bookings, maintenance, and renewals for your home.
-        </p>
+      <div className="flex items-center gap-3">
+        <div className="p-2 bg-blue-100 rounded-lg">
+          <Activity className="w-5 h-5 text-blue-600" />
+        </div>
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900">Activity Center</h2>
+          <p className="text-sm text-gray-500">
+            Track upcoming bookings, maintenance, and renewals for your home.
+          </p>
+        </div>
       </div>
 
       {/* Activity Cards (Original 3 cards) */}
