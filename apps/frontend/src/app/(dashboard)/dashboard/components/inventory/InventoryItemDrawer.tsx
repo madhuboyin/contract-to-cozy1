@@ -894,9 +894,9 @@ useEffect(() => {
   if (!props.open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex">
-      <div className="flex-1 bg-black/30" onClick={props.onClose} />
-      <div className="w-full max-w-xl bg-white h-full shadow-xl p-6 pb-[max(1rem,env(safe-area-inset-bottom))] overflow-y-auto">
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/30" onClick={props.onClose} />
+      <div className="absolute right-0 top-0 w-full max-w-xl bg-white h-full shadow-xl p-6 pb-[max(1rem,env(safe-area-inset-bottom))] overflow-y-auto overflow-x-hidden [&_input]:text-base [&_select]:text-base [&_textarea]:text-base [&_input[type='file']]:text-sm sm:[&_input]:text-sm sm:[&_select]:text-sm sm:[&_textarea]:text-sm">
         <div className="flex items-start justify-between">
           <div>
             <div className="text-lg font-semibold">{isEdit ? 'Edit item' : 'Add item'}</div>
