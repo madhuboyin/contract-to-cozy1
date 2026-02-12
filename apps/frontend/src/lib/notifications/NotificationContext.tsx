@@ -63,7 +63,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   };
 
   const markRead = async (id: string) => {
-<<<<<<< ours
     // Optimistic UI Update — derive unread decrement from current state
     setNotifications(prev => {
       const target = prev.find(n => n.id === id);
@@ -72,12 +71,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       }
       return prev.map(n => (n.id === id ? { ...n, isRead: true, readAt: n.readAt ?? new Date().toISOString() } : n));
     });
-    
-=======
-    // Optimistic UI Update
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
-    setUnreadCount(prev => Math.max(0, prev - 1));
->>>>>>> theirs
 
     try {
       await api.markNotificationAsRead(id);
@@ -90,13 +83,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const markAllRead = async () => {
     // Optimistic UI Update
-<<<<<<< ours
     const nowIso = new Date().toISOString();
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true, readAt: n.readAt ?? nowIso })));
-    
-=======
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
->>>>>>> theirs
     setUnreadCount(0);
 
     try {
