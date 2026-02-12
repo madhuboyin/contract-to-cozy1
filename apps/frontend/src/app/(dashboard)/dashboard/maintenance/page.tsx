@@ -129,6 +129,7 @@ export default function MaintenancePage() {
   const searchParams = useSearchParams();
 
   const selectedPropertyId = searchParams.get('propertyId');
+  const taskIdFromUrl = searchParams.get('taskId');
   const priority = searchParams.get('priority') === 'true';
   const from = searchParams.get('from');
 
@@ -201,7 +202,7 @@ export default function MaintenancePage() {
   const backLink = getBackLink();
 
   const { data: mainData, isLoading: isInitialLoading } = useQuery({
-    queryKey: ['maintenance-tasks', selectedPropertyId, view],
+    queryKey: ['maintenance-tasks', selectedPropertyId, view, taskIdFromUrl],
     queryFn: async () => {
       const [propertiesRes] = await Promise.all([api.getProperties()]);
       if (!propertiesRes.success) throw new Error('Failed to fetch properties.');
@@ -217,7 +218,7 @@ export default function MaintenancePage() {
 
       if (!propertyId) return { maintenanceTasks: [], propertiesMap };
 
-      const includeCompleted = view !== 'open';
+      const includeCompleted = view !== 'open' || Boolean(taskIdFromUrl);
       const tasksRes = await api.getMaintenanceTasks(propertyId, { includeCompleted });
       const tasks = tasksRes.success ? tasksRes.data : [];
 
@@ -290,6 +291,7 @@ export default function MaintenancePage() {
 
   const [viewTask, setViewTask] = useState<PropertyMaintenanceTask | null>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
+  const [hasConsumedTaskParam, setHasConsumedTaskParam] = useState(false);
 
   const handleViewModal = (task: PropertyMaintenanceTask) => {
     setViewTask(task);
@@ -300,6 +302,24 @@ export default function MaintenancePage() {
     setIsViewOpen(false);
     setViewTask(null);
   };
+
+  useEffect(() => {
+    setHasConsumedTaskParam(false);
+  }, [taskIdFromUrl]);
+
+  useEffect(() => {
+    if (!taskIdFromUrl || hasConsumedTaskParam || isInitialLoading) return;
+
+    const targetTask = allMaintenanceTasks.find((task) => task.id === taskIdFromUrl);
+    if (!targetTask) {
+      setHasConsumedTaskParam(true);
+      return;
+    }
+
+    setViewTask(targetTask);
+    setIsViewOpen(true);
+    setHasConsumedTaskParam(true);
+  }, [taskIdFromUrl, hasConsumedTaskParam, isInitialLoading, allMaintenanceTasks]);
 
   const handleCloseModal = () => {
     setIsModalOpen(false);

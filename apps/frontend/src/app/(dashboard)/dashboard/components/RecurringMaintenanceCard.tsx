@@ -93,22 +93,29 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
             <div className="space-y-3">
               {displayTasks.map((task) => {
                 const statusBadge = getStatusBadge(task);
+                const queryParts = [
+                  `taskId=${encodeURIComponent(task.id)}`,
+                  selectedPropertyId ? `propertyId=${encodeURIComponent(selectedPropertyId)}` : null,
+                  'from=dashboard',
+                ].filter(Boolean);
+                const taskHref = `/dashboard/maintenance?${queryParts.join('&')}`;
+
                 return (
-                // Inside displayTasks.map:
-                <div key={task.id} className="flex items-start justify-between p-3 rounded-lg bg-gray-50">
-                  {/* FIXED: min-w-0 is required for truncate to work inside a flex parent */}
-                  <div className="flex-1 min-w-0 pr-2">
-                    <p className="text-sm font-medium text-gray-900 truncate" title={task.title}>
-                      {task.title}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Due {task.nextDueDate ? format(new Date(task.nextDueDate), 'MMM dd') : 'N/A'}
-                    </p>
-                  </div>
-                  <Badge className={`shrink-0 ${statusBadge.className}`}>
-                    {statusBadge.label}
-                  </Badge>
-                </div>
+                  <Link key={task.id} href={taskHref} className="block">
+                    <div className="flex items-start justify-between p-3 rounded-lg bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-sm hover:bg-white transition-all cursor-pointer">
+                      <div className="flex-1 min-w-0 pr-2">
+                        <p className="text-sm font-medium text-gray-900 truncate" title={task.title}>
+                          {task.title}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Due {task.nextDueDate ? format(new Date(task.nextDueDate), 'MMM dd') : 'N/A'}
+                        </p>
+                      </div>
+                      <Badge className={`shrink-0 ${statusBadge.className}`}>
+                        {statusBadge.label}
+                      </Badge>
+                    </div>
+                  </Link>
                 );
               })}
             </div>
