@@ -46,7 +46,7 @@ export function BottomNav() {
   return (
     <>
       {/* Bottom navigation - hidden on desktop */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 safe-area-inset-bottom lg:hidden z-50 shadow-lg">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 pb-[env(safe-area-inset-bottom)] lg:hidden z-50 shadow-lg">
         <div className="grid grid-cols-5 h-16">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -81,7 +81,7 @@ export function BottomNav() {
       </nav>
 
       {/* Bottom padding spacer for content - only on mobile */}
-      <div className="h-16 lg:hidden" aria-hidden="true" />
+      <div className="h-[calc(4rem+env(safe-area-inset-bottom))] lg:hidden" aria-hidden="true" />
     </>
   );
 }

@@ -138,7 +138,7 @@ export const AIChat: React.FC = () => {
 
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 font-sans">
+    <div className="fixed right-4 z-50 font-sans bottom-[calc(5rem+env(safe-area-inset-bottom))] lg:bottom-6 lg:right-6">
       {!isOpen && (
         <button 
           onClick={() => setIsOpen(true)}

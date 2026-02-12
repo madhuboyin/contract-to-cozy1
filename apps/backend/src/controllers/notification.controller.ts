@@ -111,11 +111,14 @@ export class NotificationController {
       : 30;
 
     const notifications = await NotificationService.listForUser(userId, limit);
+<<<<<<< ours
     // ✅ enrich for UI
     const dto = notifications.map((n: any) => ({
       ...n,
       signalSource: inferSignalSourceFromNotification(n),
     }));
+=======
+>>>>>>> theirs
 
     return res.json({
       success: true,
