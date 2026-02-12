@@ -55,8 +55,27 @@ export function ActionsClient() {
 
   const loadActions = useCallback(async () => {
     if (!propertyId) {
-      setError('No property selected.');
-      setLoading(false);
+      try {
+        setLoading(true);
+        setError(null);
+
+        const propertiesRes = await api.getProperties();
+        if (propertiesRes.success) {
+          const availableProperties = propertiesRes.data.properties || [];
+          setProperties(availableProperties);
+
+          if (availableProperties.length > 0) {
+            setSelectedPropertyId(availableProperties[0].id);
+            return;
+          }
+        }
+
+        setError('No property selected.');
+      } catch (err) {
+        setError('Unable to load actions.');
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
@@ -90,7 +109,7 @@ export function ActionsClient() {
     } finally {
       setLoading(false);
     }
-  }, [propertyId]);
+  }, [propertyId, setSelectedPropertyId]);
 
   useEffect(() => {
     loadActions();

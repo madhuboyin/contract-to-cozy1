@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/community-events/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Calendar, Trash2, AlertTriangle } from 'lucide-react';
 
@@ -31,10 +31,47 @@ function EmptyState({
 /* ----------------------------- page ----------------------------- */
 
 export default function CommunityPage() {
-  const { selectedPropertyId } = usePropertyContext();
+  const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   const propertyId = selectedPropertyId;
+  const [isResolvingProperty, setIsResolvingProperty] = useState(!selectedPropertyId);
 
   const [tab, setTab] = useState<'events' | 'trash' | 'alerts'>('events');
+
+  useEffect(() => {
+    let isActive = true;
+
+    const resolveDefaultProperty = async () => {
+      if (selectedPropertyId) {
+        setIsResolvingProperty(false);
+        return;
+      }
+
+      setIsResolvingProperty(true);
+
+      try {
+        const propertiesRes = await api.getProperties();
+        const properties = propertiesRes.success ? propertiesRes.data.properties || [] : [];
+
+        if (!isActive) return;
+
+        if (properties.length > 0) {
+          setSelectedPropertyId(properties[0].id);
+        }
+      } catch (error) {
+        console.error('Failed to resolve property for community events:', error);
+      } finally {
+        if (isActive) {
+          setIsResolvingProperty(false);
+        }
+      }
+    };
+
+    resolveDefaultProperty();
+
+    return () => {
+      isActive = false;
+    };
+  }, [selectedPropertyId, setSelectedPropertyId]);
 
   // Fetch property to get city and state for trash/alerts
   const { data: property } = useQuery({
@@ -75,6 +112,19 @@ export default function CommunityPage() {
   });
 
   /* ---------------- guards ---------------- */
+
+  if (isResolvingProperty && !propertyId) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Community</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">Loading community data...</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (!propertyId) {
     return (

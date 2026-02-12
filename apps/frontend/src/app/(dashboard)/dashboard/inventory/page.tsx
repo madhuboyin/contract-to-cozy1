@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { Loader2 } from 'lucide-react';
+import { api } from '@/lib/api/client';
 
 /**
  * This page handles the top-level /dashboard/inventory route by 
@@ -12,16 +13,44 @@ import { Loader2 } from 'lucide-react';
  */
 export default function InventoryRedirectPage() {
   const router = useRouter();
-  const { selectedPropertyId } = usePropertyContext();
+  const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
 
   useEffect(() => {
-    if (selectedPropertyId) {
-      router.replace(`/dashboard/properties/${selectedPropertyId}/inventory`);
-    } else {
-      // Fallback to main dashboard if no property is selected/found
-      router.replace('/dashboard');
-    }
-  }, [selectedPropertyId, router]);
+    let isActive = true;
+
+    const resolveAndRedirect = async () => {
+      if (selectedPropertyId) {
+        router.replace(`/dashboard/properties/${selectedPropertyId}/inventory`);
+        return;
+      }
+
+      try {
+        const propertiesRes = await api.getProperties();
+        const properties = propertiesRes.success ? propertiesRes.data.properties || [] : [];
+
+        if (!isActive) return;
+
+        if (properties.length > 0) {
+          const fallbackPropertyId = properties[0].id;
+          setSelectedPropertyId(fallbackPropertyId);
+          router.replace(`/dashboard/properties/${fallbackPropertyId}/inventory`);
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to resolve property for inventory redirect:', error);
+      }
+
+      if (isActive) {
+        router.replace('/dashboard');
+      }
+    };
+
+    resolveAndRedirect();
+
+    return () => {
+      isActive = false;
+    };
+  }, [selectedPropertyId, setSelectedPropertyId, router]);
 
   return (
     <div className="flex items-center justify-center min-h-[60vh]">
