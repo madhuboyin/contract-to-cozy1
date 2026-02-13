@@ -138,20 +138,20 @@ export const AIChat: React.FC = () => {
 
 
   return (
-    <div className="fixed right-4 z-50 font-sans bottom-[calc(5rem+env(safe-area-inset-bottom))] lg:bottom-6 lg:right-6">
+    <div className="fixed left-3 z-50 font-sans bottom-[calc(5.5rem+env(safe-area-inset-bottom))] sm:left-auto sm:right-4 sm:bottom-[calc(5rem+env(safe-area-inset-bottom))] lg:bottom-6 lg:right-6">
       {!isOpen && (
         <button 
           onClick={() => setIsOpen(true)}
-          className="group flex items-center bg-stone-900 hover:bg-amber-600 text-white rounded-full px-6 py-4 shadow-2xl transition-all duration-300 hover:-translate-y-1"
+          className="group flex items-center bg-stone-900 hover:bg-amber-600 text-white rounded-full px-4 py-3 sm:px-6 sm:py-4 shadow-2xl transition-all duration-300 hover:-translate-y-1"
         >
-          <Sparkles className="w-5 h-5 mr-2 animate-pulse" />
-          <span className="font-medium">Ask Cozy</span>
+          <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 mr-2 animate-pulse" />
+          <span className="font-medium text-sm sm:text-base">Ask Cozy</span>
         </button>
       )}
 
       {isOpen && (
         <div className={cn(
-            "bg-white rounded-2xl shadow-2xl w-[350px] md:w-[400px] flex flex-col overflow-hidden border border-stone-200 h-[500px]",
+            "bg-white rounded-2xl shadow-2xl w-[min(350px,calc(100vw-1.5rem))] md:w-[400px] flex flex-col overflow-hidden border border-stone-200 h-[min(500px,70vh)] sm:h-[500px]",
             "animate-in fade-in slide-in-from-bottom-10 duration-300" 
         )}>
           {/* Header */}

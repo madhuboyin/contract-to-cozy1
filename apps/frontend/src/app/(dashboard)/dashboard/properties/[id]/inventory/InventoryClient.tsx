@@ -219,7 +219,7 @@ export default function InventoryClient() {
   const hasVisibleItems = visibleItems.length > 0;
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 space-y-4 max-w-7xl mx-auto pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
       <div className="flex flex-col gap-4">
         {/* ROW 1: Title + Tabs */}
         <div className="flex flex-col sm:flex-row sm:items-start gap-4">
@@ -243,10 +243,10 @@ export default function InventoryClient() {
         </div>
 
         {/* ROW 2: Actions - grid on mobile, flex on larger */}
-        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-stretch sm:items-center gap-2 sm:gap-3">
           <Link
             href={`/dashboard/properties/${propertyId}/inventory/rooms`}
-            className="text-sm underline opacity-80 hover:opacity-100 min-h-[44px] flex items-center justify-center sm:justify-start"
+            className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl px-3 sm:px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5 active:bg-black/10 min-h-[44px]"
           >
             <span className="hidden sm:inline">Manage rooms</span>
             <span className="sm:hidden">Rooms</span>
@@ -254,7 +254,7 @@ export default function InventoryClient() {
 
           <button
             onClick={onAdd}
-            className="rounded-xl px-3 sm:px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5 active:bg-black/10 min-h-[44px]"
+            className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl px-3 sm:px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5 active:bg-black/10 min-h-[44px]"
           >
             <span className="hidden sm:inline">Add item</span>
             <span className="sm:hidden">+ Add</span>
@@ -262,7 +262,7 @@ export default function InventoryClient() {
 
           <button
             onClick={handleExport}
-            className="rounded-xl px-3 sm:px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5 active:bg-black/10 min-h-[44px]"
+            className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl px-3 sm:px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5 active:bg-black/10 min-h-[44px]"
           >
             <span className="hidden sm:inline">Export CSV</span>
             <span className="sm:hidden">Export</span>
@@ -270,7 +270,7 @@ export default function InventoryClient() {
 
           <button
             onClick={() => setBulkOpen(true)}
-            className="rounded-xl px-3 sm:px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5 active:bg-black/10 min-h-[44px]"
+            className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl px-3 sm:px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5 active:bg-black/10 min-h-[44px]"
           >
             <span className="hidden sm:inline">Bulk upload</span>
             <span className="sm:hidden">Upload</span>
@@ -278,7 +278,7 @@ export default function InventoryClient() {
 
           <button
             onClick={() => setHistoryOpen(true)}
-            className="rounded-xl px-3 sm:px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5 active:bg-black/10 min-h-[44px]"
+            className="inline-flex w-full sm:w-auto items-center justify-center col-span-2 sm:col-auto rounded-xl px-3 sm:px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5 active:bg-black/10 min-h-[44px]"
           >
             <span className="hidden sm:inline">Import history</span>
             <span className="sm:hidden">History</span>
@@ -311,18 +311,18 @@ export default function InventoryClient() {
             )}
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-col sm:flex-row w-full sm:w-auto items-stretch sm:items-center gap-2 shrink-0">
             <button
               onClick={() => setShowOnlyGaps((v) => !v)}
               disabled={gapLoading || !!gapError || !gapCounts?.total}
-              className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 active:bg-black/10 disabled:opacity-50 min-h-[44px]"
+              className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 active:bg-black/10 disabled:opacity-50 min-h-[44px]"
             >
               {showOnlyGaps ? 'Show all' : 'Review gaps'}
             </button>
 
             <a
               href={`/dashboard/actions?propertyId=${propertyId}&filter=coverage-gaps`}
-              className="text-sm underline opacity-80 hover:opacity-100 min-h-[44px] flex items-center"
+              className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 active:bg-black/10 min-h-[44px]"
             >
               View in Actions
             </a>
