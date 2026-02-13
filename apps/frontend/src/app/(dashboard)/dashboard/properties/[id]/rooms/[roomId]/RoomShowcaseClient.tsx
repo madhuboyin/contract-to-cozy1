@@ -3,11 +3,12 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 
 import { InventoryItem, InventoryRoom } from '@/types';
 import { SectionHeader } from '../../../../components/SectionHeader';
 import InventoryItemCard from '../../../../components/inventory/InventoryItemCard';
+import InventoryItemDrawer from '@/app/(dashboard)/dashboard/components/inventory/InventoryItemDrawer';
 
 import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
 import RoomScanModal from '@/app/(dashboard)/dashboard/components/inventory/RoomScanModal';
@@ -124,14 +125,16 @@ function asArray<T = any>(v: any): T[] {
 
 export default function RoomShowcaseClient() {
   const params = useParams<{ id: string; roomId: string }>();
-  const router = useRouter();
   const propertyId = params.id;
   const roomId = params.roomId;
 
   const [room, setRoom] = useState<InventoryRoom | null>(null);
+  const [rooms, setRooms] = useState<InventoryRoom[]>([]);
   const [insights, setInsights] = useState<any>(null);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
 
   async function refresh() {
     setLoading(true);
@@ -142,6 +145,7 @@ export default function RoomShowcaseClient() {
         listInventoryItems(propertyId, { roomId }),
       ]);
 
+      setRooms(rooms);
       setRoom(rooms.find((r) => r.id === roomId) || null);
       setInsights((insightData as any)?.data ?? insightData);
       setItems(roomItems);
@@ -605,7 +609,8 @@ export default function RoomShowcaseClient() {
                 key={it.id}
                 item={it}
                 onClick={() => {
-                  router.push(`/dashboard/properties/${propertyId}/inventory?roomId=${roomId}&openItemId=${it.id}`);
+                  setEditingItem(it);
+                  setDrawerOpen(true);
                 }}
               />
             ))
@@ -616,6 +621,19 @@ export default function RoomShowcaseClient() {
           <div className="mt-3 text-xs opacity-60">Showing 9 of {items.length}. Open “Manage items” for the full list.</div>
         )}
       </div>
+
+      <InventoryItemDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        propertyId={propertyId}
+        rooms={rooms}
+        initialItem={editingItem}
+        onSaved={async () => {
+          setDrawerOpen(false);
+          await refresh();
+        }}
+        existingItems={items}
+      />
     </div>
   );
 }
