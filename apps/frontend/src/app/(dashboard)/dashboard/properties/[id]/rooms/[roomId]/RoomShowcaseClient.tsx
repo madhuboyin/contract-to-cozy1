@@ -3,7 +3,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 
 import { InventoryItem, InventoryRoom } from '@/types';
 import { SectionHeader } from '../../../../components/SectionHeader';
@@ -124,6 +124,7 @@ function asArray<T = any>(v: any): T[] {
 
 export default function RoomShowcaseClient() {
   const params = useParams<{ id: string; roomId: string }>();
+  const router = useRouter();
   const propertyId = params.id;
   const roomId = params.roomId;
 
@@ -600,7 +601,13 @@ export default function RoomShowcaseClient() {
             <div className="text-sm opacity-70">No items assigned to this room yet.</div>
           ) : (
             items.slice(0, 9).map((it) => (
-              <InventoryItemCard key={it.id} item={it} onClick={() => {}} />
+              <InventoryItemCard
+                key={it.id}
+                item={it}
+                onClick={() => {
+                  router.push(`/dashboard/properties/${propertyId}/inventory?roomId=${roomId}&openItemId=${it.id}`);
+                }}
+              />
             ))
           )}
         </div>
