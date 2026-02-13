@@ -5,9 +5,12 @@ import React from 'react';
 import Link from 'next/link';
 // 1. Import the unified API client
 import { api } from '@/lib/api/client'; 
+import { InventoryItem, InventoryRoom } from '@/types';
 import { SectionHeader } from '../../../../components/SectionHeader';
 import InsuranceQuoteModal from '@/app/(dashboard)/dashboard/components/coverage/InsuranceQuoteModal';
 import WhatsCoveredModal from '@/app/(dashboard)/dashboard/components/coverage/WhatsCoveredModal';
+import InventoryItemDrawer from '@/app/(dashboard)/dashboard/components/inventory/InventoryItemDrawer';
+import { getInventoryItem, listInventoryRooms } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 
 export default function CoverageClient({ propertyId }: { propertyId: string }) {
   // Use the standard API URL from the client
@@ -16,10 +19,19 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
   const [loading, setLoading] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
   const [data, setData] = React.useState<any>(null);
+  const [rooms, setRooms] = React.useState<InventoryRoom[]>([]);
 
   const [quoteOpen, setQuoteOpen] = React.useState(false);
   const [coveredOpen, setCoveredOpen] = React.useState(false);
   const [selected, setSelected] = React.useState<any>(null);
+  const [editingItem, setEditingItem] = React.useState<InventoryItem | null>(null);
+  const [drawerOpen, setDrawerOpen] = React.useState(false);
+  const [openingItemId, setOpeningItemId] = React.useState<string | null>(null);
+
+  async function refreshCoverageOnly() {
+    const response = await api.get(`/api/properties/${propertyId}/inventory/coverage-gaps`);
+    setData(response.data);
+  }
 
   React.useEffect(() => {
     let cancelled = false;
@@ -28,17 +40,26 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
         setLoading(true);
         setErr(null);
 
-        // 2. REFACTORED: Use the api client instead of native fetch
-        // The client automatically attaches the Authorization header and handles base URLs
-        const response = await api.get(`/api/properties/${propertyId}/inventory/coverage-gaps`);
-        
-        if (!cancelled) {
-          // The api.get helper returns { data: T } on success
-          setData(response.data);
+        // Load coverage summary and room options in parallel for inline item editing.
+        const [coverageRes, roomsRes] = await Promise.allSettled([
+          api.get(`/api/properties/${propertyId}/inventory/coverage-gaps`),
+          listInventoryRooms(propertyId),
+        ]);
+
+        if (cancelled) return;
+
+        if (coverageRes.status === 'fulfilled') {
+          setData(coverageRes.value.data);
+        } else {
+          const e: any = coverageRes.reason;
+          setErr(e?.message || 'Failed to load coverage summary');
         }
-      } catch (e: any) {
-        // The api client throws APIError with a clear message
-        if (!cancelled) setErr(e?.message || 'Failed to load coverage summary');
+
+        if (roomsRes.status === 'fulfilled') {
+          setRooms(roomsRes.value);
+        } else {
+          setRooms([]);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -49,6 +70,20 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
 
   const gaps = data?.gaps || [];
   const counts = data?.counts || {};
+
+  async function handleViewItem(itemId: string) {
+    setOpeningItemId(itemId);
+    try {
+      const item = await getInventoryItem(propertyId, itemId);
+      setEditingItem(item);
+      setDrawerOpen(true);
+    } catch (e) {
+      console.error('[CoverageClient] failed to open item from coverage', e);
+      alert('Unable to open this item from coverage. Please try again.');
+    } finally {
+      setOpeningItemId(null);
+    }
+  }
 
   return (
     <div className="p-6 space-y-4">
@@ -124,12 +159,13 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
 
                     {/* Buttons - always horizontal */}
                     <div className="flex items-center gap-2 shrink-0">
-                      <Link
-                        href={`/dashboard/properties/${propertyId}/inventory?openItemId=${g.inventoryItemId}&scrollToItemId=${g.inventoryItemId}`}
+                      <button
+                        onClick={() => handleViewItem(g.inventoryItemId)}
+                        disabled={openingItemId === g.inventoryItemId}
                         className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
                       >
-                        View
-                      </Link>
+                        {openingItemId === g.inventoryItemId ? 'Opening…' : 'View'}
+                      </button>
 
                       <button
                         onClick={() => { setSelected(g); setQuoteOpen(true); }}
@@ -180,6 +216,18 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
           itemId={selected.inventoryItemId}
         />
       )}
+
+      <InventoryItemDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        propertyId={propertyId}
+        rooms={rooms}
+        initialItem={editingItem}
+        onSaved={async () => {
+          setDrawerOpen(false);
+          await refreshCoverageOnly();
+        }}
+      />
     </div>
   );
 }
