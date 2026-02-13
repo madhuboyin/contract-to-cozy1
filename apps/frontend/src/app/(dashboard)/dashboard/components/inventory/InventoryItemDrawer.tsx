@@ -896,7 +896,7 @@ useEffect(() => {
   return (
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/30" onClick={props.onClose} />
-      <div className="absolute right-0 top-0 w-full max-w-xl bg-white h-full shadow-xl p-6 pb-[max(1rem,env(safe-area-inset-bottom))] overflow-y-auto overflow-x-hidden [&_input]:text-base [&_select]:text-base [&_textarea]:text-base [&_input[type='file']]:text-sm sm:[&_input]:text-sm sm:[&_select]:text-sm sm:[&_textarea]:text-sm">
+      <div className="absolute right-0 top-0 w-full max-w-xl bg-white h-full shadow-xl p-6 pb-[max(1rem,env(safe-area-inset-bottom))] overflow-hidden flex flex-col [&_input]:text-base [&_select]:text-base [&_textarea]:text-base [&_input[type='file']]:text-sm sm:[&_input]:text-sm sm:[&_select]:text-sm sm:[&_textarea]:text-sm">
         <div className="flex items-start justify-between">
           <div>
             <div className="text-lg font-semibold">{isEdit ? 'Edit item' : 'Add item'}</div>
@@ -907,7 +907,7 @@ useEffect(() => {
           </button>
         </div>
 
-        <div className="mt-6 space-y-4">
+        <div className="mt-6 space-y-4 flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1">
           {/* ✅ Unified "Smart scan" section */}
           {!isEdit ? (
             <div className="rounded-2xl border border-black/10 p-4">
@@ -1436,35 +1436,35 @@ useEffect(() => {
             />
           </div>
 
-          <div className="pt-3 border-t border-black/10">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              {isEdit ? (
-                <button
-                  onClick={onDelete}
-                  disabled={saving}
-                  className="rounded-xl px-4 py-2 text-sm border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
-                >
-                  Delete
-                </button>
-              ) : (
-                <span className="hidden sm:block" />
-              )}
+        </div>
+        <div className="mt-4 pt-3 border-t border-black/10 shrink-0 bg-white">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            {isEdit ? (
+              <button
+                onClick={onDelete}
+                disabled={saving}
+                className="rounded-xl px-4 py-2 text-sm border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                Delete
+              </button>
+            ) : (
+              <span className="hidden sm:block" />
+            )}
 
-              <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-2">
-                <button
-                  onClick={props.onClose}
-                  className="rounded-xl px-4 py-2 text-sm border border-black/10 hover:bg-black/5"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={onSave}
-                  disabled={saving || !canSave}
-                  className="rounded-xl px-4 py-2 text-sm font-medium bg-black text-white hover:bg-black/90 disabled:opacity-50"
-                >
-                  {saving ? 'Saving…' : draftId ? 'Save (confirm draft)' : 'Save'}
-                </button>
-              </div>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-2">
+              <button
+                onClick={props.onClose}
+                className="rounded-xl px-4 py-2 text-sm border border-black/10 hover:bg-black/5"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onSave}
+                disabled={saving || !canSave}
+                className="rounded-xl px-4 py-2 text-sm font-medium bg-black text-white hover:bg-black/90 disabled:opacity-50"
+              >
+                {saving ? 'Saving…' : draftId ? 'Save (confirm draft)' : 'Save'}
+              </button>
             </div>
           </div>
         </div>
