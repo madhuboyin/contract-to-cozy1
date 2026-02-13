@@ -26,13 +26,14 @@ export default function InventoryClient() {
   const searchParams = useSearchParams();
   const openItemId = searchParams.get('openItemId');
   const highlightRecallMatchId = searchParams.get('highlightRecallMatchId');
+  const roomIdFromUrl = searchParams.get('roomId') || undefined;
 
   const [rooms, setRooms] = useState<InventoryRoom[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [q, setQ] = useState('');
-  const [roomId, setRoomId] = useState<string | undefined>(undefined);
+  const [roomId, setRoomId] = useState<string | undefined>(roomIdFromUrl);
   const [category, setCategory] = useState<InventoryItemCategory | undefined>(undefined);
   const [hasDocuments, setHasDocuments] = useState<boolean | undefined>(undefined);
 
@@ -146,6 +147,11 @@ export default function InventoryClient() {
     refreshAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, roomId, category, hasDocuments]);
+
+  useEffect(() => {
+    // Keep room filter in sync with deep links (e.g., from "View room" -> "Manage items").
+    setRoomId((prev) => (prev === roomIdFromUrl ? prev : roomIdFromUrl));
+  }, [roomIdFromUrl]);
   
   const scrollToItemId = searchParams.get('scrollToItemId');
   const [autoScrolledFromUrl, setAutoScrolledFromUrl] = useState(false);
