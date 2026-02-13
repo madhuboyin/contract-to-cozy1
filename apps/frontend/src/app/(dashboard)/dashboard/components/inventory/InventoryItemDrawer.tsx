@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '@/lib/api/client';
 import { InventoryItem, InventoryItemCategory, InventoryItemCondition, InventoryRoom } from '@/types';
 import DocumentPickerModal from './DocumentPickerModal';
@@ -354,6 +355,7 @@ export default function InventoryItemDrawer(props: {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [autoCreateWarranty, setAutoCreateWarranty] = useState(true);
+  const [mounted, setMounted] = useState(false);
 
   // coverage links
   const [warranties, setWarranties] = useState<any[]>([]);
@@ -526,6 +528,10 @@ useEffect(() => {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.open, props.propertyId]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const canSave = name.trim().length > 0 && !duplicateError;
 
@@ -891,9 +897,9 @@ useEffect(() => {
     }
   }
 
-  if (!props.open) return null;
+  if (!props.open || !mounted) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/30" onClick={props.onClose} />
       <div className="absolute right-0 top-0 w-full max-w-xl bg-white h-full shadow-xl p-6 pb-[max(1rem,env(safe-area-inset-bottom))] overflow-hidden flex flex-col [&_input]:text-base [&_select]:text-base [&_textarea]:text-base [&_input[type='file']]:text-sm sm:[&_input]:text-sm sm:[&_select]:text-sm sm:[&_textarea]:text-sm">
@@ -1495,6 +1501,7 @@ useEffect(() => {
         onClose={() => setQrOpen(false)}
         onDetected={onQrDetected}
       />
-    </div>
+    </div>,
+    document.body
   );
 }
