@@ -172,23 +172,23 @@ export default function RoomsHubClient() {
   }, [propertyId, sortedIdsKey]);
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-start justify-between gap-4">
+    <div className="p-4 sm:p-6 space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <SectionHeader
           icon="✨"
           title="Rooms"
           description="Select a room to see health, value snapshot, and quick wins."
         />
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
           <Link
             href={`/dashboard/properties/${propertyId}/inventory/rooms`}
-            className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
           >
             Manage rooms
           </Link>
           <Link
             href={`/dashboard/properties/${propertyId}/inventory`}
-            className="text-sm underline opacity-80 hover:opacity-100"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
           >
             Back to inventory
           </Link>
@@ -296,24 +296,24 @@ export default function RoomsHubClient() {
                 )}
               </div>
 
-              <div className="mt-4 flex flex-wrap items-center gap-2 mt-auto">
+              <div className="mt-4 mt-auto grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
                 <Link
                   href={`/dashboard/properties/${propertyId}/rooms/${r.id}`}
-                  className="rounded-xl px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5"
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-sm font-medium shadow-sm border border-black/10 hover:bg-black/5"
                 >
                   View room
                 </Link>
 
                 <Link
                   href={`/dashboard/properties/${propertyId}/inventory/rooms/${r.id}`}
-                  className="rounded-xl px-4 py-2 text-sm border border-black/10 hover:bg-black/5"
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-sm border border-black/10 hover:bg-black/5"
                 >
                   Edit
                 </Link>
 
                 <Link
                   href={`/dashboard/properties/${propertyId}/inventory?roomId=${r.id}`}
-                  className="rounded-xl px-4 py-2 text-sm border border-black/10 hover:bg-black/5"
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-sm border border-black/10 hover:bg-black/5"
                 >
                   Items
                 </Link>
@@ -323,7 +323,7 @@ export default function RoomsHubClient() {
                     e.stopPropagation();
                     openScan(r);
                   }}
-                  className="rounded-xl px-4 py-2 text-sm border border-black/10 hover:bg-black/5"
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-sm border border-black/10 hover:bg-black/5"
                 >
                   AI Scan
                 </button>
