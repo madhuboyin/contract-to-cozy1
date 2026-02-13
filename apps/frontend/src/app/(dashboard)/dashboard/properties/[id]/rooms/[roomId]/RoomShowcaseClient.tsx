@@ -214,45 +214,47 @@ export default function RoomShowcaseClient() {
   }));
   
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 sm:p-6 space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <SectionHeader
-          icon={template === 'KITCHEN' ? '🍳' : template === 'LIVING_ROOM' ? '🛋️' : '✨'}
-          title={heroTitle}
-          description="A lightweight, modern room page generated from your inventory."
-        />
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="w-full sm:w-auto">
+          <SectionHeader
+            icon={template === 'KITCHEN' ? '🍳' : template === 'LIVING_ROOM' ? '🛋️' : '✨'}
+            title={heroTitle}
+            description="A lightweight, modern room page generated from your inventory."
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center sm:gap-3">
           <Link
             href={`/dashboard/properties/${propertyId}/rooms`}
-            className="text-sm underline opacity-80 hover:opacity-100"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
           >
             Back to rooms
           </Link>
           <Link
             href={`/dashboard/properties/${propertyId}/inventory?roomId=${roomId}`}
-            className="text-sm underline opacity-80 hover:opacity-100"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
           >
             View items
           </Link>
           <Link
             href={`/dashboard/properties/${propertyId}/inventory/rooms/${roomId}`}
-            className="text-sm underline opacity-80 hover:opacity-100"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
           >
             Edit room
           </Link>
 
           {/* ✅ AI Scan */}
-          <Link
-            href="#"
+          <button
+            type="button"
             onClick={(e) => {
               e.preventDefault();
               setScanOpen(true);
             }}
-            className="text-sm underline opacity-80 hover:opacity-100"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
           >
             AI Scan
-          </Link>
+          </button>
         </div>
       </div>
       <RoomScanModal
@@ -270,7 +272,7 @@ export default function RoomShowcaseClient() {
 
       {/* ✅ Scan history */}
       <div className="rounded-2xl border border-black/10 bg-white p-4">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="text-sm font-semibold">Scan history</div>
             <div className="text-xs opacity-70">Reopen a scan or export the drafts.</div>
@@ -279,7 +281,7 @@ export default function RoomShowcaseClient() {
           <button
             onClick={loadScanSessions}
             disabled={scanSessionsLoading}
-            className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
           >
             {scanSessionsLoading ? 'Refreshing…' : 'Refresh'}
           </button>
@@ -298,7 +300,7 @@ export default function RoomShowcaseClient() {
               return (
                 <div
                   key={s.id}
-                  className="rounded-xl border border-black/10 p-3 flex items-center justify-between gap-3"
+                  className="rounded-xl border border-black/10 p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0">
                     <div className="text-sm font-medium truncate">
@@ -314,20 +316,20 @@ export default function RoomShowcaseClient() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-col sm:flex-row gap-2 shrink-0 w-full sm:w-auto">
                     <button
                       onClick={() => {
                         setHistorySessionId(s.id);
                         setScanOpen(true);
                       }}
-                      className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+                      className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
                     >
                       Reopen
                     </button>
 
                     <a
                       href={exportUrl}
-                      className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+                      className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
                     >
                       Export CSV
                     </a>
@@ -377,13 +379,15 @@ export default function RoomShowcaseClient() {
 
               {/* Ring: take remaining space, centered */}
               <div className="flex-1 min-h-[180px] flex items-center justify-center">
-                <RoomHealthScoreRing
-                  value={score}
-                  variant="hero"
-                  ringOnly
-                  size={210}
-                  strokeWidth={18}
-                />
+                <div className="scale-90 sm:scale-100 origin-center">
+                  <RoomHealthScoreRing
+                    value={score}
+                    variant="hero"
+                    ringOnly
+                    size={210}
+                    strokeWidth={18}
+                  />
+                </div>
               </div>
 
               {/* Tip */}
