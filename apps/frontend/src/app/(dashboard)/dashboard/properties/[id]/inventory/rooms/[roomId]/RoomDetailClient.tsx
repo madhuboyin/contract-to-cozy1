@@ -290,14 +290,17 @@ export default function RoomDetailClient() {
   const stats = insights?.stats;
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-start justify-between gap-4">
+    <div className="p-4 sm:p-6 space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <SectionHeader
           icon={roomIcon(roomBase)}
           title={room.name}
           description="Profile, micro-checklists, and maintenance timeline."
         />
-        <Link href={`/dashboard/properties/${propertyId}/inventory/rooms`} className="text-sm underline opacity-80 hover:opacity-100">
+        <Link
+          href={`/dashboard/properties/${propertyId}/inventory/rooms`}
+          className="inline-flex min-h-[44px] items-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 w-fit"
+        >
           Back to rooms
         </Link>
       </div>
@@ -318,40 +321,42 @@ export default function RoomDetailClient() {
         <div className="flex flex-wrap gap-2">
           <Link
             href={`/dashboard/properties/${propertyId}/rooms/${roomId}`}
-            className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
           >
             View room page
           </Link>
           <Link
             href={`/dashboard/properties/${propertyId}/inventory?roomId=${roomId}`}
-            className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
           >
             Manage items
           </Link>
         </div>
       </div>
 
-      <div className="inline-flex items-center p-1 bg-black/5 rounded-xl border border-black/5">
-        {(['PROFILE', 'CHECKLIST', 'TIMELINE'] as Tab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-1.5 text-sm font-medium rounded-lg transition ${
-              tab === t ? 'bg-white text-black shadow-sm border border-black/5' : 'text-black/60 hover:text-black'
-            }`}
-          >
-            {t === 'PROFILE' ? 'Profile' : t === 'CHECKLIST' ? 'Checklist' : 'Timeline'}
-          </button>
-        ))}
+      <div className="w-full overflow-x-auto">
+        <div className="inline-flex min-w-max items-center p-1 bg-black/5 rounded-xl border border-black/5">
+          {(['PROFILE', 'CHECKLIST', 'TIMELINE'] as Tab[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`px-3 sm:px-4 py-2 min-h-[44px] text-sm font-medium rounded-lg transition ${
+                tab === t ? 'bg-white text-black shadow-sm border border-black/5' : 'text-black/60 hover:text-black'
+              }`}
+            >
+              {t === 'PROFILE' ? 'Profile' : t === 'CHECKLIST' ? 'Checklist' : 'Timeline'}
+            </button>
+          ))}
+        </div>
       </div>
       <button
       onClick={() => setScanOpen(true)}
-      className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+      className="inline-flex w-full sm:w-auto min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
       >
         AI Scan Room
       </button>
       <div className="mt-3 w-full rounded-2xl border border-black/10 bg-white p-4">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="text-sm font-semibold">Scan history</div>
             <div className="text-xs opacity-70">Reopen a scan or export the drafts.</div>
@@ -359,7 +364,7 @@ export default function RoomDetailClient() {
           <button
             onClick={loadScanSessions}
             disabled={scanSessionsLoading}
-            className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
+            className="inline-flex w-full sm:w-auto min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
           >
             {scanSessionsLoading ? 'Refreshing…' : 'Refresh'}
           </button>
@@ -376,7 +381,7 @@ export default function RoomDetailClient() {
               const exportUrl = getDraftsCsvExportUrl({ propertyId, scanSessionId: s.id });
 
               return (
-                <div key={s.id} className="rounded-xl border border-black/10 p-3 flex items-center justify-between gap-3">
+                <div key={s.id} className="rounded-xl border border-black/10 p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <div className="text-sm font-medium truncate">
                       {label}{' '}
@@ -391,20 +396,20 @@ export default function RoomDetailClient() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-col sm:flex-row gap-2 shrink-0 w-full sm:w-auto">
                     <button
                       onClick={() => {
                         setHistorySessionId(s.id);
                         setScanOpen(true);
                       }}
-                      className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+                      className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
                     >
                       Reopen
                     </button>
 
                     <a
                       href={exportUrl}
-                      className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+                      className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
                     >
                       Export CSV
                     </a>

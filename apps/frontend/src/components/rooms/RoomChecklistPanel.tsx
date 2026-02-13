@@ -308,7 +308,7 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
         </div>
 
         <div className="mt-4 rounded-xl border border-black/10 bg-black/[0.02] p-4">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-black/60" />
@@ -320,7 +320,12 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
               </div>
             </div>
 
-            <Button variant="outline" onClick={addRecommended} disabled={mutating || recommendedToAdd.length === 0}>
+            <Button
+              variant="outline"
+              onClick={addRecommended}
+              disabled={mutating || recommendedToAdd.length === 0}
+              className="inline-flex min-h-[44px] w-full sm:w-auto items-center justify-center"
+            >
               Add recommended
             </Button>
           </div>
@@ -335,14 +340,18 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
           )}
         </div>
 
-        <div className="mt-4 flex items-center gap-2">
+        <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <Input
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
             placeholder={placeholder}
             disabled={mutating}
           />
-          <Button onClick={addItem} disabled={mutating || !newLabel.trim()}>
+          <Button
+            onClick={addItem}
+            disabled={mutating || !newLabel.trim()}
+            className="inline-flex min-h-[44px] w-full sm:w-auto items-center justify-center"
+          >
             <Plus className="h-4 w-4 mr-2" />
             Add
           </Button>
