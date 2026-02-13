@@ -125,7 +125,7 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
                     {/* Buttons - always horizontal */}
                     <div className="flex items-center gap-2 shrink-0">
                       <Link
-                        href={`/dashboard/properties/${propertyId}/inventory?focus=${g.inventoryItemId}`}
+                        href={`/dashboard/properties/${propertyId}/inventory?openItemId=${g.inventoryItemId}&scrollToItemId=${g.inventoryItemId}`}
                         className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
                       >
                         View
