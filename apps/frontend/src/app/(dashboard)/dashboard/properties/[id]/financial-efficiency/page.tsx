@@ -4,14 +4,13 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
-import { FinancialEfficiencyReport, Property } from "@/types"; 
+import { FinancialEfficiencyReport } from "@/types"; 
 import { api } from "@/lib/api/client";
 import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading } from "@/components/page-header";
 import { toast } from "@/components/ui/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { DollarSign, Shield, Loader2, Leaf, BarChart, ArrowLeft, RotateCw } from "lucide-react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -76,8 +75,43 @@ const CostBreakdownTable = ({ report }: { report: FinancialEfficiencyReport }) =
                 <CardTitle>Annual Cost Breakdown</CardTitle>
                 <CardDescription>Comparison of your actual annual expenses versus the calculated market average for your area and property type.</CardDescription>
             </CardHeader>
-            <CardContent>
-                <div className="w-full overflow-x-auto">
+            <CardContent className="space-y-4">
+                <div className="space-y-3 md:hidden">
+                    {dataRows.map((item, index) => {
+                        const isEfficient = item.actual <= item.average * 1.1; // 10% tolerance
+                        const badgeColor = isEfficient ? 'success' : 'destructive';
+                        const statusText = isEfficient ? 'Efficient' : 'Overspending';
+                        return (
+                            <div key={index} className="rounded-xl border border-black/10 p-4 space-y-2">
+                                <div className="text-sm font-medium">{item.name}</div>
+                                <div className="flex items-center justify-between gap-3 text-sm">
+                                    <span className="text-muted-foreground">Your cost</span>
+                                    <span className="font-bold text-gray-800">{formatCurrency(item.actual)}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-3 text-sm">
+                                    <span className="text-muted-foreground">Market average</span>
+                                    <span className="text-muted-foreground">{formatCurrency(item.average)}</span>
+                                </div>
+                                <div className="pt-1">
+                                    <Badge variant={badgeColor as any}>{statusText}</Badge>
+                                </div>
+                            </div>
+                        );
+                    })}
+                    <div className="rounded-xl border-2 border-black/10 p-4 space-y-1">
+                        <div className="text-sm font-semibold">Total Annual Cost</div>
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                            <span className="text-muted-foreground">Your total</span>
+                            <span className="text-base font-bold">{formatCurrency(actualTotal)}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                            <span className="text-muted-foreground">Market total</span>
+                            <span className="text-base font-bold">{formatCurrency(report.marketAverageTotal)}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="hidden md:block">
                     <Table className="w-full table-auto">
                         <TableHeader>
                             <TableRow>
@@ -252,8 +286,8 @@ export default function FinancialEfficiencyPage() {
     };
 
     return (
-        <DashboardShell>
-            <PageHeader>
+        <DashboardShell className="pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+            <PageHeader className="pt-4 pb-4 md:pt-8 md:pb-8">
                 <Button 
                     variant="link" 
                     className="p-0 h-auto mb-2 text-sm text-muted-foreground"
@@ -262,7 +296,7 @@ export default function FinancialEfficiencyPage() {
                     <ArrowLeft className="h-4 w-4 mr-1" /> Back
                 </Button>
                 <PageHeaderHeading className="flex items-center gap-2">
-                    <ScoreIcon className="h-8 w-8 text-primary" /> Financial Efficiency Report
+                    <ScoreIcon className="h-6 w-6 md:h-8 md:w-8 text-primary" /> Financial Efficiency Report
                 </PageHeaderHeading>
             </PageHeader>
 
@@ -354,7 +388,7 @@ export default function FinancialEfficiencyPage() {
             <div className="mt-8 space-y-6">
                 {/* --- FES Gauge Visualization --- */}
                 <div className="space-y-2">
-                    <h3 className="text-xl font-semibold">Overall Efficiency Gauge: {level}</h3>
+                    <h3 className="text-lg md:text-xl font-semibold">Overall Efficiency Gauge: {level}</h3>
                     <div className="flex justify-between text-xs font-medium text-muted-foreground">
                         <span>Low Efficiency (0)</span>
                         <span>High Efficiency (100)</span>
