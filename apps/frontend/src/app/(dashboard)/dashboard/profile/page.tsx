@@ -142,8 +142,8 @@ export default function ProfilePage() {
   ];
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="mx-auto max-w-4xl pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Profile Settings</h1>
           <p className="mt-2 text-gray-600">Manage your account information</p>
@@ -152,7 +152,7 @@ export default function ProfilePage() {
           <button
             onClick={() => setIsEditing(true)}
             // FIX: Use brand color utilities
-            className="px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary-light transition-colors"
+            className="min-h-[44px] w-full rounded-lg bg-brand-primary px-4 py-2 text-white transition-colors hover:bg-brand-primary-light sm:w-auto"
           >
             Edit Profile
           </button>
@@ -170,7 +170,7 @@ export default function ProfilePage() {
       )}
 
       <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-        <div className="p-6 border-b border-gray-200">
+        <div className="p-4 sm:p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Personal Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
@@ -240,7 +240,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Address Information</h2>
           <div className="grid grid-cols-1 gap-6">
             <div>
@@ -328,11 +328,11 @@ export default function ProfilePage() {
         </div>
 
         {isEditing && (
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end space-x-3">
+          <div className="border-t border-gray-200 bg-gray-50 px-4 py-4 sm:px-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
             <button
               onClick={handleCancel}
               disabled={isSaving}
-              className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
+              className="min-h-[44px] w-full rounded-lg border border-gray-300 px-6 py-2.5 text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50 sm:w-auto"
             >
               Cancel
             </button>
@@ -340,7 +340,7 @@ export default function ProfilePage() {
               onClick={handleSave}
               disabled={isSaving}
               // FIX: Use brand color utilities
-              className="px-6 py-2.5 bg-brand-primary text-white rounded-lg hover:bg-brand-primary-light transition-colors disabled:opacity-50"
+              className="min-h-[44px] w-full rounded-lg bg-brand-primary px-6 py-2.5 text-white transition-colors hover:bg-brand-primary-light disabled:opacity-50 sm:w-auto"
             >
               {isSaving ? 'Saving...' : 'Save Changes'}
             </button>
@@ -348,7 +348,7 @@ export default function ProfilePage() {
         )}
       </div>
 
-      <div className="mt-6 bg-white rounded-xl shadow-lg p-6">
+      <div className="mt-6 bg-white rounded-xl shadow-lg p-4 sm:p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Account Information</h2>
         <div className="space-y-3">
           <div className="flex justify-between items-center">
