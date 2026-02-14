@@ -170,6 +170,16 @@ export const SeasonalChecklistCard: React.FC<SeasonalChecklistCardProps> = ({
       (1000 * 60 * 60 * 24)
   ));
 
+  // Display year should reflect the active year for cross-year seasons (e.g., Winter 2025-2026 -> 2026)
+  const seasonStart = new Date(checklist.seasonStartDate);
+  const seasonEnd = new Date(checklist.seasonEndDate);
+  const displayYearLabel =
+    Number.isFinite(seasonStart.getTime()) &&
+    Number.isFinite(seasonEnd.getTime()) &&
+    seasonStart.getFullYear() !== seasonEnd.getFullYear()
+      ? `${seasonStart.getFullYear()}-${String(seasonEnd.getFullYear()).slice(-2)}`
+      : String(checklist.year);
+
   // Critical tasks — include both RECOMMENDED and ADDED statuses
   const criticalTasks = checklist.items.filter(
     (item) => item.priority === 'CRITICAL' && (item.status === 'RECOMMENDED' || item.status === 'ADDED')
@@ -188,7 +198,7 @@ export const SeasonalChecklistCard: React.FC<SeasonalChecklistCardProps> = ({
       <CardHeader className="pb-3">
         <CardTitle className="text-lg font-semibold flex items-center gap-2 min-w-0">
           <span className="text-2xl" aria-hidden="true">{SEASON_EMOJI[checklist.season]}</span>
-          {checklist.season} {checklist.year}
+          {checklist.season} {displayYearLabel}
         </CardTitle>
       </CardHeader>
 
