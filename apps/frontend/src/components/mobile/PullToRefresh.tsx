@@ -111,11 +111,9 @@ export function PullToRefresh({
       </div>
 
       {/* Content */}
-      <div 
+      <div
         className="transition-transform duration-200"
-        style={{ 
-          transform: `translateY(${pullDistance}px)` 
-        }}
+        style={pullDistance > 0 ? { transform: `translateY(${pullDistance}px)` } : undefined}
       >
         {children}
       </div>

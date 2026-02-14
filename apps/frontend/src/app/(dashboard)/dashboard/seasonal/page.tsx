@@ -3,7 +3,8 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Calendar, ChevronDown, ChevronRight, CheckCircle, Clock, Settings, Link, ChevronLeft, ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
+import { Calendar, ChevronDown, ChevronRight, CheckCircle, Clock, Settings, ChevronLeft, ArrowLeft } from 'lucide-react';
 import { useSeasonalChecklists, useClimateInfo } from '@/lib/hooks/useSeasonalChecklists';
 import { SeasonalChecklistModal } from '@/components/seasonal/SeasonalChecklistModal';
 import {
@@ -17,7 +18,6 @@ import {
 import { SeasonalChecklist } from '@/types/seasonal.types';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { useRouter } from 'next/navigation';
-import { SettingsIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function SeasonalMaintenancePage() {
