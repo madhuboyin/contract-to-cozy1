@@ -97,8 +97,8 @@ export const UpcomingRenewalsCard: React.FC<UpcomingRenewalsCardProps> = ({ prop
   const totalRenewals = renewalItems.length;
 
   return (
-    <Card className="w-full min-h-[320px] h-full flex flex-col border-2 border-gray-100 rounded-2xl shadow-sm hover:border-blue-300 hover:shadow-lg hover:-translate-y-0.5 transition-all overflow-hidden">
-      <CardContent className="p-5 flex flex-col h-full">
+    <Card className="w-full min-h-[240px] md:min-h-[260px] flex flex-col border-2 border-gray-100 rounded-2xl shadow-sm hover:border-blue-300 hover:shadow-lg hover:-translate-y-0.5 transition-all">
+      <CardContent className="p-5 flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
           <div className="flex items-center gap-2">
@@ -111,7 +111,7 @@ export const UpcomingRenewalsCard: React.FC<UpcomingRenewalsCardProps> = ({ prop
         </div>
 
         {/* Items List */}
-        <div className="flex-1 overflow-hidden">
+        <div className="overflow-hidden">
           {isLoading && propertyId ? (
             <div className="space-y-3">
               <div className="h-16 rounded-lg bg-gray-100 animate-pulse" />
@@ -119,7 +119,7 @@ export const UpcomingRenewalsCard: React.FC<UpcomingRenewalsCardProps> = ({ prop
               <div className="h-16 rounded-lg bg-gray-100 animate-pulse" />
             </div>
           ) : !propertyId ? (
-            <div className="flex flex-col items-center justify-center h-full py-8 text-center">
+            <div className="flex flex-col items-center justify-center py-6 text-center">
               <span className="text-4xl mb-3">🏠</span>
               <p className="text-sm text-gray-600 mb-4">Select a property</p>
               <Link href="/dashboard/properties">
@@ -129,7 +129,7 @@ export const UpcomingRenewalsCard: React.FC<UpcomingRenewalsCardProps> = ({ prop
               </Link>
             </div>
           ) : displayItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full py-8 text-center">
+            <div className="flex flex-col items-center justify-center py-6 text-center">
               <span className="text-4xl mb-3">📋</span>
               <p className="text-sm text-gray-600 mb-4">No upcoming renewals</p>
               <Link href={propertyId ? `/dashboard/properties/${propertyId}` : '/dashboard/properties'}>
@@ -172,7 +172,7 @@ export const UpcomingRenewalsCard: React.FC<UpcomingRenewalsCardProps> = ({ prop
 
         {/* CTA Button */}
         {totalRenewals > 0 && (
-          <div className="mt-auto pt-4">
+          <div className="pt-4">
             <Link href="/dashboard/warranties">
               <Button 
                 variant="ghost" 

@@ -57,8 +57,8 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
     : '/dashboard/maintenance';
 
   return (
-    <Card className="w-full min-h-[320px] h-full flex flex-col border-2 border-gray-100 rounded-2xl shadow-sm hover:border-blue-300 hover:shadow-lg hover:-translate-y-0.5 transition-all overflow-hidden">
-      <CardContent className="p-5 flex flex-col h-full">
+    <Card className="w-full min-h-[240px] md:min-h-[260px] flex flex-col border-2 border-gray-100 rounded-2xl shadow-sm hover:border-blue-300 hover:shadow-lg hover:-translate-y-0.5 transition-all">
+      <CardContent className="p-5 flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
           <div className="flex items-center gap-2">
@@ -71,16 +71,16 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
         </div>
 
         {/* Items List */}
-        <div className="flex-1 overflow-hidden">
+        <div className="overflow-hidden">
           {!isPropertySelected ? (
-            <div className="flex flex-col items-center justify-center h-full py-8 text-center">
+            <div className="flex flex-col items-center justify-center py-6 text-center">
               <Wrench className="h-10 w-10 text-gray-300 mb-3" />
               <p className="text-sm text-gray-500">
                 Select a property to view upcoming maintenance
               </p>
             </div>
           ) : totalTasks === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full py-8 text-center">
+            <div className="flex flex-col items-center justify-center py-6 text-center">
               <CheckCircle className="h-10 w-10 text-green-500 mb-3" />
               <p className="text-sm font-medium text-gray-700">All maintenance up to date</p>
               <Link href="/dashboard/maintenance-setup">
@@ -124,7 +124,7 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
 
         {/* Footer with View All Link */}
         {totalTasks > 0 && (
-          <div className="pt-4 border-t border-gray-100 mt-auto">
+          <div className="pt-4 border-t border-gray-100">
             <Link href={maintenanceUrl}>
               <Button 
                 variant="ghost" 
