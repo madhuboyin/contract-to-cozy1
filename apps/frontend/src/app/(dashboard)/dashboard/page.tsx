@@ -34,7 +34,6 @@ import { Home } from 'lucide-react';
 import { TrendingUp } from 'lucide-react';
 import { Camera } from 'lucide-react';
 import { Scale } from 'lucide-react';
-import { Truck } from 'lucide-react';
 import { ChevronRight } from 'lucide-react';
 import { SeasonalBanner } from '@/components/seasonal/SeasonalBanner';
 import { SeasonalWidget } from '@/components/seasonal/SeasonalWidget';
@@ -489,7 +488,7 @@ export default function DashboardPage() {
           {/* CAROUSEL CONTAINER: Linked with carouselRef */}
           <div 
             ref={carouselRef}
-            className="flex gap-4 overflow-x-auto pb-6 no-scrollbar snap-x scroll-smooth"
+            className="flex gap-4 overflow-x-auto pb-2 no-scrollbar snap-x scroll-smooth"
           >
             {/* AI CARDS (Remains same as your previous working version) */}
             {[
@@ -524,7 +523,7 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      <DashboardShell>
+      <DashboardShell className="pt-0 md:pt-0">
       {/* ========================================= */}
       {/* SEASONAL MAINTENANCE BANNER - EXISTING_OWNER ONLY */}
       {/* ========================================= */}
@@ -532,55 +531,10 @@ export default function DashboardPage() {
         <SeasonalBanner propertyId={selectedPropertyId} />
       )}
 
-      <section className="mb-8">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          
-          {/* Inspection Report Intelligence - HOME_BUYER ONLY */}
-          {userType === 'HOME_BUYER' && (
-            <Link href={`/dashboard/inspection-report?propertyId=${selectedPropertyId}`}>
-              <div className="flex items-start p-5 bg-white border border-gray-200 rounded-lg hover:border-2 hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
-                <div className="flex-shrink-0 mr-4">
-                  <FileText className="h-12 w-12 text-indigo-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
-                    Inspection Reports
-                  </h3>
-                  <p className="text-sm text-gray-600 truncate">
-                    Analysis, costs & negotiation
-                  </p>
-                </div>
-              </div>
-            </Link>
-          )}
+      {homeownerSegment === 'EXISTING_OWNER' && selectedPropertyId && (
+        <SeasonalWidget propertyId={selectedPropertyId} />
+      )}
 
-          {/* Moving Concierge - HOME_BUYER ONLY */}
-          {userType === 'HOME_BUYER' && (
-            <Link href="/dashboard/moving-concierge">
-              <div className="flex items-start p-5 bg-white border border-gray-200 rounded-lg hover:border-2 hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer">
-                <div className="flex-shrink-0 mr-4">
-                  <Truck className="h-12 w-12 text-green-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-base font-semibold text-gray-900 leading-tight mb-1">
-                    Moving Help
-                  </h3>
-                  <p className="text-sm text-gray-600 truncate">
-                    AI timeline & checklist
-                  </p>
-                </div>
-              </div>
-            </Link>
-          )}
-
-          {/* Seasonal Maintenance Widget - EXISTING_OWNER ONLY */}
-          {homeownerSegment === 'EXISTING_OWNER' && selectedPropertyId && (
-            <div className="col-span-1">
-              <SeasonalWidget propertyId={selectedPropertyId} />
-            </div>
-          )}
-        </div>
-      </section>            
       {/* Filter data by selected property before passing to child components */}
       {/* This ensures the red banner and other components show data for the currently selected property only */}
       {(() => {
