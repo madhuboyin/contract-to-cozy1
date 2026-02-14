@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { api } from '@/lib/api/client';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { Booking, BookingStatus, CreateBookingInput } from '@/types';
-import { MoreVertical, Calendar, MapPin, DollarSign } from 'lucide-react';
+import { MoreVertical, Calendar } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -270,12 +270,11 @@ export default function HomeownerBookingsPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="space-y-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">My Bookings</h1>
-          <p className="mt-2 text-sm text-gray-600">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">My Bookings</h1>
+          <p className="mt-2 text-muted-foreground">
             View and manage your service bookings
           </p>
         </div>
@@ -295,171 +294,159 @@ export default function HomeownerBookingsPage() {
         )}
 
         {/* Filter Buttons */}
-        <div className="mb-6 flex flex-wrap gap-2">
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              filter === 'all'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-            }`}
-          >
-            All
-          </button>
-          {(['DRAFT', 'PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as BookingStatus[]).map((status) => (
+        <div className="-mx-1 overflow-x-auto px-1 pb-1">
+          <div className="inline-flex gap-2">
             <button
-              key={status}
-              onClick={() => setFilter(status)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                filter === status
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              onClick={() => setFilter('all')}
+              className={`min-h-[40px] whitespace-nowrap rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                filter === 'all'
+                  ? 'border-brand-primary bg-brand-primary text-white'
+                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
               }`}
             >
-              {status.replace('_', ' ')}
+              All
             </button>
-          ))}
+            {(['DRAFT', 'PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as BookingStatus[]).map((status) => (
+              <button
+                key={status}
+                onClick={() => setFilter(status)}
+                className={`min-h-[40px] whitespace-nowrap rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                  filter === status
+                    ? 'border-brand-primary bg-brand-primary text-white'
+                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {status.replace('_', ' ')}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Bookings Table */}
         {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading bookings...</p>
+          <div className="rounded-xl border bg-white py-10 text-center">
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-b-2 border-brand-primary" />
+            <p className="mt-3 text-gray-600">Loading bookings...</p>
           </div>
         ) : filteredBookings.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-12 text-center">
-            <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No bookings found</h3>
-            <p className="text-gray-600 mb-6">
-              {filter === 'all' 
-                ? "You haven't made any bookings yet." 
+          <div className="rounded-xl border bg-white p-10 text-center">
+            <Calendar className="mx-auto mb-3 h-10 w-10 text-gray-400" />
+            <h3 className="mb-2 text-lg font-medium text-gray-900">No bookings found</h3>
+            <p className="mb-6 text-gray-600">
+              {filter === 'all'
+                ? "You haven't made any bookings yet."
                 : `No ${filter.toLowerCase().replace('_', ' ')} bookings.`}
             </p>
             <Link
               href="/dashboard/find-services"
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="inline-flex items-center rounded-lg bg-brand-primary px-4 py-2 text-white hover:bg-brand-primary-light"
             >
               Find Services
             </Link>
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            {/* Table Header */}
-            <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wider">
-              <div className="md:col-span-3">Service</div>
-              <div className="md:col-span-2">Date & Time</div>
-              <div className="md:col-span-3">Property</div>
-              <div className="md:col-span-2">Status</div>
-              <div className="md:col-span-2 text-right">Actions</div>
-            </div>
-
-            {/* Mobile cards + desktop rows */}
-            <div className="divide-y divide-gray-100">
+          <>
+            {/* Mobile cards */}
+            <div className="grid gap-4 md:hidden">
               {filteredBookings.map((booking) => (
-                <div
-                  key={booking.id}
-                  className="p-4 md:grid md:grid-cols-12 md:gap-4 md:px-6 md:py-4 md:hover:bg-gray-50 md:transition-colors md:items-center"
-                >
-                  {/* Mobile top row */}
-                  <div className="flex items-start justify-between gap-4 md:hidden">
+                <div key={booking.id} className="rounded-xl border bg-white p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="font-medium text-gray-900 text-sm truncate">
+                      <div className="truncate text-base font-semibold text-gray-900">
                         {booking.service?.name || 'Service'}
                       </div>
-                      <div className="text-xs text-gray-500 mt-1 truncate">
+                      <div className="mt-1 truncate text-sm text-gray-500">
                         {booking.provider?.businessName || 'Provider'}
                       </div>
-                      <div className="text-xs text-gray-400 mt-1">
-                        #{booking.bookingNumber}
-                      </div>
+                      <div className="mt-1 text-xs text-gray-400">#{booking.bookingNumber}</div>
                     </div>
                     <div className="shrink-0">{renderActionsMenu(booking)}</div>
                   </div>
 
-                  {/* Mobile details */}
-                  <div className="mt-4 space-y-2 md:hidden">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Date</span>
-                      <span className="text-sm text-gray-900">{formatDate(booking.scheduledDate)}</span>
+                  <div className="mt-3 grid gap-2.5 text-sm text-muted-foreground">
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Date</span>
+                      <span className="font-medium text-foreground">{formatDate(booking.scheduledDate)}</span>
                     </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Time</span>
-                      <span className="text-sm text-gray-900">{formatTime(booking.scheduledDate)}</span>
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Time</span>
+                      <span className="text-foreground">{formatTime(booking.scheduledDate)}</span>
                     </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Price</span>
-                      <span className="text-sm font-medium text-gray-900">
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Price</span>
+                      <span className="font-semibold text-foreground">
                         ${Number(booking.estimatedPrice || 0).toFixed(2)}
                       </span>
                     </div>
-                    <div className="pt-1">
-                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Property</span>
-                      <div className="mt-1 text-sm text-gray-900 break-words">
-                        {formatProperty(booking.property)}
-                      </div>
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Property</span>
+                      <span className="text-right text-foreground">{formatProperty(booking.property)}</span>
                     </div>
-                    <div className="pt-1">
-                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Status</span>
-                      <div className="mt-1">
-                        <StatusDot status={booking.status} />
-                      </div>
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Status</span>
+                      <StatusDot status={booking.status} />
                     </div>
-                  </div>
-
-                  {/* Service Column */}
-                  <div className="hidden md:block md:col-span-3">
-                    <div className="font-medium text-gray-900 text-sm">
-                      {booking.service?.name || 'Service'}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {booking.provider?.businessName || 'Provider'}
-                    </div>
-                    <div className="text-xs text-gray-400 mt-1">
-                      #{booking.bookingNumber}
-                    </div>
-                  </div>
-
-                  {/* Date & Time Column */}
-                  <div className="hidden md:block md:col-span-2">
-                    <div className="text-sm text-gray-900">
-                      {formatDate(booking.scheduledDate)}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {formatTime(booking.scheduledDate)}
-                    </div>
-                    <div className="text-xs text-gray-900 font-medium mt-1">
-                      ${Number(booking.estimatedPrice || 0).toFixed(2)}
-                    </div>
-                  </div>
-
-                  {/* Property Column */}
-                  <div className="hidden md:block md:col-span-3">
-                    <div className="text-sm text-gray-900 truncate">
-                      {booking.property?.address || 'N/A'}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1 truncate">
-                      {booking.property?.city && booking.property?.state
-                        ? `${booking.property.city}, ${booking.property.state}`
-                        : ''}
-                    </div>
-                  </div>
-
-                  {/* Status Column */}
-                  <div className="hidden md:block md:col-span-2">
-                    <StatusDot status={booking.status} />
-                  </div>
-
-                  {/* Actions Column */}
-                  <div className="hidden md:block md:col-span-2 text-right">
-                    <div className="inline-flex">{renderActionsMenu(booking)}</div>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
+
+            {/* Desktop table */}
+            <div className="hidden overflow-hidden rounded-xl border bg-white shadow-sm md:block">
+              <div className="grid grid-cols-12 gap-4 border-b border-gray-200 bg-gray-50 px-6 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">
+                <div className="md:col-span-3">Service</div>
+                <div className="md:col-span-2">Date & Time</div>
+                <div className="md:col-span-3">Property</div>
+                <div className="md:col-span-2">Status</div>
+                <div className="md:col-span-2 text-right">Actions</div>
+              </div>
+
+              <div className="divide-y divide-gray-100">
+                {filteredBookings.map((booking) => (
+                  <div
+                    key={booking.id}
+                    className="grid grid-cols-12 items-center gap-4 px-6 py-4 transition-colors hover:bg-gray-50"
+                  >
+                    <div className="md:col-span-3">
+                      <div className="text-sm font-medium text-gray-900">
+                        {booking.service?.name || 'Service'}
+                      </div>
+                      <div className="mt-1 text-xs text-gray-500">
+                        {booking.provider?.businessName || 'Provider'}
+                      </div>
+                      <div className="mt-1 text-xs text-gray-400">#{booking.bookingNumber}</div>
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <div className="text-sm text-gray-900">{formatDate(booking.scheduledDate)}</div>
+                      <div className="mt-1 text-xs text-gray-500">{formatTime(booking.scheduledDate)}</div>
+                      <div className="mt-1 text-xs font-medium text-gray-900">
+                        ${Number(booking.estimatedPrice || 0).toFixed(2)}
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-3">
+                      <div className="truncate text-sm text-gray-900">{booking.property?.address || 'N/A'}</div>
+                      <div className="mt-1 truncate text-xs text-gray-500">
+                        {booking.property?.city && booking.property?.state
+                          ? `${booking.property.city}, ${booking.property.state}`
+                          : ''}
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <StatusDot status={booking.status} />
+                    </div>
+
+                    <div className="md:col-span-2 text-right">
+                      <div className="inline-flex">{renderActionsMenu(booking)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
         )}
-      </div>
+      
 
       {/* Edit Modal - Keep existing modal code */}
       {showEditModal && editingBooking && (
