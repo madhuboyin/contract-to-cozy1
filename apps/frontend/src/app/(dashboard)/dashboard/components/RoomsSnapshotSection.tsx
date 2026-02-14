@@ -2,7 +2,21 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, LayoutGrid } from 'lucide-react';
+import {
+  ArrowRight,
+  Bath,
+  BedDouble,
+  Briefcase,
+  Car,
+  ChevronLeft,
+  ChevronRight,
+  Home,
+  LayoutGrid,
+  Shirt,
+  Sofa,
+  UtensilsCrossed,
+  Warehouse,
+} from 'lucide-react';
 import { getRoomInsights, listInventoryRooms } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
 import type { InventoryRoom } from '@/types';
@@ -72,6 +86,42 @@ function deriveLabel(score: number): string {
   if (score >= 70) return 'GOOD';
   if (score >= 50) return 'NEEDS ATTENTION';
   return 'AT RISK';
+}
+
+function guessRoomType(name: string): string {
+  const normalized = (name || '').toLowerCase();
+  if (normalized.includes('kitchen')) return 'KITCHEN';
+  if (normalized.includes('living') || normalized.includes('family') || normalized.includes('great')) return 'LIVING_ROOM';
+  if (normalized.includes('bed') || normalized.includes('master') || normalized.includes('guest') || normalized.includes('kids')) return 'BEDROOM';
+  if (normalized.includes('bath') || normalized.includes('toilet') || normalized.includes('powder')) return 'BATHROOM';
+  if (normalized.includes('laundry') || normalized.includes('utility')) return 'LAUNDRY';
+  if (normalized.includes('office') || normalized.includes('study') || normalized.includes('den')) return 'OFFICE';
+  if (normalized.includes('garage')) return 'GARAGE';
+  if (normalized.includes('basement') || normalized.includes('cellar')) return 'BASEMENT';
+  return 'OTHER';
+}
+
+function roomIconFor(type: string) {
+  switch (type) {
+    case 'KITCHEN':
+      return UtensilsCrossed;
+    case 'LIVING_ROOM':
+      return Sofa;
+    case 'BEDROOM':
+      return BedDouble;
+    case 'BATHROOM':
+      return Bath;
+    case 'LAUNDRY':
+      return Shirt;
+    case 'OFFICE':
+      return Briefcase;
+    case 'GARAGE':
+      return Car;
+    case 'BASEMENT':
+      return Warehouse;
+    default:
+      return Home;
+  }
 }
 
 export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) {
@@ -232,7 +282,9 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
         <>
           <div ref={scrollerRef} className="flex gap-4 overflow-x-auto pb-2 no-scrollbar snap-x scroll-smooth">
             {rooms.map((room) => {
-              const template = safeString((room as InventoryRoom & { type?: string }).type) || 'NOT SET';
+              const rawType = safeString((room as InventoryRoom & { type?: string }).type);
+              const roomType = rawType || guessRoomType(room.name || '');
+              const RoomIcon = roomIconFor(roomType);
               const insights = roomInsights[room.id];
               const stats = insights?.stats;
               const backendScore = Number(insights?.healthScore?.score);
@@ -250,16 +302,17 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
                 <Link
                   key={room.id}
                   href={`/dashboard/properties/${propertyId}/rooms/${room.id}`}
-                  className="snap-start min-w-[320px] md:min-w-[420px] lg:min-w-[520px] flex-shrink-0 rounded-2xl border border-black/10 p-4 bg-white flex flex-col hover:bg-gray-50 transition-colors"
+                  className="snap-start min-w-[86%] sm:min-w-[70%] md:min-w-[calc((100%-1rem)/2)] lg:min-w-[calc((100%-2rem)/3)] flex-shrink-0 rounded-2xl border border-black/10 p-4 bg-white flex flex-col hover:bg-gray-50 transition-colors"
                 >
-                  <div className="min-w-0">
-                    <div className="font-medium truncate">{room.name || 'Unnamed room'}</div>
-                    <div className="text-xs opacity-60 mt-1">
-                      Template: <span className="font-medium">{template}</span>
+                  <div className="min-w-0 flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <RoomIcon className="w-4 h-4 text-gray-500 shrink-0" />
+                      <div className="font-medium truncate">{room.name || 'Unnamed room'}</div>
                     </div>
+                    <ArrowRight className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
                   </div>
 
-                  <div className="mt-4 rounded-xl border border-black/10 bg-black/[0.02] p-3">
+                  <div className="mt-4 rounded-xl border border-black/10 bg-black/[0.02] p-3 min-h-[128px]">
                     {insightsLoading[room.id] ? (
                       <div className="text-sm opacity-70">Loading insights...</div>
                     ) : insights ? (
