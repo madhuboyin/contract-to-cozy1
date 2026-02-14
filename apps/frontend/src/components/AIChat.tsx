@@ -138,11 +138,11 @@ export const AIChat: React.FC = () => {
 
 
   return (
-    <div className="fixed left-3 z-50 font-sans bottom-[calc(5.5rem+env(safe-area-inset-bottom))] sm:left-auto sm:right-4 sm:bottom-[calc(5rem+env(safe-area-inset-bottom))] lg:bottom-6 lg:right-6">
+    <div className="fixed right-3 z-50 font-sans bottom-[calc(6.5rem+env(safe-area-inset-bottom))] sm:right-4 sm:bottom-[calc(5rem+env(safe-area-inset-bottom))] lg:bottom-6 lg:right-6">
       {!isOpen && (
         <button 
           onClick={() => setIsOpen(true)}
-          className="group flex items-center bg-stone-900 hover:bg-amber-600 text-white rounded-full px-4 py-3 sm:px-6 sm:py-4 shadow-2xl transition-all duration-300 hover:-translate-y-1"
+          className="group flex items-center bg-stone-900 hover:bg-amber-600 text-white rounded-full px-3.5 py-2.5 sm:px-6 sm:py-4 shadow-2xl transition-all duration-300 hover:-translate-y-1"
         >
           <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 mr-2 animate-pulse" />
           <span className="font-medium text-sm sm:text-base">Ask Cozy</span>

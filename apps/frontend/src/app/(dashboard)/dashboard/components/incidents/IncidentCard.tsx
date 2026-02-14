@@ -14,7 +14,7 @@ export default function IncidentCard({ incident, propertyId }: { incident: Incid
       href={`/dashboard/properties/${propertyId}/incidents/${incident.id}`}
       className="block rounded-xl border bg-white p-4 hover:shadow-sm transition"
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="truncate text-sm font-semibold">{incident.title}</h3>
@@ -33,7 +33,7 @@ export default function IncidentCard({ incident, propertyId }: { incident: Incid
           </div>
         </div>
 
-        <div className="flex flex-col items-end gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end">
           <IncidentSeverityBadge severity={incident.severity} />
           <IncidentStatusBadge status={incident.status} />
         </div>

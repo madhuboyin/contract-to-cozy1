@@ -69,9 +69,9 @@ export default function IncidentsClient() {
 
   const headerRight = useMemo(() => {
     return (
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
         <select
-          className="rounded-lg border bg-white px-3 py-2 text-sm"
+          className="min-h-[44px] w-full rounded-lg border bg-white px-3 py-2 text-sm sm:w-auto"
           value={status}
           onChange={(e) => setStatus(e.target.value as any)}
         >
@@ -82,9 +82,10 @@ export default function IncidentsClient() {
           ))}
         </select>
 
-        <label className="flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm">
+        <label className="flex min-h-[44px] w-full items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm sm:w-auto">
           <input
             type="checkbox"
+            className="h-4 w-4 shrink-0"
             checked={includeSuppressed}
             onChange={(e) => setIncludeSuppressed(e.target.checked)}
           />
@@ -92,7 +93,7 @@ export default function IncidentsClient() {
         </label>
 
         <button
-          className="rounded-lg border bg-white px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+          className="min-h-[44px] w-full rounded-lg border bg-white px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50 sm:w-auto"
           onClick={load}
           disabled={loading}
         >

@@ -749,8 +749,8 @@ export default function PropertyDetailPage() {
           {/* Right fade indicator (mobile only) */}
           <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none md:hidden" />
 
-          <div className="overflow-x-auto scrollbar-hide">
-            <TabsList className="inline-flex w-max">
+          <div className="overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-1">
+            <TabsList className="inline-flex w-max [&>*]:snap-start">
               <TabsTrigger value="overview" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
                 <Home className="h-4 w-4 shrink-0" />
                 <span className="hidden sm:inline">Overview</span>
@@ -828,7 +828,7 @@ export default function PropertyDetailPage() {
           <RoomsHubClient />
         </TabsContent>
 
-        <TabsContent value="incidents" className="mt-4">
+        <TabsContent value="incidents" className="mt-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-0">
           <IncidentsClient />
         </TabsContent>
 
