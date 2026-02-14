@@ -40,6 +40,7 @@ import { SeasonalBanner } from '@/components/seasonal/SeasonalBanner';
 import { SeasonalWidget } from '@/components/seasonal/SeasonalWidget';
 import { useHomeownerSegment } from '@/lib/hooks/useHomeownerSegment';
 import { WelcomeSection } from '@/components/WelcomeSection';
+import { RoomsSnapshotSection } from './components/RoomsSnapshotSection';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -446,6 +447,9 @@ export default function DashboardPage() {
           <PropertyRiskScoreCard propertyId={selectedPropertyId} />
           <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
         </div>
+
+        {/* ROOMS SNAPSHOT */}
+        <RoomsSnapshotSection propertyId={selectedPropertyId} />
 
         {/* HORIZONTAL SEPARATOR */}
         <div className="w-full border-t border-gray-200 mb-8" />
