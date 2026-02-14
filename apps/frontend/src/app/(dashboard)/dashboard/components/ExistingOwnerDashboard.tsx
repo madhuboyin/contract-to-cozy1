@@ -10,7 +10,7 @@ import { RecurringMaintenanceCard } from './RecurringMaintenanceCard';
 import { UpcomingRenewalsCard } from './UpcomingRenewalsCard';
 import { FavoriteProvidersCard } from './FavoriteProvidersCard';
 import { SeasonalChecklistCard } from '@/app/(dashboard)/dashboard/components/SeasonalChecklistCard';
-import { ArrowRight, Activity } from 'lucide-react';
+import { ArrowRight, Activity, AlertTriangle, Sparkles, ClipboardList } from 'lucide-react';
 
 
 // Local Home Updates
@@ -103,40 +103,72 @@ export const ExistingOwnerDashboard = ({
   const isPropertySelected = !!selectedProperty;
 
   return (
-    <div className="space-y-2 pb-8">
-      {/* Header */}
-      {/* Home Pulse — compact health strip */}
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold text-gray-900 mb-3">
-          Here&apos;s what needs your attention today
-        </h2>
+    <div className="space-y-5 pb-8 md:space-y-6">
+      {/* Attention Summary */}
+      <section className="space-y-3">
+        <div className="flex items-start gap-3">
+          <div className="p-2 bg-blue-100 rounded-lg">
+            <AlertTriangle className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">
+              Here&apos;s what needs your attention today
+            </h2>
+            <p className="text-sm text-gray-500">
+              A quick summary of urgent items, progress, and estimated costs.
+            </p>
+          </div>
+        </div>
         <HomePulse stats={stats} selectedPropertyId={selectedPropertyId} />
-      </div>
+      </section>
+      <div className="w-full border-t border-gray-200" />
 
 
       {/* Action Center (Top Actions) */}
       {selectedPropertyId && (
-        <div className="space-y-2">
+        <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Action Center
-            </h2>
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <ClipboardList className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Action Center
+                </h2>
+                <p className="text-sm text-gray-500">
+                  Prioritized tasks to keep your home on track.
+                </p>
+              </div>
+            </div>
             <Link
               href={`/dashboard/actions${
                 selectedPropertyId ? `?propertyId=${selectedPropertyId}` : ''
               }`}
-              className="text-lg font-semibold text-blue-600 hover:text-blue-700 transition-colors flex items-center"
+              className="text-base md:text-lg font-semibold text-blue-600 hover:text-blue-700 transition-colors flex items-center"
             >
               View all
             </Link>
           </div>
 
           <ActionCenter propertyId={selectedPropertyId} maxItems={5} />
-        </div>
+        </section>
       )}
+      <div className="w-full border-t border-gray-200" />
 
       {/* Local Home Updates (Helpful Suggestions) */}
-      {localUpdates.length > 0 && (
+      <section className="space-y-3">
+        <div className="flex items-start gap-3">
+          <div className="p-2 bg-blue-100 rounded-lg">
+            <Sparkles className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">Local Updates</h2>
+            <p className="text-sm text-gray-500">
+              Market and service updates relevant to your property area.
+            </p>
+          </div>
+        </div>
         <LocalUpdatesCarousel
           updates={localUpdates}
           onDismiss={async (id) => {
@@ -150,41 +182,46 @@ export const ExistingOwnerDashboard = ({
             }
           }}
         />
-      )}
+      </section>
+      <div className="w-full border-t border-gray-200" />
 
       {/* NEW ROW: Seasonal Checklist + Favorite Providers */}
       <div className="grid gap-6 md:grid-cols-2">
         <SeasonalChecklistCard propertyId={selectedPropertyId} />
         <FavoriteProvidersCard />
       </div>
+      <div className="w-full border-t border-gray-200" />
 
       {/* Activity Center */}
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-blue-100 rounded-lg">
-          <Activity className="w-5 h-5 text-blue-600" />
+      <section className="space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-blue-100 rounded-lg">
+            <Activity className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">Activity Center</h2>
+            <p className="text-sm text-gray-500">
+              Track upcoming bookings, maintenance, and renewals for your home.
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">Activity Center</h2>
-          <p className="text-sm text-gray-500">
-            Track upcoming bookings, maintenance, and renewals for your home.
-          </p>
-        </div>
-      </div>
 
-      {/* Activity Cards (Original 3 cards) */}
-      <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 items-start">  
-        <UpcomingBookingsCard 
-          bookings={propertyBookings}
-          isPropertySelected={isPropertySelected}
-          selectedPropertyId={selectedPropertyId}
-        />
-        <RecurringMaintenanceCard
-          maintenance={maintenanceTasks}
-          isPropertySelected={isPropertySelected}
-          selectedPropertyId={selectedPropertyId}
-        />
-        <UpcomingRenewalsCard propertyId={selectedPropertyId} />
-      </div>
+        {/* Activity Cards (Original 3 cards) */}
+        <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 items-start">  
+          <UpcomingBookingsCard 
+            bookings={propertyBookings}
+            isPropertySelected={isPropertySelected}
+            selectedPropertyId={selectedPropertyId}
+          />
+          <RecurringMaintenanceCard
+            maintenance={maintenanceTasks}
+            isPropertySelected={isPropertySelected}
+            selectedPropertyId={selectedPropertyId}
+          />
+          <UpcomingRenewalsCard propertyId={selectedPropertyId} />
+        </div>
+      </section>
+      <div className="w-full border-t border-gray-200" />
 
       {/* Footer CTA */}
       <div className="pt-4">

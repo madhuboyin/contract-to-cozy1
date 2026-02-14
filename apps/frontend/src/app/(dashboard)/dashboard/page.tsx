@@ -446,12 +446,13 @@ export default function DashboardPage() {
           <PropertyRiskScoreCard propertyId={selectedPropertyId} />
           <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
         </div>
+        <div className="w-full border-t border-gray-200 my-5 md:my-6" />
 
         {/* ROOMS SNAPSHOT */}
         <RoomsSnapshotSection propertyId={selectedPropertyId} />
 
         {/* HORIZONTAL SEPARATOR */}
-        <div className="w-full border-t border-gray-200 mb-8" />
+        <div className="w-full border-t border-gray-200 my-5 md:my-6" />
 
           {/* 3. AI CARDS CAROUSEL */}
           <section className="mb-4">
@@ -461,7 +462,7 @@ export default function DashboardPage() {
                 <Sparkles className="w-5 h-5 text-purple-600" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-gray-900">AI-Powered Tools</h2>
+                <h2 className="text-xl font-semibold text-gray-900">AI-Powered Tools</h2>
                 <p className="text-sm text-gray-500">Smart automation for your property</p>
               </div>
             </div>
@@ -521,6 +522,7 @@ export default function DashboardPage() {
             ))}
           </div>
         </section>
+        <div className="w-full border-t border-gray-200 my-5 md:my-6" />
       </div>
 
       <DashboardShell className="pt-0 md:pt-0">
