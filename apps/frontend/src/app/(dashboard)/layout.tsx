@@ -261,26 +261,30 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 
           {/* Desktop Header - Split into utility row + primary nav row */}
           <header className="sticky top-0 z-10 hidden lg:block border-b bg-white">
-            <div className="h-16 flex items-center gap-4 px-4 sm:px-6">
-              <Link
-                href="/dashboard"
-                className="flex items-center gap-2 font-semibold shrink-0"
-              >
-                <Image
-                  src="/favicon.svg"
-                  alt="Cozy Logo"
-                  width={24}
-                  height={24}
-                  className="h-6 w-6"
-                />
-                <span className="text-xl font-bold text-blue-600">Contract to Cozy</span>
-              </Link>
+            <div className="px-6 lg:px-10">
+              <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center gap-4">
+                <Link
+                  href="/dashboard"
+                  className="flex items-center gap-2 font-semibold shrink-0"
+                >
+                  <Image
+                    src="/favicon.svg"
+                    alt="Cozy Logo"
+                    width={24}
+                    height={24}
+                    className="h-6 w-6"
+                  />
+                  <span className="text-xl font-bold text-blue-600">Contract to Cozy</span>
+                </Link>
 
-              <div className="flex-1" />
-              <DesktopUserNav user={user} />
+                <div className="flex-1" />
+                <DesktopUserNav user={user} />
+              </div>
             </div>
-            <div className="border-t border-gray-100 px-4 sm:px-6">
-              <DesktopNav user={user} />
+            <div className="border-t border-gray-100 px-6 lg:px-10">
+              <div className="mx-auto w-full max-w-[1440px]">
+                <DesktopNav user={user} />
+              </div>
             </div>
           </header>
 
@@ -368,6 +372,8 @@ function DesktopNav({ user }: { user: User | null }) {
   const resolvedPropertyId = selectedPropertyId || getPropertyIdFromPathname(pathname || '');
   const isOwner = user?.segment === 'EXISTING_OWNER';
   const isBuyer = user?.segment === 'HOME_BUYER';
+  const [homeToolsOpen, setHomeToolsOpen] = useState(false);
+  const homeToolsCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const coreLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
     { name: 'Dashboard', href: '/dashboard', icon: Home, isActive: (path) => path === '/dashboard' },
@@ -417,6 +423,34 @@ function DesktopNav({ user }: { user: User | null }) {
         : 'text-gray-700 hover:text-brand-primary hover:bg-teal-50'
     );
 
+  const clearHomeToolsCloseTimer = () => {
+    if (homeToolsCloseTimerRef.current) {
+      clearTimeout(homeToolsCloseTimerRef.current);
+      homeToolsCloseTimerRef.current = null;
+    }
+  };
+
+  const openHomeToolsMenu = () => {
+    clearHomeToolsCloseTimer();
+    setHomeToolsOpen(true);
+  };
+
+  const scheduleCloseHomeToolsMenu = () => {
+    clearHomeToolsCloseTimer();
+    homeToolsCloseTimerRef.current = setTimeout(() => {
+      setHomeToolsOpen(false);
+    }, 120);
+  };
+
+  useEffect(() => {
+    return () => {
+      clearHomeToolsCloseTimer();
+    };
+  }, []);
+
+  const homeToolsActive = HOME_TOOL_LINKS.some((tool) => tool.isActive(pathname || ''));
+  const homeAdminActive = ownerGlobalLinks.some((link) => link.isActive(pathname || ''));
+
   return (
     <nav className="w-full overflow-x-auto">
       <div className="flex min-w-max items-center gap-1 py-2">
@@ -445,19 +479,31 @@ function DesktopNav({ user }: { user: User | null }) {
           <>
             <div className="mx-2 h-5 w-px bg-gray-200" />
 
-            <DropdownMenu>
+            <DropdownMenu open={homeToolsOpen} onOpenChange={setHomeToolsOpen}>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={sharedLinkClass(HOME_TOOL_LINKS.some((tool) => tool.isActive(pathname || '')))}
+                  className={sharedLinkClass(homeToolsActive)}
+                  onMouseEnter={openHomeToolsMenu}
+                  onMouseLeave={scheduleCloseHomeToolsMenu}
+                  onFocus={openHomeToolsMenu}
+                  onBlur={scheduleCloseHomeToolsMenu}
                 >
                   <TrendingUp className="h-4 w-4" />
                   Home Tools
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-64">
+              <DropdownMenuContent
+                align="start"
+                sideOffset={6}
+                className="w-64"
+                onMouseEnter={openHomeToolsMenu}
+                onMouseLeave={scheduleCloseHomeToolsMenu}
+                onFocusCapture={openHomeToolsMenu}
+                onBlurCapture={scheduleCloseHomeToolsMenu}
+              >
                 {HOME_TOOL_LINKS.map((tool) => {
                   const ToolIcon = tool.icon;
                   const href = buildPropertyAwareHref(resolvedPropertyId, tool.hrefSuffix, tool.navTarget);
@@ -483,20 +529,31 @@ function DesktopNav({ user }: { user: User | null }) {
                 </Link>
               );
             })}
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className={sharedLinkClass(homeAdminActive)}>
+                  <FileText className="h-4 w-4" />
+                  Home Admin
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" sideOffset={6} className="w-56">
+                {ownerGlobalLinks.map((link) => {
+                  const Icon = link.icon;
+                  return (
+                    <DropdownMenuItem key={link.href} asChild>
+                      <Link href={link.href} className="flex items-center gap-2">
+                        <Icon className="h-4 w-4" />
+                        {link.name}
+                      </Link>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         )}
-
-        {isOwner &&
-          ownerGlobalLinks.map((link) => {
-            const Icon = link.icon;
-            const isActive = link.isActive(pathname || '');
-            return (
-              <Link key={link.href} href={link.href} className={sharedLinkClass(isActive)}>
-                <Icon className="h-4 w-4" />
-                {link.name}
-              </Link>
-            );
-          })}
 
         <Link
           href="/dashboard/community-events"
@@ -638,18 +695,34 @@ function SidebarNav({ user }: { user: User | null }) {
           <div className="px-3 pt-3 pb-1 text-[11px] uppercase tracking-wide text-gray-500">
             Homeowner
           </div>
-          {ownerGlobalLinks.map((link) => {
-            const Icon = link.icon;
-            const isActive = link.isActive(pathname || '');
-            return (
-              <SheetClose key={link.href} asChild>
-                <Link href={link.href} className={navLinkClass(isActive)}>
-                  <Icon className="h-4 w-4" />
-                  {link.name}
-                </Link>
-              </SheetClose>
-            );
-          })}
+          <details className="group rounded-lg">
+            <summary
+              className={cn(
+                navLinkClass(ownerGlobalLinks.some((link) => link.isActive(pathname || ''))),
+                'list-none cursor-pointer justify-between'
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <FileText className="h-4 w-4" />
+                Home Admin
+              </div>
+              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="mt-1 ml-3 border-l border-gray-200 pl-2 space-y-1">
+              {ownerGlobalLinks.map((link) => {
+                const Icon = link.icon;
+                const isActive = link.isActive(pathname || '');
+                return (
+                  <SheetClose key={link.href} asChild>
+                    <Link href={link.href} className={navLinkClass(isActive)}>
+                      <Icon className="h-4 w-4" />
+                      {link.name}
+                    </Link>
+                  </SheetClose>
+                );
+              })}
+            </div>
+          </details>
         </>
       )}
 
