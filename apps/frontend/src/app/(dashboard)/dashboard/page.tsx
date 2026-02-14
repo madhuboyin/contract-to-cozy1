@@ -604,16 +604,11 @@ export default function DashboardPage() {
         );
 
         return (
-          <ExistingOwnerDashboard 
-            userFirstName={user.firstName}
+          <ExistingOwnerDashboard
             bookings={data.bookings}
             properties={filteredProperties} // Pass only selected property
             checklistItems={filteredChecklistItems} // Pass the newly filtered list
             selectedPropertyId={selectedPropertyId}
-            consolidatedActionCount={
-              orchestrationSummary?.pendingActionCount ?? filteredUrgentActions.length
-            }
-            hasAssetDrivenActions={hasAssetDrivenActions}
           />
         );
       })()}
