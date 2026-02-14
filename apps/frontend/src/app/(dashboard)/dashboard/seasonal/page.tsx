@@ -103,6 +103,21 @@ export default function SeasonalMaintenancePage() {
     setExpandedSeasons(newExpanded);
   };
 
+  const formatSeasonYearLabel = (checklist: SeasonalChecklist): string => {
+    const seasonStart = new Date(checklist.seasonStartDate);
+    const seasonEnd = new Date(checklist.seasonEndDate);
+
+    if (
+      Number.isFinite(seasonStart.getTime()) &&
+      Number.isFinite(seasonEnd.getTime()) &&
+      seasonStart.getFullYear() !== seasonEnd.getFullYear()
+    ) {
+      return `${seasonStart.getFullYear()}-${String(seasonEnd.getFullYear()).slice(-2)}`;
+    }
+
+    return String(checklist.year);
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       {backLink && (
@@ -222,7 +237,7 @@ export default function SeasonalMaintenancePage() {
                     <span className="text-4xl">{getSeasonIcon(season)}</span>
                     <div className="text-left">
                       <h3 className={`text-xl font-bold ${colors.textColor}`}>
-                        {getSeasonName(season)} {firstChecklist.year}
+                        {getSeasonName(season)} {formatSeasonYearLabel(firstChecklist)}
                       </h3>
                       <p className="text-sm text-gray-600 mt-1">
                         {firstChecklist.totalTasks} tasks • {firstChecklist.tasksCompleted} completed
