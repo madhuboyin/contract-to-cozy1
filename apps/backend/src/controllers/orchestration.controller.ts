@@ -19,6 +19,7 @@ import { recordOrchestrationEvent } from '../services/orchestrationEvent.service
 import { snoozeAction, unsnoozeAction } from '../services/orchestrationSnooze.service';
 import { prisma } from '../lib/prisma';
 import { createCompletion } from '../services/orchestrationCompletion.service';
+import { PropertyMaintenanceTaskService } from '../services/PropertyMaintenanceTask.service';
 import { completionCreateSchema } from '../validators/orchestrationCompletion.validator';
 
 /**
@@ -77,7 +78,21 @@ export async function markOrchestrationActionCompleted(
     });
   }
 
-  return res.json({ 
+  // Sync completion to linked PropertyMaintenanceTask (triggers seasonal checklist sync)
+  try {
+    const maintenanceTask = await prisma.propertyMaintenanceTask.findFirst({
+      where: { propertyId, actionKey },
+    });
+
+    if (maintenanceTask && maintenanceTask.status !== 'COMPLETED' && userId) {
+      await PropertyMaintenanceTaskService.updateTaskStatus(userId, maintenanceTask.id, 'COMPLETED');
+      console.log(`[ORCHESTRATION] Synced completion to maintenance task ${maintenanceTask.id}`);
+    }
+  } catch (syncError: any) {
+    console.warn('[ORCHESTRATION] Failed to sync completion to maintenance task:', syncError?.message);
+  }
+
+  return res.json({
     success: true,
     completion: completion ?? null,
   });
@@ -123,6 +138,20 @@ export async function undoOrchestrationAction(
     source: 'USER',
     createdBy: userId,
   });
+
+  // Reverse sync: revert linked PropertyMaintenanceTask to IN_PROGRESS
+  try {
+    const maintenanceTask = await prisma.propertyMaintenanceTask.findFirst({
+      where: { propertyId, actionKey },
+    });
+
+    if (maintenanceTask && maintenanceTask.status === 'COMPLETED' && userId) {
+      await PropertyMaintenanceTaskService.updateTaskStatus(userId, maintenanceTask.id, 'IN_PROGRESS');
+      console.log(`[ORCHESTRATION] Reverted maintenance task ${maintenanceTask.id} to IN_PROGRESS`);
+    }
+  } catch (syncError: any) {
+    console.warn('[ORCHESTRATION] Failed to revert maintenance task:', syncError?.message);
+  }
 
   return res.json({ success: true });
 }

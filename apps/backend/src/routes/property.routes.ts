@@ -353,11 +353,16 @@ router.get('/:id/seasonal-checklist/current', authenticate, async (req: AuthRequ
         status: {
           in: ['PENDING', 'IN_PROGRESS'],
         },
+        seasonEndDate: {
+          gte: new Date(), // Only return checklists whose season hasn't ended yet
+        },
       },
       include: {
         items: {
           where: {
-            status: 'RECOMMENDED', // Only show pending tasks for dashboard
+            status: {
+              not: 'DISMISSED', // Include all statuses except dismissed
+            },
           },
           orderBy: [
             {

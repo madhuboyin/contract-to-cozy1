@@ -22,6 +22,7 @@ import { CompletionModal } from './CompletionModal';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 
 type Props = {
   propertyId: string;
@@ -34,6 +35,7 @@ export const ActionCenter: React.FC<Props> = ({
   maxItems = 5,
 }) => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // 🔑 FIXED: Separate state for each category - backend already separates them
   const [actions, setActions] = useState<OrchestratedActionDTO[]>([]);
@@ -195,6 +197,8 @@ export const ActionCenter: React.FC<Props> = ({
 
       setTraceAction(null);
       await loadActions();
+      queryClient.invalidateQueries({ queryKey: ['seasonal-checklists'] });
+      queryClient.invalidateQueries({ queryKey: ['seasonal-checklist'] });
     } catch (e: any) {
       toast({
         title: 'Unable to undo completion',
@@ -305,6 +309,8 @@ export const ActionCenter: React.FC<Props> = ({
       setIsCompletionModalOpen(false);
       setCompletionAction(null);
       await loadActions();
+      queryClient.invalidateQueries({ queryKey: ['seasonal-checklists'] });
+      queryClient.invalidateQueries({ queryKey: ['seasonal-checklist'] });
     } catch (e: any) {
       toast({
         title: 'Unable to mark completed',

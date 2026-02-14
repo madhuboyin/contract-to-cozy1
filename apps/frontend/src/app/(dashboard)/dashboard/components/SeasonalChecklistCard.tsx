@@ -4,9 +4,8 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, Calendar, CheckCircle, AlertCircle } from 'lucide-react';
+import { Loader2, Calendar, AlertCircle } from 'lucide-react';
 import { seasonalAPI } from '@/lib/api/seasonal.api';
 
 // Season emoji mapping
@@ -15,13 +14,6 @@ const SEASON_EMOJI: Record<string, string> = {
   SUMMER: '☀️',
   FALL: '🍂',
   WINTER: '❄️',
-};
-
-// Priority colors
-const PRIORITY_COLORS: Record<string, string> = {
-  CRITICAL: 'text-red-600 bg-red-50',
-  RECOMMENDED: 'text-amber-600 bg-amber-50',
-  OPTIONAL: 'text-green-600 bg-green-50',
 };
 
 interface SeasonalChecklistCardProps {
@@ -38,6 +30,7 @@ interface SeasonalChecklist {
   tasksAdded: number;
   status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'DISMISSED';
   seasonStartDate: string;
+  seasonEndDate: string;
   items: Array<{
     id: string;
     title: string;
@@ -66,7 +59,7 @@ export const SeasonalChecklistCard: React.FC<SeasonalChecklistCardProps> = ({
 
         // Call API to get current/upcoming seasonal checklist using seasonalAPI
         const data = await seasonalAPI.getCurrentChecklist(propertyId);
-        
+
         if (data?.checklist) {
           setChecklist(data.checklist);
         } else {
@@ -171,42 +164,44 @@ export const SeasonalChecklistCard: React.FC<SeasonalChecklistCardProps> = ({
     ? Math.round((checklist.tasksCompleted / checklist.totalTasks) * 100)
     : 0;
 
-  // Get upcoming tasks by priority
+  // Days remaining in season (using seasonEndDate)
+  const daysRemaining = Math.max(0, Math.floor(
+    (new Date(checklist.seasonEndDate).getTime() - new Date().getTime()) /
+      (1000 * 60 * 60 * 24)
+  ));
+
+  // Critical tasks — include both RECOMMENDED and ADDED statuses
   const criticalTasks = checklist.items.filter(
-    (item) => item.priority === 'CRITICAL' && item.status === 'RECOMMENDED'
-  );
-  const recommendedTasks = checklist.items.filter(
-    (item) => item.priority === 'RECOMMENDED' && item.status === 'RECOMMENDED'
+    (item) => item.priority === 'CRITICAL' && (item.status === 'RECOMMENDED' || item.status === 'ADDED')
   );
 
-  // Days until season starts
-  const daysUntil = Math.floor(
-    (new Date(checklist.seasonStartDate).getTime() - new Date().getTime()) /
-      (1000 * 60 * 60 * 24)
-  );
+  // Count of critical tasks that have been added to maintenance
+  const criticalAdded = criticalTasks.filter(item => item.status === 'ADDED').length;
+
+  // CTA text
+  const ctaText = criticalTasks.length > 0
+    ? `Review ${criticalTasks.length} critical task${criticalTasks.length !== 1 ? 's' : ''}`
+    : 'View Full Checklist';
 
   return (
     <Card className="hover:shadow-md transition-shadow overflow-hidden">
       <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2 min-w-0">
-            <span className="text-2xl" aria-hidden="true">{SEASON_EMOJI[checklist.season]}</span>
-            {checklist.season} {checklist.year}
-          </CardTitle>
-          <Badge variant="outline" className="text-xs shrink-0 truncate max-w-[80px] sm:max-w-none">
-            {checklist.climateRegion.replace('_', ' ')}
-          </Badge>
-        </div>
+        <CardTitle className="text-lg font-semibold flex items-center gap-2 min-w-0">
+          <span className="text-2xl" aria-hidden="true">{SEASON_EMOJI[checklist.season]}</span>
+          {checklist.season} {checklist.year}
+        </CardTitle>
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Days until season */}
-        {daysUntil > 0 && (
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <Calendar className="h-4 w-4" />
-            <span>{daysUntil} days until {checklist.season.toLowerCase()}</span>
-          </div>
-        )}
+        {/* Days remaining in season */}
+        <div className={`flex items-center gap-2 text-sm ${daysRemaining < 14 ? 'text-amber-600 font-medium' : 'text-gray-600'}`}>
+          <Calendar className="h-4 w-4" />
+          <span>
+            {daysRemaining === 0
+              ? 'Last day of ' + checklist.season.toLowerCase()
+              : `${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} left in ${checklist.season.toLowerCase()}`}
+          </span>
+        </div>
 
         {/* Progress bar */}
         <div className="space-y-1">
@@ -231,6 +226,9 @@ export const SeasonalChecklistCard: React.FC<SeasonalChecklistCardProps> = ({
             <p className="text-xs font-semibold text-red-600 flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
               {criticalTasks.length} Critical Task{criticalTasks.length !== 1 ? 's' : ''}
+              {criticalAdded > 0 && (
+                <span className="text-gray-500 font-normal">({criticalAdded} added)</span>
+              )}
             </p>
             <ul className="space-y-1">
               {criticalTasks.slice(0, 2).map((task) => (
@@ -248,17 +246,10 @@ export const SeasonalChecklistCard: React.FC<SeasonalChecklistCardProps> = ({
           </div>
         )}
 
-        {/* Recommended tasks count */}
-        {recommendedTasks.length > 0 && (
-          <p className="text-xs text-gray-600">
-            {recommendedTasks.length} recommended task{recommendedTasks.length !== 1 ? 's' : ''}
-          </p>
-        )}
-
         {/* CTA Button */}
         <Link href={`/dashboard/seasonal?propertyId=${propertyId}`}>
           <Button className="w-full" variant="outline" size="sm">
-            View Full Checklist
+            {ctaText}
           </Button>
         </Link>
       </CardContent>
