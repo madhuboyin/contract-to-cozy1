@@ -127,7 +127,7 @@ export const ExistingOwnerDashboard = ({
       {/* Action Center (Top Actions) */}
       {selectedPropertyId && (
         <section className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-start gap-3">
               <div className="p-2 bg-blue-100 rounded-lg">
                 <ClipboardList className="w-5 h-5 text-blue-600" />
@@ -145,7 +145,7 @@ export const ExistingOwnerDashboard = ({
               href={`/dashboard/actions${
                 selectedPropertyId ? `?propertyId=${selectedPropertyId}` : ''
               }`}
-              className="text-base md:text-lg font-semibold text-blue-600 hover:text-blue-700 transition-colors flex items-center"
+              className="inline-flex w-fit min-h-[44px] items-center whitespace-nowrap text-base md:text-lg font-semibold text-blue-600 hover:text-blue-700 transition-colors"
             >
               View all
             </Link>

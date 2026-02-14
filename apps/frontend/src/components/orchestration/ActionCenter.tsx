@@ -20,6 +20,8 @@ import { DecisionTraceModal } from './DecisionTraceModal';
 import { SnoozeModal } from './SnoozeModal';
 import { CompletionModal } from './CompletionModal';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
 
 type Props = {
   propertyId: string;
@@ -428,8 +430,20 @@ export const ActionCenter: React.FC<Props> = ({
   if (!actions.length && !suppressedActions.length && !snoozedActions.length) {
     return (
       <div className="rounded-lg border p-4 bg-white">
-        <div className="text-sm text-muted-foreground">
-          No urgent actions at the moment.
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5" />
+            <div>
+              <div className="text-sm font-medium text-gray-900">No urgent actions right now</div>
+              <div className="text-sm text-muted-foreground">You&apos;re in good shape. Check all actions if needed.</div>
+            </div>
+          </div>
+          <Link
+            href={`/dashboard/actions?propertyId=${encodeURIComponent(propertyId)}`}
+            className="inline-flex min-h-[40px] items-center whitespace-nowrap text-sm font-semibold text-blue-600 hover:text-blue-700"
+          >
+            View all actions
+          </Link>
         </div>
       </div>
     );
@@ -448,8 +462,9 @@ export const ActionCenter: React.FC<Props> = ({
             <button
               type="button"
               onClick={() => setShowSuppressed(v => !v)}
-              className="text-sm font-medium text-muted-foreground hover:underline"
+              className="inline-flex min-h-[40px] items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
+              {showSuppressed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               {showSuppressed
                 ? 'Hide suppressed actions'
                 : `Show suppressed actions (${suppressedActions.length})`}
@@ -478,8 +493,9 @@ export const ActionCenter: React.FC<Props> = ({
             <button
               type="button"
               onClick={() => setShowSnoozed(v => !v)}
-              className="text-sm font-medium text-muted-foreground hover:underline"
+              className="inline-flex min-h-[40px] items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
+              {showSnoozed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               {showSnoozed
                 ? 'Hide snoozed actions'
                 : `Show snoozed actions (${snoozedActions.length})`}
@@ -505,10 +521,10 @@ export const ActionCenter: React.FC<Props> = ({
                         onOpenTrace={handleOpenDecisionTrace}
                       />
                       
-                      <div className="mt-2 flex gap-2">
+                      <div className="mt-2 flex flex-wrap gap-2">
                         <button
                           onClick={() => handleUnsnooze(action)}
-                          className="text-xs text-blue-600 hover:underline"
+                          className="inline-flex min-h-[36px] items-center rounded-md border border-gray-200 px-2.5 text-sm text-blue-600 hover:bg-blue-50"
                         >
                           Un-snooze now
                         </button>
@@ -517,7 +533,7 @@ export const ActionCenter: React.FC<Props> = ({
                             setTraceAction(action);
                             setIsSnoozeModalOpen(true);
                           }}
-                          className="text-xs text-blue-600 hover:underline"
+                          className="inline-flex min-h-[36px] items-center rounded-md border border-gray-200 px-2.5 text-sm text-blue-600 hover:bg-blue-50"
                         >
                           Extend snooze
                         </button>

@@ -254,16 +254,16 @@ export const OrchestrationActionCard: React.FC<Props> = ({
       }`}
     >
       {/* Header */}
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
         <div className="space-y-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h3 className="text-base font-semibold text-gray-900">
-            {action.title}
-          </h3>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-base font-semibold text-gray-900">
+              {action.title}
+            </h3>
 
-          {riskBadge(action.riskLevel)}
-          {signalBadge(action)}
-        </div>
+            {riskBadge(action.riskLevel)}
+            {signalBadge(action)}
+          </div>
 
           {description && (
             <p className="text-sm text-gray-600">{description}</p>
@@ -295,7 +295,7 @@ export const OrchestrationActionCard: React.FC<Props> = ({
           )}
         </div>
 
-        <div className="text-right space-y-1">
+        <div className="text-left sm:text-right space-y-1">
           {exposure && <div className="text-sm font-semibold">{exposure}</div>}
           {dueDateLabel && (
             <div className="text-xs text-gray-600">Due {dueDateLabel}</div>
@@ -318,12 +318,12 @@ export const OrchestrationActionCard: React.FC<Props> = ({
 
       {/* CTA */}
       {shouldShowCta && (
-        <div className="mt-4 flex items-center gap-3">
+        <div className="mt-4 flex items-center gap-3 flex-wrap">
           <button
             type="button"
             disabled={isDisabled}
             onClick={() => !isDisabled && onCtaClick?.(action)}
-            className={`px-3 py-2 rounded-md text-sm font-semibold ${
+            className={`min-h-[40px] px-3 py-2 rounded-md text-sm font-semibold ${
               isDisabled
                 ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                 : 'bg-blue-600 text-white hover:bg-blue-700'
@@ -336,7 +336,7 @@ export const OrchestrationActionCard: React.FC<Props> = ({
             <button
               type="button"
               onClick={onDismiss}
-              className="text-sm text-muted-foreground hover:underline"
+              className="inline-flex min-h-[40px] items-center text-sm text-muted-foreground hover:underline"
             >
               Dismiss
             </button>
