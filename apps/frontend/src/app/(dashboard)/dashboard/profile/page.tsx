@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [activeMobileSection, setActiveMobileSection] = useState<'personal' | 'address' | 'account'>('personal');
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const [formData, setFormData] = useState({
@@ -133,6 +135,11 @@ export default function ProfilePage() {
     setMessage(null);
   };
 
+  const handleStartEditing = () => {
+    setIsEditing(true);
+    setActiveMobileSection('personal');
+  };
+
   const states = [
     'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
     'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
@@ -142,15 +149,15 @@ export default function ProfilePage() {
   ];
 
   return (
-    <div className="mx-auto max-w-4xl pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="mx-auto max-w-4xl pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:pb-6">
+      <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Profile Settings</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Profile Settings</h1>
           <p className="mt-2 text-gray-600">Manage your account information</p>
         </div>
         {!isEditing && (
           <button
-            onClick={() => setIsEditing(true)}
+            onClick={handleStartEditing}
             // FIX: Use brand color utilities
             className="min-h-[44px] w-full rounded-lg bg-brand-primary px-4 py-2 text-white transition-colors hover:bg-brand-primary-light sm:w-auto"
           >
@@ -171,8 +178,21 @@ export default function ProfilePage() {
 
       <div className="bg-white rounded-xl shadow-lg overflow-hidden">
         <div className="p-4 sm:p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Personal Information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <button
+            type="button"
+            onClick={() => setActiveMobileSection('personal')}
+            className="flex w-full items-center justify-between text-left"
+            aria-expanded={activeMobileSection === 'personal'}
+          >
+            <h2 className="text-xl font-semibold text-gray-900">Personal Information</h2>
+            <ChevronDown
+              className={`h-5 w-5 text-gray-500 transition-transform md:hidden ${
+                activeMobileSection === 'personal' ? 'rotate-180' : ''
+              }`}
+            />
+          </button>
+          <div className={`${activeMobileSection === 'personal' ? 'mt-4 block' : 'hidden'} md:block`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 First Name
@@ -237,12 +257,26 @@ export default function ProfilePage() {
                 <p className="text-gray-900 py-2.5">{formData.phone || '—'}</p>
               )}
             </div>
+            </div>
           </div>
         </div>
 
         <div className="p-4 sm:p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Address Information</h2>
-          <div className="grid grid-cols-1 gap-6">
+          <button
+            type="button"
+            onClick={() => setActiveMobileSection('address')}
+            className="flex w-full items-center justify-between text-left"
+            aria-expanded={activeMobileSection === 'address'}
+          >
+            <h2 className="text-xl font-semibold text-gray-900">Address Information</h2>
+            <ChevronDown
+              className={`h-5 w-5 text-gray-500 transition-transform md:hidden ${
+                activeMobileSection === 'address' ? 'rotate-180' : ''
+              }`}
+            />
+          </button>
+          <div className={`${activeMobileSection === 'address' ? 'mt-4 block' : 'hidden'} md:block`}>
+            <div className="grid grid-cols-1 gap-4 sm:gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Street Address
@@ -262,8 +296,8 @@ export default function ProfilePage() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
+                <div className="col-span-2 md:col-span-1">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   City
                 </label>
@@ -320,8 +354,9 @@ export default function ProfilePage() {
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                   />
                 ) : (
-                  <p className="text-gray-900 py-2.5">{formData.zipCode || '—'}</p>
-                )}
+                <p className="text-gray-900 py-2.5">{formData.zipCode || '—'}</p>
+              )}
+            </div>
               </div>
             </div>
           </div>
@@ -348,9 +383,22 @@ export default function ProfilePage() {
         )}
       </div>
 
-      <div className="mt-6 bg-white rounded-xl shadow-lg p-4 sm:p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Account Information</h2>
-        <div className="space-y-3">
+      <div className="mt-4 sm:mt-6 bg-white rounded-xl shadow-lg p-4 sm:p-6">
+        <button
+          type="button"
+          onClick={() => setActiveMobileSection('account')}
+          className="flex w-full items-center justify-between text-left"
+          aria-expanded={activeMobileSection === 'account'}
+        >
+          <h2 className="text-xl font-semibold text-gray-900">Account Information</h2>
+          <ChevronDown
+            className={`h-5 w-5 text-gray-500 transition-transform md:hidden ${
+              activeMobileSection === 'account' ? 'rotate-180' : ''
+            }`}
+          />
+        </button>
+        <div className={`${activeMobileSection === 'account' ? 'mt-4 block' : 'hidden'} md:block`}>
+          <div className="space-y-3">
           <div className="flex justify-between items-center">
             <span className="text-gray-600">Account Type</span>
             <span className="font-medium text-gray-900 capitalize">
@@ -368,6 +416,7 @@ export default function ProfilePage() {
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
               Active
             </span>
+          </div>
           </div>
         </div>
       </div>
