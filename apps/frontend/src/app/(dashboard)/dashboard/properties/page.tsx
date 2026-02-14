@@ -3,17 +3,49 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { Property } from '@/types';
 import { useToast } from '@/components/ui/use-toast';
 
 export default function PropertiesPage() {
-  const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const navTarget = searchParams.get('navTarget');
+
+  const navTargetLabelMap: Record<string, string> = {
+    rooms: 'Rooms',
+    incidents: 'Incidents',
+    claims: 'Claims',
+    'tool:property-tax': 'Home Tools > Property Tax',
+    'tool:cost-growth': 'Home Tools > Cost Growth',
+    'tool:insurance-trend': 'Home Tools > Insurance Trend',
+    'tool:cost-explainer': 'Home Tools > Cost Explainer',
+    'tool:true-cost': 'Home Tools > True Cost',
+    'tool:sell-hold-rent': 'Home Tools > Sell / Hold / Rent',
+    'tool:cost-volatility': 'Home Tools > Volatility',
+    'tool:break-even': 'Home Tools > Break-Even',
+  };
+
+  const navTargetLabel = navTarget ? navTargetLabelMap[navTarget] || 'selected section' : null;
+
+  const resolvePropertyHref = (propertyId: string): string => {
+    if (!navTarget) return `/dashboard/properties/${propertyId}`;
+
+    if (navTarget === 'rooms') return `/dashboard/properties/${propertyId}/rooms`;
+    if (navTarget === 'incidents') return `/dashboard/properties/${propertyId}/incidents`;
+    if (navTarget === 'claims') return `/dashboard/properties/${propertyId}/claims`;
+
+    if (navTarget.startsWith('tool:')) {
+      const toolSlug = navTarget.replace('tool:', '');
+      return `/dashboard/properties/${propertyId}/tools/${toolSlug}`;
+    }
+
+    return `/dashboard/properties/${propertyId}`;
+  };
 
   useEffect(() => {
     loadProperties();
@@ -87,6 +119,12 @@ export default function PropertiesPage() {
           </Link>
         </div>
       </div>
+
+      {navTargetLabel && (
+        <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          Select a property to continue to <span className="font-semibold">{navTargetLabel}</span>.
+        </div>
+      )}
 
       {/* Properties List */}
       <div className="mt-8">
@@ -165,7 +203,7 @@ export default function PropertiesPage() {
                 <div className="mt-6 flex items-center justify-between pt-4 border-t border-gray-200">
                   {/* Left: Primary Action (View) */}
                   <Link
-                    href={`/dashboard/properties/${property.id}`}
+                    href={resolvePropertyHref(property.id)}
                     className="text-sm font-semibold text-blue-600 hover:text-blue-800"
                   >
                     View Details

@@ -30,24 +30,134 @@ import {
   Globe,
   AlertTriangle,
   Box,
-  MessageSquare
+  ClipboardCheck,
+  LayoutGrid,
+  ShieldAlert,
+  TrendingUp,
+  Info,
+  Calculator,
+  Scale,
+  Activity,
+  Target,
+  ChevronDown
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { User } from '@/types';
 import { PropertySetupBanner } from '@/components/PropertySetupBanner';
 import { api } from '@/lib/api/client';
 import { AIChat } from '@/components/AIChat';
-import { PropertyProvider } from '@/lib/property/PropertyContext';
+import { PropertyProvider, usePropertyContext } from '@/lib/property/PropertyContext';
 import { NotificationProvider } from '@/lib/notifications/NotificationContext';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 // Mobile-first imports
 import { BottomNav } from '@/components/mobile/BottomNav';
 import { PullToRefresh } from '@/components/mobile/PullToRefresh';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface NavLink {
   name: string;
   href: string;
   icon: React.ElementType;
+}
+
+interface PropertyToolLink {
+  key: string;
+  name: string;
+  hrefSuffix: string;
+  navTarget: string;
+  icon: React.ElementType;
+  isActive: (pathname: string) => boolean;
+}
+
+const PROPERTY_ID_IN_PATH = /\/dashboard\/properties\/([^/]+)/;
+
+const HOME_TOOL_LINKS: PropertyToolLink[] = [
+  {
+    key: 'property-tax',
+    name: 'Property Tax',
+    hrefSuffix: 'tools/property-tax',
+    navTarget: 'tool:property-tax',
+    icon: DollarSign,
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/property-tax(\/|$)/.test(pathname),
+  },
+  {
+    key: 'cost-growth',
+    name: 'Cost Growth',
+    hrefSuffix: 'tools/cost-growth',
+    navTarget: 'tool:cost-growth',
+    icon: TrendingUp,
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/cost-growth(\/|$)/.test(pathname),
+  },
+  {
+    key: 'insurance-trend',
+    name: 'Insurance Trend',
+    hrefSuffix: 'tools/insurance-trend',
+    navTarget: 'tool:insurance-trend',
+    icon: Shield,
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/insurance-trend(\/|$)/.test(pathname),
+  },
+  {
+    key: 'cost-explainer',
+    name: 'Cost Explainer',
+    hrefSuffix: 'tools/cost-explainer',
+    navTarget: 'tool:cost-explainer',
+    icon: Info,
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/cost-explainer(\/|$)/.test(pathname),
+  },
+  {
+    key: 'true-cost',
+    name: 'True Cost',
+    hrefSuffix: 'tools/true-cost',
+    navTarget: 'tool:true-cost',
+    icon: Calculator,
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/true-cost(\/|$)/.test(pathname),
+  },
+  {
+    key: 'sell-hold-rent',
+    name: 'Sell / Hold / Rent',
+    hrefSuffix: 'tools/sell-hold-rent',
+    navTarget: 'tool:sell-hold-rent',
+    icon: Scale,
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/sell-hold-rent(\/|$)/.test(pathname),
+  },
+  {
+    key: 'cost-volatility',
+    name: 'Volatility',
+    hrefSuffix: 'tools/cost-volatility',
+    navTarget: 'tool:cost-volatility',
+    icon: Activity,
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/cost-volatility(\/|$)/.test(pathname),
+  },
+  {
+    key: 'break-even',
+    name: 'Break-Even',
+    hrefSuffix: 'tools/break-even',
+    navTarget: 'tool:break-even',
+    icon: Target,
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/break-even(\/|$)/.test(pathname),
+  },
+];
+
+function getPropertyIdFromPathname(pathname: string): string | undefined {
+  const match = pathname.match(PROPERTY_ID_IN_PATH);
+  return match?.[1];
+}
+
+function buildPropertyAwareHref(
+  propertyId: string | undefined,
+  hrefSuffix: string,
+  navTarget: string
+): string {
+  if (propertyId) {
+    return `/dashboard/properties/${propertyId}/${hrefSuffix}`;
+  }
+
+  return `/dashboard/properties?navTarget=${encodeURIComponent(navTarget)}`;
 }
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
@@ -149,25 +259,29 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
             <PropertySetupBanner show={showBanner} onDismiss={handleDismissBanner} />
           )}
 
-          {/* Desktop Header - Hidden on mobile */}
-          <header className="sticky top-0 z-10 hidden lg:flex h-16 items-center gap-4 border-b bg-white px-4 sm:px-6">
-            <Link
-              href="/dashboard"
-              className="flex items-center gap-2 font-semibold shrink-0"
-            >
-              <Image
-                src="/favicon.svg"
-                alt="Cozy Logo"
-                width={24}
-                height={24}
-                className="h-6 w-6"
-              />
-              <span className="text-xl font-bold text-blue-600">Contract to Cozy</span>
-            </Link>
+          {/* Desktop Header - Split into utility row + primary nav row */}
+          <header className="sticky top-0 z-10 hidden lg:block border-b bg-white">
+            <div className="h-16 flex items-center gap-4 px-4 sm:px-6">
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-2 font-semibold shrink-0"
+              >
+                <Image
+                  src="/favicon.svg"
+                  alt="Cozy Logo"
+                  width={24}
+                  height={24}
+                  className="h-6 w-6"
+                />
+                <span className="text-xl font-bold text-blue-600">Contract to Cozy</span>
+              </Link>
 
-            <DesktopNav user={user} />
-            <div className="flex-1" />
-            <DesktopUserNav user={user} />
+              <div className="flex-1" />
+              <DesktopUserNav user={user} />
+            </div>
+            <div className="border-t border-gray-100 px-4 sm:px-6">
+              <DesktopNav user={user} />
+            </div>
           </header>
 
           {/* Mobile Header - Shown only on mobile */}
@@ -250,109 +364,304 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 
 function DesktopNav({ user }: { user: User | null }) {
   const pathname = usePathname();
+  const { selectedPropertyId } = usePropertyContext();
+  const resolvedPropertyId = selectedPropertyId || getPropertyIdFromPathname(pathname || '');
+  const isOwner = user?.segment === 'EXISTING_OWNER';
+  const isBuyer = user?.segment === 'HOME_BUYER';
 
-  const allLinks: NavLink[] = [
-    { name: 'Dashboard', href: '/dashboard', icon: Home },
-    { name: 'Actions', href: '/dashboard/actions', icon: AlertTriangle },
-    { name: 'Properties', href: '/dashboard/properties', icon: Building },
-    { name: 'Inventory', href: '/dashboard/inventory', icon: Box },
-    { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
-    { name: 'Find Services', href: '/dashboard/providers', icon: Search },
-    { name: 'Checklist', href: '/dashboard/checklist', icon: ListChecks },
-    { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench },
-    { name: 'Insurance', href: '/dashboard/insurance', icon: Shield },
-    { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign },
-    { name: 'Documents', href: '/dashboard/documents', icon: FileText },
-    { name: 'Community Events', href: '/dashboard/community-events', icon: Globe },
+  const coreLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
+    { name: 'Dashboard', href: '/dashboard', icon: Home, isActive: (path) => path === '/dashboard' },
+    { name: 'Actions', href: '/dashboard/actions', icon: AlertTriangle, isActive: (path) => path.startsWith('/dashboard/actions') },
+    { name: 'Properties', href: '/dashboard/properties', icon: Building, isActive: (path) => path.startsWith('/dashboard/properties') },
+    { name: 'Inventory', href: '/dashboard/inventory', icon: Box, isActive: (path) => path.startsWith('/dashboard/inventory') },
+    { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar, isActive: (path) => path.startsWith('/dashboard/bookings') },
+    { name: 'Find Services', href: '/dashboard/providers', icon: Search, isActive: (path) => path.startsWith('/dashboard/providers') },
   ];
 
-  const visibleLinks = allLinks.filter(link => {
-    if (link.name === 'Checklist') {
-      return user?.segment === 'HOME_BUYER';
-    }
-    if (['Warranties', 'Insurance', 'Expenses', 'Documents'].includes(link.name)) {
-      return user?.segment === 'EXISTING_OWNER';
-    }
-    return true;
-  });
+  const ownerGlobalLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
+    { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench, isActive: (path) => path.startsWith('/dashboard/warranties') },
+    { name: 'Insurance', href: '/dashboard/insurance', icon: Shield, isActive: (path) => path.startsWith('/dashboard/insurance') },
+    { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign, isActive: (path) => path.startsWith('/dashboard/expenses') },
+    { name: 'Documents', href: '/dashboard/documents', icon: FileText, isActive: (path) => path.startsWith('/dashboard/documents') },
+  ];
+
+  const propertyFeatureLinks: Array<NavLink & { isActive: (path: string) => boolean; navTarget: string }> = [
+    {
+      name: 'Rooms',
+      href: buildPropertyAwareHref(resolvedPropertyId, 'rooms', 'rooms'),
+      icon: LayoutGrid,
+      navTarget: 'rooms',
+      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/rooms(\/|$)/.test(path),
+    },
+    {
+      name: 'Incidents',
+      href: buildPropertyAwareHref(resolvedPropertyId, 'incidents', 'incidents'),
+      icon: ShieldAlert,
+      navTarget: 'incidents',
+      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/incidents(\/|$)/.test(path),
+    },
+    {
+      name: 'Claims',
+      href: buildPropertyAwareHref(resolvedPropertyId, 'claims', 'claims'),
+      icon: ClipboardCheck,
+      navTarget: 'claims',
+      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/claims(\/|$)/.test(path),
+    },
+  ];
+
+  const sharedLinkClass = (isActive: boolean) =>
+    cn(
+      'font-body font-medium text-sm flex items-center gap-2 px-3 py-2 rounded-md transition-colors duration-200 whitespace-nowrap',
+      isActive
+        ? 'text-brand-primary bg-teal-50 font-semibold'
+        : 'text-gray-700 hover:text-brand-primary hover:bg-teal-50'
+    );
 
   return (
-    <nav className="hidden lg:flex gap-6 items-center">
-      {visibleLinks.map((link) => {
-        const Icon = link.icon;
-        const isActive = pathname === link.href;
-        
-        return (
+    <nav className="w-full overflow-x-auto">
+      <div className="flex min-w-max items-center gap-1 py-2">
+        {coreLinks.map((link) => {
+          const Icon = link.icon;
+          const isActive = link.isActive(pathname || '');
+          return (
+            <Link key={link.href} href={link.href} className={sharedLinkClass(isActive)}>
+              <Icon className="h-4 w-4" />
+              {link.name}
+            </Link>
+          );
+        })}
+
+        {isBuyer && (
           <Link
-            key={link.href}
-            href={link.href}
-            className={cn(
-              'font-body font-medium text-sm flex items-center gap-2 transition-colors duration-200',
-              isActive 
-                ? 'text-brand-primary font-semibold' 
-                : 'text-gray-700 hover:text-brand-primary'
-            )}
+            href="/dashboard/checklist"
+            className={sharedLinkClass((pathname || '').startsWith('/dashboard/checklist'))}
           >
-            <Icon className="h-4 w-4" />
-            {link.name}
+            <ListChecks className="h-4 w-4" />
+            Checklist
           </Link>
-        );
-      })}
+        )}
+
+        {isOwner && (
+          <>
+            <div className="mx-2 h-5 w-px bg-gray-200" />
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={sharedLinkClass(HOME_TOOL_LINKS.some((tool) => tool.isActive(pathname || '')))}
+                >
+                  <TrendingUp className="h-4 w-4" />
+                  Home Tools
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64">
+                {HOME_TOOL_LINKS.map((tool) => {
+                  const ToolIcon = tool.icon;
+                  const href = buildPropertyAwareHref(resolvedPropertyId, tool.hrefSuffix, tool.navTarget);
+                  return (
+                    <DropdownMenuItem key={tool.key} asChild>
+                      <Link href={href} className="flex items-center gap-2">
+                        <ToolIcon className="h-4 w-4" />
+                        {tool.name}
+                      </Link>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {propertyFeatureLinks.map((link) => {
+              const Icon = link.icon;
+              const isActive = link.isActive(pathname || '');
+              return (
+                <Link key={link.navTarget} href={link.href} className={sharedLinkClass(isActive)}>
+                  <Icon className="h-4 w-4" />
+                  {link.name}
+                </Link>
+              );
+            })}
+          </>
+        )}
+
+        {isOwner &&
+          ownerGlobalLinks.map((link) => {
+            const Icon = link.icon;
+            const isActive = link.isActive(pathname || '');
+            return (
+              <Link key={link.href} href={link.href} className={sharedLinkClass(isActive)}>
+                <Icon className="h-4 w-4" />
+                {link.name}
+              </Link>
+            );
+          })}
+
+        <Link
+          href="/dashboard/community-events"
+          className={sharedLinkClass((pathname || '').startsWith('/dashboard/community-events'))}
+        >
+          <Globe className="h-4 w-4" />
+          Community Events
+        </Link>
+      </div>
     </nav>
   );
 }
 
 function SidebarNav({ user }: { user: User | null }) {
   const pathname = usePathname();
+  const { selectedPropertyId } = usePropertyContext();
+  const resolvedPropertyId = selectedPropertyId || getPropertyIdFromPathname(pathname || '');
+  const isOwner = user?.segment === 'EXISTING_OWNER';
+  const isBuyer = user?.segment === 'HOME_BUYER';
 
-  const allLinks: NavLink[] = [
-    { name: 'Dashboard', href: '/dashboard', icon: Home },
-    { name: 'Actions', href: '/dashboard/actions', icon: AlertTriangle },
-    { name: 'Properties', href: '/dashboard/properties', icon: Building },
-    { name: 'Inventory', href: '/dashboard/inventory', icon: Box },
-    { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
-    { name: 'Find Services', href: '/dashboard/providers', icon: Search },
-    { name: 'Checklist', href: '/dashboard/checklist', icon: ListChecks },
-    { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench },
-    { name: 'Insurance', href: '/dashboard/insurance', icon: Shield },
-    { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign },
-    { name: 'Documents', href: '/dashboard/documents', icon: FileText },
-    { name: 'Community Events', href: '/dashboard/community-events', icon: Globe },
+  const navLinkClass = (isActive: boolean) =>
+    cn(
+      'font-body font-medium flex items-center gap-3 rounded-lg px-3 py-2 transition-colors duration-200',
+      isActive
+        ? 'bg-teal-50 text-brand-primary font-semibold'
+        : 'text-gray-700 hover:text-brand-primary hover:bg-teal-50'
+    );
+
+  const mainLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
+    { name: 'Dashboard', href: '/dashboard', icon: Home, isActive: (path) => path === '/dashboard' },
+    { name: 'Actions', href: '/dashboard/actions', icon: AlertTriangle, isActive: (path) => path.startsWith('/dashboard/actions') },
+    { name: 'Properties', href: '/dashboard/properties', icon: Building, isActive: (path) => path.startsWith('/dashboard/properties') },
+    { name: 'Inventory', href: '/dashboard/inventory', icon: Box, isActive: (path) => path.startsWith('/dashboard/inventory') },
+    { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar, isActive: (path) => path.startsWith('/dashboard/bookings') },
+    { name: 'Find Services', href: '/dashboard/providers', icon: Search, isActive: (path) => path.startsWith('/dashboard/providers') },
   ];
 
-  const visibleLinks = allLinks.filter(link => {
-    if (link.name === 'Checklist') {
-      return user?.segment === 'HOME_BUYER';
-    }
-    if (['Warranties', 'Insurance', 'Expenses', 'Documents'].includes(link.name)) {
-      return user?.segment === 'EXISTING_OWNER';
-    }
-    return true;
-  });
+  const ownerGlobalLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
+    { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench, isActive: (path) => path.startsWith('/dashboard/warranties') },
+    { name: 'Insurance', href: '/dashboard/insurance', icon: Shield, isActive: (path) => path.startsWith('/dashboard/insurance') },
+    { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign, isActive: (path) => path.startsWith('/dashboard/expenses') },
+    { name: 'Documents', href: '/dashboard/documents', icon: FileText, isActive: (path) => path.startsWith('/dashboard/documents') },
+  ];
+
+  const propertyFeatureLinks: Array<NavLink & { isActive: (path: string) => boolean; navTarget: string }> = [
+    {
+      name: 'Rooms',
+      href: buildPropertyAwareHref(resolvedPropertyId, 'rooms', 'rooms'),
+      icon: LayoutGrid,
+      navTarget: 'rooms',
+      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/rooms(\/|$)/.test(path),
+    },
+    {
+      name: 'Incidents',
+      href: buildPropertyAwareHref(resolvedPropertyId, 'incidents', 'incidents'),
+      icon: ShieldAlert,
+      navTarget: 'incidents',
+      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/incidents(\/|$)/.test(path),
+    },
+    {
+      name: 'Claims',
+      href: buildPropertyAwareHref(resolvedPropertyId, 'claims', 'claims'),
+      icon: ClipboardCheck,
+      navTarget: 'claims',
+      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/claims(\/|$)/.test(path),
+    },
+  ];
 
   return (
     <nav className="grid gap-1 px-4 text-sm font-medium">
-      {visibleLinks.map((link) => {
+      {mainLinks.map((link) => {
         const Icon = link.icon;
-        const isActive = pathname === link.href;
-        
+        const isActive = link.isActive(pathname || '');
         return (
           <SheetClose key={link.href} asChild>
-            <Link
-              href={link.href}
-              className={cn(
-                'font-body font-medium flex items-center gap-3 rounded-lg px-3 py-2 transition-colors duration-200',
-                isActive
-                  ? 'bg-teal-50 text-brand-primary font-semibold'
-                  : 'text-gray-700 hover:text-brand-primary hover:bg-teal-50'
-              )}
-            >
+            <Link href={link.href} className={navLinkClass(isActive)}>
               <Icon className="h-4 w-4" />
               {link.name}
             </Link>
           </SheetClose>
         );
       })}
+
+      {isBuyer && (
+        <SheetClose asChild>
+          <Link
+            href="/dashboard/checklist"
+            className={navLinkClass((pathname || '').startsWith('/dashboard/checklist'))}
+          >
+            <ListChecks className="h-4 w-4" />
+            Checklist
+          </Link>
+        </SheetClose>
+      )}
+
+      {isOwner && (
+        <>
+          <div className="px-3 pt-3 pb-1 text-[11px] uppercase tracking-wide text-gray-500">
+            Property Features
+          </div>
+          {propertyFeatureLinks.map((link) => {
+            const Icon = link.icon;
+            const isActive = link.isActive(pathname || '');
+            return (
+              <SheetClose key={link.navTarget} asChild>
+                <Link href={link.href} className={navLinkClass(isActive)}>
+                  <Icon className="h-4 w-4" />
+                  {link.name}
+                </Link>
+              </SheetClose>
+            );
+          })}
+
+          <details className="group rounded-lg">
+            <summary className={cn(navLinkClass(HOME_TOOL_LINKS.some((tool) => tool.isActive(pathname || ''))), 'list-none cursor-pointer justify-between')}>
+              <div className="flex items-center gap-3">
+                <TrendingUp className="h-4 w-4" />
+                Home Tools
+              </div>
+              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="mt-1 ml-3 border-l border-gray-200 pl-2 space-y-1">
+              {HOME_TOOL_LINKS.map((tool) => {
+                const ToolIcon = tool.icon;
+                const href = buildPropertyAwareHref(resolvedPropertyId, tool.hrefSuffix, tool.navTarget);
+                const isActive = tool.isActive(pathname || '');
+                return (
+                  <SheetClose key={tool.key} asChild>
+                    <Link href={href} className={navLinkClass(isActive)}>
+                      <ToolIcon className="h-4 w-4" />
+                      {tool.name}
+                    </Link>
+                  </SheetClose>
+                );
+              })}
+            </div>
+          </details>
+
+          <div className="px-3 pt-3 pb-1 text-[11px] uppercase tracking-wide text-gray-500">
+            Homeowner
+          </div>
+          {ownerGlobalLinks.map((link) => {
+            const Icon = link.icon;
+            const isActive = link.isActive(pathname || '');
+            return (
+              <SheetClose key={link.href} asChild>
+                <Link href={link.href} className={navLinkClass(isActive)}>
+                  <Icon className="h-4 w-4" />
+                  {link.name}
+                </Link>
+              </SheetClose>
+            );
+          })}
+        </>
+      )}
+
+      <SheetClose asChild>
+        <Link
+          href="/dashboard/community-events"
+          className={navLinkClass((pathname || '').startsWith('/dashboard/community-events'))}
+        >
+          <Globe className="h-4 w-4" />
+          Community Events
+        </Link>
+      </SheetClose>
     </nav>
   );
 }
