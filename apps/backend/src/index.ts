@@ -67,6 +67,7 @@ import costVolatilityRoutes from './routes/costVolatility.routes';
 import breakEvenRoutes from './routes/breakEven.routes';
 import propertyOnboardingRoutes from './routes/propertyOnboarding.routes';
 import coverageAnalysisRoutes from './routes/coverageAnalysis.routes';
+import riskPremiumOptimizerRoutes from './routes/riskPremiumOptimizer.routes';
 dotenv.config();
 
 // Initialize Prisma Client
@@ -337,6 +338,7 @@ app.use('/api', costVolatilityRoutes);
 app.use('/api', breakEvenRoutes);
 app.use('/api', propertyOnboardingRoutes);
 app.use('/api', coverageAnalysisRoutes);
+app.use('/api', riskPremiumOptimizerRoutes);
 //app.use(express.json({ limit: '10mb' })); // Ensure this is present
 app.use('/api', trueCostOwnershipRoutes);
 

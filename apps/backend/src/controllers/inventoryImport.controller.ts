@@ -4,6 +4,7 @@ import { CustomRequest } from '../types';
 import { InventoryImportService } from '../services/inventoryImport.service';
 import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../services/coverageAnalysis.service';
 import { markReplaceRepairStale } from '../services/replaceRepairAnalysis.service';
+import { markRiskPremiumOptimizerStale } from '../services/riskPremiumOptimizer.service';
 
 const svc = new InventoryImportService();
 
@@ -68,6 +69,7 @@ export async function importInventoryFromXlsx(
       await markCoverageAnalysisStale(propertyId);
       await markItemCoverageAnalysesStale(propertyId);
       await markReplaceRepairStale(propertyId);
+      await markRiskPremiumOptimizerStale(propertyId);
     }
 
     return res.json(result);

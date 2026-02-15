@@ -7,6 +7,7 @@ import { Property, Prisma, RiskAssessmentReport } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../types/auth.types';
 import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../services/coverageAnalysis.service';
+import { markRiskPremiumOptimizerStale } from '../services/riskPremiumOptimizer.service';
 
 // [FIX]: Define the expected structure of the authenticated user.
 interface AuthUserWithId {
@@ -223,6 +224,7 @@ class RiskAssessmentController {
       const report = await RiskAssessmentService.calculateAndSaveReport(propertyId);
       await markCoverageAnalysisStale(propertyId);
       await markItemCoverageAnalysesStale(propertyId);
+      await markRiskPremiumOptimizerStale(propertyId);
 
       return res.status(200).json({ 
         message: 'Risk assessment recalculated successfully.',

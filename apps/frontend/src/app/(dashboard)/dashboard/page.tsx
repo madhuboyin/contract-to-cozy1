@@ -23,7 +23,7 @@ import { WelcomeModal } from './components/WelcomeModal';
 import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
 import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
 import { TrendingUp } from 'lucide-react';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 import { SeasonalBanner } from '@/components/seasonal/SeasonalBanner';
 import { SeasonalWidget } from '@/components/seasonal/SeasonalWidget';
 import { useHomeownerSegment } from '@/lib/hooks/useHomeownerSegment';
@@ -31,6 +31,7 @@ import { WelcomeSection } from '@/components/WelcomeSection';
 import { RoomsSnapshotSection } from './components/RoomsSnapshotSection';
 import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCarousel';
 import CoverageIntelligenceToolCard from './components/CoverageIntelligenceToolCard';
+import RiskPremiumOptimizerToolCard from './components/RiskPremiumOptimizerToolCard';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -467,21 +468,22 @@ export default function DashboardPage() {
         {/* HORIZONTAL SEPARATOR */}
         <div className="w-full border-t border-gray-200 my-5 md:my-6" />
         
-        {/* COVERAGE INTELLIGENCE SPOTLIGHT */}
+        {/* AI INSURANCE/PREMIUM DECISION TOOLS */}
         <section className="mb-4">
           <div className="flex items-start gap-3 mb-4">
             <div className="p-2 bg-teal-100 rounded-lg">
-              <ShieldCheck className="w-5 h-5 text-teal-700" />
+              <ShieldAlert className="w-5 h-5 text-teal-700" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Coverage Intelligence</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Coverage & Premium Intelligence</h2>
               <p className="text-sm text-gray-600">
-                Educational insurance and warranty worth-it assessment for your selected property.
+                Educational guidance to evaluate coverage value and risk-driven premium pressure.
               </p>
             </div>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <CoverageIntelligenceToolCard propertyId={selectedPropertyId || ''} />
+            <RiskPremiumOptimizerToolCard propertyId={selectedPropertyId || ''} />
           </div>
         </section>
         <div className="w-full border-t border-gray-200 my-5 md:my-6" />

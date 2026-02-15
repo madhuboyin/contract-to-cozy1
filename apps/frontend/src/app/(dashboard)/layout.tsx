@@ -182,6 +182,15 @@ const AI_TOOL_LINKS: AIToolLink[] = [
       /^\/dashboard\/properties\/[^/]+\/tools\/coverage-intelligence(\/|$)/.test(pathname),
   },
   {
+    key: 'risk-premium-optimizer',
+    name: 'Risk-to-Premium Optimizer',
+    href: '/dashboard/risk-premium-optimizer',
+    icon: ShieldAlert,
+    isActive: (pathname) =>
+      /^\/dashboard\/risk-premium-optimizer(\/|$)/.test(pathname) ||
+      /^\/dashboard\/properties\/[^/]+\/tools\/risk-premium-optimizer(\/|$)/.test(pathname),
+  },
+  {
     key: 'replace-repair',
     name: 'Replace or Repair',
     href: '/dashboard/replace-repair',
