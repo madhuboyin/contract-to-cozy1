@@ -108,15 +108,25 @@ export default function InventoryItemCard(props: { item: InventoryItem; onClick:
           )}
         </div>
 
-        {hasCoverageGap && (
+        <div className="flex items-center gap-2 shrink-0">
+          {hasCoverageGap && (
+            <Link
+              href={`/dashboard/properties/${item.propertyId}/inventory/items/${item.id}/coverage`}
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center justify-center rounded-lg px-2.5 py-1.5 text-xs font-medium bg-teal-600 text-white hover:bg-teal-700 whitespace-nowrap"
+            >
+              Coverage worth-it
+            </Link>
+          )}
+
           <Link
-            href={`/dashboard/properties/${item.propertyId}/inventory/items/${item.id}/coverage`}
+            href={`/dashboard/properties/${item.propertyId}/inventory/items/${item.id}/replace-repair`}
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-xs font-medium bg-teal-600 text-white hover:bg-teal-700"
+            className="inline-flex items-center justify-center rounded-lg px-2.5 py-1.5 text-xs font-medium border border-black/10 hover:bg-black/5 whitespace-nowrap"
           >
-            Coverage worth-it
+            Replace/Repair
           </Link>
-        )}
+        </div>
       </div>
     </div>
   );

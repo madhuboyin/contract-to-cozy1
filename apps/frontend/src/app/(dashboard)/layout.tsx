@@ -182,6 +182,15 @@ const AI_TOOL_LINKS: AIToolLink[] = [
       /^\/dashboard\/properties\/[^/]+\/tools\/coverage-intelligence(\/|$)/.test(pathname),
   },
   {
+    key: 'replace-repair',
+    name: 'Replace or Repair',
+    href: '/dashboard/replace-repair',
+    icon: Wrench,
+    isActive: (pathname) =>
+      /^\/dashboard\/replace-repair(\/|$)/.test(pathname) ||
+      /^\/dashboard\/properties\/[^/]+\/inventory\/items\/[^/]+\/replace-repair(\/|$)/.test(pathname),
+  },
+  {
     key: 'emergency',
     name: 'Emergency Help',
     href: '/dashboard/emergency',
