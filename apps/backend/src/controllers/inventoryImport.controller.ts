@@ -2,7 +2,7 @@
 import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { InventoryImportService } from '../services/inventoryImport.service';
-import { markCoverageAnalysisStale } from '../services/coverageAnalysis.service';
+import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../services/coverageAnalysis.service';
 
 const svc = new InventoryImportService();
 
@@ -65,6 +65,7 @@ export async function importInventoryFromXlsx(
 
     if (!dryRun && Number(result.createdCount || 0) > 0) {
       await markCoverageAnalysisStale(propertyId);
+      await markItemCoverageAnalysesStale(propertyId);
     }
 
     return res.json(result);

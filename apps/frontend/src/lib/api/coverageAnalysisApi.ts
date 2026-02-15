@@ -15,6 +15,18 @@ export type CoverageAnalysisOverrides = {
   riskTolerance?: CoverageRiskTolerance;
 };
 
+export type ItemCoverageType = 'WARRANTY' | 'SERVICE_PLAN';
+
+export type ItemCoverageAnalysisOverrides = {
+  coverageType?: ItemCoverageType;
+  annualCostUsd?: number;
+  serviceFeeUsd?: number;
+  cashBufferUsd?: number;
+  riskTolerance?: CoverageRiskTolerance;
+  replacementCostUsd?: number;
+  expectedRemainingYears?: number;
+};
+
 export type CoverageAnalysisDTO = {
   id: string;
   propertyId: string;
@@ -64,9 +76,62 @@ export type CoverageAnalysisDTO = {
   }>;
 };
 
+export type ItemCoverageAnalysisDTO = {
+  id: string;
+  propertyId: string;
+  homeownerProfileId: string;
+  status: CoverageAnalysisStatus;
+  computedAt: string;
+
+  overallVerdict: CoverageVerdict;
+  insuranceVerdict: CoverageVerdict;
+  warrantyVerdict: CoverageVerdict;
+
+  confidence: CoverageConfidence;
+  impactLevel?: CoverageImpactLevel;
+
+  summary?: string;
+  nextSteps?: Array<{
+    title: string;
+    detail?: string;
+    priority?: CoverageImpactLevel;
+  }>;
+
+  item: {
+    itemId: string;
+    name: string;
+    category?: string | null;
+    roomId?: string | null;
+  };
+
+  warranty: {
+    inputsUsed: {
+      annualCostUsd?: number;
+      serviceFeeUsd?: number;
+      replacementCostUsd?: number;
+      expectedRemainingYears?: number;
+    };
+    expectedAnnualRepairRiskUsd?: number;
+    expectedCoverageCostUsd?: number;
+    expectedNetImpactUsd?: number;
+    breakEvenMonths?: number | null;
+    recommendation?: 'BUY_NOW' | 'WAIT' | 'REPLACE_SOON';
+  };
+
+  decisionTrace: Array<{
+    label: string;
+    detail?: string;
+    impact: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
+  }>;
+};
+
 export type CoverageAnalysisStatusResponse =
   | { exists: false }
   | { exists: true; analysis: CoverageAnalysisDTO };
+
+export type ItemCoverageAnalysisStatusResponse =
+  | { exists: false }
+  | { exists: true; analysis: ItemCoverageAnalysisDTO };
 
 export async function getCoverageAnalysis(
   propertyId: string
@@ -101,6 +166,28 @@ export async function simulateCoverageAnalysis(
       saveScenario,
       name,
     }
+  );
+  return res.data.analysis;
+}
+
+export async function getItemCoverageAnalysis(
+  propertyId: string,
+  itemId: string
+): Promise<ItemCoverageAnalysisStatusResponse> {
+  const res = await api.get<ItemCoverageAnalysisStatusResponse>(
+    `/api/properties/${propertyId}/inventory/items/${itemId}/coverage-analysis`
+  );
+  return res.data;
+}
+
+export async function runItemCoverageAnalysis(
+  propertyId: string,
+  itemId: string,
+  overrides?: ItemCoverageAnalysisOverrides
+): Promise<ItemCoverageAnalysisDTO> {
+  const res = await api.post<{ analysis: ItemCoverageAnalysisDTO }>(
+    `/api/properties/${propertyId}/inventory/items/${itemId}/coverage-analysis/run`,
+    { overrides: overrides ?? {} }
   );
   return res.data.analysis;
 }

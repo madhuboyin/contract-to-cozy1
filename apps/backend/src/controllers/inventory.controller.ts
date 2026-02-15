@@ -5,7 +5,7 @@ import { CustomRequest } from '../types';
 import { InventoryService } from '../services/inventory.service';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
-import { markCoverageAnalysisStale } from '../services/coverageAnalysis.service';
+import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../services/coverageAnalysis.service';
 
 const service = new InventoryService();
 
@@ -114,6 +114,7 @@ export async function updateItem(req: CustomRequest, res: Response, next: NextFu
     const itemId = req.params.itemId;
     const item = await service.updateItem(propertyId, itemId, req.body);
     await markCoverageAnalysisStale(propertyId);
+    await markItemCoverageAnalysesStale(propertyId, itemId);
     res.json({ success: true, data: { item } });
   } catch (err) {
     next(err);
@@ -126,6 +127,7 @@ export async function deleteItem(req: CustomRequest, res: Response, next: NextFu
     const itemId = req.params.itemId;
     await service.deleteItem(propertyId, itemId);
     await markCoverageAnalysisStale(propertyId);
+    await markItemCoverageAnalysesStale(propertyId, itemId);
     res.status(204).send();
   } catch (err) {
     next(err);
@@ -175,6 +177,7 @@ export async function rollbackImportBatch(req: CustomRequest, res: Response, nex
 
     const result = await service.rollbackImportBatch(propertyId, batchId);
     await markCoverageAnalysisStale(propertyId);
+    await markItemCoverageAnalysesStale(propertyId);
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);

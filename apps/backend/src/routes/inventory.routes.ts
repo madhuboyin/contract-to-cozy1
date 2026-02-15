@@ -1,6 +1,7 @@
 // apps/backend/src/routes/inventory.routes.ts
 
 import { Router, Response } from 'express';
+import { z } from 'zod';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
@@ -14,6 +15,10 @@ import { InventoryService } from '../services/inventory.service';
 import { startRoomScan, getRoomScanSession,listRoomScanSessions } from '../controllers/inventoryRoomScan.controller';
 import { bulkConfirmDrafts, bulkDismissDrafts } from '../controllers/inventoryOcr.controller';
 import { listInventoryDrafts, updateInventoryDraft, exportInventoryDraftsCsv} from '../controllers/inventoryDraft.controller';
+import {
+  getItemCoverageAnalysis,
+  runItemCoverageAnalysis,
+} from '../controllers/coverageAnalysis.controller';
 
 import {
   listRooms,
@@ -55,6 +60,20 @@ import { ocrRateLimiter } from '../middleware/ocrRateLimiter.middleware';
 import { requirePremiumForOcr } from '../middleware/premiumOcrGate.middleware';
 
 const router = Router();
+
+const itemCoverageOverridesSchema = z.object({
+  coverageType: z.enum(['WARRANTY', 'SERVICE_PLAN']).optional(),
+  annualCostUsd: z.number().nonnegative().optional(),
+  serviceFeeUsd: z.number().nonnegative().optional(),
+  cashBufferUsd: z.number().nonnegative().optional(),
+  riskTolerance: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
+  replacementCostUsd: z.number().nonnegative().optional(),
+  expectedRemainingYears: z.number().nonnegative().optional(),
+});
+
+const runItemCoverageBodySchema = z.object({
+  overrides: itemCoverageOverridesSchema.optional(),
+});
 
 const uploadXlsx = multer({
   storage: multer.memoryStorage(),
@@ -129,6 +148,17 @@ router.post(
   createItem
 );
 router.get('/properties/:propertyId/inventory/items/:itemId', propertyAuthMiddleware, getItem);
+router.get(
+  '/properties/:propertyId/inventory/items/:itemId/coverage-analysis',
+  propertyAuthMiddleware,
+  getItemCoverageAnalysis
+);
+router.post(
+  '/properties/:propertyId/inventory/items/:itemId/coverage-analysis/run',
+  propertyAuthMiddleware,
+  validateBody(runItemCoverageBodySchema),
+  runItemCoverageAnalysis
+);
 router.patch(
   '/properties/:propertyId/inventory/items/:itemId',
   propertyAuthMiddleware,

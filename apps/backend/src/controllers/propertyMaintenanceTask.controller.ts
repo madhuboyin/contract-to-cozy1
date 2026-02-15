@@ -11,6 +11,7 @@ import {
   LinkTaskToBookingRequest,
   CreateFromTemplatesRequest,
 } from '../types/task.types';
+import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../services/coverageAnalysis.service';
 
 /**
  * GET /api/maintenance-tasks/property/:propertyId
@@ -128,6 +129,8 @@ const handleCreateTask = async (
       propertyId,
       data
     );
+    await markCoverageAnalysisStale(task.propertyId);
+    await markItemCoverageAnalysesStale(task.propertyId);
 
     return res.status(201).json({
       success: true,
@@ -178,6 +181,8 @@ const handleCreateFromActionCenter = async (
       data.propertyId,
       data
     );
+    await markCoverageAnalysisStale(result.task.propertyId);
+    await markItemCoverageAnalysesStale(result.task.propertyId);
 
     return res.status(result.deduped ? 200 : 201).json({
       success: true,
@@ -232,6 +237,8 @@ const handleCreateFromSeasonal = async (
       propertyId,
       seasonalItemId
     );
+    await markCoverageAnalysisStale(task.propertyId);
+    await markItemCoverageAnalysesStale(task.propertyId);
 
     return res.status(201).json({
       success: true,
@@ -288,6 +295,8 @@ const handleCreateFromTemplates = async (
       data.propertyId,
       data.templateIds
     );
+    await markCoverageAnalysisStale(data.propertyId);
+    await markItemCoverageAnalysesStale(data.propertyId);
 
     return res.status(201).json({
       success: true,
@@ -333,6 +342,8 @@ const handleUpdateTask = async (
       taskId,
       data
     );
+    await markCoverageAnalysisStale(task.propertyId);
+    await markItemCoverageAnalysesStale(task.propertyId);
 
     return res.status(200).json({
       success: true,
@@ -391,6 +402,8 @@ const handleUpdateTaskStatus = async (
       status,
       actualCost
     );
+    await markCoverageAnalysisStale(task.propertyId);
+    await markItemCoverageAnalysesStale(task.propertyId);
 
     return res.status(200).json({
       success: true,
@@ -428,7 +441,10 @@ const handleDeleteTask = async (
     }
 
     const { taskId } = req.params;
+    const existingTask = await PropertyMaintenanceTaskService.getTask(req.user.userId, taskId);
     await PropertyMaintenanceTaskService.deleteTask(req.user.userId, taskId);
+    await markCoverageAnalysisStale(existingTask.propertyId);
+    await markItemCoverageAnalysesStale(existingTask.propertyId);
 
     return res.status(204).send();
   } catch (error) {
@@ -483,6 +499,8 @@ const handleLinkToBooking = async (
       taskId,
       bookingId
     );
+    await markCoverageAnalysisStale(task.propertyId);
+    await markItemCoverageAnalysesStale(task.propertyId);
 
     return res.status(200).json({
       success: true,

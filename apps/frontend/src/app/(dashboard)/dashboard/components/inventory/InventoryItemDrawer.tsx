@@ -3,6 +3,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { InventoryItem, InventoryItemCategory, InventoryItemCondition, InventoryRoom } from '@/types';
 import DocumentPickerModal from './DocumentPickerModal';
@@ -286,6 +287,7 @@ export default function InventoryItemDrawer(props: {
   onSaved: () => void;
   existingItems?: InventoryItem[];
 }) {
+  const router = useRouter();
   const isEdit = !!props.initialItem;
 
   // core
@@ -897,6 +899,14 @@ useEffect(() => {
     }
   }
 
+  function openCoverageWorthIt() {
+    if (!props.initialItem?.id) return;
+    props.onClose();
+    router.push(
+      `/dashboard/properties/${props.propertyId}/inventory/items/${props.initialItem.id}/coverage`
+    );
+  }
+
   if (!props.open || !mounted) return null;
 
   return createPortal(
@@ -1287,8 +1297,23 @@ useEffect(() => {
 
           {/* Coverage links */}
           <div className="rounded-2xl border border-black/10 p-4">
-            <div className="text-sm font-medium">Coverage links</div>
-            <div className="text-xs opacity-70">Link this inventory item to warranty and/or insurance.</div>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium">Coverage links</div>
+                <div className="text-xs opacity-70">
+                  Link this inventory item to warranty and/or insurance.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={openCoverageWorthIt}
+                disabled={!isEdit}
+                className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
+                title={!isEdit ? 'Save this item first to run analysis' : undefined}
+              >
+                Coverage worth-it
+              </button>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
               <div>

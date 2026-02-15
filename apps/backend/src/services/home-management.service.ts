@@ -10,7 +10,7 @@ import {
 import { prisma } from '../lib/prisma';
 import JobQueueService from './JobQueue.service';
 import { HomeEventsAutoGen } from './homeEvents/homeEvents.autogen';
-import { markCoverageAnalysisStale } from './coverageAnalysis.service';
+import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from './coverageAnalysis.service';
 
 // Helper interface for safe Decimal conversion (the object must have a toNumber method)
 interface DecimalLike {
@@ -284,6 +284,7 @@ export async function createWarranty(
 
     if (rawWarranty.propertyId) {
       await markCoverageAnalysisStale(rawWarranty.propertyId);
+      await markItemCoverageAnalysesStale(rawWarranty.propertyId);
     }
 
     return mapRawWarrantyToWarranty(rawWarranty);
@@ -334,6 +335,7 @@ export async function updateWarranty(
       console.error(`[WARRANTY-SERVICE] Failed to enqueue risk update job:`, error);
     }
     await markCoverageAnalysisStale(rawUpdatedWarranty.propertyId);
+    await markItemCoverageAnalysesStale(rawUpdatedWarranty.propertyId);
   }
   // 🔑 END NEW SECTION
 
@@ -369,6 +371,7 @@ export async function deleteWarranty(
       console.error(`[WARRANTY-SERVICE] Failed to enqueue risk update job:`, error);
     }
     await markCoverageAnalysisStale(propertyId);
+    await markItemCoverageAnalysesStale(propertyId);
   }
   // 🔑 END NEW SECTION
 
@@ -477,6 +480,7 @@ export async function createInsurancePolicy(
     
     if (rawPolicy.propertyId) {
       await markCoverageAnalysisStale(rawPolicy.propertyId);
+      await markItemCoverageAnalysesStale(rawPolicy.propertyId);
     }
 
     return mapRawPolicyToInsurancePolicy(rawPolicy);
@@ -515,6 +519,7 @@ export async function updateInsurancePolicy(
   
   if (rawUpdatedPolicy.propertyId) {
     await markCoverageAnalysisStale(rawUpdatedPolicy.propertyId);
+    await markItemCoverageAnalysesStale(rawUpdatedPolicy.propertyId);
   }
 
   return mapRawPolicyToInsurancePolicy(rawUpdatedPolicy);
@@ -535,6 +540,7 @@ export async function deleteInsurancePolicy(
 
   if (policyToDelete?.propertyId) {
     await markCoverageAnalysisStale(policyToDelete.propertyId);
+    await markItemCoverageAnalysesStale(policyToDelete.propertyId);
   }
   
   return mapRawPolicyToInsurancePolicy(rawDeletedPolicy);
