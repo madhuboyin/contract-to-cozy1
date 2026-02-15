@@ -9,6 +9,7 @@ import {
   getItemCoverageAnalysis,
   runItemCoverageAnalysis,
 } from '@/lib/api/coverageAnalysisApi';
+import { getInventoryItem } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import { Button } from '@/components/ui/button';
 
 type TraceImpact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
@@ -91,16 +92,36 @@ export default function ItemCoverageWorthItClient() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<ItemCoverageAnalysisOverrides>(EMPTY_OVERRIDES);
+  const [itemName, setItemName] = useState<string>('Inventory Item');
+  const [roomName, setRoomName] = useState<string | null>(null);
 
   const fetchStatus = async () => {
     if (!propertyId || !itemId) return;
     setLoading(true);
     setError(null);
     try {
-      const result = await getItemCoverageAnalysis(propertyId, itemId);
+      const [analysisResult, itemResult] = await Promise.allSettled([
+        getItemCoverageAnalysis(propertyId, itemId),
+        getInventoryItem(propertyId, itemId),
+      ]);
+
+      if (itemResult.status === 'fulfilled') {
+        setItemName(itemResult.value.name || 'Inventory Item');
+        setRoomName(itemResult.value.room?.name || null);
+      } else {
+        setItemName('Inventory Item');
+        setRoomName(null);
+      }
+
+      if (analysisResult.status !== 'fulfilled') {
+        throw analysisResult.reason;
+      }
+
+      const result = analysisResult.value;
       if (result.exists) {
         setHasAnalysis(true);
         setAnalysis(result.analysis);
+        setItemName((prev) => result.analysis.item?.name || prev || 'Inventory Item');
       } else {
         setHasAnalysis(false);
         setAnalysis(null);
@@ -157,7 +178,14 @@ export default function ItemCoverageWorthItClient() {
             <p className="text-sm text-gray-600 mt-1">
               Evaluate whether coverage is worth buying now for this specific item.
             </p>
-            <p className="text-xs text-gray-500 mt-2">Item ID: {itemId}</p>
+            <div className="mt-2 space-y-1 text-xs text-gray-600">
+              <p>
+                Item Name: <span className="font-medium text-gray-800">{analysis?.item?.name || itemName}</span>
+              </p>
+              <p>
+                Room Name: <span className="font-medium text-gray-800">{roomName || 'Unassigned'}</span>
+              </p>
+            </div>
           </div>
           <ShieldCheck className="h-6 w-6 text-teal-600" />
         </div>
