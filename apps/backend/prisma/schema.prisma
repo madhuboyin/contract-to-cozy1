@@ -1170,6 +1170,8 @@ model HomeownerProfile {
   replaceRepairAnalyses ReplaceRepairAnalysis[]
   riskPremiumOptimizationAnalyses RiskPremiumOptimizationAnalysis[]
   homeCapitalTimelineAnalyses HomeCapitalTimelineAnalysis[]
+  doNothingScenarios      DoNothingScenario[]
+  doNothingSimulationRuns DoNothingSimulationRun[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3717,6 +3719,104 @@ model HomeCapitalTimelineOverride {
   @@index([propertyId, type])
   @@map("home_capital_timeline_overrides")
 }
+
+// ============================================================================
+// Do Nothing Simulator
+// ============================================================================
+
+enum DoNothingSimulationStatus {
+  READY
+  STALE
+  ERROR
+}
+
+enum DoNothingSimulationConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum DoNothingIncidentLikelihood {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model DoNothingScenario {
+  id                 String @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String
+
+  name         String
+  horizonMonths Int @default(12)
+
+  // User-defined knobs: e.g., { skipMaintenance: true, skipWarranty: true, deductibleStayHigh: true, cashBufferCents: 500000, ... }
+  inputOverrides Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  runs DoNothingSimulationRun[]
+
+  @@index([homeownerProfileId])
+  @@index([propertyId, horizonMonths])
+  @@map("do_nothing_scenarios")
+}
+
+model DoNothingSimulationRun {
+  id                 String @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String
+
+  scenarioId String?
+
+  status     DoNothingSimulationStatus     @default(READY)
+  confidence DoNothingSimulationConfidence
+
+  horizonMonths Int @default(12)
+
+  // Short human summary for UI
+  summary String?
+
+  // Versioned assumptions/inputs used by the simulator (baseline risk snapshot, toggles, overrides)
+  inputsSnapshot Json?
+
+  // Main computed outputs (risk deltas, cost deltas, incident likelihood, per-category impacts)
+  outputsSnapshot Json?
+
+  // Explainability factors: label/detail/impact
+  decisionTrace Json?
+
+  // Optional: lightweight structured “next steps” list for UI cards
+  nextSteps Json?
+
+  // Key numerics (queryable + sortable for dashboards)
+  riskScoreDelta             Int?   // signed change vs baseline (if you have a numeric risk score)
+  expectedCostDeltaCentsMin  Int?   // min additional expected cost due to inaction (cents)
+  expectedCostDeltaCentsMax  Int?   // max additional expected cost due to inaction (cents)
+
+  incidentLikelihood DoNothingIncidentLikelihood?
+
+  computedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  scenario DoNothingScenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
+
+  @@index([homeownerProfileId])
+  @@index([propertyId, computedAt(sort: Desc)])
+  @@index([propertyId, horizonMonths])
+  @@index([propertyId, status])
+  @@index([scenarioId, computedAt(sort: Desc)])
+  @@map("do_nothing_simulation_runs")
+}
+
 
 // ============================================================================
 // RECALL
