@@ -172,6 +172,7 @@ function getUserTypeLabel(user: User | null): string {
 function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth() as { user: User | null, loading: boolean };
   const router = useRouter();
+  const pathname = usePathname();
   const [propertyCount, setPropertyCount] = useState<number | null>(null);
   const [showBanner, setShowBanner] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -261,8 +262,8 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 
           {/* Desktop Header - Split into utility row + primary nav row */}
           <header className="sticky top-0 z-10 hidden lg:block border-b bg-white">
-            <div className="px-6 lg:px-10">
-              <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center gap-4">
+            <div className="px-8 lg:px-14">
+              <div className="mx-auto flex h-16 w-full max-w-[1360px] items-center gap-4">
                 <Link
                   href="/dashboard"
                   className="flex items-center gap-2 font-semibold shrink-0"
@@ -277,12 +278,25 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
                   <span className="text-xl font-bold text-blue-600">Contract to Cozy</span>
                 </Link>
 
+                <Link
+                  href="/dashboard/providers"
+                  className={cn(
+                    'font-body font-medium text-sm flex items-center gap-2 px-3 py-2 rounded-md transition-colors duration-200 whitespace-nowrap',
+                    pathname?.startsWith('/dashboard/providers')
+                      ? 'text-brand-primary bg-teal-50 font-semibold'
+                      : 'text-gray-700 hover:text-brand-primary hover:bg-teal-50'
+                  )}
+                >
+                  <Search className="h-4 w-4" />
+                  Find Services
+                </Link>
+
                 <div className="flex-1" />
                 <DesktopUserNav user={user} />
               </div>
             </div>
-            <div className="border-t border-gray-100 px-6 lg:px-10">
-              <div className="mx-auto w-full max-w-[1440px]">
+            <div className="border-t border-gray-100 px-8 lg:px-14">
+              <div className="mx-auto w-full max-w-[1360px]">
                 <DesktopNav user={user} />
               </div>
             </div>
@@ -381,7 +395,6 @@ function DesktopNav({ user }: { user: User | null }) {
     { name: 'Properties', href: '/dashboard/properties', icon: Building, isActive: (path) => path.startsWith('/dashboard/properties') },
     { name: 'Inventory', href: '/dashboard/inventory', icon: Box, isActive: (path) => path.startsWith('/dashboard/inventory') },
     { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar, isActive: (path) => path.startsWith('/dashboard/bookings') },
-    { name: 'Find Services', href: '/dashboard/providers', icon: Search, isActive: (path) => path.startsWith('/dashboard/providers') },
   ];
 
   const ownerGlobalLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
@@ -448,6 +461,10 @@ function DesktopNav({ user }: { user: User | null }) {
     };
   }, []);
 
+  useEffect(() => {
+    setHomeToolsOpen(false);
+  }, [pathname]);
+
   const homeToolsActive = HOME_TOOL_LINKS.some((tool) => tool.isActive(pathname || ''));
   const homeAdminActive = ownerGlobalLinks.some((link) => link.isActive(pathname || ''));
 
@@ -487,8 +504,6 @@ function DesktopNav({ user }: { user: User | null }) {
                   className={sharedLinkClass(homeToolsActive)}
                   onMouseEnter={openHomeToolsMenu}
                   onMouseLeave={scheduleCloseHomeToolsMenu}
-                  onFocus={openHomeToolsMenu}
-                  onBlur={scheduleCloseHomeToolsMenu}
                 >
                   <TrendingUp className="h-4 w-4" />
                   Home Tools
@@ -501,8 +516,9 @@ function DesktopNav({ user }: { user: User | null }) {
                 className="w-64"
                 onMouseEnter={openHomeToolsMenu}
                 onMouseLeave={scheduleCloseHomeToolsMenu}
-                onFocusCapture={openHomeToolsMenu}
-                onBlurCapture={scheduleCloseHomeToolsMenu}
+                onInteractOutside={() => setHomeToolsOpen(false)}
+                onPointerDownOutside={() => setHomeToolsOpen(false)}
+                onEscapeKeyDown={() => setHomeToolsOpen(false)}
               >
                 {HOME_TOOL_LINKS.map((tool) => {
                   const ToolIcon = tool.icon;
