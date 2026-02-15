@@ -2550,6 +2550,32 @@ model SeasonalChecklistItem {
   @@map("seasonal_checklist_items")
 }
 
+model PropertyOnboarding {
+  id            String   @id @default(uuid())
+  propertyId    String   @unique
+  userId        String
+  status        OnboardingStatus @default(IN_PROGRESS)
+
+  // step tracking
+  currentStep   Int      @default(1) // 1..5
+  completedJson Json?    // { "1": true, "2": false, ... }
+  dismissedAt   DateTime?
+
+  // derived snapshot (optional cache)
+  setupScore    Int      @default(0)
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+
+  property      Property  @relation(fields: [propertyId], references: [id])
+}
+
+enum OnboardingStatus {
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+}
+
+
 model PropertyClimateSetting {
   id                      String              @id @default(cuid())
   propertyId              String              @unique @map("property_id")
