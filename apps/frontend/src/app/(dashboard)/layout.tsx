@@ -39,7 +39,11 @@ import {
   Scale,
   Activity,
   Target,
-  ChevronDown
+  ChevronDown,
+  Sparkles,
+  Zap,
+  Cloud,
+  Camera,
 } from 'lucide-react';
 import { User } from '@/types';
 import { PropertySetupBanner } from '@/components/PropertySetupBanner';
@@ -69,6 +73,14 @@ interface PropertyToolLink {
   name: string;
   hrefSuffix: string;
   navTarget: string;
+  icon: React.ElementType;
+  isActive: (pathname: string) => boolean;
+}
+
+interface AIToolLink {
+  key: string;
+  name: string;
+  href: string;
   icon: React.ElementType;
   isActive: (pathname: string) => boolean;
 }
@@ -157,6 +169,85 @@ const HOME_TOOL_LINKS: PropertyToolLink[] = [
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/timeline(\/|$)/.test(pathname),
   },
 ];
+
+const AI_TOOL_LINKS: AIToolLink[] = [
+  {
+    key: 'emergency',
+    name: 'Emergency Help',
+    href: '/dashboard/emergency',
+    icon: AlertTriangle,
+    isActive: (pathname) => /^\/dashboard\/emergency(\/|$)/.test(pathname),
+  },
+  {
+    key: 'documents',
+    name: 'Document Vault',
+    href: '/dashboard/documents',
+    icon: FileText,
+    isActive: (pathname) => /^\/dashboard\/documents(\/|$)/.test(pathname),
+  },
+  {
+    key: 'oracle',
+    name: 'Appliance Oracle',
+    href: '/dashboard/oracle',
+    icon: Zap,
+    isActive: (pathname) => /^\/dashboard\/oracle(\/|$)/.test(pathname),
+  },
+  {
+    key: 'budget',
+    name: 'Budget Planner',
+    href: '/dashboard/budget',
+    icon: DollarSign,
+    isActive: (pathname) => /^\/dashboard\/budget(\/|$)/.test(pathname),
+  },
+  {
+    key: 'climate',
+    name: 'Climate Risk',
+    href: '/dashboard/climate',
+    icon: Cloud,
+    isActive: (pathname) => /^\/dashboard\/climate(\/|$)/.test(pathname),
+  },
+  {
+    key: 'modifications',
+    name: 'Home Upgrades',
+    href: '/dashboard/modifications',
+    icon: Home,
+    isActive: (pathname) => /^\/dashboard\/modifications(\/|$)/.test(pathname),
+  },
+  {
+    key: 'appreciation',
+    name: 'Value Tracker',
+    href: '/dashboard/appreciation',
+    icon: TrendingUp,
+    isActive: (pathname) => /^\/dashboard\/appreciation(\/|$)/.test(pathname),
+  },
+  {
+    key: 'energy',
+    name: 'Energy Audit',
+    href: '/dashboard/energy',
+    icon: Activity,
+    isActive: (pathname) => /^\/dashboard\/energy(\/|$)/.test(pathname),
+  },
+  {
+    key: 'visual-inspector',
+    name: 'Visual Inspector',
+    href: '/dashboard/visual-inspector',
+    icon: Camera,
+    isActive: (pathname) => /^\/dashboard\/visual-inspector(\/|$)/.test(pathname),
+  },
+  {
+    key: 'tax-appeal',
+    name: 'Tax Appeals',
+    href: '/dashboard/tax-appeal',
+    icon: Scale,
+    isActive: (pathname) => /^\/dashboard\/tax-appeal(\/|$)/.test(pathname),
+  },
+];
+
+function buildAIToolHref(propertyId: string | undefined, toolHref: string): string {
+  if (!propertyId) return toolHref;
+  const separator = toolHref.includes('?') ? '&' : '?';
+  return `${toolHref}${separator}propertyId=${encodeURIComponent(propertyId)}`;
+}
 
 function getPropertyIdFromPathname(pathname: string): string | undefined {
   const match = pathname.match(PROPERTY_ID_IN_PATH);
@@ -313,6 +404,19 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
                   <Search className="h-4 w-4" />
                   Find Services
                 </Link>
+
+                <Link
+                  href="/dashboard/bookings"
+                  className={cn(
+                    'font-body font-medium text-sm flex items-center gap-2 px-3 py-2 rounded-md transition-colors duration-200 whitespace-nowrap',
+                    pathname?.startsWith('/dashboard/bookings')
+                      ? 'text-brand-primary bg-teal-50 font-semibold'
+                      : 'text-gray-700 hover:text-brand-primary hover:bg-teal-50'
+                  )}
+                >
+                  <Calendar className="h-4 w-4" />
+                  Bookings
+                </Link>
                 <DesktopUserNav user={user} />
               </div>
             </div>
@@ -408,15 +512,16 @@ function DesktopNav({ user }: { user: User | null }) {
   const isOwner = user?.segment === 'EXISTING_OWNER';
   const isBuyer = user?.segment === 'HOME_BUYER';
   const [homeToolsOpen, setHomeToolsOpen] = useState(false);
+  const [aiToolsOpen, setAiToolsOpen] = useState(false);
   const [homeAdminOpen, setHomeAdminOpen] = useState(false);
   const homeToolsCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const aiToolsCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const homeAdminCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const coreLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
     { name: 'Dashboard', href: '/dashboard', icon: Home, isActive: (path) => path === '/dashboard' },
     { name: 'Actions', href: '/dashboard/actions', icon: AlertTriangle, isActive: (path) => path.startsWith('/dashboard/actions') },
     { name: 'Inventory', href: '/dashboard/inventory', icon: Box, isActive: (path) => path.startsWith('/dashboard/inventory') },
-    { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar, isActive: (path) => path.startsWith('/dashboard/bookings') },
   ];
 
   const ownerGlobalLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
@@ -505,19 +610,41 @@ function DesktopNav({ user }: { user: User | null }) {
     }, 120);
   };
 
+  const clearAiToolsCloseTimer = () => {
+    if (aiToolsCloseTimerRef.current) {
+      clearTimeout(aiToolsCloseTimerRef.current);
+      aiToolsCloseTimerRef.current = null;
+    }
+  };
+
+  const openAiToolsMenu = () => {
+    clearAiToolsCloseTimer();
+    setAiToolsOpen(true);
+  };
+
+  const scheduleCloseAiToolsMenu = () => {
+    clearAiToolsCloseTimer();
+    aiToolsCloseTimerRef.current = setTimeout(() => {
+      setAiToolsOpen(false);
+    }, 120);
+  };
+
   useEffect(() => {
     return () => {
       clearHomeToolsCloseTimer();
+      clearAiToolsCloseTimer();
       clearHomeAdminCloseTimer();
     };
   }, []);
 
   useEffect(() => {
     setHomeToolsOpen(false);
+    setAiToolsOpen(false);
     setHomeAdminOpen(false);
   }, [pathname]);
 
   const homeToolsActive = HOME_TOOL_LINKS.some((tool) => tool.isActive(pathname || ''));
+  const aiToolsActive = AI_TOOL_LINKS.some((tool) => tool.isActive(pathname || ''));
   const homeAdminActive =
     ownerGlobalLinks.some((link) => link.isActive(pathname || '')) ||
     ownerPropertyAdminLinks.some((link) => link.isActive(pathname || ''));
@@ -545,6 +672,44 @@ function DesktopNav({ user }: { user: User | null }) {
             Checklist
           </Link>
         )}
+
+        <DropdownMenu open={aiToolsOpen} onOpenChange={setAiToolsOpen}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={sharedLinkClass(aiToolsActive)}
+              onMouseEnter={openAiToolsMenu}
+              onMouseLeave={scheduleCloseAiToolsMenu}
+            >
+              <Sparkles className="h-4 w-4" />
+              AI Tools
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            sideOffset={6}
+            className="w-64"
+            onMouseEnter={openAiToolsMenu}
+            onMouseLeave={scheduleCloseAiToolsMenu}
+            onInteractOutside={() => setAiToolsOpen(false)}
+            onPointerDownOutside={() => setAiToolsOpen(false)}
+            onEscapeKeyDown={() => setAiToolsOpen(false)}
+          >
+            {AI_TOOL_LINKS.map((tool) => {
+              const ToolIcon = tool.icon;
+              return (
+                <DropdownMenuItem key={tool.key} asChild>
+                  <Link href={buildAIToolHref(resolvedPropertyId, tool.href)} className="flex items-center gap-2">
+                    <ToolIcon className="h-4 w-4" />
+                    {tool.name}
+                  </Link>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {isOwner && (
           <>
@@ -753,6 +918,35 @@ function SidebarNav({ user }: { user: User | null }) {
           </Link>
         </SheetClose>
       )}
+
+      <details className="group rounded-lg">
+        <summary
+          className={cn(
+            navLinkClass(AI_TOOL_LINKS.some((tool) => tool.isActive(pathname || ''))),
+            'list-none cursor-pointer justify-between'
+          )}
+        >
+          <div className="flex items-center gap-3">
+            <Sparkles className="h-4 w-4" />
+            AI Tools
+          </div>
+          <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="mt-1 ml-3 border-l border-gray-200 pl-2 space-y-1">
+          {AI_TOOL_LINKS.map((tool) => {
+            const ToolIcon = tool.icon;
+            const isActive = tool.isActive(pathname || '');
+            return (
+              <SheetClose key={tool.key} asChild>
+                <Link href={buildAIToolHref(resolvedPropertyId, tool.href)} className={navLinkClass(isActive)}>
+                  <ToolIcon className="h-4 w-4" />
+                  {tool.name}
+                </Link>
+              </SheetClose>
+            );
+          })}
+        </div>
+      </details>
 
       {isOwner && (
         <>
