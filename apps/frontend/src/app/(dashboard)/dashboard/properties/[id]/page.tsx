@@ -2,6 +2,7 @@
 
 "use client";
 
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api/client";
@@ -40,6 +41,8 @@ import IncidentsClient from "./incidents/IncidentsClient";
 
 import RoomsHubClient from "./rooms/RoomsHubClient";
 import HomeToolsRail from './components/HomeToolsRail';
+import { getOnboardingStatus } from "@/lib/api/onboardingApi";
+import SetupChecklistPanel from "@/components/onboarding/SetupChecklistPanel";
 
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
@@ -670,6 +673,25 @@ export default function PropertyDetailPage() {
     enabled: !!propertyId,
   });
 
+  const { data: onboardingStatus } = useQuery({
+    queryKey: ["property-onboarding", propertyId],
+    queryFn: () => getOnboardingStatus(propertyId),
+    enabled: !!propertyId,
+  });
+
+  useEffect(() => {
+    if (!propertyId || !onboardingStatus) return;
+
+    const shouldRedirectToOnboarding =
+      onboardingStatus.status === "IN_PROGRESS" &&
+      onboardingStatus.dismissedAt === null &&
+      onboardingStatus.setupScore < 100;
+
+    if (shouldRedirectToOnboarding) {
+      router.replace(`/dashboard/properties/${propertyId}/onboarding`);
+    }
+  }, [propertyId, onboardingStatus, router]);
+
   if (isLoading) {
     return (
       <DashboardShell>
@@ -740,6 +762,10 @@ export default function PropertyDetailPage() {
 
       {/* Selling Prep Banner */}
       <SellingPrepBanner propertyId={property.id} />
+
+      {onboardingStatus && onboardingStatus.status !== "COMPLETED" && (
+        <SetupChecklistPanel propertyId={property.id} status={onboardingStatus} />
+      )}
 
       <Tabs defaultValue={defaultTab} className="w-full">
         {/* Scrollable tab container with fade indicators */}
