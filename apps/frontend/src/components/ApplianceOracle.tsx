@@ -150,7 +150,7 @@ export default function ApplianceOracle({ propertyId }: ApplianceOracleProps) {
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -220,7 +220,7 @@ export default function ApplianceOracle({ propertyId }: ApplianceOracleProps) {
                       </span>
                     </div>
                     
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div className="grid grid-cols-2 gap-3 sm:gap-4 text-sm">
                       <div>
                         <p className="text-gray-600">Current Age</p>
                         <p className="font-semibold text-gray-900">{prediction.currentAge} years</p>

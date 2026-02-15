@@ -130,7 +130,7 @@ export default function ProviderBookingsPage() {
       {/* Tabs */}
       <div className="bg-white rounded-lg shadow">
         <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8 px-6" aria-label="Tabs">
+          <nav className="-mb-px flex space-x-4 sm:space-x-8 px-4 sm:px-6 overflow-x-auto" aria-label="Tabs">
             <button
               onClick={() => setActiveTab('pending')}
               className={`${
@@ -199,8 +199,8 @@ export default function ProviderBookingsPage() {
             </div>
           ) : (
             filteredBookings.map((booking) => (
-              <div key={booking.id} className="p-6 hover:bg-gray-50 transition-colors">
-                <div className="flex items-start justify-between">
+              <div key={booking.id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                   {/* Booking Info */}
                   <div className="flex-1">
                     <div className="flex items-center space-x-3">
@@ -253,18 +253,18 @@ export default function ProviderBookingsPage() {
                   </div>
 
                   {/* Actions */}
-                  <div className="ml-6 flex flex-col space-y-2">
+                  <div className="ml-4 sm:ml-6 flex flex-col space-y-2">
                     {booking.status === 'PENDING' && (
                       <>
                         <button
                           onClick={() => handleConfirm(booking.id)}
-                          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                          className="px-4 py-2.5 sm:py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 min-h-[44px] sm:min-h-0 touch-manipulation"
                         >
                           Accept
                         </button>
                         <button
                           onClick={() => handleCancel(booking.id)}
-                          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                          className="px-4 py-2.5 sm:py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 min-h-[44px] sm:min-h-0 touch-manipulation"
                         >
                           Decline
                         </button>
@@ -275,13 +275,13 @@ export default function ProviderBookingsPage() {
                       <>
                         <button
                           onClick={() => handleStart(booking.id)}
-                          className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700"
+                          className="px-4 py-2.5 sm:py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 min-h-[44px] sm:min-h-0 touch-manipulation"
                         >
                           Start Job
                         </button>
                         <button
                           onClick={() => handleCancel(booking.id)}
-                          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                          className="px-4 py-2.5 sm:py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 min-h-[44px] sm:min-h-0 touch-manipulation"
                         >
                           Cancel
                         </button>
@@ -291,7 +291,7 @@ export default function ProviderBookingsPage() {
                     {booking.status === 'IN_PROGRESS' && (
                       <button
                         onClick={() => handleComplete(booking.id)}
-                        className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
+                        className="px-4 py-2.5 sm:py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 min-h-[44px] sm:min-h-0 touch-manipulation"
                       >
                         Complete
                       </button>
@@ -300,7 +300,7 @@ export default function ProviderBookingsPage() {
                     {(booking.status === 'COMPLETED' || booking.status === 'CANCELLED') && (
                       <Link
                         href={`/providers/bookings/${booking.id}`}
-                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 text-center"
+                        className="px-4 py-2.5 sm:py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 text-center min-h-[44px] sm:min-h-0 touch-manipulation"
                       >
                         View Details
                       </Link>

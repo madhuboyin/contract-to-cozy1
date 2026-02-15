@@ -159,16 +159,16 @@ export default function SellerPrepOverview({
         <Tabs defaultValue="checklist" className="w-full">
           {/* Layout Fix: Single row grid-cols-4 */}
           <TabsList className="grid w-full grid-cols-4 mb-6 h-auto p-1 bg-muted/50">
-            <TabsTrigger value="checklist" className="flex items-center gap-2 text-[11px] sm:text-xs md:text-sm py-2 px-1">
+            <TabsTrigger value="checklist" className="flex items-center gap-2 text-xs md:text-sm py-2 px-1">
               <Hammer className="h-4 w-4 hidden sm:inline" /> <span>Tasks</span>
             </TabsTrigger>
-            <TabsTrigger value="financials" className="flex items-center gap-2 text-[11px] sm:text-xs md:text-sm py-2 px-1">
+            <TabsTrigger value="financials" className="flex items-center gap-2 text-xs md:text-sm py-2 px-1">
               <DollarSign className="h-4 w-4 hidden sm:inline" /> <span>Finance</span>
             </TabsTrigger>
-            <TabsTrigger value="market" className="flex items-center gap-2 text-[11px] sm:text-xs md:text-sm py-2 px-1">
+            <TabsTrigger value="market" className="flex items-center gap-2 text-xs md:text-sm py-2 px-1">
               <TrendingUp className="h-4 w-4 hidden sm:inline" /> <span>Market</span>
             </TabsTrigger>
-            <TabsTrigger value="agents" className="flex items-center gap-2 text-[11px] sm:text-xs md:text-sm py-2 px-1">
+            <TabsTrigger value="agents" className="flex items-center gap-2 text-xs md:text-sm py-2 px-1">
               <Users className="h-4 w-4 hidden sm:inline" /> <span>Agents</span>
             </TabsTrigger>
           </TabsList>
@@ -326,18 +326,18 @@ function TaskItem({ item, onUpdate, isUpdating }: any) {
             <p className={`text-sm font-medium ${isDone ? 'line-through text-gray-500' : ''}`}>{item.title}</p>
           </div>
           <div className="flex gap-2 items-center">
-            <Badge variant={item.priority === 'HIGH' ? 'destructive' : 'secondary'} className="text-[10px] px-1.5 h-4 uppercase">{item.priority}</Badge>
-            <span className="text-[11px] text-gray-500">ROI: {item.roiRange} • {item.costBucket}</span>
+            <Badge variant={item.priority === 'HIGH' ? 'destructive' : 'secondary'} className="text-xs px-1.5 h-5 uppercase">{item.priority}</Badge>
+            <span className="text-xs text-gray-500">ROI: {item.roiRange} • {item.costBucket}</span>
           </div>
         </div>
         <div className="flex gap-1">
           {!isDone && !isSkipped ? (
             <>
-              <Button size="sm" variant="outline" className="h-8 text-xs px-2 text-green-700 hover:bg-green-50" onClick={() => onUpdate(item.id, 'DONE')} disabled={isUpdating}>✓ Done</Button>
-              <Button size="sm" variant="ghost" className="h-8 text-xs px-2" onClick={() => onUpdate(item.id, 'SKIPPED')} disabled={isUpdating}>Skip</Button>
+              <Button size="sm" variant="outline" className="h-11 sm:h-8 text-xs px-3 sm:px-2 text-green-700 hover:bg-green-50 touch-manipulation" onClick={() => onUpdate(item.id, 'DONE')} disabled={isUpdating}>✓ Done</Button>
+              <Button size="sm" variant="ghost" className="h-11 sm:h-8 text-xs px-3 sm:px-2 touch-manipulation" onClick={() => onUpdate(item.id, 'SKIPPED')} disabled={isUpdating}>Skip</Button>
             </>
           ) : (
-            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => onUpdate(item.id, 'PLANNED')} disabled={isUpdating}><Undo2 className="h-3 w-3 mr-1" /> Undo</Button>
+            <Button size="sm" variant="ghost" className="h-11 sm:h-8 text-xs touch-manipulation" onClick={() => onUpdate(item.id, 'PLANNED')} disabled={isUpdating}><Undo2 className="h-3 w-3 mr-1" /> Undo</Button>
           )}
         </div>
       </div>
@@ -356,7 +356,7 @@ function CompItem({ comp }: { comp: ComparableHome }) {
       </div>
       <div className="text-right">
         <p className="text-sm font-bold text-gray-900">{comp.soldPrice ? `$${comp.soldPrice.toLocaleString()}` : 'Price N/A'}</p>
-        <p className="text-[10px] text-gray-400">Sold: {comp.soldDate ? new Date(comp.soldDate).toLocaleDateString() : 'N/A'}</p>
+        <p className="text-xs text-gray-400">Sold: {comp.soldDate ? new Date(comp.soldDate).toLocaleDateString() : 'N/A'}</p>
       </div>
     </div>
   );

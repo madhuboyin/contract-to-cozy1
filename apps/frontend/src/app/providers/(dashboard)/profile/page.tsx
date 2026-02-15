@@ -95,7 +95,7 @@ export default function ProviderProfilePage() {
         {!isEditing ? (
           <button
             onClick={() => setIsEditing(true)}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+            className="px-4 py-2.5 sm:py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 min-h-[44px] sm:min-h-0 touch-manipulation"
           >
             Edit Profile
           </button>
@@ -103,14 +103,14 @@ export default function ProviderProfilePage() {
           <div className="flex space-x-3">
             <button
               onClick={() => setIsEditing(false)}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              className="px-4 py-2.5 sm:py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 min-h-[44px] sm:min-h-0 touch-manipulation"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+              className="px-4 py-2.5 sm:py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 min-h-[44px] sm:min-h-0 touch-manipulation"
             >
               {isSaving ? 'Saving...' : 'Save Changes'}
             </button>
@@ -120,7 +120,7 @@ export default function ProviderProfilePage() {
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8">
+        <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto">
           <button
             onClick={() => setActiveTab('business')}
             className={`${
@@ -177,7 +177,7 @@ export default function ProviderProfilePage() {
                 </div>
                 <button
                   onClick={() => handleFileUpload('photo')}
-                  className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
+                  className="px-4 py-2.5 sm:py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 min-h-[44px] sm:min-h-0 touch-manipulation"
                 >
                   Change Photo
                 </button>
@@ -203,7 +203,7 @@ export default function ProviderProfilePage() {
                       type="text"
                       value={businessInfo.businessName}
                       onChange={(e) => setBusinessInfo({ ...businessInfo, businessName: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 h-11 sm:h-9 text-base sm:text-sm"
                     />
                   ) : (
                     <p className="text-gray-900">{businessInfo.businessName}</p>
@@ -220,7 +220,7 @@ export default function ProviderProfilePage() {
                       rows={4}
                       value={businessInfo.description}
                       onChange={(e) => setBusinessInfo({ ...businessInfo, description: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-base sm:text-sm"
                       placeholder="Tell homeowners about your business..."
                     />
                   ) : (
@@ -239,7 +239,7 @@ export default function ProviderProfilePage() {
                         type="number"
                         value={businessInfo.yearsInBusiness}
                         onChange={(e) => setBusinessInfo({ ...businessInfo, yearsInBusiness: parseInt(e.target.value) })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 h-11 sm:h-9 text-base sm:text-sm"
                       />
                     ) : (
                       <p className="text-gray-900">{businessInfo.yearsInBusiness} years</p>
@@ -256,7 +256,7 @@ export default function ProviderProfilePage() {
                         type="number"
                         value={businessInfo.serviceRadius}
                         onChange={(e) => setBusinessInfo({ ...businessInfo, serviceRadius: parseInt(e.target.value) })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 h-11 sm:h-9 text-base sm:text-sm"
                       />
                     ) : (
                       <p className="text-gray-900">{businessInfo.serviceRadius} miles</p>
@@ -299,7 +299,7 @@ export default function ProviderProfilePage() {
                       />
                       <button
                         onClick={handleAddServiceArea}
-                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                        className="px-4 py-2.5 sm:py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 min-h-[44px] sm:min-h-0 touch-manipulation"
                       >
                         Add
                       </button>
@@ -327,7 +327,7 @@ export default function ProviderProfilePage() {
                   type="email"
                   value={contactInfo.email}
                   onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 h-11 sm:h-9 text-base sm:text-sm"
                 />
               ) : (
                 <p className="text-gray-900">{contactInfo.email}</p>
@@ -344,7 +344,7 @@ export default function ProviderProfilePage() {
                   type="tel"
                   value={contactInfo.phone}
                   onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 h-11 sm:h-9 text-base sm:text-sm"
                 />
               ) : (
                 <p className="text-gray-900">{contactInfo.phone}</p>
@@ -361,7 +361,7 @@ export default function ProviderProfilePage() {
                   type="url"
                   value={contactInfo.website}
                   onChange={(e) => setContactInfo({ ...contactInfo, website: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 h-11 sm:h-9 text-base sm:text-sm"
                   placeholder="https://example.com"
                 />
               ) : (
@@ -379,7 +379,7 @@ export default function ProviderProfilePage() {
                   type="text"
                   value={contactInfo.address}
                   onChange={(e) => setContactInfo({ ...contactInfo, address: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 h-11 sm:h-9 text-base sm:text-sm"
                 />
               ) : (
                 <p className="text-gray-900">{contactInfo.address}</p>
@@ -396,7 +396,7 @@ export default function ProviderProfilePage() {
                   type="text"
                   value={contactInfo.city}
                   onChange={(e) => setContactInfo({ ...contactInfo, city: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 h-11 sm:h-9 text-base sm:text-sm"
                 />
               ) : (
                 <p className="text-gray-900">{contactInfo.city}</p>
@@ -413,7 +413,7 @@ export default function ProviderProfilePage() {
                   type="text"
                   value={contactInfo.state}
                   onChange={(e) => setContactInfo({ ...contactInfo, state: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 h-11 sm:h-9 text-base sm:text-sm"
                 />
               ) : (
                 <p className="text-gray-900">{contactInfo.state}</p>
@@ -430,7 +430,7 @@ export default function ProviderProfilePage() {
                   type="text"
                   value={contactInfo.zipCode}
                   onChange={(e) => setContactInfo({ ...contactInfo, zipCode: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 h-11 sm:h-9 text-base sm:text-sm"
                 />
               ) : (
                 <p className="text-gray-900">{contactInfo.zipCode}</p>
@@ -456,7 +456,7 @@ export default function ProviderProfilePage() {
                     type="text"
                     value={businessInfo.licenseNumber}
                     onChange={(e) => setBusinessInfo({ ...businessInfo, licenseNumber: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 h-11 sm:h-9 text-base sm:text-sm"
                   />
                 ) : (
                   <p className="text-gray-900">{businessInfo.licenseNumber}</p>
@@ -468,7 +468,7 @@ export default function ProviderProfilePage() {
                 </label>
                 <button
                   onClick={() => handleFileUpload('license')}
-                  className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
+                  className="px-4 py-2.5 sm:py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 min-h-[44px] sm:min-h-0 touch-manipulation"
                 >
                   📄 Upload License
                 </button>
@@ -489,7 +489,7 @@ export default function ProviderProfilePage() {
                     type="text"
                     value={businessInfo.insuranceNumber}
                     onChange={(e) => setBusinessInfo({ ...businessInfo, insuranceNumber: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 h-11 sm:h-9 text-base sm:text-sm"
                   />
                 ) : (
                   <p className="text-gray-900">{businessInfo.insuranceNumber}</p>
@@ -501,7 +501,7 @@ export default function ProviderProfilePage() {
                 </label>
                 <button
                   onClick={() => handleFileUpload('insurance')}
-                  className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
+                  className="px-4 py-2.5 sm:py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 min-h-[44px] sm:min-h-0 touch-manipulation"
                 >
                   📄 Upload Certificate
                 </button>
@@ -513,7 +513,7 @@ export default function ProviderProfilePage() {
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Certifications</h3>
-              <button className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">
+              <button className="px-4 py-2.5 sm:py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 min-h-[44px] sm:min-h-0 touch-manipulation">
                 + Add Certification
               </button>
             </div>
@@ -589,7 +589,7 @@ export default function ProviderProfilePage() {
                 </label>
                 <input
                   type="password"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 h-11 sm:h-9 text-base sm:text-sm"
                 />
               </div>
               <div>
@@ -598,7 +598,7 @@ export default function ProviderProfilePage() {
                 </label>
                 <input
                   type="password"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 h-11 sm:h-9 text-base sm:text-sm"
                 />
               </div>
               <div>
@@ -607,10 +607,10 @@ export default function ProviderProfilePage() {
                 </label>
                 <input
                   type="password"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 h-11 sm:h-9 text-base sm:text-sm"
                 />
               </div>
-              <button className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">
+              <button className="px-4 py-2.5 sm:py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 min-h-[44px] sm:min-h-0 touch-manipulation">
                 Update Password
               </button>
             </div>
@@ -625,7 +625,7 @@ export default function ProviderProfilePage() {
                   <p className="text-sm font-medium text-gray-900">Deactivate Account</p>
                   <p className="text-xs text-gray-500">Temporarily disable your provider account</p>
                 </div>
-                <button className="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-300 rounded-md hover:bg-red-100">
+                <button className="px-4 py-2.5 sm:py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-300 rounded-md hover:bg-red-100 min-h-[44px] sm:min-h-0 touch-manipulation">
                   Deactivate
                 </button>
               </div>
@@ -634,7 +634,7 @@ export default function ProviderProfilePage() {
                   <p className="text-sm font-medium text-gray-900">Delete Account</p>
                   <p className="text-xs text-gray-500">Permanently delete your account and all data</p>
                 </div>
-                <button className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">
+                <button className="px-4 py-2.5 sm:py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 min-h-[44px] sm:min-h-0 touch-manipulation">
                   Delete Account
                 </button>
               </div>

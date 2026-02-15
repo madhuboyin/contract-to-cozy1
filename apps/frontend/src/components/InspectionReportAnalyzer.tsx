@@ -170,7 +170,7 @@ export default function InspectionReportAnalyzer({ propertyId }: Props) {
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Upload Area */}
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8">
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-8">
               <div className="flex flex-col items-center justify-center">
                 <FileText className="w-12 h-12 text-gray-400 mb-4" />
                 <label htmlFor="pdf-upload" className="cursor-pointer">
@@ -281,7 +281,7 @@ export default function InspectionReportAnalyzer({ propertyId }: Props) {
       </Card>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b">
+      <div className="flex gap-2 border-b overflow-x-auto">
         <button
           onClick={() => setActiveTab('overview')}
           className={`px-4 py-2 font-medium transition-colors ${

@@ -136,7 +136,7 @@ export function SeasonalTaskCard({
 
   return (
     <Card className="hover:shadow-md transition-shadow">
-      <CardContent className="p-6">
+      <CardContent className="p-4 sm:p-6">
         <div className="space-y-4">
           {/* Header */}
           <div className="flex flex-col gap-2">
