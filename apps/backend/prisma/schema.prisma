@@ -1485,6 +1485,8 @@ model Property {
   homeCapitalTimelineAnalyses  HomeCapitalTimelineAnalysis[]
   homeCapitalTimelineItems     HomeCapitalTimelineItem[]
   homeCapitalTimelineOverrides HomeCapitalTimelineOverride[]
+  doNothingScenarios      DoNothingScenario[]
+  doNothingSimulationRuns DoNothingSimulationRun[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
