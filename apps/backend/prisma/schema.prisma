@@ -1816,6 +1816,7 @@ model Document {
   claimDocuments ClaimDocument[]
   homeEventLinks HomeEventDocument[]
   riskMitigationPlanItems RiskMitigationPlanItem[]
+  capitalTimelineItems HomeCapitalTimelineItem[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2902,6 +2903,7 @@ model HomeEvent {
 
   documents       HomeEventDocument[]
   riskMitigationPlanItems RiskMitigationPlanItem[]
+  capitalTimelineItems HomeCapitalTimelineItem[]
 
   @@index([propertyId, occurredAt])
   @@index([propertyId, type, occurredAt])
