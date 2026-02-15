@@ -2,6 +2,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { InventoryItem } from '@/types';
 
 function money(cents: number | null | undefined, currency = 'USD') {
@@ -35,81 +36,88 @@ export default function InventoryItemCard(props: { item: InventoryItem; onClick:
     : null;
 
   return (
-    <button
+    <div
       id={`item-${item.id}`}
-      onClick={props.onClick}
       className={[
-        "text-left rounded-2xl border border-black/10 bg-white p-4",
-        "shadow-sm hover:shadow-md hover:bg-black/5 transition",
-        "focus:outline-none focus-visible:ring-2 focus-visible:ring-black/20",
-        "h-[176px] w-full",
-        "flex flex-col justify-between",
+        "rounded-2xl border border-black/10 bg-white shadow-sm hover:shadow-md transition",
+        "h-[192px] w-full",
+        "flex flex-col",
       ].join(' ')}
     >
-      {/* TOP: title + badges (reserved height) */}
-      <div className="min-h-[64px]">
-        <div className="flex items-start justify-between gap-2 min-w-0">
-          <div className="min-w-0 font-medium leading-snug line-clamp-2 pr-1">
-            {item.name || 'Untitled'}
+      <button
+        onClick={props.onClick}
+        className="flex-1 text-left p-4 rounded-t-2xl hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-black/20"
+      >
+        {/* TOP: title + badges (reserved height) */}
+        <div className="min-h-[64px]">
+          <div className="flex items-start justify-between gap-2 min-w-0">
+            <div className="min-w-0 font-medium leading-snug line-clamp-2 pr-1">
+              {item.name || 'Untitled'}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 max-w-[160px] overflow-hidden">
+              {hasRecallAlerts && (
+                <span className="shrink-0 text-xs rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 whitespace-nowrap">
+                  ⚠️ Recall
+                </span>
+              )}
+
+              {hasCoverageGap && (
+                <span className="shrink-0 text-xs rounded-full bg-red-100 text-red-700 px-2 py-0.5 whitespace-nowrap">
+                  Coverage gap
+                </span>
+              )}
+
+              {docsCount > 0 && (
+                <div className="shrink-0 text-xs opacity-70 whitespace-nowrap">
+                  📎 {docsCount}
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* keep badges visually clean and predictable */}
-          <div className="flex items-center justify-end gap-2 max-w-[140px] overflow-hidden">
-            {hasRecallAlerts && (
-              <span className="shrink-0 text-xs rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 whitespace-nowrap">
-                ⚠️ Recall
-              </span>
-            )}
-
-            {hasCoverageGap && (
-              <span className="shrink-0 text-xs rounded-full bg-red-100 text-red-700 px-2 py-0.5 whitespace-nowrap">
-                Coverage gap
-              </span>
-            )}
-
-            {docsCount > 0 && (
-              <div className="shrink-0 text-xs opacity-70 whitespace-nowrap">
-                📎 {docsCount}
-              </div>
-            )}
+          <div className="mt-1 text-xs text-gray-500 min-h-[16px] truncate">
+            {item.category}
+            {item.room?.name ? ` • ${item.room.name}` : ''}
           </div>
         </div>
 
-        <div className="mt-1 text-xs text-gray-500 min-h-[16px] truncate">
-          {item.category}
-          {item.room?.name ? ` • ${item.room.name}` : ''}
+        {/* MIDDLE: replacement */}
+        <div className="mt-3 min-h-[44px] leading-tight">
+          <div className="text-xs text-gray-500">Replacement</div>
+          {replacement ? (
+            <div className="font-medium tabular-nums">{replacement}</div>
+          ) : (
+            <div className="text-xs text-gray-400">No value yet</div>
+          )}
         </div>
-      </div>
+      </button>
 
-      {/* MIDDLE: replacement */}
-      <div className="min-h-[44px] leading-tight">
-        <div className="text-xs text-gray-500">Replacement</div>
-        {replacement ? (
-          <div className="font-medium tabular-nums">{replacement}</div>
-        ) : (
-          <div className="text-xs text-gray-400">No value yet</div>
-        )}
-      </div>
+      {/* BOTTOM: chips + action */}
+      <div className="px-4 pb-3 pt-2 border-t border-black/5 flex items-center justify-between gap-2">
+        <div className="min-h-[28px] flex items-center gap-2 flex-wrap">
+          {item.warrantyId && (
+            <span className="text-xs px-2 py-1 rounded-full border border-black/10">
+              Warranty
+            </span>
+          )}
+          {item.insurancePolicyId && (
+            <span className="text-xs px-2 py-1 rounded-full border border-black/10">
+              Insurance
+            </span>
+          )}
+        </div>
 
-      {/* BOTTOM: chips */}
-      <div className="min-h-[28px] flex items-center gap-2 flex-wrap">
-        {item.warrantyId && (
-          <span className="text-xs px-2 py-1 rounded-full border border-black/10">
-            Warranty
-          </span>
-        )}
-        {item.insurancePolicyId && (
-          <span className="text-xs px-2 py-1 rounded-full border border-black/10">
-            Insurance
-          </span>
-        )}
-
-        {!item.warrantyId && !item.insurancePolicyId && (
-          <span className="text-xs px-2 py-1 rounded-full border border-black/10 opacity-0">
-            placeholder
-          </span>
+        {hasCoverageGap && (
+          <Link
+            href={`/dashboard/properties/${item.propertyId}/inventory/items/${item.id}/coverage`}
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-xs font-medium bg-teal-600 text-white hover:bg-teal-700"
+          >
+            Coverage worth-it
+          </Link>
         )}
       </div>
-    </button>
+    </div>
   );
 }
