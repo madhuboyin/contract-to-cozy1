@@ -907,6 +907,14 @@ useEffect(() => {
     );
   }
 
+  function openReplaceRepair() {
+    if (!props.initialItem?.id) return;
+    props.onClose();
+    router.push(
+      `/dashboard/properties/${props.propertyId}/inventory/items/${props.initialItem.id}/replace-repair`
+    );
+  }
+
   if (!props.open || !mounted) return null;
 
   return createPortal(
@@ -1312,6 +1320,15 @@ useEffect(() => {
                 title={!isEdit ? 'Save this item first to run analysis' : undefined}
               >
                 Coverage worth-it
+              </button>
+              <button
+                type="button"
+                onClick={openReplaceRepair}
+                disabled={!isEdit}
+                className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
+                title={!isEdit ? 'Save this item first to run analysis' : undefined}
+              >
+                Replace or Repair
               </button>
             </div>
 

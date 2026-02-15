@@ -19,6 +19,10 @@ import {
   getItemCoverageAnalysis,
   runItemCoverageAnalysis,
 } from '../controllers/coverageAnalysis.controller';
+import {
+  getReplaceRepairAnalysis,
+  runReplaceRepairAnalysis,
+} from '../controllers/replaceRepairAnalysis.controller';
 
 import {
   listRooms,
@@ -73,6 +77,19 @@ const itemCoverageOverridesSchema = z.object({
 
 const runItemCoverageBodySchema = z.object({
   overrides: itemCoverageOverridesSchema.optional(),
+});
+
+const replaceRepairOverridesSchema = z.object({
+  estimatedNextRepairCostCents: z.number().int().nonnegative().optional(),
+  estimatedReplacementCostCents: z.number().int().nonnegative().optional(),
+  expectedRemainingYears: z.number().nonnegative().optional(),
+  cashBufferCents: z.number().int().nonnegative().optional(),
+  riskTolerance: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
+  usageIntensity: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
+});
+
+const runReplaceRepairBodySchema = z.object({
+  overrides: replaceRepairOverridesSchema.optional(),
 });
 
 const uploadXlsx = multer({
@@ -158,6 +175,17 @@ router.post(
   propertyAuthMiddleware,
   validateBody(runItemCoverageBodySchema),
   runItemCoverageAnalysis
+);
+router.get(
+  '/properties/:propertyId/inventory/items/:itemId/replace-repair',
+  propertyAuthMiddleware,
+  getReplaceRepairAnalysis
+);
+router.post(
+  '/properties/:propertyId/inventory/items/:itemId/replace-repair/run',
+  propertyAuthMiddleware,
+  validateBody(runReplaceRepairBodySchema),
+  runReplaceRepairAnalysis
 );
 router.patch(
   '/properties/:propertyId/inventory/items/:itemId',

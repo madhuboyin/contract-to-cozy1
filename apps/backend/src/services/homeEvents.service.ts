@@ -1,6 +1,7 @@
 // apps/backend/src/services/homeEvents.service.ts
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
+import { markReplaceRepairStale } from './replaceRepairAnalysis.service';
 
 type ListQuery = {
   type?: any;
@@ -16,6 +17,23 @@ type ListQuery = {
 function moneyToDecimalString(n?: number | null) {
   if (n === undefined || n === null) return null;
   return Number(n).toFixed(2);
+}
+
+function shouldInvalidateReplaceRepair(args: {
+  inventoryItemId?: string | null;
+  type?: string | null;
+  subtype?: string | null;
+  title?: string | null;
+}) {
+  if (!args.inventoryItemId) return false;
+
+  const eventType = String(args.type || '').toUpperCase();
+  if (eventType === 'REPAIR' || eventType === 'MAINTENANCE' || eventType === 'INSPECTION') {
+    return true;
+  }
+
+  const descriptor = `${args.subtype ?? ''} ${args.title ?? ''}`.toUpperCase();
+  return descriptor.includes('REPAIR') || descriptor.includes('REPLACE') || descriptor.includes('MAINTEN');
 }
 
 export class HomeEventsService {
@@ -168,6 +186,17 @@ export class HomeEventsService {
         },
       });
 
+      if (
+        shouldInvalidateReplaceRepair({
+          inventoryItemId: created.inventoryItemId,
+          type: created.type,
+          subtype: created.subtype,
+          title: created.title,
+        })
+      ) {
+        await markReplaceRepairStale(propertyId, created.inventoryItemId || undefined);
+      }
+
       return created;
     } catch (e: any) {
       // If unique propertyId+idempotencyKey violated, return existing
@@ -183,7 +212,10 @@ export class HomeEventsService {
   }
 
   async updateHomeEvent(propertyId: string, eventId: string, patch: any) {
-    const existing = await prisma.homeEvent.findFirst({ where: { id: eventId, propertyId }, select: { id: true } });
+    const existing = await prisma.homeEvent.findFirst({
+      where: { id: eventId, propertyId },
+      select: { id: true, inventoryItemId: true, type: true, subtype: true, title: true },
+    });
     if (!existing) throw new APIError('Home event not found', 404, 'HOME_EVENT_NOT_FOUND');
 
     // If patch includes links, validate them
@@ -227,14 +259,56 @@ export class HomeEventsService {
       },
     });
 
+    const touchedItemIds = new Set<string>();
+    if (
+      shouldInvalidateReplaceRepair({
+        inventoryItemId: existing.inventoryItemId,
+        type: existing.type,
+        subtype: existing.subtype,
+        title: existing.title,
+      }) &&
+      existing.inventoryItemId
+    ) {
+      touchedItemIds.add(existing.inventoryItemId);
+    }
+    if (
+      shouldInvalidateReplaceRepair({
+        inventoryItemId: updated.inventoryItemId,
+        type: updated.type,
+        subtype: updated.subtype,
+        title: updated.title,
+      }) &&
+      updated.inventoryItemId
+    ) {
+      touchedItemIds.add(updated.inventoryItemId);
+    }
+    for (const itemId of touchedItemIds) {
+      await markReplaceRepairStale(propertyId, itemId);
+    }
+
     return updated;
   }
 
   async deleteHomeEvent(propertyId: string, eventId: string) {
-    const existing = await prisma.homeEvent.findFirst({ where: { id: eventId, propertyId }, select: { id: true } });
+    const existing = await prisma.homeEvent.findFirst({
+      where: { id: eventId, propertyId },
+      select: { id: true, inventoryItemId: true, type: true, subtype: true, title: true },
+    });
     if (!existing) throw new APIError('Home event not found', 404, 'HOME_EVENT_NOT_FOUND');
 
     await prisma.homeEvent.delete({ where: { id: eventId } });
+
+    if (
+      shouldInvalidateReplaceRepair({
+        inventoryItemId: existing.inventoryItemId,
+        type: existing.type,
+        subtype: existing.subtype,
+        title: existing.title,
+      }) &&
+      existing.inventoryItemId
+    ) {
+      await markReplaceRepairStale(propertyId, existing.inventoryItemId);
+    }
   }
 
   async attachDocument(args: {
