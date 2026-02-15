@@ -68,6 +68,7 @@ export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
   const [editingSection, setEditingSection] = useState<EditableSection | null>(null);
   const [savingSection, setSavingSection] = useState<EditableSection | null>(null);
+  const [isSendingPasswordReset, setIsSendingPasswordReset] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const [formData, setFormData] = useState<ProfileFormData>({
@@ -206,6 +207,41 @@ export default function ProfilePage() {
     }
   };
 
+  const sendPasswordReset = async () => {
+    const email = formData.email?.trim();
+    if (!email) {
+      setMessage({ type: 'error', text: 'Email address is missing for password reset.' });
+      return;
+    }
+
+    setIsSendingPasswordReset(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      // Keep response behavior aligned with forgot-password page:
+      // only surface server errors; otherwise show generic success.
+      if (response.status >= 500) {
+        setMessage({ type: 'error', text: 'Unable to send reset link right now. Please try again.' });
+        return;
+      }
+
+      setMessage({
+        type: 'success',
+        text: 'If an account with that email exists, a password reset link has been sent.',
+      });
+    } catch {
+      setMessage({ type: 'error', text: 'Failed to send password reset link due to a network error.' });
+    } finally {
+      setIsSendingPasswordReset(false);
+    }
+  };
+
   const profileEditing = editingSection === 'profile';
   const addressEditing = editingSection === 'address';
   const actionLinkClass = 'text-base font-medium text-brand-primary underline decoration-transparent underline-offset-4 transition-colors hover:text-brand-primary-light hover:decoration-brand-primary-light';
@@ -322,6 +358,25 @@ export default function ProfilePage() {
           <FieldRow label="E-Mail Address" value={formData.email || '—'} />
           <p className="mt-2 text-sm text-gray-500">
             Email is currently managed by account authentication settings.
+          </p>
+        </SectionCard>
+
+        <SectionCard
+          className="h-full"
+          title="Password"
+          action={
+            <button
+              onClick={sendPasswordReset}
+              disabled={isSendingPasswordReset}
+              className={actionLinkClass}
+            >
+              {isSendingPasswordReset ? 'Sending...' : 'Edit Password'}
+            </button>
+          }
+        >
+          <FieldRow label="Password" value="************" />
+          <p className="mt-2 text-sm text-gray-500">
+            We will send a secure password reset link to your registered email.
           </p>
         </SectionCard>
 
