@@ -474,6 +474,7 @@ model InventoryItem {
 
   // relations (NEW)
   recallMatches  RecallMatch[]
+  replaceRepairAnalyses ReplaceRepairAnalysis[]
 
   @@index([manufacturerNorm, modelNumberNorm])
   @@index([upc])
@@ -1163,6 +1164,7 @@ model HomeownerProfile {
   expenses    Expense[]
   insuranceQuoteRequests InsuranceQuoteRequest[]
   coverageAnalyses CoverageAnalysis[]
+  replaceRepairAnalyses ReplaceRepairAnalysis[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1469,6 +1471,7 @@ model Property {
   roomScanSessions      InventoryRoomScanSession[]
   coverageAnalyses CoverageAnalysis[]
   coverageScenarios CoverageScenario[]
+  replaceRepairAnalyses ReplaceRepairAnalysis[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
