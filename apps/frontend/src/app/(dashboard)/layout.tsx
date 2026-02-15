@@ -41,7 +41,6 @@ import {
   Target,
   ChevronDown
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { User } from '@/types';
 import { PropertySetupBanner } from '@/components/PropertySetupBanner';
 import { api } from '@/lib/api/client';
@@ -162,13 +161,6 @@ function buildPropertyAwareHref(
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
 
-function getUserTypeLabel(user: User | null): string {
-  if (!user) return 'Guest';
-  if (user.segment === 'HOME_BUYER') return 'Home Buyer';
-  if (user.segment === 'EXISTING_OWNER') return 'Homeowner';
-  return 'Homeowner';
-}
-
 function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth() as { user: User | null, loading: boolean };
   const router = useRouter();
@@ -278,6 +270,21 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
                   <span className="text-xl font-bold text-blue-600">Contract to Cozy</span>
                 </Link>
 
+                <div className="flex-1 min-w-0" />
+
+                <Link
+                  href="/dashboard/properties"
+                  className={cn(
+                    'font-body font-medium text-sm flex items-center gap-2 px-3 py-2 rounded-md transition-colors duration-200 whitespace-nowrap',
+                    pathname?.startsWith('/dashboard/properties')
+                      ? 'text-brand-primary bg-teal-50 font-semibold'
+                      : 'text-gray-700 hover:text-brand-primary hover:bg-teal-50'
+                  )}
+                >
+                  <Building className="h-4 w-4" />
+                  Properties
+                </Link>
+
                 <Link
                   href="/dashboard/providers"
                   className={cn(
@@ -290,8 +297,6 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
                   <Search className="h-4 w-4" />
                   Find Services
                 </Link>
-
-                <div className="flex-1" />
                 <DesktopUserNav user={user} />
               </div>
             </div>
@@ -387,12 +392,13 @@ function DesktopNav({ user }: { user: User | null }) {
   const isOwner = user?.segment === 'EXISTING_OWNER';
   const isBuyer = user?.segment === 'HOME_BUYER';
   const [homeToolsOpen, setHomeToolsOpen] = useState(false);
+  const [homeAdminOpen, setHomeAdminOpen] = useState(false);
   const homeToolsCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const homeAdminCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const coreLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
     { name: 'Dashboard', href: '/dashboard', icon: Home, isActive: (path) => path === '/dashboard' },
     { name: 'Actions', href: '/dashboard/actions', icon: AlertTriangle, isActive: (path) => path.startsWith('/dashboard/actions') },
-    { name: 'Properties', href: '/dashboard/properties', icon: Building, isActive: (path) => path.startsWith('/dashboard/properties') },
     { name: 'Inventory', href: '/dashboard/inventory', icon: Box, isActive: (path) => path.startsWith('/dashboard/inventory') },
     { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar, isActive: (path) => path.startsWith('/dashboard/bookings') },
   ];
@@ -455,14 +461,35 @@ function DesktopNav({ user }: { user: User | null }) {
     }, 120);
   };
 
+  const clearHomeAdminCloseTimer = () => {
+    if (homeAdminCloseTimerRef.current) {
+      clearTimeout(homeAdminCloseTimerRef.current);
+      homeAdminCloseTimerRef.current = null;
+    }
+  };
+
+  const openHomeAdminMenu = () => {
+    clearHomeAdminCloseTimer();
+    setHomeAdminOpen(true);
+  };
+
+  const scheduleCloseHomeAdminMenu = () => {
+    clearHomeAdminCloseTimer();
+    homeAdminCloseTimerRef.current = setTimeout(() => {
+      setHomeAdminOpen(false);
+    }, 120);
+  };
+
   useEffect(() => {
     return () => {
       clearHomeToolsCloseTimer();
+      clearHomeAdminCloseTimer();
     };
   }, []);
 
   useEffect(() => {
     setHomeToolsOpen(false);
+    setHomeAdminOpen(false);
   }, [pathname]);
 
   const homeToolsActive = HOME_TOOL_LINKS.some((tool) => tool.isActive(pathname || ''));
@@ -546,15 +573,30 @@ function DesktopNav({ user }: { user: User | null }) {
               );
             })}
 
-            <DropdownMenu>
+            <DropdownMenu open={homeAdminOpen} onOpenChange={setHomeAdminOpen}>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className={sharedLinkClass(homeAdminActive)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={sharedLinkClass(homeAdminActive)}
+                  onMouseEnter={openHomeAdminMenu}
+                  onMouseLeave={scheduleCloseHomeAdminMenu}
+                >
                   <FileText className="h-4 w-4" />
                   Home Admin
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" sideOffset={6} className="w-56">
+              <DropdownMenuContent
+                align="start"
+                sideOffset={6}
+                className="w-56"
+                onMouseEnter={openHomeAdminMenu}
+                onMouseLeave={scheduleCloseHomeAdminMenu}
+                onInteractOutside={() => setHomeAdminOpen(false)}
+                onPointerDownOutside={() => setHomeAdminOpen(false)}
+                onEscapeKeyDown={() => setHomeAdminOpen(false)}
+              >
                 {ownerGlobalLinks.map((link) => {
                   const Icon = link.icon;
                   return (
@@ -773,18 +815,10 @@ function DesktopUserNav({ user }: { user: User | null }) {
       {/* 👤 Profile */}
       <Link 
         href="/dashboard/profile"
-        className="font-body font-medium flex items-center gap-2 text-sm text-gray-700 hover:text-brand-primary transition-colors duration-200"
+        className="font-body font-medium flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-700 hover:text-brand-primary hover:bg-teal-50 transition-colors duration-200"
       >
         <Settings className="h-4 w-4" />
-        <div>
-          <div className="font-medium">{user?.firstName}</div>
-          <Badge 
-            variant="outline" 
-            className="font-body text-xs border-brand-primary text-brand-primary"
-          >
-            {getUserTypeLabel(user)}
-          </Badge>
-        </div>
+        <div className="font-medium">{user?.firstName}</div>
       </Link>
       
       {/* 🚪 Logout */}
@@ -792,7 +826,7 @@ function DesktopUserNav({ user }: { user: User | null }) {
         onClick={handleLogout} 
         variant="ghost" 
         size="sm"
-        className="font-body font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive tracking-wide transition-colors duration-200"
+        className="font-body font-medium text-sm px-3 py-2 rounded-md text-gray-700 hover:text-brand-primary hover:bg-teal-50 transition-colors duration-200"
       >
         Logout
       </Button>
@@ -815,12 +849,6 @@ function MobileUserNav({ user }: { user: User | null }) {
       <div className="mb-2">
         <div className="font-body font-medium">{user?.firstName} {user?.lastName}</div>
         <div className="font-body text-xs text-gray-500">{user?.email}</div>
-        <Badge 
-          variant="outline" 
-          className="w-fit mt-1 border-brand-primary text-brand-primary font-body"
-        >
-          {getUserTypeLabel(user)}
-        </Badge>
       </div>
       <nav className="flex flex-col gap-1">
         <SheetClose asChild>
