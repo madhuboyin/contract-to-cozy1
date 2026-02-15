@@ -403,6 +403,16 @@ export default function InventoryClient() {
                 ].join(' ')}
               >
                 <InventoryItemCard item={item} onClick={() => onEdit(item)} />
+                {(!item.warrantyId || !item.insurancePolicyId) && (
+                  <div className="mt-2 px-1">
+                    <Link
+                      href={`/dashboard/properties/${propertyId}/inventory/items/${item.id}/coverage`}
+                      className="inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 active:bg-black/10 min-h-[40px]"
+                    >
+                      Coverage worth-it
+                    </Link>
+                  </div>
+                )}
               </div>
             ))}
           </div>

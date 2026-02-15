@@ -11,6 +11,7 @@ import {
 } from '@/lib/api/coverageAnalysisApi';
 import { getInventoryItem } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import { Button } from '@/components/ui/button';
+import { InventoryItem } from '@/types';
 
 type TraceImpact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
 
@@ -22,6 +23,19 @@ const EMPTY_OVERRIDES: ItemCoverageAnalysisOverrides = {
   riskTolerance: 'MEDIUM',
   replacementCostUsd: undefined,
   expectedRemainingYears: undefined,
+};
+
+const CATEGORY_LIFESPAN_YEARS: Record<string, number> = {
+  APPLIANCE: 12,
+  HVAC: 15,
+  PLUMBING: 20,
+  ELECTRICAL: 22,
+  ROOF_EXTERIOR: 24,
+  SAFETY: 10,
+  SMART_HOME: 8,
+  FURNITURE: 11,
+  ELECTRONICS: 7,
+  OTHER: 10,
 };
 
 function money(value?: number | null) {
@@ -80,6 +94,55 @@ function normalizeOverrides(overrides: ItemCoverageAnalysisOverrides): ItemCover
   return parsed;
 }
 
+function inferAgeYears(item: InventoryItem): number | null {
+  const source = item.installedOn ?? item.purchasedOn;
+  if (!source) return null;
+  const dt = new Date(source);
+  if (Number.isNaN(dt.getTime())) return null;
+  const years = (Date.now() - dt.getTime()) / (1000 * 60 * 60 * 24 * 365);
+  if (!Number.isFinite(years) || years < 0) return null;
+  return years;
+}
+
+function buildPrefillOverrides(item: InventoryItem): ItemCoverageAnalysisOverrides {
+  const replacementCostUsd =
+    item.replacementCostCents !== null && item.replacementCostCents !== undefined
+      ? Math.round((item.replacementCostCents / 100) * 100) / 100
+      : undefined;
+
+  const lifespan = CATEGORY_LIFESPAN_YEARS[item.category] ?? CATEGORY_LIFESPAN_YEARS.OTHER;
+  const ageYears = inferAgeYears(item);
+  const expectedRemainingYears =
+    ageYears !== null ? Math.max(0, Math.round((lifespan - ageYears) * 10) / 10) : undefined;
+
+  const annualCostFromWarranty = typeof (item.warranty as any)?.cost === 'number'
+    ? (item.warranty as any).cost
+    : undefined;
+
+  return {
+    coverageType: 'WARRANTY',
+    annualCostUsd: annualCostFromWarranty,
+    replacementCostUsd,
+    expectedRemainingYears,
+    riskTolerance: 'MEDIUM',
+  };
+}
+
+function mergeOverridesWithPrefill(
+  current: ItemCoverageAnalysisOverrides,
+  prefill: ItemCoverageAnalysisOverrides
+): ItemCoverageAnalysisOverrides {
+  return {
+    coverageType: current.coverageType ?? prefill.coverageType,
+    annualCostUsd: current.annualCostUsd ?? prefill.annualCostUsd,
+    serviceFeeUsd: current.serviceFeeUsd ?? prefill.serviceFeeUsd,
+    cashBufferUsd: current.cashBufferUsd ?? prefill.cashBufferUsd,
+    riskTolerance: current.riskTolerance ?? prefill.riskTolerance,
+    replacementCostUsd: current.replacementCostUsd ?? prefill.replacementCostUsd,
+    expectedRemainingYears: current.expectedRemainingYears ?? prefill.expectedRemainingYears,
+  };
+}
+
 export default function ItemCoverageWorthItClient() {
   const router = useRouter();
   const params = useParams<{ id: string; itemId: string }>();
@@ -94,6 +157,11 @@ export default function ItemCoverageWorthItClient() {
   const [overrides, setOverrides] = useState<ItemCoverageAnalysisOverrides>(EMPTY_OVERRIDES);
   const [itemName, setItemName] = useState<string>('Inventory Item');
   const [roomName, setRoomName] = useState<string | null>(null);
+  const [didAutoPrefill, setDidAutoPrefill] = useState(false);
+
+  useEffect(() => {
+    setDidAutoPrefill(false);
+  }, [itemId]);
 
   const fetchStatus = async () => {
     if (!propertyId || !itemId) return;
@@ -106,8 +174,13 @@ export default function ItemCoverageWorthItClient() {
       ]);
 
       if (itemResult.status === 'fulfilled') {
-        setItemName(itemResult.value.name || 'Inventory Item');
-        setRoomName(itemResult.value.room?.name || null);
+        const fetchedItem = itemResult.value;
+        setItemName(fetchedItem.name || 'Inventory Item');
+        setRoomName(fetchedItem.room?.name || null);
+        if (!didAutoPrefill) {
+          setOverrides((prev) => mergeOverridesWithPrefill(prev, buildPrefillOverrides(fetchedItem)));
+          setDidAutoPrefill(true);
+        }
       } else {
         setItemName('Inventory Item');
         setRoomName(null);
@@ -136,7 +209,7 @@ export default function ItemCoverageWorthItClient() {
   useEffect(() => {
     fetchStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [propertyId, itemId]);
+  }, [propertyId, itemId, didAutoPrefill]);
 
   const runAnalysis = async () => {
     if (!propertyId || !itemId) return;

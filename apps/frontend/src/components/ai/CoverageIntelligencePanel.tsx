@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { AlertCircle, Loader2, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
 import {
   CoverageAnalysisDTO,
@@ -9,7 +10,9 @@ import {
   runCoverageAnalysis,
   simulateCoverageAnalysis,
 } from '@/lib/api/coverageAnalysisApi';
+import { listInventoryItems } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import { Button } from '@/components/ui/button';
+import { InventoryItem } from '@/types';
 
 type CoverageIntelligencePanelProps = {
   propertyId: string;
@@ -79,6 +82,7 @@ function normalizeOverrides(overrides: CoverageAnalysisOverrides): CoverageAnaly
 }
 
 export default function CoverageIntelligencePanel({ propertyId }: CoverageIntelligencePanelProps) {
+  const router = useRouter();
   const [analysis, setAnalysis] = useState<CoverageAnalysisDTO | null>(null);
   const [hasAnalysis, setHasAnalysis] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -87,6 +91,10 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
   const [error, setError] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<CoverageAnalysisOverrides>(EMPTY_OVERRIDES);
   const [saveScenario, setSaveScenario] = useState(false);
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [itemsLoading, setItemsLoading] = useState(false);
+  const [itemsError, setItemsError] = useState<string | null>(null);
+  const [selectedItemId, setSelectedItemId] = useState<string>('');
 
   const fetchStatus = async () => {
     if (!propertyId) return;
@@ -111,6 +119,33 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
   useEffect(() => {
     fetchStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!propertyId) return;
+      setItemsLoading(true);
+      setItemsError(null);
+      try {
+        const allItems = await listInventoryItems(propertyId, {});
+        if (cancelled) return;
+        setItems(allItems);
+        setSelectedItemId((prev) => (prev ? prev : allItems[0]?.id ?? ''));
+      } catch (err: any) {
+        if (!cancelled) {
+          setItems([]);
+          setSelectedItemId('');
+          setItemsError(err?.message || 'Failed to load inventory items.');
+        }
+      } finally {
+        if (!cancelled) setItemsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [propertyId]);
 
   const runNow = async () => {
@@ -155,6 +190,12 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
     return 'bg-emerald-100 text-emerald-700';
   }, [analysis]);
 
+  const selectedItem = useMemo(() => {
+    return items.find((item) => item.id === selectedItemId) ?? null;
+  }, [items, selectedItemId]);
+
+  const selectedItemHasGap = !!selectedItem && (!selectedItem.warrantyId || !selectedItem.insurancePolicyId);
+
   if (loading) {
     return (
       <div className="rounded-2xl border border-black/10 bg-white p-8 flex items-center justify-center gap-3">
@@ -166,6 +207,51 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
 
   return (
     <div className="space-y-4">
+      <section className="rounded-2xl border border-black/10 bg-white p-5">
+        <h4 className="text-base font-semibold text-gray-900">Coverage worth-it for any inventory item</h4>
+        <p className="text-sm text-gray-600 mt-1">
+          Select an item to run a dedicated item-level coverage assessment. Known item details will be pre-filled.
+        </p>
+
+        {itemsError && <div className="mt-3 text-sm text-rose-700">{itemsError}</div>}
+
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
+          <label className="text-xs text-gray-600">
+            Inventory item
+            <select
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
+              value={selectedItemId}
+              onChange={(e) => setSelectedItemId(e.target.value)}
+              disabled={itemsLoading || items.length === 0}
+            >
+              {items.length === 0 && <option value="">No inventory items found</option>}
+              {items.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                  {item.room?.name ? ` • ${item.room.name}` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <Button
+            type="button"
+            disabled={!selectedItemId}
+            onClick={() => router.push(`/dashboard/properties/${propertyId}/inventory/items/${selectedItemId}/coverage`)}
+          >
+            Coverage worth-it
+          </Button>
+        </div>
+
+        {selectedItem && (
+          <div className="mt-3 text-xs text-gray-600">
+            {selectedItem.category}
+            {selectedItem.room?.name ? ` • ${selectedItem.room.name}` : ' • Unassigned room'}
+            {selectedItemHasGap ? ' • Coverage gap detected' : ' • Has active coverage links'}
+          </div>
+        )}
+      </section>
+
       <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm text-sky-900">
         Educational decision support only. This assessment does not recommend specific carriers or plans.
       </div>
