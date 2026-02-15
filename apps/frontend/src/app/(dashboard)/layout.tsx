@@ -140,6 +140,14 @@ const HOME_TOOL_LINKS: PropertyToolLink[] = [
     icon: Target,
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/break-even(\/|$)/.test(pathname),
   },
+  {
+    key: 'seller-prep',
+    name: 'Seller Prep',
+    hrefSuffix: 'seller-prep',
+    navTarget: 'seller-prep',
+    icon: TrendingUp,
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/seller-prep(\/|$)/.test(pathname),
+  },
 ];
 
 function getPropertyIdFromPathname(pathname: string): string | undefined {
