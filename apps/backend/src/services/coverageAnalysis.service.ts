@@ -1255,23 +1255,50 @@ export class CoverageIntelligenceService {
     };
 
     const itemNameLower = item.name.toLowerCase();
-    const relevantTaskCount = maintenanceTasks.filter((task) => {
+    const itemNameTokens = itemNameLower
+      .split(/[\s\-_/]+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 4);
+    const categoryServiceMatchWeightByItemCategory: Record<string, number> = {
+      APPLIANCE: 0.7,
+      HVAC: 0.9,
+      PLUMBING: 0.9,
+      ELECTRICAL: 0.85,
+      ROOF_EXTERIOR: 0.8,
+      SAFETY: 0.6,
+      SMART_HOME: 0.55,
+      FURNITURE: 0.05,
+      ELECTRONICS: 0.15,
+      OTHER: 0.05,
+    };
+
+    let relevantTaskCount = 0;
+    let relevantTaskScore = 0;
+    for (const task of maintenanceTasks) {
+      let contribution = 0;
+
       if (item.homeAssetId && task.homeAssetId && item.homeAssetId === task.homeAssetId) {
-        return true;
+        contribution = Math.max(contribution, 1.0);
       }
 
-      const title = (task.title || '').toLowerCase();
-      if (title && (title.includes(itemNameLower) || itemNameLower.includes(title))) {
-        return true;
+      const title = String(task.title || '').toLowerCase();
+      if (title && itemNameTokens.length > 0 && itemNameTokens.some((token) => title.includes(token))) {
+        contribution = Math.max(contribution, 0.8);
       }
 
       const relevantServices = relevantServiceCategoriesByItemCategory[item.category] ?? [];
       if (task.serviceCategory && relevantServices.includes(task.serviceCategory)) {
-        return true;
+        contribution = Math.max(
+          contribution,
+          categoryServiceMatchWeightByItemCategory[item.category] ?? 0.35
+        );
       }
 
-      return false;
-    }).length;
+      if (contribution > 0) {
+        relevantTaskCount += 1;
+        relevantTaskScore += contribution;
+      }
+    }
 
     const claimKeywordsByCategory: Record<string, string[]> = {
       APPLIANCE: ['APPLIANCE', 'EQUIPMENT', 'ELECTRICAL'],
@@ -1301,14 +1328,28 @@ export class CoverageIntelligenceService {
     const expectedCallsPerYear =
       defaults.expectedCallsPerYear +
       (failureProb >= 0.5 ? 0.35 : failureProb >= 0.3 ? 0.15 : 0) +
-      (relevantTaskCount > 0 ? 0.1 : 0);
+      (relevantTaskScore >= 1 ? 0.1 : 0);
+
+    const effectiveRepairCostUsd = Math.max(
+      40,
+      Math.min(
+        defaults.typicalRepairCostUsd,
+        replacementCostUsd > 0 ? replacementCostUsd * 0.65 : defaults.typicalRepairCostUsd
+      )
+    );
+
+    const baseAnnualRiskUsd =
+      effectiveRepairCostUsd * failureProb * riskToleranceMultiplierValue * propertyRiskMultiplier;
+    const taskRiskBoostUsd = Math.min(90, relevantTaskScore * 22);
+    const claimRiskBoostUsd = Math.min(180, relevantClaimCount * 45);
+    const gapRiskBoostUsd = gapForItem ? Math.min(60, Math.max(20, replacementCostUsd * 0.08)) : 0;
+    const rawExpectedAnnualRepairRiskUsd =
+      baseAnnualRiskUsd + taskRiskBoostUsd + claimRiskBoostUsd + gapRiskBoostUsd;
+    const annualRiskCapUsd = replacementCostUsd > 0 ? replacementCostUsd : rawExpectedAnnualRepairRiskUsd;
 
     const expectedAnnualRepairRiskUsd = Math.max(
       0,
-      defaults.typicalRepairCostUsd * failureProb * riskToleranceMultiplierValue * propertyRiskMultiplier +
-        relevantTaskCount * 35 +
-        relevantClaimCount * 55 +
-        (gapForItem ? 40 : 0)
+      Math.min(rawExpectedAnnualRepairRiskUsd, annualRiskCapUsd)
     );
     const expectedCoverageCostUsd = Math.max(0, annualCostUsd + serviceFeeUsd * expectedCallsPerYear);
     const expectedNetImpactUsd = expectedAnnualRepairRiskUsd - expectedCoverageCostUsd;
@@ -1382,7 +1423,7 @@ export class CoverageIntelligenceService {
       },
       {
         label: 'Repair risk estimate',
-        detail: `Expected annual repair risk ≈ $${toMoney(expectedAnnualRepairRiskUsd)} (educational estimate).`,
+        detail: `Expected annual repair risk ≈ $${toMoney(expectedAnnualRepairRiskUsd)} (educational estimate; capped by replacement value).`,
         impact: expectedAnnualRepairRiskUsd >= expectedCoverageCostUsd ? 'POSITIVE' : 'NEGATIVE',
       },
       {
@@ -1506,8 +1547,10 @@ export class CoverageIntelligenceService {
           failureProbability: Number(failureProb.toFixed(4)),
           expectedCallsPerYear: Number(expectedCallsPerYear.toFixed(2)),
           relevantTaskCount,
+          relevantTaskScore: Number(relevantTaskScore.toFixed(2)),
           relevantClaimCount,
           propertyRiskScore: Math.round(propertyRiskScore),
+          effectiveRepairCostUsd: toMoney(effectiveRepairCostUsd),
         },
       },
     };
