@@ -141,7 +141,7 @@ export default function SeasonalMaintenancePage() {
           </div>
           <button
             onClick={() => router.push(`/dashboard/seasonal/settings?propertyId=${propertyId}`)}
-            className="flex items-center space-x-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex items-center space-x-2 px-3 sm:px-4 py-2.5 sm:py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors min-h-[44px] sm:min-h-0 touch-manipulation"
           >
             <Settings className="w-4 h-4" />
             <span>Settings</span>
@@ -151,7 +151,7 @@ export default function SeasonalMaintenancePage() {
 
       {/* Climate Info Banner */}
       {climateInfo?.data && (
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-6 mb-8">
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4 sm:p-6 mb-8">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-semibold text-gray-900 mb-1">

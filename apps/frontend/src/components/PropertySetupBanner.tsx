@@ -58,8 +58,8 @@ export function PropertySetupBanner({ show, onDismiss }: PropertySetupBannerProp
   console.log('🎨 BANNER RENDERING NOW');
 
   return (
-    <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-orange-400 px-6 py-4 shadow-sm">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+    <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-orange-400 px-4 sm:px-6 py-4 shadow-sm">
+      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div className="flex items-center gap-3 flex-1">
           <Home className="h-5 w-5 text-orange-600 flex-shrink-0" />
           <div>
@@ -75,14 +75,14 @@ export function PropertySetupBanner({ show, onDismiss }: PropertySetupBannerProp
         <div className="flex items-center gap-3">
           <Link
             href="/dashboard/properties/new"
-            className="px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors whitespace-nowrap"
+            className="px-4 py-2.5 sm:py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors whitespace-nowrap min-h-[44px] sm:min-h-0 touch-manipulation"
           >
             Add Property Now
           </Link>
           
           <button
             onClick={handleDismiss}
-            className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+            className="p-2 text-gray-400 hover:text-gray-600 transition-colors touch-manipulation"
             aria-label="Dismiss banner"
           >
             <X className="h-4 w-4" />

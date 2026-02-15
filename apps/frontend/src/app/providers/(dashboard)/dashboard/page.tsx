@@ -39,9 +39,9 @@ export default function ProviderDashboardPage() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
         {/* Pending Bookings */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-4 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Pending Requests</p>
@@ -61,7 +61,7 @@ export default function ProviderDashboardPage() {
         </div>
 
         {/* Today's Schedule */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-4 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Today's Jobs</p>
@@ -81,7 +81,7 @@ export default function ProviderDashboardPage() {
         </div>
 
         {/* Monthly Revenue */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-4 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">This Month</p>
@@ -99,7 +99,7 @@ export default function ProviderDashboardPage() {
         </div>
 
         {/* Average Rating */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-4 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Avg. Rating</p>
@@ -118,7 +118,7 @@ export default function ProviderDashboardPage() {
       </div>
 
       {/* Two Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6">
         {/* Recent Bookings */}
         <div className="bg-white rounded-lg shadow">
           <div className="p-6 border-b border-gray-200">
@@ -131,7 +131,7 @@ export default function ProviderDashboardPage() {
           </div>
           <div className="divide-y divide-gray-200">
             {/* Booking 1 */}
-            <div className="p-6 hover:bg-gray-50 transition-colors">
+            <div className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center">
@@ -157,7 +157,7 @@ export default function ProviderDashboardPage() {
             </div>
 
             {/* Booking 2 */}
-            <div className="p-6 hover:bg-gray-50 transition-colors">
+            <div className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center">
@@ -183,7 +183,7 @@ export default function ProviderDashboardPage() {
             </div>
 
             {/* Booking 3 */}
-            <div className="p-6 hover:bg-gray-50 transition-colors">
+            <div className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center">
@@ -213,7 +213,7 @@ export default function ProviderDashboardPage() {
         {/* Quick Actions & Tips */}
         <div className="space-y-6">
           {/* Quick Actions */}
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-lg shadow p-4 sm:p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
             <div className="space-y-3">
               <Link

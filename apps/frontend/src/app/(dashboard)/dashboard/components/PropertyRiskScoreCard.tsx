@@ -95,7 +95,7 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
     // State 1: No property selected
     if (!propertyId || summary.status === 'NO_PROPERTY') {
         return (
-            <Card className="h-[190px] flex flex-col border-2 border-dashed border-gray-300">
+            <Card className="min-h-[190px] flex flex-col border-2 border-dashed border-gray-300">
                 <CardContent className="flex-1 p-5 flex flex-col items-center justify-center">
                     <Shield className="h-8 w-8 text-gray-400 mb-2" />
                     <p className="text-sm text-gray-500 text-center mb-3">Select a property</p>
@@ -112,7 +112,7 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
     // State 2: Loading or Queued
     if (isInitialLoading || summary.status === 'QUEUED') {
         return (
-            <Card className="h-[190px] flex flex-col border border-gray-200">
+            <Card className="min-h-[190px] flex flex-col border border-gray-200">
                 <CardContent className="flex-1 p-5 flex flex-col items-center justify-center">
                     <Loader2 className="h-8 w-8 text-blue-500 animate-spin mb-2" />
                     <p className="text-sm text-gray-500 text-center">
@@ -127,7 +127,7 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
     // State 3: Missing data
     if (summary.status === 'MISSING_DATA') {
         return (
-            <Card className="h-[190px] flex flex-col border-2 border-gray-300">
+            <Card className="min-h-[190px] flex flex-col border-2 border-gray-300">
                 <CardContent className="flex-1 p-5 flex flex-col items-center justify-center">
                     <Home className="h-8 w-8 text-gray-400 mb-2" />
                     <p className="text-sm font-semibold text-gray-700 text-center mb-1">More Details Needed</p>
@@ -145,7 +145,7 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
     // State 4: Calculated Report (Happy path)
     return (
         <Link href={reportLink}>
-            <Card className="h-[190px] flex flex-col border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer">
+            <Card className="min-h-[190px] flex flex-col border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer">
                 <CardContent className="flex-1 p-5 flex flex-col">
                     {/* Header */}
                     <div className="flex items-center justify-between mb-2">

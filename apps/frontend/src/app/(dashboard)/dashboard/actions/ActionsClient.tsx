@@ -366,7 +366,7 @@ export function ActionsClient() {
 
   return (
     <>
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-6">
         {/* Breadcrumb */}
         <nav className="text-sm text-muted-foreground">
           <ol className="flex items-center space-x-2">
