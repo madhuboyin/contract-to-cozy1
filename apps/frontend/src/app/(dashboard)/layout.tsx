@@ -148,6 +148,14 @@ const HOME_TOOL_LINKS: PropertyToolLink[] = [
     icon: TrendingUp,
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/seller-prep(\/|$)/.test(pathname),
   },
+  {
+    key: 'home-timeline',
+    name: 'Home Timeline',
+    hrefSuffix: 'timeline',
+    navTarget: 'home-timeline',
+    icon: Calendar,
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/timeline(\/|$)/.test(pathname),
+  },
 ];
 
 function getPropertyIdFromPathname(pathname: string): string | undefined {
