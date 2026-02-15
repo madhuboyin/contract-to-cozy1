@@ -1165,6 +1165,7 @@ model HomeownerProfile {
   insuranceQuoteRequests InsuranceQuoteRequest[]
   coverageAnalyses CoverageAnalysis[]
   replaceRepairAnalyses ReplaceRepairAnalysis[]
+  riskPremiumOptimizationAnalyses RiskPremiumOptimizationAnalysis[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1472,6 +1473,8 @@ model Property {
   coverageAnalyses CoverageAnalysis[]
   coverageScenarios CoverageScenario[]
   replaceRepairAnalyses ReplaceRepairAnalysis[]
+  riskPremiumOptimizationAnalyses RiskPremiumOptimizationAnalysis[]
+  riskMitigationPlanItems         RiskMitigationPlanItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1804,6 +1807,7 @@ model Document {
   homeReportExports HomeReportExport[]
   claimDocuments ClaimDocument[]
   homeEventLinks HomeEventDocument[]
+  riskMitigationPlanItems RiskMitigationPlanItem[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1925,31 +1929,46 @@ model InsurancePolicy {
   id                 String    @id @default(uuid())
   homeownerProfileId String
   propertyId         String? // Link to the insured property
-  
+
   // Policy Details
   carrierName        String
   policyNumber       String
   coverageType       String? // e.g., "Homeowner", "Landlord", "Flood"
   premiumAmount      Decimal   @db.Decimal(12, 2)
-  
+
+  // ✅ Added for optimizer (recommended)
+  deductibleAmount   Decimal?  @db.Decimal(12, 2)
+  coverageJson       Json?
+
   // Dates
   startDate          DateTime
   expiryDate         DateTime
-  
+
   // Relations
   homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
   property           Property? @relation(fields: [propertyId], references: [id])
   documents          Document[]
   inventoryItems     InventoryItem[]
-  claims Claim[]
-  
+  claims             Claim[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
+  // Existing
   @@index([homeownerProfileId])
   @@index([expiryDate])
+
+  // ✅ Recommended additions
+  @@index([propertyId, startDate(sort: Desc)]) // latest policy for a property
+  @@index([propertyId, expiryDate])            // active/expiring policy lookups
+  @@index([homeownerProfileId, startDate(sort: Desc)]) // latest across profile
+  @@index([carrierName])
+  @@index([policyNumber])
+  @@index([coverageType])
+
   @@map("insurance_policies")
 }
+
 
 // ============================================================================
 // EXPENSE MANAGEMENT
@@ -2874,6 +2893,7 @@ model HomeEvent {
   expense         Expense?       @relation(fields: [expenseId], references: [id], onDelete: SetNull)
 
   documents       HomeEventDocument[]
+  riskMitigationPlanItems RiskMitigationPlanItem[]
 
   @@index([propertyId, occurredAt])
   @@index([propertyId, type, occurredAt])
@@ -3394,6 +3414,146 @@ model DomainEvent {
   @@index([type, status])
   @@map("domain_events")
 }
+
+// ============================================================================
+// RISK TO PREMIUM Optimizer
+// ============================================================================
+
+enum RiskPremiumOptimizationStatus {
+  READY
+  STALE
+  ERROR
+}
+
+enum RiskPremiumOptimizationConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum MitigationPlanStatus {
+  RECOMMENDED
+  PLANNED
+  DONE
+  SKIPPED
+}
+
+enum MitigationPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum MitigationPeril {
+  WATER
+  FIRE
+  WIND_HAIL
+  THEFT
+  LIABILITY
+  ELECTRICAL
+  OTHER
+}
+
+enum MitigationActionType {
+  // Water / plumbing
+  LEAK_SENSORS
+  AUTO_SHUTOFF_VALVE
+  SUMP_PUMP_OR_BACKUP
+  WATER_HEATER_REPLACEMENT
+
+  // Roof / wind / exterior
+  ROOF_INSPECTION_OR_REPAIR
+  TREE_TRIMMING
+  WIND_HAIL_HARDENING
+
+  // Fire / safety
+  SMOKE_CO_DETECTORS
+  ELECTRICAL_PANEL_INSPECTION
+
+  // Security
+  SECURITY_SYSTEM
+
+  // Policy levers (non-carrier specific)
+  RAISE_DEDUCTIBLE
+  REVIEW_DISCOUNTS
+}
+
+model RiskPremiumOptimizationAnalysis {
+  id                 String @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String
+
+  status     RiskPremiumOptimizationStatus     @default(READY)
+  confidence RiskPremiumOptimizationConfidence
+
+  summary String?
+
+  // Snapshot of inputs and assumptions used for this run
+  inputsSnapshot Json?
+  // Ranked premium drivers with explainability
+  premiumDrivers Json?
+  // Ranked recommendations and rationale
+  recommendations Json?
+
+  // Optional savings estimate range (Decimal to match InsurancePolicy.premiumAmount)
+  estimatedSavingsMin Decimal? @db.Decimal(12, 2)
+  estimatedSavingsMax Decimal? @db.Decimal(12, 2)
+
+  computedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  planItems RiskMitigationPlanItem[]
+
+  @@index([homeownerProfileId])
+  @@index([propertyId, computedAt(sort: Desc)])
+  @@index([propertyId, status])
+  @@map("risk_premium_optimization_analyses")
+}
+
+model RiskMitigationPlanItem {
+  id         String @id @default(uuid())
+  analysisId String
+  propertyId String
+
+  actionType  MitigationActionType
+  status      MitigationPlanStatus @default(RECOMMENDED)
+  priority    MitigationPriority   @default(MEDIUM)
+  targetPeril MitigationPeril?
+
+  title String?
+  why   String
+
+  // Optional estimates (Decimal keeps consistency with HomeEvent.amount and InsurancePolicy.premiumAmount)
+  estimatedCost        Decimal? @db.Decimal(12, 2)
+  estimatedSavingsMin  Decimal? @db.Decimal(12, 2)
+  estimatedSavingsMax  Decimal? @db.Decimal(12, 2)
+
+  // Optional proof links (you already have Document + HomeEvent)
+  evidenceDocumentId String?
+  linkedHomeEventId  String?
+
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  analysis  RiskPremiumOptimizationAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  property  Property                       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  evidenceDocument Document? @relation(fields: [evidenceDocumentId], references: [id], onDelete: SetNull)
+  linkedHomeEvent  HomeEvent? @relation(fields: [linkedHomeEventId], references: [id], onDelete: SetNull)
+
+  @@index([analysisId])
+  @@index([propertyId, status])
+  @@index([propertyId, priority])
+  @@index([propertyId, actionType])
+  @@map("risk_mitigation_plan_items")
+}
+
 
 // ============================================================================
 // RECALL
