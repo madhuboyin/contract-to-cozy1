@@ -252,6 +252,31 @@ enum InventoryDraftSource {
   ROOM_VIDEO_AI
 }
 
+enum CoverageAnalysisStatus {
+  READY
+  STALE
+  ERROR
+}
+
+enum CoverageConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum CoverageVerdict {
+  WORTH_IT
+  SITUATIONAL
+  NOT_WORTH_IT
+}
+
+enum CoverageImpactLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+
 model InventoryRoomScanSession {
   id          String   @id @default(uuid())
   propertyId  String
@@ -764,6 +789,70 @@ model InventoryScanDelta {
   @@index([draftItemId])
 }
 
+model CoverageAnalysis {
+  id                 String  @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String
+
+  status        CoverageAnalysisStatus @default(READY)
+  confidence    CoverageConfidence
+  impactLevel   CoverageImpactLevel?
+
+  // High-level decisions (easy to render / filter)
+  overallVerdict   CoverageVerdict
+  insuranceVerdict CoverageVerdict
+  warrantyVerdict  CoverageVerdict
+
+  // Human-readable summary for the tool card
+  summary       String?
+  nextSteps     Json?   // array of recommended actions (structured)
+
+  // Full structured outputs (kept flexible)
+  insuranceResult        Json?
+  warrantyResult         Json?
+  addOnRecommendations   Json?
+  decisionTrace          Json?   // factors: label/detail/impact
+  inputsSnapshot         Json?   // premium, deductible, warranty cost, overrides used
+
+  computedAt DateTime @default(now())
+
+  // Relations
+  homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  // Optional: what-if scenarios saved by the user
+  scenarios CoverageScenario[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([homeownerProfileId])
+  @@index([propertyId, computedAt(sort: Desc)])
+  @@index([propertyId, status])
+  @@map("coverage_analyses")
+}
+
+
+model CoverageScenario {
+  id               String  @id @default(uuid())
+  coverageAnalysisId String
+  propertyId       String
+
+  name            String?
+  inputOverrides  Json     // deductible, premium, warranty fee, risk tolerance, etc.
+  outputSnapshot  Json     // stored result for quick compare
+
+  // Relations
+  coverageAnalysis CoverageAnalysis @relation(fields: [coverageAnalysisId], references: [id], onDelete: Cascade)
+  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([coverageAnalysisId])
+  @@index([propertyId])
+  @@map("coverage_scenarios")
+}
 
 // ============================================================================
 // FINANCIAL EFFICIENCY MANAGEMENT (PHASE 2)
@@ -1049,6 +1138,7 @@ model HomeownerProfile {
   insurancePolicies InsurancePolicy[]
   expenses    Expense[]
   insuranceQuoteRequests InsuranceQuoteRequest[]
+  coverageAnalyses CoverageAnalysis[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1353,6 +1443,8 @@ model Property {
   toolOverrides     ToolOverride[]
 
   roomScanSessions      InventoryRoomScanSession[]
+  coverageAnalyses CoverageAnalysis[]
+  coverageScenarios CoverageScenario[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
