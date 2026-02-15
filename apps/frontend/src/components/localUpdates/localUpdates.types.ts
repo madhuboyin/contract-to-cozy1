@@ -17,4 +17,5 @@ export interface LocalUpdatesCarouselProps {
   updates: LocalUpdateDTO[];
   onDismiss: (updateId: string) => void;
   onCtaClick: (updateId: string) => void;
+  variant?: 'card' | 'ticker';
 }

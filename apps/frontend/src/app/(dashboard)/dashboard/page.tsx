@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
 import { Loader2, DollarSign, ChevronLeft } from 'lucide-react';
-import { Booking, Property, User, ChecklistItem, Warranty, InsurancePolicy } from '@/types'; 
+import { Booking, Property, User, ChecklistItem, Warranty, InsurancePolicy, LocalUpdate } from '@/types'; 
 import { ScoredProperty } from './types'; 
 import { differenceInDays, isPast, parseISO } from 'date-fns'; 
 
@@ -40,6 +40,7 @@ import { SeasonalWidget } from '@/components/seasonal/SeasonalWidget';
 import { useHomeownerSegment } from '@/lib/hooks/useHomeownerSegment';
 import { WelcomeSection } from '@/components/WelcomeSection';
 import { RoomsSnapshotSection } from './components/RoomsSnapshotSection';
+import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCarousel';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -198,6 +199,7 @@ export default function DashboardPage() {
   const [orchestrationSummary, setOrchestrationSummary] = useState<{
     pendingActionCount: number;
   } | null>(null);
+  const [localUpdates, setLocalUpdates] = useState<LocalUpdate[]>([]);
   
   const [data, setData] = useState<DashboardData>({
     bookings: [],
@@ -366,6 +368,26 @@ export default function DashboardPage() {
     }
   }, [userLoading, user, redirectChecked]);
 
+  useEffect(() => {
+    if (!selectedPropertyId || user?.segment !== 'EXISTING_OWNER') {
+      setLocalUpdates([]);
+      return;
+    }
+
+    api
+      .getLocalUpdates(selectedPropertyId)
+      .then((res) => {
+        if (res.success) {
+          setLocalUpdates(res.data.updates || []);
+        } else {
+          setLocalUpdates([]);
+        }
+      })
+      .catch(() => {
+        setLocalUpdates([]);
+      });
+  }, [selectedPropertyId, user?.segment]);
+
   // --- CONDITIONAL RENDERING ---
   const loadingMessage = !redirectChecked
     ? 'Checking your account...'
@@ -428,6 +450,25 @@ export default function DashboardPage() {
 
       {/* 2. CONSTRAINED WIDTH AREA (Aligns with other cards) */}
       <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
+        {/* LOCAL UPDATES TICKER */}
+        {userSegment === 'EXISTING_OWNER' && localUpdates.length > 0 && (
+          <section className="mb-5 md:mb-6">
+            <LocalUpdatesCarousel
+              updates={localUpdates}
+              variant="ticker"
+              onDismiss={async (id) => {
+                setLocalUpdates((prev) => prev.filter((u) => u.id !== id));
+                await api.dismissLocalUpdate(id);
+              }}
+              onCtaClick={(id) => {
+                const update = localUpdates.find((u) => u.id === id);
+                if (update?.ctaUrl) {
+                  window.open(update.ctaUrl, '_blank', 'noopener,noreferrer');
+                }
+              }}
+            />
+          </section>
+        )}
         
         {/* PROPERTY INTELLIGENCE SCORES - IMMEDIATELY BELOW WELCOME */}
         <div className="flex items-center gap-3 mb-6">

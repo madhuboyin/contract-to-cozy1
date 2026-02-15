@@ -10,12 +10,7 @@ import { RecurringMaintenanceCard } from './RecurringMaintenanceCard';
 import { UpcomingRenewalsCard } from './UpcomingRenewalsCard';
 import { FavoriteProvidersCard } from './FavoriteProvidersCard';
 import { SeasonalChecklistCard } from '@/app/(dashboard)/dashboard/components/SeasonalChecklistCard';
-import { ArrowRight, Activity, AlertTriangle, Sparkles, ClipboardList } from 'lucide-react';
-
-
-// Local Home Updates
-import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCarousel';
-import { LocalUpdate } from '@/types';
+import { ArrowRight, Activity, AlertTriangle, ClipboardList } from 'lucide-react';
 import { ActionCenter } from '@/components/orchestration/ActionCenter';
 import { api } from '@/lib/api/client';
 import { HomePulse } from './HomePulse';
@@ -42,9 +37,6 @@ export const ExistingOwnerDashboard = ({
   
   // 🔑 NEW: Fetch actual Booking data for selected property
   const [propertyBookings, setPropertyBookings] = useState<Booking[]>([]);
-
-  // Local Home Updates
-  const [localUpdates, setLocalUpdates] = useState<LocalUpdate[]>([]);
 
   // PHASE 5: Fetch statistics, tasks, AND bookings
   useEffect(() => {
@@ -81,22 +73,6 @@ export const ExistingOwnerDashboard = ({
     };
 
     fetchMaintenanceData();
-  }, [selectedPropertyId]);
-
-  // Fetch local updates
-  useEffect(() => {
-    if (!selectedPropertyId) return;
-
-    api
-      .getLocalUpdates(selectedPropertyId)
-      .then((res) => {
-        if (res.success) {
-          setLocalUpdates(res.data.updates);
-        }
-      })
-      .catch(() => {
-        // fail silently
-      });
   }, [selectedPropertyId]);
 
   const selectedProperty = properties.find((p) => p.id === selectedPropertyId);
@@ -154,35 +130,6 @@ export const ExistingOwnerDashboard = ({
           <ActionCenter propertyId={selectedPropertyId} maxItems={5} />
         </section>
       )}
-      <div className="w-full border-t border-gray-200" />
-
-      {/* Local Home Updates (Helpful Suggestions) */}
-      <section className="space-y-3">
-        <div className="flex items-start gap-3">
-          <div className="p-2 bg-blue-100 rounded-lg">
-            <Sparkles className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">Local Updates</h2>
-            <p className="text-sm text-gray-500">
-              Market and service updates relevant to your property area.
-            </p>
-          </div>
-        </div>
-        <LocalUpdatesCarousel
-          updates={localUpdates}
-          onDismiss={async (id) => {
-            setLocalUpdates((prev) => prev.filter((u) => u.id !== id));
-            await api.dismissLocalUpdate(id);
-          }}
-          onCtaClick={(id) => {
-            const u = localUpdates.find((x) => x.id === id);
-            if (u?.ctaUrl) {
-              window.open(u.ctaUrl, '_blank', 'noopener,noreferrer');
-            }
-          }}
-        />
-      </section>
       <div className="w-full border-t border-gray-200" />
 
       {/* NEW ROW: Seasonal Checklist + Favorite Providers */}
