@@ -1,40 +1,29 @@
 // apps/frontend/src/app/(dashboard)/dashboard/page.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
-import { Loader2, DollarSign, ChevronLeft } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Booking, Property, User, ChecklistItem, Warranty, InsurancePolicy, LocalUpdate } from '@/types'; 
 import { ScoredProperty } from './types'; 
 import { differenceInDays, isPast, parseISO } from 'date-fns'; 
 
 // NEW IMPORTS FOR SCORECARDS AND LAYOUT
 import { DashboardShell } from '@/components/DashboardShell';
-import { PageHeader, PageHeaderHeading } from '@/components/page-header';
 import { PropertyHealthScoreCard } from './components/PropertyHealthScoreCard'; 
 import { PropertyRiskScoreCard } from './components/PropertyRiskScoreCard'; 
 import { FinancialEfficiencyScoreCard } from './components/FinancialEfficiencyScoreCard'; 
-import { MyPropertiesCard } from './components/MyPropertiesCard'; 
 // NEW IMPORTS FOR PROPERTY SELECTION
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import Link from 'next/link';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { WelcomeModal } from './components/WelcomeModal';
 
 import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
 import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
-import { AlertTriangle } from 'lucide-react';
-import { FileText } from 'lucide-react';
-import { Sparkles } from 'lucide-react';
-import { Zap } from 'lucide-react'; // Reverted: Removed CloudRain import
-import { Cloud } from 'lucide-react';
-import { Home } from 'lucide-react';
 import { TrendingUp } from 'lucide-react';
-import { Camera } from 'lucide-react';
-import { Scale } from 'lucide-react';
-import { ChevronRight } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { SeasonalBanner } from '@/components/seasonal/SeasonalBanner';
 import { SeasonalWidget } from '@/components/seasonal/SeasonalWidget';
 import { useHomeownerSegment } from '@/lib/hooks/useHomeownerSegment';
@@ -216,24 +205,6 @@ export default function DashboardPage() {
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   const { data: homeownerSegment } = useHomeownerSegment(); // Get user segment for conditional features
   
-  // Carousel ref and scroll function
-  const carouselRef = useRef<HTMLDivElement>(null);
-  
-  const scrollCarousel = (direction: 'left' | 'right') => {
-    if (!carouselRef.current) return;
-    
-    const scrollAmount = 300; // pixels to scroll
-    const currentScroll = carouselRef.current.scrollLeft;
-    const newScroll = direction === 'left' 
-      ? currentScroll - scrollAmount 
-      : currentScroll + scrollAmount;
-    
-    carouselRef.current.scrollTo({
-      left: newScroll,
-      behavior: 'smooth'
-    });
-  };
-
   // --- DATA FETCHING LOGIC (unchanged) ---
   const fetchDashboardData = useCallback(async () => {
     if (!user) return;
@@ -494,73 +465,21 @@ export default function DashboardPage() {
 
         {/* HORIZONTAL SEPARATOR */}
         <div className="w-full border-t border-gray-200 my-5 md:my-6" />
-
-          {/* 3. AI CARDS CAROUSEL */}
-          <section className="mb-4">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
+        
+        {/* AI TOOLS DISCOVERY TEASER */}
+        <section className="mb-4">
+          <div className="rounded-xl border border-purple-100 bg-gradient-to-r from-purple-50 via-white to-purple-50 p-4">
+            <div className="flex items-start gap-3">
               <div className="p-2 bg-purple-100 rounded-lg">
                 <Sparkles className="w-5 h-5 text-purple-600" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">AI-Powered Tools</h2>
-                <p className="text-sm text-gray-500">Smart automation for your property</p>
+                <h2 className="text-lg font-semibold text-gray-900">AI Tools</h2>
+                <p className="text-sm text-gray-600">
+                  AI tools are now available from the top navigation menu for faster access.
+                </p>
               </div>
             </div>
-
-            {/* FUNCTIONAL SCROLL BUTTONS */}
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => scrollCarousel('left')}
-                className="p-2 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors shadow-sm"
-                aria-label="Scroll Left"
-              >
-                <ChevronLeft className="w-4 h-4" /> 
-              </button>
-              <button 
-                onClick={() => scrollCarousel('right')}
-                className="p-2 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors shadow-sm"
-                aria-label="Scroll Right"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* CAROUSEL CONTAINER: Linked with carouselRef */}
-          <div 
-            ref={carouselRef}
-            className="flex gap-4 overflow-x-auto pb-2 no-scrollbar snap-x scroll-smooth"
-          >
-            {/* AI CARDS (Remains same as your previous working version) */}
-            {[
-              { href: 'emergency', icon: AlertTriangle, color: 'text-red-600', title: 'Emergency Help', desc: 'Instant AI guidance' },
-              { href: 'documents', icon: FileText, color: 'text-purple-600', title: 'Document Vault', desc: 'Smart analysis' },
-              { href: 'oracle', icon: Zap, color: 'text-purple-600', title: 'Appliance Oracle', desc: 'Predict failures' },
-              { href: 'budget', icon: DollarSign, color: 'text-blue-600', title: 'Budget Planner', desc: '12-month predictions' },
-              { href: 'climate', icon: Cloud, color: 'text-sky-600', title: 'Climate Risk', desc: 'Risk analysis' },
-              { href: 'modifications', icon: Home, color: 'text-indigo-600', title: 'Home Upgrades', desc: 'AI recommendations' },
-              { href: 'appreciation', icon: TrendingUp, color: 'text-green-600', title: 'Value Tracker', desc: 'Track market trends' },
-              { href: 'energy', icon: Zap, color: 'text-yellow-600', title: 'Energy Audit', desc: 'Energy-saving tips' },
-              { href: 'visual-inspector', icon: Camera, color: 'text-purple-600', title: 'Visual Inspector', desc: 'AI image analysis' },
-              { href: 'tax-appeal', icon: Scale, color: 'text-blue-700', title: 'Tax Appeals', desc: 'AI appeal analysis' },
-            ].map((card, idx) => (
-              <Link 
-                key={idx} 
-                href={`/dashboard/${card.href}?propertyId=${selectedPropertyId}`}
-                className="snap-start min-w-[280px] md:min-w-[calc(25%-12px)] flex-shrink-0"
-              >
-                <div className="flex items-start p-5 bg-white border border-gray-200 rounded-xl hover:border-teal-500 hover:shadow-lg transition-all cursor-pointer h-full">
-                  <div className="flex-shrink-0 mr-4">
-                    <card.icon className={`h-10 w-10 ${card.color}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-bold text-gray-900 leading-tight mb-1">{card.title}</h3>
-                    <p className="text-xs text-gray-500">{card.desc}</p>
-                  </div>
-                </div>
-              </Link>
-            ))}
           </div>
         </section>
         <div className="w-full border-t border-gray-200 my-5 md:my-6" />
