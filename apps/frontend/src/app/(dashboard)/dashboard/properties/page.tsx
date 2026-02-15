@@ -22,6 +22,7 @@ export default function PropertiesPage() {
     claims: 'Claims',
     'seller-prep': 'Home Tools > Seller Prep',
     'home-timeline': 'Home Tools > Home Timeline',
+    reports: 'Home Admin > Reports',
     'tool:property-tax': 'Home Tools > Property Tax',
     'tool:cost-growth': 'Home Tools > Cost Growth',
     'tool:insurance-trend': 'Home Tools > Insurance Trend',
@@ -42,6 +43,7 @@ export default function PropertiesPage() {
     if (navTarget === 'claims') return `/dashboard/properties/${propertyId}/claims`;
     if (navTarget === 'seller-prep') return `/dashboard/properties/${propertyId}/seller-prep`;
     if (navTarget === 'home-timeline') return `/dashboard/properties/${propertyId}/timeline`;
+    if (navTarget === 'reports') return `/dashboard/properties/${propertyId}/reports`;
 
     if (navTarget.startsWith('tool:')) {
       const toolSlug = navTarget.replace('tool:', '');

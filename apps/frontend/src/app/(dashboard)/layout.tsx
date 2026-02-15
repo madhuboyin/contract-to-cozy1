@@ -425,6 +425,15 @@ function DesktopNav({ user }: { user: User | null }) {
     { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign, isActive: (path) => path.startsWith('/dashboard/expenses') },
     { name: 'Documents', href: '/dashboard/documents', icon: FileText, isActive: (path) => path.startsWith('/dashboard/documents') },
   ];
+  const ownerPropertyAdminLinks: Array<NavLink & { isActive: (path: string) => boolean; navTarget: string }> = [
+    {
+      name: 'Reports',
+      href: buildPropertyAwareHref(resolvedPropertyId, 'reports', 'reports'),
+      icon: FileText,
+      navTarget: 'reports',
+      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/reports(\/|$)/.test(path),
+    },
+  ];
 
   const propertyFeatureLinks: Array<NavLink & { isActive: (path: string) => boolean; navTarget: string }> = [
     {
@@ -509,7 +518,9 @@ function DesktopNav({ user }: { user: User | null }) {
   }, [pathname]);
 
   const homeToolsActive = HOME_TOOL_LINKS.some((tool) => tool.isActive(pathname || ''));
-  const homeAdminActive = ownerGlobalLinks.some((link) => link.isActive(pathname || ''));
+  const homeAdminActive =
+    ownerGlobalLinks.some((link) => link.isActive(pathname || '')) ||
+    ownerPropertyAdminLinks.some((link) => link.isActive(pathname || ''));
 
   return (
     <nav className="w-full overflow-x-auto">
@@ -613,6 +624,17 @@ function DesktopNav({ user }: { user: User | null }) {
                 onPointerDownOutside={() => setHomeAdminOpen(false)}
                 onEscapeKeyDown={() => setHomeAdminOpen(false)}
               >
+                {ownerPropertyAdminLinks.map((link) => {
+                  const Icon = link.icon;
+                  return (
+                    <DropdownMenuItem key={link.navTarget} asChild>
+                      <Link href={link.href} className="flex items-center gap-2">
+                        <Icon className="h-4 w-4" />
+                        {link.name}
+                      </Link>
+                    </DropdownMenuItem>
+                  );
+                })}
                 {ownerGlobalLinks.map((link) => {
                   const Icon = link.icon;
                   return (
@@ -670,6 +692,15 @@ function SidebarNav({ user }: { user: User | null }) {
     { name: 'Insurance', href: '/dashboard/insurance', icon: Shield, isActive: (path) => path.startsWith('/dashboard/insurance') },
     { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign, isActive: (path) => path.startsWith('/dashboard/expenses') },
     { name: 'Documents', href: '/dashboard/documents', icon: FileText, isActive: (path) => path.startsWith('/dashboard/documents') },
+  ];
+  const ownerPropertyAdminLinks: Array<NavLink & { isActive: (path: string) => boolean; navTarget: string }> = [
+    {
+      name: 'Reports',
+      href: buildPropertyAwareHref(resolvedPropertyId, 'reports', 'reports'),
+      icon: FileText,
+      navTarget: 'reports',
+      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/reports(\/|$)/.test(path),
+    },
   ];
 
   const propertyFeatureLinks: Array<NavLink & { isActive: (path: string) => boolean; navTarget: string }> = [
@@ -783,6 +814,18 @@ function SidebarNav({ user }: { user: User | null }) {
               <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
             </summary>
             <div className="mt-1 ml-3 border-l border-gray-200 pl-2 space-y-1">
+              {ownerPropertyAdminLinks.map((link) => {
+                const Icon = link.icon;
+                const isActive = link.isActive(pathname || '');
+                return (
+                  <SheetClose key={link.navTarget} asChild>
+                    <Link href={link.href} className={navLinkClass(isActive)}>
+                      <Icon className="h-4 w-4" />
+                      {link.name}
+                    </Link>
+                  </SheetClose>
+                );
+              })}
               {ownerGlobalLinks.map((link) => {
                 const Icon = link.icon;
                 const isActive = link.isActive(pathname || '');
