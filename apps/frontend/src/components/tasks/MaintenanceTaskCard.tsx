@@ -117,12 +117,12 @@ export function MaintenanceTaskCard({
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                 <TaskStatusBadge status={task.status} variant="compact" />
                 <TaskPriorityBadge priority={task.priority} variant="compact" />
-                <Badge variant="outline" className={`${sourceBadge.className} text-[10px] sm:text-xs px-1.5 py-0`}>
+                <Badge variant="outline" className={`${sourceBadge.className} text-[11px] sm:text-xs px-1.5 py-0`}>
                   {sourceBadge.label}
                 </Badge>
                 
                 {task.serviceCategory && (
-                  <Badge variant="outline" className="text-[10px] sm:text-xs bg-gray-50 px-1.5 py-0">
+                  <Badge variant="outline" className="text-[11px] sm:text-xs bg-gray-50 px-1.5 py-0">
                     <Wrench className="h-3 w-3 mr-1" />
                     {task.serviceCategory}
                   </Badge>
@@ -133,7 +133,7 @@ export function MaintenanceTaskCard({
             {/* Actions Menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0">
+                <Button variant="ghost" size="icon" className="shrink-0">
                   <MoreVertical className="h-5 w-5 text-gray-500" />
                 </Button>
               </DropdownMenuTrigger>
