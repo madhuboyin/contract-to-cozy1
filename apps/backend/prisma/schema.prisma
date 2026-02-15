@@ -276,6 +276,30 @@ enum CoverageImpactLevel {
   HIGH
 }
 
+enum ReplaceRepairAnalysisStatus {
+  READY
+  STALE
+  ERROR
+}
+
+enum ReplaceRepairVerdict {
+  REPLACE_NOW
+  REPLACE_SOON
+  REPAIR_AND_MONITOR
+  REPAIR_ONLY
+}
+
+enum ReplaceRepairConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum ReplaceRepairImpactLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
 
 model InventoryRoomScanSession {
   id          String   @id @default(uuid())
@@ -2668,6 +2692,47 @@ enum OnboardingStatus {
   SKIPPED
 }
 
+model ReplaceRepairAnalysis {
+  id                 String  @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String
+  inventoryItemId    String
+
+  status      ReplaceRepairAnalysisStatus @default(READY)
+  verdict     ReplaceRepairVerdict
+  confidence  ReplaceRepairConfidence
+  impactLevel ReplaceRepairImpactLevel?
+
+  // Short human summary for UI card
+  summary     String?
+  nextSteps   Json?   // structured actions
+  decisionTrace Json? // factors: label/detail/impact
+
+  // Inputs / assumptions (user overrides, inferred defaults, cost assumptions)
+  inputsSnapshot Json?
+
+  // Key numerics (queryable + sortable for backlog)
+  ageYears                  Int?
+  remainingYears            Int?
+  estimatedNextRepairCostCents      Int?
+  estimatedReplacementCostCents     Int?
+  expectedAnnualRepairRiskCents     Int?
+  expectedAnnualOwnershipDeltaCents Int? // optional: replace vs repair yearly delta
+  breakEvenMonths            Int?
+
+  computedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  inventoryItem    InventoryItem    @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  @@index([inventoryItemId, computedAt(sort: Desc)])
+  @@index([propertyId, verdict])
+  @@index([propertyId, impactLevel])
+  @@map("replace_repair_analyses")
+}
 
 model PropertyClimateSetting {
   id                      String              @id @default(cuid())
