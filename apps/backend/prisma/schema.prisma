@@ -1332,6 +1332,7 @@ model Property {
   seasonalChecklists       SeasonalChecklist[]
   seasonalChecklistItems   SeasonalChecklistItem[]
   climateSetting           PropertyClimateSetting?
+  onboarding PropertyOnboarding?
 
   inventoryRooms InventoryRoom[]
   inventoryItems InventoryItem[]
