@@ -11,6 +11,7 @@ import { AddClaimDocumentInput,
 import { CLAIM_CHECKLIST_TEMPLATES, ChecklistTemplateItem } from '../claims/claims.templates';
 import { assertValidTransition } from './claims.transitions';
 import { DomainEventsService } from '../domainEvents/domainEvents.service';
+import { markCoverageAnalysisStale } from '../coverageAnalysis.service';
 import { ClaimStatus } from '../../types/claims.types';
 
 import { ClaimDocumentType, ClaimTimelineEventType} from '@prisma/client';
@@ -519,6 +520,7 @@ export class ClaimsService {
       await recomputeChecklistCompletionPct(claim.id);
     }
 
+    await markCoverageAnalysisStale(propertyId);
     return this.getClaim(propertyId, claim.id);
   }
 
@@ -788,6 +790,7 @@ export class ClaimsService {
     if (nextStatus === 'SUBMITTED') {
       await validateCanSubmitClaim(propertyId, claimId);
     }
+    await markCoverageAnalysisStale(propertyId);
     return updated;
   }
      

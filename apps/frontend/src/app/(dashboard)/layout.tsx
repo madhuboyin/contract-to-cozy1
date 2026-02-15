@@ -33,6 +33,7 @@ import {
   ClipboardCheck,
   LayoutGrid,
   ShieldAlert,
+  ShieldCheck,
   TrendingUp,
   Info,
   Calculator,
@@ -171,6 +172,15 @@ const HOME_TOOL_LINKS: PropertyToolLink[] = [
 ];
 
 const AI_TOOL_LINKS: AIToolLink[] = [
+  {
+    key: 'coverage-intelligence',
+    name: 'Coverage Intelligence',
+    href: '/dashboard/coverage-intelligence',
+    icon: ShieldCheck,
+    isActive: (pathname) =>
+      /^\/dashboard\/coverage-intelligence(\/|$)/.test(pathname) ||
+      /^\/dashboard\/properties\/[^/]+\/tools\/coverage-intelligence(\/|$)/.test(pathname),
+  },
   {
     key: 'emergency',
     name: 'Emergency Help',

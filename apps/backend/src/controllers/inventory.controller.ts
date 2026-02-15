@@ -5,6 +5,7 @@ import { CustomRequest } from '../types';
 import { InventoryService } from '../services/inventory.service';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
+import { markCoverageAnalysisStale } from '../services/coverageAnalysis.service';
 
 const service = new InventoryService();
 
@@ -32,6 +33,7 @@ export async function createRoom(req: CustomRequest, res: Response, next: NextFu
   try {
     const propertyId = req.params.propertyId;
     const room = await service.createRoom(propertyId, req.body);
+    await markCoverageAnalysisStale(propertyId);
     res.status(201).json({ success: true, data: { room } });
   } catch (err) {
     next(err);
@@ -43,6 +45,7 @@ export async function updateRoom(req: CustomRequest, res: Response, next: NextFu
     const propertyId = req.params.propertyId;
     const roomId = req.params.roomId;
     const room = await service.updateRoom(propertyId, roomId, req.body);
+    await markCoverageAnalysisStale(propertyId);
     res.json({ success: true, data: { room } });
   } catch (err) {
     next(err);
@@ -54,6 +57,7 @@ export async function deleteRoom(req: CustomRequest, res: Response, next: NextFu
     const propertyId = req.params.propertyId;
     const roomId = req.params.roomId;
     await service.deleteRoom(propertyId, roomId);
+    await markCoverageAnalysisStale(propertyId);
     res.status(204).send();
   } catch (err) {
     next(err);
@@ -86,6 +90,7 @@ export async function createItem(req: CustomRequest, res: Response, next: NextFu
     const propertyId = req.params.propertyId;
     const userId = req.user?.userId ?? null;
     const item = await service.createItem(propertyId, req.body, userId);    
+    await markCoverageAnalysisStale(propertyId);
     res.status(201).json({ success: true, data: { item } });
   } catch (err) {
     next(err);
@@ -108,6 +113,7 @@ export async function updateItem(req: CustomRequest, res: Response, next: NextFu
     const propertyId = req.params.propertyId;
     const itemId = req.params.itemId;
     const item = await service.updateItem(propertyId, itemId, req.body);
+    await markCoverageAnalysisStale(propertyId);
     res.json({ success: true, data: { item } });
   } catch (err) {
     next(err);
@@ -119,6 +125,7 @@ export async function deleteItem(req: CustomRequest, res: Response, next: NextFu
     const propertyId = req.params.propertyId;
     const itemId = req.params.itemId;
     await service.deleteItem(propertyId, itemId);
+    await markCoverageAnalysisStale(propertyId);
     res.status(204).send();
   } catch (err) {
     next(err);
@@ -167,6 +174,7 @@ export async function rollbackImportBatch(req: CustomRequest, res: Response, nex
     const batchId = req.params.batchId;
 
     const result = await service.rollbackImportBatch(propertyId, batchId);
+    await markCoverageAnalysisStale(propertyId);
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);

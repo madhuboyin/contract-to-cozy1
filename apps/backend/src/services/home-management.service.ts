@@ -10,6 +10,7 @@ import {
 import { prisma } from '../lib/prisma';
 import JobQueueService from './JobQueue.service';
 import { HomeEventsAutoGen } from './homeEvents/homeEvents.autogen';
+import { markCoverageAnalysisStale } from './coverageAnalysis.service';
 
 // Helper interface for safe Decimal conversion (the object must have a toNumber method)
 interface DecimalLike {
@@ -281,6 +282,10 @@ export async function createWarranty(
       include: { documents: true }
     });
 
+    if (rawWarranty.propertyId) {
+      await markCoverageAnalysisStale(rawWarranty.propertyId);
+    }
+
     return mapRawWarrantyToWarranty(rawWarranty);
   } catch (error) {
     console.error('Error creating warranty:', error);
@@ -328,6 +333,7 @@ export async function updateWarranty(
     } catch (error) {
       console.error(`[WARRANTY-SERVICE] Failed to enqueue risk update job:`, error);
     }
+    await markCoverageAnalysisStale(rawUpdatedWarranty.propertyId);
   }
   // 🔑 END NEW SECTION
 
@@ -362,6 +368,7 @@ export async function deleteWarranty(
     } catch (error) {
       console.error(`[WARRANTY-SERVICE] Failed to enqueue risk update job:`, error);
     }
+    await markCoverageAnalysisStale(propertyId);
   }
   // 🔑 END NEW SECTION
 
@@ -468,6 +475,10 @@ export async function createInsurancePolicy(
       } as Prisma.InsurancePolicyCreateInput,
     });
     
+    if (rawPolicy.propertyId) {
+      await markCoverageAnalysisStale(rawPolicy.propertyId);
+    }
+
     return mapRawPolicyToInsurancePolicy(rawPolicy);
   } catch (error) {
     console.error('FATAL ERROR (POST /insurance-policies): Prisma operation failed.', error); 
@@ -502,6 +513,10 @@ export async function updateInsurancePolicy(
     include: { documents: true }
   });
   
+  if (rawUpdatedPolicy.propertyId) {
+    await markCoverageAnalysisStale(rawUpdatedPolicy.propertyId);
+  }
+
   return mapRawPolicyToInsurancePolicy(rawUpdatedPolicy);
 }
 
@@ -509,9 +524,18 @@ export async function deleteInsurancePolicy(
   policyId: string, 
   homeownerProfileId: string
 ): Promise<InsurancePolicy> {
+  const policyToDelete = await prisma.insurancePolicy.findUnique({
+    where: { id: policyId, homeownerProfileId },
+    select: { propertyId: true },
+  });
+
   const rawDeletedPolicy = await prisma.insurancePolicy.delete({
     where: { id: policyId, homeownerProfileId },
   });
+
+  if (policyToDelete?.propertyId) {
+    await markCoverageAnalysisStale(policyToDelete.propertyId);
+  }
   
   return mapRawPolicyToInsurancePolicy(rawDeletedPolicy);
 }
