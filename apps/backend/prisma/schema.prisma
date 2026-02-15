@@ -476,6 +476,9 @@ model InventoryItem {
   recallMatches  RecallMatch[]
   replaceRepairAnalyses ReplaceRepairAnalysis[]
 
+  homeCapitalTimelineItems     HomeCapitalTimelineItem[]
+  homeCapitalTimelineOverrides HomeCapitalTimelineOverride[]
+
   @@index([manufacturerNorm, modelNumberNorm])
   @@index([upc])
 
@@ -1166,6 +1169,7 @@ model HomeownerProfile {
   coverageAnalyses CoverageAnalysis[]
   replaceRepairAnalyses ReplaceRepairAnalysis[]
   riskPremiumOptimizationAnalyses RiskPremiumOptimizationAnalysis[]
+  homeCapitalTimelineAnalyses HomeCapitalTimelineAnalysis[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1475,6 +1479,10 @@ model Property {
   replaceRepairAnalyses ReplaceRepairAnalysis[]
   riskPremiumOptimizationAnalyses RiskPremiumOptimizationAnalysis[]
   riskMitigationPlanItems         RiskMitigationPlanItem[]
+
+  homeCapitalTimelineAnalyses  HomeCapitalTimelineAnalysis[]
+  homeCapitalTimelineItems     HomeCapitalTimelineItem[]
+  homeCapitalTimelineOverrides HomeCapitalTimelineOverride[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3554,6 +3562,159 @@ model RiskMitigationPlanItem {
   @@map("risk_mitigation_plan_items")
 }
 
+// ============================================================================
+// Home Capital Timeline
+// ============================================================================
+
+enum HomeCapitalTimelineStatus {
+  READY
+  STALE
+  ERROR
+}
+
+enum HomeCapitalTimelineConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum HomeCapitalTimelinePriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum HomeCapitalTimelineCategory {
+  ROOF
+  HVAC
+  WATER_HEATER
+  APPLIANCE
+  PLUMBING
+  ELECTRICAL
+  EXTERIOR
+  FOUNDATION
+  OTHER
+}
+
+enum HomeCapitalTimelineEventType {
+  REPLACE
+  MAJOR_REPAIR
+  INSPECTION
+}
+
+enum HomeCapitalTimelineOverrideType {
+  PLANNED_DATE          // exact planned date
+  PLANNED_WINDOW        // planned start/end window
+  COST_OVERRIDE         // override estimated cost range
+  DISABLE_ITEM          // exclude from timeline
+  ADJUST_REMAINING_LIFE // override remaining years
+  NOTE                 // free-form note affecting reasoning
+}
+
+model HomeCapitalTimelineAnalysis {
+  id                 String @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String
+
+  status     HomeCapitalTimelineStatus     @default(READY)
+  confidence HomeCapitalTimelineConfidence
+
+  horizonYears Int @default(10)
+  summary     String?
+
+  // Versioned assumptions / overrides used for this run
+  inputsSnapshot Json?
+  // Full computed timeline for fast render (UI can also use items table)
+  timelineJson   Json?
+
+  computedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  items HomeCapitalTimelineItem[]
+
+  @@index([homeownerProfileId])
+  @@index([propertyId, computedAt(sort: Desc)])
+  @@index([propertyId, status])
+  @@map("home_capital_timeline_analyses")
+}
+
+model HomeCapitalTimelineItem {
+  id         String @id @default(uuid())
+  analysisId String
+  propertyId String
+
+  inventoryItemId String?
+  category        HomeCapitalTimelineCategory
+  eventType       HomeCapitalTimelineEventType
+
+  // Predicted window for the event
+  windowStart DateTime
+  windowEnd   DateTime
+
+  // Estimated cost range (cents)
+  estimatedCostMinCents Int?
+  estimatedCostMaxCents Int?
+  currency              String @default("USD")
+
+  confidence HomeCapitalTimelineConfidence
+  priority   HomeCapitalTimelinePriority @default(MEDIUM)
+
+  why String
+
+  // Optional proof / linkage
+  linkedHomeEventId   String?
+  evidenceDocumentId  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  analysis       HomeCapitalTimelineAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  property       Property                   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  inventoryItem  InventoryItem?             @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+
+  linkedHomeEvent  HomeEvent? @relation(fields: [linkedHomeEventId], references: [id], onDelete: SetNull)
+  evidenceDocument Document?  @relation(fields: [evidenceDocumentId], references: [id], onDelete: SetNull)
+
+  @@index([analysisId])
+  @@index([propertyId, windowStart])
+  @@index([propertyId, category])
+  @@index([propertyId, priority])
+  @@index([inventoryItemId, windowStart])
+  @@map("home_capital_timeline_items")
+}
+
+model HomeCapitalTimelineOverride {
+  id         String @id @default(uuid())
+  propertyId String
+
+  inventoryItemId String?
+  type            HomeCapitalTimelineOverrideType
+
+  // Flexible payload:
+  // - PLANNED_DATE: { date: "2028-06-01" }
+  // - PLANNED_WINDOW: { start: "...", end: "..." }
+  // - COST_OVERRIDE: { minCents: 900000, maxCents: 1200000 }
+  // - ADJUST_REMAINING_LIFE: { remainingYears: 3 }
+  // - DISABLE_ITEM: { disabled: true }
+  payload Json
+
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId])
+  @@index([inventoryItemId])
+  @@index([propertyId, type])
+  @@map("home_capital_timeline_overrides")
+}
 
 // ============================================================================
 // RECALL
