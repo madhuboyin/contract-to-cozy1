@@ -32,6 +32,7 @@ import { RoomsSnapshotSection } from './components/RoomsSnapshotSection';
 import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCarousel';
 import CoverageIntelligenceToolCard from './components/CoverageIntelligenceToolCard';
 import RiskPremiumOptimizerToolCard from './components/RiskPremiumOptimizerToolCard';
+import DoNothingSimulatorToolCard from './components/DoNothingSimulatorToolCard';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -475,15 +476,16 @@ export default function DashboardPage() {
               <ShieldAlert className="w-5 h-5 text-teal-700" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Coverage & Premium Intelligence</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Coverage, Premium & Inaction Intelligence</h2>
               <p className="text-sm text-gray-600">
-                Educational guidance to evaluate coverage value and risk-driven premium pressure.
+                Educational guidance to compare coverage, premium pressure, and delayed-action downside.
               </p>
             </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <CoverageIntelligenceToolCard propertyId={selectedPropertyId || ''} />
             <RiskPremiumOptimizerToolCard propertyId={selectedPropertyId || ''} />
+            <DoNothingSimulatorToolCard propertyId={selectedPropertyId || ''} />
           </div>
         </section>
         <div className="w-full border-t border-gray-200 my-5 md:my-6" />

@@ -8,6 +8,7 @@ import { APIError } from '../middleware/error.middleware';
 import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../services/coverageAnalysis.service';
 import { markReplaceRepairStale } from '../services/replaceRepairAnalysis.service';
 import { markRiskPremiumOptimizerStale } from '../services/riskPremiumOptimizer.service';
+import { markDoNothingRunsStale } from '../services/doNothingSimulator.service';
 
 const service = new InventoryService();
 
@@ -37,6 +38,7 @@ export async function createRoom(req: CustomRequest, res: Response, next: NextFu
     const room = await service.createRoom(propertyId, req.body);
     await markCoverageAnalysisStale(propertyId);
     await markRiskPremiumOptimizerStale(propertyId);
+    await markDoNothingRunsStale(propertyId);
     res.status(201).json({ success: true, data: { room } });
   } catch (err) {
     next(err);
@@ -50,6 +52,7 @@ export async function updateRoom(req: CustomRequest, res: Response, next: NextFu
     const room = await service.updateRoom(propertyId, roomId, req.body);
     await markCoverageAnalysisStale(propertyId);
     await markRiskPremiumOptimizerStale(propertyId);
+    await markDoNothingRunsStale(propertyId);
     res.json({ success: true, data: { room } });
   } catch (err) {
     next(err);
@@ -63,6 +66,7 @@ export async function deleteRoom(req: CustomRequest, res: Response, next: NextFu
     await service.deleteRoom(propertyId, roomId);
     await markCoverageAnalysisStale(propertyId);
     await markRiskPremiumOptimizerStale(propertyId);
+    await markDoNothingRunsStale(propertyId);
     res.status(204).send();
   } catch (err) {
     next(err);
@@ -97,6 +101,7 @@ export async function createItem(req: CustomRequest, res: Response, next: NextFu
     const item = await service.createItem(propertyId, req.body, userId);    
     await markCoverageAnalysisStale(propertyId);
     await markRiskPremiumOptimizerStale(propertyId);
+    await markDoNothingRunsStale(propertyId);
     res.status(201).json({ success: true, data: { item } });
   } catch (err) {
     next(err);
@@ -123,6 +128,7 @@ export async function updateItem(req: CustomRequest, res: Response, next: NextFu
     await markItemCoverageAnalysesStale(propertyId, itemId);
     await markReplaceRepairStale(propertyId, itemId);
     await markRiskPremiumOptimizerStale(propertyId);
+    await markDoNothingRunsStale(propertyId);
     res.json({ success: true, data: { item } });
   } catch (err) {
     next(err);
@@ -138,6 +144,7 @@ export async function deleteItem(req: CustomRequest, res: Response, next: NextFu
     await markItemCoverageAnalysesStale(propertyId, itemId);
     await markReplaceRepairStale(propertyId, itemId);
     await markRiskPremiumOptimizerStale(propertyId);
+    await markDoNothingRunsStale(propertyId);
     res.status(204).send();
   } catch (err) {
     next(err);
@@ -190,6 +197,7 @@ export async function rollbackImportBatch(req: CustomRequest, res: Response, nex
     await markItemCoverageAnalysesStale(propertyId);
     await markReplaceRepairStale(propertyId);
     await markRiskPremiumOptimizerStale(propertyId);
+    await markDoNothingRunsStale(propertyId);
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);

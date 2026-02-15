@@ -5,6 +5,7 @@ import { InventoryImportService } from '../services/inventoryImport.service';
 import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../services/coverageAnalysis.service';
 import { markReplaceRepairStale } from '../services/replaceRepairAnalysis.service';
 import { markRiskPremiumOptimizerStale } from '../services/riskPremiumOptimizer.service';
+import { markDoNothingRunsStale } from '../services/doNothingSimulator.service';
 
 const svc = new InventoryImportService();
 
@@ -70,6 +71,7 @@ export async function importInventoryFromXlsx(
       await markItemCoverageAnalysesStale(propertyId);
       await markReplaceRepairStale(propertyId);
       await markRiskPremiumOptimizerStale(propertyId);
+      await markDoNothingRunsStale(propertyId);
     }
 
     return res.json(result);

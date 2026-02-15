@@ -12,6 +12,7 @@ import JobQueueService from './JobQueue.service';
 import { HomeEventsAutoGen } from './homeEvents/homeEvents.autogen';
 import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from './coverageAnalysis.service';
 import { markRiskPremiumOptimizerStale } from './riskPremiumOptimizer.service';
+import { markDoNothingRunsStale } from './doNothingSimulator.service';
 
 // Helper interface for safe Decimal conversion (the object must have a toNumber method)
 interface DecimalLike {
@@ -287,6 +288,7 @@ export async function createWarranty(
       await markCoverageAnalysisStale(rawWarranty.propertyId);
       await markItemCoverageAnalysesStale(rawWarranty.propertyId);
       await markRiskPremiumOptimizerStale(rawWarranty.propertyId);
+      await markDoNothingRunsStale(rawWarranty.propertyId);
     }
 
     return mapRawWarrantyToWarranty(rawWarranty);
@@ -339,6 +341,7 @@ export async function updateWarranty(
     await markCoverageAnalysisStale(rawUpdatedWarranty.propertyId);
     await markItemCoverageAnalysesStale(rawUpdatedWarranty.propertyId);
     await markRiskPremiumOptimizerStale(rawUpdatedWarranty.propertyId);
+    await markDoNothingRunsStale(rawUpdatedWarranty.propertyId);
   }
   // 🔑 END NEW SECTION
 
@@ -376,6 +379,7 @@ export async function deleteWarranty(
     await markCoverageAnalysisStale(propertyId);
     await markItemCoverageAnalysesStale(propertyId);
     await markRiskPremiumOptimizerStale(propertyId);
+    await markDoNothingRunsStale(propertyId);
   }
   // 🔑 END NEW SECTION
 
@@ -486,6 +490,7 @@ export async function createInsurancePolicy(
       await markCoverageAnalysisStale(rawPolicy.propertyId);
       await markItemCoverageAnalysesStale(rawPolicy.propertyId);
       await markRiskPremiumOptimizerStale(rawPolicy.propertyId);
+      await markDoNothingRunsStale(rawPolicy.propertyId);
     }
 
     return mapRawPolicyToInsurancePolicy(rawPolicy);
@@ -526,6 +531,7 @@ export async function updateInsurancePolicy(
     await markCoverageAnalysisStale(rawUpdatedPolicy.propertyId);
     await markItemCoverageAnalysesStale(rawUpdatedPolicy.propertyId);
     await markRiskPremiumOptimizerStale(rawUpdatedPolicy.propertyId);
+    await markDoNothingRunsStale(rawUpdatedPolicy.propertyId);
   }
 
   return mapRawPolicyToInsurancePolicy(rawUpdatedPolicy);
@@ -548,6 +554,7 @@ export async function deleteInsurancePolicy(
     await markCoverageAnalysisStale(policyToDelete.propertyId);
     await markItemCoverageAnalysesStale(policyToDelete.propertyId);
     await markRiskPremiumOptimizerStale(policyToDelete.propertyId);
+    await markDoNothingRunsStale(policyToDelete.propertyId);
   }
   
   return mapRawPolicyToInsurancePolicy(rawDeletedPolicy);

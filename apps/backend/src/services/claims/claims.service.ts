@@ -13,6 +13,7 @@ import { assertValidTransition } from './claims.transitions';
 import { DomainEventsService } from '../domainEvents/domainEvents.service';
 import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../coverageAnalysis.service';
 import { markRiskPremiumOptimizerStale } from '../riskPremiumOptimizer.service';
+import { markDoNothingRunsStale } from '../doNothingSimulator.service';
 import { ClaimStatus } from '../../types/claims.types';
 
 import { ClaimDocumentType, ClaimTimelineEventType} from '@prisma/client';
@@ -524,6 +525,7 @@ export class ClaimsService {
     await markCoverageAnalysisStale(propertyId);
     await markItemCoverageAnalysesStale(propertyId);
     await markRiskPremiumOptimizerStale(propertyId);
+    await markDoNothingRunsStale(propertyId);
     return this.getClaim(propertyId, claim.id);
   }
 
@@ -796,6 +798,7 @@ export class ClaimsService {
     await markCoverageAnalysisStale(propertyId);
     await markItemCoverageAnalysesStale(propertyId);
     await markRiskPremiumOptimizerStale(propertyId);
+    await markDoNothingRunsStale(propertyId);
     return updated;
   }
      

@@ -45,6 +45,7 @@ import {
   Zap,
   Cloud,
   Camera,
+  PauseCircle,
 } from 'lucide-react';
 import { User } from '@/types';
 import { PropertySetupBanner } from '@/components/PropertySetupBanner';
@@ -198,6 +199,15 @@ const AI_TOOL_LINKS: AIToolLink[] = [
     isActive: (pathname) =>
       /^\/dashboard\/replace-repair(\/|$)/.test(pathname) ||
       /^\/dashboard\/properties\/[^/]+\/inventory\/items\/[^/]+\/replace-repair(\/|$)/.test(pathname),
+  },
+  {
+    key: 'do-nothing-simulator',
+    name: 'Do-Nothing Simulator',
+    href: '/dashboard/do-nothing-simulator',
+    icon: PauseCircle,
+    isActive: (pathname) =>
+      /^\/dashboard\/do-nothing-simulator(\/|$)/.test(pathname) ||
+      /^\/dashboard\/properties\/[^/]+\/tools\/do-nothing(\/|$)/.test(pathname),
   },
   {
     key: 'emergency',

@@ -2,6 +2,7 @@
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { markReplaceRepairStale } from './replaceRepairAnalysis.service';
+import { markDoNothingRunsStale } from './doNothingSimulator.service';
 
 type ListQuery = {
   type?: any;
@@ -195,6 +196,7 @@ export class HomeEventsService {
         })
       ) {
         await markReplaceRepairStale(propertyId, created.inventoryItemId || undefined);
+        await markDoNothingRunsStale(propertyId);
       }
 
       return created;
@@ -285,6 +287,9 @@ export class HomeEventsService {
     for (const itemId of touchedItemIds) {
       await markReplaceRepairStale(propertyId, itemId);
     }
+    if (touchedItemIds.size > 0) {
+      await markDoNothingRunsStale(propertyId);
+    }
 
     return updated;
   }
@@ -308,6 +313,7 @@ export class HomeEventsService {
       existing.inventoryItemId
     ) {
       await markReplaceRepairStale(propertyId, existing.inventoryItemId);
+      await markDoNothingRunsStale(propertyId);
     }
   }
 
