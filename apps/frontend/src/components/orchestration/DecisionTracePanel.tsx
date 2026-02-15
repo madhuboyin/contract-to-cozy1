@@ -107,9 +107,9 @@ export const DecisionTracePanel: React.FC<Props> = ({
       <button
         type="button"
         onClick={handleToggleExpanded}
-        className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+        className="text-xs text-blue-600 hover:underline flex items-center gap-1.5 min-h-[44px] sm:min-h-0 touch-manipulation"
       >
-        <Info className="h-3 w-3" />
+        <Info className="h-4 w-4" />
         {linkText}
       </button>
 
@@ -152,13 +152,13 @@ export const DecisionTracePanel: React.FC<Props> = ({
                     )}
 
                     {status && (
-                      <span className="px-2 py-0.5 rounded bg-white border text-[11px] text-gray-700">
+                      <span className="px-2 py-0.5 rounded bg-white border text-xs text-gray-700">
                         {humanizeStatus(String(status))}
                       </span>
                     )}
 
                     {action?.isRecurring && (
-                      <span className="px-2 py-0.5 rounded bg-white border text-[11px] text-gray-700">
+                      <span className="px-2 py-0.5 rounded bg-white border text-xs text-gray-700">
                         Recurring
                       </span>
                     )}

@@ -25,14 +25,14 @@ export function TaskActionButtons({
   return (
     <div className="space-y-2">
       {/* Quick Actions - Compact horizontal layout */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-3 sm:gap-2 flex-wrap">
         {/* Watch Tutorial Button */}
         {isDiyPossible && (
           <a
             href={youtubeUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 transition-colors text-xs group"
+            className="inline-flex items-center gap-1.5 px-3 py-2.5 sm:py-1.5 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 transition-colors text-xs group"
           >
             <Youtube className="w-3.5 h-3.5 text-red-600" />
             <span className="font-medium text-red-900">Tutorial</span>
@@ -46,7 +46,7 @@ export function TaskActionButtons({
             onClick={() => {
               alert(`Materials needed:\n\n${materialsList}`);
             }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors text-xs"
+            className="inline-flex items-center gap-1.5 px-3 py-2.5 sm:py-1.5 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors text-xs"
           >
             <FileText className="w-3.5 h-3.5 text-blue-600" />
             <span className="font-medium text-blue-900">Materials</span>
@@ -57,7 +57,7 @@ export function TaskActionButtons({
         {serviceCategory && (
           <Link
             href={`/dashboard/providers?category=${serviceCategory}`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 transition-colors text-xs group"
+            className="inline-flex items-center gap-1.5 px-3 py-2.5 sm:py-1.5 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 transition-colors text-xs group"
           >
             <Phone className="w-3.5 h-3.5 text-green-600" />
             <span className="font-medium text-green-900">Find Pro</span>

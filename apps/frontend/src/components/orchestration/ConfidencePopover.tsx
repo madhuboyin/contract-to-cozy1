@@ -86,9 +86,9 @@ export const ConfidencePopover: React.FC<Props> = ({ level, score, explanation =
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-gray-900"
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-gray-900 min-h-[44px] sm:min-h-0 touch-manipulation"
         >
-          <Info className="h-3.5 w-3.5" />
+          <Info className="h-4 w-4" />
           How confident is this recommendation?
         </button>
       </PopoverTrigger>

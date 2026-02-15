@@ -85,7 +85,7 @@ export function PullToRefresh({
     >
       {/* Pull indicator */}
       <div
-        className="absolute top-0 left-0 right-0 flex items-center justify-center transition-all duration-200 pointer-events-none"
+        className="absolute top-[env(safe-area-inset-top,0px)] left-0 right-0 flex items-center justify-center transition-all duration-200 pointer-events-none"
         style={{ 
           height: `${pullDistance}px`,
           opacity: opacity

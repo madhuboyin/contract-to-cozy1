@@ -20,7 +20,7 @@ export const StarRating: React.FC<StarRatingProps> = ({
   const displayValue = hoverValue ?? value ?? 0;
 
   return (
-    <div className="flex gap-1">
+    <div className="flex gap-2">
       {[1, 2, 3, 4, 5].map((rating) => (
         <button
           key={rating}
@@ -30,14 +30,14 @@ export const StarRating: React.FC<StarRatingProps> = ({
           onMouseEnter={() => !readonly && setHoverValue(rating)}
           onMouseLeave={() => !readonly && setHoverValue(null)}
           className={cn(
-            'transition-colors',
+            'p-1.5 transition-colors touch-manipulation',
             !readonly && 'hover:scale-110 cursor-pointer',
             readonly && 'cursor-default'
           )}
         >
           <Star
             className={cn(
-              'h-6 w-6',
+              'h-7 w-7 sm:h-6 sm:w-6',
               rating <= displayValue
                 ? 'fill-yellow-400 text-yellow-400'
                 : 'text-gray-300'

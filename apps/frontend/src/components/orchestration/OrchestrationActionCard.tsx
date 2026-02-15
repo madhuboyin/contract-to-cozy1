@@ -184,7 +184,7 @@ function signalBadge(action: OrchestratedActionDTO) {
   if (!s) return null;
 
   const meta = sourceMeta(s.sourceType);
-  const base = 'text-[11px] font-semibold px-2 py-0.5 rounded inline-flex items-center gap-1';
+  const base = 'text-xs font-semibold px-2 py-0.5 rounded inline-flex items-center gap-1';
   const title = s.summary || undefined;
 
   return (
