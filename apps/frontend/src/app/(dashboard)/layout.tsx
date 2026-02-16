@@ -608,6 +608,13 @@ function DesktopNav({ user }: { user: User | null }) {
       navTarget: 'claims',
       isActive: (path) => /^\/dashboard\/properties\/[^/]+\/claims(\/|$)/.test(path),
     },
+    {
+      name: 'Recalls',
+      href: buildPropertyAwareHref(resolvedPropertyId, 'recalls', 'recalls'),
+      icon: ShieldCheck,
+      navTarget: 'recalls',
+      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/recalls(\/|$)/.test(path),
+    },
   ];
 
   const sharedLinkClass = (isActive: boolean) =>
@@ -935,6 +942,13 @@ function SidebarNav({ user }: { user: User | null }) {
       icon: ClipboardCheck,
       navTarget: 'claims',
       isActive: (path) => /^\/dashboard\/properties\/[^/]+\/claims(\/|$)/.test(path),
+    },
+    {
+      name: 'Recalls',
+      href: buildPropertyAwareHref(resolvedPropertyId, 'recalls', 'recalls'),
+      icon: ShieldCheck,
+      navTarget: 'recalls',
+      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/recalls(\/|$)/.test(path),
     },
   ];
 

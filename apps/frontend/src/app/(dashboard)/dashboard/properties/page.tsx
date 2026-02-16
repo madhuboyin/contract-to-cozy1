@@ -20,6 +20,7 @@ export default function PropertiesPage() {
     rooms: 'Rooms',
     incidents: 'Incidents',
     claims: 'Claims',
+    recalls: 'Recalls',
     'seller-prep': 'Home Tools > Seller Prep',
     'home-timeline': 'Home Tools > Home Timeline',
     reports: 'Home Admin > Reports',
@@ -42,6 +43,7 @@ export default function PropertiesPage() {
     if (navTarget === 'rooms') return `/dashboard/properties/${propertyId}/rooms`;
     if (navTarget === 'incidents') return `/dashboard/properties/${propertyId}/incidents`;
     if (navTarget === 'claims') return `/dashboard/properties/${propertyId}/claims`;
+    if (navTarget === 'recalls') return `/dashboard/properties/${propertyId}/recalls`;
     if (navTarget === 'seller-prep') return `/dashboard/properties/${propertyId}/seller-prep`;
     if (navTarget === 'home-timeline') return `/dashboard/properties/${propertyId}/timeline`;
     if (navTarget === 'reports') return `/dashboard/properties/${propertyId}/reports`;
