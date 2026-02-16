@@ -10,6 +10,7 @@ function clamp(n: number, min: number, max: number) {
 
 function fmtTick(dateIso: string) {
   const dt = new Date(dateIso);
+  if (Number.isNaN(dt.getTime())) return "—";
   return dt.toLocaleDateString("en-US", { month: "short" });
 }
 
@@ -54,10 +55,15 @@ export function ScoreDeltaIndicator({ delta }: ScoreDeltaIndicatorProps) {
 }
 
 export function ScoreTrendChart({ points, ariaLabel }: ScoreTrendChartProps) {
+  const toTime = (weekStart: string) => {
+    const t = new Date(weekStart).getTime();
+    return Number.isFinite(t) ? t : 0;
+  };
+
   const sorted = useMemo(
     () =>
       [...(points || [])].sort(
-        (a, b) => new Date(a.weekStart).getTime() - new Date(b.weekStart).getTime()
+        (a, b) => toTime(a.weekStart) - toTime(b.weekStart)
       ),
     [points]
   );

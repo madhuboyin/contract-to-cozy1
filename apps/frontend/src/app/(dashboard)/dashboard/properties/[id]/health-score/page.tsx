@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
@@ -133,17 +133,28 @@ export default function PropertyHealthDetailPage() {
   const { data: property, isLoading: isLoadingProperty } = useQuery({
     queryKey: ["property", propertyId],
     queryFn: async () => {
-      const response = await api.getProperty(propertyId);
-      return response.success ? response.data : null;
+      try {
+        const response = await api.getProperty(propertyId);
+        return response.success ? response.data : null;
+      } catch {
+        return null;
+      }
     },
     enabled: !!propertyId,
   });
 
   const snapshotQuery = useQuery({
     queryKey: ["property-score-snapshot-health", propertyId, trendWeeks],
-    queryFn: () => api.getPropertyScoreSnapshots(propertyId, trendWeeks),
+    queryFn: async () => {
+      try {
+        return await api.getPropertyScoreSnapshots(propertyId, trendWeeks);
+      } catch {
+        return null;
+      }
+    },
     enabled: !!propertyId,
     staleTime: 10 * 60 * 1000,
+    retry: 1,
   });
 
   if (isLoadingProperty || !propertyId) {
@@ -157,12 +168,14 @@ export default function PropertyHealthDetailPage() {
   }
 
   const series = snapshotQuery.data?.scores?.HEALTH;
-  const latestScore = series?.latest?.score ?? 0;
-  const scoreMax = series?.latest?.scoreMax ?? 100;
+  const propertyHealthScore = asNumber((property as { healthScore?: { totalScore?: number } } | null)?.healthScore?.totalScore);
+  const propertyHealthMax = asNumber((property as { healthScore?: { maxPotentialScore?: number } } | null)?.healthScore?.maxPotentialScore) ?? 100;
+  const latestScore = series?.latest?.score ?? propertyHealthScore ?? 0;
+  const scoreMax = series?.latest?.scoreMax ?? propertyHealthMax;
   const percentage = Math.min(100, Math.max(0, (latestScore / Math.max(scoreMax || 100, 1)) * 100));
   const latestInsights = getInsights(series?.latest);
   const healthDetails = getHealthDetails(latestScore);
-  const changes = useMemo(() => buildHealthChangeItems(series), [series]);
+  const changes = buildHealthChangeItems(series);
 
   return (
     <DashboardShell className="pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
@@ -284,4 +297,3 @@ export default function PropertyHealthDetailPage() {
     </DashboardShell>
   );
 }
-

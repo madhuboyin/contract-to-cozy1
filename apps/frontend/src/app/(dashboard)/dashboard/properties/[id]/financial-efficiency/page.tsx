@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { ScoreDeltaIndicator, ScoreTrendChart } from "@/components/scores/ScoreTrendChart";
 
 
@@ -249,8 +249,12 @@ export default function FinancialEfficiencyPage() {
     const { data: property, isLoading: isLoadingProperty } = useQuery({
         queryKey: ["property", propertyId],
         queryFn: async () => {
-            const response = await api.getProperty(propertyId as string);
-            if (response.success) return response.data;
+            try {
+                const response = await api.getProperty(propertyId as string);
+                if (response.success) return response.data;
+            } catch {
+                return null;
+            }
             return null;
         },
         enabled: !!propertyId,
@@ -273,9 +277,16 @@ export default function FinancialEfficiencyPage() {
 
     const scoreSnapshotQuery = useQuery({
         queryKey: ["property-score-snapshot-financial", propertyId, trendWeeks],
-        queryFn: async () => api.getPropertyScoreSnapshots(propertyId as string, trendWeeks),
+        queryFn: async () => {
+            try {
+                return await api.getPropertyScoreSnapshots(propertyId as string, trendWeeks);
+            } catch {
+                return null;
+            }
+        },
         enabled: !!propertyId,
         staleTime: 10 * 60 * 1000,
+        retry: 1,
     });
 
     // --- Data Extraction and Status Determination ---
@@ -312,7 +323,7 @@ export default function FinancialEfficiencyPage() {
     const { level, color, progressClass, icon: ScoreIcon } = getEfficiencyDetails(score);
     const financialSeries = scoreSnapshotQuery.data?.scores?.FINANCIAL;
     const financialTrend = financialSeries?.trend || [];
-    const financialChanges = useMemo(() => buildFinancialChangeItems(financialSeries), [financialSeries]);
+    const financialChanges = buildFinancialChangeItems(financialSeries);
 
     const actualTotalCost = (report?.actualInsuranceCost || 0) + (report?.actualUtilityCost || 0) + (report?.actualWarrantyCost || 0);
     const marketAverageTotal = report?.marketAverageTotal || 0;
@@ -370,7 +381,7 @@ export default function FinancialEfficiencyPage() {
         return (
             <Card className="md:col-span-4">
                 <CardHeader><CardTitle>No Financial Data Available</CardTitle></CardHeader>
-                <CardContent><CardDescription>Please ensure you have entered your property's insurance, warranty, and utility expenses in the Home Management section to generate this report. You can trigger a calculation once the data is entered.</CardDescription></CardContent>
+                <CardContent><CardDescription>Please ensure you have entered your property&apos;s insurance, warranty, and utility expenses in the Home Management section to generate this report. You can trigger a calculation once the data is entered.</CardDescription></CardContent>
             </Card>
         );
     };
