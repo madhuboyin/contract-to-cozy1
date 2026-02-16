@@ -13,7 +13,7 @@ import { Worker, Queue } from 'bullmq';
 import { calculateAssetRisk, calculateTotalRiskScore, filterRelevantAssets, AssetRiskDetail } from '../../backend/src/utils/riskCalculator.util';
 import { RISK_ASSET_CONFIG } from '../../backend/src/config/risk-constants';
 import { calculateFinancialEfficiency } from '../../backend/src/utils/FinancialCalculator.util';
-import { calculateHealthScore } from '../../backend/src/utils/propertyScore.util';
+import { calculateHealthScore } from './utils/propertyScore.util';
 import { sendEmailNotificationJob, runDailyEmailDigest } from './jobs/sendEmailNotification.job';
 import { sendPushNotificationJob } from './jobs/sendPushNotification.job';
 import { sendSmsNotificationJob } from './jobs/sendSmsNotification.job';
@@ -400,7 +400,7 @@ async function capturePropertyScoreSnapshots(
       scoreBand: getBandForScore('HEALTH', asNumber(health.totalScore)),
       computedAt: new Date(),
       snapshotJson: {
-        requiredActions: health.insights.filter((insight) =>
+        requiredActions: health.insights.filter((insight: { status: string }) =>
           ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data'].includes(insight.status)
         ).length,
         insights: health.insights.slice(0, 8),
