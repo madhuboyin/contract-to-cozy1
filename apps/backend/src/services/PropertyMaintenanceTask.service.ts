@@ -1,6 +1,5 @@
 // apps/backend/src/services/PropertyMaintenanceTask.service.ts
 import {
-    PrismaClient,
     PropertyMaintenanceTask,
     MaintenanceTaskStatus,
     MaintenanceTaskSource,
@@ -10,8 +9,7 @@ import {
     RecurrenceFrequency,
     Season,
   } from '@prisma/client';
-  
-  const prisma = new PrismaClient();
+  import { prisma } from '../lib/prisma';
   
   /**
    * Service for managing property maintenance tasks.

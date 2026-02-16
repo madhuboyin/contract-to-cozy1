@@ -12,10 +12,9 @@
  * - Idempotent via actionKey
  */
 
-import { PrismaClient, ServiceCategory } from '@prisma/client';
+import { ServiceCategory } from '@prisma/client';
 import { PropertyMaintenanceTaskService } from './PropertyMaintenanceTask.service';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 /**
  * Creates maintenance tasks from risk assessment report.

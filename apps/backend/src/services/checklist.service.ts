@@ -34,7 +34,6 @@
  */
 
 import {
-  PrismaClient,
   Checklist,
   ChecklistItem,
   ChecklistItemStatus,
@@ -43,8 +42,7 @@ import {
   Prisma,
   TaskPriority,
 } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // Helper functions for renewal task generation
 const syncRenewalTasks = async (userId: string, checklistId: string) => {

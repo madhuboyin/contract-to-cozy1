@@ -1,7 +1,6 @@
 // apps/backend/src/services/HomeBuyerTask.service.ts
-import { PrismaClient, HomeBuyerTask, HomeBuyerTaskStatus, ServiceCategory } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { HomeBuyerTask, HomeBuyerTaskStatus, ServiceCategory } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 
 /**
  * Service for managing HOME_BUYER tasks.

@@ -6,7 +6,7 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
 import basicAuth from 'express-basic-auth';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from './lib/prisma';
 
 // Import swagger config
 import { swaggerSpec } from './config/swagger.config';
@@ -73,9 +73,6 @@ import propertyScoreSnapshotRoutes from './routes/propertyScoreSnapshot.routes';
 import homeCapitalTimelineRoutes from './routes/homeCapitalTimeline.routes';
 import dailyHomePulseRoutes from './routes/dailyHomePulse.routes';
 dotenv.config();
-
-// Initialize Prisma Client
-const prisma = new PrismaClient();
 
 const app = express();
 

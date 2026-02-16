@@ -3,9 +3,7 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest, UserRole } from '../types/auth.types';
 import { verifyAccessToken } from '../utils/jwt.util';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // NOTE: AuthRequest type is defined in '../types/auth.types' and is assumed
 // to have been updated to include homeownerProfile and providerProfile on req.user.

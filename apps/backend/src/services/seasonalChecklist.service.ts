@@ -1,8 +1,7 @@
 // apps/backend/src/services/seasonalChecklist.service.ts
-import { PrismaClient, ClimateRegion, Season, Property } from '@prisma/client';
+import { ClimateRegion, Season, Property } from '@prisma/client';
 import { ClimateZoneService } from './climateZone.service';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 export class SeasonalChecklistService {
   /**

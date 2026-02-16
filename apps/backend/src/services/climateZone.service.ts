@@ -1,8 +1,7 @@
 // apps/backend/src/services/climateZone.service.ts
-import { PrismaClient, ClimateRegion, Property } from '@prisma/client';
+import { ClimateRegion, Property } from '@prisma/client';
 import climateData from '../data/zipToClimateRegion.json';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 interface ClimateZoneMapping {
   metadata: {

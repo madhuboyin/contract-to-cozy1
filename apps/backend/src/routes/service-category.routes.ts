@@ -5,11 +5,7 @@ import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types/auth.types';
 import { Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient({
-  log: ['error', 'warn'], // Add logging to see errors
-});
+import { prisma } from '../lib/prisma';
 
 const router = Router();
 

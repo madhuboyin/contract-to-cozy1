@@ -1,9 +1,8 @@
 import { Response } from 'express';
-import { PrismaClient, UserRole, Prisma } from '@prisma/client';
+import { UserRole, Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { AuthRequest } from '../types/auth.types';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 const updateProfileSchema = z.object({
   firstName: z.string().min(1).optional(),

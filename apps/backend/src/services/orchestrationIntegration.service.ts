@@ -11,12 +11,10 @@
  * - Backward compatibility with ChecklistService
  */
 
-import { PrismaClient } from '@prisma/client';
 import { HomeBuyerTaskService } from './HomeBuyerTask.service';
 import { PropertyMaintenanceTaskService } from './PropertyMaintenanceTask.service';
 import { ChecklistService } from './checklist.service';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 /**
  * Routes Action Center task creation to the appropriate service

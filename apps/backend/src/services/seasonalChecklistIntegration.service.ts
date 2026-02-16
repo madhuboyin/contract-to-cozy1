@@ -13,10 +13,8 @@
  * - Only for EXISTING_OWNER segment
  */
 
-import { PrismaClient } from '@prisma/client';
 import { PropertyMaintenanceTaskService } from './PropertyMaintenanceTask.service';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 /**
  * Creates a PropertyMaintenanceTask from a seasonal checklist item.
