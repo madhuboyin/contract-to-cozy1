@@ -221,7 +221,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
         </span>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1.2fr)]">
         <div className="-mx-1 overflow-x-auto lg:mx-0 lg:overflow-visible">
           <div className="min-w-max rounded-lg border border-gray-200 bg-gray-50 px-1 py-1.5 lg:min-w-0 lg:px-2">
             <div className="flex min-w-max gap-0.5 lg:min-w-0 lg:gap-0">
@@ -233,15 +233,15 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
               return (
                 <div
                   key={row.kind}
-                  className={`w-[152px] shrink-0 px-2 py-1 lg:w-1/3 lg:px-2 lg:py-1 ${
+                  className={`w-[146px] shrink-0 px-1.5 py-1 lg:w-1/3 lg:px-2 lg:py-1 ${
                     row.kind !== 'FINANCIAL' ? 'border-r border-gray-200' : ''
                   }`}
                 >
-                  <div className="min-h-[84px]">
+                  <div className="min-h-[74px]">
                     <p className="text-sm font-bold text-gray-900">{row.label}</p>
                     <p
                       className={`mt-0.5 leading-none font-bold tracking-tight text-gray-900 ${
-                        row.kind === 'RISK' ? 'text-[26px]' : 'text-[28px]'
+                        row.kind === 'RISK' ? 'text-[22px]' : 'text-[24px]'
                       }`}
                     >
                       {formatSummaryValue(row.kind, row.value)}
@@ -254,14 +254,14 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
                       ) : null}
                       {delta.label}
                     </p>
-                    <div className="relative mt-1.5">
+                    <div className="relative mt-1">
                       <div className="grid grid-cols-5 gap-0.5 overflow-hidden rounded-full">
                         {colors.map((color, idx) => (
-                          <span key={idx} className={`h-1.5 rounded-full ${color}`} />
+                          <span key={idx} className={`h-1 rounded-full ${color}`} />
                         ))}
                       </div>
                       <span
-                        className="absolute -top-2.5 -translate-x-1/2 text-[13px] leading-none text-black"
+                        className="absolute -top-2 -translate-x-1/2 text-[12px] leading-none text-black"
                         style={{ left: `${Math.round(position * 100)}%` }}
                       >
                         ▼
@@ -285,8 +285,8 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
                 <Sparkles className="h-4 w-4 mt-0.5 shrink-0" />
               )}
               <div className="min-w-0">
-                <p className="text-sm font-semibold truncate">{secondaryHeadline}</p>
-                <p className="text-xs md:text-sm line-clamp-1">{secondaryDetail}</p>
+                <p className="text-sm font-semibold">{secondaryHeadline}</p>
+                <p className="text-xs md:text-sm">{secondaryDetail}</p>
               </div>
             </div>
           </div>
@@ -294,11 +294,10 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
           <div className="rounded-md border border-gray-200 bg-white p-2.5">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-gray-900 truncate">{payload.microAction.title}</p>
-                <p className="mt-0.5 text-xs md:text-sm text-gray-600 line-clamp-1">
+                <p className="text-sm font-semibold text-gray-900">{payload.microAction.title}</p>
+                <p className="mt-0.5 text-xs md:text-sm text-gray-600">
                   {payload.microAction.detail}
                 </p>
-                <p className="mt-1 text-xs text-gray-500">ETA: {payload.microAction.etaMinutes} min</p>
               </div>
               {!isActionDone ? (
                 <div className="flex items-center gap-1.5 shrink-0">
