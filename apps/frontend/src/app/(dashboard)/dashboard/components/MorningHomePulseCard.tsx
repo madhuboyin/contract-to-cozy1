@@ -233,17 +233,13 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
               return (
                 <div
                   key={row.kind}
-                  className={`w-[174px] shrink-0 px-2 py-2 lg:w-1/3 lg:px-2.5 lg:py-2 ${
+                  className={`w-[160px] shrink-0 px-2 py-1.5 lg:w-1/3 lg:px-2 lg:py-1.5 ${
                     row.kind !== 'FINANCIAL' ? 'border-r border-gray-200' : ''
                   }`}
                 >
-                  <div className="min-h-[108px]">
+                  <div className="min-h-[96px]">
                     <p className="text-sm font-bold text-gray-900">{row.label}</p>
-                    <p
-                      className={`mt-0.5 leading-none font-bold tracking-tight text-gray-900 ${
-                        row.kind === 'RISK' ? 'text-[34px]' : 'text-[38px]'
-                      }`}
-                    >
+                    <p className="mt-0.5 text-[32px] leading-none font-bold tracking-tight text-gray-900">
                       {formatSummaryValue(row.kind, row.value)}
                     </p>
                     <p className={`mt-1 inline-flex items-center gap-1 text-xs font-medium ${delta.className}`}>
@@ -254,7 +250,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
                       ) : null}
                       {delta.label}
                     </p>
-                    <div className="relative mt-2.5">
+                    <div className="relative mt-2">
                       <div className="grid grid-cols-5 gap-0.5 overflow-hidden rounded-full">
                         {colors.map((color, idx) => (
                           <span key={idx} className={`h-1.5 rounded-full ${color}`} />
@@ -267,7 +263,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
                         ▼
                       </span>
                     </div>
-                    <p className="mt-1.5 text-sm font-medium text-gray-700 truncate">{statusLabel}</p>
+                    <p className="mt-1 text-sm font-medium text-gray-700 truncate">{statusLabel}</p>
                   </div>
                 </div>
               );
@@ -338,10 +334,17 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
         </div>
       </div>
 
-      <div className="flex items-center gap-2 border-t border-gray-100 pt-2">
+      <div className="space-y-1 border-t border-gray-100 pt-2">
         <p className="text-xs text-emerald-700 font-medium truncate">
           {payload.homeWin.headline} · Micro-action streak {snapshot.streaks.microActionCompleted} day(s)
         </p>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600">
+          <span className="truncate">{payload.homeWin.detail}</span>
+          <span className="inline-flex items-center gap-1 text-indigo-700">
+            <Sparkles className="h-3.5 w-3.5" />
+            {payload.surprise.headline}
+          </span>
+        </div>
       </div>
 
       {error ? (
