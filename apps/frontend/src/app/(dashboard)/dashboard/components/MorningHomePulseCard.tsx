@@ -105,12 +105,6 @@ function getDeltaVisual(kind: SummaryKind, delta: number): {
   return { label, className, icon };
 }
 
-function chipTone(kind: SummaryKind): string {
-  if (kind === 'HEALTH') return 'border-emerald-200 bg-emerald-50/70';
-  if (kind === 'RISK') return 'border-amber-200 bg-amber-50/70';
-  return 'border-teal-200 bg-teal-50/70';
-}
-
 function segmentPalette(kind: SummaryKind): string[] {
   if (kind === 'RISK') {
     return ['bg-emerald-200', 'bg-emerald-400', 'bg-lime-500', 'bg-amber-500', 'bg-rose-600'];
@@ -232,7 +226,8 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
         <div className="-mx-1 overflow-x-auto lg:mx-0 lg:overflow-visible">
-          <div className="flex min-w-max gap-2 px-1 lg:grid lg:min-w-0 lg:grid-cols-1 lg:px-0">
+          <div className="min-w-max rounded-lg border border-gray-200 bg-gray-50 px-1 py-1.5 lg:min-w-0 lg:px-2">
+            <div className="flex min-w-max gap-0.5 lg:min-w-0 lg:gap-0">
             {payload.summary.map((row) => {
               const delta = getDeltaVisual(row.kind, row.delta);
               const position = getMetricPosition(row.kind, row.value);
@@ -241,13 +236,13 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
               return (
                 <div
                   key={row.kind}
-                  className={`w-[205px] shrink-0 rounded-lg border px-3 py-2.5 lg:w-full ${chipTone(
-                    row.kind
-                  )}`}
+                  className={`w-[170px] shrink-0 px-2 py-1.5 lg:w-1/3 ${
+                    row.kind !== 'FINANCIAL' ? 'border-r border-gray-200' : ''
+                  }`}
                 >
                   <div className="flex items-center gap-2 whitespace-nowrap">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{row.label}</p>
-                    <p className="text-base font-semibold text-gray-900">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">{row.label}</p>
+                    <p className="text-[28px] leading-none font-bold text-gray-900">
                       {formatSummaryValue(row.kind, row.value)}
                     </p>
                     <p className={`inline-flex items-center gap-1 text-xs font-medium ${delta.className}`}>
@@ -260,27 +255,28 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
                     </p>
                   </div>
                   <div className="relative mt-2">
-                    <div className="grid grid-cols-5 gap-0.5 overflow-hidden rounded-full border border-white/60 p-0.5">
+                    <div className="grid grid-cols-5 gap-0.5 overflow-hidden rounded-full">
                       {colors.map((color, idx) => (
-                        <span key={idx} className={`h-2 rounded-full ${color}`} />
+                        <span key={idx} className={`h-1.5 rounded-full ${color}`} />
                       ))}
                     </div>
                     <span
-                      className="absolute -top-3 -translate-x-1/2 text-[16px] leading-none text-black"
+                      className="absolute -top-2.5 -translate-x-1/2 text-[13px] leading-none text-black"
                       style={{ left: `${Math.round(position * 100)}%` }}
                     >
                       ▼
                     </span>
                   </div>
-                  <p className="mt-1 text-xs font-medium text-gray-600">{statusLabel}</p>
+                  <p className="mt-1 text-xs font-medium text-gray-600 truncate">{statusLabel}</p>
                   {expanded ? <p className="mt-1 text-xs text-gray-500 line-clamp-2">{row.reason}</p> : null}
                 </div>
               );
             })}
+            </div>
           </div>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2.5">
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-2.5 space-y-2">
           <div className={`rounded-md border px-2.5 py-2 ${toneForSeverity(payload.weatherInsight.severity)}`}>
             <div className="flex items-start gap-2">
               {showWeatherAsPrimary ? (
@@ -290,7 +286,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
               )}
               <div className="min-w-0">
                 <p className="text-sm font-semibold truncate">{secondaryHeadline}</p>
-                <p className="text-xs md:text-sm line-clamp-2">{secondaryDetail}</p>
+                <p className="text-xs md:text-sm line-clamp-1">{secondaryDetail}</p>
               </div>
             </div>
           </div>
@@ -299,7 +295,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-gray-900 truncate">{payload.microAction.title}</p>
-                <p className="mt-0.5 text-xs md:text-sm text-gray-600 line-clamp-2">
+                <p className="mt-0.5 text-xs md:text-sm text-gray-600 line-clamp-1">
                   {payload.microAction.detail}
                 </p>
                 <p className="mt-1 text-xs text-gray-500">ETA: {payload.microAction.etaMinutes} min</p>
