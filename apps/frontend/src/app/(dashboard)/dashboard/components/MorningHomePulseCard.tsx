@@ -26,6 +26,10 @@ type MorningHomePulseCardProps = {
   propertyId?: string;
 };
 
+type SummaryKind = 'HEALTH' | 'RISK' | 'FINANCIAL';
+
+const RISK_EXPOSURE_CAP = 15000;
+
 function formatSummaryValue(kind: 'HEALTH' | 'RISK' | 'FINANCIAL', value: number): string {
   if (kind === 'RISK' && Math.abs(value) >= 1000) {
     return new Intl.NumberFormat(undefined, {
@@ -45,6 +49,73 @@ function toneForSeverity(severity: 'LOW' | 'MEDIUM' | 'HIGH') {
 
 function microActionCompleted(status?: string | null) {
   return status === 'COMPLETED' || status === 'DISMISSED';
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getMetricPosition(kind: SummaryKind, value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  if (kind === 'RISK') {
+    const ratio = clamp(value / RISK_EXPOSURE_CAP, 0, 1);
+    return 1 - ratio;
+  }
+  return clamp(value / 100, 0, 1);
+}
+
+function getMetricLabel(kind: SummaryKind, value: number): string {
+  const score = Math.round(getMetricPosition(kind, value) * 100);
+  if (kind === 'RISK') {
+    if (score >= 80) return 'Low exposure';
+    if (score >= 60) return 'Moderate';
+    if (score >= 40) return 'Watch';
+    if (score >= 20) return 'Elevated';
+    return 'High exposure';
+  }
+  if (score >= 85) return 'Excellent';
+  if (score >= 70) return 'Good';
+  if (score >= 50) return 'Fair';
+  if (score >= 30) return 'Watch';
+  return 'Needs attention';
+}
+
+function getDeltaVisual(kind: SummaryKind, delta: number): {
+  label: string;
+  className: string;
+  icon: 'UP' | 'DOWN' | null;
+} {
+  if (!Number.isFinite(delta) || delta === 0) {
+    return { label: 'No change', className: 'text-gray-500', icon: null };
+  }
+
+  const improving = kind === 'RISK' ? delta < 0 : delta > 0;
+  const className = improving ? 'text-emerald-600' : 'text-rose-600';
+  const icon = delta > 0 ? 'UP' : 'DOWN';
+
+  const label =
+    kind === 'RISK'
+      ? `${delta > 0 ? '+' : '-'}${new Intl.NumberFormat(undefined, {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 0,
+        }).format(Math.abs(delta))}`
+      : `${delta > 0 ? '+' : ''}${Math.round(delta)}`;
+
+  return { label, className, icon };
+}
+
+function chipTone(kind: SummaryKind): string {
+  if (kind === 'HEALTH') return 'border-emerald-200 bg-emerald-50/70';
+  if (kind === 'RISK') return 'border-amber-200 bg-amber-50/70';
+  return 'border-teal-200 bg-teal-50/70';
+}
+
+function segmentPalette(kind: SummaryKind): string[] {
+  if (kind === 'RISK') {
+    return ['bg-emerald-200', 'bg-emerald-400', 'bg-lime-500', 'bg-amber-500', 'bg-rose-600'];
+  }
+  return ['bg-lime-200', 'bg-lime-400', 'bg-lime-600', 'bg-green-700', 'bg-green-900'];
 }
 
 export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCardProps) {
@@ -162,31 +233,45 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
       <div className="-mx-1 overflow-x-auto md:mx-0 md:overflow-visible">
         <div className="flex min-w-max gap-2 px-1 md:min-w-0 md:px-0">
           {payload.summary.map((row) => {
-            const isPositive = row.delta > 0;
-            const isNeutral = row.delta === 0;
+            const delta = getDeltaVisual(row.kind, row.delta);
+            const position = getMetricPosition(row.kind, row.value);
+            const statusLabel = getMetricLabel(row.kind, row.value);
+            const colors = segmentPalette(row.kind);
             return (
               <div
                 key={row.kind}
-                className="shrink-0 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 md:flex-1 md:min-w-0"
+                className={`w-[230px] shrink-0 rounded-lg border px-3 py-2 md:w-auto md:flex-1 md:min-w-0 ${chipTone(
+                  row.kind
+                )}`}
               >
                 <div className="flex items-center gap-2 whitespace-nowrap">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{row.label}</p>
                   <p className="text-base font-semibold text-gray-900">
                     {formatSummaryValue(row.kind, row.value)}
                   </p>
-                  <p
-                    className={`inline-flex items-center gap-1 text-xs font-medium ${
-                      isNeutral ? 'text-gray-500' : isPositive ? 'text-emerald-600' : 'text-rose-600'
-                    }`}
-                  >
-                    {isNeutral ? null : isPositive ? (
+                  <p className={`inline-flex items-center gap-1 text-xs font-medium ${delta.className}`}>
+                    {delta.icon === 'UP' ? (
                       <TrendingUp className="h-3 w-3" />
-                    ) : (
+                    ) : delta.icon === 'DOWN' ? (
                       <TrendingDown className="h-3 w-3" />
-                    )}
-                    {isNeutral ? '—' : `${row.delta > 0 ? '+' : ''}${row.delta}`}
+                    ) : null}
+                    {delta.label}
                   </p>
                 </div>
+                <div className="relative mt-2">
+                  <div className="grid grid-cols-5 gap-0.5 overflow-hidden rounded-full border border-white/60 p-0.5">
+                    {colors.map((color, idx) => (
+                      <span key={idx} className={`h-2 rounded-full ${color}`} />
+                    ))}
+                  </div>
+                  <span
+                    className="absolute -top-3 -translate-x-1/2 text-[16px] leading-none text-black"
+                    style={{ left: `${Math.round(position * 100)}%` }}
+                  >
+                    ▼
+                  </span>
+                </div>
+                <p className="mt-1 text-xs font-medium text-gray-600">{statusLabel}</p>
                 {expanded ? <p className="mt-1 text-xs text-gray-500 line-clamp-2">{row.reason}</p> : null}
               </div>
             );
