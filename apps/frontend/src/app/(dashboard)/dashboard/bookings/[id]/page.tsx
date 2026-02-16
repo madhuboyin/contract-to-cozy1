@@ -166,7 +166,7 @@ export default function BookingDetailsPage() {
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Booking Details</h1>
               <p className="text-sm text-gray-500 mt-1 sm:mt-2">{booking.bookingNumber}</p>
             </div>
-            <span className={`self-start inline-flex items-center px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-sm font-medium border ${getStatusColor(booking.status)}`}>
+            <span className={`self-start inline-flex items-center px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg text-sm font-medium border ${getStatusColor(booking.status)}`}>
               {booking.status.replace('_', ' ')}
             </span>
           </div>

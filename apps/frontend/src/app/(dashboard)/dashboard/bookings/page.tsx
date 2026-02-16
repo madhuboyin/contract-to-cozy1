@@ -298,7 +298,7 @@ export default function HomeownerBookingsPage() {
           <div className="inline-flex gap-2">
             <button
               onClick={() => setFilter('all')}
-              className={`min-h-[40px] whitespace-nowrap rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+              className={`min-h-[44px] whitespace-nowrap rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
                 filter === 'all'
                   ? 'border-brand-primary bg-brand-primary text-white'
                   : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
@@ -310,7 +310,7 @@ export default function HomeownerBookingsPage() {
               <button
                 key={status}
                 onClick={() => setFilter(status)}
-                className={`min-h-[40px] whitespace-nowrap rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                className={`min-h-[44px] whitespace-nowrap rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
                   filter === status
                     ? 'border-brand-primary bg-brand-primary text-white'
                     : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
@@ -482,7 +482,7 @@ export default function HomeownerBookingsPage() {
                       type="datetime-local"
                       value={editFormData.scheduledDate}
                       onChange={(e) => setEditFormData(prev => ({ ...prev, scheduledDate: e.target.value }))}
-                      className="w-full min-w-0 text-sm px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full min-w-0 text-sm px-3 py-2 min-h-[44px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
 
@@ -494,7 +494,7 @@ export default function HomeownerBookingsPage() {
                       value={editFormData.description}
                       onChange={(e) => setEditFormData(prev => ({ ...prev, description: e.target.value }))}
                       rows={2}
-                      className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full text-sm px-3 py-2 min-h-[44px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
 
@@ -506,7 +506,7 @@ export default function HomeownerBookingsPage() {
                       value={editFormData.specialRequests}
                       onChange={(e) => setEditFormData(prev => ({ ...prev, specialRequests: e.target.value }))}
                       rows={2}
-                      className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full text-sm px-3 py-2 min-h-[44px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
                 </div>
@@ -571,7 +571,7 @@ export default function HomeownerBookingsPage() {
                     rows={3}
                     required
                     placeholder="Please provide a reason (minimum 10 characters)"
-                    className="w-full text-sm px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full text-sm px-3 py-2 min-h-[44px] border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
 

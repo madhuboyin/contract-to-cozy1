@@ -185,7 +185,7 @@ export default function ProviderDetailPage() {
             variant={isFavorite ? "destructive" : "outline"}
             size="lg"
             disabled={loadingState}
-            className="flex items-center space-x-2"
+            className="flex items-center space-x-2 min-h-[44px]"
         >
             {loadingState ? (
                 <Loader2 className="h-5 w-5 animate-spin mr-2" />
@@ -272,9 +272,9 @@ export default function ProviderDetailPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
         <div className="flex items-center space-x-4">
-          <Avatar className="h-20 w-20">
+          <Avatar className="h-16 w-16 sm:h-20 sm:w-20">
             {/* Replace with Image if avatar URL is available */}
             <AvatarFallback className="text-2xl bg-brand-primary text-white font-semibold">
               {getInitials(provider.user.firstName, provider.user.lastName)}

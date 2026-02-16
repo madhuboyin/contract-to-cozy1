@@ -249,7 +249,7 @@ export default function BookProviderPage() {
       <div className="mb-6">
         <button
           onClick={() => router.back()}
-          className="text-sm text-gray-600 hover:text-gray-900 flex items-center mb-4"
+          className="text-sm text-gray-600 hover:text-gray-900 flex items-center mb-4 min-h-[44px]"
         >
           <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -342,7 +342,7 @@ export default function BookProviderPage() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Date *

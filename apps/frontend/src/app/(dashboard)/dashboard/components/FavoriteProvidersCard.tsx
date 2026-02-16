@@ -131,7 +131,7 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
                 return (
                 <div 
                     key={provider.id} 
-                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                    className="flex items-center justify-between p-3 sm:p-4 border rounded-lg hover:bg-gray-50 transition-colors min-h-[56px]"
                 >
                     <div className="flex items-center space-x-3 min-w-0">
                         <Avatar className="h-10 w-10 shrink-0">
@@ -158,16 +158,16 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
                             </div>
                         </div>
                     </div>
-                    <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
                         {/* FIX 1: Use optional chaining to safely access provider.user.phone */}
                         {provider.user?.phone && (
-                            <Button variant="ghost" size="icon" asChild>
+                            <Button variant="ghost" size="icon" className="min-h-[44px] min-w-[44px]" asChild>
                                 <a href={`tel:${provider.user.phone}`} title={`Call ${displayName}`}>
                                     <Phone className="h-4 w-4 text-gray-500 hover:text-brand-primary" />
                                 </a>
                             </Button>
                         )}
-                        <Button variant="outline" size="sm" asChild>
+                        <Button variant="outline" size="sm" className="min-h-[44px]" asChild>
                             <Link href={`/dashboard/providers/${provider.id}/book`}>
                                 <Calendar className="h-4 w-4 sm:mr-1" />
                                 <span className="hidden sm:inline">Book</span>
