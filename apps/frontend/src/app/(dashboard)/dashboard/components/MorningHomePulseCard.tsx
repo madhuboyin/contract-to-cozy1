@@ -58,21 +58,21 @@ function clamp(value: number, min: number, max: number): number {
 function getMetricPosition(kind: SummaryKind, value: number): number {
   if (!Number.isFinite(value)) return 0;
   if (kind === 'RISK') {
-    const ratio = clamp(value / RISK_EXPOSURE_CAP, 0, 1);
-    return 1 - ratio;
+    return clamp(value / RISK_EXPOSURE_CAP, 0, 1);
   }
   return clamp(value / 100, 0, 1);
 }
 
 function getMetricLabel(kind: SummaryKind, value: number): string {
-  const score = Math.round(getMetricPosition(kind, value) * 100);
   if (kind === 'RISK') {
-    if (score >= 80) return 'Low exposure';
-    if (score >= 60) return 'Moderate';
-    if (score >= 40) return 'Watch';
-    if (score >= 20) return 'Elevated';
-    return 'High exposure';
+    const exposure = Math.round(getMetricPosition(kind, value) * 100);
+    if (exposure >= 80) return 'High exposure';
+    if (exposure >= 60) return 'Elevated';
+    if (exposure >= 40) return 'Watch';
+    if (exposure >= 20) return 'Moderate';
+    return 'Low exposure';
   }
+  const score = Math.round(getMetricPosition(kind, value) * 100);
   if (score >= 85) return 'Excellent';
   if (score >= 70) return 'Good';
   if (score >= 50) return 'Fair';
