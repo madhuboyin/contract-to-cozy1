@@ -35,12 +35,13 @@ export default function CostExplainerClient() {
     setLoading(true);
     setError(null);
 
+    const reqId = ++reqRef.current;
     try {
-      const reqId = ++reqRef.current;
       const r = await getCostExplainer(propertyId, { years: nextYears });
       if (reqId !== reqRef.current) return;
       setData(r);
     } catch (e: unknown) {
+      if (reqId !== reqRef.current) return;
       setError(e instanceof Error ? e.message : 'Failed to load explainer');
     } finally {
       setLoading(false);
@@ -142,9 +143,14 @@ export default function CostExplainerClient() {
           </div>
         </div>
 
-        {error && <div className="text-sm text-red-600 mt-3">{error}</div>}
+        {error && (
+          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 flex items-start gap-3">
+            <div className="text-sm text-red-600 flex-1">{error}</div>
+            <button onClick={() => load(years)} className="text-sm font-medium text-red-700 hover:text-red-900 shrink-0">Retry</button>
+          </div>
+        )}
 
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <div className="rounded-xl border border-black/10 p-3">
             <div className="text-xs opacity-70">Total annual (now)</div>
             <div className="text-lg font-semibold">{money(data?.snapshot?.annualTotalNow)}</div>

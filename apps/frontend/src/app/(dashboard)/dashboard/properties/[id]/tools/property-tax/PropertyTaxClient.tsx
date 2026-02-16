@@ -152,19 +152,20 @@ export default function PropertyTaxClient() {
     setLoading(true);
     setError(null);
   
+    const av = assessedValue ? Number(assessedValue) : undefined;
+    const tr = taxRate ? Number(taxRate) : undefined;
+    const reqId = ++reqRef.current;
     try {
-      const av = assessedValue ? Number(assessedValue) : undefined;
-      const tr = taxRate ? Number(taxRate) : undefined;
-      const reqId = ++reqRef.current;
       const r = await getPropertyTaxEstimate(propertyId, {
         assessedValue: Number.isFinite(av as any) ? av : undefined,
         taxRate: Number.isFinite(tr as any) ? tr : undefined,
         historyYears: years,
       });
-  
+
       if (reqId !== reqRef.current) return;
       setEstimate(r);
     } catch (e: any) {
+      if (reqId !== reqRef.current) return;
       setError(e?.message || 'Failed to load property tax estimate');
     } finally {
       setLoading(false);
@@ -225,15 +226,19 @@ export default function PropertyTaxClient() {
           If you know your assessed value or local rate, enter it for a tighter estimate.
         </div>
 
-        <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           <label className="text-sm">
             <div className="text-xs opacity-70 mb-1">Assessed value (USD)</div>
             <input
               value={assessedValue}
               onChange={(e) => setAssessedValue(e.target.value)}
               placeholder="e.g. 425000"
-              className="w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
+              inputMode="decimal"
+              className={`w-full rounded-xl border px-3 py-2 text-sm ${assessedValue && !Number.isFinite(Number(assessedValue)) ? 'border-red-300' : 'border-black/10'}`}
             />
+            {assessedValue && !Number.isFinite(Number(assessedValue)) && (
+              <div className="text-xs text-red-500 mt-1">Enter a valid number</div>
+            )}
           </label>
 
           <label className="text-sm">
@@ -242,8 +247,12 @@ export default function PropertyTaxClient() {
               value={taxRate}
               onChange={(e) => setTaxRate(e.target.value)}
               placeholder="e.g. 0.0185"
-              className="w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
+              inputMode="decimal"
+              className={`w-full rounded-xl border px-3 py-2 text-sm ${taxRate && !Number.isFinite(Number(taxRate)) ? 'border-red-300' : 'border-black/10'}`}
             />
+            {taxRate && !Number.isFinite(Number(taxRate)) && (
+              <div className="text-xs text-red-500 mt-1">Enter a valid number</div>
+            )}
           </label>
 
           <div className="flex items-end">
@@ -257,7 +266,12 @@ export default function PropertyTaxClient() {
           </div>
         </div>
 
-        {error && <div className="text-sm text-red-600 mt-3">{error}</div>}
+        {error && (
+          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 flex items-start gap-3">
+            <div className="text-sm text-red-600 flex-1">{error}</div>
+            <button onClick={() => refresh()} className="text-sm font-medium text-red-700 hover:text-red-900 shrink-0">Retry</button>
+          </div>
+        )}
       </div>
 
       {/* Summary */}

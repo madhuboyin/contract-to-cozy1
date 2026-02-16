@@ -69,7 +69,18 @@ export default function TrueCostClient() {
         <HomeToolsRail propertyId={propertyId} />
       </div>
 
-      {error && <div className="text-sm text-red-600">{error}</div>}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 flex items-start gap-3">
+          <div className="text-sm text-red-600 flex-1">{error}</div>
+          <button onClick={() => load()} className="text-sm font-medium text-red-700 hover:text-red-900 shrink-0">Retry</button>
+        </div>
+      )}
+
+      {loading && !data && (
+        <div className="flex items-center justify-center h-48">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900" />
+        </div>
+      )}
 
       <div className="rounded-2xl border border-black/10 bg-white p-4">
         <div className="flex items-start justify-between gap-4">
@@ -82,7 +93,7 @@ export default function TrueCostClient() {
           <div className="text-xs opacity-60">{loading ? 'Refreshing…' : data?.meta?.generatedAt ? 'Updated just now' : ''}</div>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <div className="rounded-xl border border-black/10 p-3">
             <div className="text-xs opacity-70">Total (5y)</div>
             <div className="text-lg font-semibold">{money(data?.rollup?.total5y)}</div>
@@ -134,7 +145,7 @@ export default function TrueCostClient() {
           <span className="font-medium">{data?.input?.zipCode || '—'}</span>.
         </div>
 
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           {(data?.drivers || []).map((d, idx) => (
             <div key={idx} className="rounded-xl border border-black/10 p-3">
               <div className="text-sm font-medium">{d.factor}</div>

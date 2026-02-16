@@ -51,12 +51,13 @@ export default function CostVolatilityClient() {
     setLoading(true);
     setError(null);
 
+    const reqId = ++reqRef.current;
     try {
-      const reqId = ++reqRef.current;
       const r = await getCostVolatility(propertyId, { years: nextYears });
       if (reqId !== reqRef.current) return;
       setData(r);
     } catch (e: unknown) {
+      if (reqId !== reqRef.current) return;
       setError(e instanceof Error ? e.message : 'Failed to load cost volatility');
     } finally {
       setLoading(false);
@@ -132,7 +133,12 @@ export default function CostVolatilityClient() {
         <HomeToolsRail propertyId={propertyId} />
       </div>
 
-      {error && <div className="text-sm text-red-600">{error}</div>}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 flex items-start gap-3">
+          <div className="text-sm text-red-600 flex-1">{error}</div>
+          <button onClick={() => load(years)} className="text-sm font-medium text-red-700 hover:text-red-900 shrink-0">Retry</button>
+        </div>
+      )}
 
       {/* Main card */}
       <div className="rounded-2xl border border-black/10 bg-white p-4">
@@ -155,11 +161,11 @@ export default function CostVolatilityClient() {
                 setYears(5);
                 await load(5);
               }}
-              className={`text-xs underline ${years === 5 ? 'text-black font-medium' : 'text-black/50 hover:text-black'}`}
+              className={`text-xs underline ${years === 5 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
             >
               5y
             </button>
-
+            <span className="text-xs opacity-40">|</span>
             <button
               type="button"
               onClick={async () => {
@@ -167,14 +173,14 @@ export default function CostVolatilityClient() {
                 setYears(10);
                 await load(10);
               }}
-              className={`text-xs underline ${years === 10 ? 'text-black font-medium' : 'text-black/50 hover:text-black'}`}
+              className={`text-xs underline ${years === 10 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
             >
               10y
             </button>
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <div className="rounded-xl border border-black/10 p-3">
             <div className="text-xs opacity-70">Index</div>
             <div className="text-2xl font-semibold tabular-nums">{data?.index?.volatilityIndex ?? '—'}</div>

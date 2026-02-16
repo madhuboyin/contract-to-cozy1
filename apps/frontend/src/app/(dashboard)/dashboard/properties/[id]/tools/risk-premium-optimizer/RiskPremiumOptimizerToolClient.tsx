@@ -2,6 +2,7 @@
 
 import { useParams } from 'next/navigation';
 import { SectionHeader } from '@/app/(dashboard)/dashboard/components/SectionHeader';
+import HomeToolsRail from '../../components/HomeToolsRail';
 import RiskPremiumOptimizerPanel from '@/components/ai/RiskPremiumOptimizerPanel';
 
 export default function RiskPremiumOptimizerToolClient() {
@@ -15,6 +16,8 @@ export default function RiskPremiumOptimizerToolClient() {
         title="Risk-to-Premium Optimizer"
         description="Lower premium pressure without increasing risk."
       />
+
+      <HomeToolsRail propertyId={propertyId} />
 
       <RiskPremiumOptimizerPanel propertyId={propertyId} />
     </div>

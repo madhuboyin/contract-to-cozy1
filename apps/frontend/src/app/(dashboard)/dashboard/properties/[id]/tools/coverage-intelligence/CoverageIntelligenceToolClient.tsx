@@ -2,6 +2,7 @@
 
 import { useParams } from 'next/navigation';
 import { SectionHeader } from '@/app/(dashboard)/dashboard/components/SectionHeader';
+import HomeToolsRail from '../../components/HomeToolsRail';
 import CoverageIntelligencePanel from '@/components/ai/CoverageIntelligencePanel';
 
 export default function CoverageIntelligenceToolClient() {
@@ -15,6 +16,8 @@ export default function CoverageIntelligenceToolClient() {
         title="Coverage Intelligence"
         description="Insurance + warranty worth-it assessment for this property."
       />
+
+      <HomeToolsRail propertyId={propertyId} />
 
       <CoverageIntelligencePanel propertyId={propertyId} />
     </div>

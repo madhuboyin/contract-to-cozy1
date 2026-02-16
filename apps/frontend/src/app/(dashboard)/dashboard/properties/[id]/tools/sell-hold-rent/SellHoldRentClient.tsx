@@ -194,7 +194,12 @@ export default function SellHoldRentClient() {
         </div>
       </div>
 
-      {error && <div className="text-sm text-red-600">{error}</div>}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 flex items-start gap-3">
+          <div className="text-sm text-red-600 flex-1">{error}</div>
+          <button onClick={() => loadSimulator(years)} className="text-sm font-medium text-red-700 hover:text-red-900 shrink-0">Retry</button>
+        </div>
+      )}
 
       {/* Winner Story Card */}
       <div className="rounded-2xl border border-black/10 bg-white p-4">
@@ -210,8 +215,8 @@ export default function SellHoldRentClient() {
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-12 gap-4">
-          <div className="md:col-span-4 space-y-3">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-12 md:grid-cols-12 gap-4">
+          <div className="sm:col-span-4 md:col-span-4 space-y-3">
             <div className="rounded-xl border border-black/10 p-3">
               <div className="text-xs opacity-70">Winner</div>
               <div className="text-lg font-semibold mt-1">{winnerLabel}</div>
@@ -243,7 +248,7 @@ export default function SellHoldRentClient() {
             </div>
           </div>
 
-          <div className="md:col-span-8 rounded-xl border border-black/10 p-3">
+          <div className="sm:col-span-8 md:col-span-8 rounded-xl border border-black/10 p-3">
             <MultiLineChart xLabels={chartModel.x} series={chartModel.series} ariaLabel="Hold vs Rent annual net delta" />
             <div className="mt-2 text-xs opacity-60">
               Chart shows annual net delta (appreciation gain minus modeled costs). Sell is represented by net proceeds.

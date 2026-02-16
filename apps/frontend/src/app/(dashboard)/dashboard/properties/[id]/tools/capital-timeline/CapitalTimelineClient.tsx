@@ -353,7 +353,7 @@ export default function CapitalTimelineClient() {
                       {/* Why toggle */}
                       <button
                         onClick={() => toggleExpand(item.id)}
-                        className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                        className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors min-h-[44px] px-2 -ml-2 touch-manipulation"
                       >
                         {isExpanded ? (
                           <ChevronDown className="h-3.5 w-3.5" />

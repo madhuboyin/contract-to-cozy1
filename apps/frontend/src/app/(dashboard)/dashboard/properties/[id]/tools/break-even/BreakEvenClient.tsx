@@ -46,12 +46,13 @@ export default function BreakEvenClient() {
     setLoading(true);
     setError(null);
 
+    const reqId = ++reqRef.current;
     try {
-      const reqId = ++reqRef.current;
       const r = await getBreakEven(propertyId, { years: nextYears });
       if (reqId !== reqRef.current) return;
       setData(r);
     } catch (e: unknown) {
+      if (reqId !== reqRef.current) return;
       setError(e instanceof Error ? e.message : 'Failed to load break-even estimate');
     } finally {
       setLoading(false);
@@ -143,7 +144,7 @@ export default function BreakEvenClient() {
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-12 lg:grid-cols-12 gap-4">
           {/* Left */}
           <div className="lg:col-span-4 space-y-3">
             <div className={`rounded-xl border p-3 ${statusTone}`}>
@@ -205,7 +206,7 @@ export default function BreakEvenClient() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-12 lg:grid-cols-12 gap-4">
         <div className="lg:col-span-7 rounded-2xl border border-black/10 bg-white p-4">
           <div className="text-sm font-medium">What matters most</div>
 

@@ -2,6 +2,7 @@
 
 import { useParams } from 'next/navigation';
 import { SectionHeader } from '@/app/(dashboard)/dashboard/components/SectionHeader';
+import HomeToolsRail from '../../components/HomeToolsRail';
 import DoNothingSimulatorPanel from '@/components/ai/DoNothingSimulatorPanel';
 
 export default function DoNothingToolClient() {
@@ -15,6 +16,8 @@ export default function DoNothingToolClient() {
         title="Do-Nothing Simulator"
         description="See risk and cost impact if you delay action for 6, 12, 24, or 36 months."
       />
+
+      <HomeToolsRail propertyId={propertyId} />
 
       <DoNothingSimulatorPanel propertyId={propertyId} />
     </div>

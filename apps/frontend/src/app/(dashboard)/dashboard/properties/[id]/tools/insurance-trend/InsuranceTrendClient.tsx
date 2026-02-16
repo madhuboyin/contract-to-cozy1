@@ -34,12 +34,13 @@ export default function InsuranceTrendClient() {
     setLoading(true);
     setError(null);
 
+    const reqId = ++reqRef.current;
     try {
-      const reqId = ++reqRef.current;
       const r = await getInsuranceTrend(propertyId, { years });
       if (reqId !== reqRef.current) return;
       setData(r);
     } catch (e: unknown) {
+      if (reqId !== reqRef.current) return;
       setError(e instanceof Error ? e.message : 'Failed to load insurance trend');
     } finally {
       setLoading(false);
@@ -144,9 +145,14 @@ export default function InsuranceTrendClient() {
           </div>
         </div>
 
-        {error && <div className="text-sm text-red-600 mt-3">{error}</div>}
+        {error && (
+          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 flex items-start gap-3">
+            <div className="text-sm text-red-600 flex-1">{error}</div>
+            <button onClick={() => getAndSet(trendYears)} className="text-sm font-medium text-red-700 hover:text-red-900 shrink-0">Retry</button>
+          </div>
+        )}
 
-        <div className="mt-4 grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-12 lg:grid-cols-12 gap-4">
           <div className="lg:col-span-4 space-y-3">
             <div className="rounded-xl border border-black/10 p-3">
               <div className="text-xs opacity-70">Current estimated premium</div>
