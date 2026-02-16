@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client';
 import { fetchTicketmasterEvents } from './ticketmaster.provider';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 /**
  * Cron-safe ingestion:

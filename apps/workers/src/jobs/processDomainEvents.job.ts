@@ -256,13 +256,3 @@ export async function processDomainEventsJob(opts?: { batchSize?: number }) {
 
   return { processed };
 }
-
-async function getEmailEnabled(userId: string): Promise<boolean> {
-  const homeownerProfile = await prisma.homeownerProfile.findFirst({
-    where: { userId },
-    select: { notificationPreferences: true },
-  });
-
-  const preferences = homeownerProfile?.notificationPreferences as { emailEnabled?: boolean } | null;
-  return preferences?.emailEnabled !== false;
-}

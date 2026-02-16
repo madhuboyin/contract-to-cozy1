@@ -4,6 +4,8 @@ import { IncidentService } from '../../../backend/src/services/incidents/inciden
 
 type Geo = { lat: number; lon: number; name?: string; admin1?: string; country?: string };
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 function scoreFromMinF(minF: number) {
   if (minF <= 15) return 85;
   if (minF <= 20) return 75;
@@ -160,6 +162,9 @@ export async function freezeRiskIncidentsJob() {
     );
 
     createdOrUpdated++;
+
+    // Rate limit Open-Meteo API calls (free tier)
+    await sleep(200);
   }
 
   return { createdOrUpdated };

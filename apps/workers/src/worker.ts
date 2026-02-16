@@ -1,8 +1,7 @@
 // apps/workers/src/worker.ts
-import { 
-  PrismaClient, 
-  ChecklistItemStatus, 
-  Property, 
+import {
+  ChecklistItemStatus,
+  Property,
   Prisma
 } from '@prisma/client';
 import cron from 'node-cron';
@@ -30,10 +29,7 @@ import { recallMatchJob, RECALL_MATCH_JOB } from './jobs/recallMatch.job';
 import { coverageLapseIncidentsJob } from './jobs/coverageLapseIncidents.job';
 import { freezeRiskIncidentsJob } from './jobs/freezeRiskIncidents.job';
 import { cleanupInventoryDraftsJob } from './jobs/cleanupInventoryDrafts.job';
-
-
-
-const prisma = new PrismaClient();
+import { prisma } from './lib/prisma';
 
 // =============================================================================
 // FIX: Update queue configuration to match backend
@@ -565,20 +561,17 @@ function startWorker() {
   );
   console.log(`[WORKER] Property Intelligence Worker started for queue: ${QUEUE_NAME}`);
 
-  // Run maintenance reminders once on startup for demo
-  console.log('Running maintenance reminder job on startup for demo...');
-  sendMaintenanceReminders();
 }
 
-runHomeReportExportPoller().catch((e) => {
-  console.error('Report export poller crashed', e);
-  process.exit(1);
-});
+function restartAfterDelay(name: string, fn: () => Promise<void>, delayMs = 30_000) {
+  fn().catch((e) => {
+    console.error(`${name} crashed, restarting in ${delayMs / 1000}s...`, e);
+    setTimeout(() => restartAfterDelay(name, fn, delayMs), delayMs);
+  });
+}
 
-runReportExportCleanup().catch((e) => {
-  console.error('Report export cleanup crashed', e);
-  process.exit(1);
-});
+restartAfterDelay('Report export poller', runHomeReportExportPoller);
+restartAfterDelay('Report export cleanup', runReportExportCleanup);
 
 startHighPriorityEmailEnqueuePoller({
   intervalMs: 10_000,
@@ -647,27 +640,23 @@ recallWorker.on('failed', (job, err) => {
 // Enqueue recall jobs on startup (using repeatable logic instead of manual IDs)
 // This ensures only ONE instance of this job exists in the queue at a time.
 async function setupScheduledJobs() {
-  // Clear old manual jobs to prevent backlog
-  await recallQueue.drain();
-
-  // Ingest: Every 5 minutes (for testing) or 3 AM
+  // Ingest: Daily at 3:00 AM
   await recallQueue.add(
-    RECALL_INGEST_JOB, 
-    {}, 
-    { 
-      
-      repeat: { pattern: '* 13 * * *' }, // 3 minutes past every hour
-      jobId: 'recall-ingest-singleton' 
+    RECALL_INGEST_JOB,
+    {},
+    {
+      repeat: { pattern: '0 3 * * *' }, // 3:00 AM daily
+      jobId: 'recall-ingest-singleton'
     }
   );
 
-  // Match: Runs shortly after ingest
+  // Match: Runs shortly after ingest at 3:10 AM
   await recallQueue.add(
-    RECALL_MATCH_JOB, 
-    {}, 
-    { 
-      repeat: { pattern: '* 13 * * *' }, // 7 minutes past every hour
-      jobId: 'recall-match-singleton' 
+    RECALL_MATCH_JOB,
+    {},
+    {
+      repeat: { pattern: '10 3 * * *' }, // 3:10 AM daily
+      jobId: 'recall-match-singleton'
     }
   );
 }
@@ -685,7 +674,7 @@ console.log('[COVERAGE-LAPSE] Coverage Lapse Incidents job scheduled for 8:00 AM
 // FREEZE RISK INCIDENTS
 // =============================================================================
 cron.schedule('0 9 * * *', freezeRiskIncidentsJob, { timezone: 'America/New_York' });
-console.log('[FREEZE-RISK] Freeze Risk Incidents job scheduled for 8:00 AM EST');
+console.log('[FREEZE-RISK] Freeze Risk Incidents job scheduled for 9:00 AM EST');
 
 // =============================================================================
 // INVENTORY DRAFT CLEANUP (Phase 3 hardening)

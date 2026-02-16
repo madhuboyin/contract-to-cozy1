@@ -3,6 +3,7 @@
 
 import { prisma } from '../lib/prisma';
 import { sendEmail } from '../email/email.service';
+import { escapeHtml } from '../email/buildDigestHtml';
 
 // Type for checklist item with relations
 type ChecklistItemWithTemplate = {
@@ -13,21 +14,6 @@ type ChecklistItemWithTemplate = {
     whyItMatters: string | null;
   };
 };
-
-/**
- * HTML escape function to prevent XSS in emails
- */
-function escapeHtml(text: string): string {
-  if (!text) return '';
-  const map: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;'
-  };
-  return text.replace(/[&<>"']/g, m => map[m]);
-}
 
 /**
  * Background job to send seasonal checklist email notifications
