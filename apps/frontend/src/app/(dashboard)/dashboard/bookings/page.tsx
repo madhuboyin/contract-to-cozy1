@@ -273,7 +273,7 @@ export default function HomeownerBookingsPage() {
     <div className="space-y-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">My Bookings</h1>
+          <h1 className="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl lg:text-3xl">My Bookings</h1>
           <p className="mt-2 text-muted-foreground">
             View and manage your service bookings
           </p>
@@ -330,7 +330,7 @@ export default function HomeownerBookingsPage() {
         ) : filteredBookings.length === 0 ? (
           <div className="rounded-xl border bg-white p-10 text-center">
             <Calendar className="mx-auto mb-3 h-10 w-10 text-gray-400" />
-            <h3 className="mb-2 text-lg font-medium text-gray-900">No bookings found</h3>
+            <h3 className="mb-2 text-base sm:text-lg font-medium text-gray-900">No bookings found</h3>
             <p className="mb-6 text-gray-600">
               {filter === 'all'
                 ? "You haven't made any bookings yet."
@@ -351,7 +351,7 @@ export default function HomeownerBookingsPage() {
                 <div key={booking.id} className="rounded-xl border bg-white p-3 sm:p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="truncate text-base font-semibold text-gray-900">
+                      <div className="truncate text-sm sm:text-base font-semibold text-gray-900">
                         {booking.service?.name || 'Service'}
                       </div>
                       <div className="mt-1 truncate text-sm text-gray-500">

@@ -102,7 +102,7 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
   return (
     <Card className={cn("h-full flex flex-col overflow-hidden", className)}>
       <CardHeader>
-        <CardTitle className="font-heading text-xl flex items-center gap-2">
+        <CardTitle className="font-heading text-lg sm:text-xl flex items-center gap-2">
           <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
           My Pros
           {/* PHASE 2 FIX: Display the actual count */}

@@ -179,7 +179,7 @@ export default function BookingDetailsPage() {
               <p className="text-xs text-gray-500">
                 {booking.finalPrice ? 'Final Price' : 'Estimated Price'}
               </p>
-              <p className={`text-xl font-bold ${booking.finalPrice ? 'text-green-600' : 'text-gray-900'}`}>
+              <p className={`text-lg sm:text-xl font-bold ${booking.finalPrice ? 'text-green-600' : 'text-gray-900'}`}>
                 ${Number(booking.finalPrice || booking.estimatedPrice || 0).toFixed(2)}
               </p>
             </div>
@@ -285,14 +285,14 @@ export default function BookingDetailsPage() {
               <div className="space-y-4">
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Estimated Price</p>
-                  <p className="text-2xl font-bold text-gray-900">
+                  <p className="text-xl sm:text-2xl font-bold text-gray-900">
                     ${Number(booking.estimatedPrice || 0).toFixed(2)}
                   </p>
                 </div>
                 {booking.finalPrice && (
                   <div className="pt-4 border-t border-gray-200">
                     <p className="text-sm text-gray-500 mb-1">Final Price</p>
-                    <p className="text-2xl font-bold text-green-600">
+                    <p className="text-xl sm:text-2xl font-bold text-green-600">
                       ${Number(booking.finalPrice || 0).toFixed(2)}
                     </p>
                   </div>

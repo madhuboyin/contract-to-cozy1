@@ -194,7 +194,7 @@ export default function ProviderDetailPage() {
                     className={isFavorite ? "h-5 w-5 fill-white" : "h-5 w-5 text-gray-500"} 
                 />
             )}
-            <span className="text-base font-semibold">
+            <span className="text-sm sm:text-base font-semibold">
                 {loadingState ? 'Loading...' : isFavorite ? 'My Pro' : 'Add to My Pros'}
             </span>
         </Button>
@@ -238,7 +238,7 @@ export default function ProviderDetailPage() {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-brand-primary" />
-        <p className="ml-3 text-lg text-gray-600">Loading provider...</p>
+        <p className="ml-3 text-base sm:text-lg text-gray-600">Loading provider...</p>
       </div>
     );
   }
@@ -281,8 +281,8 @@ export default function ProviderDetailPage() {
             </AvatarFallback>
           </Avatar>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">{provider.businessName}</h1>
-            <p className="text-lg text-gray-600">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{provider.businessName}</h1>
+            <p className="text-base sm:text-lg text-gray-600">
               {provider.user.firstName} {provider.user.lastName}
             </p>
             <div className="flex items-center mt-1">
@@ -356,7 +356,7 @@ export default function ProviderDetailPage() {
             <Separator />
             
             <div>
-              <h3 className="text-lg font-semibold mb-2">Available Services ({services.length})</h3>
+              <h3 className="text-base sm:text-lg font-semibold mb-2">Available Services ({services.length})</h3>
               <div className="flex flex-wrap gap-2">
                 {services.map(service => (
                   <Badge 

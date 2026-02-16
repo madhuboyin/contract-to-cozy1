@@ -71,7 +71,7 @@ const ServiceFilter = React.memo(({ onFilterChange, defaultCategory, isHomeBuyer
   return (
     <Card className="shadow-lg">
       <CardHeader className="p-4 sm:p-6">
-        <CardTitle className="text-xl flex items-center gap-2">
+        <CardTitle className="text-lg sm:text-xl flex items-center gap-2">
           <Search className="h-5 w-5 text-blue-600" />
           Find Local Providers
         </CardTitle>
@@ -319,7 +319,7 @@ export default function ProvidersPage() {
   // --- Render ---
   return (
     <div className="space-y-6 sm:space-y-8">
-      <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Provider Search</h1>
+      <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Provider Search</h1>
   
       {/* Context Banner - Show when arriving from Health Insights */}
       {insightContext && (
@@ -378,7 +378,7 @@ export default function ProvidersPage() {
         />
       ) : (
         <div className="text-center p-6 sm:p-8 bg-gray-50 border rounded-lg">
-          <p className="text-lg font-medium text-gray-700">No providers found matching your criteria.</p>
+          <p className="text-base sm:text-lg font-medium text-gray-700">No providers found matching your criteria.</p>
           <p className="text-sm text-gray-500 mt-2">Try widening the service category or removing the zip code.</p>
         </div>
       )}
