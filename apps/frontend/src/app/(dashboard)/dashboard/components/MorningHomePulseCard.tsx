@@ -230,104 +230,115 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
         </span>
       </div>
 
-      <div className="-mx-1 overflow-x-auto md:mx-0 md:overflow-visible">
-        <div className="flex min-w-max gap-2 px-1 md:min-w-0 md:px-0">
-          {payload.summary.map((row) => {
-            const delta = getDeltaVisual(row.kind, row.delta);
-            const position = getMetricPosition(row.kind, row.value);
-            const statusLabel = getMetricLabel(row.kind, row.value);
-            const colors = segmentPalette(row.kind);
-            return (
-              <div
-                key={row.kind}
-                className={`w-[230px] shrink-0 rounded-lg border px-3 py-2 md:w-auto md:flex-1 md:min-w-0 ${chipTone(
-                  row.kind
-                )}`}
-              >
-                <div className="flex items-center gap-2 whitespace-nowrap">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{row.label}</p>
-                  <p className="text-base font-semibold text-gray-900">
-                    {formatSummaryValue(row.kind, row.value)}
-                  </p>
-                  <p className={`inline-flex items-center gap-1 text-xs font-medium ${delta.className}`}>
-                    {delta.icon === 'UP' ? (
-                      <TrendingUp className="h-3 w-3" />
-                    ) : delta.icon === 'DOWN' ? (
-                      <TrendingDown className="h-3 w-3" />
-                    ) : null}
-                    {delta.label}
-                  </p>
-                </div>
-                <div className="relative mt-2">
-                  <div className="grid grid-cols-5 gap-0.5 overflow-hidden rounded-full border border-white/60 p-0.5">
-                    {colors.map((color, idx) => (
-                      <span key={idx} className={`h-2 rounded-full ${color}`} />
-                    ))}
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
+        <div className="-mx-1 overflow-x-auto lg:mx-0 lg:overflow-visible">
+          <div className="flex min-w-max gap-2 px-1 lg:grid lg:min-w-0 lg:grid-cols-1 lg:px-0">
+            {payload.summary.map((row) => {
+              const delta = getDeltaVisual(row.kind, row.delta);
+              const position = getMetricPosition(row.kind, row.value);
+              const statusLabel = getMetricLabel(row.kind, row.value);
+              const colors = segmentPalette(row.kind);
+              return (
+                <div
+                  key={row.kind}
+                  className={`w-[205px] shrink-0 rounded-lg border px-3 py-2.5 lg:w-full ${chipTone(
+                    row.kind
+                  )}`}
+                >
+                  <div className="flex items-center gap-2 whitespace-nowrap">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{row.label}</p>
+                    <p className="text-base font-semibold text-gray-900">
+                      {formatSummaryValue(row.kind, row.value)}
+                    </p>
+                    <p className={`inline-flex items-center gap-1 text-xs font-medium ${delta.className}`}>
+                      {delta.icon === 'UP' ? (
+                        <TrendingUp className="h-3 w-3" />
+                      ) : delta.icon === 'DOWN' ? (
+                        <TrendingDown className="h-3 w-3" />
+                      ) : null}
+                      {delta.label}
+                    </p>
                   </div>
-                  <span
-                    className="absolute -top-3 -translate-x-1/2 text-[16px] leading-none text-black"
-                    style={{ left: `${Math.round(position * 100)}%` }}
-                  >
-                    ▼
-                  </span>
+                  <div className="relative mt-2">
+                    <div className="grid grid-cols-5 gap-0.5 overflow-hidden rounded-full border border-white/60 p-0.5">
+                      {colors.map((color, idx) => (
+                        <span key={idx} className={`h-2 rounded-full ${color}`} />
+                      ))}
+                    </div>
+                    <span
+                      className="absolute -top-3 -translate-x-1/2 text-[16px] leading-none text-black"
+                      style={{ left: `${Math.round(position * 100)}%` }}
+                    >
+                      ▼
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs font-medium text-gray-600">{statusLabel}</p>
+                  {expanded ? <p className="mt-1 text-xs text-gray-500 line-clamp-2">{row.reason}</p> : null}
                 </div>
-                <p className="mt-1 text-xs font-medium text-gray-600">{statusLabel}</p>
-                {expanded ? <p className="mt-1 text-xs text-gray-500 line-clamp-2">{row.reason}</p> : null}
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2.5">
+          <div className={`rounded-md border px-2.5 py-2 ${toneForSeverity(payload.weatherInsight.severity)}`}>
+            <div className="flex items-start gap-2">
+              {showWeatherAsPrimary ? (
+                <Wind className="h-4 w-4 mt-0.5 shrink-0" />
+              ) : (
+                <Sparkles className="h-4 w-4 mt-0.5 shrink-0" />
+              )}
+              <div className="min-w-0">
+                <p className="text-sm font-semibold truncate">{secondaryHeadline}</p>
+                <p className="text-xs md:text-sm line-clamp-2">{secondaryDetail}</p>
               </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className={`rounded-lg border px-3 py-2 ${toneForSeverity(payload.weatherInsight.severity)}`}>
-        <div className="flex items-start gap-2">
-          {showWeatherAsPrimary ? (
-            <Wind className="h-4 w-4 mt-0.5 shrink-0" />
-          ) : (
-            <Sparkles className="h-4 w-4 mt-0.5 shrink-0" />
-          )}
-          <div className="min-w-0">
-            <p className="text-sm font-semibold truncate">{secondaryHeadline}</p>
-            <p className="text-sm line-clamp-1">{secondaryDetail}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-900">{payload.microAction.title}</p>
-            <p className="mt-0.5 text-sm text-gray-600 line-clamp-1">{payload.microAction.detail}</p>
-            <p className="mt-1 text-xs text-gray-500">ETA: {payload.microAction.etaMinutes} min</p>
-          </div>
-          {!isActionDone ? (
-            <div className="flex items-center gap-2 shrink-0">
-              <Button size="sm" onClick={handleComplete} disabled={actionBusy !== null}>
-                {actionBusy === 'COMPLETE' ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                    Saving
-                  </>
-                ) : (
-                  payload.microAction.cta
-                )}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleDismiss}
-                disabled={actionBusy !== null}
-                aria-label="Dismiss action"
-              >
-                {actionBusy === 'DISMISS' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-4 w-4" />}
-              </Button>
             </div>
-          ) : (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 shrink-0">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              You&apos;re all set
-            </span>
-          )}
+          </div>
+
+          <div className="rounded-md border border-gray-200 bg-white p-2.5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-900 truncate">{payload.microAction.title}</p>
+                <p className="mt-0.5 text-xs md:text-sm text-gray-600 line-clamp-2">
+                  {payload.microAction.detail}
+                </p>
+                <p className="mt-1 text-xs text-gray-500">ETA: {payload.microAction.etaMinutes} min</p>
+              </div>
+              {!isActionDone ? (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Button size="sm" className="h-8 px-3" onClick={handleComplete} disabled={actionBusy !== null}>
+                    {actionBusy === 'COMPLETE' ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                        Saving
+                      </>
+                    ) : (
+                      payload.microAction.cta
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 p-0"
+                    onClick={handleDismiss}
+                    disabled={actionBusy !== null}
+                    aria-label="Dismiss action"
+                  >
+                    {actionBusy === 'DISMISS' ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <X className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 shrink-0">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Done
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
