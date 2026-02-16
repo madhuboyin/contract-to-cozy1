@@ -122,7 +122,7 @@ export default function CostVolatilityClient() {
   }, [recentEvents]);
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       <SectionHeader
         icon="📉"
         title="Cost Volatility Index"
@@ -161,7 +161,7 @@ export default function CostVolatilityClient() {
                 setYears(5);
                 await load(5);
               }}
-              className={`text-xs underline ${years === 5 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+              className={`text-xs underline min-h-[44px] inline-flex items-center px-1 touch-manipulation ${years === 5 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
             >
               5y
             </button>
@@ -173,7 +173,7 @@ export default function CostVolatilityClient() {
                 setYears(10);
                 await load(10);
               }}
-              className={`text-xs underline ${years === 10 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+              className={`text-xs underline min-h-[44px] inline-flex items-center px-1 touch-manipulation ${years === 10 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
             >
               10y
             </button>

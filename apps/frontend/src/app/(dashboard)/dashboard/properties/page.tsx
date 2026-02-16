@@ -31,6 +31,7 @@ export default function PropertiesPage() {
     'tool:sell-hold-rent': 'Home Tools > Sell / Hold / Rent',
     'tool:cost-volatility': 'Home Tools > Volatility',
     'tool:break-even': 'Home Tools > Break-Even',
+    'tool:capital-timeline': 'Home Tools > Home Capital Timeline',
   };
 
   const navTargetLabel = navTarget ? navTargetLabelMap[navTarget] || 'selected section' : null;

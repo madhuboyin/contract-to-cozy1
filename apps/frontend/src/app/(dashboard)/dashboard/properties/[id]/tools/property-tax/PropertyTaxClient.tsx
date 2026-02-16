@@ -208,7 +208,7 @@ export default function PropertyTaxClient() {
   };
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       <SectionHeader
         icon="🏷️"
         title="Property Tax Intelligence"
@@ -234,7 +234,7 @@ export default function PropertyTaxClient() {
               onChange={(e) => setAssessedValue(e.target.value)}
               placeholder="e.g. 425000"
               inputMode="decimal"
-              className={`w-full rounded-xl border px-3 py-2 text-sm ${assessedValue && !Number.isFinite(Number(assessedValue)) ? 'border-red-300' : 'border-black/10'}`}
+              className={`w-full rounded-xl border px-3 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 text-sm ${assessedValue && !Number.isFinite(Number(assessedValue)) ? 'border-red-300' : 'border-black/10'}`}
             />
             {assessedValue && !Number.isFinite(Number(assessedValue)) && (
               <div className="text-xs text-red-500 mt-1">Enter a valid number</div>
@@ -248,7 +248,7 @@ export default function PropertyTaxClient() {
               onChange={(e) => setTaxRate(e.target.value)}
               placeholder="e.g. 0.0185"
               inputMode="decimal"
-              className={`w-full rounded-xl border px-3 py-2 text-sm ${taxRate && !Number.isFinite(Number(taxRate)) ? 'border-red-300' : 'border-black/10'}`}
+              className={`w-full rounded-xl border px-3 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 text-sm ${taxRate && !Number.isFinite(Number(taxRate)) ? 'border-red-300' : 'border-black/10'}`}
             />
             {taxRate && !Number.isFinite(Number(taxRate)) && (
               <div className="text-xs text-red-500 mt-1">Enter a valid number</div>
@@ -311,7 +311,7 @@ export default function PropertyTaxClient() {
                   setTrendYears(5);
                   await getAndSet(5);
                 }}
-                className={`text-xs underline ${trendYears === 5 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+                className={`text-xs underline min-h-[44px] inline-flex items-center px-1 touch-manipulation ${trendYears === 5 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
               >
                 5y
               </button>
@@ -323,7 +323,7 @@ export default function PropertyTaxClient() {
                   setTrendYears(10);
                   await getAndSet(10);
                 }}
-                className={`text-xs underline ${trendYears === 10 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+                className={`text-xs underline min-h-[44px] inline-flex items-center px-1 touch-manipulation ${trendYears === 10 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
               >
                 10y
               </button>

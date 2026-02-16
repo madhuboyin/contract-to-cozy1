@@ -99,7 +99,7 @@ export default function InsuranceTrendClient() {
     deltaNow <= 0 ? 'bg-emerald-50 text-emerald-800 border-emerald-100' : 'bg-rose-50 text-rose-800 border-rose-100';
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       <SectionHeader
         icon="🛡️"
         title="Insurance Cost Trend Analyzer"
@@ -126,7 +126,7 @@ export default function InsuranceTrendClient() {
                 setTrendYears(5);
                 await getAndSet(5);
               }}
-              className={`text-xs underline ${trendYears === 5 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+              className={`text-xs underline min-h-[44px] inline-flex items-center px-1 touch-manipulation ${trendYears === 5 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
             >
               5y
             </button>
@@ -138,7 +138,7 @@ export default function InsuranceTrendClient() {
                 setTrendYears(10);
                 await getAndSet(10);
               }}
-              className={`text-xs underline ${trendYears === 10 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+              className={`text-xs underline min-h-[44px] inline-flex items-center px-1 touch-manipulation ${trendYears === 10 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
             >
               10y
             </button>

@@ -104,7 +104,7 @@ export default function BreakEvenClient() {
       : 'bg-rose-50 text-rose-800 border-rose-100';
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       <SectionHeader
         icon="🎯"
         title="Break-Even Ownership Year"
@@ -134,7 +134,7 @@ export default function BreakEvenClient() {
                     setYears(y as any);
                     await load(y as any);
                   }}
-                  className={`text-xs underline ${years === y ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+                  className={`text-xs underline min-h-[44px] inline-flex items-center px-1 touch-manipulation ${years === y ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
                 >
                   {y}y
                 </button>

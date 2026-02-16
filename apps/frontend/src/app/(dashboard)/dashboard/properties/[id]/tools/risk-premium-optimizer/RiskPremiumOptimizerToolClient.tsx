@@ -10,7 +10,7 @@ export default function RiskPremiumOptimizerToolClient() {
   const propertyId = params.id;
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       <SectionHeader
         icon="🧭"
         title="Risk-to-Premium Optimizer"

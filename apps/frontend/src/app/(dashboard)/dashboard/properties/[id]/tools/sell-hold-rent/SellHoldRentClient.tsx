@@ -151,7 +151,7 @@ export default function SellHoldRentClient() {
   }, [data]);
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       <SectionHeader
         icon="🎯"
         title="Sell vs Hold vs Rent"
@@ -175,7 +175,7 @@ export default function SellHoldRentClient() {
               setYears(5);
               await loadSimulator(5);
             }}
-            className={`text-xs underline ${years === 5 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+            className={`text-xs underline min-h-[44px] inline-flex items-center px-1 touch-manipulation ${years === 5 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
           >
             5y
           </button>
@@ -187,7 +187,7 @@ export default function SellHoldRentClient() {
               setYears(10);
               await loadSimulator(10);
             }}
-            className={`text-xs underline ${years === 10 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+            className={`text-xs underline min-h-[44px] inline-flex items-center px-1 touch-manipulation ${years === 10 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
           >
             10y
           </button>
@@ -574,7 +574,7 @@ function InputField(props: {
     <label className="block">
       <div className="text-xs text-black/70">{props.label}</div>
       <input
-        className="mt-1 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/5"
+        className="mt-1 w-full rounded-lg border border-black/10 bg-white px-3 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 text-sm outline-none focus:ring-2 focus:ring-black/5"
         placeholder={props.placeholder}
         value={props.value}
         onChange={(e) => props.onChange(e.target.value)}

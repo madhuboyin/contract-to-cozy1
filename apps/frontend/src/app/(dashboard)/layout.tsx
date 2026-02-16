@@ -155,6 +155,14 @@ const HOME_TOOL_LINKS: PropertyToolLink[] = [
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/break-even(\/|$)/.test(pathname),
   },
   {
+    key: 'capital-timeline',
+    name: 'Home Capital Timeline',
+    hrefSuffix: 'tools/capital-timeline',
+    navTarget: 'tool:capital-timeline',
+    icon: Calendar,
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/capital-timeline(\/|$)/.test(pathname),
+  },
+  {
     key: 'seller-prep',
     name: 'Seller Prep',
     hrefSuffix: 'seller-prep',

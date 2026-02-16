@@ -183,7 +183,7 @@ export default function CapitalTimelineClient() {
   const highPriorityCount = items.filter((i) => i.priority === 'HIGH').length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <HomeToolsRail propertyId={propertyId} />
 
       {/* Header */}
@@ -252,7 +252,7 @@ export default function CapitalTimelineClient() {
         <>
           {/* Summary Bar */}
           <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
               <div>
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Range</p>
                 <p className="mt-1 text-lg font-bold text-gray-900">
