@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  ChevronDown,
+  ChevronUp,
   CheckCircle2,
   CloudSun,
   Loader2,
@@ -50,6 +52,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState<'COMPLETE' | 'DISMISS' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   const loadSnapshot = useCallback(async () => {
     if (!propertyId) {
@@ -131,71 +134,89 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
   }
 
   const payload = snapshot.payload;
+  const showWeatherAsPrimary = payload.weatherInsight.severity !== 'LOW';
+  const secondaryHeadline = showWeatherAsPrimary
+    ? payload.weatherInsight.headline
+    : payload.surprise.headline;
+  const secondaryDetail = showWeatherAsPrimary
+    ? payload.weatherInsight.detail
+    : payload.surprise.detail;
 
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-5 space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="p-2 rounded-lg bg-teal-100">
-            <CloudSun className="h-5 w-5 text-teal-700" />
+    <section className="rounded-2xl border border-gray-200 bg-white p-4 md:p-5 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-2 rounded-lg bg-teal-100 shrink-0">
+            <CloudSun className="h-4 w-4 text-teal-700" />
           </div>
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">{payload.title}</h2>
-            <p className="text-sm text-gray-500">{payload.dateLabel}</p>
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold text-gray-900 truncate">{payload.title}</h2>
+            <p className="text-xs text-gray-500">{payload.dateLabel}</p>
           </div>
         </div>
-        <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 whitespace-nowrap">
           {snapshot.streaks.dailyPulseCheckin}-day check-in streak
         </span>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        {payload.summary.map((row) => {
-          const isPositive = row.delta > 0;
-          const isNeutral = row.delta === 0;
-          return (
-            <div key={row.kind} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{row.label}</p>
-              <p className="mt-1 text-xl font-semibold text-gray-900">
-                {formatSummaryValue(row.kind, row.value)}
-              </p>
-              <p
-                className={`mt-1 inline-flex items-center gap-1 text-xs font-medium ${
-                  isNeutral ? 'text-gray-500' : isPositive ? 'text-emerald-600' : 'text-rose-600'
-                }`}
+      <div className="-mx-1 overflow-x-auto md:mx-0 md:overflow-visible">
+        <div className="flex min-w-max gap-2 px-1 md:min-w-0 md:px-0">
+          {payload.summary.map((row) => {
+            const isPositive = row.delta > 0;
+            const isNeutral = row.delta === 0;
+            return (
+              <div
+                key={row.kind}
+                className="shrink-0 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 md:flex-1 md:min-w-0"
               >
-                {isNeutral ? null : isPositive ? (
-                  <TrendingUp className="h-3 w-3" />
-                ) : (
-                  <TrendingDown className="h-3 w-3" />
-                )}
-                {isNeutral ? 'No change' : `${row.delta > 0 ? '+' : ''}${row.delta}`}
-              </p>
-              <p className="mt-1 text-xs text-gray-500 line-clamp-2">{row.reason}</p>
-            </div>
-          );
-        })}
+                <div className="flex items-center gap-2 whitespace-nowrap">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{row.label}</p>
+                  <p className="text-base font-semibold text-gray-900">
+                    {formatSummaryValue(row.kind, row.value)}
+                  </p>
+                  <p
+                    className={`inline-flex items-center gap-1 text-xs font-medium ${
+                      isNeutral ? 'text-gray-500' : isPositive ? 'text-emerald-600' : 'text-rose-600'
+                    }`}
+                  >
+                    {isNeutral ? null : isPositive ? (
+                      <TrendingUp className="h-3 w-3" />
+                    ) : (
+                      <TrendingDown className="h-3 w-3" />
+                    )}
+                    {isNeutral ? '—' : `${row.delta > 0 ? '+' : ''}${row.delta}`}
+                  </p>
+                </div>
+                {expanded ? <p className="mt-1 text-xs text-gray-500 line-clamp-2">{row.reason}</p> : null}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      <div className={`rounded-xl border p-3 ${toneForSeverity(payload.weatherInsight.severity)}`}>
+      <div className={`rounded-lg border px-3 py-2 ${toneForSeverity(payload.weatherInsight.severity)}`}>
         <div className="flex items-start gap-2">
-          <Wind className="h-4 w-4 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold">{payload.weatherInsight.headline}</p>
-            <p className="text-sm">{payload.weatherInsight.detail}</p>
+          {showWeatherAsPrimary ? (
+            <Wind className="h-4 w-4 mt-0.5 shrink-0" />
+          ) : (
+            <Sparkles className="h-4 w-4 mt-0.5 shrink-0" />
+          )}
+          <div className="min-w-0">
+            <p className="text-sm font-semibold truncate">{secondaryHeadline}</p>
+            <p className="text-sm line-clamp-1">{secondaryDetail}</p>
           </div>
         </div>
       </div>
 
-      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div>
+      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0">
             <p className="text-sm font-semibold text-gray-900">{payload.microAction.title}</p>
-            <p className="mt-1 text-sm text-gray-600">{payload.microAction.detail}</p>
+            <p className="mt-0.5 text-sm text-gray-600 line-clamp-1">{payload.microAction.detail}</p>
             <p className="mt-1 text-xs text-gray-500">ETA: {payload.microAction.etaMinutes} min</p>
           </div>
           {!isActionDone ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <Button size="sm" onClick={handleComplete} disabled={actionBusy !== null}>
                 {actionBusy === 'COMPLETE' ? (
                   <>
@@ -217,7 +238,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
               </Button>
             </div>
           ) : (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 shrink-0">
               <CheckCircle2 className="h-3.5 w-3.5" />
               You&apos;re all set
             </span>
@@ -225,23 +246,44 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
         </div>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-          <p className="text-sm font-semibold text-emerald-900">{payload.homeWin.headline}</p>
-          <p className="mt-1 text-sm text-emerald-800">{payload.homeWin.detail}</p>
-          <p className="mt-1 text-xs text-emerald-700">
-            Micro-action streak: {snapshot.streaks.microActionCompleted} day(s)
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3">
-          <p className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-900">
-            <Sparkles className="h-4 w-4" />
-            {payload.surprise.headline}
-          </p>
-          <p className="mt-1 text-sm text-indigo-800">{payload.surprise.detail}</p>
-        </div>
+      <div className="flex items-center justify-between gap-2 border-t border-gray-100 pt-2">
+        <p className="text-xs text-emerald-700 font-medium truncate">
+          {payload.homeWin.headline} · Micro-action streak {snapshot.streaks.microActionCompleted} day(s)
+        </p>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2 text-xs text-teal-700"
+          onClick={() => setExpanded((prev) => !prev)}
+          aria-expanded={expanded}
+        >
+          {expanded ? (
+            <>
+              Hide details <ChevronUp className="h-3.5 w-3.5 ml-1" />
+            </>
+          ) : (
+            <>
+              Expand details <ChevronDown className="h-3.5 w-3.5 ml-1" />
+            </>
+          )}
+        </Button>
       </div>
+
+      {expanded ? (
+        <div className="grid gap-3 lg:grid-cols-2">
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+            <p className="text-sm font-semibold text-emerald-900">{payload.homeWin.headline}</p>
+            <p className="mt-1 text-sm text-emerald-800">{payload.homeWin.detail}</p>
+          </div>
+          <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+            <p className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-900">
+              <Sparkles className="h-4 w-4" />
+              {payload.surprise.headline}
+            </p>
+            <p className="mt-1 text-sm text-indigo-800">{payload.surprise.detail}</p>
+          </div>
+        </div>
+      ) : null}
 
       {error ? (
         <div className="inline-flex items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 border border-red-200">
@@ -252,4 +294,3 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
     </section>
   );
 }
-
