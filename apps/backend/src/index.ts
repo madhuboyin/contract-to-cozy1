@@ -71,6 +71,7 @@ import riskPremiumOptimizerRoutes from './routes/riskPremiumOptimizer.routes';
 import doNothingSimulatorRoutes from './routes/doNothingSimulator.routes';
 import propertyScoreSnapshotRoutes from './routes/propertyScoreSnapshot.routes';
 import homeCapitalTimelineRoutes from './routes/homeCapitalTimeline.routes';
+import dailyHomePulseRoutes from './routes/dailyHomePulse.routes';
 dotenv.config();
 
 // Initialize Prisma Client
@@ -344,6 +345,7 @@ app.use('/api', coverageAnalysisRoutes);
 app.use('/api', riskPremiumOptimizerRoutes);
 app.use('/api', doNothingSimulatorRoutes);
 app.use('/api', propertyScoreSnapshotRoutes);
+app.use('/api', dailyHomePulseRoutes);
 //app.use(express.json({ limit: '10mb' })); // Ensure this is present
 app.use('/api', trueCostOwnershipRoutes);
 app.use('/api', homeCapitalTimelineRoutes);

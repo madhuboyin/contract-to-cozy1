@@ -33,6 +33,7 @@ import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCaro
 import CoverageIntelligenceToolCard from './components/CoverageIntelligenceToolCard';
 import RiskPremiumOptimizerToolCard from './components/RiskPremiumOptimizerToolCard';
 import DoNothingSimulatorToolCard from './components/DoNothingSimulatorToolCard';
+import MorningHomePulseCard from './components/MorningHomePulseCard';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -424,6 +425,13 @@ export default function DashboardPage() {
 
       {/* 2. CONSTRAINED WIDTH AREA (Aligns with other cards) */}
       <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
+        {/* MORNING HOME PULSE */}
+        {userSegment === 'EXISTING_OWNER' && selectedPropertyId && (
+          <section className="mb-5 md:mb-6">
+            <MorningHomePulseCard propertyId={selectedPropertyId} />
+          </section>
+        )}
+
         {/* LOCAL UPDATES TICKER */}
         {userSegment === 'EXISTING_OWNER' && localUpdates.length > 0 && (
           <section className="mb-5 md:mb-6">
