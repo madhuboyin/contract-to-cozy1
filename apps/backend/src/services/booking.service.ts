@@ -98,7 +98,7 @@ export class BookingService {
       data: {
         bookingNumber,
         homeownerId,
-        providerId: input.providerId,
+        providerId: service.providerProfile.userId,
         providerProfileId: service.providerProfileId,
         propertyId: input.propertyId,
         serviceId: input.serviceId,
