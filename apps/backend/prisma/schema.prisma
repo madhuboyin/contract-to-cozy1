@@ -3025,6 +3025,7 @@ model Notification {
   createdAt   DateTime @default(now())
 
   deliveries  NotificationDelivery[]
+  dailySnapshots PropertyDailySnapshot[]
   
   recallMatchId String?
   recallMatch   RecallMatch? @relation(fields: [recallMatchId], references: [id], onDelete: SetNull)
