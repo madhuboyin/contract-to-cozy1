@@ -236,39 +236,43 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
               return (
                 <div
                   key={row.kind}
-                  className={`w-[170px] shrink-0 px-2 py-1.5 lg:w-1/3 ${
+                  className={`w-[188px] shrink-0 px-2.5 py-2 lg:w-1/3 lg:px-3 lg:py-2.5 ${
                     row.kind !== 'FINANCIAL' ? 'border-r border-gray-200' : ''
                   }`}
                 >
-                  <div className="flex items-center gap-2 whitespace-nowrap">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">{row.label}</p>
-                    <p className="text-[28px] leading-none font-bold text-gray-900">
+                  <div className="min-h-[134px]">
+                    <p className="text-[15px] font-bold text-gray-900">{row.label}</p>
+                    <p
+                      className={`mt-0.5 leading-none font-bold tracking-tight text-gray-900 ${
+                        row.kind === 'RISK' ? 'text-[34px]' : 'text-[44px]'
+                      }`}
+                    >
                       {formatSummaryValue(row.kind, row.value)}
                     </p>
-                    <p className={`inline-flex items-center gap-1 text-xs font-medium ${delta.className}`}>
+                    <p className={`mt-1 inline-flex items-center gap-1 text-sm font-medium ${delta.className}`}>
                       {delta.icon === 'UP' ? (
-                        <TrendingUp className="h-3 w-3" />
+                        <TrendingUp className="h-3.5 w-3.5" />
                       ) : delta.icon === 'DOWN' ? (
-                        <TrendingDown className="h-3 w-3" />
+                        <TrendingDown className="h-3.5 w-3.5" />
                       ) : null}
                       {delta.label}
                     </p>
-                  </div>
-                  <div className="relative mt-2">
-                    <div className="grid grid-cols-5 gap-0.5 overflow-hidden rounded-full">
-                      {colors.map((color, idx) => (
-                        <span key={idx} className={`h-1.5 rounded-full ${color}`} />
-                      ))}
+                    <div className="relative mt-3">
+                      <div className="grid grid-cols-5 gap-0.5 overflow-hidden rounded-full">
+                        {colors.map((color, idx) => (
+                          <span key={idx} className={`h-2 rounded-full ${color}`} />
+                        ))}
+                      </div>
+                      <span
+                        className="absolute -top-3 -translate-x-1/2 text-[16px] leading-none text-black"
+                        style={{ left: `${Math.round(position * 100)}%` }}
+                      >
+                        ▼
+                      </span>
                     </div>
-                    <span
-                      className="absolute -top-2.5 -translate-x-1/2 text-[13px] leading-none text-black"
-                      style={{ left: `${Math.round(position * 100)}%` }}
-                    >
-                      ▼
-                    </span>
+                    <p className="mt-2 text-sm font-medium text-gray-700 truncate">{statusLabel}</p>
+                    {expanded ? <p className="mt-1 text-xs text-gray-500 line-clamp-2">{row.reason}</p> : null}
                   </div>
-                  <p className="mt-1 text-xs font-medium text-gray-600 truncate">{statusLabel}</p>
-                  {expanded ? <p className="mt-1 text-xs text-gray-500 line-clamp-2">{row.reason}</p> : null}
                 </div>
               );
             })}
