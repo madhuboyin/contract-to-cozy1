@@ -3,8 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
-  ChevronDown,
-  ChevronUp,
   CheckCircle2,
   CloudSun,
   Loader2,
@@ -107,7 +105,7 @@ function getDeltaVisual(kind: SummaryKind, delta: number): {
 
 function segmentPalette(kind: SummaryKind): string[] {
   if (kind === 'RISK') {
-    return ['bg-emerald-200', 'bg-emerald-400', 'bg-lime-500', 'bg-amber-500', 'bg-rose-600'];
+    return ['bg-lime-200', 'bg-lime-400', 'bg-lime-600', 'bg-amber-500', 'bg-rose-600'];
   }
   return ['bg-lime-200', 'bg-lime-400', 'bg-lime-600', 'bg-green-700', 'bg-green-900'];
 }
@@ -117,7 +115,6 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState<'COMPLETE' | 'DISMISS' | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState(false);
 
   const loadSnapshot = useCallback(async () => {
     if (!propertyId) {
@@ -236,42 +233,41 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
               return (
                 <div
                   key={row.kind}
-                  className={`w-[188px] shrink-0 px-2.5 py-2 lg:w-1/3 lg:px-3 lg:py-2.5 ${
+                  className={`w-[174px] shrink-0 px-2 py-2 lg:w-1/3 lg:px-2.5 lg:py-2 ${
                     row.kind !== 'FINANCIAL' ? 'border-r border-gray-200' : ''
                   }`}
                 >
-                  <div className="min-h-[134px]">
-                    <p className="text-[15px] font-bold text-gray-900">{row.label}</p>
+                  <div className="min-h-[108px]">
+                    <p className="text-sm font-bold text-gray-900">{row.label}</p>
                     <p
                       className={`mt-0.5 leading-none font-bold tracking-tight text-gray-900 ${
-                        row.kind === 'RISK' ? 'text-[34px]' : 'text-[44px]'
+                        row.kind === 'RISK' ? 'text-[34px]' : 'text-[38px]'
                       }`}
                     >
                       {formatSummaryValue(row.kind, row.value)}
                     </p>
-                    <p className={`mt-1 inline-flex items-center gap-1 text-sm font-medium ${delta.className}`}>
+                    <p className={`mt-1 inline-flex items-center gap-1 text-xs font-medium ${delta.className}`}>
                       {delta.icon === 'UP' ? (
-                        <TrendingUp className="h-3.5 w-3.5" />
+                        <TrendingUp className="h-3 w-3" />
                       ) : delta.icon === 'DOWN' ? (
-                        <TrendingDown className="h-3.5 w-3.5" />
+                        <TrendingDown className="h-3 w-3" />
                       ) : null}
                       {delta.label}
                     </p>
-                    <div className="relative mt-3">
+                    <div className="relative mt-2.5">
                       <div className="grid grid-cols-5 gap-0.5 overflow-hidden rounded-full">
                         {colors.map((color, idx) => (
-                          <span key={idx} className={`h-2 rounded-full ${color}`} />
+                          <span key={idx} className={`h-1.5 rounded-full ${color}`} />
                         ))}
                       </div>
                       <span
-                        className="absolute -top-3 -translate-x-1/2 text-[16px] leading-none text-black"
+                        className="absolute -top-2.5 -translate-x-1/2 text-[13px] leading-none text-black"
                         style={{ left: `${Math.round(position * 100)}%` }}
                       >
                         ▼
                       </span>
                     </div>
-                    <p className="mt-2 text-sm font-medium text-gray-700 truncate">{statusLabel}</p>
-                    {expanded ? <p className="mt-1 text-xs text-gray-500 line-clamp-2">{row.reason}</p> : null}
+                    <p className="mt-1.5 text-sm font-medium text-gray-700 truncate">{statusLabel}</p>
                   </div>
                 </div>
               );
@@ -342,44 +338,11 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-2 border-t border-gray-100 pt-2">
+      <div className="flex items-center gap-2 border-t border-gray-100 pt-2">
         <p className="text-xs text-emerald-700 font-medium truncate">
           {payload.homeWin.headline} · Micro-action streak {snapshot.streaks.microActionCompleted} day(s)
         </p>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 px-2 text-xs text-teal-700"
-          onClick={() => setExpanded((prev) => !prev)}
-          aria-expanded={expanded}
-        >
-          {expanded ? (
-            <>
-              Hide details <ChevronUp className="h-3.5 w-3.5 ml-1" />
-            </>
-          ) : (
-            <>
-              Expand details <ChevronDown className="h-3.5 w-3.5 ml-1" />
-            </>
-          )}
-        </Button>
       </div>
-
-      {expanded ? (
-        <div className="grid gap-3 lg:grid-cols-2">
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-            <p className="text-sm font-semibold text-emerald-900">{payload.homeWin.headline}</p>
-            <p className="mt-1 text-sm text-emerald-800">{payload.homeWin.detail}</p>
-          </div>
-          <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
-            <p className="inline-flex items-center gap-1 text-sm font-semibold text-indigo-900">
-              <Sparkles className="h-4 w-4" />
-              {payload.surprise.headline}
-            </p>
-            <p className="mt-1 text-sm text-indigo-800">{payload.surprise.detail}</p>
-          </div>
-        </div>
-      ) : null}
 
       {error ? (
         <div className="inline-flex items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 border border-red-200">
