@@ -150,7 +150,7 @@ const ProviderList = ({
   fromSource?: string;
 }) => {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
       {providers.map((provider) => {
         const queryParams = new URLSearchParams();
         if (targetPropertyId) queryParams.append('propertyId', targetPropertyId);
@@ -180,7 +180,7 @@ const ProviderList = ({
               <p className="text-sm text-muted-foreground mb-3">
                 {provider.totalReviews} reviews • {provider.totalCompletedJobs} jobs completed
               </p>
-              <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-4">
+              <div className="flex flex-wrap gap-2 mb-4">
                 {provider.serviceCategories.slice(0, 3).map(category => (
                   <Badge key={category} variant="secondary" className="text-xs">
                     <ServiceCategoryIcon icon={category} className="h-3 w-3 mr-1" />

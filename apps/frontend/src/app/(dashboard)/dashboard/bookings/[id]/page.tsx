@@ -174,7 +174,7 @@ export default function BookingDetailsPage() {
 
         {/* Mobile-only: Compact pricing summary so users see cost immediately */}
         <div className="lg:hidden mb-4">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex items-center justify-between gap-4">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4 flex items-center justify-between gap-2 sm:gap-4">
             <div>
               <p className="text-xs text-gray-500">
                 {booking.finalPrice ? 'Final Price' : 'Estimated Price'}
@@ -195,7 +195,7 @@ export default function BookingDetailsPage() {
         </div>
 
         {/* Content Grid — explicit order ensures main content always appears first on mobile */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
           {/* Main Content - 2/3 width */}
           <div className="order-1 lg:col-span-2 space-y-4 sm:space-y-6">
             {/* Service Card */}
@@ -316,10 +316,10 @@ export default function BookingDetailsPage() {
                   {booking.timeline.map((entry, index) => (
                     <div key={entry.id} className="relative">
                       {index !== (booking.timeline?.length ?? 0) - 1 && (
-                        <div className="absolute left-2 top-8 bottom-0 w-px bg-gray-200" />
+                        <div className="absolute left-2.5 top-8 bottom-0 w-px bg-gray-200" />
                       )}
                       <div className="flex gap-3">
-                        <div className={`w-4 h-4 rounded-full mt-0.5 flex-shrink-0 ${
+                        <div className={`w-5 h-5 rounded-full mt-0.5 flex-shrink-0 ${
                           index === (booking.timeline?.length ?? 0) - 1
                             ? 'bg-blue-500 ring-4 ring-blue-100' 
                             : 'bg-gray-300'

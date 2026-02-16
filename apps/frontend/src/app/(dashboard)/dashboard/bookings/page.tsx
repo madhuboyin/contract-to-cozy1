@@ -348,7 +348,7 @@ export default function HomeownerBookingsPage() {
             {/* Mobile cards */}
             <div className="grid gap-4 md:hidden">
               {filteredBookings.map((booking) => (
-                <div key={booking.id} className="rounded-xl border bg-white p-4 shadow-sm">
+                <div key={booking.id} className="rounded-xl border bg-white p-3 sm:p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="truncate text-base font-semibold text-gray-900">
@@ -451,7 +451,7 @@ export default function HomeownerBookingsPage() {
       {/* Edit Modal - Keep existing modal code */}
       {showEditModal && editingBooking && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] sm:max-h-[90vh] overflow-y-auto">
             <div className="p-4 sm:p-6">
               <div className="flex items-center justify-between mb-4 sm:mb-6">
                 <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Edit Booking</h2>
@@ -536,7 +536,7 @@ export default function HomeownerBookingsPage() {
       {/* Cancel Modal - Keep existing modal code */}
       {showCancelModal && cancellingBooking && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start sm:items-center justify-center overflow-y-auto p-2 sm:p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg max-w-md w-full max-h-[80vh] sm:max-h-[90vh] overflow-y-auto">
             <div className="p-4 sm:p-6">
               <div className="flex items-center justify-between mb-4 sm:mb-6">
                 <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Cancel Booking</h2>

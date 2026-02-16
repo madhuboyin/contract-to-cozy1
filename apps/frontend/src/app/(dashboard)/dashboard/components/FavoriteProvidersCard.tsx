@@ -115,7 +115,7 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
         </CardDescription>
       </CardHeader>
       {/* Added max-h-72 and overflow-y-auto to allow scrolling if many favorites exist */}
-      <CardContent className="flex-1 overflow-y-auto max-h-64 sm:max-h-72">
+      <CardContent className="flex-1 overflow-y-auto max-h-56 sm:max-h-72">
         {favorites.length === 0 ? (
           <div className="text-center py-6 text-muted-foreground">
             <p className="font-body text-sm mb-3">Save providers you love here.</p>
