@@ -278,7 +278,7 @@ export default function ClaimBulkUploadModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-      <div className="w-full max-w-2xl rounded-2xl border bg-white shadow-xl">
+      <div className="w-full max-w-lg sm:max-w-2xl rounded-2xl border bg-white shadow-xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 border-b p-5">
           <div>
@@ -293,7 +293,7 @@ export default function ClaimBulkUploadModal({
           </div>
 
           <button
-            className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50"
+            className="rounded-lg border px-3 py-2 text-sm min-h-[44px] hover:bg-gray-50"
             onClick={closeAndReset}
             disabled={busy}
           >
@@ -323,16 +323,16 @@ export default function ClaimBulkUploadModal({
                 or select files (up to {maxFiles})
               </div>
 
-              <div className="mt-2 flex items-center gap-2">
+              <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-2">
                 <button
-                  className="rounded-lg bg-emerald-700 px-3 py-2 text-sm text-white hover:bg-emerald-800 disabled:opacity-50"
+                  className="rounded-lg bg-emerald-700 px-3 py-2.5 sm:py-2 text-sm min-h-[44px] text-white hover:bg-emerald-800 disabled:opacity-50"
                   onClick={() => inputRef.current?.click()}
                   disabled={busy || files.length >= maxFiles}
                 >
                   Choose files
                 </button>
                 <button
-                  className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+                  className="rounded-lg border px-3 py-2.5 sm:py-2 text-sm min-h-[44px] hover:bg-gray-50 disabled:opacity-50"
                   onClick={() => setFiles([])}
                   disabled={busy || files.length === 0}
                 >
@@ -356,7 +356,7 @@ export default function ClaimBulkUploadModal({
           </div>
 
           {/* Metadata */}
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-2">
             <div>
               <label className="text-xs font-semibold text-gray-700">Document type</label>
               <select
@@ -390,7 +390,7 @@ export default function ClaimBulkUploadModal({
               </div>
             </div>
 
-            <div className="sm:col-span-2">
+            <div className="md:col-span-2">
               <label className="text-xs font-semibold text-gray-700">Notes (optional)</label>
               <textarea
                 className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
@@ -435,7 +435,7 @@ export default function ClaimBulkUploadModal({
                     </div>
 
                     <button
-                      className="shrink-0 rounded-lg border px-2.5 py-1.5 text-xs hover:bg-gray-50 disabled:opacity-50"
+                      className="shrink-0 rounded-lg border px-3 py-2 text-xs min-h-[44px] hover:bg-gray-50 disabled:opacity-50"
                       onClick={() => removeFile(idx)}
                       disabled={busy}
                     >
@@ -466,7 +466,7 @@ export default function ClaimBulkUploadModal({
               </div>
               <div className="mt-2 flex justify-end">
                 <button
-                  className="rounded-lg border px-3 py-1.5 text-sm hover:bg-white"
+                  className="rounded-lg border px-3 py-2 text-sm min-h-[44px] hover:bg-white"
                   onClick={onCancelUpload}
                 >
                   Cancel upload
@@ -489,14 +489,14 @@ export default function ClaimBulkUploadModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-3 border-t p-5">
-          <div className="text-xs text-gray-600">
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 border-t p-5">
+          <div className="text-xs text-gray-600 text-center sm:text-left">
             Tip: If you need per-file titles/notes, upload in smaller batches.
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex gap-2 w-full sm:w-auto">
             <button
-              className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
+              className="flex-1 sm:flex-none rounded-lg border px-3 py-2.5 sm:py-2 text-sm min-h-[44px] hover:bg-gray-50"
               onClick={closeAndReset}
               disabled={busy}
             >
@@ -504,7 +504,7 @@ export default function ClaimBulkUploadModal({
             </button>
 
             <button
-              className="rounded-lg bg-emerald-700 px-4 py-2 text-sm text-white hover:bg-emerald-800 disabled:opacity-50"
+              className="flex-1 sm:flex-none rounded-lg bg-emerald-700 px-4 py-2.5 sm:py-2 text-sm min-h-[44px] text-white hover:bg-emerald-800 disabled:opacity-50"
               onClick={onUpload}
               disabled={!canUpload}
               title={!uploadUrl ? 'Missing upload URL (check route config)' : undefined}

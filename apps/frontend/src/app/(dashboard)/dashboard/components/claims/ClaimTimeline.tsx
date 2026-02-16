@@ -25,7 +25,7 @@ function typeBadge(type?: string) {
       : 'bg-gray-50 text-gray-700 border-gray-200';
 
   return (
-    <span className={['rounded-full border px-2 py-0.5 text-[11px] font-semibold', cls].join(' ')}>
+    <span className={['rounded-full border px-2 py-0.5 text-xs font-semibold', cls].join(' ')}>
       {t}
     </span>
   );
@@ -86,7 +86,7 @@ export default function ClaimTimeline({
       <div className="rounded-lg border bg-white p-3">
         <div className="flex items-center justify-between">
           <div className="text-xs font-semibold text-gray-700">Add note</div>
-          <div className="text-[11px] text-gray-500">Ctrl/⌘ + Enter to add</div>
+          <div className="text-xs text-gray-500">Ctrl/⌘ + Enter to add</div>
         </div>
 
         <textarea
@@ -101,7 +101,7 @@ export default function ClaimTimeline({
 
         <div className="mt-2 flex justify-end">
           <button
-            className="rounded-lg bg-emerald-700 px-3 py-2 text-sm text-white hover:bg-emerald-800 disabled:opacity-60"
+            className="rounded-lg bg-emerald-700 px-3 py-2.5 sm:py-2 min-h-[44px] text-sm text-white hover:bg-emerald-800 disabled:opacity-60"
             onClick={addNote}
             disabled={busy || !note.trim()}
           >
@@ -129,9 +129,9 @@ export default function ClaimTimeline({
 
             return (
               <div key={ev.id} className="rounded-lg border bg-white p-3">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
                       {typeBadge(ev.type)}
                       <div className="truncate text-sm font-semibold text-gray-900">
                         {ev.title || ev.type}
@@ -147,7 +147,7 @@ export default function ClaimTimeline({
                     {fileUrl ? (
                       <div className="mt-2">
                         <a
-                          className="text-xs font-medium text-emerald-700 hover:underline"
+                          className="inline-flex items-center rounded-lg border px-3 py-2 min-h-[44px] text-xs font-medium text-emerald-700 hover:bg-emerald-50"
                           href={fileUrl}
                           target="_blank"
                           rel="noreferrer"
@@ -162,7 +162,7 @@ export default function ClaimTimeline({
                     ) : null}
                   </div>
 
-                  <div className="shrink-0 text-xs text-gray-500">
+                  <div className="sm:shrink-0 text-xs text-gray-500">
                     {fmt(ev.occurredAt)}
                   </div>
                 </div>

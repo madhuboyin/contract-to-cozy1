@@ -119,43 +119,43 @@ export default function ClaimDetailClient() {
         icon="📋"
         title={claim.title}
         description={
-          <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-1 sm:gap-2 text-sm text-gray-600">
             <ClaimStatusBadge status={claim.status} />
-            <span className="text-gray-300">•</span>
+            <span className="hidden sm:inline text-gray-300">•</span>
             <span className="font-medium">{claim.type}</span>
             {claim.providerName ? (
               <>
-                <span className="text-gray-300">•</span>
+                <span className="hidden sm:inline text-gray-300">•</span>
                 <span>{claim.providerName}</span>
               </>
             ) : null}
             {claim.claimNumber ? (
               <>
-                <span className="text-gray-300">•</span>
+                <span className="hidden sm:inline text-gray-300">•</span>
                 <span>#{claim.claimNumber}</span>
               </>
             ) : null}
-            <span className="text-gray-300">•</span>
+            <span className="hidden sm:inline text-gray-300">•</span>
             <span>Checklist {completion}%</span>
           </div>
         }
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             <Link
               href={`/dashboard/properties/${propertyId}/claims`}
-              className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
+              className="rounded-lg border px-3 py-2.5 sm:py-2 min-h-[44px] text-sm hover:bg-gray-50 text-center"
             >
               Back
             </Link>
             <button
-              className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
+              className="rounded-lg border px-3 py-2.5 sm:py-2 min-h-[44px] text-sm hover:bg-gray-50"
               onClick={refresh}
               disabled={busy !== null}
             >
               Refresh
             </button>
             <button
-              className="rounded-lg bg-emerald-700 px-3 py-2 text-sm text-white hover:bg-emerald-800"
+              className="rounded-lg bg-emerald-700 px-3 py-2.5 sm:py-2 min-h-[44px] text-sm text-white hover:bg-emerald-800"
               onClick={onRegenerateChecklist}
               disabled={busy !== null}
               title="Regenerate checklist from template"
@@ -254,7 +254,7 @@ export default function ClaimDetailClient() {
                 <div className="mt-2 rounded-lg border bg-white p-3">
                   <div className="flex items-center justify-between">
                     <div className="text-xs font-semibold text-gray-700">Follow-up risk</div>
-                    <span className="rounded-full border px-2 py-0.5 text-xs">
+                    <span className="rounded-full border px-2 py-1 sm:py-0.5 text-xs min-h-[44px] sm:min-h-0 inline-flex items-center">
                       {followUpRisk.level} • {followUpRisk.score}/100
                     </span>
                   </div>
@@ -273,7 +273,7 @@ export default function ClaimDetailClient() {
                 <div className="mt-2 rounded-lg border bg-white p-3">
                   <div className="flex items-center justify-between">
                     <div className="text-xs font-semibold text-gray-700">Claim health</div>
-                    <span className="rounded-full border px-2 py-0.5 text-xs">
+                    <span className="rounded-full border px-2 py-1 sm:py-0.5 text-xs min-h-[44px] sm:min-h-0 inline-flex items-center">
                       {health.level} • {health.score}/100
                     </span>
                   </div>
@@ -343,7 +343,7 @@ export default function ClaimDetailClient() {
               <div className="mt-2">
                 <div className="text-xs font-semibold text-gray-700">Recommendation</div>
                 <div className="mt-1">
-                  <span className="rounded-full border px-2 py-0.5 text-xs">
+                  <span className="rounded-full border px-2 py-1 sm:py-0.5 text-xs min-h-[44px] sm:min-h-0 inline-flex items-center">
                     {insights.recommendation.decision}
                   </span>
                   <span className="ml-2 text-xs text-gray-500">

@@ -214,9 +214,9 @@ export default function ClaimChecklist({
               isBlocked ? 'border-amber-300 bg-amber-50/30' : '',
             ].join(' ')}
           >
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
                   <div className="text-sm font-semibold text-gray-900">
                     {it.orderIndex + 1}. {it.title}
                   </div>
@@ -280,7 +280,7 @@ export default function ClaimChecklist({
                           <span
                             key={rt.type}
                             className={[
-                              'rounded px-2 py-0.5 text-[11px]',
+                              'rounded px-2 py-0.5 text-xs',
                               rt.count > 0 ? 'bg-black/10' : 'bg-black/5 opacity-70',
                             ].join(' ')}
                             title={`${rt.type}: ${rt.count} uploaded`}
@@ -294,9 +294,9 @@ export default function ClaimChecklist({
                 ) : null}
               </div>
 
-              <div className="shrink-0 flex items-center gap-2">
+              <div className="w-full sm:w-auto sm:shrink-0 flex items-center gap-2">
                 <button
-                  className="rounded-lg border px-2 py-1 text-xs hover:bg-gray-50"
+                  className="rounded-lg border px-3 py-2 min-h-[44px] text-xs hover:bg-gray-50"
                   onClick={() => openUpload(it.id)}
                   disabled={busy || busyId === it.id}
                   title="Upload and attach documents to this checklist item"
@@ -305,7 +305,7 @@ export default function ClaimChecklist({
                 </button>
 
                 <select
-                  className="rounded-lg border px-2 py-1 text-sm"
+                  className="rounded-lg border px-3 py-2 min-h-[44px] text-sm"
                   value={it.status}
                   disabled={busy || busyId === it.id}
                   onChange={(e) => setItemStatus(it, e.target.value as ClaimChecklistStatus)}
@@ -333,7 +333,7 @@ export default function ClaimChecklist({
                         <div className="truncate text-xs text-gray-700">{label}</div>
                         {url ? (
                           <a
-                            className="shrink-0 text-xs font-medium text-emerald-700 hover:underline"
+                            className="shrink-0 rounded-lg border px-3 py-2 min-h-[44px] inline-flex items-center text-xs font-medium text-emerald-700 hover:bg-emerald-50"
                             href={url}
                             target="_blank"
                             rel="noreferrer"

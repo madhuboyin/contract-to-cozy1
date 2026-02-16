@@ -53,14 +53,14 @@ export default function ClaimDocuments({ claim }: { claim: ClaimDTO }) {
 
         return (
           <div key={d.id} className="rounded-lg border bg-white p-3">
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
               <div className="min-w-0">
                 <div className="truncate text-sm font-semibold text-gray-900">
                   {title}
                 </div>
 
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-600">
-                  <span className="inline-flex items-center rounded-full border bg-gray-50 px-2 py-0.5">
+                  <span className="inline-flex items-center rounded-full border bg-gray-50 px-2 py-1 sm:py-0.5">
                     {chip}
                   </span>
 
@@ -71,7 +71,7 @@ export default function ClaimDocuments({ claim }: { claim: ClaimDTO }) {
 
               {docUrl ? (
                 <a
-                  className="shrink-0 rounded-lg border px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                  className="w-full sm:w-auto sm:shrink-0 rounded-lg border px-3 py-2 min-h-[44px] inline-flex items-center justify-center text-xs font-medium text-emerald-700 hover:bg-emerald-50"
                   href={docUrl}
                   target="_blank"
                   rel="noreferrer"

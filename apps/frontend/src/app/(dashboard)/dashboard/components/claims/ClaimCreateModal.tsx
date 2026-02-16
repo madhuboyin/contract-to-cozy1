@@ -111,7 +111,7 @@ export default function ClaimCreateModal({
           </div>
           <button
             onClick={handleClose}
-            className="rounded-lg border px-2 py-1 text-sm hover:bg-gray-50"
+            className="rounded-lg border px-3 py-2 text-sm min-h-[44px] hover:bg-gray-50"
             disabled={busy}
           >
             Close
@@ -130,7 +130,7 @@ export default function ClaimCreateModal({
             />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-2">
             <div>
               <div className="text-xs font-semibold text-gray-700">Type</div>
               <select
@@ -159,7 +159,7 @@ export default function ClaimCreateModal({
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-2">
             <div>
               <div className="text-xs font-semibold text-gray-700">Claim # (optional)</div>
               <input
@@ -190,16 +190,16 @@ export default function ClaimCreateModal({
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex flex-col sm:flex-row sm:justify-end gap-2 pt-2">
             <button
-              className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
+              className="rounded-lg border px-3 py-2.5 sm:py-2 text-sm min-h-[44px] hover:bg-gray-50"
               onClick={handleClose}
               disabled={busy}
             >
               Cancel
             </button>
             <button
-              className="rounded-lg bg-emerald-700 px-3 py-2 text-sm text-white hover:bg-emerald-800"
+              className="rounded-lg bg-emerald-700 px-3 py-2.5 sm:py-2 text-sm min-h-[44px] text-white hover:bg-emerald-800"
               onClick={submit}
               disabled={busy || !title.trim()}
             >

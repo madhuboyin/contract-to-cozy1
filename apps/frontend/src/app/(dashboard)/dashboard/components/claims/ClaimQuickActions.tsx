@@ -182,8 +182,8 @@ export default function ClaimQuickActions({
   return (
     <>
       <div className="rounded-xl border bg-white p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[200px]">
+        <div className="flex flex-col sm:flex-wrap sm:flex-row sm:items-end gap-3">
+          <div className="w-full sm:min-w-[200px] sm:w-auto">
             <div className="text-xs font-semibold text-gray-700">Status</div>
             <select
               className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
@@ -202,7 +202,7 @@ export default function ClaimQuickActions({
             </div>
           </div>
 
-          <div className="min-w-[220px]">
+          <div className="w-full sm:min-w-[220px] sm:w-auto">
             <div className="text-xs font-semibold text-gray-700">Type</div>
             <select
               className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
@@ -221,7 +221,7 @@ export default function ClaimQuickActions({
             </div>
           </div>
 
-          <div className="min-w-[220px] flex-1">
+          <div className="w-full sm:min-w-[220px] sm:w-auto flex-1">
             <div className="text-xs font-semibold text-gray-700">Provider</div>
             <input
               className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
@@ -232,7 +232,7 @@ export default function ClaimQuickActions({
             />
           </div>
 
-          <div className="min-w-[180px]">
+          <div className="w-full sm:min-w-[180px] sm:w-auto">
             <div className="text-xs font-semibold text-gray-700">Claim #</div>
             <input
               className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
@@ -243,10 +243,10 @@ export default function ClaimQuickActions({
             />
           </div>
 
-          <div className="ml-auto flex flex-wrap gap-2">
+          <div className="flex flex-col sm:flex-row sm:ml-auto gap-2 w-full sm:w-auto">
             {typeDirty ? (
               <button
-                className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
+                className="rounded-lg border px-3 py-2.5 sm:py-2 text-sm min-h-[44px] hover:bg-gray-50"
                 onClick={() => setConfirmOpen(true)}
                 disabled={busy || regenBusy || submitBusy}
                 title="This will reset checklist progress using the selected type template."
@@ -256,7 +256,7 @@ export default function ClaimQuickActions({
             ) : null}
 
             <button
-              className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
+              className="rounded-lg border px-3 py-2.5 sm:py-2 text-sm min-h-[44px] hover:bg-gray-50"
               onClick={resetForm}
               disabled={busy || regenBusy || submitBusy || (!dirty && !typeDirty)}
             >
@@ -264,7 +264,7 @@ export default function ClaimQuickActions({
             </button>
 
             <button
-              className="rounded-lg bg-emerald-700 px-3 py-2 text-sm text-white hover:bg-emerald-800"
+              className="rounded-lg bg-emerald-700 px-3 py-2.5 sm:py-2 text-sm min-h-[44px] text-white hover:bg-emerald-800"
               onClick={save}
               disabled={busy || regenBusy || submitBusy || !dirty}
             >
@@ -291,7 +291,7 @@ export default function ClaimQuickActions({
               </div>
               <button
                 onClick={() => setConfirmOpen(false)}
-                className="rounded-lg border px-2 py-1 text-sm hover:bg-gray-50"
+                className="rounded-lg border px-3 py-2 text-sm min-h-[44px] hover:bg-gray-50"
                 disabled={regenBusy}
               >
                 Close
@@ -314,14 +314,14 @@ export default function ClaimQuickActions({
 
             <div className="mt-4 flex justify-end gap-2">
               <button
-                className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
+                className="rounded-lg border px-3 py-2.5 sm:py-2 text-sm min-h-[44px] hover:bg-gray-50"
                 onClick={() => setConfirmOpen(false)}
                 disabled={regenBusy}
               >
                 Cancel
               </button>
               <button
-                className="rounded-lg bg-emerald-700 px-3 py-2 text-sm text-white hover:bg-emerald-800"
+                className="rounded-lg bg-emerald-700 px-3 py-2.5 sm:py-2 text-sm min-h-[44px] text-white hover:bg-emerald-800"
                 onClick={confirmTypeChangeAndRegenerate}
                 disabled={regenBusy}
               >
@@ -346,7 +346,7 @@ export default function ClaimQuickActions({
               </div>
               <button
                 onClick={() => setSubmitConfirmOpen(false)}
-                className="rounded-lg border px-2 py-1 text-sm hover:bg-gray-50"
+                className="rounded-lg border px-3 py-2 text-sm min-h-[44px] hover:bg-gray-50"
                 disabled={submitBusy}
               >
                 Close
@@ -371,7 +371,7 @@ export default function ClaimQuickActions({
 
             <div className="mt-4 flex justify-end gap-2">
               <button
-                className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
+                className="rounded-lg border px-3 py-2.5 sm:py-2 text-sm min-h-[44px] hover:bg-gray-50"
                 onClick={() => setSubmitConfirmOpen(false)}
                 disabled={submitBusy}
               >
@@ -379,7 +379,7 @@ export default function ClaimQuickActions({
               </button>
               <button
                 className={[
-                  'rounded-lg px-3 py-2 text-sm text-white',
+                  'rounded-lg px-3 py-2.5 sm:py-2 text-sm min-h-[44px] text-white',
                   submitBlockedCount > 0
                     ? 'bg-emerald-200 cursor-not-allowed'
                     : 'bg-emerald-700 hover:bg-emerald-800',
