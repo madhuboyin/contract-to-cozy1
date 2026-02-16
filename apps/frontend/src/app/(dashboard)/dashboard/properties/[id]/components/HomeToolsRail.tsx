@@ -5,7 +5,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, Shield, DollarSign, Info, PanelBottomOpen ,Calculator, Scale, Activity, Target} from 'lucide-react';
+import { TrendingUp, Shield, DollarSign, Info, PanelBottomOpen ,Calculator, Scale, Activity, Target, Calendar} from 'lucide-react';
 
 // shadcn/ui (already used elsewhere in your app)
 import {
@@ -88,7 +88,13 @@ const HOME_TOOLS: ToolDef[] = [
     Icon: Target,
     tooltip: 'Find the year when appreciation outweighs cumulative ownership costs.',
   },
-  
+  {
+    key: 'capital-timeline',
+    label: 'Capital Timeline',
+    href: (id) => `/dashboard/properties/${id}/tools/capital-timeline`,
+    Icon: Calendar,
+    tooltip: 'Predict when major home systems will need replacement and estimated costs.',
+  },
 ];
 
 function isActivePath(pathname: string, href: string) {
