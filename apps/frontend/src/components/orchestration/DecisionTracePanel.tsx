@@ -107,7 +107,7 @@ export const DecisionTracePanel: React.FC<Props> = ({
       <button
         type="button"
         onClick={handleToggleExpanded}
-        className="text-xs text-blue-600 hover:underline flex items-center gap-1.5 min-h-[44px] sm:min-h-0 touch-manipulation"
+        className="text-xs text-blue-600 hover:underline flex items-center gap-1.5 min-h-[44px] touch-manipulation"
       >
         <Info className="h-4 w-4" />
         {linkText}

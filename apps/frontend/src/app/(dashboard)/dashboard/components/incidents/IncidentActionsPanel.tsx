@@ -82,14 +82,14 @@ export default function IncidentActionsPanel({
 
               return (
                 <div key={a.id} className="rounded-lg border p-3">
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-medium">{a.ctaLabel ?? `${a.type} action`}</p>
                       <p className="mt-0.5 text-xs text-slate-600">
                         Type: {a.type} • Status: {a.status}
                       </p>
                       {a?.payload?.actionKey ? (
-                        <p className="mt-1 text-[11px] text-slate-500">
+                        <p className="mt-1 text-xs text-slate-500">
                           Key: {String(a.payload.actionKey)}
                         </p>
                       ) : null}
@@ -97,7 +97,7 @@ export default function IncidentActionsPanel({
 
                     <div className="flex shrink-0 items-center gap-2">
                       <button
-                        className="rounded-lg border bg-white px-2 py-1 text-xs hover:bg-slate-50 disabled:opacity-50"
+                        className="rounded-lg border bg-white px-3 py-2 min-h-[44px] text-xs hover:bg-slate-50 disabled:opacity-50"
                         disabled={!why || !!busyId}
                         onClick={() => setOpenWhyId(isWhyOpen ? null : a.id)}
                         title={why ? 'Why was this action recommended?' : 'No decision trace available for this action yet'}
@@ -106,7 +106,7 @@ export default function IncidentActionsPanel({
                       </button>
 
                       <button
-                        className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+                        className="rounded-lg bg-slate-900 px-3 py-2 min-h-[44px] text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
                         disabled={isBusy}
                         onClick={() => onExecute(a.id)}
                       >
