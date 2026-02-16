@@ -515,14 +515,14 @@ export default function HomeownerBookingsPage() {
                   <button
                     type="button"
                     onClick={() => setShowEditModal(false)}
-                    className="flex-1 sm:flex-none px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                    className="flex-1 sm:flex-none px-4 py-2.5 min-h-[44px] text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={saving}
-                    className="flex-1 sm:flex-none px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                    className="flex-1 sm:flex-none px-4 py-2.5 min-h-[44px] text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                   >
                     {saving ? 'Saving...' : 'Save'}
                   </button>
@@ -579,14 +579,14 @@ export default function HomeownerBookingsPage() {
                   <button
                     type="button"
                     onClick={() => setShowCancelModal(false)}
-                    className="flex-1 sm:flex-none px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                    className="flex-1 sm:flex-none px-4 py-2.5 min-h-[44px] text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
                   >
                     Keep
                   </button>
                   <button
                     type="submit"
                     disabled={cancelling || cancelReason.length < 10}
-                    className="flex-1 sm:flex-none px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                    className="flex-1 sm:flex-none px-4 py-2.5 min-h-[44px] text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
                   >
                     {cancelling ? 'Cancelling...' : 'Cancel'}
                   </button>
