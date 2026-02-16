@@ -85,8 +85,8 @@ export class BookingService {
       throw new Error('Property not found or does not belong to you');
     }
 
-    // Validate provider
-    if (input.providerId !== service.providerProfile.userId) {
+    // Validate provider — input.providerId is the provider profile ID from the URL
+    if (input.providerId !== service.providerProfileId) {
       throw new Error('Provider ID does not match service provider');
     }
 
