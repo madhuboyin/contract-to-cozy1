@@ -4,7 +4,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
-import { Property, RiskAssessmentReport, AssetRiskDetail, RiskCategory, PropertyMaintenanceTask, RecurrenceFrequency, MaintenanceTaskServiceCategory } from "@/types"; 
+import { Property, RiskAssessmentReport, AssetRiskDetail, RiskCategory, PropertyMaintenanceTask, RecurrenceFrequency, MaintenanceTaskServiceCategory, PropertyScoreSeries } from "@/types"; 
 import { api } from "@/lib/api/client";
 import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading } from "@/components/page-header";
@@ -19,6 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import React, { useState } from "react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { MaintenanceConfigModal } from "../../../maintenance-setup/MaintenanceConfigModal"; 
+import { ScoreDeltaIndicator, ScoreTrendChart } from "@/components/scores/ScoreTrendChart";
 
 // --- Types for Query Data ---
 type RiskReportFull = RiskAssessmentReport; 
@@ -39,6 +40,86 @@ const getRiskDetails = (score: number) => {
     if (score >= 40) return { level: "ELEVATED", color: "text-orange-500", progressClass: "bg-orange-500", badgeVariant: "destructive" };
     return { level: "HIGH", color: "text-red-500", progressClass: "bg-red-500", badgeVariant: "destructive" };
 };
+
+function toNumber(value: unknown): number | null {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string') {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+}
+
+function formatNumberDelta(value: number): string {
+    return `${value > 0 ? '+' : ''}${value.toFixed(1)}`;
+}
+
+function buildRiskChangeItems(series: PropertyScoreSeries | undefined) {
+    const changes: Array<{ title: string; detail: string; impact: 'positive' | 'negative' | 'neutral' }> = [];
+    if (!series?.latest) {
+        return [{
+            title: 'Waiting for weekly history',
+            detail: 'Trend details appear after weekly snapshots are collected.',
+            impact: 'neutral' as const,
+        }];
+    }
+
+    if (series.deltaFromPreviousWeek !== null) {
+        const delta = series.deltaFromPreviousWeek;
+        changes.push({
+            title: 'Risk score movement',
+            detail:
+                delta > 0
+                    ? `Risk score improved ${formatNumberDelta(delta)} points versus last week.`
+                    : delta < 0
+                    ? `Risk score declined ${Math.abs(delta).toFixed(1)} points versus last week.`
+                    : 'Risk score was unchanged versus last week.',
+            impact: delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral',
+        });
+    }
+
+    const latestExposure = toNumber(series.latest.snapshot?.financialExposureTotal);
+    const previousExposure = toNumber(series.previous?.snapshot?.financialExposureTotal);
+    if (latestExposure !== null && previousExposure !== null) {
+        const deltaExposure = latestExposure - previousExposure;
+        changes.push({
+            title: '5-year exposure change',
+            detail:
+                deltaExposure < 0
+                    ? `Projected exposure dropped by ${formatCurrency(Math.abs(deltaExposure))}.`
+                    : deltaExposure > 0
+                    ? `Projected exposure increased by ${formatCurrency(deltaExposure)}.`
+                    : 'Projected exposure remained flat.',
+            impact: deltaExposure < 0 ? 'positive' : deltaExposure > 0 ? 'negative' : 'neutral',
+        });
+    }
+
+    const latestHighRiskAssets = toNumber(series.latest.snapshot?.highRiskAssets);
+    const previousHighRiskAssets = toNumber(series.previous?.snapshot?.highRiskAssets);
+    if (latestHighRiskAssets !== null && previousHighRiskAssets !== null) {
+        const deltaAssets = latestHighRiskAssets - previousHighRiskAssets;
+        changes.push({
+            title: 'High-risk assets',
+            detail:
+                deltaAssets < 0
+                    ? `${Math.abs(deltaAssets)} fewer high-risk assets than last week.`
+                    : deltaAssets > 0
+                    ? `${deltaAssets} additional high-risk assets surfaced this week.`
+                    : 'High-risk asset count stayed unchanged.',
+            impact: deltaAssets < 0 ? 'positive' : deltaAssets > 0 ? 'negative' : 'neutral',
+        });
+    }
+
+    if (changes.length === 0) {
+        changes.push({
+            title: 'No major risk drivers changed',
+            detail: 'Score remained steady with no material weekly driver changes captured.',
+            impact: 'neutral',
+        });
+    }
+
+    return changes.slice(0, 4);
+}
 
 // 🔑 NEW: Map system types to maintenance service categories
 const getServiceCategoryForAsset = (systemType: string): MaintenanceTaskServiceCategory => {
@@ -508,6 +589,7 @@ export default function RiskAssessmentPage() {
     // 🔑 NEW: Modal state for creating tasks
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedAsset, setSelectedAsset] = useState<AssetRiskDetail | null>(null);
+    const [trendWeeks, setTrendWeeks] = useState<26 | 52>(26);
 
     // 🔑 NEW: Fetch existing maintenance tasks for this property
     const { data: maintenanceTasksData, refetch: refetchTasks } = useQuery({
@@ -685,6 +767,13 @@ export default function RiskAssessmentPage() {
         staleTime: 0, // Always consider data stale
         gcTime: 0, // Don't cache results (renamed from cacheTime in v5+)
     });
+
+    const scoreSnapshotQuery = useQuery({
+        queryKey: ['property-score-snapshot-risk', propertyId, trendWeeks],
+        queryFn: async () => api.getPropertyScoreSnapshots(propertyId, trendWeeks),
+        enabled: !!propertyId,
+        staleTime: 10 * 60 * 1000,
+    });
     
     // --- Data Extraction and Status Determination ---
     const riskQueryPayload = riskQuery.data; 
@@ -744,6 +833,9 @@ export default function RiskAssessmentPage() {
     const isCalculating = isLoadingReport && !report;
     const score = report?.riskScore || 0;
     const { level, color, progressClass } = getRiskDetails(score);
+    const riskSeries = scoreSnapshotQuery.data?.scores?.RISK;
+    const riskTrend = riskSeries?.trend || [];
+    const riskChanges = buildRiskChangeItems(riskSeries);
 
     // FIX: Ensure financialExposureTotal is parsed as a number from the string API returns
     const exposureString = report?.financialExposureTotal;
@@ -1076,6 +1168,59 @@ export default function RiskAssessmentPage() {
                         className={`h-4`} 
                         indicatorClassName={progressClass} 
                     />
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-3">
+                    <Card className="lg:col-span-2">
+                        <CardHeader className="pb-2">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <CardTitle className="text-base font-medium">Risk Score Trend</CardTitle>
+                                    <CardDescription>Weekly risk score snapshots with week-over-week delta.</CardDescription>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Button size="sm" variant={trendWeeks === 26 ? "default" : "outline"} onClick={() => setTrendWeeks(26)}>
+                                        6 Months
+                                    </Button>
+                                    <Button size="sm" variant={trendWeeks === 52 ? "default" : "outline"} onClick={() => setTrendWeeks(52)}>
+                                        1 Year
+                                    </Button>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <ScoreTrendChart points={riskTrend} ariaLabel="Property risk score trend" />
+                            <ScoreDeltaIndicator delta={riskSeries?.deltaFromPreviousWeek} />
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-base font-medium">Changes Impacting Score</CardTitle>
+                            <CardDescription>Key weekly drivers behind your risk movement.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            {riskChanges.map((change, idx) => (
+                                <div key={`${change.title}-${idx}`} className="rounded-lg border border-black/10 px-3 py-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <p className="text-sm font-medium">{change.title}</p>
+                                        <Badge
+                                            variant={
+                                                change.impact === 'positive'
+                                                    ? 'success'
+                                                    : change.impact === 'negative'
+                                                    ? 'destructive'
+                                                    : 'secondary'
+                                            }
+                                        >
+                                            {change.impact === 'positive' ? 'Positive' : change.impact === 'negative' ? 'Negative' : 'Neutral'}
+                                        </Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1">{change.detail}</p>
+                                </div>
+                            ))}
+                        </CardContent>
+                    </Card>
                 </div>
 
                 {/* --- Detailed Section Content --- */}

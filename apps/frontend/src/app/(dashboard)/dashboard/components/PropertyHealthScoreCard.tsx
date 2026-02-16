@@ -45,7 +45,7 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
     ).length || 0;
 
     return (
-        <Link href={`/dashboard/properties/${property.id}/?tab=maintenance&view=insights`}>
+        <Link href={`/dashboard/properties/${property.id}/health-score`}>
             <Card className="h-[190px] flex flex-col border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer">
                 <CardContent className="flex-1 p-5 flex flex-col">
                     {/* Header */}

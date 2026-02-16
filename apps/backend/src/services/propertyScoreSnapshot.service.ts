@@ -8,6 +8,7 @@ export type ScorePointDTO = {
   scoreMax: number | null;
   scoreBand: string | null;
   computedAt: string;
+  snapshot: Record<string, unknown> | null;
 };
 
 export type ScoreSeriesDTO = {
@@ -51,6 +52,10 @@ function mapPoint(record: any): ScorePointDTO {
     scoreMax: record.scoreMax === null || record.scoreMax === undefined ? null : asNumber(record.scoreMax),
     scoreBand: record.scoreBand ?? null,
     computedAt: new Date(record.computedAt).toISOString(),
+    snapshot:
+      record.snapshotJson && typeof record.snapshotJson === 'object'
+        ? (record.snapshotJson as Record<string, unknown>)
+        : null,
   };
 }
 
@@ -114,6 +119,7 @@ export async function getPropertyScoreSnapshotSummary(
           scoreMax: true,
           scoreBand: true,
           computedAt: true,
+          snapshotJson: true,
         },
       });
       return [scoreType, rows] as const;

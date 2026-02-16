@@ -4,7 +4,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
-import { FinancialEfficiencyReport } from "@/types"; 
+import { FinancialEfficiencyReport, PropertyScoreSeries } from "@/types"; 
 import { api } from "@/lib/api/client";
 import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading } from "@/components/page-header";
@@ -15,7 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import React from "react";
+import React, { useMemo, useState } from "react";
+import { ScoreDeltaIndicator, ScoreTrendChart } from "@/components/scores/ScoreTrendChart";
 
 
 // --- Types for Query Data ---
@@ -36,6 +37,84 @@ const getEfficiencyDetails = (score: number) => {
     if (score >= 70) return { level: "AVERAGE", color: "text-blue-500", progressClass: "bg-blue-500", badgeVariant: "secondary" as const, icon: BarChart };
     return { level: "LOW", color: "text-red-500", progressClass: "bg-red-500", badgeVariant: "destructive" as const, icon: DollarSign };
 };
+
+function toNumber(value: unknown): number | null {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string') {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+}
+
+function buildFinancialChangeItems(series: PropertyScoreSeries | undefined) {
+    const changes: Array<{ title: string; detail: string; impact: 'positive' | 'negative' | 'neutral' }> = [];
+    if (!series?.latest) {
+        return [{
+            title: 'Waiting for weekly history',
+            detail: 'Trend details appear after weekly snapshots are collected.',
+            impact: 'neutral' as const,
+        }];
+    }
+
+    const delta = series.deltaFromPreviousWeek;
+    if (delta !== null) {
+        changes.push({
+            title: 'Efficiency score movement',
+            detail:
+                delta > 0
+                    ? `Efficiency score improved by ${delta.toFixed(1)} points versus last week.`
+                    : delta < 0
+                    ? `Efficiency score declined by ${Math.abs(delta).toFixed(1)} points versus last week.`
+                    : 'Efficiency score was unchanged versus last week.',
+            impact: delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral',
+        });
+    }
+
+    const latestAnnual = toNumber(series.latest.snapshot?.annualCost);
+    const previousAnnual = toNumber(series.previous?.snapshot?.annualCost);
+    if (latestAnnual !== null && previousAnnual !== null) {
+        const costDelta = latestAnnual - previousAnnual;
+        changes.push({
+            title: 'Annual home cost movement',
+            detail:
+                costDelta < 0
+                    ? `Annual cost dropped by ${formatCurrency(Math.abs(costDelta))}.`
+                    : costDelta > 0
+                    ? `Annual cost increased by ${formatCurrency(costDelta)}.`
+                    : 'Annual cost remained flat week over week.',
+            impact: costDelta < 0 ? 'positive' : costDelta > 0 ? 'negative' : 'neutral',
+        });
+    }
+
+    const latestMarket = toNumber(series.latest.snapshot?.marketAverageTotal);
+    const previousMarket = toNumber(series.previous?.snapshot?.marketAverageTotal);
+    if (latestAnnual !== null && previousAnnual !== null && latestMarket !== null && previousMarket !== null) {
+        const latestGap = latestAnnual - latestMarket;
+        const previousGap = previousAnnual - previousMarket;
+        const gapDelta = latestGap - previousGap;
+        changes.push({
+            title: 'Gap vs market average',
+            detail:
+                gapDelta < 0
+                    ? `You moved ${formatCurrency(Math.abs(gapDelta))} closer to market benchmark.`
+                    : gapDelta > 0
+                    ? `Gap widened by ${formatCurrency(gapDelta)} versus market benchmark.`
+                    : 'Gap vs market benchmark is unchanged.',
+            impact: gapDelta < 0 ? 'positive' : gapDelta > 0 ? 'negative' : 'neutral',
+        });
+    }
+
+    if (changes.length === 0) {
+        changes.push({
+            title: 'No major cost-driver shifts',
+            detail: 'No significant changes were captured in weekly cost drivers.',
+            impact: 'neutral',
+        });
+    }
+
+    return changes.slice(0, 4);
+}
 
 // --- Component for Detailed Cost Breakdown Table ---
 const CostBreakdownTable = ({ report }: { report: FinancialEfficiencyReport }) => {
@@ -165,6 +244,7 @@ export default function FinancialEfficiencyPage() {
     const params = useParams();
     const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
     const router = useRouter();
+    const [trendWeeks, setTrendWeeks] = useState<26 | 52>(26);
     // 1. Fetch Property Details (to get name/address for header)
     const { data: property, isLoading: isLoadingProperty } = useQuery({
         queryKey: ["property", propertyId],
@@ -189,6 +269,13 @@ export default function FinancialEfficiencyPage() {
         retry: 1, 
         staleTime: 0, 
         gcTime: 0, 
+    });
+
+    const scoreSnapshotQuery = useQuery({
+        queryKey: ["property-score-snapshot-financial", propertyId, trendWeeks],
+        queryFn: async () => api.getPropertyScoreSnapshots(propertyId as string, trendWeeks),
+        enabled: !!propertyId,
+        staleTime: 10 * 60 * 1000,
     });
 
     // --- Data Extraction and Status Determination ---
@@ -223,6 +310,9 @@ export default function FinancialEfficiencyPage() {
     const isCalculating = isLoadingReport && !report;
     const score = report?.financialEfficiencyScore || 0;
     const { level, color, progressClass, icon: ScoreIcon } = getEfficiencyDetails(score);
+    const financialSeries = scoreSnapshotQuery.data?.scores?.FINANCIAL;
+    const financialTrend = financialSeries?.trend || [];
+    const financialChanges = useMemo(() => buildFinancialChangeItems(financialSeries), [financialSeries]);
 
     const actualTotalCost = (report?.actualInsuranceCost || 0) + (report?.actualUtilityCost || 0) + (report?.actualWarrantyCost || 0);
     const marketAverageTotal = report?.marketAverageTotal || 0;
@@ -398,6 +488,59 @@ export default function FinancialEfficiencyPage() {
                         className={`h-4`} 
                         indicatorClassName={progressClass} 
                     />
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-3">
+                    <Card className="lg:col-span-2">
+                        <CardHeader className="pb-2">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <CardTitle className="text-base font-medium">Efficiency Score Trend</CardTitle>
+                                    <CardDescription>Weekly score snapshots over 6 months or 1 year.</CardDescription>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Button size="sm" variant={trendWeeks === 26 ? "default" : "outline"} onClick={() => setTrendWeeks(26)}>
+                                        6 Months
+                                    </Button>
+                                    <Button size="sm" variant={trendWeeks === 52 ? "default" : "outline"} onClick={() => setTrendWeeks(52)}>
+                                        1 Year
+                                    </Button>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <ScoreTrendChart points={financialTrend} ariaLabel="Financial efficiency score trend" />
+                            <ScoreDeltaIndicator delta={financialSeries?.deltaFromPreviousWeek} />
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-base font-medium">Changes Impacting Score</CardTitle>
+                            <CardDescription>Top weekly factors that moved your efficiency.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            {financialChanges.map((change, idx) => (
+                                <div key={`${change.title}-${idx}`} className="rounded-lg border border-black/10 px-3 py-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <p className="text-sm font-medium">{change.title}</p>
+                                        <Badge
+                                            variant={
+                                                change.impact === 'positive'
+                                                    ? 'success'
+                                                    : change.impact === 'negative'
+                                                    ? 'destructive'
+                                                    : 'secondary'
+                                            }
+                                        >
+                                            {change.impact === 'positive' ? 'Positive' : change.impact === 'negative' ? 'Negative' : 'Neutral'}
+                                        </Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1">{change.detail}</p>
+                                </div>
+                            ))}
+                        </CardContent>
+                    </Card>
                 </div>
 
                 {/* --- Detailed Section Content --- */}

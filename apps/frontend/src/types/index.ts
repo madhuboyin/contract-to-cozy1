@@ -329,6 +329,7 @@ export interface PropertyScoreTrendPoint {
   scoreMax: number | null;
   scoreBand: string | null;
   computedAt: string;
+  snapshot: Record<string, unknown> | null;
 }
 
 export interface PropertyScoreSeries {
