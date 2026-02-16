@@ -1172,6 +1172,7 @@ model HomeownerProfile {
   homeCapitalTimelineAnalyses HomeCapitalTimelineAnalysis[]
   doNothingScenarios      DoNothingScenario[]
   doNothingSimulationRuns DoNothingSimulationRun[]
+  scoreSnapshots PropertyScoreSnapshot[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1487,6 +1488,7 @@ model Property {
   homeCapitalTimelineOverrides HomeCapitalTimelineOverride[]
   doNothingScenarios      DoNothingScenario[]
   doNothingSimulationRuns DoNothingSimulationRun[]
+  scoreSnapshots PropertyScoreSnapshot[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3819,6 +3821,48 @@ model DoNothingSimulationRun {
   @@map("do_nothing_simulation_runs")
 }
 
+
+// ============================================================================
+// PROPERTY SCORE
+// ============================================================================
+
+enum PropertyScoreType {
+  HEALTH
+  RISK
+  FINANCIAL
+}
+
+// New history table (weekly buckets)
+model PropertyScoreSnapshot {
+  id                 String            @id @default(uuid())
+  propertyId         String
+  homeownerProfileId String
+  scoreType          PropertyScoreType
+
+  // Current score value for that week
+  score              Float
+  scoreMax           Float?            // optional (ex: health can be 71 max)
+
+  // Optional UX helpers (can also be derived at read time)
+  scoreBand          String?           // "Excellent", "Fair", etc.
+  sourceVersion      Int               @default(1)
+
+  // Monday 00:00:00 (or your chosen canonical week bucket in UTC)
+  weekStart          DateTime
+
+  computedAt         DateTime          @default(now())
+  snapshotJson       Json?             // factors/drivers/metadata for "what changed"
+  createdAt          DateTime          @default(now())
+
+  property           Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  homeownerProfile   HomeownerProfile  @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, scoreType, weekStart])
+  @@index([propertyId, scoreType, weekStart(sort: Desc)])
+  @@index([homeownerProfileId, scoreType, weekStart(sort: Desc)])
+  @@index([computedAt(sort: Desc)])
+  @@map("property_score_snapshots")
+}
 
 // ============================================================================
 // RECALL
