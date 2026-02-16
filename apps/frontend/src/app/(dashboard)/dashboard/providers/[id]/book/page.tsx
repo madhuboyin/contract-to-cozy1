@@ -27,7 +27,7 @@ export default function BookProviderPage() {
   const queryClient = useQueryClient();
   
   const searchParams = useSearchParams();
-  const serviceCategory = searchParams.get('service');
+  const serviceCategory = searchParams.get('service') || searchParams.get('category');
   const preSelectedPropertyId = searchParams.get('propertyId');
   // NEW: Extract health insight tracking from URL
   const insightFactor = searchParams.get('insightFactor');
@@ -206,9 +206,9 @@ export default function BookProviderPage() {
         setError(response.message || 'Failed to create booking');
         console.error('Booking error:', response);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create booking:', error);
-      setError('An error occurred. Please try again.');
+      setError(error?.message || 'An error occurred. Please try again.');
     } finally {
       setSubmitting(false);
     }
