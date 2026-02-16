@@ -98,7 +98,7 @@ export const SnoozeModal: React.FC<Props> = ({
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="w-full max-w-md">
         <DialogHeader>
           <DialogTitle>
             {isExtending ? 'Extend snooze' : 'Snooze this recommendation'}
@@ -121,7 +121,7 @@ export const SnoozeModal: React.FC<Props> = ({
             <Label>How long do you want to snooze this?</Label>
             <RadioGroup value={duration} onValueChange={setDuration}>
               {SNOOZE_DURATIONS.map((option) => (
-                <div key={option.value} className="flex items-center space-x-2">
+                <div key={option.value} className="flex items-center space-x-2 min-h-[44px]">
                   <RadioGroupItem value={option.value} id={option.value} />
                   <Label htmlFor={option.value} className="font-normal cursor-pointer">
                     {option.label}

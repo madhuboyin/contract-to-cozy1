@@ -126,7 +126,7 @@ export const TaskStatusBadge: React.FC<TaskStatusBadgeProps> = ({ checklistItem 
 
   return (
     <div className="mt-3 rounded-md border bg-gray-50 p-3 text-sm">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div className="flex-1 space-y-2">
           {/* Status Badge */}
           <div className="flex items-center gap-2 flex-wrap">
@@ -165,7 +165,7 @@ export const TaskStatusBadge: React.FC<TaskStatusBadgeProps> = ({ checklistItem 
         {/* View Task Link */}
         <Link
           href={`/dashboard/maintenance?taskId=${checklistItem.id}`}
-          className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline whitespace-nowrap"
+          className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline whitespace-nowrap min-h-[44px] inline-flex items-center touch-manipulation"
         >
           View task →
         </Link>

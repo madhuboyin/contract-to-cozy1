@@ -323,7 +323,7 @@ export const OrchestrationActionCard: React.FC<Props> = ({
             type="button"
             disabled={isDisabled}
             onClick={() => !isDisabled && onCtaClick?.(action)}
-            className={`min-h-[40px] px-3 py-2 rounded-md text-sm font-semibold ${
+            className={`min-h-[44px] px-3 py-2 rounded-md text-sm font-semibold ${
               isDisabled
                 ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                 : 'bg-blue-600 text-white hover:bg-blue-700'
@@ -336,7 +336,7 @@ export const OrchestrationActionCard: React.FC<Props> = ({
             <button
               type="button"
               onClick={onDismiss}
-              className="inline-flex min-h-[40px] items-center text-sm text-muted-foreground hover:underline"
+              className="inline-flex min-h-[44px] items-center text-sm text-muted-foreground hover:underline"
             >
               Dismiss
             </button>

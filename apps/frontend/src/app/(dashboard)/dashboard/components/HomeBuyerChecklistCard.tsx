@@ -41,7 +41,7 @@ export const HomeBuyerChecklistCard = ({ items, className }: HomeBuyerChecklistC
   return (
     <Card className={cn("h-full flex flex-col shadow-lg", className)}>
       <CardHeader className="pb-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div className="space-y-1">
             <CardTitle className="font-heading text-xl flex items-center gap-2">
               <ListChecks className="h-5 w-5 text-blue-600" />
@@ -66,7 +66,7 @@ export const HomeBuyerChecklistCard = ({ items, className }: HomeBuyerChecklistC
             <div 
               key={item.id} 
               className={cn(
-                "flex items-center p-3 rounded-lg transition-all",
+                "flex items-center p-3 rounded-lg transition-all min-h-[44px]",
                 item.status === 'COMPLETED' ? "bg-green-50/50" : "hover:bg-gray-50"
               )}
             >
@@ -89,7 +89,7 @@ export const HomeBuyerChecklistCard = ({ items, className }: HomeBuyerChecklistC
                 )}
               </div>
               {item.status !== 'COMPLETED' && (
-                <Button variant="ghost" size="sm" className="ml-2 h-8 text-xs" asChild>
+                <Button variant="ghost" size="sm" className="ml-2 min-h-[44px] text-xs" asChild>
                    <Link href="/dashboard/checklist">Action</Link>
                 </Button>
               )}

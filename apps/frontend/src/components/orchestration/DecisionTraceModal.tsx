@@ -41,7 +41,7 @@ function impactToPoints(impact?: number | null) {
 function deltaBadge(points: number | null) {
   if (points === null) {
     return (
-      <span className="text-[11px] text-muted-foreground px-2 py-0.5 rounded border bg-white">
+      <span className="text-xs text-muted-foreground px-2 py-0.5 rounded border bg-white">
         —
       </span>
     );
@@ -49,7 +49,7 @@ function deltaBadge(points: number | null) {
 
   if (points === 0) {
     return (
-      <span className="text-[11px] text-muted-foreground px-2 py-0.5 rounded border bg-white">
+      <span className="text-xs text-muted-foreground px-2 py-0.5 rounded border bg-white">
         0
       </span>
     );
@@ -58,8 +58,8 @@ function deltaBadge(points: number | null) {
   const isUp = points > 0;
   const label = `${isUp ? '▲' : '▼'} ${isUp ? '+' : ''}${points}`;
   const cls = isUp
-    ? 'text-[11px] text-green-700 px-2 py-0.5 rounded border bg-white'
-    : 'text-[11px] text-red-700 px-2 py-0.5 rounded border bg-white';
+    ? 'text-xs text-green-700 px-2 py-0.5 rounded border bg-white'
+    : 'text-xs text-red-700 px-2 py-0.5 rounded border bg-white';
 
   return <span className={cls}>{label}</span>;
 }
@@ -96,7 +96,7 @@ export const DecisionTraceModal: React.FC<Props> = ({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="w-full max-w-2xl">
         <DialogHeader>
           <DialogTitle>How this recommendation was decided</DialogTitle>
         </DialogHeader>

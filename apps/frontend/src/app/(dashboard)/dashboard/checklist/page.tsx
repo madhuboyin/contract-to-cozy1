@@ -218,7 +218,7 @@ export default function ChecklistPage() {
         </Link>
       </Button>
 
-      <h2 className="text-3xl font-bold tracking-tight">
+      <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
         Your Home Closure Journey
       </h2>
       <p className="text-lg text-muted-foreground">
@@ -270,7 +270,7 @@ function ChecklistItemRow({ item, onUpdateStatus }: ChecklistItemRowProps) {
   return (
     <li
       className={cn(
-        'flex items-center justify-between p-4',
+        'flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 gap-2',
         item.isUpdating && 'opacity-60 pointer-events-none'
       )}
     >

@@ -472,7 +472,7 @@ export function ActionsClient() {
                 </h2>
                 <button
                   onClick={() => setShowSnoozed(!showSnoozed)}
-                  className="text-sm text-blue-600 hover:underline"
+                  className="text-sm text-blue-600 hover:underline min-h-[44px] px-3 py-2 touch-manipulation"
                 >
                   {showSnoozed ? 'Hide' : 'Show'}
                 </button>
@@ -501,7 +501,7 @@ export function ActionsClient() {
                         <div className="flex gap-2">
                           <button
                             onClick={() => handleUnsnooze(action)}
-                            className="text-xs text-blue-600 hover:underline"
+                            className="text-xs text-blue-600 hover:underline min-h-[44px] px-3 py-2 touch-manipulation"
                           >
                             Un-snooze now
                           </button>
@@ -510,7 +510,7 @@ export function ActionsClient() {
                               setTraceAction(action);
                               setIsSnoozeModalOpen(true);
                             }}
-                            className="text-xs text-blue-600 hover:underline"
+                            className="text-xs text-blue-600 hover:underline min-h-[44px] px-3 py-2 touch-manipulation"
                           >
                             Extend snooze
                           </button>
