@@ -40,6 +40,7 @@ import {
   // NEW FINANCIAL EFFICIENCY TYPES
   FinancialEfficiencyReport, // [NEW IMPORT]
   FinancialReportSummary, // [NEW IMPORT]
+  PropertyScoreSnapshotSummary,
   // [NEW IMPORTS] for AI Report Typing
   OracleReport, 
   BudgetForecast,
@@ -1196,6 +1197,20 @@ class APIClient {
     }
     return null;
 }
+
+  async getPropertyScoreSnapshots(
+    propertyId: string,
+    weeks = 52
+  ): Promise<PropertyScoreSnapshotSummary | null> {
+    const response = await this.request<PropertyScoreSnapshotSummary>(
+      `/api/properties/${propertyId}/score-snapshots?weeks=${weeks}`
+    );
+
+    if (response.success && response.data) {
+      return response.data;
+    }
+    return null;
+  }
   
   /**
    * Fetches the full detailed FES report, queuing a new calculation if stale/missing.

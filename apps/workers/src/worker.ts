@@ -13,6 +13,7 @@ import { Worker, Queue } from 'bullmq';
 import { calculateAssetRisk, calculateTotalRiskScore, filterRelevantAssets, AssetRiskDetail } from '../../backend/src/utils/riskCalculator.util';
 import { RISK_ASSET_CONFIG } from '../../backend/src/config/risk-constants';
 import { calculateFinancialEfficiency } from '../../backend/src/utils/FinancialCalculator.util';
+import { calculateHealthScore } from '../../backend/src/utils/propertyScore.util';
 import { sendEmailNotificationJob, runDailyEmailDigest } from './jobs/sendEmailNotification.job';
 import { sendPushNotificationJob } from './jobs/sendPushNotification.job';
 import { sendSmsNotificationJob } from './jobs/sendSmsNotification.job';
@@ -105,6 +106,338 @@ interface PropertyWithRelations extends Property {
   riskReport: RiskAssessmentReport | null;
   // Note: All property fields (heatingType, waterHeaterType, roofType, yearBuilt, etc.)
   // are already included from the base Property type from Prisma
+}
+
+type ScoreType = 'HEALTH' | 'RISK' | 'FINANCIAL';
+
+function asNumber(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (value && typeof value === 'object' && 'toNumber' in (value as Record<string, unknown>)) {
+    const maybe = (value as { toNumber: () => number }).toNumber();
+    return Number.isFinite(maybe) ? maybe : 0;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getWeekStartUtc(reference = new Date()): Date {
+  const weekStart = new Date(
+    Date.UTC(reference.getUTCFullYear(), reference.getUTCMonth(), reference.getUTCDate(), 0, 0, 0, 0)
+  );
+  const day = (weekStart.getUTCDay() + 6) % 7; // Monday=0
+  weekStart.setUTCDate(weekStart.getUTCDate() - day);
+  return weekStart;
+}
+
+function inferApplianceTypeFromItem(item: {
+  sourceHash?: string | null;
+  tags?: string[] | null;
+  name?: string | null;
+}): string | null {
+  const sourceHash = item.sourceHash ?? '';
+  if (sourceHash.startsWith('property_appliance::')) {
+    return sourceHash.replace('property_appliance::', '') || null;
+  }
+
+  const typeTag = (item.tags || []).find((tag) => tag.startsWith('APPLIANCE_TYPE:'));
+  if (typeTag) {
+    return typeTag.replace('APPLIANCE_TYPE:', '') || null;
+  }
+
+  const name = String(item.name || '').toLowerCase();
+  if (!name) return null;
+  if (name.includes('dishwasher')) return 'DISHWASHER';
+  if (name.includes('refrigerator') || name.includes('fridge')) return 'REFRIGERATOR';
+  if (name.includes('oven') || name.includes('range') || name.includes('stove') || name.includes('cooktop')) {
+    return 'OVEN_RANGE';
+  }
+  if (name.includes('washer') || name.includes('dryer') || name.includes('laundry')) return 'WASHER_DRYER';
+  if (name.includes('microwave') || name.includes('hood') || name.includes('vent')) return 'MICROWAVE_HOOD';
+  if (name.includes('water softener') || name.includes('softener')) return 'WATER_SOFTENER';
+  return null;
+}
+
+function getBandForScore(scoreType: ScoreType, score: number): string {
+  if (scoreType === 'RISK') {
+    if (score >= 80) return 'Low Risk';
+    if (score >= 60) return 'Moderate Risk';
+    if (score >= 40) return 'Elevated Risk';
+    return 'High Risk';
+  }
+
+  if (scoreType === 'FINANCIAL') {
+    if (score >= 90) return 'Excellent';
+    if (score >= 70) return 'Average';
+    return 'Below Average';
+  }
+
+  if (score >= 85) return 'Excellent';
+  if (score >= 70) return 'Good';
+  if (score >= 50) return 'Fair';
+  return 'Needs Attention';
+}
+
+async function upsertPropertyScoreSnapshot(input: {
+  propertyId: string;
+  homeownerProfileId: string;
+  scoreType: ScoreType;
+  score: number;
+  scoreMax?: number | null;
+  scoreBand?: string | null;
+  snapshotJson?: Record<string, unknown>;
+  computedAt?: Date;
+  weekStart?: Date;
+}) {
+  const snapshotModel = (prisma as any).propertyScoreSnapshot;
+  if (!snapshotModel) {
+    console.warn('[SCORE-SNAPSHOT] Prisma client missing propertyScoreSnapshot delegate. Run prisma generate.');
+    return;
+  }
+
+  const {
+    propertyId,
+    homeownerProfileId,
+    scoreType,
+    score,
+    scoreMax = null,
+    scoreBand = null,
+    snapshotJson = {},
+    computedAt = new Date(),
+    weekStart = getWeekStartUtc(computedAt),
+  } = input;
+
+  const existing = await snapshotModel.findFirst({
+    where: {
+      propertyId,
+      scoreType,
+      weekStart,
+    },
+    select: { id: true },
+  });
+
+  if (existing?.id) {
+    await snapshotModel.update({
+      where: { id: existing.id },
+      data: {
+        homeownerProfileId,
+        score,
+        scoreMax,
+        scoreBand,
+        computedAt,
+        snapshotJson: snapshotJson as Prisma.InputJsonValue,
+      },
+    });
+    return;
+  }
+
+  await snapshotModel.create({
+    data: {
+      propertyId,
+      homeownerProfileId,
+      scoreType,
+      score,
+      scoreMax,
+      scoreBand,
+      weekStart,
+      computedAt,
+      snapshotJson: snapshotJson as Prisma.InputJsonValue,
+      sourceVersion: 1,
+    },
+  });
+}
+
+async function capturePropertyScoreSnapshots(
+  propertyId: string,
+  homeownerProfileId: string
+): Promise<void> {
+  const [riskReport, financialReport, propertyCore, warranties, documentCount, activeBookings, applianceItems] =
+    await Promise.all([
+      (prisma as any).riskAssessmentReport.findUnique({
+        where: { propertyId },
+        select: {
+          riskScore: true,
+          financialExposureTotal: true,
+          details: true,
+          lastCalculatedAt: true,
+        },
+      }),
+      (prisma as any).financialEfficiencyReport.findUnique({
+        where: { propertyId },
+        select: {
+          financialEfficiencyScore: true,
+          actualInsuranceCost: true,
+          actualUtilityCost: true,
+          actualWarrantyCost: true,
+          marketAverageTotal: true,
+          lastCalculatedAt: true,
+        },
+      }),
+      (prisma as any).property.findUnique({
+        where: { id: propertyId },
+      }),
+      (prisma as any).warranty.findMany({
+        where: { propertyId },
+        select: {
+          id: true,
+          homeownerProfileId: true,
+          propertyId: true,
+          providerName: true,
+          policyNumber: true,
+          coverageDetails: true,
+          cost: true,
+          startDate: true,
+          expiryDate: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      (prisma as any).document.count({
+        where: { propertyId },
+      }),
+      (prisma as any).booking.findMany({
+        where: {
+          propertyId,
+          status: { in: ['PENDING', 'CONFIRMED', 'IN_PROGRESS'] },
+        },
+        select: {
+          id: true,
+          category: true,
+          status: true,
+          insightFactor: true,
+          insightContext: true,
+          propertyId: true,
+          providerId: true,
+          homeownerProfileId: true,
+          scheduledDate: true,
+          notes: true,
+          price: true,
+          createdAt: true,
+          updatedAt: true,
+          title: true,
+        },
+      }),
+      (prisma as any).inventoryItem.findMany({
+        where: {
+          propertyId,
+          category: 'APPLIANCE',
+        },
+        select: {
+          id: true,
+          sourceHash: true,
+          tags: true,
+          name: true,
+          installedOn: true,
+        },
+      }),
+    ]);
+
+  if (riskReport) {
+    const details = Array.isArray(riskReport.details) ? (riskReport.details as Array<Record<string, unknown>>) : [];
+    const highRiskCount = details.filter((detail) => String(detail.riskLevel || '').toUpperCase() === 'HIGH').length;
+    await upsertPropertyScoreSnapshot({
+      propertyId,
+      homeownerProfileId,
+      scoreType: 'RISK',
+      score: Math.round(asNumber(riskReport.riskScore) * 10) / 10,
+      scoreMax: 100,
+      scoreBand: getBandForScore('RISK', asNumber(riskReport.riskScore)),
+      computedAt: riskReport.lastCalculatedAt ? new Date(riskReport.lastCalculatedAt) : new Date(),
+      snapshotJson: {
+        financialExposureTotal: asNumber(riskReport.financialExposureTotal),
+        highRiskAssets: highRiskCount,
+      },
+    });
+  }
+
+  if (financialReport) {
+    const actualInsuranceCost = asNumber(financialReport.actualInsuranceCost);
+    const actualUtilityCost = asNumber(financialReport.actualUtilityCost);
+    const actualWarrantyCost = asNumber(financialReport.actualWarrantyCost);
+    const annualCost = actualInsuranceCost + actualUtilityCost + actualWarrantyCost;
+
+    await upsertPropertyScoreSnapshot({
+      propertyId,
+      homeownerProfileId,
+      scoreType: 'FINANCIAL',
+      score: Math.round(asNumber(financialReport.financialEfficiencyScore) * 10) / 10,
+      scoreMax: 100,
+      scoreBand: getBandForScore('FINANCIAL', asNumber(financialReport.financialEfficiencyScore)),
+      computedAt: financialReport.lastCalculatedAt ? new Date(financialReport.lastCalculatedAt) : new Date(),
+      snapshotJson: {
+        annualCost,
+        marketAverageTotal: asNumber(financialReport.marketAverageTotal),
+      },
+    });
+  }
+
+  if (propertyCore) {
+    const homeAssets = (applianceItems || [])
+      .map((item: any) => {
+        const type = inferApplianceTypeFromItem(item);
+        if (!type) return null;
+        return {
+          id: item.id,
+          propertyId,
+          assetType: type,
+          installationYear: item.installedOn ? new Date(item.installedOn).getUTCFullYear() : null,
+        };
+      })
+      .filter(Boolean);
+
+    const healthInput = {
+      ...(propertyCore as Record<string, unknown>),
+      homeAssets,
+      warranties: warranties || [],
+    };
+
+    const health = calculateHealthScore(healthInput as any, documentCount || 0, (activeBookings || []) as any[]);
+    await upsertPropertyScoreSnapshot({
+      propertyId,
+      homeownerProfileId,
+      scoreType: 'HEALTH',
+      score: Math.round(asNumber(health.totalScore) * 10) / 10,
+      scoreMax: asNumber(health.maxPotentialScore),
+      scoreBand: getBandForScore('HEALTH', asNumber(health.totalScore)),
+      computedAt: new Date(),
+      snapshotJson: {
+        requiredActions: health.insights.filter((insight) =>
+          ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data'].includes(insight.status)
+        ).length,
+        insights: health.insights.slice(0, 8),
+      },
+    });
+  }
+}
+
+async function captureWeeklyScoreSnapshotsJob() {
+  console.log(`[${new Date().toISOString()}] Running weekly property score snapshot job...`);
+  try {
+    const properties = await (prisma as any).property.findMany({
+      select: {
+        id: true,
+        homeownerProfileId: true,
+      },
+    });
+
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (const property of properties as Array<{ id: string; homeownerProfileId: string }>) {
+      try {
+        await capturePropertyScoreSnapshots(property.id, property.homeownerProfileId);
+        successCount += 1;
+      } catch (error) {
+        failureCount += 1;
+        console.error(`[SCORE-SNAPSHOT] Failed for property ${property.id}:`, error);
+      }
+    }
+
+    console.log(
+      `[SCORE-SNAPSHOT] Weekly snapshot completed. Success: ${successCount}, Failed: ${failureCount}, Total: ${properties.length}`
+    );
+  } catch (error) {
+    console.error('[SCORE-SNAPSHOT] Weekly snapshot job failed:', error);
+  }
 }
 
 /**
@@ -269,6 +602,11 @@ async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
 
     console.log(`✅ Risk assessment calculated and saved for property ${propertyId}.`);
     console.log(`   Score: ${reportData.riskScore}, Exposure: $${reportData.financialExposureTotal}, Assets: ${assetRisks.length}`);
+
+    if (property.homeownerProfileId) {
+      await capturePropertyScoreSnapshots(propertyId, property.homeownerProfileId);
+      console.log(`[SCORE-SNAPSHOT] Updated weekly snapshots from risk calculation for property ${propertyId}.`);
+    }
     
   } catch (error) {
     console.error('❌ Error calculating risk assessment:', error);
@@ -364,6 +702,11 @@ async function processFESCalculation(jobData: PropertyIntelligenceJobPayload) {
 
     console.log(`✅ FES calculation completed for property ${propertyId}.`);
     console.log(`   Score: ${result.score}, Exposure: $${totalExposure.toFixed(2)}`);
+
+    if (property.homeownerProfileId) {
+      await capturePropertyScoreSnapshots(propertyId, property.homeownerProfileId);
+      console.log(`[SCORE-SNAPSHOT] Updated weekly snapshots from FES calculation for property ${propertyId}.`);
+    }
     
   } catch (error) {
     console.error('❌ Error calculating FES:', error);
@@ -443,6 +786,15 @@ function startWorker() {
   console.log('   - Expiration: Daily at 1:00 AM EST (clean up old checklists)');
   console.log('   - Generation: Daily at 2:00 AM EST (create new checklists)');
   console.log('   - Notifications: Daily at 9:00 AM EST (send emails)');
+
+  cron.schedule(
+    '0 4 * * 1',
+    async () => {
+      await captureWeeklyScoreSnapshotsJob();
+    },
+    { timezone: 'America/New_York' }
+  );
+  console.log('   - Weekly score snapshots: Monday at 4:00 AM EST');
   // =============================================================================
   // FIX: Initialize BullMQ Worker with correct queue name and job handlers
   // =============================================================================

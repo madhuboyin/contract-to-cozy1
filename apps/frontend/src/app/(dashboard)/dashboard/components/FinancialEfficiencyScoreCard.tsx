@@ -3,7 +3,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { DollarSign, Loader2, ArrowRight, Home } from 'lucide-react';
+import { DollarSign, Loader2, ArrowRight, Home, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api/client';
@@ -54,6 +54,16 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
         gcTime: 10 * 60 * 1000,
         enabled: enabled,
     });
+
+    const snapshotQuery = useQuery({
+        queryKey: ['property-score-snapshot', propertyId, 'FINANCIAL'],
+        queryFn: async () => {
+            if (!propertyId) return null;
+            return api.getPropertyScoreSnapshots(propertyId, 16);
+        },
+        enabled,
+        staleTime: 10 * 60 * 1000,
+    });
     
     const summary = efficiencyQuery.data || FALLBACK_SUMMARY; 
     const isInitialLoading = efficiencyQuery.isLoading && !summary.lastCalculatedAt; 
@@ -61,6 +71,7 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
     const score = summary.financialEfficiencyScore || 0;
     const exposure = summary.financialExposureTotal || 0; 
     const { level, color, progressColor } = getEfficiencyDetails(score);
+    const scoreDelta = snapshotQuery.data?.scores?.FINANCIAL?.deltaFromPreviousWeek ?? null;
     const reportLink = `/dashboard/properties/${propertyId!}/financial-efficiency`; 
 
     // State 1: No property selected
@@ -135,7 +146,31 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
                             </span>
                             <span className="text-xl text-gray-400 font-normal">/100</span>
                         </div>
-                        <p className="text-sm text-gray-600 mt-1">{level}</p>
+                        <div className="mt-1 flex items-center justify-between gap-2">
+                            <p className="text-sm text-gray-600">{level}</p>
+                            {scoreDelta === null ? (
+                                <span className="text-xs text-gray-500 inline-flex items-center gap-1">
+                                    <Minus className="h-3 w-3" />
+                                    No weekly change
+                                </span>
+                            ) : (
+                                <span
+                                    className={`text-xs inline-flex items-center gap-1 ${
+                                        scoreDelta > 0 ? 'text-green-600' : scoreDelta < 0 ? 'text-red-600' : 'text-gray-500'
+                                    }`}
+                                >
+                                    {scoreDelta > 0 ? (
+                                        <TrendingUp className="h-3 w-3" />
+                                    ) : scoreDelta < 0 ? (
+                                        <TrendingDown className="h-3 w-3" />
+                                    ) : (
+                                        <Minus className="h-3 w-3" />
+                                    )}
+                                    {scoreDelta > 0 ? '+' : ''}
+                                    {scoreDelta.toFixed(1)} vs last week
+                                </span>
+                            )}
+                        </div>
                     </div>
 
                     {/* Thin Horizontal Progress Bar */}

@@ -3,7 +3,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Loader2, Shield, Home, ArrowRight } from 'lucide-react';
+import { Loader2, Shield, Home, ArrowRight, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api/client';
@@ -83,6 +83,16 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
         gcTime: 10 * 60 * 1000,
         enabled: enabled,
     });
+
+    const riskSnapshotQuery = useQuery({
+        queryKey: ['property-score-snapshot', propertyId, 'RISK'],
+        queryFn: async () => {
+            if (!propertyId) return null;
+            return api.getPropertyScoreSnapshots(propertyId, 16);
+        },
+        enabled,
+        staleTime: 10 * 60 * 1000,
+    });
     
     const summary = riskQuery.data || FALLBACK_SUMMARY; 
     const isInitialLoading = riskQuery.isLoading && !summary.lastCalculatedAt; 
@@ -90,6 +100,7 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
     const riskScore = summary.riskScore || 0;
     const exposure = summary.financialExposureTotal || 0;
     const { level, color, progressColor } = getRiskDetails(riskScore);
+    const riskDelta = riskSnapshotQuery.data?.scores?.RISK?.deltaFromPreviousWeek ?? null;
     const reportLink = `/dashboard/properties/${propertyId}/risk-assessment`; 
 
     // State 1: No property selected
@@ -164,7 +175,31 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
                             </span>
                             <span className="text-xl text-gray-400 font-normal">/100</span>
                         </div>
-                        <p className="text-sm text-gray-600 mt-1">{level}</p>
+                        <div className="mt-1 flex items-center justify-between gap-2">
+                            <p className="text-sm text-gray-600">{level}</p>
+                            {riskDelta === null ? (
+                                <span className="text-xs text-gray-500 inline-flex items-center gap-1">
+                                    <Minus className="h-3 w-3" />
+                                    No weekly change
+                                </span>
+                            ) : (
+                                <span
+                                    className={`text-xs inline-flex items-center gap-1 ${
+                                        riskDelta > 0 ? 'text-green-600' : riskDelta < 0 ? 'text-red-600' : 'text-gray-500'
+                                    }`}
+                                >
+                                    {riskDelta > 0 ? (
+                                        <TrendingUp className="h-3 w-3" />
+                                    ) : riskDelta < 0 ? (
+                                        <TrendingDown className="h-3 w-3" />
+                                    ) : (
+                                        <Minus className="h-3 w-3" />
+                                    )}
+                                    {riskDelta > 0 ? '+' : ''}
+                                    {riskDelta.toFixed(1)} vs last week
+                                </span>
+                            )}
+                        </div>
                     </div>
 
                     {/* Thin Horizontal Progress Bar */}

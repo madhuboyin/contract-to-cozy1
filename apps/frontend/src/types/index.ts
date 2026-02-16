@@ -321,6 +321,34 @@ export interface FinancialReportSummary {
   message?: string;
 }
 
+export type PropertyScoreType = 'HEALTH' | 'RISK' | 'FINANCIAL';
+
+export interface PropertyScoreTrendPoint {
+  weekStart: string;
+  score: number;
+  scoreMax: number | null;
+  scoreBand: string | null;
+  computedAt: string;
+}
+
+export interface PropertyScoreSeries {
+  scoreType: PropertyScoreType;
+  latest: PropertyScoreTrendPoint | null;
+  previous: PropertyScoreTrendPoint | null;
+  deltaFromPreviousWeek: number | null;
+  trend: PropertyScoreTrendPoint[];
+}
+
+export interface PropertyScoreSnapshotSummary {
+  propertyId: string;
+  weeks: number;
+  scores: {
+    HEALTH: PropertyScoreSeries;
+    RISK: PropertyScoreSeries;
+    FINANCIAL: PropertyScoreSeries;
+  };
+}
+
 // ============================================================================
 // COMMUNITY EVENTS TYPES (PHASE 6)
 // ============================================================================
@@ -1603,4 +1631,3 @@ export interface LinkBookingResponse {
 // =============================================================================
 // END PHASE 3 TYPES
 // =============================================================================
-

@@ -2,10 +2,12 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { Activity, ArrowRight } from "lucide-react";
+import { Activity, ArrowRight, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import Link from "next/link";
 import { ScoredProperty } from "@/app/(dashboard)/dashboard/types";
 import React from 'react';
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api/client";
 
 const getHealthDetails = (score: number) => {
     if (score >= 85) {
@@ -30,6 +32,13 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
     const maxScore = property.healthScore?.maxPotentialScore || 100;
     const percentage = (healthScore / maxScore) * 100;
     const { level, color, progressColor } = getHealthDetails(healthScore);
+    const snapshotQuery = useQuery({
+        queryKey: ['property-score-snapshot', property.id, 'HEALTH'],
+        queryFn: async () => api.getPropertyScoreSnapshots(property.id, 16),
+        enabled: !!property.id,
+        staleTime: 10 * 60 * 1000,
+    });
+    const healthDelta = snapshotQuery.data?.scores?.HEALTH?.deltaFromPreviousWeek ?? null;
     
     const totalRequiredActions = property.healthScore?.insights.filter(i => 
         HIGH_PRIORITY_STATUSES.includes(i.status)
@@ -56,7 +65,31 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
                             </span>
                             <span className="text-xl text-gray-400 font-normal">/{maxScore}</span>
                         </div>
-                        <p className="text-sm text-gray-600 mt-1">{level}</p>
+                        <div className="mt-1 flex items-center justify-between gap-2">
+                            <p className="text-sm text-gray-600">{level}</p>
+                            {healthDelta === null ? (
+                                <span className="text-xs text-gray-500 inline-flex items-center gap-1">
+                                    <Minus className="h-3 w-3" />
+                                    No weekly change
+                                </span>
+                            ) : (
+                                <span
+                                    className={`text-xs inline-flex items-center gap-1 ${
+                                        healthDelta > 0 ? 'text-green-600' : healthDelta < 0 ? 'text-red-600' : 'text-gray-500'
+                                    }`}
+                                >
+                                    {healthDelta > 0 ? (
+                                        <TrendingUp className="h-3 w-3" />
+                                    ) : healthDelta < 0 ? (
+                                        <TrendingDown className="h-3 w-3" />
+                                    ) : (
+                                        <Minus className="h-3 w-3" />
+                                    )}
+                                    {healthDelta > 0 ? '+' : ''}
+                                    {healthDelta.toFixed(1)} vs last week
+                                </span>
+                            )}
+                        </div>
                     </div>
 
                     {/* Thin Horizontal Progress Bar */}
