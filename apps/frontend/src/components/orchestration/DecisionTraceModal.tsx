@@ -204,8 +204,8 @@ export const DecisionTraceModal: React.FC<Props> = ({
         </div>
 
         {/* ================= Footer ================= */}
-        <DialogFooter className="flex justify-between gap-2">
-          <div className="flex gap-2">
+        <DialogFooter className="flex flex-col sm:flex-row sm:justify-between gap-2">
+          <div className="flex flex-wrap gap-2">
             {onSnooze && (
               <Button
                 variant="outline"
@@ -241,7 +241,7 @@ export const DecisionTraceModal: React.FC<Props> = ({
             )}
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {onUndo && (
               <Button variant="outline" onClick={onUndo}>
                 Undo Completion

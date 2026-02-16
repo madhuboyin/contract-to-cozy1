@@ -49,16 +49,11 @@ export const SnoozeModal: React.FC<Props> = ({
   onSnooze,
   currentSnoozeUntil,
 }) => {
-  console.log('🔍 SNOOZE MODAL: Rendered', { open, hasOnSnooze: !!onSnooze });
   const [duration, setDuration] = useState<string>('30');
   const [customDate, setCustomDate] = useState<Date | undefined>(undefined);
   const [reason, setReason] = useState<string>('');
 
   const handleSnooze = () => {
-    console.log('🔍 SNOOZE MODAL: handleSnooze called');
-    console.log('🔍 SNOOZE MODAL: Selected duration:', duration);
-    console.log('🔍 SNOOZE MODAL: Custom date:', customDate);
-    console.log('🔍 SNOOZE MODAL: Reason:', reason);
     let snoozeDate: Date;
 
     if (duration === 'custom') {
@@ -73,10 +68,7 @@ export const SnoozeModal: React.FC<Props> = ({
 
     // Set to end of day
     snoozeDate.setHours(23, 59, 59, 999);
-    console.log('🔍 SNOOZE MODAL: Calling onSnooze prop with:', snoozeDate);
-    console.log('🔍 SNOOZE MODAL: Reason:', reason);
     onSnooze(snoozeDate, reason || undefined);
-    console.log('🔍 SNOOZE MODAL: onSnooze prop called, closing modal')
     handleClose();
   };
 
@@ -135,7 +127,7 @@ export const SnoozeModal: React.FC<Props> = ({
           {duration === 'custom' && (
             <div className="space-y-2">
               <Label>Select date</Label>
-              <div className="border rounded-md p-3">
+              <div className="border rounded-md p-2 sm:p-3 overflow-x-auto">
                 <Calendar
                   mode="single"
                   selected={customDate}

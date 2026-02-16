@@ -446,7 +446,7 @@ export const ActionCenter: React.FC<Props> = ({
           </div>
           <Link
             href={`/dashboard/actions?propertyId=${encodeURIComponent(propertyId)}`}
-            className="inline-flex min-h-[40px] items-center whitespace-nowrap text-sm font-semibold text-blue-600 hover:text-blue-700"
+            className="inline-flex min-h-[44px] items-center whitespace-nowrap text-sm font-semibold text-blue-600 hover:text-blue-700 touch-manipulation"
           >
             View all actions
           </Link>
@@ -468,7 +468,7 @@ export const ActionCenter: React.FC<Props> = ({
             <button
               type="button"
               onClick={() => setShowSuppressed(v => !v)}
-              className="inline-flex min-h-[40px] items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 touch-manipulation"
             >
               {showSuppressed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               {showSuppressed
@@ -499,7 +499,7 @@ export const ActionCenter: React.FC<Props> = ({
             <button
               type="button"
               onClick={() => setShowSnoozed(v => !v)}
-              className="inline-flex min-h-[40px] items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 touch-manipulation"
             >
               {showSnoozed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               {showSnoozed
@@ -530,7 +530,7 @@ export const ActionCenter: React.FC<Props> = ({
                       <div className="mt-2 flex flex-wrap gap-2">
                         <button
                           onClick={() => handleUnsnooze(action)}
-                          className="inline-flex min-h-[36px] items-center rounded-md border border-gray-200 px-2.5 text-sm text-blue-600 hover:bg-blue-50"
+                          className="inline-flex min-h-[44px] items-center rounded-md border border-gray-200 px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 touch-manipulation"
                         >
                           Un-snooze now
                         </button>
@@ -539,7 +539,7 @@ export const ActionCenter: React.FC<Props> = ({
                             setTraceAction(action);
                             setIsSnoozeModalOpen(true);
                           }}
-                          className="inline-flex min-h-[36px] items-center rounded-md border border-gray-200 px-2.5 text-sm text-blue-600 hover:bg-blue-50"
+                          className="inline-flex min-h-[44px] items-center rounded-md border border-gray-200 px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 touch-manipulation"
                         >
                           Extend snooze
                         </button>

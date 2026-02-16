@@ -249,7 +249,7 @@ export const OrchestrationActionCard: React.FC<Props> = ({
         
   return (
     <div
-      className={`rounded-lg border p-4 shadow-sm ${
+      className={`rounded-lg border p-3 sm:p-4 shadow-sm ${
         suppressed ? 'bg-gray-50 opacity-70' : 'bg-white'
       }`}
     >
@@ -296,7 +296,7 @@ export const OrchestrationActionCard: React.FC<Props> = ({
         </div>
 
         <div className="text-left sm:text-right space-y-1">
-          {exposure && <div className="text-sm font-semibold">{exposure}</div>}
+          {exposure && <div className="text-sm font-semibold whitespace-nowrap">{exposure}</div>}
           {dueDateLabel && (
             <div className="text-xs text-gray-600">Due {dueDateLabel}</div>
           )}

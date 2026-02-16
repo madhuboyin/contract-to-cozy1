@@ -157,7 +157,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           className={cn(
-            'border-2 border-dashed rounded-lg p-6 text-center cursor-pointer',
+            'border-2 border-dashed rounded-lg p-4 sm:p-6 text-center cursor-pointer',
             'hover:border-blue-500 hover:bg-blue-50 transition-colors',
             'border-gray-300'
           )}
@@ -182,7 +182,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
 
       {/* Photo Thumbnails */}
       {photos.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {photos.map((photo) => (
             <div
               key={photo.id}
@@ -209,7 +209,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
               {!photo.uploading && !photo.error && (
                 <button
                   onClick={() => handleRemove(photo.id)}
-                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 min-w-[28px] min-h-[28px] flex items-center justify-center"
                 >
                   <X className="h-4 w-4" />
                 </button>

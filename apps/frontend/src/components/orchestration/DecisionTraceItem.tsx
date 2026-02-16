@@ -63,7 +63,7 @@ export const DecisionTraceItem: React.FC<Props> = (props) => {
 
           {step.details && (
             <div className="text-xs text-muted-foreground flex items-center gap-1">
-              <Info size={12} />
+              <Info size={14} />
               <span>{formatRuleDetails(step.details)}</span>
             </div>
           )}
