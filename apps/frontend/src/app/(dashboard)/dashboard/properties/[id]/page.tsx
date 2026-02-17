@@ -35,7 +35,7 @@ import { toast } from "@/components/ui/use-toast";
 import { FileDown } from "lucide-react";
 import ReportsClient from "./reports/ReportsClient";
 import ClaimsClient from "./claims/ClaimsClient";
-import { ClipboardCheck } from "lucide-react";
+import { ClipboardCheck, LayoutDashboard } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import IncidentsClient from "./incidents/IncidentsClient";
 
@@ -835,6 +835,12 @@ export default function PropertyDetailPage() {
               <TabsTrigger value="claims" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
                 <ClipboardCheck className="h-4 w-4 shrink-0" />
                 Claims
+              </TabsTrigger>
+
+              <TabsTrigger value="status-board" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]" onClick={() => router.push(`/dashboard/properties/${property.id}/status-board`)}>
+                <LayoutDashboard className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Status Board</span>
+                <span className="sm:hidden">Status</span>
               </TabsTrigger>
             </TabsList>
           </div>

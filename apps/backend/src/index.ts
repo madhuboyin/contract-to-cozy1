@@ -74,6 +74,7 @@ import homeCapitalTimelineRoutes from './routes/homeCapitalTimeline.routes';
 import dailyHomePulseRoutes from './routes/dailyHomePulse.routes';
 import homeScoreReportRoutes from './routes/homeScoreReport.routes';
 import homeSavingsRoutes from './routes/homeSavings.routes';
+import homeStatusBoardRoutes from './routes/homeStatusBoard.routes';
 dotenv.config();
 
 const app = express();
@@ -350,6 +351,7 @@ app.use('/api', homeSavingsRoutes);
 //app.use(express.json({ limit: '10mb' })); // Ensure this is present
 app.use('/api', trueCostOwnershipRoutes);
 app.use('/api', homeCapitalTimelineRoutes);
+app.use('/api', homeStatusBoardRoutes);
 
 //app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // 404 handler
