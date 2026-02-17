@@ -17,6 +17,10 @@ const formatCurrency = (amount: number) => new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 0,
 }).format(amount);
 
+const RISK_EXPOSURE_CAP = 15000;
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
 const getRiskDetails = (score: number) => {
     if (score >= 80) return { level: "Low Risk", color: "text-green-600", progressColor: "bg-green-500" };
     if (score >= 60) return { level: "Moderate Risk", color: "text-yellow-600", progressColor: "bg-yellow-500" };
@@ -100,6 +104,8 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
     const riskScore = summary.riskScore || 0;
     const exposure = summary.financialExposureTotal || 0;
     const { level, color, progressColor } = getRiskDetails(riskScore);
+    const rawRiskProgress = clamp((exposure / RISK_EXPOSURE_CAP) * 100, 0, 100);
+    const riskProgress = exposure > 0 ? Math.max(rawRiskProgress, 6) : 0;
     const riskDelta = riskSnapshotQuery.data?.scores?.RISK?.deltaFromPreviousWeek ?? null;
     const reportLink = `/dashboard/properties/${propertyId}/risk-assessment`; 
 
@@ -211,7 +217,7 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
                         <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
                             <div 
                                 className={`h-full ${progressColor} transition-all duration-300`}
-                                style={{ width: `${riskScore}%` }}
+                                style={{ width: `${riskProgress}%` }}
                             />
                         </div>
                     </div>
