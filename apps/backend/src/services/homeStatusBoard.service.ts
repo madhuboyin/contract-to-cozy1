@@ -37,14 +37,26 @@ function mapCategoryToAssetType(category: string): string | null {
 }
 
 function mapAssetTypeToCategory(assetType: string): string {
-  if (assetType.startsWith('HVAC')) return 'HVAC';
-  if (assetType.startsWith('WATER_HEATER')) return 'PLUMBING';
-  if (assetType.startsWith('ELECTRICAL')) return 'ELECTRICAL';
-  if (assetType.startsWith('ROOF')) return 'ROOF';
-  if (assetType.startsWith('MAJOR_APPLIANCE')) return 'APPLIANCE';
+  const cfg = RISK_ASSET_CONFIG.find((c) => c.systemType === assetType);
+  if (cfg && cfg.category !== 'FINANCIAL_GAP') return cfg.category;
   if (assetType.startsWith('SAFETY')) return 'SAFETY';
-  if (assetType.startsWith('FOUNDATION')) return 'STRUCTURE';
-  return 'OTHER';
+  if (assetType.startsWith('FOUNDATION') || assetType.startsWith('ROOF')) return 'STRUCTURE';
+  return 'SYSTEMS';
+}
+
+function mapInventoryCategoryToStatusBoardCategory(category: string | null | undefined): string {
+  if (!category) return 'SYSTEMS';
+  if (category === 'SAFETY') return 'SAFETY';
+  if (category === 'ROOF_EXTERIOR') return 'STRUCTURE';
+  return 'SYSTEMS';
+}
+
+function deriveStatusBoardCategory(
+  assetType: string | null | undefined,
+  inventoryCategory: string | null | undefined
+): string {
+  if (assetType) return mapAssetTypeToCategory(assetType);
+  return mapInventoryCategoryToStatusBoardCategory(inventoryCategory);
 }
 
 interface WarrantyInfo {
@@ -135,9 +147,12 @@ export async function ensureHomeItems(propertyId: string): Promise<void> {
     }),
     prisma.homeItem.findMany({
       where: { propertyId },
-      select: { inventoryItemId: true, homeAssetId: true },
+      select: { id: true, inventoryItemId: true, homeAssetId: true, categoryKey: true, roomId: true },
     }),
   ]);
+
+  const inventoryById = new Map(inventoryItems.map((ii) => [ii.id, ii]));
+  const homeAssetById = new Map(homeAssets.map((ha) => [ha.id, ha]));
 
   const existingInvIds = new Set(existingHomeItems.map((h) => h.inventoryItemId).filter(Boolean));
   const existingAssetIds = new Set(existingHomeItems.map((h) => h.homeAssetId).filter(Boolean));
@@ -159,7 +174,7 @@ export async function ensureHomeItems(propertyId: string): Promise<void> {
           kind: 'INVENTORY_ITEM',
           inventoryItemId: ii.id,
           roomId: ii.roomId,
-          categoryKey: ii.category || 'OTHER',
+          categoryKey: deriveStatusBoardCategory(homeAssetById.get(ii.homeAssetId ?? '')?.assetType, ii.category),
           status: {
             create: {},
           },
@@ -178,7 +193,7 @@ export async function ensureHomeItems(propertyId: string): Promise<void> {
           propertyId,
           kind: 'HOME_ASSET',
           homeAssetId: ha.id,
-          categoryKey: mapAssetTypeToCategory(ha.assetType),
+          categoryKey: deriveStatusBoardCategory(ha.assetType, null),
           status: {
             create: {},
           },
@@ -189,6 +204,44 @@ export async function ensureHomeItems(propertyId: string): Promise<void> {
 
   if (creates.length > 0) {
     await prisma.$transaction(creates);
+  }
+
+  // Backfill category/room for existing rows so board consistently includes SYSTEMS/SAFETY/STRUCTURE.
+  const updates: Prisma.PrismaPromise<any>[] = [];
+  for (const existing of existingHomeItems) {
+    if (existing.inventoryItemId) {
+      const ii = inventoryById.get(existing.inventoryItemId);
+      if (!ii) continue;
+      const desiredCategory = deriveStatusBoardCategory(homeAssetById.get(ii.homeAssetId ?? '')?.assetType, ii.category);
+      const desiredRoomId = ii.roomId ?? null;
+      if (existing.categoryKey !== desiredCategory || (existing.roomId ?? null) !== desiredRoomId) {
+        updates.push(
+          prisma.homeItem.update({
+            where: { id: existing.id },
+            data: { categoryKey: desiredCategory, roomId: desiredRoomId },
+          })
+        );
+      }
+      continue;
+    }
+
+    if (existing.homeAssetId) {
+      const ha = homeAssetById.get(existing.homeAssetId);
+      if (!ha) continue;
+      const desiredCategory = deriveStatusBoardCategory(ha.assetType, null);
+      if (existing.categoryKey !== desiredCategory) {
+        updates.push(
+          prisma.homeItem.update({
+            where: { id: existing.id },
+            data: { categoryKey: desiredCategory },
+          })
+        );
+      }
+    }
+  }
+
+  if (updates.length > 0) {
+    await prisma.$transaction(updates);
   }
 }
 
@@ -370,6 +423,9 @@ export async function computeStatuses(propertyId: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function listBoard(propertyId: string, query: ListBoardQuery) {
+  // Keep board registry and category mappings synced on every load.
+  await ensureHomeItems(propertyId);
+
   // Backfill check: if no computedAt in last 24h, recompute
   const recentStatus = await prisma.homeItemStatus.findFirst({
     where: {
@@ -380,7 +436,6 @@ export async function listBoard(propertyId: string, query: ListBoardQuery) {
   });
 
   if (!recentStatus) {
-    await ensureHomeItems(propertyId);
     await computeStatuses(propertyId);
   }
 
