@@ -123,6 +123,85 @@ function asArray<T = any>(v: any): T[] {
   return [];
 }
 
+function safeString(v: any): string | null {
+  const s = String(v ?? '').trim();
+  return s ? s : null;
+}
+
+function normalizeImpact(v: any): 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | undefined {
+  const up = String(v ?? '').toUpperCase();
+  if (up === 'POSITIVE' || up === 'NEGATIVE' || up === 'NEUTRAL') return up as any;
+  return undefined;
+}
+
+function buildWhyFactors(insights: any) {
+  const raw = (insights as any)?.healthScore?.factors;
+
+  if (Array.isArray(raw)) {
+    const fromArray = raw
+      .map((f: any) => {
+        const label = safeString(f?.label || f?.key);
+        const detail = safeString(f?.detail);
+        if (!label && !detail) return null;
+        return {
+          label: label || 'Score factor',
+          detail: detail || undefined,
+          impact: normalizeImpact(f?.impact),
+        };
+      })
+      .filter(Boolean) as Array<{ label: string; detail?: string; impact?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' }>;
+
+    if (fromArray.length > 0) return fromArray;
+  }
+
+  if (!raw || typeof raw !== 'object') return [];
+
+  const itemCount = Number((raw as any).itemCount || 0);
+  const docsLinkedCount = Number((raw as any).docsLinkedCount || 0);
+  const coverageGapsCount = Number((raw as any).coverageGapsCount || 0);
+  const missingAppliancesCount = Number((raw as any).missingAppliancesCount || 0);
+  const comfortScoreHint = String((raw as any).comfortScoreHint || 'UNKNOWN').toUpperCase();
+
+  const derived: Array<{ label: string; detail?: string; impact?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' }> = [
+    {
+      label: 'Items tracked',
+      detail: `${itemCount} item${itemCount === 1 ? '' : 's'} currently tracked in this room.`,
+      impact: itemCount >= 5 ? 'POSITIVE' : itemCount === 0 ? 'NEGATIVE' : 'NEUTRAL',
+    },
+    {
+      label: 'Documents linked',
+      detail: `${docsLinkedCount} linked document${docsLinkedCount === 1 ? '' : 's'} improve claims readiness.`,
+      impact: docsLinkedCount > 0 ? 'POSITIVE' : 'NEGATIVE',
+    },
+    {
+      label: 'Coverage gaps',
+      detail:
+        coverageGapsCount > 0
+          ? `${coverageGapsCount} item${coverageGapsCount === 1 ? '' : 's'} missing warranty and/or insurance linkage.`
+          : 'No coverage gaps detected for room items.',
+      impact: coverageGapsCount > 0 ? 'NEGATIVE' : 'POSITIVE',
+    },
+  ];
+
+  if (missingAppliancesCount > 0) {
+    derived.push({
+      label: 'Missing key appliances',
+      detail: `${missingAppliancesCount} expected appliance${missingAppliancesCount === 1 ? '' : 's'} not found in inventory.`,
+      impact: 'NEGATIVE',
+    });
+  }
+
+  if (comfortScoreHint === 'HIGH' || comfortScoreHint === 'MEDIUM' || comfortScoreHint === 'LOW') {
+    derived.push({
+      label: 'Comfort readiness',
+      detail: `Comfort hint is ${comfortScoreHint.toLowerCase()} based on currently tracked items.`,
+      impact: comfortScoreHint === 'HIGH' ? 'POSITIVE' : comfortScoreHint === 'LOW' ? 'NEGATIVE' : 'NEUTRAL',
+    });
+  }
+
+  return derived;
+}
+
 export default function RoomShowcaseClient() {
   const params = useParams<{ id: string; roomId: string }>();
   const propertyId = params.id;
@@ -212,11 +291,7 @@ export default function RoomShowcaseClient() {
     }
   }
 
-  const whyFactors = asArray((insights as any)?.healthScore?.factors).map((f: any) => ({
-    label: String(f?.label || f?.key || 'Factor'),
-    detail: f?.detail ? String(f.detail) : undefined,
-    impact: (String(f?.impact || '').toUpperCase() as any) || undefined,
-  }));
+  const whyFactors = buildWhyFactors(insights);
   
   return (
     <div className="p-4 sm:p-6 space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
