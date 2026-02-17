@@ -327,6 +327,7 @@ export async function computeStatuses(propertyId: string): Promise<void> {
     if (item.status.overrideInstalledAt) installDate = item.status.overrideInstalledAt;
 
     const expectedLife = getExpectedLife(assetType, inventoryCategory);
+    const hasInstallDate = Boolean(installDate);
     const ageYears = installDate
       ? (now.getTime() - installDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000)
       : 0;
@@ -343,20 +344,24 @@ export async function computeStatuses(propertyId: string): Promise<void> {
     const reasons: { code: string; detail: string }[] = [];
     let condition: HomeItemCondition = 'GOOD';
 
+    if (!hasInstallDate) {
+      reasons.push({ code: 'MISSING_INSTALL_DATE', detail: 'Install date is empty' });
+    }
+
     if (hasOverdueUrgent) {
       condition = 'ACTION_NEEDED';
       reasons.push({ code: 'OVERDUE_MAINTENANCE', detail: 'Overdue urgent maintenance task' });
     }
 
-    if (warrantyInfo.status === 'expired' && eolRatio >= 0.8) {
+    if (hasInstallDate && warrantyInfo.status === 'expired' && eolRatio >= 0.8) {
       condition = 'ACTION_NEEDED';
       reasons.push({ code: 'WARRANTY_EXPIRED_EOL', detail: 'Warranty expired and nearing end of life' });
     }
 
-    if (eolRatio >= 1.0 && condition !== 'ACTION_NEEDED') {
+    if (hasInstallDate && eolRatio >= 1.0 && condition !== 'ACTION_NEEDED') {
       condition = 'ACTION_NEEDED';
       reasons.push({ code: 'PAST_EOL', detail: `Past expected life (${expectedLife}yr)` });
-    } else if (eolRatio >= 0.8 && condition === 'GOOD') {
+    } else if (hasInstallDate && eolRatio >= 0.8 && condition === 'GOOD') {
       condition = 'MONITOR';
       reasons.push({ code: 'NEARING_EOL', detail: `${Math.round(eolRatio * 100)}% of expected life` });
     }
@@ -366,7 +371,7 @@ export async function computeStatuses(propertyId: string): Promise<void> {
       reasons.push({ code: 'WARRANTY_EXPIRING', detail: 'Warranty expiring within 60 days' });
     }
 
-    if (condition === 'GOOD') {
+    if (condition === 'GOOD' && hasInstallDate) {
       reasons.push({ code: 'ALL_CLEAR', detail: 'No issues detected' });
     }
 
@@ -563,6 +568,9 @@ export async function listBoard(propertyId: string, query: ListBoardQuery) {
     // Room
     const room = item.inventoryItem?.room ?? null;
 
+    const needsInstallDateForPrediction =
+      !installDate && effectiveCondition === 'GOOD' && effectiveRecommendation === 'OK';
+
     return {
       id: item.id,
       kind: item.kind,
@@ -587,6 +595,7 @@ export async function listBoard(propertyId: string, query: ListBoardQuery) {
       warrantyExpiry: warrantyInfo.expiryDate?.toISOString() ?? null,
       pendingMaintenance,
       room: room ? { id: room.id, name: room.name } : null,
+      needsInstallDateForPrediction,
       deepLinks: buildDeepLinks(item, propertyId),
       inventoryItemId: item.inventoryItemId,
       homeAssetId: item.homeAssetId,
@@ -605,7 +614,7 @@ export async function listBoard(propertyId: string, query: ListBoardQuery) {
   // Summary counts
   const summary = {
     total: total,
-    good: items.filter((i) => i.condition === 'GOOD').length,
+    good: items.filter((i) => i.condition === 'GOOD' && !i.needsInstallDateForPrediction).length,
     monitor: items.filter((i) => i.condition === 'MONITOR').length,
     actionNeeded: items.filter((i) => i.condition === 'ACTION_NEEDED').length,
   };

@@ -32,6 +32,7 @@ export interface StatusBoardItemDTO {
   warrantyExpiry: string | null;
   pendingMaintenance: number;
   room: { id: string; name: string } | null;
+  needsInstallDateForPrediction: boolean;
   deepLinks: Record<string, string>;
   inventoryItemId: string | null;
   homeAssetId: string | null;

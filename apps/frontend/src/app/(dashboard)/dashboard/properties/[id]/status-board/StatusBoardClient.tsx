@@ -40,6 +40,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Pin,
   EyeOff,
@@ -55,6 +56,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
+  Info,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -99,6 +101,9 @@ const HEADER_CELL_CLASS =
 
 const LINK_ACTION_BUTTON_CLASS =
   "border-teal-200 text-teal-700 hover:bg-teal-50 hover:text-teal-800 dark:border-teal-900/70 dark:text-teal-300 dark:hover:bg-teal-950/40 transition-colors";
+
+const INSTALL_DATE_MISSING_TOOLTIP =
+  "Install date is empty. Add install date for accurate prediction.";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -245,18 +250,65 @@ export default function StatusBoardClient() {
             </Badge>
           </TableCell>
           <TableCell className="py-4">
-            <Badge
-              className={`text-xs font-semibold ${CONDITION_COLORS[item.condition]} ${
-                item.condition === "ACTION_NEEDED" ? "ring-1 ring-red-300/70 dark:ring-red-800/70" : ""
-              }`}
-            >
-              {CONDITION_LABELS[item.condition]}
-            </Badge>
-            {item.overrideCondition && (
-              <span className="ml-1 text-[10px] text-muted-foreground">(override)</span>
+            {item.needsInstallDateForPrediction ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Badge
+                  variant="outline"
+                  className="text-xs font-semibold bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700"
+                >
+                  N/A
+                </Badge>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                      aria-label="Why condition is N/A"
+                    >
+                      <Info className="h-3.5 w-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>{INSTALL_DATE_MISSING_TOOLTIP}</TooltipContent>
+                </Tooltip>
+              </span>
+            ) : (
+              <>
+                <Badge
+                  className={`text-xs font-semibold ${CONDITION_COLORS[item.condition]} ${
+                    item.condition === "ACTION_NEEDED" ? "ring-1 ring-red-300/70 dark:ring-red-800/70" : ""
+                  }`}
+                >
+                  {CONDITION_LABELS[item.condition]}
+                </Badge>
+                {item.overrideCondition && (
+                  <span className="ml-1 text-[10px] text-muted-foreground">(override)</span>
+                )}
+              </>
             )}
           </TableCell>
-          <TableCell className="py-4 text-sm font-medium text-slate-700 dark:text-slate-200">{RECOMMENDATION_LABELS[item.recommendation]}</TableCell>
+          <TableCell className="py-4 text-sm font-medium text-slate-700 dark:text-slate-200">
+            {item.needsInstallDateForPrediction ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="text-slate-500 dark:text-slate-300">N/A</span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                      aria-label="Why action is N/A"
+                    >
+                      <Info className="h-3.5 w-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>{INSTALL_DATE_MISSING_TOOLTIP}</TooltipContent>
+                </Tooltip>
+              </span>
+            ) : (
+              RECOMMENDATION_LABELS[item.recommendation]
+            )}
+          </TableCell>
           <TableCell className="w-10 py-4 align-middle">
             <ChevronRight
               className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${
@@ -308,6 +360,8 @@ export default function StatusBoardClient() {
                         >
                           {r.code === "ALL_CLEAR" ? (
                             <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                          ) : r.code === "MISSING_INSTALL_DATE" ? (
+                            <Info className="h-3.5 w-3.5 text-sky-500" />
                           ) : r.code.includes("EOL") || r.code.includes("OVERDUE") ? (
                             <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
                           ) : (
@@ -464,7 +518,8 @@ export default function StatusBoardClient() {
     ));
 
   return (
-    <div className="space-y-4">
+    <TooltipProvider delayDuration={120}>
+      <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => router.back()}>
@@ -683,6 +738,7 @@ export default function StatusBoardClient() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }
