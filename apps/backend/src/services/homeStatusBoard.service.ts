@@ -45,18 +45,23 @@ function mapAssetTypeToCategory(assetType: string): string {
 }
 
 function mapInventoryCategoryToStatusBoardCategory(category: string | null | undefined): string {
-  if (!category) return 'SYSTEMS';
+  if (!category) return 'OTHER';
+  // Keep explicit risk buckets where they naturally apply.
   if (category === 'SAFETY') return 'SAFETY';
   if (category === 'ROOF_EXTERIOR') return 'STRUCTURE';
-  return 'SYSTEMS';
+  // Preserve existing inventory categories (APPLIANCE, ELECTRONICS, FURNITURE, etc.).
+  return category;
 }
 
 function deriveStatusBoardCategory(
   assetType: string | null | undefined,
   inventoryCategory: string | null | undefined
 ): string {
+  // For inventory-backed items, prioritize inventory category to avoid collapsing
+  // APPLIANCE/FURNITURE/ELECTRONICS into SYSTEMS.
+  if (inventoryCategory) return mapInventoryCategoryToStatusBoardCategory(inventoryCategory);
   if (assetType) return mapAssetTypeToCategory(assetType);
-  return mapInventoryCategoryToStatusBoardCategory(inventoryCategory);
+  return 'OTHER';
 }
 
 interface WarrantyInfo {
