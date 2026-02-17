@@ -1176,6 +1176,9 @@ model HomeownerProfile {
   doNothingScenarios      DoNothingScenario[]
   doNothingSimulationRuns DoNothingSimulationRun[]
   scoreSnapshots PropertyScoreSnapshot[]
+  homeSavingsRuns          HomeSavingsRun[]
+  homeSavingsOpportunities HomeSavingsOpportunity[]
+  homeSavingsAccounts      HomeSavingsAccount[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1497,6 +1500,9 @@ model Property {
   dailySnapshots PropertyDailySnapshot[]
   microActions   PropertyMicroAction[]
   streaks        PropertyStreak[]
+  homeSavingsRuns          HomeSavingsRun[]
+  homeSavingsOpportunities HomeSavingsOpportunity[]
+  homeSavingsAccounts      HomeSavingsAccount[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1942,6 +1948,7 @@ model Warranty {
   maintenanceTasks PropertyMaintenanceTask[]
   inventoryItems    InventoryItem[]
   claims Claim[]
+  homeSavingsAccounts HomeSavingsAccount[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1982,6 +1989,7 @@ model InsurancePolicy {
   documents          Document[]
   inventoryItems     InventoryItem[]
   claims             Claim[]
+  homeSavingsAccounts HomeSavingsAccount[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4174,6 +4182,7 @@ model HomeSavingsAccount {
   warranty            Warranty?        @relation(fields: [warrantyId], references: [id], onDelete: SetNull)
 
   documents           Document[]       @relation("HomeSavingsAccountDocuments")
+  opportunities HomeSavingsOpportunity[]
 
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
