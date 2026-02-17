@@ -94,6 +94,12 @@ const WARRANTY_LABELS: Record<WarrantyBadge, string> = {
   none: "None",
 };
 
+const HEADER_CELL_CLASS =
+  "h-11 px-3 text-[13px] font-semibold tracking-wide text-slate-700 dark:text-slate-200";
+
+const LINK_ACTION_BUTTON_CLASS =
+  "border-teal-200 text-teal-700 hover:bg-teal-50 hover:text-teal-800 dark:border-teal-900/70 dark:text-teal-300 dark:hover:bg-teal-950/40 transition-colors";
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -210,79 +216,92 @@ export default function StatusBoardClient() {
     itemList.map((item) => (
       <Fragment key={item.id}>
         <TableRow
-          className={`cursor-pointer hover:bg-muted/50 ${item.isPinned ? "bg-yellow-50/50 dark:bg-yellow-900/10" : ""}`}
+          className={`group cursor-pointer border-b border-slate-200/80 transition-all duration-200 hover:bg-slate-50/80 dark:border-slate-700/70 dark:hover:bg-slate-900/40 ${item.isPinned ? "bg-amber-50/60 dark:bg-amber-900/10" : ""}`}
           onClick={() => handleExpand(item)}
         >
-          <TableCell className="w-8">
+          <TableCell className="w-10 py-4 align-middle">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 handleTogglePin(item);
               }}
-              className={`p-1 rounded hover:bg-muted ${item.isPinned ? "text-yellow-600" : "text-muted-foreground"}`}
+              className={`rounded-md p-1 transition-colors hover:bg-slate-200/70 dark:hover:bg-slate-800 ${item.isPinned ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}
             >
               <Pin className="h-3.5 w-3.5" />
             </button>
           </TableCell>
-          <TableCell className="font-medium">{item.displayName}</TableCell>
-          <TableCell className="text-muted-foreground text-sm">{item.category}</TableCell>
-          <TableCell className="text-sm">{item.ageYears != null ? `${item.ageYears}yr` : "—"}</TableCell>
-          <TableCell>
+          <TableCell className="py-4 align-middle">
+            <p className="font-medium text-slate-900 dark:text-slate-100">{item.displayName}</p>
+            <p className="mt-1 text-xs text-muted-foreground lg:hidden">
+              {item.category}
+              {item.ageYears != null ? ` • ${item.ageYears}yr` : ""}
+            </p>
+          </TableCell>
+          <TableCell className="hidden py-4 text-sm text-muted-foreground lg:table-cell">{item.category}</TableCell>
+          <TableCell className="hidden py-4 text-sm md:table-cell">{item.ageYears != null ? `${item.ageYears}yr` : "—"}</TableCell>
+          <TableCell className="hidden py-4 lg:table-cell">
             <Badge variant="outline" className={`text-xs ${WARRANTY_COLORS[item.warrantyStatus]}`}>
               {WARRANTY_LABELS[item.warrantyStatus]}
             </Badge>
           </TableCell>
-          <TableCell>
-            <Badge className={`text-xs ${CONDITION_COLORS[item.condition]}`}>
+          <TableCell className="py-4">
+            <Badge
+              className={`text-xs font-semibold ${CONDITION_COLORS[item.condition]} ${
+                item.condition === "ACTION_NEEDED" ? "ring-1 ring-red-300/70 dark:ring-red-800/70" : ""
+              }`}
+            >
               {CONDITION_LABELS[item.condition]}
             </Badge>
             {item.overrideCondition && (
               <span className="ml-1 text-[10px] text-muted-foreground">(override)</span>
             )}
           </TableCell>
-          <TableCell className="text-sm">{RECOMMENDATION_LABELS[item.recommendation]}</TableCell>
-          <TableCell className="w-8">
-            {expandedId === item.id ? (
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            )}
+          <TableCell className="py-4 text-sm font-medium text-slate-700 dark:text-slate-200">{RECOMMENDATION_LABELS[item.recommendation]}</TableCell>
+          <TableCell className="w-10 py-4 align-middle">
+            <ChevronRight
+              className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${
+                expandedId === item.id ? "rotate-90" : ""
+              }`}
+            />
           </TableCell>
         </TableRow>
 
         {expandedId === item.id && (
           <TableRow>
-            <TableCell colSpan={8} className="bg-muted/30 p-0">
-              <div className="p-4 space-y-4">
+            <TableCell colSpan={8} className="bg-slate-50/80 p-0 dark:bg-slate-900/40">
+              <div className="animate-in fade-in-0 slide-in-from-top-1 p-5 duration-200 space-y-5">
                 {/* Details grid */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Installed</span>
-                    <p className="font-medium">{item.installDate ? new Date(item.installDate).toLocaleDateString() : "—"}</p>
+                <div className="grid grid-cols-2 gap-3 text-sm lg:grid-cols-4">
+                  <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-700/70 dark:bg-slate-950/30">
+                    <span className="text-xs uppercase tracking-wide text-muted-foreground">Installed</span>
+                    <p className="mt-1 font-medium">{item.installDate ? new Date(item.installDate).toLocaleDateString() : "—"}</p>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">Last Computed</span>
-                    <p className="font-medium">{item.computedAt ? new Date(item.computedAt).toLocaleDateString() : "—"}</p>
+                  <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-700/70 dark:bg-slate-950/30">
+                    <span className="text-xs uppercase tracking-wide text-muted-foreground">Last Computed</span>
+                    <p className="mt-1 font-medium">{item.computedAt ? new Date(item.computedAt).toLocaleDateString() : "—"}</p>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">Warranty</span>
-                    <p className="font-medium">
+                  <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-700/70 dark:bg-slate-950/30">
+                    <span className="text-xs uppercase tracking-wide text-muted-foreground">Warranty</span>
+                    <p className="mt-1 font-medium">
                       {item.warrantyExpiry ? `Expires ${new Date(item.warrantyExpiry).toLocaleDateString()}` : "None"}
                     </p>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">Pending Tasks</span>
-                    <p className="font-medium">{item.pendingMaintenance}</p>
+                  <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-700/70 dark:bg-slate-950/30">
+                    <span className="text-xs uppercase tracking-wide text-muted-foreground">Pending Tasks</span>
+                    <p className="mt-1 font-medium">{item.pendingMaintenance}</p>
                   </div>
                 </div>
 
                 {/* Computed reasons */}
                 {item.computedReasons.length > 0 && (
                   <div>
-                    <p className="text-sm font-medium mb-1">Computed Reasons</p>
-                    <ul className="space-y-1">
+                    <p className="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-100">Computed Reasons</p>
+                    <ul className="flex flex-wrap gap-2">
                       {item.computedReasons.map((r, i) => (
-                        <li key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <li
+                          key={i}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-white/80 px-3 py-1.5 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-200"
+                        >
                           {r.code === "ALL_CLEAR" ? (
                             <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
                           ) : r.code.includes("EOL") || r.code.includes("OVERDUE") ? (
@@ -301,32 +320,37 @@ export default function StatusBoardClient() {
                 <div className="flex flex-wrap gap-2">
                   {item.deepLinks.viewItem && (
                     <Link href={item.deepLinks.viewItem}>
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" className={LINK_ACTION_BUTTON_CLASS}>
                         <ExternalLink className="h-3.5 w-3.5 mr-1" /> View Item
                       </Button>
                     </Link>
                   )}
                   {item.deepLinks.viewRoom && (
                     <Link href={item.deepLinks.viewRoom}>
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" className={LINK_ACTION_BUTTON_CLASS}>
                         <ExternalLink className="h-3.5 w-3.5 mr-1" /> View Room
                       </Button>
                     </Link>
                   )}
                   {item.deepLinks.maintenance && item.pendingMaintenance > 0 ? (
                     <Link href={item.deepLinks.maintenance}>
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" className={LINK_ACTION_BUTTON_CLASS}>
                         <Wrench className="h-3.5 w-3.5 mr-1" /> Maintenance
                       </Button>
                     </Link>
                   ) : (
-                    <Button variant="outline" size="sm" disabled className="opacity-50 cursor-not-allowed">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled
+                      className="cursor-not-allowed border-slate-200 text-slate-400 opacity-60 dark:border-slate-800 dark:text-slate-500"
+                    >
                       <Wrench className="h-3.5 w-3.5 mr-1" /> Maintenance
                     </Button>
                   )}
                   {item.deepLinks.riskAssessment && (
                     <Link href={item.deepLinks.riskAssessment}>
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" className={LINK_ACTION_BUTTON_CLASS}>
                         <Shield className="h-3.5 w-3.5 mr-1" /> Risk
                       </Button>
                     </Link>
@@ -345,11 +369,11 @@ export default function StatusBoardClient() {
                 </div>
 
                 {/* Override form */}
-                <div className="border-t pt-3 space-y-3">
+                <div className="space-y-3 border-t border-dashed border-slate-300/80 pt-4 dark:border-slate-700/80">
                   <p className="text-sm font-medium">Override Status</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
-                      <label className="text-xs text-muted-foreground">Condition</label>
+                      <label className="mb-1 block text-xs text-muted-foreground">Condition</label>
                       <Select value={overrideCondition} onValueChange={setOverrideCondition}>
                         <SelectTrigger className="h-8 text-sm">
                           <SelectValue placeholder="Use computed" />
@@ -363,7 +387,7 @@ export default function StatusBoardClient() {
                       </Select>
                     </div>
                     <div>
-                      <label className="text-xs text-muted-foreground">Recommendation</label>
+                      <label className="mb-1 block text-xs text-muted-foreground">Recommendation</label>
                       <Select value={overrideRecommendation} onValueChange={setOverrideRecommendation}>
                         <SelectTrigger className="h-8 text-sm">
                           <SelectValue placeholder="Use computed" />
@@ -377,24 +401,32 @@ export default function StatusBoardClient() {
                       </Select>
                     </div>
                     <div>
-                      <label className="text-xs text-muted-foreground">Notes</label>
+                      <label className="mb-1 block text-xs text-muted-foreground">Notes</label>
                       <Textarea
                         value={overrideNotes}
                         onChange={(e) => setOverrideNotes(e.target.value)}
                         placeholder="Optional notes..."
-                        className="h-8 text-sm resize-none"
+                        className="min-h-[40px] text-sm resize-y"
                       />
                     </div>
                   </div>
                   <Button
                     size="sm"
+                    className="bg-teal-600 text-white transition-colors hover:bg-teal-700 dark:bg-teal-600 dark:hover:bg-teal-500"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleSaveOverride(item.id);
                     }}
                     disabled={patchMutation.isPending}
                   >
-                    Save Override
+                    {patchMutation.isPending ? (
+                      <>
+                        <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      "Save Override"
+                    )}
                   </Button>
                 </div>
               </div>
@@ -547,7 +579,7 @@ export default function StatusBoardClient() {
           {Object.entries(groups).map(([groupName, groupItems]) => (
             <Collapsible key={groupName} open={true}>
               <CollapsibleTrigger asChild>
-                <div className="flex items-center gap-2 cursor-pointer p-2 rounded-md hover:bg-muted/50">
+                <div className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 hover:bg-muted/50">
                   <ChevronDown className="h-4 w-4" />
                   <h3 className="font-medium">{groupName}</h3>
                   <Badge variant="outline" className="text-xs">
@@ -556,18 +588,18 @@ export default function StatusBoardClient() {
                 </div>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <div className="rounded-md border">
+                <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white/40 backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-950/30">
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-8" />
-                        <TableHead>Name</TableHead>
-                        <TableHead>Category</TableHead>
-                        <TableHead>Age</TableHead>
-                        <TableHead>Warranty</TableHead>
-                        <TableHead>Condition</TableHead>
-                        <TableHead>Action</TableHead>
-                        <TableHead className="w-8" />
+                      <TableRow className="border-b-2 border-slate-300/80 dark:border-slate-600/80">
+                        <TableHead className={`w-10 ${HEADER_CELL_CLASS}`} />
+                        <TableHead className={HEADER_CELL_CLASS}>Name</TableHead>
+                        <TableHead className={`hidden lg:table-cell ${HEADER_CELL_CLASS}`}>Category</TableHead>
+                        <TableHead className={`hidden md:table-cell ${HEADER_CELL_CLASS}`}>Age</TableHead>
+                        <TableHead className={`hidden lg:table-cell ${HEADER_CELL_CLASS}`}>Warranty</TableHead>
+                        <TableHead className={HEADER_CELL_CLASS}>Condition</TableHead>
+                        <TableHead className={HEADER_CELL_CLASS}>Action</TableHead>
+                        <TableHead className={`w-10 ${HEADER_CELL_CLASS}`} />
                       </TableRow>
                     </TableHeader>
                     <TableBody>{renderItems(groupItems)}</TableBody>
@@ -579,18 +611,18 @@ export default function StatusBoardClient() {
         </div>
       ) : (
         // Flat view
-        <div className="rounded-md border">
+        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white/40 backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-950/30">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead className="w-8" />
-                <TableHead>Name</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Age</TableHead>
-                <TableHead>Warranty</TableHead>
-                <TableHead>Condition</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead className="w-8" />
+              <TableRow className="border-b-2 border-slate-300/80 dark:border-slate-600/80">
+                <TableHead className={`w-10 ${HEADER_CELL_CLASS}`} />
+                <TableHead className={HEADER_CELL_CLASS}>Name</TableHead>
+                <TableHead className={`hidden lg:table-cell ${HEADER_CELL_CLASS}`}>Category</TableHead>
+                <TableHead className={`hidden md:table-cell ${HEADER_CELL_CLASS}`}>Age</TableHead>
+                <TableHead className={`hidden lg:table-cell ${HEADER_CELL_CLASS}`}>Warranty</TableHead>
+                <TableHead className={HEADER_CELL_CLASS}>Condition</TableHead>
+                <TableHead className={HEADER_CELL_CLASS}>Action</TableHead>
+                <TableHead className={`w-10 ${HEADER_CELL_CLASS}`} />
               </TableRow>
             </TableHeader>
             <TableBody>{renderItems(items)}</TableBody>
