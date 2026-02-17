@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, SubmitHandler, useFieldArray, useFormContext } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -277,11 +277,23 @@ const ApplianceFieldArray = () => {
 
 export default function EditPropertyPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const params = useParams();
   const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
   
   const hasResetForm = React.useRef(false);
+
+  const contextualReturnTo = React.useMemo(() => {
+    const raw = searchParams.get("returnTo");
+    if (!raw || !raw.startsWith("/dashboard/properties/")) {
+      return null;
+    }
+    if (searchParams.get("fromOnboarding") === "1" || searchParams.get("fromHomeScore") === "1") {
+      return raw;
+    }
+    return null;
+  }, [searchParams]);
 
   // 2. Fetch Existing Property Data
   const { data: property, isLoading: isLoadingProperty } = useQuery({
@@ -390,7 +402,7 @@ export default function EditPropertyPage() {
           title: "Property Updated",
           description: "Your property details have been updated successfully.",
         });
-        router.push(`/dashboard/properties/${propertyId}`);
+        router.push(contextualReturnTo ?? `/dashboard/properties/${propertyId}`);
       } else {
         toast({
           title: "Update Failed",
@@ -458,7 +470,11 @@ export default function EditPropertyPage() {
           <HomeIcon className="h-8 w-8 text-muted-foreground" /> Edit Property: {property.name || property.address}
         </PageHeaderHeading>
         <div className="flex space-x-2">
-          <Button variant="outline" onClick={() => router.push(`/dashboard/properties/${propertyId}`)} disabled={updateMutation.isPending}>
+          <Button
+            variant="outline"
+            onClick={() => router.push(contextualReturnTo ?? `/dashboard/properties/${propertyId}`)}
+            disabled={updateMutation.isPending}
+          >
             <X className="h-4 w-4 mr-2" /> Cancel
           </Button>
           <Button 

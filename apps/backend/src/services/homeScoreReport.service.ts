@@ -310,6 +310,19 @@ function buildHomeScoreTrend(summary: PropertyScoreSnapshotSummaryDTO): HomeScor
 export class HomeScoreReportService {
   private readonly financialService = new FinancialReportService();
 
+  private withHomeScoreReturnContext(propertyId: string, targetHref?: string): string | undefined {
+    if (!targetHref) {
+      return undefined;
+    }
+
+    const params = new URLSearchParams({
+      fromHomeScore: '1',
+      returnTo: `/dashboard/properties/${propertyId}/home-score`,
+    });
+
+    return `${targetHref}${targetHref.includes('?') ? '&' : '?'}${params.toString()}`;
+  }
+
   private async assertPropertyAccess(propertyId: string, userId: string) {
     const property = await prisma.property.findFirst({
       where: {
@@ -651,7 +664,7 @@ export class HomeScoreReportService {
         confidence,
         verificationStatus,
         lastUpdatedAt: nowIso,
-        verifyHref: fact.verifyHref,
+        verifyHref: this.withHomeScoreReturnContext(propertyId, fact.verifyHref),
       };
     });
   }
@@ -867,6 +880,10 @@ export class HomeScoreReportService {
     const severityRank = { HIGH: 3, MEDIUM: 2, LOW: 1 } as const;
 
     return checks
+      .map((check) => ({
+        ...check,
+        actionHref: this.withHomeScoreReturnContext(propertyId, check.actionHref),
+      }))
       .sort((a, b) => statusRank[b.status] - statusRank[a.status] || severityRank[b.severity] - severityRank[a.severity])
       .slice(0, 6);
   }
@@ -951,7 +968,10 @@ export class HomeScoreReportService {
       });
     }
 
-    return opportunities.slice(0, 5);
+    return opportunities.slice(0, 5).map((opportunity) => ({
+      ...opportunity,
+      href: this.withHomeScoreReturnContext(propertyId, opportunity.href),
+    }));
   }
 
   private async getHealthScore(propertyId: string): Promise<{
@@ -1214,7 +1234,12 @@ export class HomeScoreReportService {
       });
     }
 
-    const sortedReasons = [...reasons].sort((a, b) => b.weight - a.weight);
+    const reasonsWithReturn = reasons.map((reason) => ({
+      ...reason,
+      actionHref: this.withHomeScoreReturnContext(propertyId, reason.actionHref),
+    }));
+
+    const sortedReasons = [...reasonsWithReturn].sort((a, b) => b.weight - a.weight);
 
     const topReason = sortedReasons[0];
     const nextBestAction = topReason
