@@ -839,7 +839,7 @@ useEffect(() => {
         installedOnValue = yearDate ? yearDate.toISOString() : null;
       } else {
         // ELECTRONICS, FURNITURE, OTHER: use purchase date
-        purchasedOnValue = purchaseDate || null;
+        purchasedOnValue = purchaseDate ? new Date(purchaseDate).toISOString() : null;
       }
   
       const payload = {
