@@ -313,12 +313,16 @@ export default function StatusBoardClient() {
                       </Button>
                     </Link>
                   )}
-                  {item.deepLinks.maintenance && (
+                  {item.deepLinks.maintenance && item.pendingMaintenance > 0 ? (
                     <Link href={item.deepLinks.maintenance}>
                       <Button variant="outline" size="sm">
                         <Wrench className="h-3.5 w-3.5 mr-1" /> Maintenance
                       </Button>
                     </Link>
+                  ) : (
+                    <Button variant="outline" size="sm" disabled className="opacity-50 cursor-not-allowed">
+                      <Wrench className="h-3.5 w-3.5 mr-1" /> Maintenance
+                    </Button>
                   )}
                   {item.deepLinks.riskAssessment && (
                     <Link href={item.deepLinks.riskAssessment}>

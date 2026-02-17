@@ -91,16 +91,21 @@ function buildDeepLinks(
   const links: Record<string, string> = {};
 
   if (item.inventoryItemId) {
-    links.viewItem = `${base}/inventory/${item.inventoryItemId}`;
+    const itemParams = new URLSearchParams({
+      openItemId: item.inventoryItemId,
+      scrollToItemId: item.inventoryItemId,
+      from: 'status-board',
+    });
+    links.viewItem = `${base}/inventory?${itemParams.toString()}`;
   }
   if (item.homeAssetId) {
     links.viewAsset = `${base}/systems/${item.homeAssetId}`;
   }
   if (item.roomId) {
-    links.viewRoom = `${base}/rooms/${item.roomId}`;
+    links.viewRoom = `${base}/rooms/${item.roomId}?from=status-board`;
   }
   links.riskAssessment = `${base}/risk`;
-  links.maintenance = `${base}/maintenance`;
+  links.maintenance = `/dashboard/maintenance?propertyId=${propertyId}&from=status-board`;
 
   return links;
 }

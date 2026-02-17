@@ -184,6 +184,12 @@ export default function MaintenancePage() {
   }, [selectedPropertyId, queryClient]);
 
   const getBackLink = () => {
+    if (from === 'status-board' && selectedPropertyId) {
+      return {
+        href: `/dashboard/properties/${selectedPropertyId}/status-board`,
+        label: 'Back to Status Board',
+      };
+    }
     if (from === 'seasonal') {
       return {
         href: `/dashboard/seasonal${selectedPropertyId ? `?propertyId=${selectedPropertyId}` : ''}`,

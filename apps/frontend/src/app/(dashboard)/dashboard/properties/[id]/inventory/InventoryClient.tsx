@@ -28,6 +28,7 @@ export default function InventoryClient() {
   const openItemId = searchParams.get('openItemId');
   const highlightRecallMatchId = searchParams.get('highlightRecallMatchId');
   const roomIdFromUrl = searchParams.get('roomId') || undefined;
+  const from = searchParams.get('from');
 
   const [rooms, setRooms] = useState<InventoryRoom[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -222,6 +223,14 @@ export default function InventoryClient() {
   return (
     <div className="p-4 sm:p-6 space-y-4 max-w-7xl mx-auto pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
       <OnboardingReturnBanner />
+      {from === 'status-board' && (
+        <Link
+          href={`/dashboard/properties/${propertyId}/status-board`}
+          className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
+        >
+          Back to Status Board
+        </Link>
+      )}
 
       <div className="flex flex-col gap-4">
         {/* ROW 1: Title + Tabs */}

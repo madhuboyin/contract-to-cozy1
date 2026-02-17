@@ -3,7 +3,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 
 import { InventoryItem, InventoryRoom } from '@/types';
 import { SectionHeader } from '../../../../components/SectionHeader';
@@ -204,8 +204,11 @@ function buildWhyFactors(insights: any) {
 
 export default function RoomShowcaseClient() {
   const params = useParams<{ id: string; roomId: string }>();
+  const searchParams = useSearchParams();
   const propertyId = params.id;
   const roomId = params.roomId;
+  const from = searchParams.get('from');
+  const fromStatusBoard = from === 'status-board';
 
   const [room, setRoom] = useState<InventoryRoom | null>(null);
   const [rooms, setRooms] = useState<InventoryRoom[]>([]);
@@ -306,13 +309,13 @@ export default function RoomShowcaseClient() {
         </div>
         <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center sm:gap-3">
           <Link
-            href={`/dashboard/properties/${propertyId}/rooms`}
+            href={fromStatusBoard ? `/dashboard/properties/${propertyId}/status-board` : `/dashboard/properties/${propertyId}/rooms`}
             className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
           >
-            Back to rooms
+            {fromStatusBoard ? 'Back to Status Board' : 'Back to rooms'}
           </Link>
           <Link
-            href={`/dashboard/properties/${propertyId}/inventory?roomId=${roomId}`}
+            href={`/dashboard/properties/${propertyId}/inventory?roomId=${roomId}${fromStatusBoard ? '&from=status-board' : ''}`}
             className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
           >
             View items
