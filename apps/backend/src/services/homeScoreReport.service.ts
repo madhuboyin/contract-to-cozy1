@@ -12,6 +12,8 @@ type HomeScoreComponentKey = 'HEALTH' | 'RISK' | 'FINANCIAL';
 type HomeScoreConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
 type HomeScoreProvenance = 'SYSTEM_COMPUTED' | 'USER_STATED' | 'INFERRED';
 type HomeScoreImpact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
+type HomeScoreConsistencyStatus = 'PASS' | 'WARN' | 'FAIL';
+type HomeScoreConsistencySeverity = 'LOW' | 'MEDIUM' | 'HIGH';
 
 const RISK_EXPOSURE_CAP = 15000;
 
@@ -48,6 +50,34 @@ export type HomeScoreTrendPointDTO = {
   financialScore: number | null;
 };
 
+export type HomeScoreConsistencyCheckDTO = {
+  id: string;
+  title: string;
+  status: HomeScoreConsistencyStatus;
+  severity: HomeScoreConsistencySeverity;
+  detail: string;
+  actionHref?: string;
+};
+
+export type HomeScoreVerificationOpportunityDTO = {
+  id: string;
+  title: string;
+  detail: string;
+  component: HomeScoreComponentKey | 'GENERAL';
+  verificationType: 'PROFILE' | 'DOCUMENT' | 'SYSTEM';
+  estimatedConfidenceGain: HomeScoreConfidence;
+  href?: string;
+};
+
+export type HomeScoreUncertaintyDTO = {
+  scoreRangeLow: number;
+  scoreRangeHigh: number;
+  riskExposureRangeLow: number | null;
+  riskExposureRangeHigh: number | null;
+  accuracyScore: number;
+  detail: string;
+};
+
 export type HomeScoreReportDTO = {
   propertyId: string;
   generatedAt: string;
@@ -63,12 +93,48 @@ export type HomeScoreReportDTO = {
   components: HomeScoreComponentDTO[];
   topReasonsScoreNotHigher: HomeScoreReasonDTO[];
   whatChangedSinceLastWeek: HomeScoreReasonDTO[];
+  consistencyChecks: HomeScoreConsistencyCheckDTO[];
+  verificationOpportunities: HomeScoreVerificationOpportunityDTO[];
+  uncertainty: HomeScoreUncertaintyDTO;
   nextBestAction: {
     title: string;
     detail: string;
     href?: string;
   } | null;
   trend: HomeScoreTrendPointDTO[];
+};
+
+type PropertyQualitySignals = {
+  property: {
+    yearBuilt: number | null;
+    propertyType: string | null;
+    propertySize: number | null;
+    ownershipType: string | null;
+    occupantsCount: number | null;
+    heatingType: string | null;
+    coolingType: string | null;
+    waterHeaterType: string | null;
+    roofType: string | null;
+    hvacInstallYear: number | null;
+    waterHeaterInstallYear: number | null;
+    roofReplacementYear: number | null;
+    hasSmokeDetectors: boolean | null;
+    hasCoDetectors: boolean | null;
+    hasSecuritySystem: boolean | null;
+    hasFireExtinguisher: boolean | null;
+    hasDrainageIssues: boolean | null;
+    hasIrrigation: boolean | null;
+  };
+  userStatedFilled: number;
+  userStatedTotal: number;
+  profileCompletenessRatio: number;
+  documentCount: number;
+  evidenceDocumentCount: number;
+  inventoryCount: number;
+  warrantyCount: number;
+  insuranceCount: number;
+  overdueTaskCount: number;
+  criticalTaskCount: number;
 };
 
 type HomeScoreBuildResult = {
@@ -113,6 +179,12 @@ function average(values: Array<number | null | undefined>) {
   const valid = values.filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
   if (valid.length === 0) return 0;
   return valid.reduce((sum, value) => sum + value, 0) / valid.length;
+}
+
+function isPopulated(value: unknown) {
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value === 'boolean') return true;
+  return value !== null && value !== undefined && value !== '';
 }
 
 function summarizeFinancialStatus(status: string | undefined) {
@@ -207,6 +279,354 @@ export class HomeScoreReportService {
     return property;
   }
 
+  private async getPropertyQualitySignals(propertyId: string): Promise<PropertyQualitySignals> {
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
+      select: {
+        yearBuilt: true,
+        propertyType: true,
+        propertySize: true,
+        ownershipType: true,
+        occupantsCount: true,
+        heatingType: true,
+        coolingType: true,
+        waterHeaterType: true,
+        roofType: true,
+        hvacInstallYear: true,
+        waterHeaterInstallYear: true,
+        roofReplacementYear: true,
+        hasSmokeDetectors: true,
+        hasCoDetectors: true,
+        hasSecuritySystem: true,
+        hasFireExtinguisher: true,
+        hasDrainageIssues: true,
+        hasIrrigation: true,
+      },
+    });
+
+    if (!property) {
+      throw new Error('Property not found while collecting HomeScore quality signals.');
+    }
+
+    const now = new Date();
+
+    const [
+      documentCount,
+      evidenceDocumentCount,
+      inventoryCount,
+      warrantyCount,
+      insuranceCount,
+      overdueTaskCount,
+      criticalTaskCount,
+    ] = await Promise.all([
+      prisma.document.count({ where: { propertyId } }),
+      prisma.document.count({
+        where: {
+          propertyId,
+          OR: [{ inventoryItemId: { not: null } }, { warrantyId: { not: null } }, { policyId: { not: null } }],
+        },
+      }),
+      prisma.inventoryItem.count({ where: { propertyId } }),
+      prisma.warranty.count({ where: { propertyId } }),
+      prisma.insurancePolicy.count({ where: { propertyId } }),
+      prisma.propertyMaintenanceTask.count({
+        where: {
+          propertyId,
+          status: 'PENDING',
+          nextDueDate: { not: null, lt: now },
+        },
+      }),
+      prisma.propertyMaintenanceTask.count({
+        where: {
+          propertyId,
+          status: 'PENDING',
+          priority: 'HIGH',
+          OR: [{ nextDueDate: { not: null, lt: now } }, { riskLevel: { in: ['HIGH', 'CRITICAL'] } }],
+        },
+      }),
+    ]);
+
+    const userStatedFields = [
+      property.yearBuilt,
+      property.propertyType,
+      property.propertySize,
+      property.ownershipType,
+      property.occupantsCount,
+      property.heatingType,
+      property.coolingType,
+      property.waterHeaterType,
+      property.roofType,
+      property.hvacInstallYear,
+      property.waterHeaterInstallYear,
+      property.roofReplacementYear,
+      property.hasSmokeDetectors,
+      property.hasCoDetectors,
+      property.hasSecuritySystem,
+      property.hasFireExtinguisher,
+      property.hasDrainageIssues,
+      property.hasIrrigation,
+    ];
+
+    const userStatedFilled = userStatedFields.filter(isPopulated).length;
+    const userStatedTotal = userStatedFields.length;
+    const profileCompletenessRatio = userStatedFilled / Math.max(userStatedTotal, 1);
+
+    return {
+      property,
+      userStatedFilled,
+      userStatedTotal,
+      profileCompletenessRatio,
+      documentCount,
+      evidenceDocumentCount,
+      inventoryCount,
+      warrantyCount,
+      insuranceCount,
+      overdueTaskCount,
+      criticalTaskCount,
+    };
+  }
+
+  private buildConsistencyChecks(propertyId: string, signals: PropertyQualitySignals): HomeScoreConsistencyCheckDTO[] {
+    const checks: HomeScoreConsistencyCheckDTO[] = [];
+    const currentYear = new Date().getFullYear();
+    const {
+      property,
+      profileCompletenessRatio,
+      overdueTaskCount,
+      criticalTaskCount,
+      documentCount,
+      insuranceCount,
+      warrantyCount,
+    } = signals;
+
+    const chronologyIssues: string[] = [];
+    if (property.yearBuilt && property.hvacInstallYear && property.hvacInstallYear < property.yearBuilt - 1) {
+      chronologyIssues.push('HVAC install year is earlier than year built.');
+    }
+    if (
+      property.yearBuilt &&
+      property.waterHeaterInstallYear &&
+      property.waterHeaterInstallYear < property.yearBuilt - 1
+    ) {
+      chronologyIssues.push('Water heater install year is earlier than year built.');
+    }
+    if (property.yearBuilt && property.roofReplacementYear && property.roofReplacementYear < property.yearBuilt - 1) {
+      chronologyIssues.push('Roof replacement year is earlier than year built.');
+    }
+    if (property.roofReplacementYear && property.roofReplacementYear > currentYear + 1) {
+      chronologyIssues.push('Roof replacement year appears to be in the future.');
+    }
+
+    if (chronologyIssues.length > 0) {
+      checks.push({
+        id: 'chronology-consistency',
+        title: 'System timelines need correction',
+        status: 'FAIL',
+        severity: 'HIGH',
+        detail: chronologyIssues[0],
+        actionHref: `/dashboard/properties/${propertyId}/edit`,
+      });
+    } else {
+      checks.push({
+        id: 'chronology-consistency',
+        title: 'System timeline consistency',
+        status: 'PASS',
+        severity: 'LOW',
+        detail: 'System ages are chronologically consistent with property details.',
+      });
+    }
+
+    const missingSafety = ['smoke detector', 'CO detector'].filter((label) => {
+      if (label === 'smoke detector') return property.hasSmokeDetectors === false;
+      return property.hasCoDetectors === false;
+    });
+    const unknownSafety = [property.hasSmokeDetectors, property.hasCoDetectors].filter((value) => value === null).length;
+
+    if (missingSafety.length > 0) {
+      checks.push({
+        id: 'safety-equipment-check',
+        title: 'Critical safety equipment incomplete',
+        status: 'FAIL',
+        severity: 'HIGH',
+        detail: `Missing ${missingSafety.join(' and ')} confirmation.`,
+        actionHref: `/dashboard/properties/${propertyId}/edit`,
+      });
+    } else if (unknownSafety > 0) {
+      checks.push({
+        id: 'safety-equipment-check',
+        title: 'Safety profile needs verification',
+        status: 'WARN',
+        severity: 'MEDIUM',
+        detail: 'Confirm smoke and CO detector coverage to improve confidence.',
+        actionHref: `/dashboard/properties/${propertyId}/edit`,
+      });
+    } else {
+      checks.push({
+        id: 'safety-equipment-check',
+        title: 'Safety baseline confirmation',
+        status: 'PASS',
+        severity: 'LOW',
+        detail: 'Smoke and CO detector data is present.',
+      });
+    }
+
+    if (criticalTaskCount > 0) {
+      checks.push({
+        id: 'maintenance-backlog',
+        title: 'Critical maintenance backlog',
+        status: 'FAIL',
+        severity: 'HIGH',
+        detail: `${criticalTaskCount} critical overdue task${criticalTaskCount === 1 ? '' : 's'} are increasing uncertainty and risk.`,
+        actionHref: `/dashboard/actions`,
+      });
+    } else if (overdueTaskCount > 0) {
+      checks.push({
+        id: 'maintenance-backlog',
+        title: 'Overdue maintenance tasks',
+        status: 'WARN',
+        severity: 'MEDIUM',
+        detail: `${overdueTaskCount} overdue task${overdueTaskCount === 1 ? '' : 's'} detected.`,
+        actionHref: `/dashboard/actions`,
+      });
+    } else {
+      checks.push({
+        id: 'maintenance-backlog',
+        title: 'Maintenance hygiene',
+        status: 'PASS',
+        severity: 'LOW',
+        detail: 'No overdue maintenance tasks detected.',
+      });
+    }
+
+    if ((insuranceCount > 0 || warrantyCount > 0) && documentCount === 0) {
+      checks.push({
+        id: 'coverage-documentation',
+        title: 'Coverage documentation missing',
+        status: 'WARN',
+        severity: 'MEDIUM',
+        detail: 'Policies/warranties exist but no supporting documents are linked.',
+        actionHref: `/dashboard/properties/${propertyId}/documents`,
+      });
+    } else if (documentCount > 0) {
+      checks.push({
+        id: 'coverage-documentation',
+        title: 'Documentation coverage',
+        status: 'PASS',
+        severity: 'LOW',
+        detail: `${documentCount} supporting document${documentCount === 1 ? '' : 's'} linked to this property.`,
+      });
+    }
+
+    if (profileCompletenessRatio < 0.6) {
+      checks.push({
+        id: 'profile-completeness',
+        title: 'Property profile is sparse',
+        status: 'WARN',
+        severity: 'MEDIUM',
+        detail: 'Low profile completeness widens HomeScore uncertainty ranges.',
+        actionHref: `/dashboard/properties/${propertyId}/edit`,
+      });
+    } else {
+      checks.push({
+        id: 'profile-completeness',
+        title: 'Property profile completeness',
+        status: 'PASS',
+        severity: 'LOW',
+        detail: `Profile completeness is ${Math.round(profileCompletenessRatio * 100)}%.`,
+      });
+    }
+
+    const statusRank = { FAIL: 3, WARN: 2, PASS: 1 } as const;
+    const severityRank = { HIGH: 3, MEDIUM: 2, LOW: 1 } as const;
+
+    return checks
+      .sort((a, b) => statusRank[b.status] - statusRank[a.status] || severityRank[b.severity] - severityRank[a.severity])
+      .slice(0, 6);
+  }
+
+  private buildVerificationOpportunities(
+    propertyId: string,
+    signals: PropertyQualitySignals,
+    riskReportReady: boolean,
+    financialStatus: 'CALCULATED' | 'MISSING_DATA' | 'QUEUED' | 'NO_PROPERTY'
+  ): HomeScoreVerificationOpportunityDTO[] {
+    const opportunities: HomeScoreVerificationOpportunityDTO[] = [];
+
+    if (signals.profileCompletenessRatio < 0.8) {
+      opportunities.push({
+        id: 'verify-profile-fields',
+        title: 'Complete missing property fields',
+        detail: 'Add missing system ages and safety details to reduce uncertainty.',
+        component: 'HEALTH',
+        verificationType: 'PROFILE',
+        estimatedConfidenceGain: signals.profileCompletenessRatio < 0.6 ? 'HIGH' : 'MEDIUM',
+        href: `/dashboard/properties/${propertyId}/edit`,
+      });
+    }
+
+    if (signals.evidenceDocumentCount < 2) {
+      opportunities.push({
+        id: 'upload-supporting-docs',
+        title: 'Attach evidence documents',
+        detail: 'Upload photos, invoices, or reports to verify key systems and coverage.',
+        component: 'GENERAL',
+        verificationType: 'DOCUMENT',
+        estimatedConfidenceGain: 'HIGH',
+        href: `/dashboard/properties/${propertyId}/documents`,
+      });
+    }
+
+    if (!riskReportReady) {
+      opportunities.push({
+        id: 'refresh-risk-report',
+        title: 'Refresh risk assessment',
+        detail: 'Risk analysis is queued; rerun for updated exposure factors.',
+        component: 'RISK',
+        verificationType: 'SYSTEM',
+        estimatedConfidenceGain: 'MEDIUM',
+        href: `/dashboard/properties/${propertyId}/risk-assessment`,
+      });
+    }
+
+    if (financialStatus !== 'CALCULATED') {
+      opportunities.push({
+        id: 'complete-financial-inputs',
+        title: 'Add insurance and warranty cost inputs',
+        detail: 'Complete annual premium and coverage details to firm up financial confidence.',
+        component: 'FINANCIAL',
+        verificationType: 'PROFILE',
+        estimatedConfidenceGain: 'HIGH',
+        href: `/dashboard/properties/${propertyId}/financial-efficiency`,
+      });
+    }
+
+    if (signals.insuranceCount === 0) {
+      opportunities.push({
+        id: 'link-insurance-policy',
+        title: 'Link an active insurance policy',
+        detail: 'Policy details improve risk and financial credibility in the report.',
+        component: 'RISK',
+        verificationType: 'DOCUMENT',
+        estimatedConfidenceGain: 'MEDIUM',
+        href: `/dashboard/insurance`,
+      });
+    }
+
+    if (signals.inventoryCount > 0 && signals.warrantyCount === 0) {
+      opportunities.push({
+        id: 'link-warranty-data',
+        title: 'Link warranties to major items',
+        detail: 'Coverage links reduce uncertainty in lifecycle and risk calculations.',
+        component: 'FINANCIAL',
+        verificationType: 'DOCUMENT',
+        estimatedConfidenceGain: 'MEDIUM',
+        href: `/dashboard/warranties`,
+      });
+    }
+
+    return opportunities.slice(0, 5);
+  }
+
   private async getHealthScore(propertyId: string): Promise<{
     health: HealthScoreResult;
     lastUpdatedAt: string;
@@ -261,11 +681,12 @@ export class HomeScoreReportService {
   private async build(propertyId: string, userId: string, weeks: number): Promise<HomeScoreBuildResult> {
     await this.assertPropertyAccess(propertyId, userId);
 
-    const [healthResult, riskReportOrQueued, financialSummary, scoreSummary] = await Promise.all([
+    const [healthResult, riskReportOrQueued, financialSummary, scoreSummary, qualitySignals] = await Promise.all([
       this.getHealthScore(propertyId),
       RiskAssessmentService.getOrCreateRiskReport(propertyId),
       this.financialService.getFinancialEfficiencySummary(propertyId),
       getPropertyScoreSnapshotSummary(propertyId, userId, weeks),
+      this.getPropertyQualitySignals(propertyId),
     ]);
 
     const healthScore = Math.round((healthResult.health.totalScore / Math.max(healthResult.health.maxPotentialScore || 100, 1)) * 100);
@@ -493,6 +914,60 @@ export class HomeScoreReportService {
       )?.[0] ?? 'MEDIUM'
     ) as HomeScoreConfidence;
 
+    const verificationLadder = {
+      userStated: qualitySignals.userStatedFilled,
+      inferred:
+        healthResult.missingCount +
+        (riskReportReady ? 0 : 1) +
+        (financialSummary.status === 'CALCULATED' ? 0 : 1),
+      systemComputed:
+        Number(riskReportReady) +
+        Number(financialSummary.status === 'CALCULATED') +
+        Number(qualitySignals.documentCount > 0) +
+        Number(scoreSummary.scores.HEALTH.latest !== null) +
+        Number(scoreSummary.scores.RISK.latest !== null) +
+        Number(scoreSummary.scores.FINANCIAL.latest !== null),
+    };
+
+    const confidenceWeight = overallConfidence === 'HIGH' ? 0.9 : overallConfidence === 'MEDIUM' ? 0.7 : 0.5;
+    const dataCompletenessWeight = clamp(
+      qualitySignals.profileCompletenessRatio * 0.55 +
+        (qualitySignals.documentCount > 0 ? 0.15 : 0) +
+        (riskReportReady ? 0.15 : 0) +
+        (financialSummary.status === 'CALCULATED' ? 0.15 : 0),
+      0,
+      1
+    );
+    const accuracyScore = Math.round(
+      clamp((confidenceWeight * 0.45 + dataCompletenessWeight * 0.55) * 100, 15, 99)
+    );
+    const scoreSpread = clamp(
+      (overallConfidence === 'HIGH' ? 4 : overallConfidence === 'MEDIUM' ? 8 : 13) +
+        Math.round((1 - dataCompletenessWeight) * 10),
+      3,
+      20
+    );
+    const scoreRangeLow = Math.round(clamp(homeScore - scoreSpread, 0, 100));
+    const scoreRangeHigh = Math.round(clamp(homeScore + Math.max(2, scoreSpread - 2), 0, 100));
+
+    let riskExposureRangeLow: number | null = null;
+    let riskExposureRangeHigh: number | null = null;
+    if (riskReportReady) {
+      const exposureSpreadPct =
+        (overallConfidence === 'HIGH' ? 0.12 : overallConfidence === 'MEDIUM' ? 0.22 : 0.35) +
+        Math.max(0, (1 - dataCompletenessWeight) * 0.1);
+      riskExposureRangeLow = Math.max(0, Math.round(riskExposure * (1 - exposureSpreadPct)));
+      riskExposureRangeHigh = Math.round(riskExposure * (1 + exposureSpreadPct));
+    }
+
+    const consistencyChecks = this.buildConsistencyChecks(propertyId, qualitySignals);
+    const verificationOpportunities = this.buildVerificationOpportunities(
+      propertyId,
+      qualitySignals,
+      riskReportReady,
+      financialSummary.status
+    );
+
     const report: HomeScoreReportDTO = {
       propertyId,
       generatedAt: new Date().toISOString(),
@@ -500,14 +975,23 @@ export class HomeScoreReportService {
       scoreBand: scoreBand(homeScore),
       deltaFromPreviousWeek,
       confidence: overallConfidence,
-      verificationLadder: {
-        userStated: 1,
-        inferred: 1,
-        systemComputed: 1,
-      },
+      verificationLadder,
       components,
       topReasonsScoreNotHigher: sortedReasons.slice(0, 5),
       whatChangedSinceLastWeek: whatChangedSinceLastWeek.slice(0, 5),
+      consistencyChecks,
+      verificationOpportunities,
+      uncertainty: {
+        scoreRangeLow,
+        scoreRangeHigh,
+        riskExposureRangeLow,
+        riskExposureRangeHigh,
+        accuracyScore,
+        detail:
+          accuracyScore >= 75
+            ? 'Score range is tight because profile and evidence quality are strong.'
+            : 'Score range is wider due to missing profile inputs or unverified evidence.',
+      },
       nextBestAction,
       trend,
     };

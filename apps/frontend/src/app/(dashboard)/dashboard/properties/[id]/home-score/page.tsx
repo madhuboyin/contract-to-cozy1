@@ -4,7 +4,7 @@ import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Gauge, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, Gauge, Loader2, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +39,12 @@ function reasonBadge(impact: HomeScoreReason["impact"]) {
   if (impact === "POSITIVE") return "success";
   if (impact === "NEGATIVE") return "destructive";
   return "secondary";
+}
+
+function consistencyBadgeClass(status: "PASS" | "WARN" | "FAIL") {
+  if (status === "PASS") return "bg-green-100 text-green-700 border-green-200";
+  if (status === "WARN") return "bg-amber-100 text-amber-700 border-amber-200";
+  return "bg-red-100 text-red-700 border-red-200";
 }
 
 export default function HomeScoreReportPage() {
@@ -129,6 +135,8 @@ export default function HomeScoreReportPage() {
   }
 
   const score = Math.round(report.homeScore);
+  const consistencyChecks = report.consistencyChecks || [];
+  const verificationOpportunities = report.verificationOpportunities || [];
 
   return (
     <DashboardShell className="pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
@@ -183,6 +191,21 @@ export default function HomeScoreReportPage() {
                 <p className="font-semibold text-foreground">{report.verificationLadder.systemComputed}</p>
                 <p>System</p>
               </div>
+            </div>
+
+            <div className="mt-4 rounded-lg border border-black/10 bg-muted/40 p-3 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium text-foreground">HomeScore range</span>
+                <span className="text-muted-foreground">
+                  {report.uncertainty.scoreRangeLow} - {report.uncertainty.scoreRangeHigh}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium text-foreground">Accuracy score</span>
+                <span className="text-muted-foreground">{report.uncertainty.accuracyScore}/100</span>
+              </div>
+              <Progress value={report.uncertainty.accuracyScore} className="h-1.5" />
+              <p className="text-[11px] text-muted-foreground">{report.uncertainty.detail}</p>
             </div>
           </CardContent>
         </Card>
@@ -274,6 +297,75 @@ export default function HomeScoreReportPage() {
                 <p className="text-xs text-muted-foreground mt-1">{change.detail}</p>
               </div>
             ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-8 grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-medium">Consistency checks</CardTitle>
+            <CardDescription>Cross-field validation to catch contradictions and improve report trust.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {consistencyChecks.map((check) => (
+              <div key={check.id} className="rounded-lg border border-black/10 px-3 py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    {check.status === "PASS" ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    )}
+                    <p className="text-sm font-medium">{check.title}</p>
+                  </div>
+                  <Badge variant="outline" className={consistencyBadgeClass(check.status)}>
+                    {check.status}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">{check.detail}</p>
+                <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>Severity: {check.severity}</span>
+                  {check.actionHref ? (
+                    <Link href={check.actionHref} className="text-primary hover:underline">
+                      Resolve
+                    </Link>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-medium">Verification opportunities</CardTitle>
+            <CardDescription>High-impact actions to increase data credibility and tighten uncertainty.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {verificationOpportunities.length > 0 ? (
+              verificationOpportunities.map((opportunity) => (
+                <div key={opportunity.id} className="rounded-lg border border-black/10 px-3 py-2">
+                  <div className="flex items-start gap-2">
+                    <Sparkles className="h-4 w-4 text-primary mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{opportunity.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{opportunity.detail}</p>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span>Confidence gain: {opportunity.estimatedConfidenceGain}</span>
+                    {opportunity.href ? (
+                      <Link href={opportunity.href} className="text-primary hover:underline">
+                        Verify
+                      </Link>
+                    ) : null}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">No additional verification steps needed right now.</p>
+            )}
           </CardContent>
         </Card>
       </div>

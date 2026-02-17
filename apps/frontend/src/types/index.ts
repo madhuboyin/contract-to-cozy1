@@ -354,6 +354,8 @@ export type HomeScoreComponentKey = 'HEALTH' | 'RISK' | 'FINANCIAL';
 export type HomeScoreConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
 export type HomeScoreProvenance = 'SYSTEM_COMPUTED' | 'USER_STATED' | 'INFERRED';
 export type HomeScoreImpact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
+export type HomeScoreConsistencyStatus = 'PASS' | 'WARN' | 'FAIL';
+export type HomeScoreConsistencySeverity = 'LOW' | 'MEDIUM' | 'HIGH';
 
 export interface HomeScoreComponent {
   key: HomeScoreComponentKey;
@@ -388,6 +390,34 @@ export interface HomeScoreTrendPoint {
   financialScore: number | null;
 }
 
+export interface HomeScoreConsistencyCheck {
+  id: string;
+  title: string;
+  status: HomeScoreConsistencyStatus;
+  severity: HomeScoreConsistencySeverity;
+  detail: string;
+  actionHref?: string;
+}
+
+export interface HomeScoreVerificationOpportunity {
+  id: string;
+  title: string;
+  detail: string;
+  component: HomeScoreComponentKey | 'GENERAL';
+  verificationType: 'PROFILE' | 'DOCUMENT' | 'SYSTEM';
+  estimatedConfidenceGain: HomeScoreConfidence;
+  href?: string;
+}
+
+export interface HomeScoreUncertainty {
+  scoreRangeLow: number;
+  scoreRangeHigh: number;
+  riskExposureRangeLow: number | null;
+  riskExposureRangeHigh: number | null;
+  accuracyScore: number;
+  detail: string;
+}
+
 export interface HomeScoreReport {
   propertyId: string;
   generatedAt: string;
@@ -403,6 +433,9 @@ export interface HomeScoreReport {
   components: HomeScoreComponent[];
   topReasonsScoreNotHigher: HomeScoreReason[];
   whatChangedSinceLastWeek: HomeScoreReason[];
+  consistencyChecks: HomeScoreConsistencyCheck[];
+  verificationOpportunities: HomeScoreVerificationOpportunity[];
+  uncertainty: HomeScoreUncertainty;
   nextBestAction: {
     title: string;
     detail: string;
