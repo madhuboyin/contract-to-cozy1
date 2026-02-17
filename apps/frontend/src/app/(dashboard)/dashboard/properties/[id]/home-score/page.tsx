@@ -180,6 +180,14 @@ export default function HomeScoreReportPage() {
   const fieldFacts = report.fieldFacts || [];
   const correctionHistory = report.correctionHistory || [];
   const changeLog = report.changeLog || [];
+  const withHomeScoreReturnContext = (href?: string | null) => {
+    if (!href || !propertyId || !href.startsWith("/dashboard/")) {
+      return href || undefined;
+    }
+    const returnTo = `/dashboard/properties/${propertyId}/home-score`;
+    const joiner = href.includes("?") ? "&" : "?";
+    return `${href}${joiner}fromHomeScore=1&returnTo=${encodeURIComponent(returnTo)}`;
+  };
 
   return (
     <DashboardShell className="pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
@@ -291,7 +299,7 @@ export default function HomeScoreReportPage() {
                 <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
                   <span>Confidence: {reason.confidence}</span>
                   {reason.actionHref ? (
-                    <Link href={reason.actionHref} className="text-primary hover:underline">
+                    <Link href={withHomeScoreReturnContext(reason.actionHref) || "#"} className="text-primary hover:underline">
                       Resolve
                     </Link>
                   ) : null}
@@ -373,7 +381,7 @@ export default function HomeScoreReportPage() {
                       Confidence: {fact.confidence} • Source: {fact.provenance.replace("_", " ").toLowerCase()}
                     </span>
                     {fact.verifyHref ? (
-                      <Link href={fact.verifyHref} className="text-primary hover:underline">
+                      <Link href={withHomeScoreReturnContext(fact.verifyHref) || "#"} className="text-primary hover:underline">
                         Verify
                       </Link>
                     ) : null}
@@ -514,7 +522,7 @@ export default function HomeScoreReportPage() {
                 <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
                   <span>Severity: {check.severity}</span>
                   {check.actionHref ? (
-                    <Link href={check.actionHref} className="text-primary hover:underline">
+                    <Link href={withHomeScoreReturnContext(check.actionHref) || "#"} className="text-primary hover:underline">
                       Resolve
                     </Link>
                   ) : null}
@@ -543,7 +551,7 @@ export default function HomeScoreReportPage() {
                   <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
                     <span>Confidence gain: {opportunity.estimatedConfidenceGain}</span>
                     {opportunity.href ? (
-                      <Link href={opportunity.href} className="text-primary hover:underline">
+                      <Link href={withHomeScoreReturnContext(opportunity.href) || "#"} className="text-primary hover:underline">
                         Verify
                       </Link>
                     ) : null}
