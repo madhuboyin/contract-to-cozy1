@@ -11,6 +11,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api/client";
 import { ScoreDeltaIndicator, ScoreTrendChart } from "@/components/scores/ScoreTrendChart";
 import { HomeScoreComponent, HomeScoreReason } from "@/types";
@@ -35,6 +37,11 @@ function componentBadge(component: HomeScoreComponent["key"]) {
   return "success";
 }
 
+function componentLabel(component: HomeScoreComponent["key"] | "GENERAL") {
+  if (component === "GENERAL") return "GENERAL";
+  return component;
+}
+
 function reasonBadge(impact: HomeScoreReason["impact"]) {
   if (impact === "POSITIVE") return "success";
   if (impact === "NEGATIVE") return "destructive";
@@ -47,12 +54,28 @@ function consistencyBadgeClass(status: "PASS" | "WARN" | "FAIL") {
   return "bg-red-100 text-red-700 border-red-200";
 }
 
+function verificationBadgeClass(status: "VERIFIED" | "REVIEW_NEEDED" | "UNVERIFIED" | "UNKNOWN") {
+  if (status === "VERIFIED") return "bg-green-100 text-green-700 border-green-200";
+  if (status === "REVIEW_NEEDED") return "bg-amber-100 text-amber-700 border-amber-200";
+  if (status === "UNVERIFIED") return "bg-slate-100 text-slate-700 border-slate-200";
+  return "bg-gray-100 text-gray-700 border-gray-200";
+}
+
+function correctionBadgeClass(status: "SUBMITTED" | "APPLIED" | "REJECTED") {
+  if (status === "APPLIED") return "bg-green-100 text-green-700 border-green-200";
+  if (status === "REJECTED") return "bg-red-100 text-red-700 border-red-200";
+  return "bg-blue-100 text-blue-700 border-blue-200";
+}
+
 export default function HomeScoreReportPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
   const propertyId = (Array.isArray(params.id) ? params.id[0] : params.id) as string;
   const [weeks, setWeeks] = useState<26 | 52>(26);
+  const [correctionFieldKey, setCorrectionFieldKey] = useState("");
+  const [correctionProposedValue, setCorrectionProposedValue] = useState("");
+  const [correctionDetail, setCorrectionDetail] = useState("");
 
   const propertyQuery = useQuery({
     queryKey: ["property", propertyId],
@@ -84,6 +107,23 @@ export default function HomeScoreReportPage() {
       await queryClient.invalidateQueries({ queryKey: ["primary-risk-summary", propertyId] });
       await queryClient.invalidateQueries({ queryKey: ["financial-efficiency-summary", propertyId] });
       await queryClient.invalidateQueries({ queryKey: ["property-score-snapshot", propertyId] });
+    },
+  });
+
+  const submitCorrectionMutation = useMutation({
+    mutationFn: async () => {
+      if (!propertyId) return null;
+      return api.submitHomeScoreCorrection(propertyId, {
+        fieldKey: correctionFieldKey || report?.fieldFacts?.[0]?.key || "general",
+        proposedValue: correctionProposedValue || undefined,
+        detail: correctionDetail,
+      });
+    },
+    onSuccess: async () => {
+      setCorrectionProposedValue("");
+      setCorrectionDetail("");
+      await queryClient.invalidateQueries({ queryKey: ["home-score-report"] });
+      await queryClient.invalidateQueries({ queryKey: ["home-score-report-page", propertyId] });
     },
   });
 
@@ -137,6 +177,9 @@ export default function HomeScoreReportPage() {
   const score = Math.round(report.homeScore);
   const consistencyChecks = report.consistencyChecks || [];
   const verificationOpportunities = report.verificationOpportunities || [];
+  const fieldFacts = report.fieldFacts || [];
+  const correctionHistory = report.correctionHistory || [];
+  const changeLog = report.changeLog || [];
 
   return (
     <DashboardShell className="pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
@@ -297,6 +340,150 @@ export default function HomeScoreReportPage() {
                 <p className="text-xs text-muted-foreground mt-1">{change.detail}</p>
               </div>
             ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-8 grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-medium">Field verification ledger</CardTitle>
+            <CardDescription>
+              Per-field provenance, confidence, and verification status used in this HomeScore.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {fieldFacts.length > 0 ? (
+              fieldFacts.map((fact) => (
+                <div key={fact.id} className="rounded-lg border border-black/10 px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-medium">{fact.label}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{fact.value}</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className={verificationBadgeClass(fact.verificationStatus)}>
+                        {fact.verificationStatus.replace("_", " ")}
+                      </Badge>
+                      <Badge variant="outline">{componentLabel(fact.component)}</Badge>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span>
+                      Confidence: {fact.confidence} • Source: {fact.provenance.replace("_", " ").toLowerCase()}
+                    </span>
+                    {fact.verifyHref ? (
+                      <Link href={fact.verifyHref} className="text-primary hover:underline">
+                        Verify
+                      </Link>
+                    ) : null}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">No field-level verification facts available yet.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-medium">Corrections & audit trail</CardTitle>
+            <CardDescription>Submit a correction for any disputed field and track status changes.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="rounded-lg border border-black/10 p-3 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Submit correction</p>
+              <select
+                value={correctionFieldKey || fieldFacts[0]?.key || "general"}
+                onChange={(event) => setCorrectionFieldKey(event.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                {fieldFacts.length > 0 ? (
+                  fieldFacts.map((fact) => (
+                    <option key={fact.id} value={fact.key}>
+                      {fact.label}
+                    </option>
+                  ))
+                ) : (
+                  <option value="general">General</option>
+                )}
+              </select>
+              <Input
+                placeholder="Proposed value (optional)"
+                value={correctionProposedValue}
+                onChange={(event) => setCorrectionProposedValue(event.target.value)}
+              />
+              <Textarea
+                placeholder="What should be corrected and why?"
+                value={correctionDetail}
+                onChange={(event) => setCorrectionDetail(event.target.value)}
+                className="min-h-[90px]"
+              />
+              <Button
+                size="sm"
+                onClick={() => submitCorrectionMutation.mutate()}
+                disabled={submitCorrectionMutation.isPending || correctionDetail.trim().length < 6}
+              >
+                {submitCorrectionMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : null}
+                Submit correction
+              </Button>
+            </div>
+
+            {correctionHistory.length > 0 ? (
+              correctionHistory.slice(0, 6).map((entry) => (
+                <div key={entry.id} className="rounded-lg border border-black/10 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium">{entry.title}</p>
+                    <Badge variant="outline" className={correctionBadgeClass(entry.status)}>
+                      {entry.status}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{entry.detail}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {new Date(entry.submittedAt).toLocaleDateString()}
+                    {entry.proposedValue ? ` • Proposed: ${entry.proposedValue}` : ""}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">No correction requests yet.</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-8">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-medium">Change log</CardTitle>
+            <CardDescription>Score movements and correction events over recent report cycles.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {changeLog.length > 0 ? (
+              changeLog.map((entry) => (
+                <div key={entry.id} className="rounded-lg border border-black/10 px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium">{entry.title}</p>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={reasonBadge(entry.impact) as any}>{entry.impact.toLowerCase()}</Badge>
+                      <span className="text-[11px] text-muted-foreground">
+                        {new Date(entry.weekStart).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{entry.detail}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Component: {componentLabel(entry.component)} • Source: {entry.provenance.replace("_", " ").toLowerCase()}
+                    {entry.delta !== null ? ` • Δ ${entry.delta > 0 ? "+" : ""}${entry.delta.toFixed(1)}` : ""}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">No report change history available yet.</p>
+            )}
           </CardContent>
         </Card>
       </div>

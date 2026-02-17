@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { CustomRequest } from '../types';
-import { HomeScoreReportService } from '../services/homeScoreReport.service';
+import { HomeScoreCorrectionInput, HomeScoreReportService } from '../services/homeScoreReport.service';
 
 const service = new HomeScoreReportService();
 
@@ -86,6 +86,46 @@ export async function getHomeScoreFactors(req: CustomRequest, res: Response) {
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to fetch home score factors.',
+    });
+  }
+}
+
+export async function getHomeScoreCorrections(req: CustomRequest, res: Response) {
+  try {
+    const propertyId = req.params.propertyId;
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Authentication required.' });
+    }
+
+    const limit = Math.max(1, Math.min(50, Number(req.query.limit) || 20));
+    const corrections = await service.getCorrections(propertyId, userId, limit);
+    return res.json({ success: true, data: { corrections } });
+  } catch (error: any) {
+    console.error('Error fetching home score corrections:', error);
+    return res.status(500).json({
+      success: false,
+      message: error?.message || 'Failed to fetch home score corrections.',
+    });
+  }
+}
+
+export async function submitHomeScoreCorrection(req: CustomRequest, res: Response) {
+  try {
+    const propertyId = req.params.propertyId;
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Authentication required.' });
+    }
+
+    const payload = (req.body ?? {}) as HomeScoreCorrectionInput;
+    const result = await service.submitCorrection(propertyId, userId, payload);
+    return res.status(201).json({ success: true, data: result });
+  } catch (error: any) {
+    console.error('Error submitting home score correction:', error);
+    return res.status(500).json({
+      success: false,
+      message: error?.message || 'Failed to submit home score correction.',
     });
   }
 }

@@ -42,6 +42,7 @@ import {
   FinancialReportSummary, // [NEW IMPORT]
   PropertyScoreSnapshotSummary,
   HomeScoreReport,
+  HomeScoreCorrection,
   HomeScoreReason,
   HomeScoreTrendPoint,
   // [NEW IMPORTS] for AI Report Typing
@@ -1271,6 +1272,43 @@ class APIClient {
 
     if (response.success && Array.isArray(response.data?.factors)) {
       return response.data.factors;
+    }
+    return null;
+  }
+
+  async getHomeScoreCorrections(
+    propertyId: string,
+    limit = 20
+  ): Promise<HomeScoreCorrection[] | null> {
+    const response = await this.request<{ corrections: HomeScoreCorrection[] }>(
+      `/api/properties/${propertyId}/home-score/corrections?limit=${limit}`
+    );
+
+    if (response.success && Array.isArray(response.data?.corrections)) {
+      return response.data.corrections;
+    }
+    return null;
+  }
+
+  async submitHomeScoreCorrection(
+    propertyId: string,
+    payload: {
+      fieldKey: string;
+      title?: string;
+      detail: string;
+      proposedValue?: string;
+    }
+  ): Promise<HomeScoreCorrection | null> {
+    const response = await this.request<{ correction: HomeScoreCorrection }>(
+      `/api/properties/${propertyId}/home-score/corrections`,
+      {
+        method: 'POST',
+        body: payload,
+      }
+    );
+
+    if (response.success && response.data?.correction) {
+      return response.data.correction;
     }
     return null;
   }

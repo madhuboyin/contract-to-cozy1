@@ -14,6 +14,8 @@ type HomeScoreProvenance = 'SYSTEM_COMPUTED' | 'USER_STATED' | 'INFERRED';
 type HomeScoreImpact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
 type HomeScoreConsistencyStatus = 'PASS' | 'WARN' | 'FAIL';
 type HomeScoreConsistencySeverity = 'LOW' | 'MEDIUM' | 'HIGH';
+type HomeScoreVerificationStatus = 'VERIFIED' | 'REVIEW_NEEDED' | 'UNVERIFIED' | 'UNKNOWN';
+type HomeScoreCorrectionStatus = 'SUBMITTED' | 'APPLIED' | 'REJECTED';
 
 const RISK_EXPOSURE_CAP = 15000;
 
@@ -69,6 +71,42 @@ export type HomeScoreVerificationOpportunityDTO = {
   href?: string;
 };
 
+export type HomeScoreFieldFactDTO = {
+  id: string;
+  key: string;
+  label: string;
+  value: string;
+  component: HomeScoreComponentKey | 'GENERAL';
+  provenance: HomeScoreProvenance;
+  confidence: HomeScoreConfidence;
+  verificationStatus: HomeScoreVerificationStatus;
+  lastUpdatedAt: string | null;
+  verifyHref?: string;
+};
+
+export type HomeScoreCorrectionDTO = {
+  id: string;
+  fieldKey: string;
+  title: string;
+  detail: string;
+  proposedValue: string | null;
+  status: HomeScoreCorrectionStatus;
+  submittedAt: string;
+  submittedBy: string | null;
+};
+
+export type HomeScoreChangeLogEntryDTO = {
+  id: string;
+  weekStart: string;
+  title: string;
+  detail: string;
+  component: HomeScoreComponentKey | 'GENERAL';
+  impact: HomeScoreImpact;
+  delta: number | null;
+  confidence: HomeScoreConfidence;
+  provenance: HomeScoreProvenance;
+};
+
 export type HomeScoreUncertaintyDTO = {
   scoreRangeLow: number;
   scoreRangeHigh: number;
@@ -95,6 +133,9 @@ export type HomeScoreReportDTO = {
   whatChangedSinceLastWeek: HomeScoreReasonDTO[];
   consistencyChecks: HomeScoreConsistencyCheckDTO[];
   verificationOpportunities: HomeScoreVerificationOpportunityDTO[];
+  fieldFacts: HomeScoreFieldFactDTO[];
+  correctionHistory: HomeScoreCorrectionDTO[];
+  changeLog: HomeScoreChangeLogEntryDTO[];
   uncertainty: HomeScoreUncertaintyDTO;
   nextBestAction: {
     title: string;
@@ -143,6 +184,13 @@ type HomeScoreBuildResult = {
   reasons: HomeScoreReasonDTO[];
 };
 
+export type HomeScoreCorrectionInput = {
+  fieldKey: string;
+  title?: string;
+  detail: string;
+  proposedValue?: string;
+};
+
 function asNumber(value: unknown): number {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (
@@ -185,6 +233,13 @@ function isPopulated(value: unknown) {
   if (typeof value === 'number') return Number.isFinite(value);
   if (typeof value === 'boolean') return true;
   return value !== null && value !== undefined && value !== '';
+}
+
+function toDisplayValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') return 'Unknown';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'number') return Number.isFinite(value) ? value.toLocaleString() : 'Unknown';
+  return String(value);
 }
 
 function summarizeFinancialStatus(status: string | undefined) {
@@ -384,6 +439,278 @@ export class HomeScoreReportService {
       overdueTaskCount,
       criticalTaskCount,
     };
+  }
+
+  private normalizeCorrectionStatus(action: string): HomeScoreCorrectionStatus {
+    if (action === 'HOME_SCORE_CORRECTION_APPLIED') return 'APPLIED';
+    if (action === 'HOME_SCORE_CORRECTION_REJECTED') return 'REJECTED';
+    return 'SUBMITTED';
+  }
+
+  private parseJsonObject(value: Prisma.JsonValue | null): Record<string, unknown> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    return value as Record<string, unknown>;
+  }
+
+  private async getCorrectionHistory(propertyId: string, limit = 20): Promise<HomeScoreCorrectionDTO[]> {
+    const logs = await prisma.auditLog.findMany({
+      where: {
+        entityType: 'PROPERTY',
+        entityId: propertyId,
+        action: {
+          in: [
+            'HOME_SCORE_CORRECTION_SUBMITTED',
+            'HOME_SCORE_CORRECTION_APPLIED',
+            'HOME_SCORE_CORRECTION_REJECTED',
+          ],
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+
+    return logs.map((log) => {
+      const payload = this.parseJsonObject(log.newValues ?? null);
+      const fieldKey = typeof payload.fieldKey === 'string' ? payload.fieldKey : 'general';
+      const title =
+        typeof payload.title === 'string'
+          ? payload.title
+          : fieldKey === 'general'
+          ? 'General correction submitted'
+          : `Correction: ${fieldKey}`;
+      const detail =
+        typeof payload.detail === 'string' && payload.detail.trim().length > 0
+          ? payload.detail
+          : 'Correction request submitted from HomeScore report.';
+      const proposedValue =
+        typeof payload.proposedValue === 'string' && payload.proposedValue.trim().length > 0
+          ? payload.proposedValue
+          : null;
+
+      return {
+        id: log.id,
+        fieldKey,
+        title,
+        detail,
+        proposedValue,
+        status: this.normalizeCorrectionStatus(log.action),
+        submittedAt: log.createdAt.toISOString(),
+        submittedBy: log.userId ?? null,
+      };
+    });
+  }
+
+  private buildFieldFacts(
+    propertyId: string,
+    signals: PropertyQualitySignals,
+    components: HomeScoreComponentDTO[]
+  ): HomeScoreFieldFactDTO[] {
+    const confidenceByComponent = new Map<HomeScoreComponentKey, HomeScoreConfidence>(
+      components.map((component) => [component.key, component.confidence])
+    );
+    const nowIso = new Date().toISOString();
+
+    const qualityFacts: Array<{
+      id: string;
+      key: string;
+      label: string;
+      value: unknown;
+      component: HomeScoreComponentKey | 'GENERAL';
+      provenance: HomeScoreProvenance;
+      verifyHref?: string;
+    }> = [
+      {
+        id: 'fact-year-built',
+        key: 'yearBuilt',
+        label: 'Year built',
+        value: signals.property.yearBuilt,
+        component: 'HEALTH',
+        provenance: 'USER_STATED',
+        verifyHref: `/dashboard/properties/${propertyId}/edit`,
+      },
+      {
+        id: 'fact-roof-replacement-year',
+        key: 'roofReplacementYear',
+        label: 'Roof replacement year',
+        value: signals.property.roofReplacementYear,
+        component: 'RISK',
+        provenance: 'USER_STATED',
+        verifyHref: `/dashboard/properties/${propertyId}/edit`,
+      },
+      {
+        id: 'fact-hvac-install-year',
+        key: 'hvacInstallYear',
+        label: 'HVAC install year',
+        value: signals.property.hvacInstallYear,
+        component: 'HEALTH',
+        provenance: 'USER_STATED',
+        verifyHref: `/dashboard/properties/${propertyId}/edit`,
+      },
+      {
+        id: 'fact-water-heater-install-year',
+        key: 'waterHeaterInstallYear',
+        label: 'Water heater install year',
+        value: signals.property.waterHeaterInstallYear,
+        component: 'RISK',
+        provenance: 'USER_STATED',
+        verifyHref: `/dashboard/properties/${propertyId}/edit`,
+      },
+      {
+        id: 'fact-smoke-detectors',
+        key: 'hasSmokeDetectors',
+        label: 'Smoke detectors',
+        value: signals.property.hasSmokeDetectors,
+        component: 'HEALTH',
+        provenance: 'USER_STATED',
+        verifyHref: `/dashboard/properties/${propertyId}/edit`,
+      },
+      {
+        id: 'fact-co-detectors',
+        key: 'hasCoDetectors',
+        label: 'CO detectors',
+        value: signals.property.hasCoDetectors,
+        component: 'HEALTH',
+        provenance: 'USER_STATED',
+        verifyHref: `/dashboard/properties/${propertyId}/edit`,
+      },
+      {
+        id: 'fact-linked-documents',
+        key: 'documentCount',
+        label: 'Linked documents',
+        value: signals.documentCount,
+        component: 'GENERAL',
+        provenance: 'SYSTEM_COMPUTED',
+        verifyHref: `/dashboard/properties/${propertyId}/documents`,
+      },
+      {
+        id: 'fact-evidence-documents',
+        key: 'evidenceDocumentCount',
+        label: 'Evidence-backed docs',
+        value: signals.evidenceDocumentCount,
+        component: 'GENERAL',
+        provenance: 'SYSTEM_COMPUTED',
+        verifyHref: `/dashboard/properties/${propertyId}/documents`,
+      },
+      {
+        id: 'fact-insurance-linked',
+        key: 'insuranceCount',
+        label: 'Insurance policies linked',
+        value: signals.insuranceCount,
+        component: 'FINANCIAL',
+        provenance: 'SYSTEM_COMPUTED',
+        verifyHref: `/dashboard/insurance`,
+      },
+      {
+        id: 'fact-warranties-linked',
+        key: 'warrantyCount',
+        label: 'Warranties linked',
+        value: signals.warrantyCount,
+        component: 'FINANCIAL',
+        provenance: 'SYSTEM_COMPUTED',
+        verifyHref: `/dashboard/warranties`,
+      },
+      {
+        id: 'fact-overdue-tasks',
+        key: 'overdueTaskCount',
+        label: 'Overdue maintenance tasks',
+        value: signals.overdueTaskCount,
+        component: 'RISK',
+        provenance: 'SYSTEM_COMPUTED',
+        verifyHref: `/dashboard/actions`,
+      },
+    ];
+
+    return qualityFacts.map((fact) => {
+      const hasValue = fact.value !== null && fact.value !== undefined && fact.value !== '';
+      const componentConfidence =
+        fact.component === 'GENERAL' ? 'MEDIUM' : confidenceByComponent.get(fact.component) ?? 'MEDIUM';
+
+      let verificationStatus: HomeScoreVerificationStatus = 'UNKNOWN';
+      let confidence: HomeScoreConfidence = componentConfidence;
+
+      if (!hasValue || toDisplayValue(fact.value) === 'Unknown') {
+        verificationStatus = 'UNKNOWN';
+        confidence = 'LOW';
+      } else if (fact.provenance === 'SYSTEM_COMPUTED') {
+        verificationStatus = 'VERIFIED';
+      } else if (signals.evidenceDocumentCount > 0) {
+        verificationStatus = 'REVIEW_NEEDED';
+        if (confidence === 'LOW') confidence = 'MEDIUM';
+      } else {
+        verificationStatus = 'UNVERIFIED';
+        confidence = confidence === 'HIGH' ? 'MEDIUM' : confidence;
+      }
+
+      return {
+        id: fact.id,
+        key: fact.key,
+        label: fact.label,
+        value: toDisplayValue(fact.value),
+        component: fact.component,
+        provenance: fact.provenance,
+        confidence,
+        verificationStatus,
+        lastUpdatedAt: nowIso,
+        verifyHref: fact.verifyHref,
+      };
+    });
+  }
+
+  private buildChangeLog(
+    scoreSummary: PropertyScoreSnapshotSummaryDTO,
+    correctionHistory: HomeScoreCorrectionDTO[]
+  ): HomeScoreChangeLogEntryDTO[] {
+    const entries: HomeScoreChangeLogEntryDTO[] = [];
+    const componentMeta: Record<HomeScoreComponentKey, { label: string; confidence: HomeScoreConfidence }> = {
+      HEALTH: { label: 'Property Health', confidence: 'HIGH' },
+      RISK: { label: 'Risk Assessment', confidence: 'HIGH' },
+      FINANCIAL: { label: 'Financial Efficiency', confidence: 'MEDIUM' },
+    };
+
+    (['HEALTH', 'RISK', 'FINANCIAL'] as const).forEach((key) => {
+      const points = [...scoreSummary.scores[key].trend].sort(
+        (a, b) => new Date(a.weekStart).getTime() - new Date(b.weekStart).getTime()
+      );
+      for (let index = 1; index < points.length; index += 1) {
+        const previous = points[index - 1];
+        const current = points[index];
+        const delta = Math.round((current.score - previous.score) * 10) / 10;
+        if (Math.abs(delta) < 0.1) continue;
+
+        entries.push({
+          id: `${key.toLowerCase()}-${current.weekStart}`,
+          weekStart: current.weekStart,
+          title: `${componentMeta[key].label} ${delta > 0 ? 'improved' : 'declined'} ${Math.abs(delta).toFixed(1)} pts`,
+          detail:
+            delta > 0
+              ? `${componentMeta[key].label} trended upward compared with the prior weekly snapshot.`
+              : `${componentMeta[key].label} trended downward compared with the prior weekly snapshot.`,
+          component: key,
+          impact: delta > 0 ? 'POSITIVE' : 'NEGATIVE',
+          delta,
+          confidence: componentMeta[key].confidence,
+          provenance: 'SYSTEM_COMPUTED',
+        });
+      }
+    });
+
+    correctionHistory.slice(0, 6).forEach((correction) => {
+      entries.push({
+        id: `correction-${correction.id}`,
+        weekStart: correction.submittedAt,
+        title: `Correction ${correction.status.toLowerCase()}: ${correction.title}`,
+        detail: correction.detail,
+        component: 'GENERAL',
+        impact: correction.status === 'APPLIED' ? 'POSITIVE' : correction.status === 'REJECTED' ? 'NEGATIVE' : 'NEUTRAL',
+        delta: null,
+        confidence: 'MEDIUM',
+        provenance: 'USER_STATED',
+      });
+    });
+
+    return entries
+      .sort((a, b) => new Date(b.weekStart).getTime() - new Date(a.weekStart).getTime())
+      .slice(0, 12);
   }
 
   private buildConsistencyChecks(propertyId: string, signals: PropertyQualitySignals): HomeScoreConsistencyCheckDTO[] {
@@ -967,6 +1294,9 @@ export class HomeScoreReportService {
       riskReportReady,
       financialSummary.status
     );
+    const correctionHistory = await this.getCorrectionHistory(propertyId);
+    const fieldFacts = this.buildFieldFacts(propertyId, qualitySignals, components);
+    const changeLog = this.buildChangeLog(scoreSummary, correctionHistory);
 
     const report: HomeScoreReportDTO = {
       propertyId,
@@ -981,6 +1311,9 @@ export class HomeScoreReportService {
       whatChangedSinceLastWeek: whatChangedSinceLastWeek.slice(0, 5),
       consistencyChecks,
       verificationOpportunities,
+      fieldFacts,
+      correctionHistory,
+      changeLog,
       uncertainty: {
         scoreRangeLow,
         scoreRangeHigh,
@@ -1016,6 +1349,73 @@ export class HomeScoreReportService {
   async getHistory(propertyId: string, userId: string, weeks = 52) {
     const report = await this.getReport(propertyId, userId, weeks);
     return report.trend;
+  }
+
+  async getCorrections(propertyId: string, userId: string, limit = 20) {
+    await this.assertPropertyAccess(propertyId, userId);
+    return this.getCorrectionHistory(propertyId, limit);
+  }
+
+  async submitCorrection(propertyId: string, userId: string, input: HomeScoreCorrectionInput) {
+    await this.assertPropertyAccess(propertyId, userId);
+    const fieldKey = input.fieldKey.trim();
+    const detail = input.detail.trim();
+    const title = (input.title || `Correction requested for ${fieldKey}`).trim();
+    const proposedValue = input.proposedValue?.trim() || null;
+
+    if (!fieldKey || !detail) {
+      throw new Error('fieldKey and detail are required to submit a correction.');
+    }
+
+    const signals = await this.getPropertyQualitySignals(propertyId);
+    const propertyFactMap: Record<string, unknown> = {
+      yearBuilt: signals.property.yearBuilt,
+      propertyType: signals.property.propertyType,
+      propertySize: signals.property.propertySize,
+      roofReplacementYear: signals.property.roofReplacementYear,
+      hvacInstallYear: signals.property.hvacInstallYear,
+      waterHeaterInstallYear: signals.property.waterHeaterInstallYear,
+      hasSmokeDetectors: signals.property.hasSmokeDetectors,
+      hasCoDetectors: signals.property.hasCoDetectors,
+      hasSecuritySystem: signals.property.hasSecuritySystem,
+      hasFireExtinguisher: signals.property.hasFireExtinguisher,
+    };
+    const currentValue = Object.prototype.hasOwnProperty.call(propertyFactMap, fieldKey)
+      ? propertyFactMap[fieldKey]
+      : null;
+
+    const createdLog = await prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'HOME_SCORE_CORRECTION_SUBMITTED',
+        entityType: 'PROPERTY',
+        entityId: propertyId,
+        oldValues: {
+          fieldKey,
+          currentValue: toDisplayValue(currentValue),
+        },
+        newValues: {
+          fieldKey,
+          title,
+          detail,
+          proposedValue,
+          status: 'SUBMITTED',
+        },
+      },
+    });
+
+    return {
+      correction: {
+        id: createdLog.id,
+        fieldKey,
+        title,
+        detail,
+        proposedValue,
+        status: 'SUBMITTED' as HomeScoreCorrectionStatus,
+        submittedAt: createdLog.createdAt.toISOString(),
+        submittedBy: userId,
+      },
+    };
   }
 
   async refresh(propertyId: string, userId: string, weeks = 26) {

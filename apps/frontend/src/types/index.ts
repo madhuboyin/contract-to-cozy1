@@ -356,6 +356,8 @@ export type HomeScoreProvenance = 'SYSTEM_COMPUTED' | 'USER_STATED' | 'INFERRED'
 export type HomeScoreImpact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
 export type HomeScoreConsistencyStatus = 'PASS' | 'WARN' | 'FAIL';
 export type HomeScoreConsistencySeverity = 'LOW' | 'MEDIUM' | 'HIGH';
+export type HomeScoreVerificationStatus = 'VERIFIED' | 'REVIEW_NEEDED' | 'UNVERIFIED' | 'UNKNOWN';
+export type HomeScoreCorrectionStatus = 'SUBMITTED' | 'APPLIED' | 'REJECTED';
 
 export interface HomeScoreComponent {
   key: HomeScoreComponentKey;
@@ -409,6 +411,42 @@ export interface HomeScoreVerificationOpportunity {
   href?: string;
 }
 
+export interface HomeScoreFieldFact {
+  id: string;
+  key: string;
+  label: string;
+  value: string;
+  component: HomeScoreComponentKey | 'GENERAL';
+  provenance: HomeScoreProvenance;
+  confidence: HomeScoreConfidence;
+  verificationStatus: HomeScoreVerificationStatus;
+  lastUpdatedAt: string | null;
+  verifyHref?: string;
+}
+
+export interface HomeScoreCorrection {
+  id: string;
+  fieldKey: string;
+  title: string;
+  detail: string;
+  proposedValue: string | null;
+  status: HomeScoreCorrectionStatus;
+  submittedAt: string;
+  submittedBy: string | null;
+}
+
+export interface HomeScoreChangeLogEntry {
+  id: string;
+  weekStart: string;
+  title: string;
+  detail: string;
+  component: HomeScoreComponentKey | 'GENERAL';
+  impact: HomeScoreImpact;
+  delta: number | null;
+  confidence: HomeScoreConfidence;
+  provenance: HomeScoreProvenance;
+}
+
 export interface HomeScoreUncertainty {
   scoreRangeLow: number;
   scoreRangeHigh: number;
@@ -435,6 +473,9 @@ export interface HomeScoreReport {
   whatChangedSinceLastWeek: HomeScoreReason[];
   consistencyChecks: HomeScoreConsistencyCheck[];
   verificationOpportunities: HomeScoreVerificationOpportunity[];
+  fieldFacts: HomeScoreFieldFact[];
+  correctionHistory: HomeScoreCorrection[];
+  changeLog: HomeScoreChangeLogEntry[];
   uncertainty: HomeScoreUncertainty;
   nextBestAction: {
     title: string;
