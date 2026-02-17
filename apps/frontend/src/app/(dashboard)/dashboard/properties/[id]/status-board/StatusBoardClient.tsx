@@ -250,9 +250,9 @@ export default function StatusBoardClient() {
           </TableCell>
         </TableRow>
 
-        <CollapsibleContent asChild>
-          <TableRow>
-            <TableCell colSpan={8} className="bg-muted/30 p-0">
+        <CollapsibleContent>
+          <tr>
+            <td colSpan={8} className="bg-muted/30 p-0">
               <div className="p-4 space-y-4">
                 {/* Details grid */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
@@ -394,8 +394,8 @@ export default function StatusBoardClient() {
                   </Button>
                 </div>
               </div>
-            </TableCell>
-          </TableRow>
+            </td>
+          </tr>
         </CollapsibleContent>
       </Collapsible>
     ));
