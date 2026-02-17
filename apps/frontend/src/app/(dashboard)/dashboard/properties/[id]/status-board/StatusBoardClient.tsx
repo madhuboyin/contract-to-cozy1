@@ -82,6 +82,12 @@ const RECOMMENDATION_LABELS: Record<StatusBoardRecommendation, string> = {
   REPLACE_SOON: "Replace Soon",
 };
 
+const RECOMMENDATION_COLORS: Record<StatusBoardRecommendation, string> = {
+  OK: "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700",
+  REPAIR: "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800",
+  REPLACE_SOON: "bg-red-100 text-red-800 border-red-300 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800",
+};
+
 const WARRANTY_COLORS: Record<WarrantyBadge, string> = {
   active: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
   expiring_soon: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
@@ -104,6 +110,12 @@ const LINK_ACTION_BUTTON_CLASS =
 
 const INSTALL_DATE_MISSING_TOOLTIP =
   "Install date is empty. Add install date for accurate prediction.";
+
+function formatAgeDisplay(ageYears: number | null): string {
+  if (ageYears == null) return "—";
+  if (ageYears < 1) return "<1 yr";
+  return `${Math.round(ageYears)} yrs`;
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -211,6 +223,24 @@ export default function StatusBoardClient() {
     patchMutation.mutate({ homeItemId: itemId, payload });
   }
 
+  function getReasonDisplayText(item: StatusBoardItemDTO, reason: { code: string; detail: string }) {
+    if (reason.code === "MISSING_INSTALL_DATE") {
+      return "Install date is empty. Add install date for accurate prediction.";
+    }
+
+    if (reason.code === "PAST_EOL") {
+      const expectedLifeMatch = reason.detail.match(/(\d+)\s*yr/i);
+      const expectedLife = expectedLifeMatch ? Number(expectedLifeMatch[1]) : null;
+      const currentAge = item.ageYears != null ? Math.round(item.ageYears) : null;
+      if (expectedLife && currentAge != null) {
+        return `Expected lifespan: ${expectedLife} yrs • Current age: ${currentAge} yrs`;
+      }
+      return "Past expected life";
+    }
+
+    return reason.detail;
+  }
+
   const summary = data?.summary;
   const items = data?.items ?? [];
   const pagination = data?.pagination;
@@ -230,20 +260,20 @@ export default function StatusBoardClient() {
                 e.stopPropagation();
                 handleTogglePin(item);
               }}
-              className={`rounded-md p-1 transition-colors hover:bg-slate-200/70 dark:hover:bg-slate-800 ${item.isPinned ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}
+              className={`rounded-md p-1.5 transition-colors hover:bg-slate-200/70 dark:hover:bg-slate-800 ${item.isPinned ? "text-amber-600 dark:text-amber-400" : "text-slate-500 dark:text-slate-300"}`}
             >
-              <Pin className="h-3.5 w-3.5" />
+              <Pin className="h-4 w-4" />
             </button>
           </TableCell>
           <TableCell className="py-4 align-middle">
             <p className="font-medium text-slate-900 dark:text-slate-100">{item.displayName}</p>
             <p className="mt-1 text-xs text-muted-foreground lg:hidden">
               {item.category}
-              {item.ageYears != null ? ` • ${item.ageYears}yr` : ""}
+              {item.ageYears != null ? ` • ${formatAgeDisplay(item.ageYears)}` : ""}
             </p>
           </TableCell>
           <TableCell className="hidden py-4 text-sm text-muted-foreground lg:table-cell">{item.category}</TableCell>
-          <TableCell className="hidden py-4 text-sm md:table-cell">{item.ageYears != null ? `${item.ageYears}yr` : "—"}</TableCell>
+          <TableCell className="hidden py-4 text-sm md:table-cell">{formatAgeDisplay(item.ageYears)}</TableCell>
           <TableCell className="hidden py-4 lg:table-cell">
             <Badge variant="outline" className={`text-xs ${WARRANTY_COLORS[item.warrantyStatus]}`}>
               {WARRANTY_LABELS[item.warrantyStatus]}
@@ -290,7 +320,12 @@ export default function StatusBoardClient() {
           <TableCell className="py-4 text-sm font-medium text-slate-700 dark:text-slate-200">
             {item.needsInstallDateForPrediction ? (
               <span className="inline-flex items-center gap-1.5">
-                <span className="text-slate-500 dark:text-slate-300">N/A</span>
+                <Badge
+                  variant="outline"
+                  className="text-xs font-semibold bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700"
+                >
+                  N/A
+                </Badge>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
@@ -306,7 +341,12 @@ export default function StatusBoardClient() {
                 </Tooltip>
               </span>
             ) : (
-              RECOMMENDATION_LABELS[item.recommendation]
+              <Badge
+                variant="outline"
+                className={`text-xs font-semibold ${RECOMMENDATION_COLORS[item.recommendation]}`}
+              >
+                {RECOMMENDATION_LABELS[item.recommendation]}
+              </Badge>
             )}
           </TableCell>
           <TableCell className="w-10 py-4 align-middle">
@@ -321,7 +361,7 @@ export default function StatusBoardClient() {
         {expandedId === item.id && (
           <TableRow>
             <TableCell colSpan={8} className="bg-slate-50/80 p-0 dark:bg-slate-900/40">
-              <div className="animate-in fade-in-0 slide-in-from-top-1 p-5 duration-200 space-y-5">
+              <div className="animate-in fade-in-0 slide-in-from-top-1 border-l-2 border-teal-200/80 p-5 duration-200 space-y-5 dark:border-teal-800/80">
                 {/* Details grid */}
                 <div className="grid grid-cols-2 gap-3 text-sm xl:grid-cols-5">
                   <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-700/70 dark:bg-slate-950/30">
@@ -367,7 +407,7 @@ export default function StatusBoardClient() {
                           ) : (
                             <Clock className="h-3.5 w-3.5 text-amber-500" />
                           )}
-                          {r.detail}
+                          {getReasonDisplayText(item, r)}
                         </li>
                       ))}
                     </ul>
@@ -451,7 +491,22 @@ export default function StatusBoardClient() {
 
                 {/* Override form */}
                 <div className="space-y-3 border-t border-dashed border-slate-300/80 pt-4 dark:border-slate-700/80">
-                  <p className="text-sm font-medium">Override Status</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium">Adjust Status (Optional)</p>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                          aria-label="Why override status"
+                        >
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Use this only when you need to override computed status.</TooltipContent>
+                    </Tooltip>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
                       <label className="mb-1 block text-xs text-muted-foreground">Condition</label>
@@ -564,7 +619,7 @@ export default function StatusBoardClient() {
       )}
 
       {/* Controls bar */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-300/80 bg-white/70 p-2 shadow-sm dark:border-slate-700/80 dark:bg-slate-950/40">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
