@@ -33,6 +33,7 @@ import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCaro
 import CoverageIntelligenceToolCard from './components/CoverageIntelligenceToolCard';
 import RiskPremiumOptimizerToolCard from './components/RiskPremiumOptimizerToolCard';
 import DoNothingSimulatorToolCard from './components/DoNothingSimulatorToolCard';
+import HomeSavingsCheckToolCard from './components/HomeSavingsCheckToolCard';
 import MorningHomePulseCard from './components/MorningHomePulseCard';
 import { HomeScoreReportCard } from './components/HomeScoreReportCard';
 
@@ -492,7 +493,8 @@ export default function DashboardPage() {
               </p>
             </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <HomeSavingsCheckToolCard propertyId={selectedPropertyId || ''} />
             <CoverageIntelligenceToolCard propertyId={selectedPropertyId || ''} />
             <RiskPremiumOptimizerToolCard propertyId={selectedPropertyId || ''} />
             <DoNothingSimulatorToolCard propertyId={selectedPropertyId || ''} />

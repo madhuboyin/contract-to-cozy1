@@ -46,6 +46,7 @@ import {
   Cloud,
   Camera,
   PauseCircle,
+  PiggyBank,
 } from 'lucide-react';
 import { User } from '@/types';
 import { PropertySetupBanner } from '@/components/PropertySetupBanner';
@@ -216,6 +217,15 @@ const AI_TOOL_LINKS: AIToolLink[] = [
     isActive: (pathname) =>
       /^\/dashboard\/do-nothing-simulator(\/|$)/.test(pathname) ||
       /^\/dashboard\/properties\/[^/]+\/tools\/do-nothing(\/|$)/.test(pathname),
+  },
+  {
+    key: 'home-savings',
+    name: 'Home Savings Check',
+    href: '/dashboard/home-savings',
+    icon: PiggyBank,
+    isActive: (pathname) =>
+      /^\/dashboard\/home-savings(\/|$)/.test(pathname) ||
+      /^\/dashboard\/properties\/[^/]+\/tools\/home-savings(\/|$)/.test(pathname),
   },
   {
     key: 'emergency',
