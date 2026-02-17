@@ -17,6 +17,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { Document, DocumentType, Property, Warranty, InsurancePolicy, DocumentUploadInput } from '@/types';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
 
 // --- Document Type Constants for UI ---
 const DOCUMENT_TYPES: DocumentType[] = [
@@ -591,6 +592,7 @@ export default function DocumentsPage() {
 
   return (
     <div className="space-y-6 pb-8">
+      <OnboardingReturnBanner />
       {propertyIdFromUrl && (
         <Button 
             variant="link" 

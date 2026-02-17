@@ -20,6 +20,7 @@ import { useCallback } from 'react';
 import { SnoozeModal } from '@/components/orchestration/SnoozeModal';
 import { CompletionModal } from '@/components/orchestration/CompletionModal';
 import { useSearchParams } from 'next/navigation';
+import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
 
 export function ActionsClient() {
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
@@ -367,6 +368,7 @@ export function ActionsClient() {
   return (
     <>
       <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+        <OnboardingReturnBanner />
         {/* Breadcrumb */}
         <nav className="text-sm text-muted-foreground">
           <ol className="flex items-center space-x-2">

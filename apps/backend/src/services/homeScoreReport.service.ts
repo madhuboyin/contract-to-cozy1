@@ -593,7 +593,7 @@ export class HomeScoreReportService {
         value: signals.documentCount,
         component: 'GENERAL',
         provenance: 'SYSTEM_COMPUTED',
-        verifyHref: `/dashboard/properties/${propertyId}/documents`,
+        verifyHref: `/dashboard/documents?propertyId=${propertyId}`,
       },
       {
         id: 'fact-evidence-documents',
@@ -602,7 +602,7 @@ export class HomeScoreReportService {
         value: signals.evidenceDocumentCount,
         component: 'GENERAL',
         provenance: 'SYSTEM_COMPUTED',
-        verifyHref: `/dashboard/properties/${propertyId}/documents`,
+        verifyHref: `/dashboard/documents?propertyId=${propertyId}`,
       },
       {
         id: 'fact-insurance-linked',
@@ -611,7 +611,7 @@ export class HomeScoreReportService {
         value: signals.insuranceCount,
         component: 'FINANCIAL',
         provenance: 'SYSTEM_COMPUTED',
-        verifyHref: `/dashboard/insurance`,
+        verifyHref: `/dashboard/insurance?propertyId=${propertyId}`,
       },
       {
         id: 'fact-warranties-linked',
@@ -620,7 +620,7 @@ export class HomeScoreReportService {
         value: signals.warrantyCount,
         component: 'FINANCIAL',
         provenance: 'SYSTEM_COMPUTED',
-        verifyHref: `/dashboard/warranties`,
+        verifyHref: `/dashboard/warranties?propertyId=${propertyId}`,
       },
       {
         id: 'fact-overdue-tasks',
@@ -629,7 +629,7 @@ export class HomeScoreReportService {
         value: signals.overdueTaskCount,
         component: 'RISK',
         provenance: 'SYSTEM_COMPUTED',
-        verifyHref: `/dashboard/actions`,
+        verifyHref: `/dashboard/actions?propertyId=${propertyId}`,
       },
     ];
 
@@ -817,7 +817,7 @@ export class HomeScoreReportService {
         status: 'FAIL',
         severity: 'HIGH',
         detail: `${criticalTaskCount} critical overdue task${criticalTaskCount === 1 ? '' : 's'} are increasing uncertainty and risk.`,
-        actionHref: `/dashboard/actions`,
+        actionHref: `/dashboard/actions?propertyId=${propertyId}`,
       });
     } else if (overdueTaskCount > 0) {
       checks.push({
@@ -826,7 +826,7 @@ export class HomeScoreReportService {
         status: 'WARN',
         severity: 'MEDIUM',
         detail: `${overdueTaskCount} overdue task${overdueTaskCount === 1 ? '' : 's'} detected.`,
-        actionHref: `/dashboard/actions`,
+        actionHref: `/dashboard/actions?propertyId=${propertyId}`,
       });
     } else {
       checks.push({
@@ -845,7 +845,7 @@ export class HomeScoreReportService {
         status: 'WARN',
         severity: 'MEDIUM',
         detail: 'Policies/warranties exist but no supporting documents are linked.',
-        actionHref: `/dashboard/properties/${propertyId}/documents`,
+        actionHref: `/dashboard/documents?propertyId=${propertyId}`,
       });
     } else if (documentCount > 0) {
       checks.push({
@@ -916,7 +916,7 @@ export class HomeScoreReportService {
         component: 'GENERAL',
         verificationType: 'DOCUMENT',
         estimatedConfidenceGain: 'HIGH',
-        href: `/dashboard/properties/${propertyId}/documents`,
+        href: `/dashboard/documents?propertyId=${propertyId}`,
       });
     }
 
@@ -952,7 +952,7 @@ export class HomeScoreReportService {
         component: 'RISK',
         verificationType: 'DOCUMENT',
         estimatedConfidenceGain: 'MEDIUM',
-        href: `/dashboard/insurance`,
+        href: `/dashboard/insurance?propertyId=${propertyId}`,
       });
     }
 
@@ -964,7 +964,7 @@ export class HomeScoreReportService {
         component: 'FINANCIAL',
         verificationType: 'DOCUMENT',
         estimatedConfidenceGain: 'MEDIUM',
-        href: `/dashboard/warranties`,
+        href: `/dashboard/warranties?propertyId=${propertyId}`,
       });
     }
 

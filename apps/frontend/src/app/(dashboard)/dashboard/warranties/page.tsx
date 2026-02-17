@@ -17,6 +17,7 @@ import { Property, APIResponse, APIError, Document, DocumentUploadInput, Documen
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
+import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
 // NEW IMPORTS for Table structure
 import {
   Table,
@@ -846,6 +847,7 @@ const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
 
   return (
     <div className="space-y-6 pb-8">
+      <OnboardingReturnBanner />
       <Button 
         variant="link" 
         className="p-0 h-auto mb-2 text-sm text-muted-foreground"

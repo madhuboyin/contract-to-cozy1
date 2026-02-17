@@ -15,6 +15,7 @@ import { InsurancePolicy, CreateInsurancePolicyInput, UpdateInsurancePolicyInput
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
+import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
 // NEW IMPORTS for Table structure
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -458,6 +459,7 @@ export default function InsurancePage() {
 
   return (
     <div className="space-y-6 pb-8">
+      <OnboardingReturnBanner />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2 sm:text-3xl">
           <Shield className="w-6 h-6 text-green-600 sm:w-7 sm:h-7" /> My Insurance Policies

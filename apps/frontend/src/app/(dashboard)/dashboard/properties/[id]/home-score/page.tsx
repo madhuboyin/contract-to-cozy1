@@ -184,9 +184,34 @@ export default function HomeScoreReportPage() {
     if (!href || !propertyId || !href.startsWith("/dashboard/")) {
       return href || undefined;
     }
-    const returnTo = `/dashboard/properties/${propertyId}/home-score`;
-    const joiner = href.includes("?") ? "&" : "?";
-    return `${href}${joiner}fromHomeScore=1&returnTo=${encodeURIComponent(returnTo)}`;
+
+    const normalizeLegacyHomeScoreHref = (target: string) => {
+      const [pathPart, queryPart = ""] = target.split("?");
+      const params = new URLSearchParams(queryPart);
+      const scopedMatch = pathPart.match(
+        /^\/dashboard\/properties\/([^/]+)\/(documents|insurance|warranties|actions)$/
+      );
+
+      if (scopedMatch) {
+        const [, scopedPropertyId, section] = scopedMatch;
+        const mappedPath = `/dashboard/${section}`;
+        if (!params.has("propertyId")) {
+          params.set("propertyId", scopedPropertyId);
+        }
+        const normalizedQuery = params.toString();
+        return normalizedQuery ? `${mappedPath}?${normalizedQuery}` : mappedPath;
+      }
+
+      return target;
+    };
+
+    const normalizedHref = normalizeLegacyHomeScoreHref(href);
+    const [basePath, existingQuery = ""] = normalizedHref.split("?");
+    const params = new URLSearchParams(existingQuery);
+    params.set("fromHomeScore", "1");
+    params.set("returnTo", `/dashboard/properties/${propertyId}/home-score`);
+    const finalQuery = params.toString();
+    return finalQuery ? `${basePath}?${finalQuery}` : basePath;
   };
 
   return (
