@@ -393,6 +393,7 @@ model InventoryRoom {
 
   scanSessions   InventoryRoomScanSession[]
   inventoryDrafts InventoryDraftItem[]
+  homeItems HomeItem[]
 
   @@index([propertyId])
   @@unique([propertyId, name])
@@ -460,6 +461,7 @@ model InventoryItem {
   documents        Document[]
   insuranceQuoteRequests InsuranceQuoteRequest[]
   homeEvents HomeEvent[]
+  homeItems HomeItem[]
 
   // Recall matching fields (NEW)
   manufacturer   String?
@@ -1099,6 +1101,7 @@ model User {
   dailySnapshots PropertyDailySnapshot[]
   microActions   PropertyMicroAction[]
   streaks        PropertyStreak[]
+  homeItemStatusEvents HomeItemStatusEvent[]
   
   @@index([email])
   @@index([role])
@@ -2064,6 +2067,7 @@ model HomeAsset {
   modelNumberNorm  String?
 
   recallMatches   RecallMatch[]
+  homeItems HomeItem[]
 
   @@index([manufacturerNorm, modelNumberNorm])
   
