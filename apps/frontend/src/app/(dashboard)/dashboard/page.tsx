@@ -34,6 +34,7 @@ import CoverageIntelligenceToolCard from './components/CoverageIntelligenceToolC
 import RiskPremiumOptimizerToolCard from './components/RiskPremiumOptimizerToolCard';
 import DoNothingSimulatorToolCard from './components/DoNothingSimulatorToolCard';
 import MorningHomePulseCard from './components/MorningHomePulseCard';
+import { HomeScoreReportCard } from './components/HomeScoreReportCard';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -462,7 +463,8 @@ export default function DashboardPage() {
             <p className="text-sm text-gray-500">Real-time health, risk, and financial analysis</p>
           </div>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mt-6 mb-8">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mt-6 mb-8">
+          <HomeScoreReportCard propertyId={selectedPropertyId} />
           {selectedProperty && (
             <PropertyHealthScoreCard property={selectedProperty} />
           )}

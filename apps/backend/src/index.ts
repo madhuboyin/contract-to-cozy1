@@ -72,6 +72,7 @@ import doNothingSimulatorRoutes from './routes/doNothingSimulator.routes';
 import propertyScoreSnapshotRoutes from './routes/propertyScoreSnapshot.routes';
 import homeCapitalTimelineRoutes from './routes/homeCapitalTimeline.routes';
 import dailyHomePulseRoutes from './routes/dailyHomePulse.routes';
+import homeScoreReportRoutes from './routes/homeScoreReport.routes';
 dotenv.config();
 
 const app = express();
@@ -343,6 +344,7 @@ app.use('/api', riskPremiumOptimizerRoutes);
 app.use('/api', doNothingSimulatorRoutes);
 app.use('/api', propertyScoreSnapshotRoutes);
 app.use('/api', dailyHomePulseRoutes);
+app.use('/api', homeScoreReportRoutes);
 //app.use(express.json({ limit: '10mb' })); // Ensure this is present
 app.use('/api', trueCostOwnershipRoutes);
 app.use('/api', homeCapitalTimelineRoutes);

@@ -41,6 +41,9 @@ import {
   FinancialEfficiencyReport, // [NEW IMPORT]
   FinancialReportSummary, // [NEW IMPORT]
   PropertyScoreSnapshotSummary,
+  HomeScoreReport,
+  HomeScoreReason,
+  HomeScoreTrendPoint,
   // [NEW IMPORTS] for AI Report Typing
   OracleReport, 
   BudgetForecast,
@@ -1208,6 +1211,66 @@ class APIClient {
 
     if (response.success && response.data) {
       return response.data;
+    }
+    return null;
+  }
+
+  async getHomeScoreReport(
+    propertyId: string,
+    weeks = 26
+  ): Promise<HomeScoreReport | null> {
+    const response = await this.request<{ report: HomeScoreReport }>(
+      `/api/properties/${propertyId}/home-score/report?weeks=${weeks}`
+    );
+
+    if (response.success && response.data?.report) {
+      return response.data.report;
+    }
+    return null;
+  }
+
+  async refreshHomeScoreReport(
+    propertyId: string,
+    weeks = 26
+  ): Promise<HomeScoreReport | null> {
+    const response = await this.request<{ report: HomeScoreReport }>(
+      `/api/properties/${propertyId}/home-score/report/refresh?weeks=${weeks}`,
+      {
+        method: 'POST',
+        body: {},
+      }
+    );
+
+    if (response.success && response.data?.report) {
+      return response.data.report;
+    }
+    return null;
+  }
+
+  async getHomeScoreHistory(
+    propertyId: string,
+    weeks = 52
+  ): Promise<HomeScoreTrendPoint[] | null> {
+    const response = await this.request<{ history: HomeScoreTrendPoint[] }>(
+      `/api/properties/${propertyId}/home-score/history?weeks=${weeks}`
+    );
+
+    if (response.success && Array.isArray(response.data?.history)) {
+      return response.data.history;
+    }
+    return null;
+  }
+
+  async getHomeScoreFactors(
+    propertyId: string,
+    weeks = 26
+  ): Promise<HomeScoreReason[] | null> {
+    const response = await this.request<{ factors: HomeScoreReason[] }>(
+      `/api/properties/${propertyId}/home-score/factors?weeks=${weeks}`
+    );
+
+    if (response.success && Array.isArray(response.data?.factors)) {
+      return response.data.factors;
     }
     return null;
   }

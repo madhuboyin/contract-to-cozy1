@@ -350,6 +350,67 @@ export interface PropertyScoreSnapshotSummary {
   };
 }
 
+export type HomeScoreComponentKey = 'HEALTH' | 'RISK' | 'FINANCIAL';
+export type HomeScoreConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
+export type HomeScoreProvenance = 'SYSTEM_COMPUTED' | 'USER_STATED' | 'INFERRED';
+export type HomeScoreImpact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
+
+export interface HomeScoreComponent {
+  key: HomeScoreComponentKey;
+  label: string;
+  score: number;
+  scoreMax: number;
+  deltaFromPreviousWeek: number | null;
+  status: string;
+  confidence: HomeScoreConfidence;
+  provenance: HomeScoreProvenance;
+  sourceSummary: string;
+  lastUpdatedAt: string | null;
+}
+
+export interface HomeScoreReason {
+  id: string;
+  title: string;
+  detail: string;
+  component: HomeScoreComponentKey;
+  impact: HomeScoreImpact;
+  weight: number;
+  confidence: HomeScoreConfidence;
+  provenance: HomeScoreProvenance;
+  actionHref?: string;
+}
+
+export interface HomeScoreTrendPoint {
+  weekStart: string;
+  homeScore: number;
+  healthScore: number | null;
+  riskScore: number | null;
+  financialScore: number | null;
+}
+
+export interface HomeScoreReport {
+  propertyId: string;
+  generatedAt: string;
+  homeScore: number;
+  scoreBand: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'NEEDS_ATTENTION';
+  deltaFromPreviousWeek: number | null;
+  confidence: HomeScoreConfidence;
+  verificationLadder: {
+    userStated: number;
+    inferred: number;
+    systemComputed: number;
+  };
+  components: HomeScoreComponent[];
+  topReasonsScoreNotHigher: HomeScoreReason[];
+  whatChangedSinceLastWeek: HomeScoreReason[];
+  nextBestAction: {
+    title: string;
+    detail: string;
+    href?: string;
+  } | null;
+  trend: HomeScoreTrendPoint[];
+}
+
 // ============================================================================
 // COMMUNITY EVENTS TYPES (PHASE 6)
 // ============================================================================
