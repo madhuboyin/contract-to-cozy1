@@ -541,7 +541,7 @@ export default function StatusBoardClient() {
         // Grouped view
         <div className="space-y-4">
           {Object.entries(groups).map(([groupName, groupItems]) => (
-            <Collapsible key={groupName} defaultOpen>
+            <Collapsible key={groupName} open={true}>
               <CollapsibleTrigger asChild>
                 <div className="flex items-center gap-2 cursor-pointer p-2 rounded-md hover:bg-muted/50">
                   <ChevronDown className="h-4 w-4" />
