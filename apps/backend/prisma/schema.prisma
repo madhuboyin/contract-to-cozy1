@@ -4210,15 +4210,13 @@ model HomeSavingsCategory {
 }
 
 // ============================================================================
-// HOME INVENTORY
+// HOME STATUS BOARD (Whole Home Overview)
+// Canonical unified registry + computed/override status for compact grid view
 // ============================================================================
 
-enum HomeItemType {
-  INVENTORY
-  SYSTEM
-  SAFETY
-  CONTRACT
-  OTHER
+enum HomeItemKind {
+  INVENTORY_ITEM
+  HOME_ASSET
 }
 
 enum HomeItemCondition {
@@ -4246,98 +4244,108 @@ enum HomeItemValueSource {
   PHOTO
 }
 
-model HomeItemStatus {
-  id          String @id @default(uuid())
-  homeItemId  String @unique
-
-  // Computed (system)
-  computedCondition       HomeItemCondition?
-  computedRecommendation  HomeItemRecommendation?
-  computedReasonJson      Json?   // why: overdue maintenance, EOL, risk factor
-  computedAt              DateTime?
-
-  // User overrides
-  overrideCondition       HomeItemCondition?
-  overrideRecommendation  HomeItemRecommendation?
-  overridePurchaseDate    DateTime?
-  overrideInstalledAt     DateTime?
-  overrideNotes           String?
-  overrideSource          HomeItemValueSource?
-
-  // Confidence that we have correct facts (optional but very useful for future HomeScore)
-  confidence              HomeItemDataConfidence @default(MEDIUM)
-
-  // UX controls
-  isPinned                Boolean @default(false)
-  isHidden                Boolean @default(false)
-  pinOrder                Int?
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  homeItem    HomeItem @relation(fields: [homeItemId], references: [id], onDelete: Cascade)
-
-  @@index([isPinned, pinOrder])
-  @@index([isHidden])
-  @@map("home_item_status")
+enum HomeItemStatusEventType {
+  COMPUTED_UPDATE
+  USER_OVERRIDE
+  PIN
+  UNPIN
+  HIDE
+  UNHIDE
+  REVIEWED
 }
 
-
 model HomeItem {
-  id          String      @id @default(uuid())
-  propertyId  String
-  type        HomeItemType
+  id         String @id @default(uuid())
+  propertyId String
 
-  // Stable display identity
-  name        String
-  categoryKey String?     // e.g. "HVAC", "ROOF", "APPLIANCE", "INTERNET"
-  roomId      String?     // if applicable
+  kind       HomeItemKind
 
-  // Reference to underlying entity (no duplication)
-  sourceType  String      // "INVENTORY_ITEM" | "HOME_ASSET" | "WARRANTY" | etc.
-  sourceId    String
+  // Optional link to room for grouping/navigation (when applicable)
+  roomId     String?
 
-  // Optional lightweight denormalized fields for faster grids (not required but helpful)
-  purchaseDate DateTime?
-  installedAt  DateTime?
-  manufacturer String?
-  modelNumber  String?
+  // Exactly one of these should be set based on kind (enforce in code):
+  // - INVENTORY_ITEM => inventoryItemId required, homeAssetId null
+  // - HOME_ASSET     => homeAssetId required, inventoryItemId null
+  inventoryItemId String?
+  homeAssetId     String?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  // Optional display overrides (keep grid consistent)
+  displayName String?
+  categoryKey String? // e.g. "HVAC", "ROOF", "APPLIANCE" (populate in code/backfill)
 
-  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  room        Room?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@unique([sourceType, sourceId])
-  @@index([propertyId, type])
-  @@index([propertyId, categoryKey])
+  property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  room          InventoryRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  homeAsset     HomeAsset?     @relation(fields: [homeAssetId], references: [id], onDelete: Cascade)
+
+  status        HomeItemStatus?
+  events        HomeItemStatusEvent[]
+
+  @@index([propertyId, kind])
   @@index([propertyId, roomId])
+  @@index([propertyId, categoryKey])
+
+  // Property-scoped uniqueness (safer for future)
+  @@unique([propertyId, inventoryItemId])
+  @@unique([propertyId, homeAssetId])
+
   @@map("home_items")
 }
 
-model HomeItemLink {
+
+model HomeItemStatus {
   id         String @id @default(uuid())
-  homeItemId String
+  homeItemId String @unique
 
-  label      String   // "Room", "Warranty", "Maintenance", "Risk"
-  url        String
-  sortOrder  Int @default(0)
+  // Computed (system)
+  computedCondition      HomeItemCondition?
+  computedRecommendation HomeItemRecommendation?
+  computedReasonJson     Json?     // reasons: overdue maintenance, EOL, risk flags
+  computedAt             DateTime?
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  // User overrides (do not mutate underlying entities)
+  overrideCondition      HomeItemCondition?
+  overrideRecommendation HomeItemRecommendation?
+  overridePurchaseDate   DateTime?
+  overrideInstalledAt    DateTime?
+  overrideNotes          String?
+  overrideSource         HomeItemValueSource?
 
-  homeItem   HomeItem @relation(fields: [homeItemId], references: [id], onDelete: Cascade)
+  // Confidence in the correctness of key facts (future HomeScore readiness)
+  confidence             HomeItemDataConfidence @default(MEDIUM)
 
-  @@index([homeItemId, sortOrder])
-  @@map("home_item_links")
+  // UX controls
+  isPinned  Boolean @default(false)
+  pinOrder  Int?
+  isHidden  Boolean @default(false)
+
+  // Optional: allows “Mark reviewed” / recency prompts later
+  lastReviewedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  homeItem HomeItem @relation(fields: [homeItemId], references: [id], onDelete: Cascade)
+
+  @@index([isPinned, pinOrder])
+  @@index([isHidden])
+  @@index([computedCondition])
+  @@index([overrideCondition])
+
+  @@map("home_item_status")
 }
+
 
 model HomeItemStatusEvent {
   id          String @id @default(uuid())
   homeItemId  String
   actorUserId String?
-  eventType   String // "COMPUTED_UPDATE" | "USER_OVERRIDE" | "PIN" | "HIDE"
+
+  eventType   HomeItemStatusEventType
   payloadJson Json?
 
   createdAt   DateTime @default(now())
@@ -4346,9 +4354,10 @@ model HomeItemStatusEvent {
   user        User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([homeItemId, createdAt(sort: Desc)])
+  @@index([actorUserId, createdAt(sort: Desc)])
+
   @@map("home_item_status_events")
 }
-
 
 // ============================================================================
 // RECALL
