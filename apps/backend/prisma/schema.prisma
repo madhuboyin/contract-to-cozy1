@@ -1832,9 +1832,18 @@ model Document {
   riskMitigationPlanItems RiskMitigationPlanItem[]
   capitalTimelineItems HomeCapitalTimelineItem[]
   
+  homeSavingsAccountId     String?
+  homeSavingsOpportunityId String?
+
+  homeSavingsAccount       HomeSavingsAccount?     @relation("HomeSavingsAccountDocuments", fields: [homeSavingsAccountId], references: [id], onDelete: SetNull)
+  homeSavingsOpportunity   HomeSavingsOpportunity? @relation("HomeSavingsOpportunityDocuments", fields: [homeSavingsOpportunityId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
+  @@index([homeSavingsAccountId])
+  @@index([homeSavingsOpportunityId])
+
   @@index([bookingId])
   @@index([type])
   @@index([propertyId]) // NEW INDEX
@@ -4017,6 +4026,178 @@ model PropertyStreak {
   @@index([propertyId, streakType])
   @@index([userId, streakType])
   @@map("property_streaks")
+}
+
+// ============================================================================
+// Home Savings Check
+// ============================================================================
+
+enum HomeSavingsBillingCadence {
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+  OTHER
+}
+
+enum HomeSavingsAccountStatus {
+  ACTIVE
+  INACTIVE
+  UNKNOWN
+}
+
+enum HomeSavingsOpportunityStatus {
+  NEW
+  VIEWED
+  DISMISSED
+  SAVED
+  APPLIED
+  SWITCHED
+  EXPIRED
+}
+
+enum HomeSavingsConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum HomeSavingsRunTrigger {
+  MANUAL
+  SCHEDULED
+  EVENT_DRIVEN
+}
+
+model HomeSavingsRun {
+  id                 String   @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String?
+
+  trigger            HomeSavingsRunTrigger @default(MANUAL)
+
+  // Inputs used to compute comparisons
+  inputsJson         Json?
+  // Summary of outputs (totals, counts)
+  summaryJson        Json?
+
+  ranAt              DateTime @default(now())
+
+  homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property           Property?        @relation(fields: [propertyId], references: [id])
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([homeownerProfileId, ranAt(sort: Desc)])
+  @@index([propertyId, ranAt(sort: Desc)])
+  @@map("home_savings_runs")
+}
+
+model HomeSavingsOpportunity {
+  id                 String   @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String?
+
+  categoryKey        String
+  accountId          String? // the current plan this is based on
+  status             HomeSavingsOpportunityStatus @default(NEW)
+  confidence         HomeSavingsConfidence @default(MEDIUM)
+
+  headline           String // "Switch to Verizon Fios and save $20/month"
+  detail             String?
+  rationaleJson      Json?  // why we think you’re overpaying
+
+  // Savings math (store both monthly and annual)
+  estimatedMonthlySavings Decimal? @db.Decimal(12, 2)
+  estimatedAnnualSavings  Decimal? @db.Decimal(12, 2)
+  currency               String    @default("USD")
+
+  // Recommended alternative(s)
+  recommendedProviderName String?
+  recommendedPlanName     String?
+  offerJson               Json? // multiple offers, rates, fees, promo periods, etc.
+
+  // Links / next action
+  actionUrl           String?
+  expiresAt           DateTime?
+
+  generatedAt         DateTime @default(now())
+
+  homeownerProfile    HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property            Property?        @relation(fields: [propertyId], references: [id])
+  account             HomeSavingsAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  documents           Document[] @relation("HomeSavingsOpportunityDocuments")
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([homeownerProfileId, categoryKey, status])
+  @@index([propertyId, categoryKey, status])
+  @@index([accountId])
+  @@map("home_savings_opportunities")
+}
+
+model HomeSavingsAccount {
+  id                 String   @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String?
+
+  categoryKey         String // FK by convention to HomeSavingsCategory.key
+  status              HomeSavingsAccountStatus @default(ACTIVE)
+
+  providerName        String?
+  planName            String?
+  accountNumberMasked String? // last4 or masked token
+
+  // Cost inputs
+  billingCadence      HomeSavingsBillingCadence @default(MONTHLY)
+  amount              Decimal? @db.Decimal(12, 2) // current recurring amount
+  currency            String   @default("USD")
+
+  // Contract / dates
+  startDate           DateTime?
+  renewalDate         DateTime?
+  contractEndDate     DateTime?
+
+  // Usage + plan details (internet speed, kWh usage, rate type, etc.)
+  usageJson           Json?
+  planDetailsJson     Json?
+
+  // Optional linking to existing canonical entities (for Phase-1 categories)
+  insurancePolicyId   String?
+  warrantyId          String?
+
+  homeownerProfile    HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property            Property?        @relation(fields: [propertyId], references: [id])
+
+  insurancePolicy     InsurancePolicy? @relation(fields: [insurancePolicyId], references: [id], onDelete: SetNull)
+  warranty            Warranty?        @relation(fields: [warrantyId], references: [id], onDelete: SetNull)
+
+  documents           Document[]       @relation("HomeSavingsAccountDocuments")
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([homeownerProfileId, categoryKey])
+  @@index([propertyId, categoryKey])
+  @@index([insurancePolicyId])
+  @@index([warrantyId])
+  @@map("home_savings_accounts")
+}
+
+model HomeSavingsCategory {
+  id          String   @id @default(uuid())
+  key         String   @unique // e.g. "INTERNET", "ELECTRICITY_GAS"
+  label       String   // "Internet", "Electricity & Gas"
+  description String?
+  isEnabled   Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  metadata    Json?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("home_savings_categories")
 }
 
 // ============================================================================
