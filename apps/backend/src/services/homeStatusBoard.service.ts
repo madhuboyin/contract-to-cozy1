@@ -162,11 +162,6 @@ export async function ensureHomeItems(propertyId: string): Promise<void> {
   const existingInvIds = new Set(existingHomeItems.map((h) => h.inventoryItemId).filter(Boolean));
   const existingAssetIds = new Set(existingHomeItems.map((h) => h.homeAssetId).filter(Boolean));
 
-  // Track which homeAssetIds are covered by an inventory item
-  const assetIdsCoveredByInventory = new Set(
-    inventoryItems.map((ii) => ii.homeAssetId).filter(Boolean)
-  );
-
   const creates: any[] = [];
 
   // Upsert for each inventory item not yet tracked
@@ -188,10 +183,11 @@ export async function ensureHomeItems(propertyId: string): Promise<void> {
     );
   }
 
-  // Upsert for each home asset not yet tracked and not already covered by an inventory item
+  // Upsert for each home asset not yet tracked.
+  // Keep HOME_ASSET rows even when an inventory item links to the same asset so
+  // SYSTEMS / SAFETY / STRUCTURE entries are visible in Status Board.
   for (const ha of homeAssets) {
     if (existingAssetIds.has(ha.id)) continue;
-    if (assetIdsCoveredByInventory.has(ha.id)) continue;
     creates.push(
       prisma.homeItem.create({
         data: {
