@@ -97,6 +97,7 @@ function buildDeepLinks(
       from: 'status-board',
     });
     links.viewItem = `${base}/inventory?${itemParams.toString()}`;
+    links.replaceRepair = `${base}/inventory/items/${item.inventoryItemId}/replace-repair`;
   }
   if (item.homeAssetId) {
     links.viewAsset = `${base}/systems/${item.homeAssetId}`;
@@ -106,6 +107,7 @@ function buildDeepLinks(
   }
   links.riskAssessment = `${base}/risk`;
   links.maintenance = `/dashboard/maintenance?propertyId=${propertyId}&from=status-board`;
+  links.warranty = `/dashboard/warranties?propertyId=${propertyId}&from=status-board`;
 
   return links;
 }

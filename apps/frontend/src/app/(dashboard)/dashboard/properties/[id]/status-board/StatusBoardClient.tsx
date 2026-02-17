@@ -271,7 +271,7 @@ export default function StatusBoardClient() {
             <TableCell colSpan={8} className="bg-slate-50/80 p-0 dark:bg-slate-900/40">
               <div className="animate-in fade-in-0 slide-in-from-top-1 p-5 duration-200 space-y-5">
                 {/* Details grid */}
-                <div className="grid grid-cols-2 gap-3 text-sm lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 text-sm xl:grid-cols-5">
                   <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-700/70 dark:bg-slate-950/30">
                     <span className="text-xs uppercase tracking-wide text-muted-foreground">Installed</span>
                     <p className="mt-1 font-medium">{item.installDate ? new Date(item.installDate).toLocaleDateString() : "—"}</p>
@@ -289,6 +289,10 @@ export default function StatusBoardClient() {
                   <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-700/70 dark:bg-slate-950/30">
                     <span className="text-xs uppercase tracking-wide text-muted-foreground">Pending Tasks</span>
                     <p className="mt-1 font-medium">{item.pendingMaintenance}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-700/70 dark:bg-slate-950/30">
+                    <span className="text-xs uppercase tracking-wide text-muted-foreground">Room</span>
+                    <p className="mt-1 font-medium">{item.room?.name ?? "No Room"}</p>
                   </div>
                 </div>
 
@@ -332,6 +336,29 @@ export default function StatusBoardClient() {
                       </Button>
                     </Link>
                   )}
+                  {item.deepLinks.warranty && (
+                    <Link href={item.deepLinks.warranty}>
+                      <Button variant="outline" size="sm" className={LINK_ACTION_BUTTON_CLASS}>
+                        <Shield className="h-3.5 w-3.5 mr-1" /> Warranty
+                      </Button>
+                    </Link>
+                  )}
+                  {item.recommendation === "REPLACE_SOON" && item.deepLinks.replaceRepair ? (
+                    <Link href={item.deepLinks.replaceRepair}>
+                      <Button variant="outline" size="sm" className={LINK_ACTION_BUTTON_CLASS}>
+                        <Wrench className="h-3.5 w-3.5 mr-1" /> Replace or Repair
+                      </Button>
+                    </Link>
+                  ) : item.recommendation === "REPLACE_SOON" ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled
+                      className="cursor-not-allowed border-slate-200 text-slate-400 opacity-60 dark:border-slate-800 dark:text-slate-500"
+                    >
+                      <Wrench className="h-3.5 w-3.5 mr-1" /> Replace or Repair
+                    </Button>
+                  ) : null}
                   {item.deepLinks.maintenance && item.pendingMaintenance > 0 ? (
                     <Link href={item.deepLinks.maintenance}>
                       <Button variant="outline" size="sm" className={LINK_ACTION_BUTTON_CLASS}>
