@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { Fragment, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -208,7 +208,7 @@ export default function StatusBoardClient() {
   // Render grouped or flat
   const renderItems = (itemList: StatusBoardItemDTO[]) =>
     itemList.map((item) => (
-      <Collapsible key={item.id} open={expandedId === item.id}>
+      <Fragment key={item.id}>
         <TableRow
           className={`cursor-pointer hover:bg-muted/50 ${item.isPinned ? "bg-yellow-50/50 dark:bg-yellow-900/10" : ""}`}
           onClick={() => handleExpand(item)}
@@ -250,9 +250,9 @@ export default function StatusBoardClient() {
           </TableCell>
         </TableRow>
 
-        <CollapsibleContent>
-          <tr>
-            <td colSpan={8} className="bg-muted/30 p-0">
+        {expandedId === item.id && (
+          <TableRow>
+            <TableCell colSpan={8} className="bg-muted/30 p-0">
               <div className="p-4 space-y-4">
                 {/* Details grid */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
@@ -394,10 +394,10 @@ export default function StatusBoardClient() {
                   </Button>
                 </div>
               </div>
-            </td>
-          </tr>
-        </CollapsibleContent>
-      </Collapsible>
+            </TableCell>
+          </TableRow>
+        )}
+      </Fragment>
     ));
 
   return (
