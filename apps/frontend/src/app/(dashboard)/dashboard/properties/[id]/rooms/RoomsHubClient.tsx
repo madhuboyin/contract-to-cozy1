@@ -10,6 +10,7 @@ import { listInventoryRooms, patchRoomMeta, getRoomInsights } from '../../../inv
 import { SectionHeader } from '../../../components/SectionHeader';
 import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
 import RoomScanModal from '@/app/(dashboard)/dashboard/components/inventory/RoomScanModal';
+import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
 
 
 function guessRoomType(name: string) {
@@ -173,6 +174,8 @@ export default function RoomsHubClient() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
+      <OnboardingReturnBanner />
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <SectionHeader
           icon="✨"

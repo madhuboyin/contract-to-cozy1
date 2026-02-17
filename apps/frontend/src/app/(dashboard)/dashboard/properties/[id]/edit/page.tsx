@@ -28,6 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/components/ui/use-toast";
+import OnboardingReturnBanner from "@/components/onboarding/OnboardingReturnBanner";
 
 
 // --- Appliance Constants and Schemas ---
@@ -470,6 +471,8 @@ export default function EditPropertyPage() {
           </Button>
         </div>
       </PageHeader>
+
+      <OnboardingReturnBanner />
       
        {hasErrors && (
          <div className="mb-4 p-4 border border-red-300 bg-red-50 rounded-md">

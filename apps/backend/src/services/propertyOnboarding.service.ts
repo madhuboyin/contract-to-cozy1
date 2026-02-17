@@ -22,6 +22,21 @@ export type SetupStatusDTO = {
 
 type CompletionMap = Record<string, boolean>;
 
+function withOnboardingReturnContext(
+  propertyId: string,
+  targetPath: string,
+  step: SetupStep
+): string {
+  const returnTo = `/dashboard/properties/${propertyId}/onboarding`;
+  const params = new URLSearchParams({
+    fromOnboarding: '1',
+    returnTo,
+    step: String(step),
+  });
+
+  return `${targetPath}?${params.toString()}`;
+}
+
 const STEP_TEMPLATES: Array<{
   step: SetupStep;
   title: string;
@@ -34,35 +49,60 @@ const STEP_TEMPLATES: Array<{
     title: 'Add Property Details',
     description: 'Add baseline details so your home profile is accurate.',
     ctaLabel: 'Edit details',
-    href: (propertyId) => `/dashboard/properties/${propertyId}/edit`,
+    href: (propertyId) =>
+      withOnboardingReturnContext(
+        propertyId,
+        `/dashboard/properties/${propertyId}/edit`,
+        1
+      ),
   },
   {
     step: 2,
     title: 'Create Rooms',
     description: 'Set up rooms to organize inventory and room-level insights.',
     ctaLabel: 'Manage rooms',
-    href: (propertyId) => `/dashboard/properties/${propertyId}/rooms`,
+    href: (propertyId) =>
+      withOnboardingReturnContext(
+        propertyId,
+        `/dashboard/properties/${propertyId}/rooms`,
+        2
+      ),
   },
   {
     step: 3,
     title: 'Add Inventory',
     description: 'Track key items and systems to unlock better coverage insights.',
     ctaLabel: 'Open inventory',
-    href: (propertyId) => `/dashboard/properties/${propertyId}/inventory`,
+    href: (propertyId) =>
+      withOnboardingReturnContext(
+        propertyId,
+        `/dashboard/properties/${propertyId}/inventory`,
+        3
+      ),
   },
   {
     step: 4,
     title: 'Activate Protection',
     description: 'Enable proactive protection by configuring tasks or alerts.',
     ctaLabel: 'Open incidents',
-    href: (propertyId) => `/dashboard/properties/${propertyId}/incidents`,
+    href: (propertyId) =>
+      withOnboardingReturnContext(
+        propertyId,
+        `/dashboard/properties/${propertyId}/incidents`,
+        4
+      ),
   },
   {
     step: 5,
     title: 'Generate Insights',
     description: 'Generate or review reports to unlock a complete home snapshot.',
     ctaLabel: 'View insights',
-    href: (propertyId) => `/dashboard/properties/${propertyId}/risk-assessment`,
+    href: (propertyId) =>
+      withOnboardingReturnContext(
+        propertyId,
+        `/dashboard/properties/${propertyId}/risk-assessment`,
+        5
+      ),
   },
 ];
 

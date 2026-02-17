@@ -17,6 +17,7 @@ import { SectionHeader } from '../../../components/SectionHeader';
 import { listPropertyRecalls } from '../recalls/recallsApi';
 import InventoryBulkUploadModal from '../../../components/inventory/InventoryBulkUploadModal';
 import InventoryImportHistoryModal from '../../../components/inventory/InventoryImportHistoryModal';
+import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
 
 
 export default function InventoryClient() {
@@ -220,6 +221,8 @@ export default function InventoryClient() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4 max-w-7xl mx-auto pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
+      <OnboardingReturnBanner />
+
       <div className="flex flex-col gap-4">
         {/* ROW 1: Title + Tabs */}
         <div className="flex flex-col sm:flex-row sm:items-start gap-4">
