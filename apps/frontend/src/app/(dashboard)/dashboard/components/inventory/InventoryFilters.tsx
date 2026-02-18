@@ -37,18 +37,18 @@ export default function InventoryFilters(props: {
   rooms: { id: string; name: string }[];
 }) {
   return (
-    <div className="rounded-2xl border border-black/10 p-4 flex flex-col gap-3 lg:flex-row">
+    <div className="rounded-2xl border border-black/15 bg-white/90 p-4 shadow-sm flex flex-col gap-3 lg:flex-row">
       <input
         value={props.q}
         onChange={(e) => props.onQChange(e.target.value)}
         placeholder="Search (name, brand, model, serial)…"
-        className="w-full lg:flex-1 rounded-xl border border-black/10 px-3 py-2 text-sm min-h-[44px]"
+        className="w-full lg:flex-1 rounded-xl border border-black/15 px-3 py-2 text-sm min-h-[44px] bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-300"
       />
 
       <select
         value={props.roomId ?? 'ALL'}
         onChange={(e) => props.onRoomChange(e.target.value)}
-        className="w-full lg:w-auto rounded-xl border border-black/10 px-3 py-2 text-sm min-h-[44px]"
+        className="w-full lg:w-auto rounded-xl border border-black/15 px-3 py-2 text-sm min-h-[44px] bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-300"
       >
         {props.rooms.map((r) => (
           <option key={r.id} value={r.id}>
@@ -60,7 +60,7 @@ export default function InventoryFilters(props: {
       <select
         value={props.category ?? ''}
         onChange={(e) => props.onCategoryChange((e.target.value as InventoryItemCategory) || undefined)}
-        className="w-full lg:w-auto rounded-xl border border-black/10 px-3 py-2 text-sm min-h-[44px]"
+        className="w-full lg:w-auto rounded-xl border border-black/15 px-3 py-2 text-sm min-h-[44px] bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-300"
       >
         <option value="">All categories</option>
         {CATEGORIES.map((c) => (
@@ -77,7 +77,7 @@ export default function InventoryFilters(props: {
           if (v === '') props.onHasDocumentsChange(undefined);
           else props.onHasDocumentsChange(v === 'true');
         }}
-        className="w-full lg:w-auto rounded-xl border border-black/10 px-3 py-2 text-sm min-h-[44px]"
+        className="w-full lg:w-auto rounded-xl border border-black/15 px-3 py-2 text-sm min-h-[44px] bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-300"
       >
         <option value="">Docs: Any</option>
         <option value="true">Has docs</option>
@@ -92,7 +92,7 @@ export default function InventoryFilters(props: {
           if (v === '') props.onHasRecallAlertsChange(undefined);
           else props.onHasRecallAlertsChange(v === 'true');
         }}
-        className="w-full lg:w-auto rounded-xl border border-black/10 px-3 py-2 text-sm min-h-[44px]"
+        className="w-full lg:w-auto rounded-xl border border-black/15 px-3 py-2 text-sm min-h-[44px] bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-300"
       >
         <option value="">Recalls: Any</option>
         <option value="true">Has recall alerts</option>

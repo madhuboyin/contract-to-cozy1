@@ -219,6 +219,9 @@ export default function InventoryClient() {
 
   const hasAnyItems = items.length > 0;
   const hasVisibleItems = visibleItems.length > 0;
+  const coverageHealthPct = hasAnyItems
+    ? Math.max(0, Math.round(((items.length - gapIds.size) / items.length) * 100))
+    : 100;
 
   return (
     <div className="p-4 sm:p-6 space-y-4 max-w-7xl mx-auto pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
@@ -300,7 +303,7 @@ export default function InventoryClient() {
       </div>
   
       {/* Coverage Gap Banner */}
-      <div className="rounded-2xl border border-black/10 bg-white p-4">
+      <div className="rounded-2xl border border-black/10 bg-gradient-to-br from-amber-50/50 via-white to-teal-50/40 p-4">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div className="min-w-0">
             <div className="text-sm font-medium">Coverage gaps</div>
@@ -317,8 +320,31 @@ export default function InventoryClient() {
                     {gapCounts.NO_COVERAGE ? ` • ${gapCounts.NO_COVERAGE} uncovered` : ''}
                   </>
                 ) : (
-                  <>No high-value coverage gaps detected.</>
+                  <>
+                    No high-value coverage gaps detected.
+                    <span className="ml-1 font-medium text-emerald-700">All high-value items look protected.</span>
+                  </>
                 )}
+              </div>
+            )}
+
+            {!gapLoading && !gapError && hasAnyItems && (
+              <div className="mt-3 max-w-xs">
+                <div className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-wide text-slate-500">
+                  <span>Inventory Health</span>
+                  <span>{coverageHealthPct}%</span>
+                </div>
+                <div className="h-2.5 rounded-full bg-slate-200/70 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all duration-500"
+                    style={{ width: `${coverageHealthPct}%` }}
+                    role="progressbar"
+                    aria-label="Inventory coverage health"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={coverageHealthPct}
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -342,27 +368,29 @@ export default function InventoryClient() {
         </div>
       </div>
 
-      <InventoryFilters
-        q={q}
-        onQChange={setQ}
-        roomId={roomId}
-        onRoomChange={(val) => {
-          if (val === 'ALL') {
-            setRoomId(undefined);
-          } else {
-            setRoomId(val);
-          }
-        }}
-        category={category}
-        onCategoryChange={setCategory}
-        hasDocuments={hasDocuments}
-        onHasDocumentsChange={setHasDocuments}
-        hasRecallAlerts={hasRecallAlerts}
-        onHasRecallAlertsChange={setHasRecallAlerts}
-        rooms={roomOptions}
-      />
+      <div className="sticky top-2 z-20 md:static md:z-auto rounded-2xl bg-white/80 backdrop-blur-md p-2 space-y-2 border border-black/5">
+        <InventoryFilters
+          q={q}
+          onQChange={setQ}
+          roomId={roomId}
+          onRoomChange={(val) => {
+            if (val === 'ALL') {
+              setRoomId(undefined);
+            } else {
+              setRoomId(val);
+            }
+          }}
+          category={category}
+          onCategoryChange={setCategory}
+          hasDocuments={hasDocuments}
+          onHasDocumentsChange={setHasDocuments}
+          hasRecallAlerts={hasRecallAlerts}
+          onHasRecallAlertsChange={setHasRecallAlerts}
+          rooms={roomOptions}
+        />
 
-      <InventoryRoomChips rooms={rooms} selectedRoomId={roomId} onSelect={(id) => setRoomId(id)} />
+        <InventoryRoomChips rooms={rooms} selectedRoomId={roomId} onSelect={(id) => setRoomId(id)} />
+      </div>
 
       {loading ? (
           <div className="text-sm opacity-70">Loading…</div>
@@ -405,7 +433,7 @@ export default function InventoryClient() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-fr">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 auto-rows-fr">
             {visibleItems.map((item) => (
               <div
                 key={item.id}
