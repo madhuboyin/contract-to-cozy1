@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { AlertCircle, ArrowLeft, Loader2, Wrench } from 'lucide-react';
 import { getInventoryItem } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { InventoryItem } from '@/types';
 import {
   getReplaceRepairAnalysis,
@@ -299,7 +300,23 @@ export default function ReplaceRepairClient() {
           </label>
 
           <label className="text-xs text-gray-600">
-            Cash buffer ($)
+            <span className="inline-flex items-center gap-1">
+              Cash buffer ($)
+              <TooltipProvider delayDuration={120}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="What is cash buffer"
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 text-[10px] font-semibold text-gray-600 hover:bg-gray-100"
+                    >
+                      i
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>How much money could you spend on this today without stress</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </span>
             <input
               type="number"
               min={0}
