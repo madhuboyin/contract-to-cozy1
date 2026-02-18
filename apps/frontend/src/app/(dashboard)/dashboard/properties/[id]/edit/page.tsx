@@ -285,6 +285,11 @@ export default function EditPropertyPage() {
   const hasResetForm = React.useRef(false);
 
   const contextualReturnTo = React.useMemo(() => {
+    const from = searchParams.get("from");
+    if (from === "status-board") {
+      return `/dashboard/properties/${propertyId}/status-board`;
+    }
+
     const raw = searchParams.get("returnTo");
     if (!raw || !raw.startsWith("/dashboard/properties/")) {
       return null;
@@ -293,7 +298,7 @@ export default function EditPropertyPage() {
       return raw;
     }
     return null;
-  }, [searchParams]);
+  }, [searchParams, propertyId]);
 
   // 2. Fetch Existing Property Data
   const { data: property, isLoading: isLoadingProperty } = useQuery({
@@ -475,7 +480,7 @@ export default function EditPropertyPage() {
             onClick={() => router.push(contextualReturnTo ?? `/dashboard/properties/${propertyId}`)}
             disabled={updateMutation.isPending}
           >
-            <X className="h-4 w-4 mr-2" /> Cancel
+            <X className="h-4 w-4 mr-2" /> {searchParams.get("from") === "status-board" ? "Back to Status Board" : "Cancel"}
           </Button>
           <Button 
             onClick={form.handleSubmit(onSubmit)} 
@@ -596,7 +601,7 @@ export default function EditPropertyPage() {
             <Card>
                 <CardHeader>
                     <CardTitle>Risk & System Details</CardTitle>
-                    <CardDescription>These details are crucial for calculating your property's risk score and maintenance schedules.</CardDescription>
+                    <CardDescription>These details are crucial for calculating your property&apos;s risk score and maintenance schedules.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

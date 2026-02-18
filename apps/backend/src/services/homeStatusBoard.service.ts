@@ -194,7 +194,7 @@ function buildDeepLinks(
     links.replaceRepair = `${base}/inventory/items/${item.inventoryItemId}/replace-repair`;
   } else if (showRiskLink) {
     // Risk-matrix system rows are not inventory-backed; route "View Item" to property edit.
-    links.viewItem = `${base}/edit`;
+    links.viewItem = `${base}/edit?from=status-board`;
   }
   if (item.homeAssetId) {
     links.viewAsset = `${base}/systems/${item.homeAssetId}`;
