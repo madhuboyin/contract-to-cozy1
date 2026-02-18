@@ -18,7 +18,7 @@ export function SellerPrepDisclaimer() {
 
   return (
     <>
-      <Alert className="rounded-2xl border-yellow-300/70 bg-yellow-50/85 shadow-sm backdrop-blur">
+      <Alert className="border-yellow-300 bg-yellow-50">
         <AlertCircle className="h-4 w-4 text-yellow-600" />
         <AlertDescription className="text-sm text-yellow-900">
           <strong>Important:</strong> ROI estimates are based on national averages from
@@ -37,7 +37,7 @@ export function SellerPrepDisclaimer() {
       </Alert>
 
       <Dialog open={showSources} onOpenChange={setShowSources}>
-        <DialogContent className="sm:max-w-[600px] border-white/70 bg-white/90 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/90">
+        <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Data Sources & Methodology</DialogTitle>
             <DialogDescription>
@@ -46,9 +46,9 @@ export function SellerPrepDisclaimer() {
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="rounded-r-xl border-l-4 border-blue-500 bg-blue-50/45 p-3 pl-4">
+            <div className="border-l-4 border-blue-500 pl-4">
               <h4 className="font-semibold text-sm mb-1">Remodeling Magazine</h4>
-              <p className="mb-2 text-sm text-slate-600 dark:text-slate-300">
+              <p className="text-sm text-gray-600 mb-2">
                 Cost vs. Value Report (Annual) - Tracks ROI for 22 home improvement
                 projects across 150 U.S. markets
               </p>
@@ -62,11 +62,11 @@ export function SellerPrepDisclaimer() {
               </a>
             </div>
 
-            <div className="rounded-r-xl border-l-4 border-blue-500 bg-blue-50/45 p-3 pl-4">
+            <div className="border-l-4 border-blue-500 pl-4">
               <h4 className="font-semibold text-sm mb-1">
                 National Association of Realtors (NAR)
               </h4>
-              <p className="mb-2 text-sm text-slate-600 dark:text-slate-300">
+              <p className="text-sm text-gray-600 mb-2">
                 Remodeling Impact Report - Surveys homeowners and agents on project appeal
                 and value
               </p>
@@ -80,12 +80,12 @@ export function SellerPrepDisclaimer() {
               </a>
             </div>
 
-            <div className="rounded-r-xl border-l-4 border-blue-500 bg-blue-50/45 p-3 pl-4">
+            <div className="border-l-4 border-blue-500 pl-4">
               <h4 className="font-semibold text-sm mb-1">Our Methodology</h4>
-              <p className="text-sm text-slate-600 dark:text-slate-300">
+              <p className="text-sm text-gray-600">
                 We aggregate ROI data from multiple sources and adjust for:
               </p>
-              <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-600 dark:text-slate-300">
+              <ul className="list-disc list-inside text-sm text-gray-600 mt-2 space-y-1">
                 <li>Regional cost differences</li>
                 <li>Property type (SFH vs. Condo)</li>
                 <li>Current market conditions</li>
@@ -93,9 +93,9 @@ export function SellerPrepDisclaimer() {
               </ul>
             </div>
 
-            <div className="rounded-xl border border-slate-200/70 bg-slate-50/85 p-4 dark:border-slate-700/70 dark:bg-slate-900/50">
+            <div className="bg-gray-50 p-4 rounded-lg">
               <h4 className="font-semibold text-sm mb-2">Important Caveats:</h4>
-              <ul className="list-inside list-disc space-y-1 text-sm text-slate-600 dark:text-slate-300">
+              <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
                 <li>ROI estimates assume quality work by licensed professionals</li>
                 <li>Results vary by local market, neighborhood, and buyer preferences</li>
                 <li>Timing matters - market conditions change quarterly</li>
@@ -104,7 +104,7 @@ export function SellerPrepDisclaimer() {
               </ul>
             </div>
 
-            <div className="border-t border-slate-200/70 pt-4 dark:border-slate-700/70">
+            <div className="pt-4 border-t">
               <Button onClick={() => setShowSources(false)} className="w-full">
                 Close
               </Button>
