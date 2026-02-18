@@ -74,7 +74,7 @@ export default function InventoryItemCard(props: { item: InventoryItem; onClick:
         'bg-gradient-to-br from-[#fff5eb]/82 via-[#fffdf8]/90 to-[#eef8f3]/70',
         'backdrop-blur-sm shadow-[0_12px_26px_-20px_rgba(15,23,42,0.6)]',
         'transition-all duration-200 motion-safe:hover:scale-[1.02] hover:-translate-y-0.5 hover:shadow-[0_22px_38px_-20px_rgba(15,23,42,0.55)]',
-        'h-[220px] w-full',
+        'min-h-[252px] w-full',
         "flex flex-col",
       ].join(' ')}
     >
@@ -132,7 +132,7 @@ export default function InventoryItemCard(props: { item: InventoryItem; onClick:
         <div className="mt-3 min-h-[62px] leading-tight">
           <div className="text-[11px] uppercase tracking-wide text-slate-500">Replacement</div>
           {replacement ? (
-            <div className="text-[1.45rem] font-semibold tabular-nums text-slate-900 sm:text-[1.5rem]">{replacement}</div>
+            <div className="text-[1.28rem] font-semibold tabular-nums text-slate-900 sm:text-[1.35rem]">{replacement}</div>
           ) : (
             <div className="text-sm text-slate-500">No value yet</div>
           )}
