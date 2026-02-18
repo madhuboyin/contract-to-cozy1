@@ -113,6 +113,12 @@ const WARRANTY_LABELS: Record<WarrantyBadge, string> = {
 const HEADER_CELL_CLASS =
   "h-12 px-3 text-[13px] font-semibold tracking-wide text-slate-700 dark:text-slate-200";
 
+const GLASS_PANEL_CLASS =
+  "rounded-[26px] border border-white/60 bg-white/50 shadow-[0_18px_48px_-28px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-950/40";
+
+const GLASS_CARD_CLASS =
+  "border-white/70 bg-white/55 shadow-[0_16px_32px_-22px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-950/40";
+
 const LINK_ACTION_BUTTON_CLASS =
   "border-teal-200 text-teal-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-teal-50 hover:text-teal-800 hover:shadow-[0_10px_24px_-16px_rgba(13,148,136,0.7)] dark:border-teal-900/70 dark:text-teal-300 dark:hover:bg-teal-950/40";
 
@@ -692,52 +698,77 @@ export default function StatusBoardClient() {
 
   return (
     <TooltipProvider delayDuration={120}>
-      <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-2xl font-heading font-bold">Home Status Board</h1>
-          <p className="text-sm text-muted-foreground">
-            All home items with computed condition statuses
-          </p>
-        </div>
-      </div>
+      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/80 bg-[radial-gradient(circle_at_12%_15%,rgba(251,191,36,0.16),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.2),transparent_38%),radial-gradient(circle_at_50%_100%,rgba(59,130,246,0.12),transparent_40%),linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.88))] p-4 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.6)] dark:border-slate-700/80 dark:bg-[radial-gradient(circle_at_12%_15%,rgba(245,158,11,0.14),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.16),transparent_38%),radial-gradient(circle_at_50%_100%,rgba(59,130,246,0.12),transparent_40%),linear-gradient(180deg,rgba(2,6,23,0.88),rgba(2,6,23,0.78))] sm:p-5">
+        <div className="pointer-events-none absolute -left-16 top-8 h-44 w-44 rounded-full bg-amber-300/20 blur-3xl dark:bg-amber-500/20" />
+        <div className="pointer-events-none absolute -right-12 top-10 h-52 w-52 rounded-full bg-teal-300/20 blur-3xl dark:bg-teal-500/20" />
+        <div className="pointer-events-none absolute bottom-0 left-1/3 h-40 w-40 rounded-full bg-sky-300/20 blur-3xl dark:bg-sky-500/20" />
 
-      {/* Summary strip */}
-      {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Card className="border-slate-200/80 bg-gradient-to-b from-white to-slate-50/80">
-            <CardContent className="p-5 text-center">
-              <p className="text-3xl font-bold">{summary.total}</p>
-              <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">Total Items</p>
-            </CardContent>
-          </Card>
-          <Card className="border-slate-200/80 bg-gradient-to-b from-emerald-50/70 to-white dark:from-emerald-950/20 dark:to-transparent">
-            <CardContent className="p-5 text-center">
-              <p className="text-3xl font-bold text-green-600">{summary.good}</p>
-              <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">Good</p>
-            </CardContent>
-          </Card>
-          <Card className="border-slate-200/80 bg-gradient-to-b from-amber-50/70 to-white dark:from-amber-950/20 dark:to-transparent">
-            <CardContent className="p-5 text-center">
-              <p className="text-3xl font-bold text-amber-600">{summary.monitor}</p>
-              <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">Monitor</p>
-            </CardContent>
-          </Card>
-          <Card className="border-slate-200/80 bg-gradient-to-b from-rose-50/70 to-white dark:from-rose-950/20 dark:to-transparent">
-            <CardContent className="p-5 text-center">
-              <p className="text-3xl font-bold text-red-600">{summary.actionNeeded}</p>
-              <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">Action Needed</p>
-            </CardContent>
-          </Card>
+        <div className="relative z-10 space-y-5">
+        {/* Header */}
+        <div className={`flex items-center gap-3 p-2 sm:p-3 ${GLASS_PANEL_CLASS}`}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 rounded-full border border-slate-300/70 bg-white/70 hover:bg-white dark:border-slate-700/80 dark:bg-slate-900/60 dark:hover:bg-slate-900"
+            onClick={() => router.back()}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">Home Intelligence</p>
+            <h1 className="text-2xl font-heading font-bold leading-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
+              Home Status Board
+            </h1>
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              All home items with computed condition statuses
+            </p>
+          </div>
         </div>
-      )}
+
+        {/* Summary strip */}
+        {summary && (
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Card className={GLASS_CARD_CLASS}>
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-300">Total Items</p>
+                  <Box className="h-4 w-4 text-slate-500 dark:text-slate-300" />
+                </div>
+                <p className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">{summary.total}</p>
+              </CardContent>
+            </Card>
+            <Card className={`${GLASS_CARD_CLASS} bg-gradient-to-br from-emerald-100/70 via-white/55 to-emerald-50/60 dark:from-emerald-900/30 dark:to-emerald-950/20`}>
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-300">Good</p>
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
+                </div>
+                <p className="mt-2 text-3xl font-bold text-emerald-700 dark:text-emerald-300">{summary.good}</p>
+              </CardContent>
+            </Card>
+            <Card className={`${GLASS_CARD_CLASS} bg-gradient-to-br from-amber-100/70 via-white/55 to-amber-50/60 dark:from-amber-900/30 dark:to-amber-950/20`}>
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-300">Monitor</p>
+                  <Clock className="h-4 w-4 text-amber-600 dark:text-amber-300" />
+                </div>
+                <p className="mt-2 text-3xl font-bold text-amber-700 dark:text-amber-300">{summary.monitor}</p>
+              </CardContent>
+            </Card>
+            <Card className={`${GLASS_CARD_CLASS} bg-gradient-to-br from-rose-100/70 via-white/55 to-orange-50/60 dark:from-rose-900/30 dark:to-red-950/20`}>
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-300">Action Needed</p>
+                  <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-300" />
+                </div>
+                <p className="mt-2 text-3xl font-bold text-rose-700 dark:text-rose-300">{summary.actionNeeded}</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
       {/* Controls bar */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-300/80 bg-white/70 p-3 shadow-sm dark:border-slate-700/80 dark:bg-slate-950/40">
+      <div className={`flex flex-wrap items-center gap-2 p-3 ${GLASS_PANEL_CLASS}`}>
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -747,12 +778,12 @@ export default function StatusBoardClient() {
               setSearch(e.target.value);
               setPage(1);
             }}
-            className="pl-9 h-9"
+            className="h-9 border-slate-300/80 bg-white/75 pl-9 shadow-sm focus-visible:ring-teal-200 dark:border-slate-700/80 dark:bg-slate-900/60"
           />
         </div>
 
         <Select value={conditionFilter} onValueChange={(v) => { setConditionFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-[140px] h-9">
+          <SelectTrigger className="h-9 w-[140px] border-slate-300/80 bg-white/70 shadow-sm dark:border-slate-700/80 dark:bg-slate-900/60">
             <SelectValue placeholder="Condition" />
           </SelectTrigger>
           <SelectContent>
@@ -764,7 +795,7 @@ export default function StatusBoardClient() {
         </Select>
 
         <Select value={categoryFilter} onValueChange={(v) => { setCategoryFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-[140px] h-9">
+          <SelectTrigger className="h-9 w-[140px] border-slate-300/80 bg-white/70 shadow-sm dark:border-slate-700/80 dark:bg-slate-900/60">
             <SelectValue placeholder="Category" />
           </SelectTrigger>
           <SelectContent>
@@ -778,7 +809,7 @@ export default function StatusBoardClient() {
         </Select>
 
         <Select value={groupBy} onValueChange={setGroupBy}>
-          <SelectTrigger className="w-[130px] h-9">
+          <SelectTrigger className="h-9 w-[130px] border-slate-300/80 bg-white/70 shadow-sm dark:border-slate-700/80 dark:bg-slate-900/60">
             <SelectValue placeholder="Group by" />
           </SelectTrigger>
           <SelectContent>
@@ -792,7 +823,7 @@ export default function StatusBoardClient() {
         <Button
           variant={pinnedOnly ? "default" : "outline"}
           size="sm"
-          className="h-9"
+          className={`h-9 transition-colors ${pinnedOnly ? "bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200" : "border-slate-300/80 bg-white/60 hover:bg-white dark:border-slate-700/80 dark:bg-slate-900/40 dark:hover:bg-slate-900"}`}
           onClick={() => { setPinnedOnly(!pinnedOnly); setPage(1); }}
         >
           <Pin className="h-3.5 w-3.5 mr-1" /> Pinned
@@ -801,7 +832,7 @@ export default function StatusBoardClient() {
         <Button
           variant={includeHidden ? "default" : "outline"}
           size="sm"
-          className="h-9"
+          className={`h-9 transition-colors ${includeHidden ? "bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200" : "border-slate-300/80 bg-white/60 hover:bg-white dark:border-slate-700/80 dark:bg-slate-900/40 dark:hover:bg-slate-900"}`}
           onClick={() => { setIncludeHidden(!includeHidden); setPage(1); }}
         >
           <EyeOff className="h-3.5 w-3.5 mr-1" /> Hidden
@@ -810,7 +841,7 @@ export default function StatusBoardClient() {
         <Button
           variant="outline"
           size="sm"
-          className={`h-9 transition-all ${recomputeMutation.isPending ? "bg-slate-100 dark:bg-slate-900/60" : "hover:-translate-y-0.5"}`}
+          className={`h-9 border-slate-300/80 bg-white/65 shadow-sm transition-all dark:border-slate-700/80 dark:bg-slate-900/40 ${recomputeMutation.isPending ? "bg-slate-100 dark:bg-slate-900/60" : "hover:-translate-y-0.5 hover:bg-white dark:hover:bg-slate-900"}`}
           onClick={() => recomputeMutation.mutate()}
           disabled={recomputeMutation.isPending}
         >
@@ -818,14 +849,16 @@ export default function StatusBoardClient() {
           {recomputeMutation.isPending ? "Recomputing..." : "Recompute"}
         </Button>
       </div>
+        </div>
+      </div>
 
       {/* Table */}
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading status board...</div>
+        <div className={`py-12 text-center text-muted-foreground ${GLASS_PANEL_CLASS}`}>Loading status board...</div>
       ) : error ? (
-        <div className="text-center py-12 text-red-500">Failed to load status board</div>
+        <div className={`py-12 text-center text-red-500 ${GLASS_PANEL_CLASS}`}>Failed to load status board</div>
       ) : items.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
+        <div className={`py-12 text-center text-muted-foreground ${GLASS_PANEL_CLASS}`}>
           No items found. Add inventory items or home systems to see them here.
         </div>
       ) : groups && groupBy !== "none" ? (
@@ -834,16 +867,16 @@ export default function StatusBoardClient() {
           {Object.entries(groups).map(([groupName, groupItems]) => (
             <Collapsible key={groupName} open={true}>
               <CollapsibleTrigger asChild>
-                <div className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 hover:bg-muted/50">
+                <div className={`flex cursor-pointer items-center gap-2 rounded-2xl px-3 py-2.5 transition-colors hover:bg-white/70 dark:hover:bg-slate-900/60 ${GLASS_CARD_CLASS}`}>
                   <ChevronDown className="h-4 w-4" />
-                  <h3 className="font-medium">{groupName}</h3>
-                  <Badge variant="outline" className="text-xs">
+                  <h3 className="font-semibold">{groupName}</h3>
+                  <Badge variant="outline" className="text-xs bg-white/70 dark:bg-slate-900/60">
                     {groupItems.length}
                   </Badge>
                 </div>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white/40 backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-950/30">
+                <div className={`mt-2 overflow-hidden rounded-2xl ${GLASS_PANEL_CLASS}`}>
                   <Table>
                     <TableHeader>
                       <TableRow className="border-b-2 border-slate-300/80 dark:border-slate-600/80">
@@ -866,7 +899,7 @@ export default function StatusBoardClient() {
         </div>
       ) : (
         // Flat view
-        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white/40 backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-950/30">
+        <div className={`overflow-hidden rounded-2xl ${GLASS_PANEL_CLASS}`}>
           <Table>
             <TableHeader>
               <TableRow className="border-b-2 border-slate-300/80 dark:border-slate-600/80">
@@ -887,8 +920,8 @@ export default function StatusBoardClient() {
 
       {/* Pagination */}
       {pagination && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
+        <div className={`flex items-center justify-between p-3 ${GLASS_PANEL_CLASS}`}>
+          <p className="text-sm text-muted-foreground dark:text-slate-300">
             Page {pagination.page} of {pagination.totalPages} ({pagination.total} items)
           </p>
           <div className="flex gap-2">
@@ -911,7 +944,6 @@ export default function StatusBoardClient() {
           </div>
         </div>
       )}
-      </div>
     </TooltipProvider>
   );
 }
