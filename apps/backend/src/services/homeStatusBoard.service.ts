@@ -44,6 +44,10 @@ function mapAssetTypeToCategory(assetType: string): string {
   return 'SYSTEMS';
 }
 
+function isRiskAssessmentCategory(category: string | null | undefined): boolean {
+  return category === 'SYSTEMS' || category === 'SAFETY' || category === 'STRUCTURE';
+}
+
 function mapInventoryCategoryToStatusBoardCategory(category: string | null | undefined): string {
   if (!category) return 'OTHER';
   // Keep explicit risk buckets where they naturally apply.
@@ -167,11 +171,18 @@ function getWarrantyStatus(warranties: { expiryDate?: Date | null }[]): Warranty
 }
 
 function buildDeepLinks(
-  item: { id: string; inventoryItemId: string | null; homeAssetId: string | null; roomId: string | null },
+  item: {
+    id: string;
+    inventoryItemId: string | null;
+    homeAssetId: string | null;
+    roomId: string | null;
+    categoryKey: string | null;
+  },
   propertyId: string
 ) {
   const base = `/dashboard/properties/${propertyId}`;
   const links: Record<string, string> = {};
+  const showRiskLink = isRiskAssessmentCategory(item.categoryKey);
 
   if (item.inventoryItemId) {
     const itemParams = new URLSearchParams({
@@ -181,6 +192,9 @@ function buildDeepLinks(
     });
     links.viewItem = `${base}/inventory?${itemParams.toString()}`;
     links.replaceRepair = `${base}/inventory/items/${item.inventoryItemId}/replace-repair`;
+  } else if (showRiskLink) {
+    // Risk-matrix system rows are not inventory-backed; route "View Item" to property edit.
+    links.viewItem = `${base}/edit`;
   }
   if (item.homeAssetId) {
     links.viewAsset = `${base}/systems/${item.homeAssetId}`;
@@ -188,7 +202,9 @@ function buildDeepLinks(
   if (item.roomId) {
     links.viewRoom = `${base}/rooms/${item.roomId}?from=status-board`;
   }
-  links.riskAssessment = `${base}/risk`;
+  if (showRiskLink) {
+    links.riskAssessment = `${base}/risk-assessment`;
+  }
   links.maintenance = `/dashboard/maintenance?propertyId=${propertyId}&from=status-board`;
   links.warranty = `/dashboard/warranties?propertyId=${propertyId}&from=status-board`;
 
@@ -675,7 +691,16 @@ export async function listBoard(propertyId: string, query: ListBoardQuery) {
       pendingMaintenance,
       room: room ? { id: room.id, name: room.name } : null,
       needsInstallDateForPrediction,
-      deepLinks: buildDeepLinks(item, propertyId),
+      deepLinks: buildDeepLinks(
+        {
+          id: item.id,
+          inventoryItemId: item.inventoryItemId,
+          homeAssetId: item.homeAssetId,
+          roomId: item.roomId,
+          categoryKey: item.categoryKey,
+        },
+        propertyId
+      ),
       inventoryItemId: item.inventoryItemId,
       homeAssetId: item.homeAssetId,
     };
