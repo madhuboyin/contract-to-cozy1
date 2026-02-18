@@ -502,16 +502,29 @@ export async function listBoard(propertyId: string, query: ListBoardQuery) {
   // Keep board registry and category mappings synced on every load.
   await ensureHomeItems(propertyId);
 
-  // Backfill check: if no computedAt in last 24h, recompute
-  const recentStatus = await prisma.homeItemStatus.findFirst({
-    where: {
-      homeItem: { propertyId },
-      computedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-    },
-    select: { id: true },
-  });
+  // Recompute if board is stale OR if there are newly created/uncomputed rows.
+  const [recentStatus, hasUncomputedStatus] = await Promise.all([
+    prisma.homeItemStatus.findFirst({
+      where: {
+        homeItem: { propertyId },
+        computedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+      },
+      select: { id: true },
+    }),
+    prisma.homeItemStatus.findFirst({
+      where: {
+        homeItem: { propertyId },
+        OR: [
+          { computedAt: null },
+          { computedCondition: null },
+          { computedRecommendation: null },
+        ],
+      },
+      select: { id: true },
+    }),
+  ]);
 
-  if (!recentStatus) {
+  if (!recentStatus || hasUncomputedStatus) {
     await computeStatuses(propertyId);
   }
 
