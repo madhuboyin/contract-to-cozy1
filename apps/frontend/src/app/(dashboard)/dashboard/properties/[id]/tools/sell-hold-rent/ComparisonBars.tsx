@@ -23,7 +23,7 @@ export default function ComparisonBars(props: {
   const present = vals.filter((x) => typeof x.v === 'number' && Number.isFinite(x.v as number));
   if (present.length === 0) {
     return (
-      <div className="rounded-xl border border-black/10 bg-black/[0.02] p-3 text-xs text-black/60">
+      <div className="rounded-2xl border border-white/70 bg-white/70 p-3 text-xs text-slate-500 backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/45 dark:text-slate-300">
         No scenario data yet.
       </div>
     );
@@ -40,27 +40,27 @@ export default function ComparisonBars(props: {
         const active = props.winner ? props.winner === row.k : false;
 
         return (
-          <div key={row.k} className="rounded-xl border border-black/10 p-3">
+          <div key={row.k} className="rounded-2xl border border-white/70 bg-white/68 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-sm font-medium">
+              <div className="text-sm font-medium text-slate-800 dark:text-slate-100">
                 {row.label}{' '}
                 {active && (
-                  <span className="ml-2 text-xs rounded-full border border-black/10 bg-black/[0.04] px-2 py-0.5">
+                  <span className="ml-2 rounded-full border border-teal-200/70 bg-teal-50/85 px-2 py-0.5 text-xs text-teal-700 dark:border-teal-700/60 dark:bg-teal-900/30 dark:text-teal-200">
                     Best
                   </span>
                 )}
               </div>
-              <div className="text-sm font-semibold">{money(v)}</div>
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{money(v)}</div>
             </div>
 
-            <div className="mt-2 h-2 rounded-full bg-black/5 overflow-hidden">
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-700/60">
               <div
-                className={`h-full ${positive ? 'bg-emerald-500/40' : 'bg-rose-500/35'}`}
+                className={`h-full ${positive ? 'bg-gradient-to-r from-emerald-400/80 to-teal-500/80' : 'bg-gradient-to-r from-rose-400/80 to-amber-400/80'}`}
                 style={{ width: `${pct}%` }}
               />
             </div>
 
-            <div className="mt-1 text-xs text-black/60">
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
               {v === null ? '—' : positive ? 'Net positive' : 'Net negative'} • relative magnitude
             </div>
           </div>

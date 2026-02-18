@@ -151,86 +151,99 @@ export default function SellHoldRentClient() {
   }, [data]);
 
   return (
-    <div className="p-4 sm:p-6 space-y-4">
-      <SectionHeader
-        icon="🎯"
-        title="Sell vs Hold vs Rent"
-        description="Compare outcomes using appreciation, ownership costs, and rental income assumptions."
-      />
+    <div className="space-y-5 p-4 sm:p-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
+      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[radial-gradient(circle_at_10%_10%,rgba(251,191,36,0.14),transparent_40%),radial-gradient(circle_at_88%_14%,rgba(20,184,166,0.14),transparent_40%),linear-gradient(180deg,rgba(255,255,255,0.9),rgba(248,250,252,0.8))] p-4 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.6)] dark:border-slate-700/70 dark:bg-[radial-gradient(circle_at_10%_10%,rgba(251,191,36,0.12),transparent_40%),radial-gradient(circle_at_88%_14%,rgba(20,184,166,0.12),transparent_40%),linear-gradient(180deg,rgba(2,6,23,0.9),rgba(2,6,23,0.78))]">
+        <div className="rounded-2xl border border-white/70 bg-white/60 p-4 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45">
+          <SectionHeader
+            icon="🎯"
+            title="Sell vs Hold vs Rent"
+            description="Compare outcomes using appreciation, ownership costs, and rental income assumptions."
+          />
 
-      <div className="mt-3">
-        <HomeToolsRail propertyId={propertyId} />
+          <div className="mt-4">
+            <HomeToolsRail propertyId={propertyId} />
+          </div>
+        </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-xs text-black/60">
+      <div className="rounded-2xl border border-white/70 bg-white/65 p-3 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/45">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-xs text-slate-500 dark:text-slate-300">
           Property-scoped decision simulator • {data?.meta?.confidence ? `Confidence: ${data.meta.confidence}` : 'Phase 3'}
-        </div>
+          </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={async () => {
-              if (years === 5) return;
-              setYears(5);
-              await loadSimulator(5);
-            }}
-            className={`text-xs underline min-h-[44px] inline-flex items-center px-1 touch-manipulation ${years === 5 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
-          >
-            5y
-          </button>
-          <span className="text-xs opacity-40">|</span>
-          <button
-            type="button"
-            onClick={async () => {
-              if (years === 10) return;
-              setYears(10);
-              await loadSimulator(10);
-            }}
-            className={`text-xs underline min-h-[44px] inline-flex items-center px-1 touch-manipulation ${years === 10 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
-          >
-            10y
-          </button>
+          <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/75 p-1 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55">
+            <button
+              type="button"
+              onClick={async () => {
+                if (years === 5) return;
+                setYears(5);
+                await loadSimulator(5);
+              }}
+              className={`inline-flex min-h-[36px] items-center rounded-full px-3 text-sm font-medium transition-all touch-manipulation ${
+                years === 5
+                  ? 'border border-slate-900 bg-slate-900 text-white shadow-sm dark:border-white dark:bg-white dark:text-slate-900'
+                  : 'border border-transparent text-slate-600 hover:border-slate-300/70 hover:bg-white/80 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900/60'
+              }`}
+            >
+              5y
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                if (years === 10) return;
+                setYears(10);
+                await loadSimulator(10);
+              }}
+              className={`inline-flex min-h-[36px] items-center rounded-full px-3 text-sm font-medium transition-all touch-manipulation ${
+                years === 10
+                  ? 'border border-slate-900 bg-slate-900 text-white shadow-sm dark:border-white dark:bg-white dark:text-slate-900'
+                  : 'border border-transparent text-slate-600 hover:border-slate-300/70 hover:bg-white/80 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900/60'
+              }`}
+            >
+              10y
+            </button>
+          </div>
         </div>
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-3 flex items-start gap-3">
-          <div className="text-sm text-red-600 flex-1">{error}</div>
-          <button onClick={() => loadSimulator(years)} className="text-sm font-medium text-red-700 hover:text-red-900 shrink-0">Retry</button>
+        <div className="flex items-start gap-3 rounded-2xl border border-red-200/70 bg-red-50/85 p-3 backdrop-blur">
+          <div className="flex-1 text-sm text-red-600">{error}</div>
+          <button onClick={() => loadSimulator(years)} className="shrink-0 text-sm font-medium text-red-700 hover:text-red-900">Retry</button>
         </div>
       )}
 
       {/* Winner Story Card */}
-      <div className="rounded-2xl border border-black/10 bg-white p-4">
+      <div className="rounded-[26px] border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/70 to-teal-50/45 p-4 sm:p-5 shadow-[0_20px_42px_-30px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/60 dark:via-slate-900/50 dark:to-teal-950/20">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-sm font-medium">Best outcome</div>
-            <div className="text-xs opacity-70 mt-1">
-              For <span className="font-medium">{data?.input?.addressLabel || '—'}</span>
+            <div className="text-base font-semibold text-slate-900 dark:text-slate-100">Best outcome</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
+              For <span className="font-medium text-slate-700 dark:text-slate-200">{data?.input?.addressLabel || '—'}</span>
             </div>
           </div>
-          <div className="text-xs opacity-60">
+          <div className="text-xs text-slate-500 dark:text-slate-300">
             {loading ? 'Refreshing…' : data?.meta?.generatedAt ? 'Updated just now' : ''}
           </div>
         </div>
 
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-12 md:grid-cols-12 gap-4">
-          <div className="sm:col-span-4 md:col-span-4 space-y-3">
-            <div className="rounded-xl border border-black/10 p-3">
-              <div className="text-xs opacity-70">Winner</div>
-              <div className="text-lg font-semibold mt-1">{winnerLabel}</div>
+          <div className="space-y-3 sm:col-span-4 md:col-span-4">
+            <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
+              <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Winner</div>
+              <div className="mt-1 text-[1.7rem] font-semibold leading-tight text-slate-900 dark:text-slate-100">{winnerLabel}</div>
 
-              <div className="text-xs opacity-70 mt-2">Net outcome ({years}y)</div>
-              <div className="text-base font-semibold">
+              <div className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Net outcome ({years}y)</div>
+              <div className="text-base font-semibold text-slate-800 dark:text-slate-100">
                 {loading && !hasScenarioData ? '—' : money(winnerNet)}
               </div>
 
-              <div className="text-xs opacity-60 mt-2">
+              <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
                 Appreciation {pct(data?.current?.appreciationRate)} • Rent now {money(data?.current?.monthlyRentNow)}
               </div>
 
-              <div className="text-xs opacity-60 mt-1">
+              <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
                 Debt model{' '}
                 <span className="font-medium">
                   {data?.current?.mortgage ? 'On' : 'Unknown'}
@@ -238,19 +251,19 @@ export default function SellHoldRentClient() {
               </div>
             </div>
 
-            <div className="rounded-xl bg-black/5 p-3">
-              <div className="text-xs opacity-70">Rationale</div>
+            <div className="rounded-2xl border border-white/70 bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
+              <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Rationale</div>
               <div className="mt-2 space-y-1">
                 {(data?.recommendation?.rationale || []).slice(0, 3).map((r, i) => (
-                  <div key={i} className="text-xs text-black/70">• {r}</div>
+                  <div key={i} className="text-xs text-slate-600 dark:text-slate-300">• {r}</div>
                 ))}
               </div>
             </div>
           </div>
 
-          <div className="sm:col-span-8 md:col-span-8 rounded-xl border border-black/10 p-3">
+          <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48 sm:col-span-8 md:col-span-8">
             <MultiLineChart xLabels={chartModel.x} series={chartModel.series} ariaLabel="Hold vs Rent annual net delta" />
-            <div className="mt-2 text-xs opacity-60">
+            <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
               Chart shows annual net delta (appreciation gain minus modeled costs). Sell is represented by net proceeds.
             </div>
           </div>
@@ -259,12 +272,12 @@ export default function SellHoldRentClient() {
 
       {/* Scenario Comparison */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="lg:col-span-5 rounded-2xl border border-black/10 bg-white p-4">
-          <div className="text-sm font-medium">Scenario comparison</div>
-          <div className="text-xs opacity-70 mt-1">Net outcomes over {years} years</div>
+        <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38 lg:col-span-5">
+          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Scenario comparison</div>
+          <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Net outcomes over {years} years</div>
           <div className="mt-3">
             {loading && !hasScenarioData ? (
-              <div className="rounded-xl border border-black/10 bg-black/[0.02] p-3 text-xs text-black/60">
+              <div className="rounded-2xl border border-white/70 bg-white/70 p-3 text-xs text-slate-500 backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/45 dark:text-slate-300">
                 Loading scenarios…
               </div>
             ) : (
@@ -273,14 +286,14 @@ export default function SellHoldRentClient() {
           </div>
         </div>
 
-        <div className="lg:col-span-7 grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 lg:col-span-7 md:grid-cols-3">
           {/* SELL */}
-          <div className="rounded-2xl border border-black/10 bg-white p-4">
-            <div className="text-sm font-medium">Sell</div>
-            <div className="text-xs opacity-70 mt-1">Net proceeds ({years}y)</div>
-            <div className="text-lg font-semibold mt-2">{money(data?.scenarios?.sell?.netProceeds)}</div>
+          <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/78 via-amber-50/50 to-teal-50/42 p-4 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
+            <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">Sell</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Net proceeds ({years}y)</div>
+            <div className="mt-2 text-2xl font-semibold leading-tight text-slate-900 dark:text-slate-100">{money(data?.scenarios?.sell?.netProceeds)}</div>
 
-            <div className="mt-3 text-xs text-black/70 space-y-1">
+            <div className="mt-3 space-y-1 text-xs text-slate-600 dark:text-slate-300">
               <div>Projected sale: <span className="font-medium">{money(data?.scenarios?.sell?.projectedSalePrice)}</span></div>
               <div>Selling costs: <span className="font-medium">{money(data?.scenarios?.sell?.sellingCosts)}</span></div>
               {'mortgagePayoff' in (data?.scenarios?.sell || {}) && (
@@ -288,18 +301,18 @@ export default function SellHoldRentClient() {
               )}
             </div>
 
-            <div className="mt-3 text-xs opacity-70 space-y-1">
+            <div className="mt-3 space-y-1 text-xs text-slate-500 dark:text-slate-300">
               {(data?.scenarios?.sell?.notes || []).slice(0, 2).map((n, i) => <div key={i}>• {n}</div>)}
             </div>
           </div>
 
           {/* HOLD */}
-          <div className="rounded-2xl border border-black/10 bg-white p-4">
-            <div className="text-sm font-medium">Hold</div>
-            <div className="text-xs opacity-70 mt-1">Net outcome ({years}y)</div>
-            <div className="text-lg font-semibold mt-2">{money(data?.scenarios?.hold?.net)}</div>
+          <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/78 via-amber-50/50 to-teal-50/42 p-4 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
+            <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">Hold</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Net outcome ({years}y)</div>
+            <div className="mt-2 text-2xl font-semibold leading-tight text-slate-900 dark:text-slate-100">{money(data?.scenarios?.hold?.net)}</div>
 
-            <div className="mt-3 text-xs text-black/70 space-y-1">
+            <div className="mt-3 space-y-1 text-xs text-slate-600 dark:text-slate-300">
               <div>Appreciation gain: <span className="font-medium">{money(data?.scenarios?.hold?.appreciationGain)}</span></div>
               <div>Ownership costs: <span className="font-medium">{money(data?.scenarios?.hold?.totalOwnershipCosts)}</span></div>
               {'mortgageInterestCost' in (data?.scenarios?.hold || {}) && (
@@ -310,18 +323,18 @@ export default function SellHoldRentClient() {
               )}
             </div>
 
-            <div className="mt-3 text-xs opacity-70 space-y-1">
+            <div className="mt-3 space-y-1 text-xs text-slate-500 dark:text-slate-300">
               {(data?.scenarios?.hold?.notes || []).slice(0, 2).map((n, i) => <div key={i}>• {n}</div>)}
             </div>
           </div>
 
           {/* RENT */}
-          <div className="rounded-2xl border border-black/10 bg-white p-4">
-            <div className="text-sm font-medium">Rent</div>
-            <div className="text-xs opacity-70 mt-1">Net outcome ({years}y)</div>
-            <div className="text-lg font-semibold mt-2">{money(data?.scenarios?.rent?.net)}</div>
+          <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/78 via-amber-50/50 to-teal-50/42 p-4 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
+            <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">Rent</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Net outcome ({years}y)</div>
+            <div className="mt-2 text-2xl font-semibold leading-tight text-slate-900 dark:text-slate-100">{money(data?.scenarios?.rent?.net)}</div>
 
-            <div className="mt-3 text-xs text-black/70 space-y-1">
+            <div className="mt-3 space-y-1 text-xs text-slate-600 dark:text-slate-300">
               <div>Rental income: <span className="font-medium">{money(data?.scenarios?.rent?.totalRentalIncome)}</span></div>
               <div>
                 Vacancy + mgmt:{' '}
@@ -340,7 +353,7 @@ export default function SellHoldRentClient() {
               )}
             </div>
 
-            <div className="mt-3 text-xs opacity-70 space-y-1">
+            <div className="mt-3 space-y-1 text-xs text-slate-500 dark:text-slate-300">
               {(data?.scenarios?.rent?.notes || []).slice(0, 2).map((n, i) => <div key={i}>• {n}</div>)}
             </div>
           </div>
@@ -348,51 +361,51 @@ export default function SellHoldRentClient() {
       </div>
 
       {/* Key drivers + assumptions */}
-      <div className="rounded-2xl border border-black/10 bg-white p-4">
-        <div className="text-sm font-medium">Key drivers</div>
-        <div className="text-xs opacity-70 mt-1">What is influencing the result in this model</div>
+      <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
+        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Key drivers</div>
+        <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">What is influencing the result in this model</div>
 
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
           {(data?.drivers || []).map((d, idx) => (
-            <div key={idx} className="rounded-xl border border-black/10 p-3">
+            <div key={idx} className="rounded-2xl border border-white/70 bg-white/68 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-sm font-medium">{d.factor}</div>
-                <span className="text-xs rounded px-2 py-0.5 border border-black/10 bg-black/5">{d.impact}</span>
+                <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{d.factor}</div>
+                <span className="rounded-full border border-slate-300/70 bg-slate-50/85 px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300">{d.impact}</span>
               </div>
-              <div className="text-xs text-black/70 mt-2">{d.explanation}</div>
+              <div className="mt-2 text-xs text-slate-600 dark:text-slate-300">{d.explanation}</div>
             </div>
           ))}
         </div>
 
-        <div className="mt-4 rounded-xl bg-black/5 p-3">
-          <div className="text-xs opacity-70">Assumptions</div>
+        <div className="mt-4 rounded-xl border border-white/70 bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
+          <div className="text-xs text-slate-500 dark:text-slate-300">Assumptions</div>
           <div className="mt-2 space-y-1">
             {(data?.meta?.notes || []).map((n, i) => (
-              <div key={i} className="text-xs text-black/70">• {n}</div>
+              <div key={i} className="text-xs text-slate-600 dark:text-slate-300">• {n}</div>
             ))}
           </div>
         </div>
       </div>
 
       {/* Phase-3: Override + Debt Snapshot Editor */}
-      <div className="rounded-2xl border border-black/10 bg-white p-4">
+      <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-sm font-medium">Model inputs</div>
-            <div className="text-xs opacity-70 mt-1">
+            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Model inputs</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
               Overrides are saved per property and automatically applied to this tool.
             </div>
           </div>
-          <div className="text-xs opacity-60">
+          <div className="text-xs text-slate-500 dark:text-slate-300">
             {ovLoading || snapLoading ? 'Loading…' : ''}
           </div>
         </div>
 
         <div className="mt-4 grid grid-cols-1 lg:grid-cols-12 gap-4">
           {/* Overrides */}
-          <div className="lg:col-span-7 rounded-xl border border-black/10 p-3">
-            <div className="text-sm font-medium">Overrides</div>
-            <div className="text-xs opacity-60 mt-1">Leave blank to use the model default.</div>
+          <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48 lg:col-span-7">
+            <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">Overrides</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Leave blank to use the model default.</div>
 
             <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
               <InputField
@@ -440,7 +453,7 @@ export default function SellHoldRentClient() {
             </div>
 
             <div className="mt-4 flex items-center justify-between gap-3">
-              <div className="text-xs text-black/60">
+              <div className="text-xs text-slate-500 dark:text-slate-300">
                 Applied overrides: {Object.keys(overrides || {}).length ? Object.keys(overrides).length : '0'}
               </div>
 
@@ -475,7 +488,7 @@ export default function SellHoldRentClient() {
                     setOvSaving(false);
                   }
                 }}
-                className="text-xs rounded-lg border border-black/10 bg-black/5 px-3 py-1.5 hover:bg-black/10 disabled:opacity-60"
+                className="inline-flex h-9 items-center justify-center rounded-full border border-slate-300/70 bg-white/85 px-4 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:bg-white disabled:opacity-60 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200 dark:hover:bg-slate-900"
               >
                 {ovSaving ? 'Saving…' : 'Save overrides'}
               </button>
@@ -483,9 +496,9 @@ export default function SellHoldRentClient() {
           </div>
 
           {/* Debt snapshot */}
-          <div className="lg:col-span-5 rounded-xl border border-black/10 p-3">
-            <div className="text-sm font-medium">Debt snapshot</div>
-            <div className="text-xs opacity-60 mt-1">
+          <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48 lg:col-span-5">
+            <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">Debt snapshot</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
               If provided, SELL/HOLD/RENT outcomes become mortgage-aware.
             </div>
 
@@ -517,7 +530,7 @@ export default function SellHoldRentClient() {
             </div>
 
             <div className="mt-4 flex items-center justify-between gap-3">
-              <div className="text-xs text-black/60">
+              <div className="text-xs text-slate-500 dark:text-slate-300">
                 {snapshot?.lastVerifiedAt ? `Last verified: ${new Date(snapshot.lastVerifiedAt).toLocaleDateString()}` : 'Not set'}
               </div>
 
@@ -548,13 +561,13 @@ export default function SellHoldRentClient() {
                     setSnapSaving(false);
                   }
                 }}
-                className="text-xs rounded-lg border border-black/10 bg-black/5 px-3 py-1.5 hover:bg-black/10 disabled:opacity-60"
+                className="inline-flex h-9 items-center justify-center rounded-full border border-slate-300/70 bg-white/85 px-4 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:bg-white disabled:opacity-60 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200 dark:hover:bg-slate-900"
               >
                 {snapSaving ? 'Saving…' : 'Save snapshot'}
               </button>
             </div>
 
-            <div className="mt-3 text-xs text-black/60">
+            <div className="mt-3 text-xs text-slate-500 dark:text-slate-300">
               Tip: This is not a full amortization import — it’s a lightweight snapshot for Phase-3 accuracy.
             </div>
           </div>
@@ -572,9 +585,9 @@ function InputField(props: {
 }) {
   return (
     <label className="block">
-      <div className="text-xs text-black/70">{props.label}</div>
+      <div className="text-xs text-slate-600 dark:text-slate-300">{props.label}</div>
       <input
-        className="mt-1 w-full rounded-lg border border-black/10 bg-white px-3 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 text-sm outline-none focus:ring-2 focus:ring-black/5"
+        className="mt-1 min-h-[44px] w-full rounded-xl border border-slate-300/70 bg-white/85 px-3 py-2.5 text-sm text-slate-800 shadow-sm outline-none backdrop-blur focus:border-slate-400 focus:ring-2 focus:ring-slate-200 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-100 dark:focus:border-slate-500 dark:focus:ring-slate-700 sm:min-h-0 sm:py-2"
         placeholder={props.placeholder}
         value={props.value}
         onChange={(e) => props.onChange(e.target.value)}

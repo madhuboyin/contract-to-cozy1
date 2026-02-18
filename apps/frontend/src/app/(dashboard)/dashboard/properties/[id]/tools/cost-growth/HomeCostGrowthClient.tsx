@@ -94,39 +94,43 @@ export default function HomeCostGrowthClient() {
   }, [data, trendYears]);
 
   const confidenceBadge = (c?: string) => {
-    const base = 'text-xs rounded px-2 py-0.5 border border-black/10';
-    if (c === 'HIGH') return <span className={`${base} bg-emerald-50 text-emerald-700`}>High confidence</span>;
-    if (c === 'MEDIUM') return <span className={`${base} bg-amber-50 text-amber-800`}>Medium confidence</span>;
-    return <span className={`${base} bg-black/5 text-black/70`}>Estimated</span>;
+    const base = 'inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm backdrop-blur';
+    if (c === 'HIGH') return <span className={`${base} border-emerald-200/70 bg-emerald-50/85 text-emerald-700`}>High confidence</span>;
+    if (c === 'MEDIUM') return <span className={`${base} border-amber-200/70 bg-amber-50/85 text-amber-800`}>Medium confidence</span>;
+    return <span className={`${base} border-slate-300/70 bg-slate-50/85 text-slate-700`}>Estimated</span>;
   };
 
   const netTone =
     (data?.rollup?.totalNet ?? 0) >= 0
-      ? 'bg-emerald-50 text-emerald-800 border-emerald-100'
-      : 'bg-rose-50 text-rose-800 border-rose-100';
+      ? 'border-emerald-200/70 bg-gradient-to-br from-emerald-50/80 via-white/75 to-teal-50/70 text-emerald-800'
+      : 'border-rose-200/70 bg-gradient-to-br from-rose-50/85 via-white/75 to-amber-50/65 text-rose-800';
 
   return (
-    <div className="p-4 sm:p-6 space-y-4">
-      <SectionHeader
-        icon="📈"
-        title="Home Cost Growth Analyzer"
-        description="Compare appreciation vs ownership expense growth to understand your net cost trend over time."
-      />
-      <div className="mt-3">
-        <HomeToolsRail propertyId={propertyId} />
+    <div className="space-y-5 p-4 sm:p-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
+      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[radial-gradient(circle_at_10%_10%,rgba(251,191,36,0.14),transparent_40%),radial-gradient(circle_at_88%_14%,rgba(20,184,166,0.14),transparent_40%),linear-gradient(180deg,rgba(255,255,255,0.9),rgba(248,250,252,0.8))] p-4 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.6)] dark:border-slate-700/70 dark:bg-[radial-gradient(circle_at_10%_10%,rgba(251,191,36,0.12),transparent_40%),radial-gradient(circle_at_88%_14%,rgba(20,184,166,0.12),transparent_40%),linear-gradient(180deg,rgba(2,6,23,0.9),rgba(2,6,23,0.78))]">
+        <div className="rounded-2xl border border-white/70 bg-white/60 p-4 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45">
+          <SectionHeader
+            icon="📈"
+            title="Home Cost Growth Analyzer"
+            description="Compare appreciation vs ownership expense growth to understand your net cost trend over time."
+          />
+          <div className="mt-4">
+            <HomeToolsRail propertyId={propertyId} />
+          </div>
+        </div>
       </div>
 
       {/* Main Story Card */}
-      <div className="rounded-2xl border border-black/10 bg-white p-4">
-        <div className="flex items-start justify-between gap-4">
+      <div className="rounded-[26px] border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/70 to-teal-50/45 p-4 sm:p-5 shadow-[0_20px_42px_-30px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/60 dark:via-slate-900/50 dark:to-teal-950/20">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="text-sm font-medium">Appreciation vs Expenses</div>
-            <div className="text-xs opacity-70 mt-1">
-              Property-scoped estimate for <span className="font-medium">{data?.input?.addressLabel || '—'}</span>
+            <div className="text-base font-semibold text-slate-900 dark:text-slate-100">Appreciation vs Expenses</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
+              Property-scoped estimate for <span className="font-medium text-slate-700 dark:text-slate-200">{data?.input?.addressLabel || '—'}</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/75 p-1 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55">
             <button
               type="button"
               onClick={async () => {
@@ -134,11 +138,14 @@ export default function HomeCostGrowthClient() {
                 setTrendYears(5);
                 await getAndSet(5);
               }}
-              className={`text-xs underline min-h-[44px] inline-flex items-center px-1 touch-manipulation ${trendYears === 5 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+              className={`inline-flex min-h-[36px] items-center rounded-full px-3 text-sm font-medium transition-all touch-manipulation ${
+                trendYears === 5
+                  ? 'border border-slate-900 bg-slate-900 text-white shadow-sm dark:border-white dark:bg-white dark:text-slate-900'
+                  : 'border border-transparent text-slate-600 hover:border-slate-300/70 hover:bg-white/80 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900/60'
+              }`}
             >
               5y
             </button>
-            <span className="text-xs opacity-40">|</span>
             <button
               type="button"
               onClick={async () => {
@@ -146,7 +153,11 @@ export default function HomeCostGrowthClient() {
                 setTrendYears(10);
                 await getAndSet(10);
               }}
-              className={`text-xs underline min-h-[44px] inline-flex items-center px-1 touch-manipulation ${trendYears === 10 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+              className={`inline-flex min-h-[36px] items-center rounded-full px-3 text-sm font-medium transition-all touch-manipulation ${
+                trendYears === 10
+                  ? 'border border-slate-900 bg-slate-900 text-white shadow-sm dark:border-white dark:bg-white dark:text-slate-900'
+                  : 'border border-transparent text-slate-600 hover:border-slate-300/70 hover:bg-white/80 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900/60'
+              }`}
             >
               10y
             </button>
@@ -154,36 +165,36 @@ export default function HomeCostGrowthClient() {
         </div>
 
         {error && (
-          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 flex items-start gap-3">
-            <div className="text-sm text-red-600 flex-1">{error}</div>
-            <button onClick={() => getAndSet(trendYears)} className="text-sm font-medium text-red-700 hover:text-red-900 shrink-0">Retry</button>
+          <div className="mt-3 flex items-start gap-3 rounded-2xl border border-red-200/70 bg-red-50/85 p-3 backdrop-blur">
+            <div className="flex-1 text-sm text-red-600">{error}</div>
+            <button onClick={() => getAndSet(trendYears)} className="shrink-0 text-sm font-medium text-red-700 hover:text-red-900">Retry</button>
           </div>
         )}
 
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-12 lg:grid-cols-12 gap-4">
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-12 lg:grid-cols-12">
           {/* Left: summary */}
-          <div className="lg:col-span-4 space-y-3">
-            <div className="rounded-xl border border-black/10 p-3">
-              <div className="text-xs opacity-70">Current estimated home value</div>
-              <div className="text-lg font-semibold">{money(data?.current?.homeValueNow)}</div>
+          <div className="space-y-3 lg:col-span-4">
+            <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
+              <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Current estimated home value</div>
+              <div className="mt-1 text-[1.75rem] font-semibold leading-tight text-slate-900 dark:text-slate-100">{money(data?.current?.homeValueNow)}</div>
               <div className="mt-2 flex items-center gap-2">
-                <div className="text-xs opacity-70">Confidence</div>
+                <div className="text-xs text-slate-500 dark:text-slate-300">Confidence</div>
                 {confidenceBadge(data?.meta?.confidence)}
               </div>
             </div>
 
-            <div className="rounded-xl border border-black/10 p-3">
-              <div className="text-xs opacity-70">CAGR appreciation ({trendYears}y)</div>
-              <div className="text-sm font-medium">{pct(data?.current?.appreciationRate)}</div>
+            <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
+              <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">CAGR appreciation ({trendYears}y)</div>
+              <div className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">{pct(data?.current?.appreciationRate)}</div>
 
-              <div className="mt-2 text-xs opacity-70">Annual expenses (now)</div>
-              <div className="text-sm font-medium">{money(data?.current?.annualExpensesNow)}</div>
+              <div className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Annual expenses (now)</div>
+              <div className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.current?.annualExpensesNow)}</div>
             </div>
 
-            <div className={`rounded-xl border p-3 ${netTone}`}>
-              <div className="text-xs opacity-80">Net impact ({trendYears}y)</div>
-              <div className="text-base font-semibold">{money(data?.rollup?.totalNet)}</div>
-              <div className="text-xs opacity-70 mt-1">
+            <div className={`rounded-2xl border p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur ${netTone}`}>
+              <div className="text-xs uppercase tracking-[0.12em] opacity-80">Net impact ({trendYears}y)</div>
+              <div className="mt-1 text-2xl font-semibold leading-tight">{money(data?.rollup?.totalNet)}</div>
+              <div className="mt-1 text-xs opacity-70">
                 Appreciation gain <span className="font-medium">{money(data?.rollup?.totalAppreciationGain)}</span> minus expenses{' '}
                 <span className="font-medium">{money(data?.rollup?.totalExpenses)}</span>
               </div>
@@ -191,19 +202,19 @@ export default function HomeCostGrowthClient() {
           </div>
 
           {/* Right: chart */}
-          <div className="lg:col-span-8 rounded-xl border border-black/10 p-3">
+          <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48 lg:col-span-8">
             <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className="text-xs rounded-full border border-black/10 px-2 py-0.5 bg-white">Home value</span>
-              <span className="text-xs rounded-full border border-black/10 px-2 py-0.5 bg-white opacity-80">Total expenses</span>
-              <span className="text-xs rounded-full border border-black/10 px-2 py-0.5 bg-white opacity-70">Net Δ</span>
-              <span className="text-xs opacity-60 ml-auto">{loading ? 'Refreshing…' : data?.meta?.generatedAt ? 'Updated just now' : ''}</span>
+              <span className="rounded-full border border-slate-300/70 bg-white/85 px-2.5 py-1 text-xs font-medium text-slate-700 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200">Home value</span>
+              <span className="rounded-full border border-slate-300/70 bg-white/60 px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/45 dark:text-slate-300">Total expenses</span>
+              <span className="rounded-full border border-slate-300/70 bg-white/60 px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/45 dark:text-slate-300">Net Δ</span>
+              <span className="ml-auto text-xs text-slate-500 dark:text-slate-300">{loading ? 'Refreshing…' : data?.meta?.generatedAt ? 'Updated just now' : ''}</span>
             </div>
 
-            <div className="text-black/70">
+            <div className="text-slate-700 dark:text-slate-200">
               <MultiLineChart xLabels={chartModel.x} series={chartModel.series} ariaLabel="Home value vs expenses trend" />
             </div>
 
-            <div className="mt-2 text-xs opacity-60">
+            <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
               Net Δ is year-over-year appreciation gain minus annual expenses (tax + insurance + maintenance).
             </div>
           </div>
@@ -212,70 +223,70 @@ export default function HomeCostGrowthClient() {
 
       {/* Breakdown Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded-2xl border border-black/10 bg-white p-4">
-          <div className="text-sm font-medium">Taxes</div>
-          <div className="text-xs opacity-70 mt-1">Total over {trendYears}y</div>
-          <div className="text-lg font-semibold mt-2">{money(data?.rollup?.expenseBreakdown?.taxes)}</div>
-          <div className="text-xs opacity-60 mt-2">Current annual tax</div>
-          <div className="text-sm font-medium">{money(data?.current?.annualTaxNow)}</div>
+        <div className="group rounded-2xl border border-white/70 bg-gradient-to-br from-white/78 via-amber-50/50 to-teal-50/42 p-4 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_36px_-24px_rgba(15,23,42,0.6)] dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
+          <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Taxes</div>
+          <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Total over {trendYears}y</div>
+          <div className="mt-2 text-2xl font-semibold leading-tight text-slate-900 dark:text-slate-100">{money(data?.rollup?.expenseBreakdown?.taxes)}</div>
+          <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">Current annual tax</div>
+          <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.current?.annualTaxNow)}</div>
         </div>
 
-        <div className="rounded-2xl border border-black/10 bg-white p-4">
-          <div className="text-sm font-medium">Insurance</div>
-          <div className="text-xs opacity-70 mt-1">Total over {trendYears}y</div>
-          <div className="text-lg font-semibold mt-2">{money(data?.rollup?.expenseBreakdown?.insurance)}</div>
-          <div className="text-xs opacity-60 mt-2">Current annual insurance</div>
-          <div className="text-sm font-medium">{money(data?.current?.annualInsuranceNow)}</div>
+        <div className="group rounded-2xl border border-white/70 bg-gradient-to-br from-white/78 via-amber-50/50 to-teal-50/42 p-4 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_36px_-24px_rgba(15,23,42,0.6)] dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
+          <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Insurance</div>
+          <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Total over {trendYears}y</div>
+          <div className="mt-2 text-2xl font-semibold leading-tight text-slate-900 dark:text-slate-100">{money(data?.rollup?.expenseBreakdown?.insurance)}</div>
+          <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">Current annual insurance</div>
+          <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.current?.annualInsuranceNow)}</div>
         </div>
 
-        <div className="rounded-2xl border border-black/10 bg-white p-4">
-          <div className="text-sm font-medium">Maintenance</div>
-          <div className="text-xs opacity-70 mt-1">Total over {trendYears}y</div>
-          <div className="text-lg font-semibold mt-2">{money(data?.rollup?.expenseBreakdown?.maintenance)}</div>
-          <div className="text-xs opacity-60 mt-2">Current annual maintenance</div>
-          <div className="text-sm font-medium">{money(data?.current?.annualMaintenanceNow)}</div>
+        <div className="group rounded-2xl border border-white/70 bg-gradient-to-br from-white/78 via-amber-50/50 to-teal-50/42 p-4 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_36px_-24px_rgba(15,23,42,0.6)] dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
+          <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Maintenance</div>
+          <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Total over {trendYears}y</div>
+          <div className="mt-2 text-2xl font-semibold leading-tight text-slate-900 dark:text-slate-100">{money(data?.rollup?.expenseBreakdown?.maintenance)}</div>
+          <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">Current annual maintenance</div>
+          <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.current?.annualMaintenanceNow)}</div>
         </div>
       </div>
 
       {/* Drivers */}
-      <div className="rounded-2xl border border-black/10 bg-white p-4">
-        <div className="text-sm font-medium">Localized insights</div>
-        <div className="text-xs opacity-70 mt-1">
+      <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
+        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Localized insights</div>
+        <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
           Phase 1 ties insights to <span className="font-medium">{data?.input?.state || '—'}</span> and ZIP{' '}
           <span className="font-medium">{data?.input?.zipCode || '—'}</span>.
         </div>
 
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
           {(data?.drivers || []).map((d, idx) => (
-            <div key={idx} className="rounded-xl border border-black/10 p-3">
+            <div key={idx} className="rounded-2xl border border-white/70 bg-white/68 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-sm font-medium">{d.factor}</div>
-                <span className="text-xs rounded px-2 py-0.5 border border-black/10 bg-black/5">{d.impact}</span>
+                <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{d.factor}</div>
+                <span className="rounded-full border border-slate-300/70 bg-slate-50/85 px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300">{d.impact}</span>
               </div>
-              <div className="text-xs text-black/70 mt-2">{d.explanation}</div>
+              <div className="mt-2 text-xs text-slate-600 dark:text-slate-300">{d.explanation}</div>
             </div>
           ))}
         </div>
       </div>
 
       {/* Assumptions / Notes */}
-      <div className="rounded-2xl border border-black/10 bg-white p-4">
-        <div className="text-sm font-medium">Assumptions (Phase 1)</div>
-        <div className="text-xs opacity-70 mt-1">
+      <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
+        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Assumptions (Phase 1)</div>
+        <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
           These are heuristic estimates designed for story + trend comparisons. We can swap in free datasets (FHFA HPI, etc.) later.
         </div>
 
         <div className="mt-3 space-y-2">
           {(data?.meta?.notes || []).map((n, i) => (
-            <div key={i} className="text-xs text-black/70">
+            <div key={i} className="text-xs text-slate-600 dark:text-slate-300">
               • {n}
             </div>
           ))}
         </div>
 
-        <div className="mt-4 rounded-xl bg-black/5 p-3">
-          <div className="text-xs opacity-70">Data sources</div>
-          <div className="text-xs text-black/70 mt-1">{(data?.meta?.dataSources || []).join(' · ')}</div>
+        <div className="mt-4 rounded-xl border border-white/70 bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
+          <div className="text-xs text-slate-500 dark:text-slate-300">Data sources</div>
+          <div className="mt-1 text-xs text-slate-600 dark:text-slate-300">{(data?.meta?.dataSources || []).join(' · ')}</div>
         </div>
       </div>
     </div>
