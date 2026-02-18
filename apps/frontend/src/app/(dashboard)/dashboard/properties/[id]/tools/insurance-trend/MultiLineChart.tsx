@@ -135,7 +135,7 @@ export default function MultiLineChart(props: {
       <div className="relative">
         <svg
           viewBox={`0 0 ${w} ${h}`}
-          className="w-full h-[200px] text-black/70"
+          className="h-[200px] w-full text-slate-600 dark:text-slate-300"
           preserveAspectRatio="none"
           role="img"
           aria-label={props.ariaLabel || 'Trend chart'}
@@ -233,14 +233,14 @@ export default function MultiLineChart(props: {
         {/* tooltip */}
         {tooltip && (
           <div
-            className="absolute top-2 rounded-xl border border-black/10 bg-white/95 px-3 py-2 text-xs shadow-sm"
+            className="absolute top-2 rounded-xl border border-white/70 bg-white/85 px-3 py-2 text-xs shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/80"
             style={{ left: `calc(${hoverXPct * 100}% - 90px)`, width: 180, pointerEvents: 'none' }}
           >
-            <div className="font-medium mb-1">{tooltip.year}</div>
+            <div className="mb-1 font-medium text-slate-800 dark:text-slate-100">{tooltip.year}</div>
             {tooltip.rows.map((r) => (
-              <div key={r.key} className="flex justify-between gap-3 text-black/70">
+              <div key={r.key} className="flex justify-between gap-3 text-slate-600 dark:text-slate-300">
                 <span>{r.label}</span>
-                <span className="font-medium">{fmtMoneyShort(r.value)}</span>
+                <span className="font-medium text-slate-800 dark:text-slate-100">{fmtMoneyShort(r.value)}</span>
               </div>
             ))}
           </div>
@@ -248,7 +248,7 @@ export default function MultiLineChart(props: {
       </div>
 
       {/* legend */}
-      <div className="mt-2 flex justify-end gap-3 text-xs text-black/60">
+      <div className="mt-2 flex justify-end gap-3 text-xs text-slate-500 dark:text-slate-300">
         {safe.series.map((s, idx) => (
           <div key={s.key} className="flex items-center gap-2">
             <svg width="26" height="10">
