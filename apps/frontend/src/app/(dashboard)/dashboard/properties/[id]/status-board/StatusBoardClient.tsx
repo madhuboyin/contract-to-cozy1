@@ -60,6 +60,7 @@ import {
   Home,
   Cpu,
   Building,
+  Box,
 } from "lucide-react";
 import Link from "next/link";
 
