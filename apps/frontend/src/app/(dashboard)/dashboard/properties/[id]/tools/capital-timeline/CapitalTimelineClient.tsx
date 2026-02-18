@@ -17,6 +17,7 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
+import { SectionHeader } from '@/app/(dashboard)/dashboard/components/SectionHeader';
 import {
   getLatestTimeline,
   runTimeline,
@@ -69,38 +70,38 @@ function categoryLabel(cat: string) {
 }
 
 function eventTypeBadge(eventType: string) {
-  const base = 'text-xs font-medium px-2 py-0.5 rounded-full';
+  const base = 'text-xs font-medium px-2.5 py-1 rounded-full border shadow-sm backdrop-blur';
   switch (eventType) {
     case 'REPLACE':
-      return <span className={`${base} bg-red-50 text-red-700`}>Replace</span>;
+      return <span className={`${base} border-red-200/70 bg-red-50/85 text-red-700`}>Replace</span>;
     case 'MAJOR_REPAIR':
-      return <span className={`${base} bg-amber-50 text-amber-700`}>Major Repair</span>;
+      return <span className={`${base} border-amber-200/70 bg-amber-50/85 text-amber-700`}>Major Repair</span>;
     case 'INSPECTION':
-      return <span className={`${base} bg-blue-50 text-blue-700`}>Inspection</span>;
+      return <span className={`${base} border-blue-200/70 bg-blue-50/85 text-blue-700`}>Inspection</span>;
     default:
-      return <span className={`${base} bg-gray-50 text-gray-700`}>{eventType}</span>;
+      return <span className={`${base} border-slate-300/70 bg-slate-50/85 text-slate-700`}>{eventType}</span>;
   }
 }
 
 function priorityBadge(priority: string) {
-  const base = 'text-xs font-medium px-2 py-0.5 rounded-full';
+  const base = 'text-xs font-medium px-2.5 py-1 rounded-full border shadow-sm backdrop-blur';
   switch (priority) {
     case 'HIGH':
-      return <span className={`${base} bg-red-100 text-red-800`}>High Priority</span>;
+      return <span className={`${base} border-red-200/70 bg-red-100/80 text-red-800`}>High Priority</span>;
     case 'MEDIUM':
-      return <span className={`${base} bg-amber-100 text-amber-800`}>Medium</span>;
+      return <span className={`${base} border-amber-200/70 bg-amber-100/80 text-amber-800`}>Medium</span>;
     case 'LOW':
-      return <span className={`${base} bg-green-100 text-green-800`}>Low</span>;
+      return <span className={`${base} border-emerald-200/70 bg-emerald-100/80 text-emerald-800`}>Low</span>;
     default:
       return null;
   }
 }
 
 function confidenceBadge(c: string) {
-  const base = 'text-xs rounded px-2 py-0.5 border border-black/10';
-  if (c === 'HIGH') return <span className={`${base} bg-emerald-50 text-emerald-700`}>High confidence</span>;
-  if (c === 'MEDIUM') return <span className={`${base} bg-amber-50 text-amber-800`}>Medium confidence</span>;
-  return <span className={`${base} bg-black/5 text-black/70`}>Low confidence</span>;
+  const base = 'inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm backdrop-blur';
+  if (c === 'HIGH') return <span className={`${base} border-emerald-200/70 bg-emerald-50/85 text-emerald-700`}>High confidence</span>;
+  if (c === 'MEDIUM') return <span className={`${base} border-amber-200/70 bg-amber-50/85 text-amber-800`}>Medium confidence</span>;
+  return <span className={`${base} border-slate-300/70 bg-slate-50/85 text-slate-700`}>Low confidence</span>;
 }
 
 // ─── Component ──────────────────────────────────────────────────────
@@ -183,57 +184,56 @@ export default function CapitalTimelineClient() {
   const highPriorityCount = items.filter((i) => i.priority === 'HIGH').length;
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <HomeToolsRail propertyId={propertyId} />
-
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Capital Timeline</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Predicted major expenses for your home over the next {horizonYears} years
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {/* Horizon Toggle */}
-          <div className="flex bg-gray-100 rounded-lg p-0.5">
-            {([5, 10] as const).map((h) => (
-              <button
-                key={h}
-                onClick={() => handleHorizonChange(h)}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  horizonYears === h
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                {h}yr
-              </button>
-            ))}
+    <div className="space-y-5 p-4 sm:p-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
+      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[radial-gradient(circle_at_10%_10%,rgba(251,191,36,0.14),transparent_40%),radial-gradient(circle_at_88%_14%,rgba(20,184,166,0.14),transparent_40%),linear-gradient(180deg,rgba(255,255,255,0.9),rgba(248,250,252,0.8))] p-4 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.6)] dark:border-slate-700/70 dark:bg-[radial-gradient(circle_at_10%_10%,rgba(251,191,36,0.12),transparent_40%),radial-gradient(circle_at_88%_14%,rgba(20,184,166,0.12),transparent_40%),linear-gradient(180deg,rgba(2,6,23,0.9),rgba(2,6,23,0.78))]">
+        <div className="rounded-2xl border border-white/70 bg-white/60 p-4 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45">
+          <SectionHeader
+            icon="🗓️"
+            title="Capital Timeline"
+            description={`Predicted major expenses for your home over the next ${horizonYears} years`}
+          />
+          <div className="mt-4">
+            <HomeToolsRail propertyId={propertyId} />
           </div>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/75 p-1 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55">
+              {([5, 10] as const).map((h) => (
+                <button
+                  key={h}
+                  onClick={() => handleHorizonChange(h)}
+                  className={`inline-flex min-h-[36px] items-center rounded-full px-3 text-sm font-medium transition-all ${
+                    horizonYears === h
+                      ? 'border border-slate-900 bg-slate-900 text-white shadow-sm dark:border-white dark:bg-white dark:text-slate-900'
+                      : 'border border-transparent text-slate-600 hover:border-slate-300/70 hover:bg-white/80 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900/60'
+                  }`}
+                >
+                  {h}yr
+                </button>
+              ))}
+            </div>
 
-          <button
-            onClick={() => doRun(horizonYears)}
-            disabled={running}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
-          >
-            <RefreshCw className={`h-4 w-4 ${running ? 'animate-spin' : ''}`} />
-            Re-analyze
-          </button>
+            <button
+              onClick={() => doRun(horizonYears)}
+              disabled={running}
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-white disabled:opacity-50 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200 dark:hover:bg-slate-900"
+            >
+              <RefreshCw className={`h-4 w-4 ${running ? 'animate-spin' : ''}`} />
+              Re-analyze
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Loading */}
       {(loading || running) && !data && (
-        <div className="flex items-center justify-center h-48">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900" />
+        <div className="flex h-48 items-center justify-center rounded-2xl border border-white/70 bg-white/65 backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/45">
+          <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-slate-900 dark:border-slate-100" />
         </div>
       )}
 
       {/* Error */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+        <div className="flex items-start gap-3 rounded-2xl border border-red-200/70 bg-red-50/85 p-4 backdrop-blur">
           <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium text-red-800">{error}</p>
@@ -251,21 +251,21 @@ export default function CapitalTimelineClient() {
       {data && !loading && (
         <>
           {/* Summary Bar */}
-          <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6">
+          <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 sm:p-6 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Range</p>
-                <p className="mt-1 text-lg font-bold text-gray-900">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-300">Total Range</p>
+                <p className="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">
                   {money(totalMin)} &ndash; {money(totalMax)}
                 </p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Items</p>
-                <p className="mt-1 text-lg font-bold text-gray-900">{items.length}</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-300">Items</p>
+                <p className="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">{items.length}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">High Priority</p>
-                <p className="mt-1 text-lg font-bold text-gray-900">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-300">High Priority</p>
+                <p className="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">
                   {highPriorityCount > 0 ? (
                     <span className="text-red-600">{highPriorityCount}</span>
                   ) : (
@@ -274,12 +274,12 @@ export default function CapitalTimelineClient() {
                 </p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Confidence</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-300">Confidence</p>
                 <div className="mt-1">{confidenceBadge(data.confidence)}</div>
               </div>
             </div>
             {data.summary && (
-              <p className="mt-4 text-sm text-gray-600 border-t border-gray-100 pt-3">
+              <p className="mt-4 border-t border-slate-200/70 pt-3 text-sm text-slate-600 dark:border-slate-700/70 dark:text-slate-300">
                 {data.summary}
               </p>
             )}
@@ -287,10 +287,10 @@ export default function CapitalTimelineClient() {
 
           {/* Timeline Items */}
           {items.length === 0 ? (
-            <div className="bg-white border border-gray-200 rounded-xl p-12 text-center">
-              <Calendar className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No upcoming capital expenses</h3>
-              <p className="text-sm text-gray-600">
+            <div className="rounded-2xl border border-white/70 bg-white/70 p-12 text-center shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
+              <Calendar className="mx-auto mb-4 h-12 w-12 text-slate-300 dark:text-slate-500" />
+              <h3 className="mb-2 text-lg font-medium text-slate-900 dark:text-slate-100">No upcoming capital expenses</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-300">
                 Add inventory items to your property to get personalized predictions.
               </p>
             </div>
@@ -305,23 +305,23 @@ export default function CapitalTimelineClient() {
                 return (
                   <div
                     key={item.id}
-                    className="bg-white border border-gray-200 rounded-xl overflow-hidden"
+                    className="overflow-hidden rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38"
                   >
                     {/* Item Header */}
                     <div className="p-4 sm:p-5">
                       <div className="flex items-start gap-3">
-                        <div className="flex-shrink-0 p-2 bg-gray-50 rounded-lg text-gray-600">
+                        <div className="flex-shrink-0 rounded-xl border border-white/70 bg-white/75 p-2 text-slate-600 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300">
                           {categoryIcon(item.category)}
                         </div>
 
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                             <div>
-                              <h3 className="text-sm font-semibold text-gray-900">
+                              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                                 {itemName}
                               </h3>
                               {item.inventoryItem?.brand && (
-                                <p className="text-xs text-gray-500 mt-0.5">
+                                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-300">
                                   {item.inventoryItem.brand}
                                   {item.inventoryItem.model ? ` ${item.inventoryItem.model}` : ''}
                                 </p>
@@ -336,12 +336,12 @@ export default function CapitalTimelineClient() {
 
                           <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 text-sm">
                             <div>
-                              <span className="text-gray-500">When: </span>
-                              <span className="font-medium text-gray-900">{windowLabel(item)}</span>
+                              <span className="text-slate-500 dark:text-slate-300">When: </span>
+                              <span className="font-medium text-slate-900 dark:text-slate-100">{windowLabel(item)}</span>
                             </div>
                             <div>
-                              <span className="text-gray-500">Est. Cost: </span>
-                              <span className="font-medium text-gray-900">
+                              <span className="text-slate-500 dark:text-slate-300">Est. Cost: </span>
+                              <span className="font-medium text-slate-900 dark:text-slate-100">
                                 {money(item.estimatedCostMinCents)} &ndash; {money(item.estimatedCostMaxCents)}
                               </span>
                             </div>
@@ -353,7 +353,7 @@ export default function CapitalTimelineClient() {
                       {/* Why toggle */}
                       <button
                         onClick={() => toggleExpand(item.id)}
-                        className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors min-h-[44px] px-2 -ml-2 touch-manipulation"
+                        className="mt-3 -ml-2 inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-2 text-xs font-medium text-slate-500 transition-colors hover:text-slate-700 touch-manipulation dark:text-slate-300 dark:hover:text-slate-100"
                       >
                         {isExpanded ? (
                           <ChevronDown className="h-3.5 w-3.5" />
@@ -367,7 +367,7 @@ export default function CapitalTimelineClient() {
                     {/* Expanded explanation */}
                     {isExpanded && (
                       <div className="px-4 sm:px-5 pb-4 sm:pb-5 pt-0">
-                        <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 leading-relaxed">
+                        <div className="rounded-xl border border-white/70 bg-white/72 p-3 text-sm leading-relaxed text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300">
                           {item.why}
                         </div>
                       </div>

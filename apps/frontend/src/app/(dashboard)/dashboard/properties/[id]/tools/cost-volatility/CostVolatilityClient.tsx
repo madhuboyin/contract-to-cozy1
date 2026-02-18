@@ -11,17 +11,17 @@ import { getCostVolatility, type CostVolatilityDTO } from './costVolatilityApi';
 import MiniLineChartPct from './MiniLineChartPct';
 
 function badgeForBand(b?: 'LOW' | 'MEDIUM' | 'HIGH') {
-  const base = 'text-xs rounded px-2 py-0.5 border border-black/10';
-  if (b === 'HIGH') return <span className={`${base} bg-red-50 text-red-700`}>High</span>;
-  if (b === 'MEDIUM') return <span className={`${base} bg-amber-50 text-amber-800`}>Medium</span>;
-  return <span className={`${base} bg-emerald-50 text-emerald-700`}>Low</span>;
+  const base = 'inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm backdrop-blur';
+  if (b === 'HIGH') return <span className={`${base} border-red-200/70 bg-red-50/85 text-red-700`}>High</span>;
+  if (b === 'MEDIUM') return <span className={`${base} border-amber-200/70 bg-amber-50/85 text-amber-800`}>Medium</span>;
+  return <span className={`${base} border-emerald-200/70 bg-emerald-50/85 text-emerald-700`}>Low</span>;
 }
 
 function confidenceBadge(c?: string) {
-  const base = 'text-xs rounded px-2 py-0.5 border border-black/10';
-  if (c === 'HIGH') return <span className={`${base} bg-emerald-50 text-emerald-700`}>High confidence</span>;
-  if (c === 'MEDIUM') return <span className={`${base} bg-amber-50 text-amber-800`}>Medium confidence</span>;
-  return <span className={`${base} bg-black/5 text-black/70`}>Estimated</span>;
+  const base = 'inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm backdrop-blur';
+  if (c === 'HIGH') return <span className={`${base} border-emerald-200/70 bg-emerald-50/85 text-emerald-700`}>High confidence</span>;
+  if (c === 'MEDIUM') return <span className={`${base} border-amber-200/70 bg-amber-50/85 text-amber-800`}>Medium confidence</span>;
+  return <span className={`${base} border-slate-300/70 bg-slate-50/85 text-slate-700`}>Estimated</span>;
 }
 
 function eventLabel(t?: string) {
@@ -122,38 +122,42 @@ export default function CostVolatilityClient() {
   }, [recentEvents]);
 
   return (
-    <div className="p-4 sm:p-6 space-y-4">
-      <SectionHeader
-        icon="📉"
-        title="Cost Volatility Index"
-        description="Measures how unpredictable your ownership costs are year-to-year."
-      />
+    <div className="space-y-5 p-4 sm:p-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
+      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[radial-gradient(circle_at_10%_10%,rgba(251,191,36,0.14),transparent_40%),radial-gradient(circle_at_88%_14%,rgba(20,184,166,0.14),transparent_40%),linear-gradient(180deg,rgba(255,255,255,0.9),rgba(248,250,252,0.8))] p-4 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.6)] dark:border-slate-700/70 dark:bg-[radial-gradient(circle_at_10%_10%,rgba(251,191,36,0.12),transparent_40%),radial-gradient(circle_at_88%_14%,rgba(20,184,166,0.12),transparent_40%),linear-gradient(180deg,rgba(2,6,23,0.9),rgba(2,6,23,0.78))]">
+        <div className="rounded-2xl border border-white/70 bg-white/60 p-4 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45">
+          <SectionHeader
+            icon="📉"
+            title="Cost Volatility Index"
+            description="Measures how unpredictable your ownership costs are year-to-year."
+          />
 
-      <div className="mt-4">
-        <HomeToolsRail propertyId={propertyId} />
+          <div className="mt-4">
+            <HomeToolsRail propertyId={propertyId} />
+          </div>
+        </div>
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-3 flex items-start gap-3">
-          <div className="text-sm text-red-600 flex-1">{error}</div>
-          <button onClick={() => load(years)} className="text-sm font-medium text-red-700 hover:text-red-900 shrink-0">Retry</button>
+        <div className="flex items-start gap-3 rounded-2xl border border-red-200/70 bg-red-50/85 p-3 backdrop-blur">
+          <div className="flex-1 text-sm text-red-600">{error}</div>
+          <button onClick={() => load(years)} className="shrink-0 text-sm font-medium text-red-700 hover:text-red-900">Retry</button>
         </div>
       )}
 
       {/* Main card */}
-      <div className="rounded-2xl border border-black/10 bg-white p-4">
-        <div className="flex items-start justify-between gap-4">
+      <div className="rounded-[26px] border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/70 to-teal-50/45 p-4 sm:p-5 shadow-[0_20px_42px_-30px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/60 dark:via-slate-900/50 dark:to-teal-950/20">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="text-sm font-medium">Volatility score (0–100)</div>
-            <div className="text-xs opacity-70 mt-1">
-              <span className="font-medium">{data?.input?.addressLabel || '—'}</span>
+            <div className="text-base font-semibold text-slate-900 dark:text-slate-100">Volatility score (0–100)</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
+              <span className="font-medium text-slate-700 dark:text-slate-200">{data?.input?.addressLabel || '—'}</span>
             </div>
-            <div className="mt-2 text-xs opacity-70">
+            <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
               Your costs aren’t just rising — they’re unpredictable.
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/75 p-1 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55">
             <button
               type="button"
               onClick={async () => {
@@ -161,11 +165,14 @@ export default function CostVolatilityClient() {
                 setYears(5);
                 await load(5);
               }}
-              className={`text-xs underline min-h-[44px] inline-flex items-center px-1 touch-manipulation ${years === 5 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+              className={`inline-flex min-h-[36px] items-center rounded-full px-3 text-sm font-medium transition-all touch-manipulation ${
+                years === 5
+                  ? 'border border-slate-900 bg-slate-900 text-white shadow-sm dark:border-white dark:bg-white dark:text-slate-900'
+                  : 'border border-transparent text-slate-600 hover:border-slate-300/70 hover:bg-white/80 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900/60'
+              }`}
             >
               5y
             </button>
-            <span className="text-xs opacity-40">|</span>
             <button
               type="button"
               onClick={async () => {
@@ -173,7 +180,11 @@ export default function CostVolatilityClient() {
                 setYears(10);
                 await load(10);
               }}
-              className={`text-xs underline min-h-[44px] inline-flex items-center px-1 touch-manipulation ${years === 10 ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+              className={`inline-flex min-h-[36px] items-center rounded-full px-3 text-sm font-medium transition-all touch-manipulation ${
+                years === 10
+                  ? 'border border-slate-900 bg-slate-900 text-white shadow-sm dark:border-white dark:bg-white dark:text-slate-900'
+                  : 'border border-transparent text-slate-600 hover:border-slate-300/70 hover:bg-white/80 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900/60'
+              }`}
             >
               10y
             </button>
@@ -181,48 +192,48 @@ export default function CostVolatilityClient() {
         </div>
 
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="rounded-xl border border-black/10 p-3">
-            <div className="text-xs opacity-70">Index</div>
-            <div className="text-2xl font-semibold tabular-nums">{data?.index?.volatilityIndex ?? '—'}</div>
+          <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
+            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Index</div>
+            <div className="text-2xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">{data?.index?.volatilityIndex ?? '—'}</div>
 
             <div className="mt-1 flex items-center gap-2">
               {badgeForBand(data?.index?.band)}
               {!!data?.index?.bandLabel && (
-                <span className="text-xs opacity-60">{data.index.bandLabel}</span>
+                <span className="text-xs text-slate-500 dark:text-slate-300">{data.index.bandLabel}</span>
               )}
             </div>
 
             {!!data?.index?.dominantDriver && (
-              <div className="mt-2 text-xs opacity-60">
-                Primary driver: <span className="font-medium text-black/70">{data.index.dominantDriver}</span>
+              <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
+                Primary driver: <span className="font-medium text-slate-700 dark:text-slate-200">{data.index.dominantDriver}</span>
               </div>
             )}
           </div>
 
-          <div className="rounded-xl border border-black/10 p-3">
-            <div className="text-xs opacity-70">Insurance volatility</div>
+          <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
+            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Insurance volatility</div>
 
             {/* ✅ Patch: show "—" if insufficient history */}
-            <div className="text-xl font-semibold tabular-nums">
+            <div className="text-xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">
               {showInsuranceAsMissing ? '—' : (data?.index?.insuranceVolatility ?? '—')}
             </div>
 
-            <div className="text-xs opacity-60 mt-1">
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
               {showInsuranceAsMissing ? 'Insufficient renewal history' : 'Std dev of YoY premium changes'}
             </div>
           </div>
 
-          <div className="rounded-xl border border-black/10 p-3">
-            <div className="text-xs opacity-70">Tax volatility</div>
-            <div className="text-xl font-semibold tabular-nums">{data?.index?.taxVolatility ?? '—'}</div>
-            <div className="text-xs opacity-60 mt-1">YoY variance + cadence pressure</div>
+          <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
+            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Tax volatility</div>
+            <div className="text-xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">{data?.index?.taxVolatility ?? '—'}</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">YoY variance + cadence pressure</div>
           </div>
 
           {/* ✅ Patch: rename ZIP proxy to Phase-2 meaning */}
-          <div className="rounded-xl border border-black/10 p-3">
-            <div className="text-xs opacity-70">Regional sensitivity</div>
-            <div className="text-xl font-semibold tabular-nums">{data?.index?.zipVolatility ?? '—'}</div>
-            <div className="text-xs opacity-60 mt-1">
+          <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
+            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Regional sensitivity</div>
+            <div className="text-xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">{data?.index?.zipVolatility ?? '—'}</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
               Pricing environment modifier
               <span
                 className="ml-2 underline decoration-dotted cursor-help"
@@ -235,12 +246,12 @@ export default function CostVolatilityClient() {
         </div>
 
         {/* YoY chart */}
-        <div className="mt-4 rounded-xl border border-black/10 p-3">
+        <div className="mt-4 rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
           <div className="flex flex-wrap items-center gap-2 mb-2">
-            <span className="text-xs rounded-full border border-black/10 px-2 py-0.5 bg-white">
+            <span className="rounded-full border border-slate-300/70 bg-white/85 px-2.5 py-1 text-xs font-medium text-slate-700 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200">
               Total annual cost YoY change (%)
             </span>
-            <span className="text-xs opacity-60 ml-auto">
+            <span className="ml-auto text-xs text-slate-500 dark:text-slate-300">
               {loading ? 'Refreshing…' : data?.meta?.generatedAt ? 'Updated just now' : ''}
             </span>
           </div>
@@ -252,24 +263,24 @@ export default function CostVolatilityClient() {
             ariaLabel="Total cost YoY change chart"
           />
 
-          <div className="mt-2 text-xs opacity-60">
+          <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
             Higher swings = more surprise risk. 10y view is sampled for readability.
           </div>
         </div>
 
         {/* ✅ Phase-2: calm event chips */}
         {!!recentEvents.length && (
-          <div className="mt-4 rounded-xl border border-black/10 p-3">
+          <div className="mt-4 rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-sm font-medium">Years with surprise risk</div>
-              <div className="text-xs opacity-60">Dots mark flagged years</div>
+              <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Years with surprise risk</div>
+              <div className="text-xs text-slate-500 dark:text-slate-300">Dots mark flagged years</div>
             </div>
 
             <div className="mt-2 flex flex-wrap gap-2">
               {recentEvents.map((e, idx) => (
                 <span
                   key={`${e.year}-${idx}`}
-                  className="text-xs rounded-full border border-black/10 bg-white px-2 py-0.5"
+                  className="rounded-full border border-slate-300/70 bg-white/85 px-2.5 py-1 text-xs text-slate-700 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200"
                   title={e.description}
                 >
                   {e.year} <span className="opacity-60">·</span> {eventLabel(e.type)}
@@ -281,20 +292,20 @@ export default function CostVolatilityClient() {
 
         {/* ✅ Phase-2: why spikes (top 2 drivers) */}
         {!!(data?.drivers?.length ?? 0) && (
-          <div className="mt-4 rounded-xl border border-black/10 p-3">
-            <div className="text-sm font-medium">Why volatility spikes here</div>
+          <div className="mt-4 rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
+            <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Why volatility spikes here</div>
 
             {/* ✅ Patch: year anchor when events exist */}
             {!!spikeAnchor && (
-              <div className="mt-2 text-xs text-black/70 leading-5">
+              <div className="mt-2 text-xs leading-5 text-slate-600 dark:text-slate-300">
                 {spikeAnchor}
               </div>
             )}
 
             <div className="mt-2 space-y-2">
               {(data?.drivers || []).slice(0, 2).map((d, idx) => (
-                <div key={`${d.factor}-${idx}`} className="text-xs text-black/70 leading-5">
-                  <span className="font-medium text-black/80">{d.factor}:</span> {d.explanation}
+                <div key={`${d.factor}-${idx}`} className="text-xs leading-5 text-slate-600 dark:text-slate-300">
+                  <span className="font-medium text-slate-800 dark:text-slate-100">{d.factor}:</span> {d.explanation}
                 </div>
               ))}
             </div>
@@ -303,17 +314,17 @@ export default function CostVolatilityClient() {
 
         {/* ✅ Phase-2: optional AI readiness hook */}
         {!!data?.meta?.aiSummary && (
-          <div className="mt-4 rounded-xl bg-black/5 p-3">
-            <div className="text-xs font-medium text-black/70">Summary</div>
-            <div className="mt-2 text-xs text-black/70 leading-5">{data.meta.aiSummary.shortExplanation}</div>
-            <div className="mt-2 text-xs text-black/70 leading-5">{data.meta.aiSummary.riskNarrative}</div>
+          <div className="mt-4 rounded-2xl border border-white/70 bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
+            <div className="text-xs font-medium text-slate-700 dark:text-slate-200">Summary</div>
+            <div className="mt-2 text-xs leading-5 text-slate-600 dark:text-slate-300">{data.meta.aiSummary.shortExplanation}</div>
+            <div className="mt-2 text-xs leading-5 text-slate-600 dark:text-slate-300">{data.meta.aiSummary.riskNarrative}</div>
 
             {!!data.meta.aiSummary.whatToWatch?.length && (
               <div className="mt-2">
-                <div className="text-[11px] uppercase tracking-wide text-black/60">What to watch</div>
+                <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-300">What to watch</div>
                 <div className="mt-1 space-y-1">
                   {data.meta.aiSummary.whatToWatch.slice(0, 3).map((w, i) => (
-                    <div key={i} className="text-xs text-black/70">• {w}</div>
+                    <div key={i} className="text-xs text-slate-600 dark:text-slate-300">• {w}</div>
                   ))}
                 </div>
               </div>
@@ -323,14 +334,14 @@ export default function CostVolatilityClient() {
       </div>
 
       {/* Drivers */}
-      <div className="rounded-2xl border border-black/10 bg-white p-4">
+      <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-sm font-medium">What’s driving unpredictability</div>
-            <div className="text-xs opacity-70 mt-1">Ranked by estimated impact.</div>
+            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">What’s driving unpredictability</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Ranked by estimated impact.</div>
 
             {/* ✅ Patch: confidence clarification */}
-            <div className="text-xs opacity-60 mt-1">
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
               Confidence reflects data availability, not volatility severity.
             </div>
           </div>
@@ -339,26 +350,26 @@ export default function CostVolatilityClient() {
 
         <div className="mt-4 space-y-3">
           {(data?.drivers || []).map((d, idx) => (
-            <div key={`${d.factor}-${idx}`} className="rounded-xl border border-black/10 p-3">
+            <div key={`${d.factor}-${idx}`} className="rounded-2xl border border-white/70 bg-white/68 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
               <div className="flex items-start justify-between gap-3">
-                <div className="text-sm font-medium">{d.factor}</div>
-                <span className="text-xs rounded px-2 py-0.5 border border-black/10 bg-white">{d.impact}</span>
+                <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{d.factor}</div>
+                <span className="rounded-full border border-slate-300/70 bg-white/85 px-2.5 py-1 text-xs text-slate-600 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300">{d.impact}</span>
               </div>
-              <div className="text-sm text-black/70 mt-1 leading-6">{d.explanation}</div>
+              <div className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">{d.explanation}</div>
             </div>
           ))}
           {!loading && !(data?.drivers || []).length && (
-            <div className="text-sm text-black/60">No drivers available.</div>
+            <div className="text-sm text-slate-500 dark:text-slate-300">No drivers available.</div>
           )}
         </div>
       </div>
 
       {/* Notes */}
-      <div className="rounded-2xl border border-black/10 bg-white p-4">
-        <div className="text-sm font-medium">Assumptions & notes</div>
+      <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
+        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Assumptions & notes</div>
         <div className="mt-2 space-y-1">
           {(data?.meta?.notes || []).map((n, idx) => (
-            <div key={idx} className="text-sm text-black/70 leading-6">
+            <div key={idx} className="text-sm leading-6 text-slate-600 dark:text-slate-300">
               • {n}
             </div>
           ))}

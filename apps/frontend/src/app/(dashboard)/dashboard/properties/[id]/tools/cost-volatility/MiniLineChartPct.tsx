@@ -113,7 +113,7 @@ export default function MiniLineChartPct(props: {
     <div className="relative w-full">
       <svg
         viewBox={`0 0 ${w} ${h}`}
-        className="w-full h-[200px] text-black/70"
+        className="h-[200px] w-full text-slate-600 dark:text-slate-300"
         preserveAspectRatio="none"
         role="img"
         aria-label={props.ariaLabel || 'Volatility YoY percent chart'}
@@ -199,11 +199,11 @@ export default function MiniLineChartPct(props: {
 
       {tooltip && (
         <div
-          className="absolute top-2 z-10 rounded-xl border border-black/10 bg-white/95 backdrop-blur px-3 py-2 shadow-sm"
+          className="absolute top-2 z-10 rounded-xl border border-white/70 bg-white/85 px-3 py-2 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/80"
           style={{ left: `calc(${Math.round(hoverXPct * 100)}% - 90px)`, width: 180, pointerEvents: 'none' }}
         >
-          <div className="text-xs font-medium text-black/80">{tooltip.year}</div>
-          <div className="mt-1 text-xs text-black/70 flex items-center justify-between">
+          <div className="text-xs font-medium text-slate-800 dark:text-slate-100">{tooltip.year}</div>
+          <div className="mt-1 flex items-center justify-between text-xs text-slate-600 dark:text-slate-300">
             <span>Total YoY</span>
             <span className="font-medium tabular-nums">{tooltip.v.toFixed(1)}%</span>
           </div>
@@ -211,8 +211,8 @@ export default function MiniLineChartPct(props: {
           {!!tooltip.evs.length && (
             <div className="mt-2 space-y-1">
               {tooltip.evs.slice(0, 2).map((e, i) => (
-                <div key={i} className="text-[11px] text-black/60 leading-4">
-                  <span className="inline-block mr-1 rounded border border-black/10 bg-white px-1.5 py-0.5">
+                <div key={i} className="text-[11px] leading-4 text-slate-500 dark:text-slate-300">
+                  <span className="mr-1 inline-block rounded border border-slate-300/70 bg-white/85 px-1.5 py-0.5 text-slate-600 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300">
                     {badgeLabel(e.type)}
                   </span>
                   {e.description}
