@@ -23,6 +23,7 @@ export default function PropertiesPage() {
     recalls: 'Recalls',
     'seller-prep': 'Home Tools > Seller Prep',
     'home-timeline': 'Home Tools > Home Timeline',
+    'status-board': 'Home Tools > Status Board',
     reports: 'Home Admin > Reports',
     'tool:property-tax': 'Home Tools > Property Tax',
     'tool:cost-growth': 'Home Tools > Cost Growth',
@@ -46,6 +47,7 @@ export default function PropertiesPage() {
     if (navTarget === 'recalls') return `/dashboard/properties/${propertyId}/recalls`;
     if (navTarget === 'seller-prep') return `/dashboard/properties/${propertyId}/seller-prep`;
     if (navTarget === 'home-timeline') return `/dashboard/properties/${propertyId}/timeline`;
+    if (navTarget === 'status-board') return `/dashboard/properties/${propertyId}/status-board`;
     if (navTarget === 'reports') return `/dashboard/properties/${propertyId}/reports`;
 
     if (navTarget.startsWith('tool:')) {

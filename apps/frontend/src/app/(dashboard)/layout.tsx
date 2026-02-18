@@ -179,6 +179,14 @@ const HOME_TOOL_LINKS: PropertyToolLink[] = [
     icon: Calendar,
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/timeline(\/|$)/.test(pathname),
   },
+  {
+    key: 'status-board',
+    name: 'Status Board',
+    hrefSuffix: 'status-board',
+    navTarget: 'status-board',
+    icon: LayoutGrid,
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/status-board(\/|$)/.test(pathname),
+  },
 ];
 
 const AI_TOOL_LINKS: AIToolLink[] = [
