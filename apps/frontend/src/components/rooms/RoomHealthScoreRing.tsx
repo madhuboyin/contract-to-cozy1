@@ -64,8 +64,8 @@ function norm(s?: string) {
 function ringToneClass(v: number) {
   // subtle but clear
   if (v >= 75) return 'text-emerald-600';
-  if (v >= 50) return 'text-amber-500';
-  return 'text-red-500';
+  if (v >= 50) return 'text-amber-600';
+  return 'text-orange-600';
 }
 
 function prefersReducedMotion(): boolean {
@@ -159,8 +159,8 @@ export default function RoomHealthScoreRing({
 
   const valueTextClass =
     variant === 'hero'
-      ? 'fill-black text-[26px] font-semibold'
-      : 'fill-black text-[16px] font-semibold';
+      ? 'fill-slate-900 text-[28px] font-bold drop-shadow-[0_2px_4px_rgba(15,23,42,0.18)] dark:fill-slate-100'
+      : 'fill-slate-900 text-[18px] font-bold drop-shadow-[0_1px_2px_rgba(15,23,42,0.14)] dark:fill-slate-100';
 
   const ringClass = useMemo(() => ringToneClass(v), [v]);
 
@@ -172,7 +172,7 @@ export default function RoomHealthScoreRing({
         cy={resolvedSize / 2}
         r={r}
         strokeWidth={resolvedStrokeWidth}
-        className="fill-none stroke-black/10"
+        className="fill-none stroke-slate-300/80 dark:stroke-slate-700/80"
       />
       <circle
         cx={resolvedSize / 2}
@@ -218,7 +218,7 @@ export default function RoomHealthScoreRing({
             <div className="relative group">
               <button
                 type="button"
-                className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white px-2 py-0.5 text-[11px] text-gray-700 hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-black/10"
+                className="inline-flex items-center gap-1 rounded-full border border-slate-300/70 bg-white/80 px-2 py-0.5 text-[11px] text-slate-700 shadow-sm backdrop-blur-sm transition-colors hover:bg-white focus:outline-none focus:ring-2 focus:ring-teal-100 dark:border-slate-700/70 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-900"
                 aria-label={whyTitle}
               >
                 ⓘ Why this score?
@@ -227,7 +227,7 @@ export default function RoomHealthScoreRing({
               <div
                 className={[
                   'absolute left-0 top-full mt-2 w-[340px] max-w-[85vw]',
-                  'rounded-2xl border border-black/10 bg-white p-3 shadow-lg',
+                  'rounded-2xl border border-white/75 bg-white/82 p-3 shadow-[0_16px_32px_-24px_rgba(15,23,42,0.7)] backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/88',
                   'opacity-0 pointer-events-none',
                   'group-hover:opacity-100 group-hover:pointer-events-auto',
                   'group-focus-within:opacity-100 group-focus-within:pointer-events-auto',
