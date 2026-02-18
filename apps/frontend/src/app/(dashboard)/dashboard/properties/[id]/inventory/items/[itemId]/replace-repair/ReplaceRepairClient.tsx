@@ -118,6 +118,15 @@ function verdictLabel(verdict?: ReplaceRepairAnalysisDTO['verdict']) {
   return verdict.replaceAll('_', ' ');
 }
 
+const GLASS_PANEL_CLASS =
+  'rounded-2xl border border-white/70 bg-white/55 shadow-[0_18px_38px_-28px_rgba(15,23,42,0.6)] backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45';
+
+const BENTO_TILE_CLASS =
+  'rounded-xl border border-white/75 bg-gradient-to-br from-white/80 to-slate-50/65 p-3 shadow-[0_10px_22px_-18px_rgba(15,23,42,0.55)] backdrop-blur-sm dark:border-slate-700/70 dark:from-slate-900/60 dark:to-slate-900/40';
+
+const INPUT_BASE_CLASS =
+  'mt-1 w-full rounded-lg border border-slate-300/80 bg-white/85 px-3 py-2 text-sm shadow-sm focus-visible:ring-2 focus-visible:ring-teal-100 focus-visible:outline-none dark:border-slate-700/80 dark:bg-slate-900/65';
+
 export default function ReplaceRepairClient() {
   const router = useRouter();
   const params = useParams<{ id: string; itemId: string }>();
@@ -216,17 +225,19 @@ export default function ReplaceRepairClient() {
   }, [analysis]);
 
   return (
-    <div className="mx-auto max-w-5xl p-6 space-y-4">
+    <div className="mx-auto max-w-5xl space-y-4 p-6">
       <button
         type="button"
         onClick={() => router.back()}
-        className="inline-flex items-center gap-2 text-sm text-teal-700 hover:text-teal-800"
+        className="inline-flex items-center gap-2 rounded-full border border-slate-300/70 bg-white/75 px-3 py-1.5 text-sm text-teal-700 shadow-sm transition-colors hover:bg-white hover:text-teal-800 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-teal-300 dark:hover:bg-slate-900"
       >
         <ArrowLeft className="h-4 w-4" />
         Back
       </button>
 
-      <section className="rounded-2xl border border-black/10 bg-white p-6">
+      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[radial-gradient(circle_at_8%_8%,rgba(251,191,36,0.15),transparent_38%),radial-gradient(circle_at_92%_10%,rgba(20,184,166,0.14),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.85))] p-4 shadow-[0_28px_60px_-42px_rgba(15,23,42,0.65)] dark:border-slate-700/70 dark:bg-[radial-gradient(circle_at_8%_8%,rgba(251,191,36,0.11),transparent_38%),radial-gradient(circle_at_92%_10%,rgba(20,184,166,0.11),transparent_36%),linear-gradient(180deg,rgba(2,6,23,0.88),rgba(2,6,23,0.8))]">
+        <div className="space-y-4">
+      <section className={`${GLASS_PANEL_CLASS} p-6`}>
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">Replace or Repair</h1>
@@ -247,18 +258,18 @@ export default function ReplaceRepairClient() {
         </div>
       </section>
 
-      <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm text-sky-900">
+      <div className="rounded-2xl border border-sky-200/70 bg-gradient-to-r from-sky-50/95 to-cyan-50/90 p-4 text-sm text-sky-900 shadow-[0_12px_20px_-20px_rgba(14,116,144,0.7)] dark:border-sky-900/50 dark:from-sky-950/45 dark:to-cyan-950/35 dark:text-sky-200">
         Educational decision support only. This estimate does not guarantee outcomes or recommend specific vendors.
       </div>
 
       {error && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-start gap-2">
+        <div className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50/90 p-4 text-sm text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/35 dark:text-rose-200">
           <AlertCircle className="h-4 w-4 mt-0.5" />
           <span>{error}</span>
         </div>
       )}
 
-      <section className="rounded-2xl border border-black/10 bg-white p-5">
+      <section className={`${GLASS_PANEL_CLASS} p-5`}>
         <h2 className="text-base font-semibold text-gray-900">Inputs</h2>
         <p className="text-sm text-gray-600 mt-1">Optional overrides for your item-level scenario.</p>
 
@@ -269,7 +280,7 @@ export default function ReplaceRepairClient() {
               type="number"
               min={0}
               step="0.01"
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className={INPUT_BASE_CLASS}
               value={inputs.estimatedNextRepairCostUsd}
               onChange={(e) => setInputs((prev) => ({ ...prev, estimatedNextRepairCostUsd: e.target.value }))}
             />
@@ -281,7 +292,7 @@ export default function ReplaceRepairClient() {
               type="number"
               min={0}
               step="0.01"
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className={INPUT_BASE_CLASS}
               value={inputs.estimatedReplacementCostUsd}
               onChange={(e) => setInputs((prev) => ({ ...prev, estimatedReplacementCostUsd: e.target.value }))}
             />
@@ -293,7 +304,7 @@ export default function ReplaceRepairClient() {
               type="number"
               min={0}
               step="0.1"
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className={INPUT_BASE_CLASS}
               value={inputs.expectedRemainingYears}
               onChange={(e) => setInputs((prev) => ({ ...prev, expectedRemainingYears: e.target.value }))}
             />
@@ -321,7 +332,7 @@ export default function ReplaceRepairClient() {
               type="number"
               min={0}
               step="0.01"
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className={INPUT_BASE_CLASS}
               value={inputs.cashBufferUsd}
               onChange={(e) => setInputs((prev) => ({ ...prev, cashBufferUsd: e.target.value }))}
             />
@@ -330,7 +341,7 @@ export default function ReplaceRepairClient() {
           <label className="text-xs text-gray-600">
             Risk tolerance
             <select
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
+              className={INPUT_BASE_CLASS}
               value={inputs.riskTolerance}
               onChange={(e) => setInputs((prev) => ({ ...prev, riskTolerance: e.target.value as any }))}
             >
@@ -343,7 +354,7 @@ export default function ReplaceRepairClient() {
           <label className="text-xs text-gray-600">
             Usage intensity
             <select
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
+              className={INPUT_BASE_CLASS}
               value={inputs.usageIntensity}
               onChange={(e) => setInputs((prev) => ({ ...prev, usageIntensity: e.target.value as any }))}
             >
@@ -355,7 +366,11 @@ export default function ReplaceRepairClient() {
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button onClick={runAnalysis} disabled={running || loading}>
+          <Button
+            onClick={runAnalysis}
+            disabled={running || loading}
+            className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm transition-all hover:-translate-y-0.5 hover:from-emerald-700 hover:to-teal-700"
+          >
             {running ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -367,21 +382,21 @@ export default function ReplaceRepairClient() {
               'Run analysis'
             )}
           </Button>
-          <Button variant="ghost" onClick={fetchData} disabled={loading}>
+          <Button variant="ghost" onClick={fetchData} disabled={loading} className="hover:bg-white/70 dark:hover:bg-slate-900/60">
             Refresh
           </Button>
         </div>
       </section>
 
       {loading && (
-        <div className="rounded-2xl border border-black/10 bg-white p-8 flex items-center justify-center gap-3">
+        <div className={`${GLASS_PANEL_CLASS} flex items-center justify-center gap-3 p-8`}>
           <Loader2 className="h-5 w-5 animate-spin text-teal-600" />
           <span className="text-sm text-gray-600">Loading analysis…</span>
         </div>
       )}
 
       {!loading && !analysis && (
-        <div className="rounded-2xl border border-black/10 bg-white p-6">
+        <div className={`${GLASS_PANEL_CLASS} p-6`}>
           <h3 className="text-lg font-semibold text-gray-900">No analysis yet</h3>
           <p className="text-sm text-gray-600 mt-1">Run Replace or Repair to generate your item decision support.</p>
         </div>
@@ -389,7 +404,7 @@ export default function ReplaceRepairClient() {
 
       {!loading && analysis && (
         <>
-          <section className="rounded-2xl border border-black/10 bg-white p-5">
+          <section className={`${GLASS_PANEL_CLASS} p-5`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
@@ -406,31 +421,31 @@ export default function ReplaceRepairClient() {
             </div>
 
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <div className={BENTO_TILE_CLASS}>
                 <div className="text-xs text-gray-500">Age</div>
                 <div className="text-base font-semibold text-gray-900">
                   {analysis.ageYears !== undefined ? `${analysis.ageYears} year(s)` : '—'}
                 </div>
               </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <div className={BENTO_TILE_CLASS}>
                 <div className="text-xs text-gray-500">Remaining years</div>
                 <div className="text-base font-semibold text-gray-900">
                   {analysis.remainingYears !== undefined ? analysis.remainingYears : '—'}
                 </div>
               </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <div className={BENTO_TILE_CLASS}>
                 <div className="text-xs text-gray-500">Estimated next repair</div>
                 <div className="text-base font-semibold text-gray-900">{money(analysis.estimatedNextRepairCostCents)}</div>
               </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <div className={BENTO_TILE_CLASS}>
                 <div className="text-xs text-gray-500">Estimated replacement</div>
                 <div className="text-base font-semibold text-gray-900">{money(analysis.estimatedReplacementCostCents)}</div>
               </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <div className={BENTO_TILE_CLASS}>
                 <div className="text-xs text-gray-500">Expected annual repair risk</div>
                 <div className="text-base font-semibold text-gray-900">{money(analysis.expectedAnnualRepairRiskCents)}</div>
               </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <div className={BENTO_TILE_CLASS}>
                 <div className="text-xs text-gray-500">Break-even months</div>
                 <div className="text-base font-semibold text-gray-900">{analysis.breakEvenMonths ?? '—'}</div>
               </div>
@@ -438,11 +453,11 @@ export default function ReplaceRepairClient() {
           </section>
 
           {analysis.nextSteps && analysis.nextSteps.length > 0 && (
-            <section className="rounded-2xl border border-black/10 bg-white p-5">
+            <section className={`${GLASS_PANEL_CLASS} p-5`}>
               <h4 className="text-base font-semibold text-gray-900">Next steps</h4>
               <div className="mt-3 space-y-2">
                 {analysis.nextSteps.map((step, index) => (
-                  <div key={`${step.title}-${index}`} className="rounded-xl border border-gray-200 p-3">
+                  <div key={`${step.title}-${index}`} className={BENTO_TILE_CLASS}>
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-sm font-medium text-gray-900">{step.title}</div>
                       {step.priority && <span className="text-xs text-gray-500">{step.priority}</span>}
@@ -454,14 +469,14 @@ export default function ReplaceRepairClient() {
             </section>
           )}
 
-          <section className="rounded-2xl border border-black/10 bg-white p-5">
+          <section className={`${GLASS_PANEL_CLASS} p-5`}>
             <details open>
               <summary className="cursor-pointer text-base font-semibold text-gray-900">Why this?</summary>
               <div className="mt-3 space-y-2">
                 {analysis.decisionTrace.map((trace, index) => (
                   <div
                     key={`${trace.label}-${index}`}
-                    className="rounded-xl border border-gray-200 p-3 flex items-start justify-between gap-3"
+                    className="flex items-start justify-between gap-3 rounded-xl border border-white/70 bg-white/60 p-3 shadow-[0_10px_22px_-18px_rgba(15,23,42,0.55)] backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-900/45"
                   >
                     <div>
                       <div className="text-sm font-medium text-gray-900">{trace.label}</div>
@@ -475,6 +490,8 @@ export default function ReplaceRepairClient() {
           </section>
         </>
       )}
+        </div>
+      </div>
     </div>
   );
 }
