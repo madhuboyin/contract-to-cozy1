@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState, useMemo } from "react";
+import { Fragment, useState, useMemo, type ElementType } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -57,6 +57,9 @@ import {
   CheckCircle2,
   Clock,
   Info,
+  Home,
+  Cpu,
+  Building,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -65,9 +68,12 @@ import Link from "next/link";
 // ---------------------------------------------------------------------------
 
 const CONDITION_COLORS: Record<StatusBoardCondition, string> = {
-  GOOD: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  MONITOR: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-  ACTION_NEEDED: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+  GOOD:
+    "border-emerald-200 bg-gradient-to-r from-emerald-50 to-green-100 text-emerald-800 dark:border-emerald-900/80 dark:from-emerald-950/40 dark:to-green-950/30 dark:text-emerald-300",
+  MONITOR:
+    "border-amber-200 bg-gradient-to-r from-amber-50 to-yellow-100 text-amber-800 dark:border-amber-900/80 dark:from-amber-950/40 dark:to-yellow-950/30 dark:text-amber-300",
+  ACTION_NEEDED:
+    "border-red-200 bg-gradient-to-r from-rose-50 via-red-50 to-orange-100 text-red-800 dark:border-red-900/80 dark:from-rose-950/40 dark:via-red-950/40 dark:to-orange-950/30 dark:text-red-300",
 };
 
 const CONDITION_LABELS: Record<StatusBoardCondition, string> = {
@@ -83,9 +89,10 @@ const RECOMMENDATION_LABELS: Record<StatusBoardRecommendation, string> = {
 };
 
 const RECOMMENDATION_COLORS: Record<StatusBoardRecommendation, string> = {
-  OK: "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700",
-  REPAIR: "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800",
-  REPLACE_SOON: "bg-red-100 text-red-800 border-red-300 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800",
+  OK: "bg-gradient-to-r from-slate-50 to-slate-100 text-slate-700 border-slate-300 dark:from-slate-900/70 dark:to-slate-800/80 dark:text-slate-200 dark:border-slate-700",
+  REPAIR: "bg-gradient-to-r from-amber-50 to-yellow-100 text-amber-800 border-amber-300 dark:from-amber-950/40 dark:to-yellow-950/30 dark:text-amber-300 dark:border-amber-800",
+  REPLACE_SOON:
+    "bg-gradient-to-r from-rose-50 via-red-50 to-orange-100 text-red-800 border-red-300 dark:from-rose-950/40 dark:via-red-950/40 dark:to-orange-950/30 dark:text-red-300 dark:border-red-800",
 };
 
 const WARRANTY_COLORS: Record<WarrantyBadge, string> = {
@@ -103,10 +110,10 @@ const WARRANTY_LABELS: Record<WarrantyBadge, string> = {
 };
 
 const HEADER_CELL_CLASS =
-  "h-11 px-3 text-[13px] font-semibold tracking-wide text-slate-700 dark:text-slate-200";
+  "h-12 px-3 text-[13px] font-semibold tracking-wide text-slate-700 dark:text-slate-200";
 
 const LINK_ACTION_BUTTON_CLASS =
-  "border-teal-200 text-teal-700 hover:bg-teal-50 hover:text-teal-800 dark:border-teal-900/70 dark:text-teal-300 dark:hover:bg-teal-950/40 transition-colors";
+  "border-teal-200 text-teal-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-teal-50 hover:text-teal-800 hover:shadow-[0_10px_24px_-16px_rgba(13,148,136,0.7)] dark:border-teal-900/70 dark:text-teal-300 dark:hover:bg-teal-950/40";
 
 const INSTALL_DATE_MISSING_TOOLTIP =
   "Install date is empty. Add install date for accurate prediction.";
@@ -115,6 +122,32 @@ function formatAgeDisplay(ageYears: number | null): string {
   if (ageYears == null) return "—";
   if (ageYears < 1) return "<1 yr";
   return `${Math.round(ageYears)} yrs`;
+}
+
+function getCategoryVisual(category: string): { Icon: ElementType; toneClass: string } {
+  switch (category) {
+    case "APPLIANCE":
+      return { Icon: Wrench, toneClass: "from-cyan-50 to-sky-100 text-sky-700 dark:from-sky-950/40 dark:to-cyan-950/30 dark:text-sky-300" };
+    case "FURNITURE":
+      return { Icon: Home, toneClass: "from-indigo-50 to-violet-100 text-indigo-700 dark:from-indigo-950/40 dark:to-violet-950/30 dark:text-indigo-300" };
+    case "ELECTRONICS":
+      return { Icon: Cpu, toneClass: "from-purple-50 to-fuchsia-100 text-purple-700 dark:from-purple-950/40 dark:to-fuchsia-950/30 dark:text-purple-300" };
+    case "SAFETY":
+      return { Icon: Shield, toneClass: "from-red-50 to-orange-100 text-red-700 dark:from-red-950/40 dark:to-orange-950/30 dark:text-red-300" };
+    case "STRUCTURE":
+      return { Icon: Building, toneClass: "from-amber-50 to-yellow-100 text-amber-700 dark:from-amber-950/40 dark:to-yellow-950/30 dark:text-amber-300" };
+    case "SYSTEMS":
+      return { Icon: Wrench, toneClass: "from-teal-50 to-emerald-100 text-teal-700 dark:from-teal-950/40 dark:to-emerald-950/30 dark:text-teal-300" };
+    default:
+      return { Icon: Box, toneClass: "from-slate-50 to-slate-100 text-slate-700 dark:from-slate-900/70 dark:to-slate-800/80 dark:text-slate-300" };
+  }
+}
+
+function getHealthScore(item: StatusBoardItemDTO): number {
+  if (item.needsInstallDateForPrediction) return 55;
+  if (item.condition === "ACTION_NEEDED") return 35;
+  if (item.condition === "MONITOR") return 68;
+  return 92;
 }
 
 // ---------------------------------------------------------------------------
@@ -250,11 +283,24 @@ export default function StatusBoardClient() {
   const renderItems = (itemList: StatusBoardItemDTO[]) =>
     itemList.map((item) => (
       <Fragment key={item.id}>
+        {(() => {
+          const isUrgentItem = !item.needsInstallDateForPrediction && item.condition === "ACTION_NEEDED";
+          const categoryVisual = getCategoryVisual(item.category);
+          const CategoryIcon = categoryVisual.Icon;
+          const healthScore = getHealthScore(item);
+          return (
+        <>
         <TableRow
-          className={`group cursor-pointer border-b border-slate-200/80 transition-all duration-200 hover:bg-slate-50/80 dark:border-slate-700/70 dark:hover:bg-slate-900/40 ${item.isPinned ? "bg-amber-50/60 dark:bg-amber-900/10" : ""}`}
+          className={`group cursor-pointer border-b border-slate-200/80 transition-all duration-300 hover:bg-slate-50/80 dark:border-slate-700/70 dark:hover:bg-slate-900/40 ${
+            item.isPinned ? "bg-amber-50/60 dark:bg-amber-900/10" : ""
+          } ${
+            isUrgentItem
+              ? "shadow-[inset_3px_0_0_0_rgba(239,68,68,0.35)] hover:shadow-[inset_3px_0_0_0_rgba(239,68,68,0.55),0_12px_28px_-20px_rgba(239,68,68,0.7)]"
+              : ""
+          }`}
           onClick={() => handleExpand(item)}
         >
-          <TableCell className="w-10 py-4 align-middle">
+          <TableCell className="w-10 py-5 align-middle">
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -265,21 +311,33 @@ export default function StatusBoardClient() {
               <Pin className="h-4 w-4" />
             </button>
           </TableCell>
-          <TableCell className="py-4 align-middle">
-            <p className="font-medium text-slate-900 dark:text-slate-100">{item.displayName}</p>
-            <p className="mt-1 text-xs text-muted-foreground lg:hidden">
-              {item.category}
-              {item.ageYears != null ? ` • ${formatAgeDisplay(item.ageYears)}` : ""}
-            </p>
+          <TableCell className="py-5 align-middle">
+            <div className="flex items-center gap-3">
+              <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${categoryVisual.toneClass}`}>
+                <CategoryIcon className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-base font-semibold text-slate-900 dark:text-slate-100">{item.displayName}</p>
+                <p className="mt-1 text-xs text-muted-foreground lg:hidden">
+                  {item.category}
+                  {item.ageYears != null ? ` • ${formatAgeDisplay(item.ageYears)}` : ""}
+                </p>
+              </div>
+            </div>
           </TableCell>
-          <TableCell className="hidden py-4 text-sm text-muted-foreground lg:table-cell">{item.category}</TableCell>
-          <TableCell className="hidden py-4 text-sm md:table-cell">{formatAgeDisplay(item.ageYears)}</TableCell>
-          <TableCell className="hidden py-4 lg:table-cell">
+          <TableCell className="hidden py-5 text-sm text-muted-foreground lg:table-cell">
+            <span className="inline-flex items-center gap-1.5">
+              <CategoryIcon className="h-3.5 w-3.5 text-slate-500" />
+              {item.category}
+            </span>
+          </TableCell>
+          <TableCell className="hidden py-5 text-sm md:table-cell">{formatAgeDisplay(item.ageYears)}</TableCell>
+          <TableCell className="hidden py-5 lg:table-cell">
             <Badge variant="outline" className={`text-xs ${WARRANTY_COLORS[item.warrantyStatus]}`}>
               {WARRANTY_LABELS[item.warrantyStatus]}
             </Badge>
           </TableCell>
-          <TableCell className="py-4">
+          <TableCell className="py-5">
             {item.needsInstallDateForPrediction ? (
               <span className="inline-flex items-center gap-1.5">
                 <Badge
@@ -305,8 +363,10 @@ export default function StatusBoardClient() {
             ) : (
               <>
                 <Badge
-                  className={`text-xs font-semibold ${CONDITION_COLORS[item.condition]} ${
-                    item.condition === "ACTION_NEEDED" ? "ring-1 ring-red-300/70 dark:ring-red-800/70" : ""
+                  className={`text-xs md:text-sm font-semibold shadow-sm ${CONDITION_COLORS[item.condition]} ${
+                    item.condition === "ACTION_NEEDED"
+                      ? "ring-1 ring-red-300/70 dark:ring-red-800/70 motion-safe:animate-pulse"
+                      : ""
                   }`}
                 >
                   {CONDITION_LABELS[item.condition]}
@@ -317,7 +377,7 @@ export default function StatusBoardClient() {
               </>
             )}
           </TableCell>
-          <TableCell className="py-4 text-sm font-medium text-slate-700 dark:text-slate-200">
+          <TableCell className="py-5 text-sm font-medium text-slate-700 dark:text-slate-200">
             {item.needsInstallDateForPrediction ? (
               <span className="inline-flex items-center gap-1.5">
                 <Badge
@@ -343,13 +403,13 @@ export default function StatusBoardClient() {
             ) : (
               <Badge
                 variant="outline"
-                className={`text-xs font-semibold ${RECOMMENDATION_COLORS[item.recommendation]}`}
+                className={`text-xs md:text-sm font-semibold shadow-sm ${RECOMMENDATION_COLORS[item.recommendation]}`}
               >
                 {RECOMMENDATION_LABELS[item.recommendation]}
               </Badge>
             )}
           </TableCell>
-          <TableCell className="w-10 py-4 align-middle">
+          <TableCell className="w-10 py-5 align-middle">
             <ChevronRight
               className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${
                 expandedId === item.id ? "rotate-90" : ""
@@ -361,29 +421,69 @@ export default function StatusBoardClient() {
         {expandedId === item.id && (
           <TableRow>
             <TableCell colSpan={8} className="bg-slate-50/80 p-0 dark:bg-slate-900/40">
-              <div className="animate-in fade-in-0 slide-in-from-top-1 border-l-2 border-teal-200/80 p-5 duration-200 space-y-5 dark:border-teal-800/80">
+              <div className="animate-in fade-in-0 slide-in-from-top-1 border-l-2 border-teal-200/80 p-6 duration-300 space-y-5 dark:border-teal-800/80">
                 {/* Details grid */}
                 <div className="grid grid-cols-2 gap-3 text-sm xl:grid-cols-5">
-                  <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-700/70 dark:bg-slate-950/30">
-                    <span className="text-xs uppercase tracking-wide text-muted-foreground">Installed</span>
+                  <div className="rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-700/70 dark:bg-slate-950/30">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                          <Clock className="h-3 w-3" />
+                          Installed
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>Installation date used for age prediction.</TooltipContent>
+                    </Tooltip>
                     <p className="mt-1 font-medium">{item.installDate ? new Date(item.installDate).toLocaleDateString() : "—"}</p>
                   </div>
-                  <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-700/70 dark:bg-slate-950/30">
-                    <span className="text-xs uppercase tracking-wide text-muted-foreground">Last Computed</span>
+                  <div className="rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-700/70 dark:bg-slate-950/30">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                          <RefreshCw className="h-3 w-3" />
+                          Last Computed
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>Most recent prediction run timestamp.</TooltipContent>
+                    </Tooltip>
                     <p className="mt-1 font-medium">{item.computedAt ? new Date(item.computedAt).toLocaleDateString() : "—"}</p>
                   </div>
-                  <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-700/70 dark:bg-slate-950/30">
-                    <span className="text-xs uppercase tracking-wide text-muted-foreground">Warranty</span>
+                  <div className="rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-700/70 dark:bg-slate-950/30">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                          <Shield className="h-3 w-3" />
+                          Warranty
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>Current coverage state for this item.</TooltipContent>
+                    </Tooltip>
                     <p className="mt-1 font-medium">
                       {item.warrantyExpiry ? `Expires ${new Date(item.warrantyExpiry).toLocaleDateString()}` : "None"}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-700/70 dark:bg-slate-950/30">
-                    <span className="text-xs uppercase tracking-wide text-muted-foreground">Pending Tasks</span>
+                  <div className="rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-700/70 dark:bg-slate-950/30">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                          <Wrench className="h-3 w-3" />
+                          Pending Tasks
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>Open maintenance tasks linked to this item.</TooltipContent>
+                    </Tooltip>
                     <p className="mt-1 font-medium">{item.pendingMaintenance}</p>
                   </div>
-                  <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-700/70 dark:bg-slate-950/30">
-                    <span className="text-xs uppercase tracking-wide text-muted-foreground">Room</span>
+                  <div className="rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-700/70 dark:bg-slate-950/30">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                          <Home className="h-3 w-3" />
+                          Room
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>Room associated with this item.</TooltipContent>
+                    </Tooltip>
                     <p className="mt-1 font-medium">{item.room?.name ?? "No Room"}</p>
                   </div>
                 </div>
@@ -408,6 +508,19 @@ export default function StatusBoardClient() {
                             <Clock className="h-3.5 w-3.5 text-amber-500" />
                           )}
                           {getReasonDisplayText(item, r)}
+                          {r.code === "ALL_CLEAR" && (
+                            <span className="ml-1 inline-flex items-center gap-1">
+                              <span className="h-1.5 w-14 overflow-hidden rounded-full bg-emerald-100 dark:bg-emerald-900/40">
+                                <span
+                                  className="block h-full bg-gradient-to-r from-emerald-500 to-lime-500"
+                                  style={{ width: `${healthScore}%` }}
+                                />
+                              </span>
+                              <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+                                {healthScore}%
+                              </span>
+                            </span>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -479,6 +592,7 @@ export default function StatusBoardClient() {
                   <Button
                     variant="ghost"
                     size="sm"
+                    className="transition-colors hover:bg-slate-200/70 dark:hover:bg-slate-800"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleToggleHide(item);
@@ -548,7 +662,7 @@ export default function StatusBoardClient() {
                   </div>
                   <Button
                     size="sm"
-                    className="bg-teal-600 text-white transition-colors hover:bg-teal-700 dark:bg-teal-600 dark:hover:bg-teal-500"
+                    className="bg-teal-600 text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-teal-700 hover:shadow-[0_10px_24px_-16px_rgba(13,148,136,0.8)] dark:bg-teal-600 dark:hover:bg-teal-500"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleSaveOverride(item.id);
@@ -569,6 +683,9 @@ export default function StatusBoardClient() {
             </TableCell>
           </TableRow>
         )}
+        </>
+          );
+        })()}
       </Fragment>
     ));
 
@@ -591,35 +708,35 @@ export default function StatusBoardClient() {
       {/* Summary strip */}
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Card>
-            <CardContent className="p-3 text-center">
-              <p className="text-2xl font-bold">{summary.total}</p>
-              <p className="text-xs text-muted-foreground">Total Items</p>
+          <Card className="border-slate-200/80 bg-gradient-to-b from-white to-slate-50/80">
+            <CardContent className="p-5 text-center">
+              <p className="text-3xl font-bold">{summary.total}</p>
+              <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">Total Items</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-green-600">{summary.good}</p>
-              <p className="text-xs text-muted-foreground">Good</p>
+          <Card className="border-slate-200/80 bg-gradient-to-b from-emerald-50/70 to-white dark:from-emerald-950/20 dark:to-transparent">
+            <CardContent className="p-5 text-center">
+              <p className="text-3xl font-bold text-green-600">{summary.good}</p>
+              <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">Good</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-amber-600">{summary.monitor}</p>
-              <p className="text-xs text-muted-foreground">Monitor</p>
+          <Card className="border-slate-200/80 bg-gradient-to-b from-amber-50/70 to-white dark:from-amber-950/20 dark:to-transparent">
+            <CardContent className="p-5 text-center">
+              <p className="text-3xl font-bold text-amber-600">{summary.monitor}</p>
+              <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">Monitor</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-red-600">{summary.actionNeeded}</p>
-              <p className="text-xs text-muted-foreground">Action Needed</p>
+          <Card className="border-slate-200/80 bg-gradient-to-b from-rose-50/70 to-white dark:from-rose-950/20 dark:to-transparent">
+            <CardContent className="p-5 text-center">
+              <p className="text-3xl font-bold text-red-600">{summary.actionNeeded}</p>
+              <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">Action Needed</p>
             </CardContent>
           </Card>
         </div>
       )}
 
       {/* Controls bar */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-300/80 bg-white/70 p-2 shadow-sm dark:border-slate-700/80 dark:bg-slate-950/40">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-300/80 bg-white/70 p-3 shadow-sm dark:border-slate-700/80 dark:bg-slate-950/40">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -692,12 +809,12 @@ export default function StatusBoardClient() {
         <Button
           variant="outline"
           size="sm"
-          className="h-9"
+          className={`h-9 transition-all ${recomputeMutation.isPending ? "bg-slate-100 dark:bg-slate-900/60" : "hover:-translate-y-0.5"}`}
           onClick={() => recomputeMutation.mutate()}
           disabled={recomputeMutation.isPending}
         >
           <RefreshCw className={`h-3.5 w-3.5 mr-1 ${recomputeMutation.isPending ? "animate-spin" : ""}`} />
-          Recompute
+          {recomputeMutation.isPending ? "Recomputing..." : "Recompute"}
         </Button>
       </div>
 
