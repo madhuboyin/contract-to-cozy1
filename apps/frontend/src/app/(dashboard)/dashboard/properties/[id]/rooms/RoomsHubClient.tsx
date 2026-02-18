@@ -343,17 +343,6 @@ export default function RoomsHubClient() {
                     </span>
                     <div className="font-semibold truncate text-[1.1rem] text-slate-900 dark:text-slate-100">{r.name}</div>
                   </div>
-                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
-                    {r.type ? (
-                      <>Template: <span className="font-medium">{r.type}</span></>
-                    ) : showDetect ? (
-                      <>
-                        Template not set · Suggested: <span className="font-medium">{inferred}</span>
-                      </>
-                    ) : (
-                      <>Template not set</>
-                    )}
-                  </div>
                 </div>
 
                 {showDetect && (
@@ -405,39 +394,40 @@ export default function RoomsHubClient() {
                 )}
               </div>
 
-              <div className="mt-4 mt-auto grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
-                <Link
-                  href={`/dashboard/properties/${propertyId}/rooms/${r.id}`}
-                  className="inline-flex min-h-[46px] items-center justify-center rounded-xl border border-teal-300/70 bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:-translate-y-0.5 hover:from-emerald-700 hover:to-teal-700"
-                >
-                  View room
-                </Link>
+              <div className="mt-4 mt-auto overflow-x-auto">
+                <div className="flex w-max items-center gap-2">
+                  <Link
+                    href={`/dashboard/properties/${propertyId}/rooms/${r.id}`}
+                    className="inline-flex h-10 items-center justify-center rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-100 dark:hover:bg-slate-900"
+                  >
+                    View
+                  </Link>
 
-                <Link
-                  href={`/dashboard/properties/${propertyId}/inventory/rooms/${r.id}`}
-                  className="inline-flex min-h-[46px] items-center justify-center rounded-xl border border-slate-300/70 bg-white/80 px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:hover:bg-slate-900"
-                >
-                  Edit
-                </Link>
+                  <Link
+                    href={`/dashboard/properties/${propertyId}/inventory/rooms/${r.id}`}
+                    className="inline-flex h-10 items-center justify-center rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-100 dark:hover:bg-slate-900"
+                  >
+                    Edit
+                  </Link>
 
-                <Link
-                  href={`/dashboard/properties/${propertyId}/inventory?roomId=${r.id}`}
-                  className="inline-flex min-h-[46px] items-center justify-center rounded-xl border border-slate-300/70 bg-white/80 px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:hover:bg-slate-900"
-                >
-                  Items
-                </Link>
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    openScan(r);
-                  }}
-                  className="inline-flex min-h-[46px] items-center justify-center gap-1 rounded-xl border border-slate-300/70 bg-white/80 px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:hover:bg-slate-900"
-                >
-                  <Sparkles className={`h-3.5 w-3.5 ${scanLaunchingId === r.id ? 'animate-pulse text-amber-500' : 'text-teal-600 dark:text-teal-300'}`} />
-                  {scanLaunchingId === r.id ? 'Launching…' : 'AI Scan'}
-                </button>
-
+                  <Link
+                    href={`/dashboard/properties/${propertyId}/inventory?roomId=${r.id}`}
+                    className="inline-flex h-10 items-center justify-center rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-100 dark:hover:bg-slate-900"
+                  >
+                    Items
+                  </Link>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      openScan(r);
+                    }}
+                    className="inline-flex h-10 items-center justify-center gap-1 rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-100 dark:hover:bg-slate-900"
+                  >
+                    <Sparkles className={`h-3.5 w-3.5 ${scanLaunchingId === r.id ? 'animate-pulse text-amber-500' : 'text-teal-600 dark:text-teal-300'}`} />
+                    {scanLaunchingId === r.id ? 'Launching…' : 'AI Scan'}
+                  </button>
+                </div>
               </div>
             </div>
           );
