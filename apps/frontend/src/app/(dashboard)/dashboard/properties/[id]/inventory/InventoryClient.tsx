@@ -433,7 +433,7 @@ export default function InventoryClient() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 auto-rows-fr">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 sm:gap-5 auto-rows-fr">
             {visibleItems.map((item) => (
               <div
                 key={item.id}

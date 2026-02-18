@@ -3,7 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Droplet, Home, Package, Shield, Wind, Wrench, Zap } from 'lucide-react';
+import { CheckCircle2, Droplet, Home, Package, Shield, Sparkles, Wind, Wrench, Zap } from 'lucide-react';
 import { InventoryItem } from '@/types';
 
 function money(cents: number | null | undefined, currency = 'USD') {
@@ -55,10 +55,13 @@ export default function InventoryItemCard(props: { item: InventoryItem; onClick:
   const docsCount = item.documents?.length ?? 0;
   const hasRecallAlerts = getHasRecallAlerts(item);
   const hasCoverageGap = !item.warrantyId || !item.insurancePolicyId;
+  const hasWarranty = !!item.warrantyId;
+  const hasInsurance = !!item.insurancePolicyId;
 
   const replacement = item.replacementCostCents
     ? money(item.replacementCostCents, item.currency)
     : null;
+  const coveragePercent = hasWarranty && hasInsurance ? 100 : hasWarranty || hasInsurance ? 65 : 20;
   const categoryMeta = CATEGORY_META[item.category || 'OTHER'] || CATEGORY_META.OTHER;
   const CategoryIcon = categoryMeta.icon;
   const categoryLabel = formatCategory(item.category || 'OTHER');
@@ -68,10 +71,10 @@ export default function InventoryItemCard(props: { item: InventoryItem; onClick:
       id={`item-${item.id}`}
       className={[
         'group relative overflow-hidden rounded-2xl border border-white/70',
-        'bg-gradient-to-br from-amber-50/70 via-white/90 to-teal-50/65',
-        'backdrop-blur-sm shadow-[0_12px_26px_-20px_rgba(15,23,42,0.65)]',
-        'transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-22px_rgba(15,23,42,0.7)]',
-        'h-[214px] w-full',
+        'bg-gradient-to-br from-[#fff5eb]/82 via-[#fffdf8]/90 to-[#eef8f3]/70',
+        'backdrop-blur-sm shadow-[0_12px_26px_-20px_rgba(15,23,42,0.6)]',
+        'transition-all duration-200 motion-safe:hover:scale-[1.02] hover:-translate-y-0.5 hover:shadow-[0_22px_38px_-20px_rgba(15,23,42,0.55)]',
+        'h-[220px] w-full',
         "flex flex-col",
       ].join(' ')}
     >
@@ -104,7 +107,7 @@ export default function InventoryItemCard(props: { item: InventoryItem; onClick:
                   )}
 
                   {hasCoverageGap && (
-                    <span className="shrink-0 text-[11px] rounded-full bg-gradient-to-r from-rose-50 to-orange-50 text-rose-700 border border-rose-200 px-2 py-0.5 whitespace-nowrap">
+                    <span className="shrink-0 text-[11px] rounded-full bg-gradient-to-r from-orange-50 to-rose-100 text-rose-700 border border-rose-200 px-2 py-0.5 whitespace-nowrap">
                       Coverage gap
                     </span>
                   )}
@@ -126,12 +129,31 @@ export default function InventoryItemCard(props: { item: InventoryItem; onClick:
         </div>
 
         {/* MIDDLE: replacement */}
-        <div className="mt-3 min-h-[52px] leading-tight">
+        <div className="mt-3 min-h-[62px] leading-tight">
           <div className="text-[11px] uppercase tracking-wide text-slate-500">Replacement</div>
           {replacement ? (
-            <div className="text-[1.7rem] font-semibold tabular-nums text-slate-900">{replacement}</div>
+            <div className="text-[1.45rem] font-semibold tabular-nums text-slate-900 sm:text-[1.5rem]">{replacement}</div>
           ) : (
             <div className="text-sm text-slate-500">No value yet</div>
+          )}
+          {replacement && (
+            <div className="mt-2 max-w-[160px]">
+              <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wide text-slate-500">
+                <span>Covered</span>
+                <span>{coveragePercent}%</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-slate-200/80">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all duration-300"
+                  style={{ width: `${coveragePercent}%` }}
+                  role="progressbar"
+                  aria-label={`Coverage level ${coveragePercent}%`}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={coveragePercent}
+                />
+              </div>
+            </div>
           )}
         </div>
       </button>
@@ -156,8 +178,9 @@ export default function InventoryItemCard(props: { item: InventoryItem; onClick:
             <Link
               href={`/dashboard/properties/${item.propertyId}/inventory/items/${item.id}/coverage`}
               onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center justify-center rounded-full px-3 py-1.5 text-xs font-medium bg-teal-600 text-white hover:bg-teal-700 hover:shadow-sm whitespace-nowrap transition-colors duration-150"
+              className="inline-flex items-center justify-center gap-1 rounded-full px-3.5 py-2 text-xs font-medium min-h-[36px] bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 hover:shadow-[0_10px_20px_-12px_rgba(5,150,105,0.8)] active:scale-[0.98] whitespace-nowrap transition-all duration-150"
             >
+              <Sparkles className="h-3.5 w-3.5 motion-safe:group-hover:animate-pulse" />
               Coverage worth-it
             </Link>
           )}
@@ -165,8 +188,9 @@ export default function InventoryItemCard(props: { item: InventoryItem; onClick:
           <Link
             href={`/dashboard/properties/${item.propertyId}/inventory/items/${item.id}/replace-repair`}
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center justify-center rounded-full px-3 py-1.5 text-xs font-medium border border-slate-300 bg-white/85 hover:bg-white whitespace-nowrap transition-colors duration-150"
+            className="inline-flex items-center justify-center gap-1 rounded-full px-3.5 py-2 text-sm font-medium min-h-[36px] border border-slate-300 bg-white/85 hover:bg-white whitespace-nowrap transition-colors duration-150"
           >
+            {!hasCoverageGap && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
             Replace/Repair
           </Link>
         </div>
