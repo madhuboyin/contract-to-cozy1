@@ -119,11 +119,11 @@ export default function SellerPrepPage() {
     return (
       <DashboardShell>
         <div className="space-y-4">
-          <div className="h-10 w-48 rounded bg-gray-100 animate-pulse" />
-          <div className="h-24 rounded-lg bg-gray-100 animate-pulse" />
+          <div className="h-10 w-48 animate-pulse rounded bg-slate-200/70" />
+          <div className="h-24 animate-pulse rounded-2xl bg-slate-200/70" />
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-8 h-96 rounded-lg bg-gray-100 animate-pulse" />
-            <div className="lg:col-span-4 h-64 rounded-lg bg-gray-100 animate-pulse" />
+            <div className="h-96 animate-pulse rounded-2xl bg-slate-200/70 lg:col-span-8" />
+            <div className="h-64 animate-pulse rounded-2xl bg-slate-200/70 lg:col-span-4" />
           </div>
         </div>
       </DashboardShell>
@@ -133,14 +133,14 @@ export default function SellerPrepPage() {
   if (error || !data) {
     return (
       <DashboardShell>
-        <Card className="p-6">
+        <Card className="rounded-2xl border border-red-200/70 bg-red-50/85 p-6 shadow-sm backdrop-blur">
           <div className="flex items-start gap-3">
             <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
             <div>
               <p className="font-medium text-red-600">
                 Failed to load Seller Preparation insights
               </p>
-              <p className="text-sm text-gray-600 mt-1">
+              <p className="mt-1 text-sm text-red-700/80">
                 {error instanceof Error ? error.message : 'An unexpected error occurred'}
               </p>
               <Button
@@ -158,7 +158,7 @@ export default function SellerPrepPage() {
   }
 
   return (
-    <DashboardShell className="max-w-7xl mx-auto gap-4">
+    <DashboardShell className="mx-auto max-w-7xl gap-5 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
       {/* Intake Form Modal */}
       {propertyId && (
         <SellerPrepIntakeForm
@@ -170,53 +170,59 @@ export default function SellerPrepPage() {
       )}
 
       {/* Navigation & Header Section */}
-      <div className="space-y-2">
-        <Link
-          href={`/dashboard/properties/${propertyId}`}
-          className="text-xs font-medium text-muted-foreground hover:text-blue-600 inline-flex items-center transition-colors"
-        >
-          <ArrowLeft className="h-3 w-3 mr-1" />
-          Back to Property
-        </Link>
+      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[radial-gradient(circle_at_10%_10%,rgba(251,191,36,0.14),transparent_40%),radial-gradient(circle_at_88%_14%,rgba(20,184,166,0.14),transparent_40%),linear-gradient(180deg,rgba(255,255,255,0.9),rgba(248,250,252,0.8))] p-4 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.6)] dark:border-slate-700/70 dark:bg-[radial-gradient(circle_at_10%_10%,rgba(251,191,36,0.12),transparent_40%),radial-gradient(circle_at_88%_14%,rgba(20,184,166,0.12),transparent_40%),linear-gradient(180deg,rgba(2,6,23,0.9),rgba(2,6,23,0.78))]">
+        <div className="space-y-3 rounded-2xl border border-white/70 bg-white/60 p-4 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45">
+          <Link
+            href={`/dashboard/properties/${propertyId}`}
+            className="inline-flex items-center text-xs font-medium text-slate-500 transition-colors hover:text-slate-700 dark:text-slate-300 dark:hover:text-slate-100"
+          >
+            <ArrowLeft className="mr-1 h-3 w-3" />
+            Back to Property
+          </Link>
 
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <PageHeader className="p-0">
-            <PageHeaderHeading className="text-2xl flex items-center gap-2">
-              <TrendingUp className="h-6 w-6 text-green-600" />
-              Home Sale Preparation
-            </PageHeaderHeading>
-            <PageHeaderDescription>
-              Personalized action plan to maximize your home's resale value
-            </PageHeaderDescription>
-          </PageHeader>
-          
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleEditPreferences}
-              className="h-9"
-            >
-              <Settings className="h-4 w-4 mr-2" />
-              {data.overview.preferences ? "Edit Preferences" : "Setup Plan"}
-            </Button>
+          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+            <PageHeader className="p-0">
+              <PageHeaderHeading className="flex items-center gap-2 text-2xl text-slate-900 dark:text-slate-100">
+                <TrendingUp className="h-6 w-6 text-teal-600 dark:text-teal-300" />
+                Home Sale Preparation
+              </PageHeaderHeading>
+              <PageHeaderDescription className="text-slate-600 dark:text-slate-300">
+                Personalized action plan to maximize your home&apos;s resale value
+              </PageHeaderDescription>
+            </PageHeader>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleEditPreferences}
+                className="h-10 rounded-full border-slate-300/70 bg-white/85 px-4 text-slate-700 shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200 dark:hover:bg-slate-900"
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                {data.overview.preferences ? "Edit Preferences" : "Setup Plan"}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
-      <SellerPrepDisclaimer />
+      <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
+        <SellerPrepDisclaimer />
+      </div>
 
       {/* Main Redesigned Dashboard Content */}
-      <SellerPrepOverview
-        overview={data.overview}
-        comparables={data.comparables}
-        report={data.report}
-        propertyId={propertyId as string}
-      />
+      <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
+        <SellerPrepOverview
+          overview={data.overview}
+          comparables={data.comparables}
+          report={data.report}
+          propertyId={propertyId as string}
+        />
+      </div>
 
       {/* Persistent Feedback Mechanism */}
       {propertyId && (
-        <div className="mt-8 border-t pt-6">
+        <div className="mt-6 border-t border-slate-200/70 pt-6 dark:border-slate-700/70">
           <FeedbackWidget propertyId={propertyId} />
         </div>
       )}

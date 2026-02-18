@@ -158,7 +158,7 @@ export default function SellerPrepOverview({
       <div className="lg:col-span-8 space-y-6">
         <Tabs defaultValue="checklist" className="w-full">
           {/* Layout Fix: Single row grid-cols-4 */}
-          <TabsList className="grid w-full grid-cols-4 mb-6 h-auto p-1 bg-muted/50">
+          <TabsList className="mb-6 grid h-auto w-full grid-cols-4 rounded-2xl border border-white/70 bg-white/70 p-1 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/50">
             <TabsTrigger value="checklist" className="flex items-center gap-2 text-xs md:text-sm py-2 px-1">
               <Hammer className="h-4 w-4 hidden sm:inline" /> <span>Tasks</span>
             </TabsTrigger>
@@ -175,7 +175,7 @@ export default function SellerPrepOverview({
 
           {/* TAB 1: Action Plan & History */}
           <TabsContent value="checklist" className="space-y-6 outline-none">
-            <Card>
+            <Card className="rounded-2xl border-white/70 bg-white/80 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/55">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg">
                   {hasPreferences ? 'Your Personalized Checklist' : 'ROI-Based Prep Checklist'}
@@ -186,7 +186,7 @@ export default function SellerPrepOverview({
               </CardHeader>
               <CardContent className="space-y-3">
                 {overview.items.length === 0 ? (
-                  <p className="text-sm text-gray-500 py-8 text-center">No tasks available.</p>
+                  <p className="py-8 text-center text-sm text-slate-500 dark:text-slate-300">No tasks available.</p>
                 ) : (
                   overview.items.map((item) => (
                     <TaskItem 
@@ -215,7 +215,7 @@ export default function SellerPrepOverview({
 
           {/* TAB 3: Comps & Report */}
           <TabsContent value="market" className="space-y-6 outline-none">
-            <Card>
+            <Card className="rounded-2xl border-white/70 bg-white/80 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/55">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <TrendingUp className="h-5 w-5 text-purple-600" /> Comparable Sales
@@ -230,7 +230,7 @@ export default function SellerPrepOverview({
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="rounded-2xl border-white/70 bg-white/80 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/55">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="h-5 w-5 text-blue-600" /> Readiness Report
@@ -239,7 +239,7 @@ export default function SellerPrepOverview({
               <CardContent className="space-y-4">
                 <p className="text-sm leading-relaxed">{report.summary}</p>
                 {report.risks && report.risks.length > 0 && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
+                  <div className="rounded-xl border border-amber-200/70 bg-amber-50/85 p-3 shadow-sm backdrop-blur">
                     <p className="text-xs font-medium text-amber-800 mb-2">⚠️ Areas for Attention:</p>
                     <ul className="list-disc ml-5 space-y-1 text-sm text-amber-800">
                       {report.risks.map((risk, i) => <li key={i}>{risk}</li>)}
@@ -263,9 +263,9 @@ export default function SellerPrepOverview({
 
       {/* RIGHT COLUMN: Persistent Sidebar Stats */}
       <div className="lg:col-span-4 space-y-6">
-        <Card className="sticky top-6">
+        <Card className="sticky top-6 rounded-2xl border-white/70 bg-white/80 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/55">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-gray-700">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-700 dark:text-slate-200">
               <LayoutDashboard className="h-4 w-4" /> Readiness Dashboard
             </CardTitle>
           </CardHeader>
@@ -275,26 +275,26 @@ export default function SellerPrepOverview({
                 <span>Progress</span>
                 <span>{overview.completionPercent}%</span>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-2">
+              <div className="h-2 w-full rounded-full bg-slate-200/80 dark:bg-slate-700/60">
                 <div
-                  className="bg-green-600 h-2 rounded-full transition-all duration-500"
+                  className="h-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-500"
                   style={{ width: `${overview.completionPercent}%` }}
                 />
               </div>
             </div>
 
             {hasPreferences && overview.personalizedSummary && (
-              <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-800 leading-relaxed">
+              <div className="rounded-xl border border-blue-200/70 bg-blue-50/85 p-3 text-xs leading-relaxed text-blue-800 shadow-sm backdrop-blur">
                 <strong>Current Strategy:</strong> {overview.personalizedSummary}
               </div>
             )}
 
-            <div className="pt-4 border-t space-y-3">
-              <h4 className="text-xs font-bold uppercase text-gray-500 tracking-wider">Expert Assistance</h4>
-              <p className="text-xs text-gray-600">Need help with repairs or staging?</p>
+            <div className="space-y-3 border-t border-slate-200/70 pt-4 dark:border-slate-700/70">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300">Expert Assistance</h4>
+              <p className="text-xs text-slate-600 dark:text-slate-300">Need help with repairs or staging?</p>
               <Button 
                 onClick={() => setShowLeadModal(true)} 
-                className="w-full bg-blue-600 hover:bg-blue-700 h-9 text-xs"
+                className="h-10 w-full rounded-full bg-slate-900 text-xs text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
               >
                 Get Free Contractor Quotes
               </Button>
@@ -318,16 +318,22 @@ function TaskItem({ item, onUpdate, isUpdating }: any) {
   const isDone = item.status === 'DONE';
   const isSkipped = item.status === 'SKIPPED';
   return (
-    <div className={`border rounded-lg p-4 transition-all ${isDone ? 'bg-green-50 border-green-200' : isSkipped ? 'bg-gray-50 border-gray-200' : 'hover:bg-gray-50'}`}>
+    <div className={`rounded-2xl border p-4 shadow-sm backdrop-blur transition-all ${
+      isDone
+        ? 'border-emerald-200/70 bg-emerald-50/80'
+        : isSkipped
+          ? 'border-slate-300/70 bg-slate-50/85 dark:border-slate-700/70 dark:bg-slate-900/50'
+          : 'border-white/70 bg-white/75 hover:bg-white/90 dark:border-slate-700/70 dark:bg-slate-900/55'
+    }`}>
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             {isDone && <CheckCircle className="h-4 w-4 text-green-600" />}
-            <p className={`text-sm font-medium ${isDone ? 'line-through text-gray-500' : ''}`}>{item.title}</p>
+            <p className={`text-sm font-medium ${isDone ? 'line-through text-slate-500 dark:text-slate-300' : 'text-slate-800 dark:text-slate-100'}`}>{item.title}</p>
           </div>
           <div className="flex gap-2 items-center">
             <Badge variant={item.priority === 'HIGH' ? 'destructive' : 'secondary'} className="text-xs px-1.5 h-5 uppercase">{item.priority}</Badge>
-            <span className="text-xs text-gray-500">ROI: {item.roiRange} • {item.costBucket}</span>
+            <span className="text-xs text-slate-500 dark:text-slate-300">ROI: {item.roiRange} • {item.costBucket}</span>
           </div>
         </div>
         <div className="flex gap-1">
@@ -347,16 +353,16 @@ function TaskItem({ item, onUpdate, isUpdating }: any) {
 
 function CompItem({ comp }: { comp: ComparableHome }) {
   return (
-    <div className="flex justify-between items-start border-b pb-3 last:border-0 last:pb-0">
+    <div className="flex items-start justify-between border-b border-slate-200/70 pb-3 last:border-0 last:pb-0 dark:border-slate-700/70">
       <div className="flex-1">
-        <p className="text-sm font-medium text-gray-900">{comp.address}</p>
-        <p className="text-xs text-gray-500">
+        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{comp.address}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-300">
           {comp.sqft?.toLocaleString()} sqft • {comp.beds} bed • {comp.baths} bath
         </p>
       </div>
       <div className="text-right">
-        <p className="text-sm font-bold text-gray-900">{comp.soldPrice ? `$${comp.soldPrice.toLocaleString()}` : 'Price N/A'}</p>
-        <p className="text-xs text-gray-400">Sold: {comp.soldDate ? new Date(comp.soldDate).toLocaleDateString() : 'N/A'}</p>
+        <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{comp.soldPrice ? `$${comp.soldPrice.toLocaleString()}` : 'Price N/A'}</p>
+        <p className="text-xs text-slate-400 dark:text-slate-400">Sold: {comp.soldDate ? new Date(comp.soldDate).toLocaleDateString() : 'N/A'}</p>
       </div>
     </div>
   );
