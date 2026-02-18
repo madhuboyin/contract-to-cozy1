@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState, useMemo, type ElementType } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getStatusBoard,
@@ -49,7 +49,6 @@ import {
   ChevronRight,
   RefreshCw,
   Search,
-  ArrowLeft,
   ExternalLink,
   Shield,
   Wrench,
@@ -163,7 +162,6 @@ function getHealthScore(item: StatusBoardItemDTO): number {
 
 export default function StatusBoardClient() {
   const params = useParams();
-  const router = useRouter();
   const queryClient = useQueryClient();
   const propertyId = params.id as string;
 
@@ -372,7 +370,7 @@ export default function StatusBoardClient() {
                 <Badge
                   className={`text-xs md:text-sm font-semibold shadow-sm ${CONDITION_COLORS[item.condition]} ${
                     item.condition === "ACTION_NEEDED"
-                      ? "ring-1 ring-red-300/70 dark:ring-red-800/70 motion-safe:animate-pulse"
+                      ? "ring-1 ring-red-300/70 dark:ring-red-800/70"
                       : ""
                   }`}
                 >
@@ -698,28 +696,15 @@ export default function StatusBoardClient() {
 
   return (
     <TooltipProvider delayDuration={120}>
-      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/80 bg-[radial-gradient(circle_at_12%_15%,rgba(251,191,36,0.16),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.2),transparent_38%),radial-gradient(circle_at_50%_100%,rgba(59,130,246,0.12),transparent_40%),linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.88))] p-4 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.6)] dark:border-slate-700/80 dark:bg-[radial-gradient(circle_at_12%_15%,rgba(245,158,11,0.14),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.16),transparent_38%),radial-gradient(circle_at_50%_100%,rgba(59,130,246,0.12),transparent_40%),linear-gradient(180deg,rgba(2,6,23,0.88),rgba(2,6,23,0.78))] sm:p-5">
-        <div className="pointer-events-none absolute -left-16 top-8 h-44 w-44 rounded-full bg-amber-300/20 blur-3xl dark:bg-amber-500/20" />
-        <div className="pointer-events-none absolute -right-12 top-10 h-52 w-52 rounded-full bg-teal-300/20 blur-3xl dark:bg-teal-500/20" />
-        <div className="pointer-events-none absolute bottom-0 left-1/3 h-40 w-40 rounded-full bg-sky-300/20 blur-3xl dark:bg-sky-500/20" />
-
-        <div className="relative z-10 space-y-5">
+      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/80 bg-[radial-gradient(circle_at_12%_15%,rgba(251,191,36,0.14),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.16),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.88))] p-4 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.6)] dark:border-slate-700/80 dark:bg-[radial-gradient(circle_at_12%_15%,rgba(245,158,11,0.1),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.12),transparent_38%),linear-gradient(180deg,rgba(2,6,23,0.88),rgba(2,6,23,0.78))] sm:p-5">
+        <div className="relative z-10 space-y-3">
         {/* Header */}
-        <div className={`flex items-center gap-3 p-2 sm:p-3 ${GLASS_PANEL_CLASS}`}>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-10 w-10 rounded-full border border-slate-300/70 bg-white/70 hover:bg-white dark:border-slate-700/80 dark:bg-slate-900/60 dark:hover:bg-slate-900"
-            onClick={() => router.back()}
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+        <div className={`p-3 sm:p-4 ${GLASS_PANEL_CLASS}`}>
           <div className="min-w-0">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">Home Intelligence</p>
-            <h1 className="text-2xl font-heading font-bold leading-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
+            <h1 className="text-xl font-heading font-bold leading-tight text-slate-900 dark:text-slate-100 sm:text-2xl">
               Home Status Board
             </h1>
-            <p className="text-sm text-slate-600 dark:text-slate-300">
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
               All home items with computed condition statuses
             </p>
           </div>
@@ -729,46 +714,46 @@ export default function StatusBoardClient() {
         {summary && (
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Card className={GLASS_CARD_CLASS}>
-              <CardContent className="p-5">
+              <CardContent className="p-3.5 sm:p-4">
                 <div className="flex items-center justify-between">
                   <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-300">Total Items</p>
                   <Box className="h-4 w-4 text-slate-500 dark:text-slate-300" />
                 </div>
-                <p className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">{summary.total}</p>
+                <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">{summary.total}</p>
               </CardContent>
             </Card>
             <Card className={`${GLASS_CARD_CLASS} bg-gradient-to-br from-emerald-100/70 via-white/55 to-emerald-50/60 dark:from-emerald-900/30 dark:to-emerald-950/20`}>
-              <CardContent className="p-5">
+              <CardContent className="p-3.5 sm:p-4">
                 <div className="flex items-center justify-between">
                   <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-300">Good</p>
                   <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
                 </div>
-                <p className="mt-2 text-3xl font-bold text-emerald-700 dark:text-emerald-300">{summary.good}</p>
+                <p className="mt-1 text-2xl font-bold text-emerald-700 dark:text-emerald-300">{summary.good}</p>
               </CardContent>
             </Card>
             <Card className={`${GLASS_CARD_CLASS} bg-gradient-to-br from-amber-100/70 via-white/55 to-amber-50/60 dark:from-amber-900/30 dark:to-amber-950/20`}>
-              <CardContent className="p-5">
+              <CardContent className="p-3.5 sm:p-4">
                 <div className="flex items-center justify-between">
                   <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-300">Monitor</p>
                   <Clock className="h-4 w-4 text-amber-600 dark:text-amber-300" />
                 </div>
-                <p className="mt-2 text-3xl font-bold text-amber-700 dark:text-amber-300">{summary.monitor}</p>
+                <p className="mt-1 text-2xl font-bold text-amber-700 dark:text-amber-300">{summary.monitor}</p>
               </CardContent>
             </Card>
             <Card className={`${GLASS_CARD_CLASS} bg-gradient-to-br from-rose-100/70 via-white/55 to-orange-50/60 dark:from-rose-900/30 dark:to-red-950/20`}>
-              <CardContent className="p-5">
+              <CardContent className="p-3.5 sm:p-4">
                 <div className="flex items-center justify-between">
                   <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-300">Action Needed</p>
                   <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-300" />
                 </div>
-                <p className="mt-2 text-3xl font-bold text-rose-700 dark:text-rose-300">{summary.actionNeeded}</p>
+                <p className="mt-1 text-2xl font-bold text-rose-700 dark:text-rose-300">{summary.actionNeeded}</p>
               </CardContent>
             </Card>
           </div>
         )}
 
       {/* Controls bar */}
-      <div className={`flex flex-wrap items-center gap-2 p-3 ${GLASS_PANEL_CLASS}`}>
+      <div className={`flex flex-wrap items-center gap-2 p-2.5 ${GLASS_PANEL_CLASS}`}>
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -854,16 +839,16 @@ export default function StatusBoardClient() {
 
       {/* Table */}
       {isLoading ? (
-        <div className={`py-12 text-center text-muted-foreground ${GLASS_PANEL_CLASS}`}>Loading status board...</div>
+        <div className={`mt-4 py-12 text-center text-muted-foreground ${GLASS_PANEL_CLASS}`}>Loading status board...</div>
       ) : error ? (
-        <div className={`py-12 text-center text-red-500 ${GLASS_PANEL_CLASS}`}>Failed to load status board</div>
+        <div className={`mt-4 py-12 text-center text-red-500 ${GLASS_PANEL_CLASS}`}>Failed to load status board</div>
       ) : items.length === 0 ? (
-        <div className={`py-12 text-center text-muted-foreground ${GLASS_PANEL_CLASS}`}>
+        <div className={`mt-4 py-12 text-center text-muted-foreground ${GLASS_PANEL_CLASS}`}>
           No items found. Add inventory items or home systems to see them here.
         </div>
       ) : groups && groupBy !== "none" ? (
         // Grouped view
-        <div className="space-y-4">
+        <div className="mt-4 space-y-4">
           {Object.entries(groups).map(([groupName, groupItems]) => (
             <Collapsible key={groupName} open={true}>
               <CollapsibleTrigger asChild>
@@ -899,7 +884,7 @@ export default function StatusBoardClient() {
         </div>
       ) : (
         // Flat view
-        <div className={`overflow-hidden rounded-2xl ${GLASS_PANEL_CLASS}`}>
+        <div className={`mt-4 overflow-hidden rounded-2xl ${GLASS_PANEL_CLASS}`}>
           <Table>
             <TableHeader>
               <TableRow className="border-b-2 border-slate-300/80 dark:border-slate-600/80">
@@ -920,7 +905,7 @@ export default function StatusBoardClient() {
 
       {/* Pagination */}
       {pagination && pagination.totalPages > 1 && (
-        <div className={`flex items-center justify-between p-3 ${GLASS_PANEL_CLASS}`}>
+        <div className={`mt-3 flex items-center justify-between p-3 ${GLASS_PANEL_CLASS}`}>
           <p className="text-sm text-muted-foreground dark:text-slate-300">
             Page {pagination.page} of {pagination.totalPages} ({pagination.total} items)
           </p>
