@@ -118,6 +118,12 @@ const GLASS_PANEL_CLASS =
 const GLASS_CARD_CLASS =
   "border-white/70 bg-white/55 shadow-[0_16px_32px_-22px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-950/40";
 
+const TABLE_SHELL_CLASS =
+  "overflow-hidden rounded-[26px] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.72),rgba(248,250,252,0.52))] shadow-[0_20px_44px_-34px_rgba(15,23,42,0.7)] backdrop-blur-xl dark:border-slate-700/70 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.62),rgba(2,6,23,0.45))]";
+
+const DETAIL_BENTO_TILE_CLASS =
+  "rounded-2xl border border-white/75 bg-gradient-to-br from-white/80 to-slate-50/60 p-4 shadow-[0_10px_20px_-16px_rgba(15,23,42,0.55)] backdrop-blur-sm dark:border-slate-700/70 dark:from-slate-900/55 dark:to-slate-900/35";
+
 const LINK_ACTION_BUTTON_CLASS =
   "border-teal-200 text-teal-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-teal-50 hover:text-teal-800 hover:shadow-[0_10px_24px_-16px_rgba(13,148,136,0.7)] dark:border-teal-900/70 dark:text-teal-300 dark:hover:bg-teal-950/40";
 
@@ -296,11 +302,11 @@ export default function StatusBoardClient() {
           return (
         <>
         <TableRow
-          className={`group cursor-pointer border-b border-slate-200/80 transition-all duration-300 hover:bg-slate-50/80 dark:border-slate-700/70 dark:hover:bg-slate-900/40 ${
-            item.isPinned ? "bg-amber-50/60 dark:bg-amber-900/10" : ""
+          className={`group cursor-pointer border-b border-white/60 bg-white/35 backdrop-blur-sm transition-colors duration-200 hover:bg-white/70 dark:border-slate-700/70 dark:bg-slate-900/20 dark:hover:bg-slate-900/45 ${
+            item.isPinned ? "bg-amber-50/55 dark:bg-amber-900/15" : ""
           } ${
             isUrgentItem
-              ? "shadow-[inset_3px_0_0_0_rgba(239,68,68,0.35)] hover:shadow-[inset_3px_0_0_0_rgba(239,68,68,0.55),0_12px_28px_-20px_rgba(239,68,68,0.7)]"
+              ? "shadow-[inset_3px_0_0_0_rgba(239,68,68,0.35)]"
               : ""
           }`}
           onClick={() => handleExpand(item)}
@@ -425,11 +431,12 @@ export default function StatusBoardClient() {
 
         {expandedId === item.id && (
           <TableRow>
-            <TableCell colSpan={8} className="bg-slate-50/80 p-0 dark:bg-slate-900/40">
-              <div className="animate-in fade-in-0 slide-in-from-top-1 border-l-2 border-teal-200/80 p-6 duration-300 space-y-5 dark:border-teal-800/80">
+            <TableCell colSpan={8} className="bg-transparent p-0">
+              <div className="m-2 rounded-2xl border border-white/70 bg-[radial-gradient(circle_at_0%_0%,rgba(45,212,191,0.14),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.72),rgba(248,250,252,0.52))] p-5 shadow-[0_20px_40px_-30px_rgba(15,23,42,0.7)] backdrop-blur-xl dark:border-slate-700/70 dark:bg-[radial-gradient(circle_at_0%_0%,rgba(45,212,191,0.16),transparent_36%),linear-gradient(180deg,rgba(15,23,42,0.62),rgba(2,6,23,0.45))]">
+                <div className="space-y-5 border-l-2 border-teal-200/80 pl-4 dark:border-teal-800/80">
                 {/* Details grid */}
                 <div className="grid grid-cols-2 gap-3 text-sm xl:grid-cols-5">
-                  <div className="rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-700/70 dark:bg-slate-950/30">
+                  <div className={DETAIL_BENTO_TILE_CLASS}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
@@ -441,7 +448,7 @@ export default function StatusBoardClient() {
                     </Tooltip>
                     <p className="mt-1 font-medium">{item.installDate ? new Date(item.installDate).toLocaleDateString() : "—"}</p>
                   </div>
-                  <div className="rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-700/70 dark:bg-slate-950/30">
+                  <div className={DETAIL_BENTO_TILE_CLASS}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
@@ -453,7 +460,7 @@ export default function StatusBoardClient() {
                     </Tooltip>
                     <p className="mt-1 font-medium">{item.computedAt ? new Date(item.computedAt).toLocaleDateString() : "—"}</p>
                   </div>
-                  <div className="rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-700/70 dark:bg-slate-950/30">
+                  <div className={DETAIL_BENTO_TILE_CLASS}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
@@ -467,7 +474,7 @@ export default function StatusBoardClient() {
                       {item.warrantyExpiry ? `Expires ${new Date(item.warrantyExpiry).toLocaleDateString()}` : "None"}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-700/70 dark:bg-slate-950/30">
+                  <div className={DETAIL_BENTO_TILE_CLASS}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
@@ -479,7 +486,7 @@ export default function StatusBoardClient() {
                     </Tooltip>
                     <p className="mt-1 font-medium">{item.pendingMaintenance}</p>
                   </div>
-                  <div className="rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-700/70 dark:bg-slate-950/30">
+                  <div className={DETAIL_BENTO_TILE_CLASS}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
@@ -501,7 +508,7 @@ export default function StatusBoardClient() {
                       {item.computedReasons.map((r, i) => (
                         <li
                           key={i}
-                          className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-white/80 px-3 py-1.5 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-200"
+                          className="inline-flex items-center gap-1.5 rounded-full border border-white/80 bg-white/75 px-3 py-1.5 text-xs text-slate-700 shadow-[0_8px_18px_-16px_rgba(15,23,42,0.65)] backdrop-blur-sm dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-200"
                         >
                           {r.code === "ALL_CLEAR" ? (
                             <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
@@ -533,7 +540,7 @@ export default function StatusBoardClient() {
                 )}
 
                 {/* Deep links */}
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 rounded-2xl border border-white/70 bg-white/50 p-3 backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-900/40">
                   {item.deepLinks.viewItem && (
                     <Link href={item.deepLinks.viewItem}>
                       <Button variant="outline" size="sm" className={LINK_ACTION_BUTTON_CLASS}>
@@ -609,7 +616,7 @@ export default function StatusBoardClient() {
                 </div>
 
                 {/* Override form */}
-                <div className="space-y-3 border-t border-dashed border-slate-300/80 pt-4 dark:border-slate-700/80">
+                <div className="space-y-3 rounded-2xl border border-white/70 bg-white/45 p-4 backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-900/35">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium">Adjust Status (Optional)</p>
                     <Tooltip>
@@ -630,7 +637,7 @@ export default function StatusBoardClient() {
                     <div>
                       <label className="mb-1 block text-xs text-muted-foreground">Condition</label>
                       <Select value={overrideCondition} onValueChange={setOverrideCondition}>
-                        <SelectTrigger className="h-8 text-sm">
+                        <SelectTrigger className="h-8 border-slate-300/80 bg-white/75 text-sm dark:border-slate-700/80 dark:bg-slate-900/60">
                           <SelectValue placeholder="Use computed" />
                         </SelectTrigger>
                         <SelectContent>
@@ -644,7 +651,7 @@ export default function StatusBoardClient() {
                     <div>
                       <label className="mb-1 block text-xs text-muted-foreground">Recommendation</label>
                       <Select value={overrideRecommendation} onValueChange={setOverrideRecommendation}>
-                        <SelectTrigger className="h-8 text-sm">
+                        <SelectTrigger className="h-8 border-slate-300/80 bg-white/75 text-sm dark:border-slate-700/80 dark:bg-slate-900/60">
                           <SelectValue placeholder="Use computed" />
                         </SelectTrigger>
                         <SelectContent>
@@ -661,7 +668,7 @@ export default function StatusBoardClient() {
                         value={overrideNotes}
                         onChange={(e) => setOverrideNotes(e.target.value)}
                         placeholder="Optional notes..."
-                        className="min-h-[40px] text-sm resize-y"
+                        className="min-h-[40px] resize-y border-slate-300/80 bg-white/75 text-sm dark:border-slate-700/80 dark:bg-slate-900/60"
                       />
                     </div>
                   </div>
@@ -683,6 +690,7 @@ export default function StatusBoardClient() {
                       "Save Override"
                     )}
                   </Button>
+                </div>
                 </div>
               </div>
             </TableCell>
@@ -861,10 +869,10 @@ export default function StatusBoardClient() {
                 </div>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <div className={`mt-2 overflow-hidden rounded-2xl ${GLASS_PANEL_CLASS}`}>
+                <div className={`mt-2 ${TABLE_SHELL_CLASS}`}>
                   <Table>
                     <TableHeader>
-                      <TableRow className="border-b-2 border-slate-300/80 dark:border-slate-600/80">
+                      <TableRow className="border-b border-white/70 bg-white/55 dark:border-slate-700/80 dark:bg-slate-900/55">
                         <TableHead className={`w-10 ${HEADER_CELL_CLASS}`} />
                         <TableHead className={HEADER_CELL_CLASS}>Name</TableHead>
                         <TableHead className={`hidden lg:table-cell ${HEADER_CELL_CLASS}`}>Category</TableHead>
@@ -884,10 +892,10 @@ export default function StatusBoardClient() {
         </div>
       ) : (
         // Flat view
-        <div className={`mt-4 overflow-hidden rounded-2xl ${GLASS_PANEL_CLASS}`}>
+        <div className={`mt-4 ${TABLE_SHELL_CLASS}`}>
           <Table>
             <TableHeader>
-              <TableRow className="border-b-2 border-slate-300/80 dark:border-slate-600/80">
+              <TableRow className="border-b border-white/70 bg-white/55 dark:border-slate-700/80 dark:bg-slate-900/55">
                 <TableHead className={`w-10 ${HEADER_CELL_CLASS}`} />
                 <TableHead className={HEADER_CELL_CLASS}>Name</TableHead>
                 <TableHead className={`hidden lg:table-cell ${HEADER_CELL_CLASS}`}>Category</TableHead>
