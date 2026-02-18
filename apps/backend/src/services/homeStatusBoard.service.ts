@@ -64,6 +64,72 @@ function deriveStatusBoardCategory(
   return 'OTHER';
 }
 
+function parseNumericAge(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return value;
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return null;
+}
+
+async function ensureHomeAssetsFromRiskReport(propertyId: string): Promise<void> {
+  const report = await prisma.riskAssessmentReport.findUnique({
+    where: { propertyId },
+    select: { details: true },
+  });
+
+  if (!report?.details || !Array.isArray(report.details)) return;
+
+  // Build a unique list of non-appliance system types from risk report details.
+  const candidates = new Map<string, number | null>();
+  for (const rawEntry of report.details) {
+    if (!rawEntry || typeof rawEntry !== 'object' || Array.isArray(rawEntry)) continue;
+    const entry = rawEntry as Record<string, unknown>;
+    const systemType = typeof entry.systemType === 'string' ? entry.systemType.trim() : '';
+    if (!systemType || systemType.startsWith('MAJOR_APPLIANCE_')) continue;
+
+    const category = mapAssetTypeToCategory(systemType);
+    if (category !== 'SYSTEMS' && category !== 'SAFETY' && category !== 'STRUCTURE') continue;
+
+    const nextAge = parseNumericAge(entry.age);
+    const prevAge = candidates.get(systemType);
+    if (!candidates.has(systemType) || (prevAge == null && nextAge != null)) {
+      candidates.set(systemType, nextAge);
+    }
+  }
+
+  if (candidates.size === 0) return;
+
+  const systemTypes = Array.from(candidates.keys());
+  const existing = await prisma.homeAsset.findMany({
+    where: {
+      propertyId,
+      assetType: { in: systemTypes },
+    },
+    select: { assetType: true },
+  });
+  const existingTypes = new Set(existing.map((row) => row.assetType));
+  const missingTypes = systemTypes.filter((type) => !existingTypes.has(type));
+  if (missingTypes.length === 0) return;
+
+  const currentYear = new Date().getFullYear();
+  await prisma.homeAsset.createMany({
+    data: missingTypes.map((assetType) => {
+      const ageYears = candidates.get(assetType) ?? null;
+      let installationYear: number | null = null;
+      if (ageYears != null) {
+        const inferredYear = currentYear - Math.round(ageYears);
+        if (inferredYear >= 1900 && inferredYear <= currentYear) {
+          installationYear = inferredYear;
+        }
+      }
+      return { propertyId, assetType, installationYear };
+    }),
+    skipDuplicates: true,
+  });
+}
+
 interface WarrantyInfo {
   status: 'active' | 'expiring_soon' | 'expired' | 'none';
   expiryDate: Date | null;
@@ -140,6 +206,10 @@ const CONDITION_SEVERITY: Record<string, number> = {
 // ---------------------------------------------------------------------------
 
 export async function ensureHomeItems(propertyId: string): Promise<void> {
+  // Risk report can contain SYSTEMS/SAFETY/STRUCTURE assets not yet persisted as home assets.
+  // Sync these first so status board can include them.
+  await ensureHomeAssetsFromRiskReport(propertyId);
+
   // Fetch inventory items and home assets
   const [inventoryItems, homeAssets, existingHomeItems] = await Promise.all([
     prisma.inventoryItem.findMany({
