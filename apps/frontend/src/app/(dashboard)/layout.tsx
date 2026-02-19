@@ -578,9 +578,11 @@ function DesktopNav({ user }: { user: User | null }) {
   const [homeToolsOpen, setHomeToolsOpen] = useState(false);
   const [aiToolsOpen, setAiToolsOpen] = useState(false);
   const [homeAdminOpen, setHomeAdminOpen] = useState(false);
+  const [protectionOpen, setProtectionOpen] = useState(false);
   const homeToolsCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const aiToolsCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const homeAdminCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const protectionCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const coreLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
     { name: 'Dashboard', href: '/dashboard', icon: Home, isActive: (path) => path === '/dashboard' },
@@ -612,6 +614,9 @@ function DesktopNav({ user }: { user: User | null }) {
       navTarget: 'rooms',
       isActive: (path) => /^\/dashboard\/properties\/[^/]+\/rooms(\/|$)/.test(path),
     },
+  ];
+
+  const protectionLinks: Array<NavLink & { isActive: (path: string) => boolean; navTarget: string }> = [
     {
       name: 'Incidents',
       href: buildPropertyAwareHref(resolvedPropertyId, 'incidents', 'incidents'),
@@ -700,11 +705,31 @@ function DesktopNav({ user }: { user: User | null }) {
     }, 120);
   };
 
+  const clearProtectionCloseTimer = () => {
+    if (protectionCloseTimerRef.current) {
+      clearTimeout(protectionCloseTimerRef.current);
+      protectionCloseTimerRef.current = null;
+    }
+  };
+
+  const openProtectionMenu = () => {
+    clearProtectionCloseTimer();
+    setProtectionOpen(true);
+  };
+
+  const scheduleCloseProtectionMenu = () => {
+    clearProtectionCloseTimer();
+    protectionCloseTimerRef.current = setTimeout(() => {
+      setProtectionOpen(false);
+    }, 120);
+  };
+
   useEffect(() => {
     return () => {
       clearHomeToolsCloseTimer();
       clearAiToolsCloseTimer();
       clearHomeAdminCloseTimer();
+      clearProtectionCloseTimer();
     };
   }, []);
 
@@ -712,10 +737,12 @@ function DesktopNav({ user }: { user: User | null }) {
     setHomeToolsOpen(false);
     setAiToolsOpen(false);
     setHomeAdminOpen(false);
+    setProtectionOpen(false);
   }, [pathname]);
 
   const homeToolsActive = HOME_TOOL_LINKS.some((tool) => tool.isActive(pathname || ''));
   const aiToolsActive = AI_TOOL_LINKS.some((tool) => tool.isActive(pathname || ''));
+  const protectionActive = protectionLinks.some((link) => link.isActive(pathname || ''));
   const homeAdminActive =
     ownerGlobalLinks.some((link) => link.isActive(pathname || '')) ||
     ownerPropertyAdminLinks.some((link) => link.isActive(pathname || ''));
@@ -836,6 +863,44 @@ function DesktopNav({ user }: { user: User | null }) {
               );
             })}
 
+            <DropdownMenu open={protectionOpen} onOpenChange={setProtectionOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={sharedLinkClass(protectionActive)}
+                  onMouseEnter={openProtectionMenu}
+                  onMouseLeave={scheduleCloseProtectionMenu}
+                >
+                  <Shield className="h-4 w-4" />
+                  Protection
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                sideOffset={6}
+                className="w-56"
+                onMouseEnter={openProtectionMenu}
+                onMouseLeave={scheduleCloseProtectionMenu}
+                onInteractOutside={() => setProtectionOpen(false)}
+                onPointerDownOutside={() => setProtectionOpen(false)}
+                onEscapeKeyDown={() => setProtectionOpen(false)}
+              >
+                {protectionLinks.map((link) => {
+                  const Icon = link.icon;
+                  return (
+                    <DropdownMenuItem key={link.navTarget} asChild>
+                      <Link href={link.href} className="flex items-center gap-2">
+                        <Icon className="h-4 w-4" />
+                        {link.name}
+                      </Link>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <DropdownMenu open={homeAdminOpen} onOpenChange={setHomeAdminOpen}>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -947,6 +1012,9 @@ function SidebarNav({ user }: { user: User | null }) {
       navTarget: 'rooms',
       isActive: (path) => /^\/dashboard\/properties\/[^/]+\/rooms(\/|$)/.test(path),
     },
+  ];
+
+  const protectionLinks: Array<NavLink & { isActive: (path: string) => boolean; navTarget: string }> = [
     {
       name: 'Incidents',
       href: buildPropertyAwareHref(resolvedPropertyId, 'incidents', 'incidents'),
@@ -969,6 +1037,7 @@ function SidebarNav({ user }: { user: User | null }) {
       isActive: (path) => /^\/dashboard\/properties\/[^/]+\/recalls(\/|$)/.test(path),
     },
   ];
+  const protectionActive = protectionLinks.some((link) => link.isActive(pathname || ''));
 
   return (
     <nav className="grid gap-1 px-4 text-sm font-medium">
@@ -1043,6 +1112,35 @@ function SidebarNav({ user }: { user: User | null }) {
               </SheetClose>
             );
           })}
+
+          <details className="group rounded-lg" open={protectionActive}>
+            <summary
+              className={cn(
+                navLinkClass(protectionActive),
+                'list-none cursor-pointer justify-between'
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <Shield className="h-4 w-4" />
+                Protection
+              </div>
+              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="mt-1 ml-3 border-l border-gray-200 pl-2 space-y-1">
+              {protectionLinks.map((link) => {
+                const Icon = link.icon;
+                const isActive = link.isActive(pathname || '');
+                return (
+                  <SheetClose key={link.navTarget} asChild>
+                    <Link href={link.href} className={navLinkClass(isActive)}>
+                      <Icon className="h-4 w-4" />
+                      {link.name}
+                    </Link>
+                  </SheetClose>
+                );
+              })}
+            </div>
+          </details>
 
           <details className="group rounded-lg">
             <summary className={cn(navLinkClass(HOME_TOOL_LINKS.some((tool) => tool.isActive(pathname || ''))), 'list-none cursor-pointer justify-between')}>
