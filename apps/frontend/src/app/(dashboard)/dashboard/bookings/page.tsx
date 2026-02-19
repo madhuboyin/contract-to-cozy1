@@ -7,13 +7,7 @@ import Link from 'next/link';
 import { api } from '@/lib/api/client';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { Booking, BookingStatus, CreateBookingInput } from '@/types';
-import { MoreVertical, Calendar } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { Calendar, Eye, Edit, XCircle } from 'lucide-react';
 
 interface EditFormData {
   scheduledDate: string;
@@ -233,40 +227,41 @@ export default function HomeownerBookingsPage() {
     }
   };
 
-  const renderActionsMenu = (booking: Booking) => (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+  const renderActions = (booking: Booking, centered = false) => (
+    <div className={`flex items-center gap-1 ${centered ? 'justify-center' : 'justify-end'}`}>
+      <Link
+        href={`/dashboard/bookings/${booking.id}`}
+        aria-label={`View booking ${booking.bookingNumber}`}
+        title="View Details"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
+      >
+        <Eye className="h-4 w-4" />
+      </Link>
+
+      {canEditBooking(booking.status) && (
         <button
           type="button"
-          aria-label={`Booking actions for ${booking.bookingNumber}`}
-          className="h-11 w-11 inline-flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors"
+          onClick={() => handleEditClick(booking)}
+          aria-label={`Edit booking ${booking.bookingNumber}`}
+          title="Edit Booking"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
         >
-          <MoreVertical className="w-5 h-5 text-gray-500" />
+          <Edit className="h-4 w-4" />
         </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuItem asChild>
-          <Link href={`/dashboard/bookings/${booking.id}`} className="w-full cursor-pointer">
-            View Details
-          </Link>
-        </DropdownMenuItem>
+      )}
 
-        {canEditBooking(booking.status) && (
-          <DropdownMenuItem onClick={() => handleEditClick(booking)}>
-            Edit Booking
-          </DropdownMenuItem>
-        )}
-
-        {canCancelBooking(booking.status) && (
-          <DropdownMenuItem
-            onClick={() => handleCancelClick(booking)}
-            className="text-red-600 focus:text-red-600"
-          >
-            Cancel Booking
-          </DropdownMenuItem>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      {canCancelBooking(booking.status) && (
+        <button
+          type="button"
+          onClick={() => handleCancelClick(booking)}
+          aria-label={`Cancel booking ${booking.bookingNumber}`}
+          title="Cancel Booking"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-600"
+        >
+          <XCircle className="h-4 w-4" />
+        </button>
+      )}
+    </div>
   );
 
   return (
@@ -349,7 +344,7 @@ export default function HomeownerBookingsPage() {
             <div className="grid gap-4 md:hidden">
               {filteredBookings.map((booking) => (
                 <div key={booking.id} className="rounded-xl border bg-white p-3 sm:p-4 shadow-sm">
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
                     <div className="min-w-0">
                       <div className="truncate text-sm sm:text-base font-semibold text-gray-900">
                         {booking.service?.name || 'Service'}
@@ -359,7 +354,6 @@ export default function HomeownerBookingsPage() {
                       </div>
                       <div className="mt-1 text-xs text-gray-400">#{booking.bookingNumber}</div>
                     </div>
-                    <div className="shrink-0">{renderActionsMenu(booking)}</div>
                   </div>
 
                   <div className="mt-3 grid gap-2.5 text-sm text-muted-foreground">
@@ -386,6 +380,7 @@ export default function HomeownerBookingsPage() {
                       <StatusDot status={booking.status} />
                     </div>
                   </div>
+                  <div className="mt-3">{renderActions(booking)}</div>
                 </div>
               ))}
             </div>
@@ -438,7 +433,7 @@ export default function HomeownerBookingsPage() {
                     </div>
 
                     <div className="md:col-span-2 text-right">
-                      <div className="inline-flex">{renderActionsMenu(booking)}</div>
+                      {renderActions(booking)}
                     </div>
                   </div>
                 ))}
