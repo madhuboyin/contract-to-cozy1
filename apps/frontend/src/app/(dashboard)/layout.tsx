@@ -424,8 +424,8 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
           )}
 
           {/* Desktop Header - Split into utility row + primary nav row */}
-          <header className="sticky top-0 z-10 hidden lg:block border-b bg-white">
-            <div className="px-8 lg:px-14">
+          <header className="sticky top-0 z-10 hidden border-b bg-white lg:block">
+            <div className="border-b border-[#0a4fa8] bg-gradient-to-r from-[#0a56b8] via-[#0d63c9] to-[#1272da] px-8 text-white lg:px-14">
               <div className="mx-auto flex h-16 w-full max-w-[1360px] items-center gap-4">
                 <Link
                   href="/dashboard"
@@ -438,7 +438,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
                     height={24}
                     className="h-6 w-6"
                   />
-                  <span className="text-xl font-bold text-blue-600">Contract to Cozy</span>
+                  <span className="text-xl font-bold text-white">Contract to Cozy</span>
                 </Link>
 
                 <div className="flex-1 min-w-0" />
@@ -446,10 +446,10 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <Link
                   href="/dashboard/properties"
                   className={cn(
-                    'font-body font-medium text-sm flex items-center gap-2 px-3 py-2 rounded-md transition-colors duration-200 whitespace-nowrap',
+                    'font-body flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200',
                     pathname?.startsWith('/dashboard/properties')
-                      ? 'text-brand-primary bg-teal-50 font-semibold'
-                      : 'text-gray-700 hover:text-brand-primary hover:bg-teal-50'
+                      ? 'bg-white/22 text-white font-semibold'
+                      : 'text-white/90 hover:bg-white/18 hover:text-white'
                   )}
                 >
                   <Building className="h-4 w-4" />
@@ -459,10 +459,10 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <Link
                   href="/dashboard/providers"
                   className={cn(
-                    'font-body font-medium text-sm flex items-center gap-2 px-3 py-2 rounded-md transition-colors duration-200 whitespace-nowrap',
+                    'font-body flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200',
                     pathname?.startsWith('/dashboard/providers')
-                      ? 'text-brand-primary bg-teal-50 font-semibold'
-                      : 'text-gray-700 hover:text-brand-primary hover:bg-teal-50'
+                      ? 'bg-white/22 text-white font-semibold'
+                      : 'text-white/90 hover:bg-white/18 hover:text-white'
                   )}
                 >
                   <Search className="h-4 w-4" />
@@ -472,16 +472,16 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <Link
                   href="/dashboard/bookings"
                   className={cn(
-                    'font-body font-medium text-sm flex items-center gap-2 px-3 py-2 rounded-md transition-colors duration-200 whitespace-nowrap',
+                    'font-body flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200',
                     pathname?.startsWith('/dashboard/bookings')
-                      ? 'text-brand-primary bg-teal-50 font-semibold'
-                      : 'text-gray-700 hover:text-brand-primary hover:bg-teal-50'
+                      ? 'bg-white/22 text-white font-semibold'
+                      : 'text-white/90 hover:bg-white/18 hover:text-white'
                   )}
                 >
                   <Calendar className="h-4 w-4" />
                   Bookings
                 </Link>
-                <DesktopUserNav user={user} />
+                <DesktopUserNav user={user} inverted />
               </div>
             </div>
             <div className="border-t border-gray-100 px-8 lg:px-14">
@@ -1128,7 +1128,7 @@ function SidebarNav({ user }: { user: User | null }) {
   );
 }
 
-function DesktopUserNav({ user }: { user: User | null }) {
+function DesktopUserNav({ user, inverted = false }: { user: User | null; inverted?: boolean }) {
   const { logout } = useAuth();
 
   const handleLogout = () => {
@@ -1146,7 +1146,12 @@ function DesktopUserNav({ user }: { user: User | null }) {
       {/* 👤 Profile */}
       <Link 
         href="/dashboard/profile"
-        className="font-body font-medium flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-700 hover:text-brand-primary hover:bg-teal-50 transition-colors duration-200"
+        className={cn(
+          'font-body flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200',
+          inverted
+            ? 'text-white/90 hover:bg-white/18 hover:text-white'
+            : 'text-gray-700 hover:bg-teal-50 hover:text-brand-primary'
+        )}
       >
         <Settings className="h-4 w-4" />
         <div className="font-medium">{user?.firstName}</div>
@@ -1157,7 +1162,12 @@ function DesktopUserNav({ user }: { user: User | null }) {
         onClick={handleLogout} 
         variant="ghost" 
         size="sm"
-        className="font-body font-medium text-sm px-3 py-2 rounded-md text-gray-700 hover:text-brand-primary hover:bg-teal-50 transition-colors duration-200"
+        className={cn(
+          'font-body rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200',
+          inverted
+            ? 'text-white/90 hover:bg-white/18 hover:text-white'
+            : 'text-gray-700 hover:bg-teal-50 hover:text-brand-primary'
+        )}
       >
         Logout
       </Button>
