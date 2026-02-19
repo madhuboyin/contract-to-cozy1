@@ -22,10 +22,10 @@ const RISK_EXPOSURE_CAP = 15000;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 const getRiskDetails = (score: number) => {
-    if (score >= 80) return { level: "Low Risk", color: "text-green-600", progressColor: "bg-green-500" };
-    if (score >= 60) return { level: "Moderate Risk", color: "text-yellow-600", progressColor: "bg-yellow-500" };
-    if (score >= 40) return { level: "Elevated Risk", color: "text-orange-600", progressColor: "bg-orange-500" };
-    return { level: "High Risk", color: "text-red-600", progressColor: "bg-red-500" };
+    if (score >= 80) return { level: "Low Risk", color: "text-emerald-700", progressColor: "bg-emerald-500" };
+    if (score >= 60) return { level: "Moderate Risk", color: "text-amber-600", progressColor: "bg-amber-500" };
+    if (score >= 40) return { level: "Elevated Risk", color: "text-orange-600", progressColor: "bg-orange-400" };
+    return { level: "High Risk", color: "text-rose-600", progressColor: "bg-rose-400" };
 };
 
 interface PropertyRiskScoreCardProps {
@@ -191,7 +191,7 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
                             ) : (
                                 <span
                                     className={`text-xs inline-flex items-center gap-1 ${
-                                        riskDelta > 0 ? 'text-green-600' : riskDelta < 0 ? 'text-red-600' : 'text-gray-500'
+                                        riskDelta > 0 ? 'text-emerald-600' : riskDelta < 0 ? 'text-rose-600' : 'text-gray-500'
                                     }`}
                                 >
                                     {riskDelta > 0 ? (

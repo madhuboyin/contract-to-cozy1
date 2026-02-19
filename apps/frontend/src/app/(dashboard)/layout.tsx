@@ -425,7 +425,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 
           {/* Desktop Header - Split into utility row + primary nav row */}
           <header className="sticky top-0 z-10 hidden border-b bg-white lg:block">
-            <div className="border-b border-[#0a4fa8] bg-gradient-to-r from-[#0a56b8] via-[#0d63c9] to-[#1272da] px-8 text-white lg:px-14">
+            <div className="border-b border-[#184454] bg-gradient-to-r from-[#213f5a] via-[#1a5468] to-[#187466] px-8 text-white lg:px-14">
               <div className="mx-auto flex h-16 w-full max-w-[1360px] items-center gap-4">
                 <Link
                   href="/dashboard"

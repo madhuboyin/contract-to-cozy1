@@ -9,10 +9,10 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api/client";
 
 function getBandStyles(band?: string) {
-  if (band === "EXCELLENT") return { label: "Excellent", scoreColor: "text-green-600", progressColor: "bg-green-500" };
-  if (band === "GOOD") return { label: "Good", scoreColor: "text-blue-600", progressColor: "bg-blue-500" };
-  if (band === "FAIR") return { label: "Fair", scoreColor: "text-yellow-600", progressColor: "bg-yellow-500" };
-  return { label: "Needs Attention", scoreColor: "text-red-600", progressColor: "bg-red-500" };
+  if (band === "EXCELLENT") return { label: "Excellent", scoreColor: "text-emerald-700", progressColor: "bg-emerald-500" };
+  if (band === "GOOD") return { label: "Good", scoreColor: "text-teal-700", progressColor: "bg-teal-500" };
+  if (band === "FAIR") return { label: "Fair", scoreColor: "text-amber-600", progressColor: "bg-amber-500" };
+  return { label: "Needs Attention", scoreColor: "text-rose-600", progressColor: "bg-rose-400" };
 }
 
 interface HomeScoreReportCardProps {
@@ -91,7 +91,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
               ) : (
                 <span
                   className={`text-xs inline-flex items-center gap-1 ${
-                    delta > 0 ? "text-green-600" : delta < 0 ? "text-red-600" : "text-gray-500"
+                    delta > 0 ? "text-emerald-600" : delta < 0 ? "text-rose-600" : "text-gray-500"
                   }`}
                 >
                   {delta > 0 ? (

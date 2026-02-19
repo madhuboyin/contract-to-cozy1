@@ -18,9 +18,9 @@ const formatCurrency = (amount: number) => new Intl.NumberFormat('en-US', {
 }).format(amount);
 
 const getEfficiencyDetails = (score: number) => {
-    if (score >= 90) return { level: "Excellent", color: "text-green-600", progressColor: "bg-green-500" };
-    if (score >= 70) return { level: "Average", color: "text-yellow-600", progressColor: "bg-yellow-500" };
-    return { level: "Below Average", color: "text-red-600", progressColor: "bg-red-500" };
+    if (score >= 90) return { level: "Excellent", color: "text-emerald-700", progressColor: "bg-emerald-500" };
+    if (score >= 70) return { level: "Average", color: "text-amber-600", progressColor: "bg-amber-500" };
+    return { level: "Below Average", color: "text-rose-600", progressColor: "bg-rose-400" };
 };
 
 interface FinancialEfficiencyScoreCardProps {
@@ -71,6 +71,7 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
     const score = summary.financialEfficiencyScore || 0;
     const exposure = summary.financialExposureTotal || 0; 
     const { level, color, progressColor } = getEfficiencyDetails(score);
+    const displayScoreColor = score >= 100 ? 'text-amber-600' : color;
     const scoreDelta = snapshotQuery.data?.scores?.FINANCIAL?.deltaFromPreviousWeek ?? null;
     const reportLink = `/dashboard/properties/${propertyId!}/financial-efficiency`; 
 
@@ -141,7 +142,7 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
                     {/* Large Score - Number First */}
                     <div className="mb-2">
                         <div className="flex items-baseline gap-2">
-                            <span className={`text-4xl font-bold leading-none ${color}`}>
+                            <span className={`text-4xl font-bold leading-none ${displayScoreColor}`}>
                                 {score}
                             </span>
                             <span className="text-xl text-gray-400 font-normal">/100</span>
@@ -156,7 +157,7 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
                             ) : (
                                 <span
                                     className={`text-xs inline-flex items-center gap-1 ${
-                                        scoreDelta > 0 ? 'text-green-600' : scoreDelta < 0 ? 'text-red-600' : 'text-gray-500'
+                                        scoreDelta > 0 ? 'text-emerald-600' : scoreDelta < 0 ? 'text-rose-600' : 'text-gray-500'
                                     }`}
                                 >
                                     {scoreDelta > 0 ? (
