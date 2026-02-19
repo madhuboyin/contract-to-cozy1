@@ -1143,34 +1143,42 @@ function DesktopUserNav({ user, inverted = false }: { user: User | null; inverte
       {/* 🔔 Notifications */}
       <NotificationBell />
 
-      {/* 👤 Profile */}
-      <Link 
-        href="/dashboard/profile"
-        className={cn(
-          'font-body flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200',
-          inverted
-            ? 'text-white/90 hover:bg-white/18 hover:text-white'
-            : 'text-gray-700 hover:bg-teal-50 hover:text-brand-primary'
-        )}
-      >
-        <Settings className="h-4 w-4" />
-        <div className="font-medium">{user?.firstName}</div>
-      </Link>
-      
-      {/* 🚪 Logout */}
-      <Button 
-        onClick={handleLogout} 
-        variant="ghost" 
-        size="sm"
-        className={cn(
-          'font-body rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200',
-          inverted
-            ? 'text-white/90 hover:bg-white/18 hover:text-white'
-            : 'text-gray-700 hover:bg-teal-50 hover:text-brand-primary'
-        )}
-      >
-        Logout
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              'font-body flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200',
+              inverted
+                ? 'text-white/90 hover:bg-white/18 hover:text-white data-[state=open]:bg-white/22 data-[state=open]:text-white'
+                : 'text-gray-700 hover:bg-teal-50 hover:text-brand-primary data-[state=open]:bg-teal-50 data-[state=open]:text-brand-primary'
+            )}
+          >
+            <Settings className="h-4 w-4" />
+            <span>{user?.firstName || 'Account'}</span>
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" sideOffset={6} className="w-44">
+          <DropdownMenuItem asChild>
+            <Link href="/dashboard/profile" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Profile
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={(event) => {
+              event.preventDefault();
+              handleLogout();
+            }}
+            className="flex items-center gap-2"
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
