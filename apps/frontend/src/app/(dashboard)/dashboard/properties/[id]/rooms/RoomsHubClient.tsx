@@ -8,6 +8,7 @@ import { Lightbulb, Sparkles } from 'lucide-react';
 
 import { InventoryRoom } from '@/types';
 import { listInventoryRooms, patchRoomMeta, getRoomInsights } from '../../../inventory/inventoryApi';
+import { SectionHeader } from '../../../components/SectionHeader';
 import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
 import RoomScanModal from '@/app/(dashboard)/dashboard/components/inventory/RoomScanModal';
 import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
@@ -115,24 +116,21 @@ function getRoomGlyph(type?: string | null) {
 function scoreTone(score: number) {
   if (score >= 75) {
     return {
-      panel:
-        'from-emerald-400/10 via-slate-900/60 to-teal-400/10 border-emerald-300/30',
-      status: 'text-emerald-300',
+      panel: 'from-emerald-50/90 via-white/80 to-teal-50/70 border-emerald-200/60',
+      status: 'text-emerald-700',
       label: 'HEALTHY',
     };
   }
   if (score >= 50) {
     return {
-      panel:
-        'from-amber-400/10 via-slate-900/60 to-yellow-300/10 border-amber-300/30',
-      status: 'text-amber-300',
+      panel: 'from-amber-50/90 via-white/80 to-yellow-50/70 border-amber-200/60',
+      status: 'text-amber-700',
       label: 'NEEDS ATTENTION',
     };
   }
   return {
-    panel:
-      'from-orange-400/10 via-slate-900/60 to-rose-400/10 border-rose-300/30',
-    status: 'text-orange-300',
+    panel: 'from-orange-50/90 via-white/80 to-rose-50/70 border-rose-200/60',
+    status: 'text-orange-700',
     label: 'AT RISK',
   };
 }
@@ -251,38 +249,27 @@ export default function RoomsHubClient() {
   }, [scoredRooms, sorted]);
 
   return (
-    <div className="dark relative isolate space-y-5 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] text-slate-100 sm:p-6 lg:pb-6">
-      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-[36px] bg-[#06090f]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_8%_10%,rgba(251,146,60,0.28),transparent_34%),radial-gradient(circle_at_84%_16%,rgba(56,189,248,0.22),transparent_36%),radial-gradient(circle_at_52%_86%,rgba(251,191,36,0.14),transparent_42%),linear-gradient(145deg,#070b14_0%,#0d1622_52%,#101824_100%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(125deg,rgba(255,255,255,0.06)_0%,transparent_34%,rgba(255,255,255,0.03)_100%)]" />
-      </div>
-
+    <div className="p-4 sm:p-6 space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
       <OnboardingReturnBanner />
 
-      <div className="relative overflow-hidden rounded-[30px] border border-white/15 bg-[radial-gradient(circle_at_10%_0%,rgba(251,191,36,0.18),transparent_36%),radial-gradient(circle_at_86%_6%,rgba(45,212,191,0.2),transparent_40%),linear-gradient(150deg,rgba(15,23,42,0.82),rgba(17,24,39,0.68))] p-4 shadow-[0_30px_65px_-44px_rgba(2,6,23,0.95)]">
-        <div className="sticky top-2 z-20 rounded-2xl border border-white/20 bg-slate-950/38 p-3 backdrop-blur-2xl">
+      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[radial-gradient(circle_at_8%_8%,rgba(251,191,36,0.14),transparent_40%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.14),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.82))] p-4 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.6)] dark:border-slate-700/70 dark:bg-[radial-gradient(circle_at_8%_8%,rgba(251,191,36,0.12),transparent_40%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.12),transparent_38%),linear-gradient(180deg,rgba(2,6,23,0.88),rgba(2,6,23,0.78))]">
+        <div className="sticky top-2 z-20 rounded-2xl border border-white/70 bg-white/55 p-3 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/20 bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.34)]">
-                <span className="text-xl">✨</span>
-              </div>
-              <div className="min-w-0">
-                <h2 className="text-[1.85rem] font-semibold tracking-tight text-white">Rooms</h2>
-                <p className="mt-1 text-sm text-slate-300/90">
-                  Select a room to see health, value snapshot, and quick wins.
-                </p>
-              </div>
-            </div>
+            <SectionHeader
+              icon="✨"
+              title="Rooms"
+              description="Select a room to see health, value snapshot, and quick wins."
+            />
             <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:items-center">
               <Link
                 href={`/dashboard/properties/${propertyId}/inventory/rooms`}
-                className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/22 bg-white/10 px-4 py-2 text-sm font-medium text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] backdrop-blur-md transition-all hover:bg-white/16"
+                className="inline-flex min-h-[46px] items-center justify-center rounded-xl border border-slate-300/70 bg-white/80 px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:hover:bg-slate-900"
               >
                 Manage rooms
               </Link>
               <Link
                 href={`/dashboard/properties/${propertyId}/inventory`}
-                className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/22 bg-white/10 px-4 py-2 text-sm font-medium text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] backdrop-blur-md transition-all hover:bg-white/16"
+                className="inline-flex min-h-[46px] items-center justify-center rounded-xl border border-slate-300/70 bg-white/80 px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:hover:bg-slate-900"
               >
                 Back to inventory
               </Link>
@@ -292,13 +279,13 @@ export default function RoomsHubClient() {
       </div>
 
       {overallHealth !== null && (
-        <div className="rounded-2xl border border-white/15 bg-[radial-gradient(circle_at_0%_0%,rgba(251,146,60,0.15),transparent_38%),radial-gradient(circle_at_100%_20%,rgba(45,212,191,0.2),transparent_40%),linear-gradient(132deg,rgba(15,23,42,0.66),rgba(15,23,42,0.5))] p-4 shadow-[0_20px_36px_-30px_rgba(2,6,23,0.9)] backdrop-blur-2xl">
+        <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/75 via-amber-50/55 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-amber-950/20 dark:to-teal-950/20">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-300/85">Home Rooms Health</p>
-              <p className="mt-1 text-3xl font-semibold text-white">{overallHealth}% cozy</p>
+              <p className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300">Home Rooms Health</p>
+              <p className="mt-1 text-3xl font-semibold text-slate-900 dark:text-slate-100">{overallHealth}% cozy</p>
             </div>
-            <p className="text-sm text-slate-200/90">
+            <p className="text-sm text-slate-600 dark:text-slate-300">
               {lowestRoomName
                 ? `Focus next on ${lowestRoomName} to lift your overall room score.`
                 : 'Load room insights to see where quick wins are available.'}
@@ -309,15 +296,15 @@ export default function RoomsHubClient() {
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
         {loading && (
-          <div className="rounded-2xl border border-white/20 bg-slate-900/45 p-4 text-sm text-slate-200 opacity-80 backdrop-blur-xl">
+          <div className="rounded-2xl border border-white/70 bg-white/60 p-4 text-sm opacity-70 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45">
             Loading rooms…
           </div>
         )}
 
         {!loading && sorted.length === 0 && (
-          <div className="rounded-2xl border border-white/20 bg-slate-900/45 p-4 text-sm text-slate-200 opacity-85 backdrop-blur-xl">
+          <div className="rounded-2xl border border-white/70 bg-white/60 p-4 text-sm opacity-70 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45">
             No rooms yet. Create rooms in{' '}
-            <Link className="underline decoration-white/70 underline-offset-2" href={`/dashboard/properties/${propertyId}/inventory/rooms`}>
+            <Link className="underline" href={`/dashboard/properties/${propertyId}/inventory/rooms`}>
               Manage rooms
             </Link>
             .
@@ -346,15 +333,15 @@ export default function RoomsHubClient() {
           return (
             <div
               key={r.id}
-              className="group flex flex-col rounded-2xl border border-white/16 bg-[radial-gradient(circle_at_5%_0%,rgba(251,146,60,0.16),transparent_32%),radial-gradient(circle_at_100%_14%,rgba(56,189,248,0.13),transparent_36%),linear-gradient(152deg,rgba(15,23,42,0.74),rgba(15,23,42,0.58))] p-4 shadow-[0_22px_40px_-30px_rgba(2,6,23,0.95)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-0.5 hover:border-white/24 hover:shadow-[0_26px_48px_-30px_rgba(2,6,23,0.95)]"
+              className="group flex flex-col rounded-2xl border border-white/70 bg-gradient-to-br from-[#fff7ef]/85 via-white/80 to-[#eef7f2]/70 p-4 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_36px_-24px_rgba(15,23,42,0.6)] dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/45 dark:to-slate-900/35"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/20 bg-white/14 text-base shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]">
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/75 text-base shadow-sm dark:bg-slate-800/70">
                       {getRoomGlyph(r.type || inferred)}
                     </span>
-                    <div className="truncate text-[1.1rem] font-semibold text-white">{r.name}</div>
+                    <div className="font-semibold truncate text-[1.1rem] text-slate-900 dark:text-slate-100">{r.name}</div>
                   </div>
                 </div>
 
@@ -362,7 +349,7 @@ export default function RoomsHubClient() {
                   <button
                     onClick={() => ensureType(r)}
                     disabled={detectingId === r.id}
-                    className="rounded-full border border-white/24 bg-white/10 px-2.5 py-1 text-xs text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.24)] transition-colors hover:bg-white/16 disabled:opacity-50"
+                    className="rounded-full border border-slate-300/70 bg-white/80 px-2.5 py-1 text-xs shadow-sm transition-colors hover:bg-white disabled:opacity-50 dark:border-slate-700/70 dark:bg-slate-900/60 dark:hover:bg-slate-900"
                     title="Auto-detect room template from name"
                   >
                     {detectingId === r.id ? 'Detecting…' : 'Apply'}
@@ -370,9 +357,9 @@ export default function RoomsHubClient() {
                 )}
               </div>
 
-              <div className={`mt-4 rounded-2xl border bg-gradient-to-br p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] ${scoreTone(score).panel}`}>
+              <div className={`mt-4 rounded-2xl border bg-gradient-to-br p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] ${scoreTone(score).panel} dark:from-slate-900/60 dark:to-slate-900/40`}>
                 {insightsLoading[r.id] ? (
-                  <div className="text-sm text-slate-200 opacity-80">Loading insights…</div>
+                  <div className="text-sm opacity-70">Loading insights…</div>
                 ) : insights ? (
                   <div className="space-y-2">
                     <RoomHealthScoreRing
@@ -386,13 +373,13 @@ export default function RoomsHubClient() {
                     />
 
                     {improvements.length > 0 && safeString(improvements?.[0]?.title) && (
-                      <div className="flex items-start gap-1.5 text-xs text-slate-200">
+                      <div className="flex items-start gap-1.5 text-xs text-slate-600 dark:text-slate-300">
                         <Lightbulb className="mt-0.5 h-3.5 w-3.5 text-amber-500" />
-                        <span className="italic text-slate-300">
+                        <span className="italic">
                           Tip:{' '}
-                          <span className="font-medium text-white">
-                            {String(improvements[0].title)}
-                          </span>
+                        <span className="font-medium text-slate-700 dark:text-slate-200">
+                          {String(improvements[0].title)}
+                        </span>
                         </span>
                       </div>
                     )}
@@ -400,7 +387,7 @@ export default function RoomsHubClient() {
                 ) : (
                   <button
                     onClick={() => loadInsight(r.id)}
-                    className="rounded-xl border border-white/24 bg-white/10 px-3 py-2 text-sm text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.24)] transition-colors hover:bg-white/16"
+                    className="rounded-xl border border-slate-300/70 bg-white/85 px-3 py-2 text-sm shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/60 dark:hover:bg-slate-900"
                   >
                     Load health score
                   </button>
@@ -411,21 +398,21 @@ export default function RoomsHubClient() {
                 <div className="flex w-max items-center gap-2">
                   <Link
                     href={`/dashboard/properties/${propertyId}/rooms/${r.id}`}
-                    className="inline-flex h-10 items-center justify-center rounded-full border border-white/24 bg-white/10 px-4 text-sm font-medium text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.24)] transition-colors hover:bg-white/16"
+                    className="inline-flex h-10 items-center justify-center rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-100 dark:hover:bg-slate-900"
                   >
                     View
                   </Link>
 
                   <Link
                     href={`/dashboard/properties/${propertyId}/inventory/rooms/${r.id}`}
-                    className="inline-flex h-10 items-center justify-center rounded-full border border-white/24 bg-white/10 px-4 text-sm font-medium text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.24)] transition-colors hover:bg-white/16"
+                    className="inline-flex h-10 items-center justify-center rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-100 dark:hover:bg-slate-900"
                   >
                     Edit
                   </Link>
 
                   <Link
                     href={`/dashboard/properties/${propertyId}/inventory?roomId=${r.id}`}
-                    className="inline-flex h-10 items-center justify-center rounded-full border border-white/24 bg-white/10 px-4 text-sm font-medium text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.24)] transition-colors hover:bg-white/16"
+                    className="inline-flex h-10 items-center justify-center rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-100 dark:hover:bg-slate-900"
                   >
                     Items
                   </Link>
@@ -435,9 +422,9 @@ export default function RoomsHubClient() {
                       e.stopPropagation();
                       openScan(r);
                     }}
-                    className="inline-flex h-10 items-center justify-center gap-1 rounded-full border border-white/24 bg-white/10 px-4 text-sm font-medium text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.24)] transition-colors hover:bg-white/16"
+                    className="inline-flex h-10 items-center justify-center gap-1 rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-100 dark:hover:bg-slate-900"
                   >
-                    <Sparkles className={`h-3.5 w-3.5 ${scanLaunchingId === r.id ? 'animate-pulse text-amber-300' : 'text-teal-300'}`} />
+                    <Sparkles className={`h-3.5 w-3.5 ${scanLaunchingId === r.id ? 'animate-pulse text-amber-500' : 'text-teal-600 dark:text-teal-300'}`} />
                     {scanLaunchingId === r.id ? 'Launching…' : 'AI Scan'}
                   </button>
                 </div>
