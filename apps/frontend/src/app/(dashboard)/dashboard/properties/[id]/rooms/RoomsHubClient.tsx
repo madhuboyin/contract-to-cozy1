@@ -394,7 +394,7 @@ export default function RoomsHubClient() {
                 )}
               </div>
 
-              <div className="mt-4 mt-auto overflow-x-auto">
+              <div className="mt-auto overflow-x-auto pt-4">
                 <div className="flex w-max items-center gap-2">
                   <Link
                     href={`/dashboard/properties/${propertyId}/rooms/${r.id}`}
