@@ -13,7 +13,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -46,13 +45,13 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-  
+
     try {
-      setLoading(true); // Button greys out here
+      setLoading(true);
       const result = await login({ email: formData.email, password: formData.password });
-  
+
       if (result) {
-        const userRole = result.user.role; 
+        const userRole = result.user.role;
 
         if (userRole === 'PROVIDER') {
           router.replace('/providers/dashboard');
@@ -61,143 +60,130 @@ export default function LoginPage() {
         } else {
           router.replace('/dashboard');
         }
-
       } else {
         setError('Invalid email or password.');
       }
     } catch (err: any) {
-      // The robust APIClient now ensures we hit this block for server crashes
       console.error('Login component caught network error:', err);
       setError(err.message || 'An unexpected error occurred.');
     } finally {
-      // This MUST run to un-grey the button
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#061018] text-white">
-      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 pb-4 pt-6 sm:px-6 sm:pb-6 sm:pt-8">
-        <header className="flex items-center justify-between py-2 sm:py-4">
-          <Link href="/" className="flex items-center gap-2 transition-opacity hover:opacity-85">
-            <span className="text-2xl">🏠</span>
-            <span className="text-2xl font-semibold tracking-tight text-white">C2C</span>
-          </Link>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
+      {/* Navigation Header with Home Link */}
+      <nav className="bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            {/* Logo - Links to Home */}
+            <Link href="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
+              <span className="text-2xl">🏠</span>
+              <span className="text-lg font-semibold text-gray-900">Contract to Cozy</span>
+            </Link>
 
-          <Link
-            href="/providers/join"
-            className="rounded-full border border-white/20 px-4 py-2 text-xs font-medium text-white/80 transition-colors hover:border-white/35 hover:text-white sm:text-sm"
-          >
-            For Providers
-          </Link>
-        </header>
+            {/* Right side navigation */}
+            <div className="flex items-center space-x-4">
+              <Link
+                href="/signup"
+                className="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
+              >
+                Sign Up
+              </Link>
+              <Link
+                href="/providers/join"
+                className="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
+              >
+                For Providers
+              </Link>
+            </div>
+          </div>
+        </div>
+      </nav>
 
-        <main className="flex flex-1 flex-col justify-between">
-          <section className="px-1 pb-6 pt-10 sm:max-w-xl sm:px-0 sm:pb-10 sm:pt-16">
-            <h1 className="text-4xl font-bold leading-tight tracking-tight text-white sm:text-5xl">
-              Go ahead and set up your account
-            </h1>
-            <p className="mt-4 text-lg text-white/60">
-              Sign in to continue managing your home with confidence.
-            </p>
-          </section>
-
-          <section className="rounded-[32px] bg-white p-4 text-slate-900 shadow-[0_-12px_48px_-24px_rgba(0,0,0,0.55)] sm:p-6">
-            <div className="rounded-2xl bg-slate-100 p-1.5">
-              <div className="grid grid-cols-2 gap-1.5">
-                <span className="inline-flex h-12 items-center justify-center rounded-xl bg-white text-base font-semibold text-slate-900 shadow-sm">
-                  Login
-                </span>
-                <Link
-                  href="/signup"
-                  className="inline-flex h-12 items-center justify-center rounded-xl text-base font-medium text-slate-500 transition-colors hover:text-slate-700"
-                >
-                  Register
-                </Link>
-              </div>
+      {/* Main Content */}
+      <div className="flex-1 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full">
+          {/* Card */}
+          <div className="bg-white rounded-2xl shadow-xl p-5 sm:p-8">
+            {/* Header */}
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-bold text-gray-900">Welcome Back</h2>
+              <p className="mt-2 text-sm text-gray-600">
+                Sign in to your account
+              </p>
             </div>
 
             {/* Error Message */}
             {error && (
-              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              <div className="mb-6 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
                 <div className="flex items-center space-x-2">
-                  <svg className="h-5 w-5 flex-shrink-0 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" d="M9.401 3.003c1.155-1.121 3.2-1.121 4.356 0l4.46 4.321c1.155 1.121 1.155 3.2 0 4.356l-6.666 6.467a3.076 3.076 0 01-4.356 0l-6.666-6.467c-1.155-1.155-1.155-3.2 0-4.356l4.46-4.321zM12 9a.75.75 0 00-.75.75v3.75c0 .414.336.75.75.75s.75-.336.75-.75V9.75A.75.75 0 0012 9zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" /></svg>
+                  <svg className="w-5 h-5 flex-shrink-0 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" d="M9.401 3.003c1.155-1.121 3.2-1.121 4.356 0l4.46 4.321c1.155 1.121 1.155 3.2 0 4.356l-6.666 6.467a3.076 3.076 0 01-4.356 0l-6.666-6.467c-1.155-1.155-1.155-3.2 0-4.356l4.46-4.321zM12 9a.75.75 0 00-.75.75v3.75c0 .414.336.75.75.75s.75-.336.75-.75V9.75A.75.75 0 0012 9zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" /></svg>
                   <span>{error}</span>
                 </div>
               </div>
             )}
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
               {/* Email */}
               <div>
-                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                  <label htmlFor="email" className="block text-xs font-medium text-slate-500">
-                    Email Address
-                  </label>
-                  <div className="mt-1.5 flex items-center gap-3">
-                    <Mail className="h-5 w-5 text-emerald-700" />
-                    <input
-                      id="email"
-                      name="email"
-                      type="email"
-                      required
-                      value={formData.email}
-                      onChange={handleChange}
-                      className="w-full border-0 p-0 text-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-0"
-                      placeholder="you@example.com"
-                    />
-                  </div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    required
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="w-full pl-11 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="you@example.com"
+                  />
                 </div>
               </div>
 
               {/* Password with Toggle */}
               <div>
-                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                  <label htmlFor="password" className="block text-xs font-medium text-slate-500">
-                    Password
-                  </label>
-                  <div className="mt-1.5 flex items-center gap-3">
-                    <Lock className="h-5 w-5 text-emerald-700" />
-                    <input
-                      id="password"
-                      name="password"
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      value={formData.password}
-                      onChange={handleChange}
-                      className="w-full border-0 p-0 text-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-0"
-                      placeholder="••••••••"
-                    />
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
+                  <input
+                    id="password"
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={formData.password}
+                    onChange={handleChange}
+                    className="w-full pl-11 pr-12 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="••••••••"
+                  />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="rounded-full p-1.5 text-slate-500 transition-colors hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 p-2 text-gray-500 hover:text-gray-700 focus:outline-none touch-manipulation"
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? (
-                      <EyeOff className="h-5 w-5" />
+                      <EyeOff className="w-5 h-5" />
                     ) : (
-                      <Eye className="h-5 w-5" />
+                      <Eye className="w-5 h-5" />
                     )}
                   </button>
                 </div>
               </div>
-              </div>
 
-              <div className="flex items-center justify-between pt-1">
-                <label className="inline-flex items-center gap-2 text-sm text-slate-600">
-                  <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(event) => setRememberMe(event.target.checked)}
-                    className="h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-500"
-                  />
-                  Remember me
-                </label>
+              {/* Forgot Password */}
+              <div className="text-right">
                 <Link
                   href="/forgot-password"
-                  className="text-sm font-medium text-emerald-700 hover:text-emerald-800"
+                  className="text-sm font-medium text-blue-600 hover:text-blue-700"
                 >
                   Forgot password?
                 </Link>
@@ -207,23 +193,23 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-2 w-full rounded-full bg-[#709B7C] px-4 py-3 text-base font-semibold text-white transition-colors hover:bg-[#638d70] disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
               >
-                {loading ? 'Signing in...' : 'Login'}
+                {loading ? 'Signing In...' : 'Sign In'}
               </button>
             </form>
 
             <div className="mt-6">
-              <div className="flex items-center gap-3 text-slate-500">
-                <div className="h-px flex-1 bg-slate-200" />
+              <div className="flex items-center gap-3 text-gray-500">
+                <div className="h-px flex-1 bg-gray-200" />
                 <span className="text-sm">Or login with</span>
-                <div className="h-px flex-1 bg-slate-200" />
+                <div className="h-px flex-1 bg-gray-200" />
               </div>
 
               <button
                 type="button"
                 disabled
-                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-500"
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-3 text-base font-semibold text-gray-500"
                 aria-label="Google login coming soon"
               >
                 <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
@@ -236,21 +222,23 @@ export default function LoginPage() {
               </button>
             </div>
 
-            <div className="mt-5 text-center text-sm text-slate-600">
-              Don&apos;t have an account?{' '}
-              <Link href="/signup" className="font-medium text-emerald-700 hover:text-emerald-800">
-                Register
-              </Link>
+            {/* Footer Links */}
+            <div className="mt-6 space-y-3 text-center">
+              <p className="text-sm text-gray-600">
+                Don&apos;t have an account?{' '}
+                <Link href="/signup" className="font-medium text-blue-600 hover:text-blue-700">
+                  Sign up
+                </Link>
+              </p>
+              <p className="text-sm text-gray-600">
+                Are you a service provider?{' '}
+                <Link href="/providers/join" className="font-medium text-blue-600 hover:text-blue-700">
+                  Join as provider
+                </Link>
+              </p>
             </div>
-
-            <div className="mt-2 text-center text-sm text-slate-600">
-              Are you a service provider?{' '}
-              <Link href="/providers/join" className="font-medium text-emerald-700 hover:text-emerald-800">
-                Join as provider
-              </Link>
-            </div>
-          </section>
-        </main>
+          </div>
+        </div>
       </div>
     </div>
   );
