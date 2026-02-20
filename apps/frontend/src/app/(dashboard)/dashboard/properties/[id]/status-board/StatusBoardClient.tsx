@@ -374,7 +374,7 @@ export default function StatusBoardClient() {
             ) : (
               <>
                 <Badge
-                  className={`text-xs md:text-sm font-semibold shadow-sm ${CONDITION_COLORS[item.condition]} ${
+                  className={`whitespace-normal text-center text-xs leading-tight md:text-sm md:whitespace-nowrap font-semibold shadow-sm ${CONDITION_COLORS[item.condition]} ${
                     item.condition === "ACTION_NEEDED"
                       ? "ring-1 ring-red-300/70 dark:ring-red-800/70"
                       : ""
@@ -414,7 +414,7 @@ export default function StatusBoardClient() {
             ) : (
               <Badge
                 variant="outline"
-                className={`text-xs md:text-sm font-semibold shadow-sm ${RECOMMENDATION_COLORS[item.recommendation]}`}
+                className={`whitespace-normal text-center text-xs leading-tight md:text-sm md:whitespace-nowrap font-semibold shadow-sm ${RECOMMENDATION_COLORS[item.recommendation]}`}
               >
                 {RECOMMENDATION_LABELS[item.recommendation]}
               </Badge>
@@ -871,7 +871,7 @@ export default function StatusBoardClient() {
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <div className={`mt-2 ${TABLE_SHELL_CLASS}`}>
-                  <Table className="min-w-[720px] md:min-w-full">
+                  <Table className="table-fixed md:table-auto">
                     <TableHeader>
                       <TableRow className="border-b border-white/70 bg-white/55 dark:border-slate-700/80 dark:bg-slate-900/55">
                         <TableHead className={`w-10 ${HEADER_CELL_CLASS}`} />
@@ -894,7 +894,7 @@ export default function StatusBoardClient() {
       ) : (
         // Flat view
         <div className={`mt-4 ${TABLE_SHELL_CLASS}`}>
-          <Table className="min-w-[720px] md:min-w-full">
+          <Table className="table-fixed md:table-auto">
             <TableHeader>
               <TableRow className="border-b border-white/70 bg-white/55 dark:border-slate-700/80 dark:bg-slate-900/55">
                 <TableHead className={`w-10 ${HEADER_CELL_CLASS}`} />
