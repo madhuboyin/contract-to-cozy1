@@ -704,6 +704,7 @@ export default function StatusBoardClient() {
 
   return (
     <TooltipProvider delayDuration={120}>
+      <div className="pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
       <div className="relative overflow-hidden rounded-[30px] border border-slate-200/80 bg-[radial-gradient(circle_at_12%_15%,rgba(251,191,36,0.14),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.16),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.88))] p-4 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.6)] dark:border-slate-700/80 dark:bg-[radial-gradient(circle_at_12%_15%,rgba(245,158,11,0.1),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.12),transparent_38%),linear-gradient(180deg,rgba(2,6,23,0.88),rgba(2,6,23,0.78))] sm:p-5">
         <div className="relative z-10 space-y-3">
         {/* Header */}
@@ -870,7 +871,7 @@ export default function StatusBoardClient() {
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <div className={`mt-2 ${TABLE_SHELL_CLASS}`}>
-                  <Table>
+                  <Table className="min-w-[720px] md:min-w-full">
                     <TableHeader>
                       <TableRow className="border-b border-white/70 bg-white/55 dark:border-slate-700/80 dark:bg-slate-900/55">
                         <TableHead className={`w-10 ${HEADER_CELL_CLASS}`} />
@@ -893,7 +894,7 @@ export default function StatusBoardClient() {
       ) : (
         // Flat view
         <div className={`mt-4 ${TABLE_SHELL_CLASS}`}>
-          <Table>
+          <Table className="min-w-[720px] md:min-w-full">
             <TableHeader>
               <TableRow className="border-b border-white/70 bg-white/55 dark:border-slate-700/80 dark:bg-slate-900/55">
                 <TableHead className={`w-10 ${HEADER_CELL_CLASS}`} />
@@ -937,6 +938,7 @@ export default function StatusBoardClient() {
           </div>
         </div>
       )}
+      </div>
     </TooltipProvider>
   );
 }

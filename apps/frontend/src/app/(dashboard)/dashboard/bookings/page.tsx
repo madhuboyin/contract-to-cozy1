@@ -2,12 +2,23 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type ComponentType } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api/client';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { Booking, BookingStatus, CreateBookingInput } from '@/types';
-import { Calendar, Eye, Edit, XCircle } from 'lucide-react';
+import {
+  AlertTriangle,
+  Calendar,
+  CalendarClock,
+  CheckCircle2,
+  CircleDashed,
+  Clock3,
+  Edit,
+  Eye,
+  LoaderCircle,
+  XCircle,
+} from 'lucide-react';
 
 interface EditFormData {
   scheduledDate: string;
@@ -23,35 +34,45 @@ const toLocalDatetimeInput = (isoString: string | null): string => {
   return localTime.toISOString().slice(0, 16);
 };
 
-// Status dot component
-// Fix the StatusDot component in the bookings page
+const UPCOMING_SOON_WINDOW_DAYS = 7;
+const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
+  DRAFT: 'Draft',
+  PENDING: 'Pending',
+  CONFIRMED: 'Confirmed',
+  IN_PROGRESS: 'In Progress',
+  COMPLETED: 'Completed',
+  CANCELLED: 'Cancelled',
+  DISPUTED: 'Disputed',
+};
 
 const StatusDot = ({ status }: { status: BookingStatus }) => {
   const colors: Record<BookingStatus, string> = {
-    DRAFT: 'bg-gray-400',
-    PENDING: 'bg-yellow-500',
-    CONFIRMED: 'bg-green-500',
-    IN_PROGRESS: 'bg-blue-500',
-    COMPLETED: 'bg-gray-500',
-    CANCELLED: 'bg-red-500',
-    DISPUTED: 'bg-orange-500',
+    DRAFT: 'border-slate-300 bg-slate-100 text-slate-700',
+    PENDING: 'border-amber-300 bg-amber-100 text-amber-800',
+    CONFIRMED: 'border-emerald-300 bg-emerald-100 text-emerald-800',
+    IN_PROGRESS: 'border-sky-300 bg-sky-100 text-sky-800',
+    COMPLETED: 'border-teal-300 bg-teal-100 text-teal-800',
+    CANCELLED: 'border-rose-300 bg-rose-100 text-rose-800',
+    DISPUTED: 'border-orange-300 bg-orange-100 text-orange-800',
   };
 
-  const labels: Record<BookingStatus, string> = {
-    DRAFT: 'Draft',
-    PENDING: 'Pending',
-    CONFIRMED: 'Confirmed',
-    IN_PROGRESS: 'In Progress',
-    COMPLETED: 'Completed',
-    CANCELLED: 'Cancelled',
-    DISPUTED: 'Disputed',
+  const icons: Record<BookingStatus, ComponentType<{ className?: string }>> = {
+    DRAFT: CircleDashed,
+    PENDING: Clock3,
+    CONFIRMED: CheckCircle2,
+    IN_PROGRESS: LoaderCircle,
+    COMPLETED: CheckCircle2,
+    CANCELLED: XCircle,
+    DISPUTED: AlertTriangle,
   };
+  const Icon = icons[status];
+  const isInProgress = status === 'IN_PROGRESS';
 
   return (
-    <div className="flex items-center gap-2">
-      <div className={`w-2 h-2 rounded-full ${colors[status]}`} />
-      <span className="text-sm text-gray-700">{labels[status]}</span>
-    </div>
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${colors[status]}`}>
+      <Icon className={`h-3.5 w-3.5 ${isInProgress ? 'animate-spin' : ''}`} />
+      {BOOKING_STATUS_LABELS[status]}
+    </span>
   );
 };
 
@@ -81,6 +102,19 @@ const formatProperty = (property: Booking['property'] | null | undefined) => {
   if (!property) return 'N/A';
   const parts = [property.address, property.city, property.state];
   return parts.filter(Boolean).join(', ');
+};
+
+const isUpcomingSoon = (booking: Booking): boolean => {
+  if (!booking.scheduledDate) return false;
+  if (booking.status === 'CANCELLED' || booking.status === 'COMPLETED') return false;
+
+  const scheduledAt = new Date(booking.scheduledDate);
+  if (Number.isNaN(scheduledAt.getTime())) return false;
+
+  const now = new Date();
+  const soonCutoff = new Date(now);
+  soonCutoff.setDate(now.getDate() + UPCOMING_SOON_WINDOW_DAYS);
+  return scheduledAt >= now && scheduledAt <= soonCutoff;
 };
 
 export default function HomeownerBookingsPage() {
@@ -233,7 +267,7 @@ export default function HomeownerBookingsPage() {
         href={`/dashboard/bookings/${booking.id}`}
         aria-label={`View booking ${booking.bookingNumber}`}
         title="View Details"
-        className="inline-flex h-9 w-9 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
+        className="inline-flex h-11 w-11 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600 md:h-9 md:w-9"
       >
         <Eye className="h-4 w-4" />
       </Link>
@@ -244,7 +278,7 @@ export default function HomeownerBookingsPage() {
           onClick={() => handleEditClick(booking)}
           aria-label={`Edit booking ${booking.bookingNumber}`}
           title="Edit Booking"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600 md:h-9 md:w-9"
         >
           <Edit className="h-4 w-4" />
         </button>
@@ -256,7 +290,7 @@ export default function HomeownerBookingsPage() {
           onClick={() => handleCancelClick(booking)}
           aria-label={`Cancel booking ${booking.bookingNumber}`}
           title="Cancel Booking"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-600"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-600 md:h-9 md:w-9"
         >
           <XCircle className="h-4 w-4" />
         </button>
@@ -289,31 +323,33 @@ export default function HomeownerBookingsPage() {
         )}
 
         {/* Filter Buttons */}
-        <div className="-mx-1 overflow-x-auto px-1 pb-1">
-          <div className="inline-flex gap-2">
-            <button
-              onClick={() => setFilter('all')}
-              className={`min-h-[44px] whitespace-nowrap rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
-                filter === 'all'
-                  ? 'border-brand-primary bg-brand-primary text-white'
-                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              All
-            </button>
-            {(['DRAFT', 'PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as BookingStatus[]).map((status) => (
+        <div className="sticky top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 -mx-2 rounded-xl bg-gray-50/95 px-2 py-2 backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 md:static md:z-auto md:mx-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none">
+          <div className="-mx-1 overflow-x-auto px-1 pb-1">
+            <div className="inline-flex gap-2">
               <button
-                key={status}
-                onClick={() => setFilter(status)}
+                onClick={() => setFilter('all')}
                 className={`min-h-[44px] whitespace-nowrap rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
-                  filter === status
+                  filter === 'all'
                     ? 'border-brand-primary bg-brand-primary text-white'
                     : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
                 }`}
               >
-                {status.replace('_', ' ')}
+                All
               </button>
-            ))}
+              {(['DRAFT', 'PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as BookingStatus[]).map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setFilter(status)}
+                  className={`min-h-[44px] whitespace-nowrap rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                    filter === status
+                      ? 'border-brand-primary bg-brand-primary text-white'
+                      : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  {status.replace('_', ' ')}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -342,8 +378,15 @@ export default function HomeownerBookingsPage() {
           <>
             {/* Mobile cards */}
             <div className="grid gap-4 md:hidden">
-              {filteredBookings.map((booking) => (
-                <div key={booking.id} className="rounded-xl border bg-white p-3 sm:p-4 shadow-sm">
+              {filteredBookings.map((booking) => {
+                const isSoon = isUpcomingSoon(booking);
+                return (
+                <div
+                  key={booking.id}
+                  className={`rounded-xl border bg-white p-3 shadow-sm transition-colors sm:p-4 ${
+                    isSoon ? 'border-amber-200 shadow-[0_12px_24px_-18px_rgba(180,83,9,0.5)]' : ''
+                  }`}
+                >
                   <div className="flex items-start gap-3">
                     <div className="min-w-0">
                       <div className="truncate text-sm sm:text-base font-semibold text-gray-900">
@@ -359,7 +402,15 @@ export default function HomeownerBookingsPage() {
                   <div className="mt-3 grid gap-2.5 text-sm text-muted-foreground">
                     <div className="flex flex-wrap justify-between gap-2">
                       <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Date</span>
-                      <span className="font-medium text-foreground">{formatDate(booking.scheduledDate)}</span>
+                      <span className="inline-flex items-center gap-1.5 text-foreground">
+                        <CalendarClock className="h-3.5 w-3.5 text-gray-500" />
+                        <span className="font-medium">{formatDate(booking.scheduledDate)}</span>
+                        {isSoon && (
+                          <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                            Soon
+                          </span>
+                        )}
+                      </span>
                     </div>
                     <div className="flex flex-wrap justify-between gap-2">
                       <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Time</span>
@@ -382,7 +433,8 @@ export default function HomeownerBookingsPage() {
                   </div>
                   <div className="mt-3">{renderActions(booking)}</div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Desktop table */}
@@ -396,7 +448,9 @@ export default function HomeownerBookingsPage() {
               </div>
 
               <div className="divide-y divide-gray-100">
-                {filteredBookings.map((booking) => (
+                {filteredBookings.map((booking) => {
+                  const isSoon = isUpcomingSoon(booking);
+                  return (
                   <div
                     key={booking.id}
                     className="grid grid-cols-12 items-center gap-4 px-6 py-4 transition-colors hover:bg-gray-50"
@@ -412,7 +466,17 @@ export default function HomeownerBookingsPage() {
                     </div>
 
                     <div className="md:col-span-2">
-                      <div className="text-sm text-gray-900">{formatDate(booking.scheduledDate)}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="inline-flex items-center gap-1 text-sm text-gray-900">
+                          <CalendarClock className="h-3.5 w-3.5 text-gray-500" />
+                          {formatDate(booking.scheduledDate)}
+                        </div>
+                        {isSoon && (
+                          <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                            Soon
+                          </span>
+                        )}
+                      </div>
                       <div className="mt-1 text-xs text-gray-500">{formatTime(booking.scheduledDate)}</div>
                       <div className="mt-1 text-xs font-medium text-gray-900">
                         ${Number(booking.estimatedPrice || 0).toFixed(2)}
@@ -436,7 +500,8 @@ export default function HomeownerBookingsPage() {
                       {renderActions(booking)}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </>
