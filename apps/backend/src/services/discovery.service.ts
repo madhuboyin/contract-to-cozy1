@@ -330,7 +330,15 @@ async function getEquityNudge(
     },
   });
 
-  if (!property || property.isEquityVerified) return null;
+  if (!property) return null;
+
+  const isMissingPurchasePrice = property.purchasePriceCents === null;
+  const isMissingPurchaseDate = property.purchaseDate === null;
+  const isMissingEquityCore = isMissingPurchasePrice || isMissingPurchaseDate;
+
+  if (property.isEquityVerified && !isMissingEquityCore) {
+    return null;
+  }
 
   const id = equityNudgeId(propertyId);
   if (isExcluded(id, excludedIds)) {
@@ -338,12 +346,34 @@ async function getEquityNudge(
     return null;
   }
 
+  let title = 'Track your home equity';
+  if (isMissingPurchasePrice && isMissingPurchaseDate) {
+    title = 'Add purchase baseline';
+  } else if (isMissingPurchasePrice) {
+    title = 'Add purchase price';
+  } else if (isMissingPurchaseDate) {
+    title = 'Add purchase date';
+  }
+
+  let description =
+    'Enter purchase details to unlock equity tracking and maintenance premium intelligence.';
+  if (isMissingPurchasePrice && isMissingPurchaseDate) {
+    description =
+      'Add purchase price and purchase date to unlock accurate equity and appreciation insights.';
+  } else if (isMissingPurchasePrice) {
+    description =
+      'Add your purchase price to unlock accurate equity and appreciation insights.';
+  } else if (isMissingPurchaseDate) {
+    description =
+      'Add your purchase date to unlock accurate appreciation and equity timeline insights.';
+  }
+
   return {
     id,
     type: 'EQUITY',
-    title: 'Track your home equity',
+    title,
     description: withStreakEncouragement(
-      'Enter purchase details to unlock equity tracking and maintenance premium intelligence.',
+      description,
       streak.currentStreak
     ),
     currentStreak: streak.currentStreak,

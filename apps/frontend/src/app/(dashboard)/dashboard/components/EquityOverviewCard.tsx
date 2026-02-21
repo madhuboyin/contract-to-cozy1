@@ -2,11 +2,11 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LineChart, Sparkles } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/use-toast';
 
 interface EquityOverviewCardProps {
   propertyId: string | undefined;
@@ -14,6 +14,9 @@ interface EquityOverviewCardProps {
 }
 
 const HOME_EQUITY_QUERY_KEY = 'home-equity-summary';
+const HOME_NUDGE_QUERY_KEY = 'home-health-nudge';
+const PROPERTY_QUERY_KEY = 'property';
+const PROPERTIES_QUERY_KEY = 'properties';
 const RESALE_ADVANTAGE_BASELINE = 80;
 
 function formatCents(cents: number | null | undefined) {
@@ -23,6 +26,11 @@ function formatCents(cents: number | null | undefined) {
     currency: 'USD',
     maximumFractionDigits: 0,
   }).format(safe / 100);
+}
+
+function formatCentsOrPlaceholder(cents: number | null | undefined, placeholder = 'Not set') {
+  if (typeof cents !== 'number' || !Number.isFinite(cents)) return placeholder;
+  return formatCents(cents);
 }
 
 function clampPercent(value: number) {
@@ -35,6 +43,11 @@ function hasMaintenanceAlphaAdvantage(healthScore: number | null | undefined) {
 }
 
 export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCardProps) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [purchasePriceDollars, setPurchasePriceDollars] = React.useState('');
+  const [purchaseDate, setPurchaseDate] = React.useState('');
+
   const { data } = useQuery({
     queryKey: [HOME_EQUITY_QUERY_KEY, propertyId],
     enabled: !!propertyId,
@@ -45,16 +58,82 @@ export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCa
     },
   });
 
+  React.useEffect(() => {
+    if (!data) return;
+    setPurchasePriceDollars(
+      typeof data.purchasePriceCents === 'number' ? String(data.purchasePriceCents / 100) : ''
+    );
+    setPurchaseDate(data.purchaseDate ? data.purchaseDate.slice(0, 10) : '');
+  }, [data]);
+
+  const saveEquityBaselineMutation = useMutation({
+    mutationFn: async () => {
+      if (!propertyId) {
+        throw new Error('Property is required.');
+      }
+
+      const normalizedPrice = Number(purchasePriceDollars);
+      if (!Number.isFinite(normalizedPrice) || normalizedPrice <= 0) {
+        throw new Error('Enter a valid purchase price.');
+      }
+      if (!purchaseDate) {
+        throw new Error('Select the purchase date.');
+      }
+
+      const purchasePriceCents = Math.round(normalizedPrice * 100);
+      return api.patch(`/api/properties/${propertyId}`, {
+        purchasePriceCents,
+        purchaseDate,
+        isEquityVerified: true,
+      });
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: [HOME_EQUITY_QUERY_KEY, propertyId] }),
+        queryClient.invalidateQueries({ queryKey: [PROPERTY_QUERY_KEY, propertyId] }),
+        queryClient.invalidateQueries({ queryKey: [PROPERTIES_QUERY_KEY] }),
+        queryClient.invalidateQueries({ queryKey: [HOME_NUDGE_QUERY_KEY, propertyId] }),
+      ]);
+
+      toast({
+        title: 'Equity baseline saved',
+        description: 'Home equity intelligence has been refreshed.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Unable to save equity baseline',
+        description: error?.message || 'Please check purchase price and date.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   if (!propertyId || !data) return null;
 
+  const isMissingPurchasePrice = data.purchasePriceCents === null;
+  const isMissingPurchaseDate = data.purchaseDate === null;
   const needsEquitySetup =
-    !data.isEquityVerified || data.purchasePriceCents === null || data.purchaseDate === null;
+    !data.isEquityVerified || isMissingPurchasePrice || isMissingPurchaseDate;
   const appraisedCents = data.lastAppraisedValueCents;
   const purchaseCents = data.purchasePriceCents ?? 0;
   const positiveEquityCents = Math.max(0, appraisedCents - purchaseCents);
   const equityPercent =
     appraisedCents > 0 ? clampPercent((positiveEquityCents / appraisedCents) * 100) : 0;
   const showMaintenanceAlpha = hasMaintenanceAlphaAdvantage(healthScore);
+  const normalizedPrice = Number(purchasePriceDollars);
+  const canSaveBaseline =
+    Number.isFinite(normalizedPrice) &&
+    normalizedPrice > 0 &&
+    purchaseDate.trim().length > 0 &&
+    !saveEquityBaselineMutation.isPending;
+
+  const setupPrompt =
+    isMissingPurchasePrice && isMissingPurchaseDate
+      ? 'Add purchase price and purchase date to unlock accurate equity insights.'
+      : isMissingPurchasePrice
+        ? 'Add purchase price to unlock accurate appreciation and equity insights.'
+        : 'Add purchase date to unlock accurate appreciation timeline insights.';
 
   return (
     <div className="w-full rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-5 py-4 shadow-sm">
@@ -65,15 +144,45 @@ export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCa
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold text-gray-900">Home Equity Overview</h3>
           <p className="mt-1 text-sm text-gray-700">
-            Appreciation since purchase: {formatCents(data.appreciationCents)}
+            {isMissingPurchasePrice
+              ? 'Add purchase price to calculate appreciation.'
+              : `Appreciation since purchase: ${formatCents(data.appreciationCents)}`}
           </p>
           {needsEquitySetup && (
-            <div className="mt-2">
-              <Button asChild size="sm" className="min-h-[44px]">
-                <Link href={`/dashboard/properties/${propertyId}/edit`}>
-                  Complete Equity Setup
-                </Link>
-              </Button>
+            <div className="mt-3 rounded-lg border border-emerald-200 bg-white/80 p-3">
+              <p className="text-xs text-emerald-900">{setupPrompt}</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                <input
+                  inputMode="decimal"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Purchase price (USD)"
+                  value={purchasePriceDollars}
+                  onChange={(event) => setPurchasePriceDollars(event.target.value)}
+                  disabled={saveEquityBaselineMutation.isPending}
+                  className="min-h-[44px] rounded-md border border-emerald-300 bg-white px-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 disabled:opacity-60"
+                />
+                <input
+                  type="date"
+                  value={purchaseDate}
+                  onChange={(event) => setPurchaseDate(event.target.value)}
+                  disabled={saveEquityBaselineMutation.isPending}
+                  className="min-h-[44px] rounded-md border border-emerald-300 bg-white px-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400 disabled:opacity-60"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  className="min-h-[44px]"
+                  disabled={!canSaveBaseline}
+                  onClick={() => saveEquityBaselineMutation.mutate()}
+                >
+                  {saveEquityBaselineMutation.isPending ? 'Saving...' : 'Save Baseline'}
+                </Button>
+              </div>
+              <p className="mt-1 text-xs text-gray-600">
+                This updates your equity model without opening full property edit.
+              </p>
             </div>
           )}
 
@@ -91,7 +200,7 @@ export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCa
           </div>
 
           <div className="mt-3 grid gap-1 text-xs text-gray-700 sm:grid-cols-3">
-            <p>Purchase: {formatCents(data.purchasePriceCents)}</p>
+            <p>Purchase: {formatCentsOrPlaceholder(data.purchasePriceCents)}</p>
             <p>Appraised: {formatCents(data.lastAppraisedValueCents)}</p>
             <p>Maintenance Premium: {formatCents(data.maintenancePremiumCents)}</p>
           </div>
