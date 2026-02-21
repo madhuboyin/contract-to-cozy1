@@ -288,6 +288,7 @@ app.get('/', (req: Request, res: Response) => {
 // API ROUTES
 // =============================================================================
 
+app.use('/api/vault', vaultRoutes); // public — no auth, must be FIRST before any /api catch-alls
 app.use('/api/auth', authRoutes);
 app.use('/api/providers', providerRoutes);
 app.use('/api/bookings', bookingRoutes);
@@ -359,7 +360,6 @@ app.use('/api', homeStatusBoardRoutes);
 app.use('/api', inventoryVerificationRoutes);
 app.use('/api', maintenancePredictionRoutes);
 app.use('/api/weather', weatherRoutes);
-app.use('/api/vault', vaultRoutes); // public — no auth middleware
 
 //app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // 404 handler
