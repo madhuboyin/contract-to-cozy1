@@ -395,7 +395,39 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
     deriveStreakFromPatchedProperty,
   ]);
 
-  if (isLoading || !propertyId || !nudge) return null;
+  if (isLoading || !propertyId) return null;
+
+  if (!nudge) {
+    return (
+      <div className="w-full rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="rounded-lg bg-blue-100 p-2 shrink-0">
+            <Shield className="w-5 h-5 text-blue-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-gray-900">You&apos;re all caught up</h3>
+            <p className="mt-1 text-sm text-gray-700">
+              Keep improving your insights by verifying more assets or updating your equity details.
+            </p>
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
+              <Link
+                href={`/dashboard/properties/${propertyId}/inventory`}
+                className="inline-flex min-h-[44px] items-center rounded-lg border border-blue-300 px-3 py-1.5 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100"
+              >
+                Verify Assets
+              </Link>
+              <Link
+                href={`/dashboard/properties/${propertyId}/edit`}
+                className="inline-flex min-h-[44px] items-center rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                Update Property Details
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (nudge.type === 'RESILIENCE') {
     return (

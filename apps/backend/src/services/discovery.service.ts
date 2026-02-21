@@ -406,8 +406,8 @@ export async function getNextDiscoveryNudge(
   );
 
   const nudge =
-    (await getResilienceNudge(propertyId, excludedSet, streak)) ??  // weather-gated: immediate null when no rain
     (await getCriticalAssetNudge(propertyId, excludedSet, streak)) ??
+    (await getResilienceNudge(propertyId, excludedSet, streak)) ??
     (await getInsuranceNudge(propertyId, excludedSet, streak)) ??
     (await getEquityNudge(propertyId, excludedSet, streak)) ??
     (await getUtilityNudge(propertyId, excludedSet, streak));

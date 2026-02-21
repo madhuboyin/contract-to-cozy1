@@ -3,6 +3,7 @@
 import React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, CheckCircle2, Flame, Loader2, Search, Wrench } from 'lucide-react';
 import { api } from '@/lib/api/client';
@@ -23,6 +24,11 @@ const FORECAST_QUERY_KEY = 'maintenance-predictions';
 const PROPERTY_QUERY_KEY = 'property';
 const PROPERTIES_QUERY_KEY = 'properties';
 const MAINTENANCE_TASK_QUERY_KEY = 'maintenance-tasks';
+
+type ForecastQueryResult = {
+  predictions: MaintenancePrediction[];
+  generationError: string | null;
+};
 
 function priorityLabel(priority: number) {
   if (priority >= 5) return 'Critical';
@@ -159,20 +165,40 @@ export function MaintenanceForecast({ propertyId, mode = 'timeline' }: Maintenan
   const { toast } = useToast();
   const limit = mode === 'next-up' ? 3 : 24;
 
-  const { data: predictions, isLoading } = useQuery({
+  const {
+    data: forecastData,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery<ForecastQueryResult>({
     queryKey: [FORECAST_QUERY_KEY, propertyId, mode],
     enabled: Boolean(propertyId),
     staleTime: 60 * 1000,
     queryFn: async () => {
       const id = propertyId!;
-      await api.generateMaintenanceForecast(id).catch(() => null);
+      let generationError: string | null = null;
+      try {
+        await api.generateMaintenanceForecast(id);
+      } catch (err: any) {
+        generationError = err?.message || 'Forecast generation failed.';
+      }
       const response = await api.getMaintenanceForecast(id, {
         status: ['PENDING', 'OVERDUE'],
         limit,
       });
-      return response.success ? response.data : [];
+      if (!response.success) {
+        throw new Error(response.message || 'Unable to load maintenance forecast.');
+      }
+      return {
+        predictions: response.data ?? [],
+        generationError,
+      };
     },
   });
+
+  const predictions = forecastData?.predictions ?? [];
+  const generationError = forecastData?.generationError;
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({
@@ -272,7 +298,33 @@ export function MaintenanceForecast({ propertyId, mode = 'timeline' }: Maintenan
     );
   }
 
-  if (!predictions || predictions.length === 0) {
+  if (isError) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Could not load maintenance forecast.';
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Wrench className="h-5 w-5 text-blue-600" />
+            {mode === 'next-up' ? 'Next Up' : 'Maintenance Forecast'}
+          </CardTitle>
+          <CardDescription>{errorMessage}</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-2">
+          <Button type="button" onClick={() => void refetch()} className="min-h-[44px]">
+            Retry
+          </Button>
+          <Button asChild variant="outline" className="min-h-[44px]">
+            <Link href={`/dashboard/properties/${propertyId}/inventory`}>
+              Verify Assets
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (predictions.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -284,6 +336,16 @@ export function MaintenanceForecast({ propertyId, mode = 'timeline' }: Maintenan
             Verify HVAC, roof, and water-heater assets to unlock forecast tasks.
           </CardDescription>
         </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-2">
+          <Button asChild className="min-h-[44px]">
+            <Link href={`/dashboard/properties/${propertyId}/inventory`}>
+              Verify Key Assets
+            </Link>
+          </Button>
+          <Button type="button" variant="outline" onClick={() => void refetch()} className="min-h-[44px]">
+            Refresh Forecast
+          </Button>
+        </CardContent>
       </Card>
     );
   }
@@ -395,6 +457,11 @@ export function MaintenanceForecast({ propertyId, mode = 'timeline' }: Maintenan
       </div>
 
       <div className="overflow-x-auto pb-2">
+        {generationError && (
+          <p className="mb-2 text-xs text-amber-700">
+            Forecast refresh had a warning: {generationError}
+          </p>
+        )}
         <div className="flex gap-3">
           {predictions.map((prediction) => (
             <TimelineCard

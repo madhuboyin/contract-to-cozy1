@@ -2,9 +2,11 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { LineChart, Sparkles } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import { Button } from '@/components/ui/button';
 
 interface EquityOverviewCardProps {
   propertyId: string | undefined;
@@ -45,6 +47,8 @@ export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCa
 
   if (!propertyId || !data) return null;
 
+  const needsEquitySetup =
+    !data.isEquityVerified || data.purchasePriceCents === null || data.purchaseDate === null;
   const appraisedCents = data.lastAppraisedValueCents;
   const purchaseCents = data.purchasePriceCents ?? 0;
   const positiveEquityCents = Math.max(0, appraisedCents - purchaseCents);
@@ -63,6 +67,15 @@ export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCa
           <p className="mt-1 text-sm text-gray-700">
             Appreciation since purchase: {formatCents(data.appreciationCents)}
           </p>
+          {needsEquitySetup && (
+            <div className="mt-2">
+              <Button asChild size="sm" className="min-h-[44px]">
+                <Link href={`/dashboard/properties/${propertyId}/edit`}>
+                  Complete Equity Setup
+                </Link>
+              </Button>
+            </div>
+          )}
 
           <div className="mt-3">
             <div className="mb-1 flex justify-between text-xs text-gray-600">

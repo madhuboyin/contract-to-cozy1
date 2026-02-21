@@ -98,7 +98,12 @@ export type ForecastStatusUpdateResult = {
 };
 
 function isWaterHeaterItem(item: Pick<InventoryItem, 'category' | 'name'>): boolean {
-  if (item.category !== InventoryItemCategory.PLUMBING) return false;
+  if (
+    item.category !== InventoryItemCategory.PLUMBING &&
+    item.category !== InventoryItemCategory.APPLIANCE
+  ) {
+    return false;
+  }
   const lower = item.name.toLowerCase();
   return WATER_HEATER_HINTS.some((hint) => lower.includes(hint));
 }
