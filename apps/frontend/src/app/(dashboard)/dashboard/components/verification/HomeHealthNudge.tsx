@@ -4,9 +4,14 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Shield, Camera, Edit3, ArrowRight, AlertCircle, Home, Droplets } from 'lucide-react';
+import { Shield, Camera, Edit3, ArrowRight, AlertCircle, Home, Droplets, Flame } from 'lucide-react';
 import { api } from '@/lib/api/client';
-import { getHomeHealthNudge, verifyItem, getMissingFields } from './verificationApi';
+import {
+  getHomeHealthNudge,
+  verifyItem,
+  getMissingFields,
+  StreakUpdateDTO,
+} from './verificationApi';
 import LabelOcrModal from '../inventory/LabelOcrModal';
 import InventoryItemDrawer from '../inventory/InventoryItemDrawer';
 import { InsuranceGapNudge } from './InsuranceGapNudge';
@@ -19,6 +24,7 @@ import {
   listInventoryRooms,
 } from '../../inventory/inventoryApi';
 import { InventoryItem, InventoryRoom } from '@/types';
+import { useToast } from '@/components/ui/use-toast';
 
 interface HomeHealthNudgeProps {
   propertyId: string | undefined;
@@ -27,9 +33,15 @@ interface HomeHealthNudgeProps {
 const HOME_NUDGE_QUERY_KEY = 'home-health-nudge';
 const INSURANCE_PROTECTION_GAP_QUERY_KEY = 'insurance-protection-gap';
 const HOME_EQUITY_QUERY_KEY = 'home-equity-summary';
+const PROPERTY_QUERY_KEY = 'property';
+const PROPERTIES_QUERY_KEY = 'properties';
+const CONFETTI_SCRIPT_ID = 'ctc-canvas-confetti';
+const CONFETTI_CDN_SRC =
+  'https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js';
 
 export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const { getExclusionList, snoozeNudge, snoozeVersion } = useSnoozeManager();
   const [labelOpen, setLabelOpen] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
@@ -44,6 +56,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   const [equityPriceDollars, setEquityPriceDollars] = useState('');
   const [equityPurchaseDate, setEquityPurchaseDate] = useState('');
   const [equitySaving, setEquitySaving] = useState(false);
+  const [showSuccessFlash, setShowSuccessFlash] = useState(false);
   const insuranceFileRef = useRef<HTMLInputElement | null>(null);
 
   // Edit drawer state (asset verification path)
@@ -59,10 +72,106 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
     staleTime: 60 * 1000,
   });
 
-  const refreshNudge = useCallback(async () => {
+  const invalidateAfterNudgeAction = useCallback(async () => {
     if (!propertyId) return;
-    await queryClient.invalidateQueries({ queryKey: [HOME_NUDGE_QUERY_KEY, propertyId] });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: [HOME_NUDGE_QUERY_KEY, propertyId] }),
+      queryClient.invalidateQueries({ queryKey: [PROPERTY_QUERY_KEY, propertyId] }),
+      queryClient.invalidateQueries({ queryKey: [PROPERTIES_QUERY_KEY] }),
+    ]);
   }, [propertyId, queryClient]);
+
+  const triggerMilestoneCelebration = useCallback(async (multiplier: number) => {
+    async function getConfettiFn() {
+      if (typeof window === 'undefined') return null;
+      const existing = (window as any).confetti;
+      if (typeof existing === 'function') return existing;
+
+      await new Promise<void>((resolve, reject) => {
+        const existingScript = document.getElementById(CONFETTI_SCRIPT_ID) as HTMLScriptElement | null;
+        if (existingScript) {
+          existingScript.addEventListener('load', () => resolve(), { once: true });
+          existingScript.addEventListener(
+            'error',
+            () => reject(new Error('Failed to load confetti script')),
+            { once: true }
+          );
+          return;
+        }
+
+        const script = document.createElement('script');
+        script.id = CONFETTI_SCRIPT_ID;
+        script.src = CONFETTI_CDN_SRC;
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Failed to load confetti script'));
+        document.head.appendChild(script);
+      });
+
+      return typeof (window as any).confetti === 'function' ? (window as any).confetti : null;
+    }
+
+    try {
+      const confetti = await getConfettiFn();
+      if (!confetti) throw new Error('Confetti function unavailable');
+      confetti({
+        particleCount: 180,
+        spread: 100,
+        startVelocity: 45,
+        origin: { y: 0.6 },
+      });
+    } catch (err) {
+      console.error('Confetti effect unavailable:', err);
+    }
+
+    toast({
+      title: 'Streak Milestone!',
+      description: `Your Home Health Multiplier is now ${multiplier.toFixed(2)}x.`,
+    });
+  }, [toast]);
+
+  const triggerSuccessFeedback = useCallback(
+    async (streak: StreakUpdateDTO | null | undefined) => {
+      setShowSuccessFlash(true);
+      window.setTimeout(() => setShowSuccessFlash(false), 700);
+
+      if (!streak) return;
+      if (!streak.milestoneReached) return;
+      await triggerMilestoneCelebration(streak.bonusMultiplier);
+    },
+    [triggerMilestoneCelebration]
+  );
+
+  const deriveStreakFromPatchedProperty = useCallback(
+    (patchedProperty: any): StreakUpdateDTO | null => {
+      const nextStreak = Number(patchedProperty?.currentStreak);
+      const nextLongest = Number(patchedProperty?.longestStreak);
+      const nextBonus = Number(patchedProperty?.bonusMultiplier);
+      const previousStreak = Number(nudge?.currentStreak ?? 0);
+
+      if (!Number.isFinite(nextStreak) || !Number.isFinite(nextLongest) || !Number.isFinite(nextBonus)) {
+        return null;
+      }
+
+      return {
+        currentStreak: nextStreak,
+        longestStreak: nextLongest,
+        bonusMultiplier: nextBonus,
+        lastActivityDate: typeof patchedProperty?.lastActivityDate === 'string'
+          ? patchedProperty.lastActivityDate
+          : null,
+        milestoneReached: nextStreak > previousStreak && nextStreak % 3 === 0,
+      };
+    },
+    [nudge?.currentStreak]
+  );
+
+  const streakBadge = (
+    <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
+      <Flame className="h-3.5 w-3.5" />
+      {nudge ? `🔥 ${nudge.currentStreak} Task Streak` : '🔥 0 Task Streak'}
+    </div>
+  );
 
   useEffect(() => {
     if (nudge?.type !== 'INSURANCE') {
@@ -89,8 +198,8 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   const handleSnooze = useCallback(async () => {
     if (!propertyId || !nudge?.id) return;
     snoozeNudge(nudge.id);
-    await queryClient.invalidateQueries({ queryKey: [HOME_NUDGE_QUERY_KEY, propertyId] });
-  }, [propertyId, nudge?.id, queryClient, snoozeNudge]);
+    await invalidateAfterNudgeAction();
+  }, [propertyId, nudge?.id, invalidateAfterNudgeAction, snoozeNudge]);
 
   const handleOcrCapture = useCallback(
     async (file: File) => {
@@ -101,9 +210,10 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
         if (draft?.draftId) {
           await confirmInventoryDraft(propertyId, draft.draftId);
         }
-        await verifyItem(propertyId, nudge.item.id, { source: 'OCR_LABEL' });
+        const verifyResponse = await verifyItem(propertyId, nudge.item.id, { source: 'OCR_LABEL' });
+        await triggerSuccessFeedback(verifyResponse.data?.streak);
         await Promise.all([
-          refreshNudge(),
+          invalidateAfterNudgeAction(),
           queryClient.invalidateQueries({
             queryKey: [HOME_EQUITY_QUERY_KEY, propertyId],
           }),
@@ -115,7 +225,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
         setLabelOpen(false);
       }
     },
-    [propertyId, nudge, refreshNudge, queryClient]
+    [propertyId, nudge, queryClient, invalidateAfterNudgeAction, triggerSuccessFeedback]
   );
 
   const handleAddDetails = useCallback(async () => {
@@ -139,7 +249,8 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   const handleDrawerSaved = useCallback(async () => {
     if (propertyId && drawerItem?.id) {
       try {
-        await verifyItem(propertyId, drawerItem.id, { source: 'MANUAL' });
+        const verifyResponse = await verifyItem(propertyId, drawerItem.id, { source: 'MANUAL' });
+        await triggerSuccessFeedback(verifyResponse.data?.streak);
       } catch (err) {
         console.error('Failed to mark item verified:', err);
       }
@@ -147,30 +258,31 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
     setDrawerOpen(false);
     setDrawerItem(null);
     await Promise.all([
-      refreshNudge(),
+      invalidateAfterNudgeAction(),
       queryClient.invalidateQueries({
         queryKey: [HOME_EQUITY_QUERY_KEY, propertyId],
       }),
     ]);
-  }, [propertyId, drawerItem, refreshNudge, queryClient]);
+  }, [propertyId, drawerItem, invalidateAfterNudgeAction, queryClient, triggerSuccessFeedback]);
 
   const handleResilienceChoice = useCallback(
     async (value: boolean | null, choiceKey: string) => {
       if (!propertyId) return;
       setResilienceChoiceSaving(choiceKey);
       try {
-        await api.patch(`/api/properties/${propertyId}`, {
+        const response = await api.patch(`/api/properties/${propertyId}`, {
           hasSumpPumpBackup: value,
           isResilienceVerified: true,
         });
-        await refreshNudge();
+        await triggerSuccessFeedback(deriveStreakFromPatchedProperty(response.data));
+        await invalidateAfterNudgeAction();
       } catch (err) {
         console.error('Failed to save resilience answer:', err);
       } finally {
         setResilienceChoiceSaving(null);
       }
     },
-    [propertyId, refreshNudge]
+    [propertyId, triggerSuccessFeedback, deriveStreakFromPatchedProperty, invalidateAfterNudgeAction]
   );
 
   const handleUtilitySelect = useCallback(
@@ -182,15 +294,16 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
           value === '__NOT_SURE__'
             ? { primaryHeatingFuel: null, isUtilityVerified: true }
             : { primaryHeatingFuel: value, isUtilityVerified: true };
-        await api.patch(`/api/properties/${propertyId}`, payload);
-        await refreshNudge();
+        const response = await api.patch(`/api/properties/${propertyId}`, payload);
+        await triggerSuccessFeedback(deriveStreakFromPatchedProperty(response.data));
+        await invalidateAfterNudgeAction();
       } catch (err) {
         console.error('Failed to save utility setup:', err);
       } finally {
         setUtilitySaving(false);
       }
     },
-    [propertyId, refreshNudge]
+    [propertyId, triggerSuccessFeedback, deriveStreakFromPatchedProperty, invalidateAfterNudgeAction]
   );
 
   const handleInsuranceFileSelected = useCallback(
@@ -223,13 +336,14 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
 
     setInsuranceConfirming(true);
     try {
-      await api.confirmInsuranceDeclaration(propertyId, nudge.policyId, {
+      const response = await api.confirmInsuranceDeclaration(propertyId, nudge.policyId, {
         personalPropertyLimitCents: insuranceExtracted.personalPropertyLimitCents,
         deductibleCents: insuranceExtracted.deductibleCents,
       });
+      await triggerSuccessFeedback(response.data?.streak || null);
       setInsuranceExtracted(null);
       await Promise.all([
-        refreshNudge(),
+        invalidateAfterNudgeAction(),
         queryClient.invalidateQueries({
           queryKey: [INSURANCE_PROTECTION_GAP_QUERY_KEY, propertyId],
         }),
@@ -239,7 +353,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
     } finally {
       setInsuranceConfirming(false);
     }
-  }, [propertyId, nudge, insuranceExtracted, refreshNudge, queryClient]);
+  }, [propertyId, nudge, insuranceExtracted, invalidateAfterNudgeAction, queryClient, triggerSuccessFeedback]);
 
   const handleEquitySubmit = useCallback(async () => {
     if (!propertyId || nudge?.type !== 'EQUITY') return;
@@ -252,13 +366,14 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
     setEquitySaving(true);
     try {
       const purchasePriceCents = Math.round(normalizedPrice * 100);
-      await api.patch(`/api/properties/${propertyId}`, {
+      const response = await api.patch(`/api/properties/${propertyId}`, {
         purchasePriceCents,
         purchaseDate: equityPurchaseDate,
         isEquityVerified: true,
       });
+      await triggerSuccessFeedback(deriveStreakFromPatchedProperty(response.data));
       await Promise.all([
-        refreshNudge(),
+        invalidateAfterNudgeAction(),
         queryClient.invalidateQueries({
           queryKey: [HOME_EQUITY_QUERY_KEY, propertyId],
         }),
@@ -273,8 +388,10 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
     nudge,
     equityPriceDollars,
     equityPurchaseDate,
-    refreshNudge,
+    invalidateAfterNudgeAction,
     queryClient,
+    triggerSuccessFeedback,
+    deriveStreakFromPatchedProperty,
   ]);
 
   if (isLoading || !propertyId || !nudge) return null;
@@ -282,13 +399,14 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   if (nudge.type === 'RESILIENCE') {
     return (
       <div
-        className="
+        className={`
           w-full rounded-xl shadow-sm
           bg-gradient-to-r from-cyan-50 to-blue-50
           border-2 border-cyan-200 border-l-4 border-l-cyan-600
           px-5 py-4
           hover:shadow-md transition-shadow
-        "
+          ${showSuccessFlash ? 'ring-2 ring-emerald-300 animate-pulse' : ''}
+        `}
       >
         <div className="flex items-start gap-3">
           <div className="p-2 bg-cyan-100 rounded-lg shrink-0">
@@ -296,6 +414,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-gray-900">{nudge.title}</h3>
+            {streakBadge}
             <p className="text-sm text-gray-700 mt-1">{nudge.description}</p>
             <div className="flex items-center gap-2 mt-3 flex-wrap">
               <button
@@ -336,13 +455,14 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   if (nudge.type === 'UTILITY') {
     return (
       <div
-        className="
+        className={`
           w-full rounded-xl shadow-sm
           bg-gradient-to-r from-amber-50 to-orange-50
           border-2 border-amber-200 border-l-4 border-l-amber-600
           px-5 py-4
           hover:shadow-md transition-shadow
-        "
+          ${showSuccessFlash ? 'ring-2 ring-emerald-300 animate-pulse' : ''}
+        `}
       >
         <div className="flex items-start gap-3">
           <div className="p-2 bg-amber-100 rounded-lg shrink-0">
@@ -350,6 +470,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-gray-900">{nudge.title}</h3>
+            {streakBadge}
             <p className="text-sm text-gray-700 mt-1">{nudge.description}</p>
             <div className="mt-3">
               <select
@@ -401,6 +522,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
           onUploadClick={() => insuranceFileRef.current?.click()}
           onConfirm={() => void handleInsuranceConfirm()}
           onSnooze={() => void handleSnooze()}
+          showSuccessFlash={showSuccessFlash}
         />
       </>
     );
@@ -414,6 +536,8 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
         purchasePriceDollars={equityPriceDollars}
         purchaseDate={equityPurchaseDate}
         isSaving={equitySaving}
+        currentStreak={nudge.currentStreak}
+        showSuccessFlash={showSuccessFlash}
         onPurchasePriceChange={setEquityPriceDollars}
         onPurchaseDateChange={setEquityPurchaseDate}
         onSubmit={() => void handleEquitySubmit()}
@@ -426,18 +550,18 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   const verified = totalItems - totalUnverified;
   const percentVerified = totalItems > 0 ? Math.round((verified / totalItems) * 100) : 0;
   const missingFields = getMissingFields(item);
-  const locationHint = item.room?.name ? ` in ${item.room.name}` : '';
 
   return (
     <>
       <div
-        className="
+        className={`
           w-full rounded-xl shadow-sm
           bg-gradient-to-r from-blue-50 to-indigo-50
           border-2 border-blue-200 border-l-4 border-l-blue-500
           px-5 py-4
           hover:shadow-md transition-shadow
-        "
+          ${showSuccessFlash ? 'ring-2 ring-emerald-300 animate-pulse' : ''}
+        `}
       >
         <div className="flex items-start gap-3">
           <div className="p-2 bg-blue-100 rounded-lg shrink-0">
@@ -448,9 +572,10 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
             <h3 className="font-semibold text-gray-900">
               Complete details for {item.name}
             </h3>
+            {streakBadge}
 
             <p className="text-sm text-gray-600 mt-0.5">
-              Your {item.name}{locationHint} is missing key details needed for lifespan predictions and maintenance alerts.
+              {nudge.description}
             </p>
 
             {missingFields.length > 0 && (

@@ -660,6 +660,7 @@ export interface HomeEquitySummary {
   baseEquityCents: number;
   maintenanceSpendCents: number;
   maintenancePremiumRate: number;
+  bonusMultiplier: number;
   maintenancePremiumCents: number;
   totalEquityWithMaintenanceCents: number;
   healthScore: number | null;
@@ -898,6 +899,10 @@ export interface Property {
   hasSecondaryHeat: boolean | null;
   isResilienceVerified: boolean;
   isUtilityVerified: boolean;
+  currentStreak: number;
+  longestStreak: number;
+  lastActivityDate: string | null;
+  bonusMultiplier: number;
   purchasePriceCents: number | null;
   purchaseDate: string | null;
   lastAppraisedValue: number | null;

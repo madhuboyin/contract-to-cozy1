@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { applianceOracleService } from './applianceOracle.service';
 import { refreshEstimatedMaintenancePremium } from './valueIntelligence.service';
+import { incrementStreak, StreakUpdateResult } from './gamification.service';
 
 const APPLIANCE_LIFESPAN_DATA: Record<string, { avgLife: number; category: string }> = {
   'HVAC': { avgLife: 15, category: 'HVAC' },
@@ -147,7 +148,7 @@ export async function markItemVerified(
   propertyId: string,
   source: VerificationSource,
   technicalSpecs?: Record<string, any>
-) {
+): Promise<{ item: any; streak: StreakUpdateResult }> {
   const item = await prisma.inventoryItem.findFirst({
     where: { id: itemId, propertyId },
   });
@@ -171,13 +172,15 @@ export async function markItemVerified(
     console.error('[VERIFICATION] Lifespan recalculation failed (non-blocking):', err);
   });
 
+  const streak = await incrementStreak(propertyId);
+
   if (HIGH_VALUE_CATEGORIES.includes(updated.category as string)) {
     refreshEstimatedMaintenancePremium(propertyId).catch((err) => {
       console.error('[VERIFICATION] Maintenance premium refresh failed (non-blocking):', err);
     });
   }
 
-  return updated;
+  return { item: updated, streak };
 }
 
 export async function getVerificationStats(propertyId: string) {

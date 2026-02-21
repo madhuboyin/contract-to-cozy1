@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { Camera, FileScan } from 'lucide-react';
+import { Camera, FileScan, Flame } from 'lucide-react';
 import { InsuranceNudgeDTO } from './verificationApi';
 
 interface InsuranceGapNudgeProps {
@@ -16,6 +16,7 @@ interface InsuranceGapNudgeProps {
   onUploadClick: () => void;
   onConfirm: () => void;
   onSnooze: () => void;
+  showSuccessFlash?: boolean;
 }
 
 function formatCents(cents: number | null | undefined) {
@@ -35,16 +36,18 @@ export function InsuranceGapNudge({
   onUploadClick,
   onConfirm,
   onSnooze,
+  showSuccessFlash = false,
 }: InsuranceGapNudgeProps) {
   return (
     <div
-      className="
+      className={`
         w-full rounded-xl shadow-sm
         bg-gradient-to-r from-rose-50 to-orange-50
         border-2 border-rose-200 border-l-4 border-l-rose-600
         px-5 py-4
         hover:shadow-md transition-shadow
-      "
+        ${showSuccessFlash ? 'ring-2 ring-emerald-300 animate-pulse' : ''}
+      `}
     >
       <div className="flex items-start gap-3">
         <div className="p-2 bg-rose-100 rounded-lg shrink-0">
@@ -52,8 +55,12 @@ export function InsuranceGapNudge({
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-gray-900">{nudge.title}</h3>
+          <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
+            <Flame className="h-3.5 w-3.5" />
+            🔥 {nudge.currentStreak} Task Streak
+          </div>
           <p className="text-sm text-gray-700 mt-1">
-            Are you fully covered? Snap a photo of your Insurance Declarations page to see if your coverage matches your verified inventory value.
+            {nudge.description}
           </p>
 
           <div className="mt-2 text-xs text-rose-800">

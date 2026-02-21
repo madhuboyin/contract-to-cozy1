@@ -15,6 +15,7 @@ export type HomeEquityResult = {
   baseEquityCents: number;
   maintenanceSpendCents: number;
   maintenancePremiumRate: number;
+  bonusMultiplier: number;
   maintenancePremiumCents: number;
   totalEquityWithMaintenanceCents: number;
   healthScore: number | null;
@@ -70,9 +71,23 @@ function maintenanceSpendToPremiumCents(maintenanceSpendCents: number) {
   return Math.round(maintenanceSpendCents * MAINTENANCE_PREMIUM_RATE);
 }
 
+function applyBonusMultiplier(basePremiumCents: number, bonusMultiplier: number) {
+  return Math.round(basePremiumCents * bonusMultiplier);
+}
+
 export async function refreshEstimatedMaintenancePremium(propertyId: string): Promise<number> {
-  const maintenanceSpendCents = await getMaintenanceSpendCents(propertyId);
-  const maintenancePremiumCents = maintenanceSpendToPremiumCents(maintenanceSpendCents);
+  const [maintenanceSpendCents, property] = await Promise.all([
+    getMaintenanceSpendCents(propertyId),
+    prisma.property.findUnique({
+      where: { id: propertyId },
+      select: { bonusMultiplier: true },
+    }),
+  ]);
+  const basePremiumCents = maintenanceSpendToPremiumCents(maintenanceSpendCents);
+  const maintenancePremiumCents = applyBonusMultiplier(
+    basePremiumCents,
+    property?.bonusMultiplier ?? 1.0
+  );
 
   await prisma.property.update({
     where: { id: propertyId },
@@ -92,6 +107,7 @@ export async function calculateHomeEquity(propertyId: string): Promise<HomeEquit
       purchaseDate: true,
       lastAppraisedValue: true,
       isEquityVerified: true,
+      bonusMultiplier: true,
     },
   });
 
@@ -111,7 +127,11 @@ export async function calculateHomeEquity(propertyId: string): Promise<HomeEquit
     }),
   ]);
 
-  const maintenancePremiumCents = maintenanceSpendToPremiumCents(maintenanceSpendCents);
+  const baseMaintenancePremiumCents = maintenanceSpendToPremiumCents(maintenanceSpendCents);
+  const maintenancePremiumCents = applyBonusMultiplier(
+    baseMaintenancePremiumCents,
+    property.bonusMultiplier
+  );
   const lastAppraisedValueCents = property.lastAppraisedValue ?? 0;
   const purchasePriceCents = property.purchasePriceCents ?? null;
   const appreciationCents =
@@ -137,6 +157,7 @@ export async function calculateHomeEquity(propertyId: string): Promise<HomeEquit
     baseEquityCents,
     maintenanceSpendCents,
     maintenancePremiumRate: MAINTENANCE_PREMIUM_RATE,
+    bonusMultiplier: property.bonusMultiplier,
     maintenancePremiumCents,
     totalEquityWithMaintenanceCents,
     healthScore,

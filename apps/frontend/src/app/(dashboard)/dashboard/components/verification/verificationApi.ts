@@ -28,6 +28,9 @@ export interface DiscoveryNudgeBaseDTO {
   title: string;
   description: string;
   actionType: 'PHOTO' | 'TOGGLE' | 'INPUT';
+  currentStreak: number;
+  longestStreak: number;
+  bonusMultiplier: number;
 }
 
 export interface AssetNudgeDTO extends DiscoveryNudgeBaseDTO, VerificationNudgeDTO {
@@ -73,6 +76,14 @@ export interface VerifyItemPayload {
   technicalSpecs?: Record<string, any>;
 }
 
+export interface StreakUpdateDTO {
+  currentStreak: number;
+  longestStreak: number;
+  bonusMultiplier: number;
+  lastActivityDate: string | null;
+  milestoneReached: boolean;
+}
+
 export interface VerificationStats {
   total: number;
   verified: number;
@@ -110,7 +121,10 @@ export async function verifyItem(
   itemId: string,
   payload: VerifyItemPayload
 ) {
-  return api.post(`/api/properties/${propertyId}/inventory/${itemId}/verify`, payload);
+  return api.post<{ item: VerificationNudgeItem; streak: StreakUpdateDTO }>(
+    `/api/properties/${propertyId}/inventory/${itemId}/verify`,
+    payload
+  );
 }
 
 export async function getVerificationStats(

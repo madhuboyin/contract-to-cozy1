@@ -13,6 +13,7 @@ import {
   getUnverifiedActiveInsurancePolicy,
 } from './insuranceAuditor.service';
 import { hasPendingCriticalAssetVerification } from './inventoryVerification.service';
+import { incrementStreak } from './gamification.service';
 
 import { prisma } from '../lib/prisma';
 
@@ -934,6 +935,28 @@ export async function updateProperty(
   if (data.homeAssets !== undefined) {
     await syncPropertyApplianceInventoryItems(propertyId, data.homeAssets || []);
   }
+
+  const existingHeatingFuel = String(existingProperty.primaryHeatingFuel || '').trim();
+  const nextHeatingFuel =
+    data.primaryHeatingFuel !== undefined
+      ? (data.primaryHeatingFuel?.trim() || null)
+      : (existingProperty.primaryHeatingFuel?.trim() || null);
+
+  const completedResilienceNudge =
+    existingProperty.hasSumpPumpBackup === null &&
+    data.hasSumpPumpBackup !== undefined &&
+    data.hasSumpPumpBackup !== null;
+
+  const completedUtilityNudge = existingHeatingFuel.length === 0 && !!nextHeatingFuel;
+
+  const nextPurchasePriceCents =
+    data.purchasePriceCents !== undefined ? data.purchasePriceCents : existingProperty.purchasePriceCents;
+  const nextPurchaseDate =
+    data.purchaseDate !== undefined ? data.purchaseDate : existingProperty.purchaseDate;
+  const nextIsEquityVerified =
+    data.isEquityVerified ??
+    (nextPurchasePriceCents !== null && nextPurchaseDate !== null);
+  const completedEquityNudge = !existingProperty.isEquityVerified && nextIsEquityVerified;
   
 
   // Use a proper type for updatePayload for better type checking
@@ -1004,10 +1027,6 @@ export async function updateProperty(
   if (data.isEquityVerified !== undefined) {
     updatePayload.isEquityVerified = data.isEquityVerified;
   } else if (data.purchasePriceCents !== undefined || data.purchaseDate !== undefined) {
-    const nextPurchasePriceCents =
-      data.purchasePriceCents !== undefined ? data.purchasePriceCents : existingProperty.purchasePriceCents;
-    const nextPurchaseDate =
-      data.purchaseDate !== undefined ? data.purchaseDate : existingProperty.purchaseDate;
     updatePayload.isEquityVerified = nextPurchasePriceCents !== null && nextPurchaseDate !== null;
   }
 
@@ -1015,6 +1034,10 @@ export async function updateProperty(
     where: { id: propertyId },
     data: updatePayload,
   });
+
+  if (completedResilienceNudge || completedUtilityNudge || completedEquityNudge) {
+    await incrementStreak(propertyId);
+  }
 
   // PHASE 2 ADDITION: FIX: Use the comprehensive job enqueuer
   if (Object.keys(updatePayload).length > 0) {

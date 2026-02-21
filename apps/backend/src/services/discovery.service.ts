@@ -3,16 +3,20 @@
 import { InventoryItemCategory } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { calculateProtectionGap } from './insuranceAuditor.service';
+import { evaluateStreakExpiry, PropertyStreakState } from './gamification.service';
 
 const WATER_HEATER_HINTS = ['water heater', 'hot water'];
 
 export type DiscoveryNudge =
-  | {
+  | ({
       id: string;
-      type: 'ASSET';
       title: string;
       description: string;
+      currentStreak: number;
+      longestStreak: number;
+      bonusMultiplier: number;
       actionType: 'PHOTO';
+      type: 'ASSET';
       item: {
         id: string;
         name: string;
@@ -29,46 +33,58 @@ export type DiscoveryNudge =
       };
       totalUnverified: number;
       totalItems: number;
-    }
-  | {
+    })
+  | ({
       id: string;
-      type: 'RESILIENCE';
       title: string;
       description: string;
+      currentStreak: number;
+      longestStreak: number;
+      bonusMultiplier: number;
       actionType: 'TOGGLE';
+      type: 'RESILIENCE';
       field: 'hasSumpPumpBackup';
       options: Array<{ label: string; value: boolean | null }>;
-    }
-  | {
+    })
+  | ({
       id: string;
-      type: 'INSURANCE';
       title: string;
       description: string;
+      currentStreak: number;
+      longestStreak: number;
+      bonusMultiplier: number;
       actionType: 'PHOTO';
+      type: 'INSURANCE';
       policyId: string;
       totalInventoryValueCents: number;
       personalPropertyLimitCents: number;
       underInsuredCents: number;
-    }
-  | {
+    })
+  | ({
       id: string;
-      type: 'EQUITY';
       title: string;
       description: string;
+      currentStreak: number;
+      longestStreak: number;
+      bonusMultiplier: number;
       actionType: 'INPUT';
+      type: 'EQUITY';
       purchasePriceCents: number | null;
       purchaseDate: Date | null;
       lastAppraisedValueCents: number;
-    }
-  | {
+    })
+  | ({
       id: string;
-      type: 'UTILITY';
       title: string;
       description: string;
+      currentStreak: number;
+      longestStreak: number;
+      bonusMultiplier: number;
       actionType: 'INPUT';
+      type: 'UTILITY';
       field: 'primaryHeatingFuel';
       options: Array<{ label: string; value: string }>;
-    };
+    });
 
 function isExcluded(id: string, excludedIds: Set<string>) {
   return excludedIds.has(id);
@@ -110,6 +126,11 @@ function utilityNudgeId(propertyId: string) {
   return `property:${propertyId}:utility`;
 }
 
+function withStreakEncouragement(description: string, streak: number) {
+  if (streak <= 0) return description;
+  return `${description} Complete this to keep your ${streak}-day streak alive!`;
+}
+
 function buildWaterHeaterNameFilter() {
   return WATER_HEATER_HINTS.map((hint) => ({
     name: { contains: hint, mode: 'insensitive' as const },
@@ -118,7 +139,8 @@ function buildWaterHeaterNameFilter() {
 
 async function getCriticalAssetNudge(
   propertyId: string,
-  excludedIds: Set<string>
+  excludedIds: Set<string>,
+  streak: PropertyStreakState
 ): Promise<DiscoveryNudge | null> {
   const [totalItems, totalUnverified, candidates] = await Promise.all([
     prisma.inventoryItem.count({ where: { propertyId } }),
@@ -155,8 +177,13 @@ async function getCriticalAssetNudge(
       id: nudgeId,
       type: 'ASSET',
       title: `Verify ${item.name}`,
-      description:
+      description: withStreakEncouragement(
         'Capture key details to unlock accurate lifespan predictions and proactive maintenance alerts.',
+        streak.currentStreak
+      ),
+      currentStreak: streak.currentStreak,
+      longestStreak: streak.longestStreak,
+      bonusMultiplier: streak.bonusMultiplier,
       actionType: 'PHOTO',
       item: {
         id: item.id,
@@ -182,7 +209,8 @@ async function getCriticalAssetNudge(
 
 async function getResilienceNudge(
   propertyId: string,
-  excludedIds: Set<string>
+  excludedIds: Set<string>,
+  streak: PropertyStreakState
 ): Promise<DiscoveryNudge | null> {
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
@@ -201,8 +229,13 @@ async function getResilienceNudge(
     id,
     type: 'RESILIENCE',
     title: 'Home resilience check',
-    description:
+    description: withStreakEncouragement(
       'Heavy rain predicted. Do you have a battery backup for your sump pump? This unlocks better flood risk guidance.',
+      streak.currentStreak
+    ),
+    currentStreak: streak.currentStreak,
+    longestStreak: streak.longestStreak,
+    bonusMultiplier: streak.bonusMultiplier,
     actionType: 'TOGGLE',
     field: 'hasSumpPumpBackup',
     options: [
@@ -215,7 +248,8 @@ async function getResilienceNudge(
 
 async function getInsuranceNudge(
   propertyId: string,
-  excludedIds: Set<string>
+  excludedIds: Set<string>,
+  streak: PropertyStreakState
 ): Promise<DiscoveryNudge | null> {
   const policy = await prisma.insurancePolicy.findFirst({
     where: {
@@ -240,8 +274,13 @@ async function getInsuranceNudge(
     id,
     type: 'INSURANCE',
     title: 'Insurance declarations check',
-    description:
+    description: withStreakEncouragement(
       'Snap your declarations page to verify personal property coverage and unlock protection gap insights.',
+      streak.currentStreak
+    ),
+    currentStreak: streak.currentStreak,
+    longestStreak: streak.longestStreak,
+    bonusMultiplier: streak.bonusMultiplier,
     actionType: 'PHOTO',
     policyId: policy.id,
     totalInventoryValueCents: protectionGap.totalInventoryValueCents,
@@ -252,7 +291,8 @@ async function getInsuranceNudge(
 
 async function getEquityNudge(
   propertyId: string,
-  excludedIds: Set<string>
+  excludedIds: Set<string>,
+  streak: PropertyStreakState
 ): Promise<DiscoveryNudge | null> {
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
@@ -276,8 +316,13 @@ async function getEquityNudge(
     id,
     type: 'EQUITY',
     title: 'Track your home equity',
-    description:
+    description: withStreakEncouragement(
       'Enter purchase details to unlock equity tracking and maintenance premium intelligence.',
+      streak.currentStreak
+    ),
+    currentStreak: streak.currentStreak,
+    longestStreak: streak.longestStreak,
+    bonusMultiplier: streak.bonusMultiplier,
     actionType: 'INPUT',
     purchasePriceCents: property.purchasePriceCents,
     purchaseDate: property.purchaseDate,
@@ -287,7 +332,8 @@ async function getEquityNudge(
 
 async function getUtilityNudge(
   propertyId: string,
-  excludedIds: Set<string>
+  excludedIds: Set<string>,
+  streak: PropertyStreakState
 ): Promise<DiscoveryNudge | null> {
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
@@ -307,8 +353,13 @@ async function getUtilityNudge(
     id,
     type: 'UTILITY',
     title: 'Utility setup',
-    description:
+    description: withStreakEncouragement(
       'Set your primary heating fuel to improve risk modeling and cost guidance quality.',
+      streak.currentStreak
+    ),
+    currentStreak: streak.currentStreak,
+    longestStreak: streak.longestStreak,
+    bonusMultiplier: streak.bonusMultiplier,
     actionType: 'INPUT',
     field: 'primaryHeatingFuel',
     options: [
@@ -326,6 +377,7 @@ export async function getNextDiscoveryNudge(
   propertyId: string,
   excludedIds: string[] = []
 ): Promise<DiscoveryNudge | null> {
+  const streak = await evaluateStreakExpiry(propertyId);
   const excludedSet = new Set(
     excludedIds
       .map((id) => id.trim())
@@ -333,11 +385,11 @@ export async function getNextDiscoveryNudge(
   );
 
   const nudge =
-    (await getCriticalAssetNudge(propertyId, excludedSet)) ??
-    (await getResilienceNudge(propertyId, excludedSet)) ??
-    (await getInsuranceNudge(propertyId, excludedSet)) ??
-    (await getEquityNudge(propertyId, excludedSet)) ??
-    (await getUtilityNudge(propertyId, excludedSet));
+    (await getCriticalAssetNudge(propertyId, excludedSet, streak)) ??
+    (await getResilienceNudge(propertyId, excludedSet, streak)) ??
+    (await getInsuranceNudge(propertyId, excludedSet, streak)) ??
+    (await getEquityNudge(propertyId, excludedSet, streak)) ??
+    (await getUtilityNudge(propertyId, excludedSet, streak));
 
   if (!nudge) {
     logNone(propertyId);

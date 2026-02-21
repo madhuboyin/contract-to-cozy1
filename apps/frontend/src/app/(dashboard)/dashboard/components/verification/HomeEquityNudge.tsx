@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, Flame } from 'lucide-react';
 
 interface HomeEquityNudgeProps {
   title: string;
@@ -10,6 +10,8 @@ interface HomeEquityNudgeProps {
   purchasePriceDollars: string;
   purchaseDate: string;
   isSaving: boolean;
+  currentStreak: number;
+  showSuccessFlash?: boolean;
   onPurchasePriceChange: (value: string) => void;
   onPurchaseDateChange: (value: string) => void;
   onSubmit: () => void;
@@ -22,6 +24,8 @@ export function HomeEquityNudge({
   purchasePriceDollars,
   purchaseDate,
   isSaving,
+  currentStreak,
+  showSuccessFlash = false,
   onPurchasePriceChange,
   onPurchaseDateChange,
   onSubmit,
@@ -30,13 +34,21 @@ export function HomeEquityNudge({
   const canSubmit = purchasePriceDollars.trim().length > 0 && purchaseDate.trim().length > 0;
 
   return (
-    <div className="w-full rounded-xl border-2 border-emerald-200 border-l-4 border-l-emerald-600 bg-gradient-to-r from-emerald-50 to-teal-50 px-5 py-4 shadow-sm">
+    <div
+      className={`w-full rounded-xl border-2 border-emerald-200 border-l-4 border-l-emerald-600 bg-gradient-to-r from-emerald-50 to-teal-50 px-5 py-4 shadow-sm ${
+        showSuccessFlash ? 'ring-2 ring-emerald-300 animate-pulse' : ''
+      }`}
+    >
       <div className="flex items-start gap-3">
         <div className="rounded-lg bg-emerald-100 p-2 shrink-0">
           <TrendingUp className="h-5 w-5 text-emerald-700" />
         </div>
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold text-gray-900">{title}</h3>
+          <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
+            <Flame className="h-3.5 w-3.5" />
+            🔥 {currentStreak} Task Streak
+          </div>
           <p className="mt-1 text-sm text-gray-700">{description}</p>
 
           <div className="mt-3 grid gap-3 sm:grid-cols-2">

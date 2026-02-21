@@ -1124,8 +1124,28 @@ class APIClient {
     propertyId: string,
     policyId: string,
     data: { personalPropertyLimitCents?: number | null; deductibleCents?: number | null }
-  ): Promise<APIResponse<InsurancePolicy>> {
-    return this.request<InsurancePolicy>(
+  ): Promise<
+    APIResponse<{
+      policy: InsurancePolicy;
+      streak: {
+        currentStreak: number;
+        longestStreak: number;
+        bonusMultiplier: number;
+        lastActivityDate: string | null;
+        milestoneReached: boolean;
+      } | null;
+    }>
+  > {
+    return this.request<{
+      policy: InsurancePolicy;
+      streak: {
+        currentStreak: number;
+        longestStreak: number;
+        bonusMultiplier: number;
+        lastActivityDate: string | null;
+        milestoneReached: boolean;
+      } | null;
+    }>(
       `/api/properties/${propertyId}/insurance/${policyId}/ocr/confirm`,
       { method: 'POST', body: data }
     );

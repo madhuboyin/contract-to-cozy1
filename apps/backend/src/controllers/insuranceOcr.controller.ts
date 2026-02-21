@@ -4,6 +4,7 @@ import { CustomRequest } from '../types';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { extractInsuranceFieldsFromImage } from '../services/insuranceOcr.service';
+import { incrementStreak } from '../services/gamification.service';
 
 function pickUploadedFile(req: CustomRequest): Express.Multer.File | undefined {
   const direct = (req as any).file as Express.Multer.File | undefined;
@@ -88,7 +89,7 @@ export async function confirmInsuranceOcr(
         propertyId,
         homeownerProfile: { userId },
       },
-      select: { id: true },
+      select: { id: true, isVerified: true },
     });
 
     if (!existing) throw new APIError('Insurance policy not found', 404, 'POLICY_NOT_FOUND');
@@ -123,7 +124,9 @@ export async function confirmInsuranceOcr(
       },
     });
 
-    return res.json({ success: true, data: policy });
+    const streak = existing.isVerified ? null : await incrementStreak(propertyId);
+
+    return res.json({ success: true, data: { policy, streak } });
   } catch (err) {
     next(err);
   }

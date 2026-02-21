@@ -54,8 +54,8 @@ export async function verifyItem(req: CustomRequest, res: Response, next: NextFu
     const { propertyId, itemId } = req.params;
     const { source, technicalSpecs } = req.body;
 
-    const item = await markItemVerified(itemId, propertyId, source, technicalSpecs);
-    res.json({ success: true, data: { item } });
+    const result = await markItemVerified(itemId, propertyId, source, technicalSpecs);
+    res.json({ success: true, data: result });
   } catch (err) {
     next(err);
   }

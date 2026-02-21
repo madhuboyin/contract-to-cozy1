@@ -367,8 +367,13 @@ export function calculateHealthScore(
 
   // --- FINAL RESULT ---
 
-  const totalScore = Math.round(baseScore + extraScore);
-  const maxPotentialScore = Math.round(totalScore + maxUnlockableScore);
+  const rawTotalScore = Math.round(baseScore + extraScore);
+  const bonusMultiplier =
+    typeof property.bonusMultiplier === 'number' && Number.isFinite(property.bonusMultiplier)
+      ? property.bonusMultiplier
+      : 1;
+  const totalScore = Math.round(rawTotalScore * bonusMultiplier);
+  const maxPotentialScore = Math.round((rawTotalScore + maxUnlockableScore) * bonusMultiplier);
   
   return {
     totalScore: Math.min(totalScore, MAX_SCORE),
