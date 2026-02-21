@@ -152,6 +152,11 @@ export const createPropertySchema = z.object({
   hasCoDetectors: z.boolean().optional(),
   hasSecuritySystem: z.boolean().optional(),
   hasFireExtinguisher: z.boolean().optional(),
+  hasSumpPumpBackup: z.boolean().nullable().optional(),
+  primaryHeatingFuel: z.string().max(50).nullable().optional(),
+  hasSecondaryHeat: z.boolean().nullable().optional(),
+  isResilienceVerified: z.boolean().optional(),
+  isUtilityVerified: z.boolean().optional(),
   
   // FIX: REMOVED applianceAges and ADDED homeAssets array
   homeAssets: z.array(HomeAssetInputSchema).optional(), // NEW STRUCTURED FIELD

@@ -23,6 +23,36 @@ export interface VerificationNudgeDTO {
   totalItems: number;
 }
 
+export interface AssetVerificationNudgeDTO extends VerificationNudgeDTO {
+  type: 'ASSET_VERIFICATION';
+  source: 'INVENTORY';
+}
+
+export interface ResilienceCheckNudgeDTO {
+  type: 'RESILIENCE_CHECK';
+  source: 'PROPERTY';
+  title: string;
+  description: string;
+  question: string;
+  field: 'hasSumpPumpBackup';
+  options: Array<{ label: string; value: boolean | null }>;
+}
+
+export interface UtilitySetupNudgeDTO {
+  type: 'UTILITY_SETUP';
+  source: 'PROPERTY';
+  title: string;
+  description: string;
+  question: string;
+  field: 'primaryHeatingFuel';
+  options: Array<{ label: string; value: string }>;
+}
+
+export type HomeHealthNudgeDTO =
+  | AssetVerificationNudgeDTO
+  | ResilienceCheckNudgeDTO
+  | UtilitySetupNudgeDTO;
+
 export interface VerifyItemPayload {
   source: 'OCR_LABEL' | 'MANUAL' | 'AI_ORACLE';
   technicalSpecs?: Record<string, any>;
@@ -45,11 +75,11 @@ export function getMissingFields(item: VerificationNudgeItem): string[] {
   return missing;
 }
 
-export async function getVerificationNudge(
+export async function getHomeHealthNudge(
   propertyId: string
-): Promise<VerificationNudgeDTO | null> {
-  const res = await api.get<VerificationNudgeDTO | null>(
-    `/api/properties/${propertyId}/inventory/verification/nudge`
+): Promise<HomeHealthNudgeDTO | null> {
+  const res = await api.get<HomeHealthNudgeDTO | null>(
+    `/api/properties/${propertyId}/nudges/next`
   );
   return res.data ?? null;
 }

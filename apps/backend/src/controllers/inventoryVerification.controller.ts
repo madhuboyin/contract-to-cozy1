@@ -7,12 +7,46 @@ import {
   markItemVerified,
   getVerificationStats,
 } from '../services/inventoryVerification.service';
+import { getNextPropertyNudge } from '../services/property.service';
 
 export async function getNudge(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const { propertyId } = req.params;
     const result = await getHighestPriorityUnverifiedItem(propertyId);
     res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getNextDashboardNudge(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { propertyId } = req.params;
+
+    // Priority 1: Property-level resilience/utility nudges
+    const propertyNudge = await getNextPropertyNudge(propertyId);
+    if (propertyNudge) {
+      return res.json({ success: true, data: propertyNudge });
+    }
+
+    // Priority 2: Inventory verification nudges
+    const inventoryNudge = await getHighestPriorityUnverifiedItem(propertyId);
+    if (!inventoryNudge) {
+      return res.json({ success: true, data: null });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        type: 'ASSET_VERIFICATION',
+        source: 'INVENTORY',
+        ...inventoryNudge,
+      },
+    });
   } catch (err) {
     next(err);
   }

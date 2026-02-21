@@ -8,6 +8,7 @@ import {
   InsurancePolicy,
   InventoryItem,
   InventoryRoom,
+  RiskCategory,
 } from '@prisma/client';
 
 import { prisma } from '../lib/prisma'; 
@@ -242,6 +243,9 @@ class RiskAssessmentService {
         } catch (e) {
           console.warn('[RISK-SERVICE] Failed to build inventory major appliance risks', e);
         }
+
+        // Property-level resilience impact: sump-pump backup reduces basement flood risk.
+        assetRisks.push(this.buildBasementFloodRisk(property as PropertyWithRelations));
         
         console.log(`[RISK-SERVICE] Calculated risk for ${assetRisks.length} assets`);
         
@@ -487,7 +491,50 @@ class RiskAssessmentService {
     }
   
     return out;
-  }  
+  }
+
+  private buildBasementFloodRisk(property: PropertyWithRelations): AssetRiskDetail {
+    const baselineScore = property.hasDrainageIssues === true ? 72 : 48;
+    const basementFloodRisk =
+      property.hasSumpPumpBackup === true
+        ? Math.round(baselineScore * 0.6)
+        : baselineScore;
+
+    const probability = Math.max(0.1, Math.min(0.95, basementFloodRisk / 100));
+    const replacementCost = property.hasDrainageIssues === true ? 18000 : 12000;
+    const hasCoverage = property.insurancePolicies.length > 0;
+    const coverageFactor = hasCoverage ? 0.35 : 0;
+    const outOfPocketCost = Math.round(replacementCost * (1 - coverageFactor));
+    const riskDollar = Math.round(outOfPocketCost * probability);
+
+    let riskLevel: AssetRiskDetail['riskLevel'];
+    if (basementFloodRisk < 35) riskLevel = 'LOW';
+    else if (basementFloodRisk < 50) riskLevel = 'MODERATE';
+    else if (basementFloodRisk < 65) riskLevel = 'ELEVATED';
+    else if (basementFloodRisk < 80) riskLevel = 'HIGH';
+    else riskLevel = 'CRITICAL';
+
+    const actionCta =
+      property.hasSumpPumpBackup === true
+        ? 'Maintain battery backup and test quarterly'
+        : 'Install sump pump battery backup';
+
+    return {
+      assetName: 'BASEMENT_FLOOD_RISK',
+      systemType: 'BASEMENT_FLOOD_RISK',
+      category: RiskCategory.STRUCTURE,
+      age: 0,
+      expectedLife: 1,
+      replacementCost,
+      probability: Math.round(probability * 100) / 100,
+      coverageFactor,
+      outOfPocketCost,
+      riskDollar,
+      riskLevel,
+      actionCta,
+    } as AssetRiskDetail;
+  }
+
   private async fetchPropertyDetails(propertyId: string): Promise<PropertyWithRelations | null> {
     return prisma.property.findUnique({
       where: { id: propertyId },

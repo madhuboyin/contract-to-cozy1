@@ -208,6 +208,7 @@ router.get('/:id', authenticate, propertyController.getProperty);
  *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.put('/:id', authenticate, validateBody(updatePropertySchema), propertyController.updateProperty);
+router.patch('/:id', authenticate, validateBody(updatePropertySchema), propertyController.updateProperty);
 
 /**
  * @swagger

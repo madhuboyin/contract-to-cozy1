@@ -860,6 +860,11 @@ export interface Property {
   hasCoDetectors: boolean | null;
   hasSecuritySystem: boolean | null;
   hasFireExtinguisher: boolean | null;
+  hasSumpPumpBackup: boolean | null;
+  primaryHeatingFuel: string | null;
+  hasSecondaryHeat: boolean | null;
+  isResilienceVerified: boolean;
+  isUtilityVerified: boolean;
   applianceAges: any;
   
   // Home Assets relation

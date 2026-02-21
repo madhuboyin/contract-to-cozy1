@@ -856,6 +856,11 @@ class APIClient {
       hasCoDetectors?: boolean;
       hasSecuritySystem?: boolean;
       hasFireExtinguisher?: boolean;
+      hasSumpPumpBackup?: boolean | null;
+      primaryHeatingFuel?: string | null;
+      hasSecondaryHeat?: boolean | null;
+      isResilienceVerified?: boolean;
+      isUtilityVerified?: boolean;
       applianceAges?: any;
     }
   ): Promise<APIResponse<Property>> {

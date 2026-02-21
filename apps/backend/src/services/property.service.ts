@@ -54,6 +54,11 @@ interface CreatePropertyData {
   hasCoDetectors?: boolean;
   hasSecuritySystem?: boolean;
   hasFireExtinguisher?: boolean;
+  hasSumpPumpBackup?: boolean | null;
+  primaryHeatingFuel?: string | null;
+  hasSecondaryHeat?: boolean | null;
+  isResilienceVerified?: boolean;
+  isUtilityVerified?: boolean;
   
   homeAssets?: HomeAssetInput[];
 }
@@ -185,6 +190,26 @@ export interface PropertyAIGuidance {
   incidents: IncidentForAI[];
   recallMatches: RecallMatchForAI[];
 }
+
+export type PropertyNudge =
+  | {
+      type: 'RESILIENCE_CHECK';
+      source: 'PROPERTY';
+      title: string;
+      description: string;
+      question: string;
+      field: 'hasSumpPumpBackup';
+      options: Array<{ label: string; value: boolean | null }>;
+    }
+  | {
+      type: 'UTILITY_SETUP';
+      source: 'PROPERTY';
+      title: string;
+      description: string;
+      question: string;
+      field: 'primaryHeatingFuel';
+      options: Array<{ label: string; value: string }>;
+    };
 
 async function hydrateHomeAssetsFromInventory<T extends { id: string }>(
   property: T
@@ -349,6 +374,11 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       hasCoDetectors: data.hasCoDetectors,
       hasSecuritySystem: data.hasSecuritySystem,
       hasFireExtinguisher: data.hasFireExtinguisher,
+      hasSumpPumpBackup: data.hasSumpPumpBackup ?? null,
+      primaryHeatingFuel: data.primaryHeatingFuel?.trim() || null,
+      hasSecondaryHeat: data.hasSecondaryHeat ?? null,
+      isResilienceVerified: data.isResilienceVerified ?? false,
+      isUtilityVerified: data.isUtilityVerified ?? false,
       // END PHASE 2 ADDITIONS
     },
   });
@@ -402,6 +432,63 @@ export async function getPropertyById(propertyId: string, userId: string): Promi
   // ATTACH SCORE: Calculate and attach score before returning
   const hydrated = await hydrateHomeAssetsFromInventory(property as any);
 return attachHealthScore(hydrated as PropertyWithAssets);
+}
+
+export async function getNextPropertyNudge(propertyId: string): Promise<PropertyNudge | null> {
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: {
+      hasSumpPumpBackup: true,
+      primaryHeatingFuel: true,
+      isResilienceVerified: true,
+      isUtilityVerified: true,
+    },
+  });
+
+  if (!property) return null;
+
+  const isResilienceMissing =
+    property.hasSumpPumpBackup === null && !property.isResilienceVerified;
+
+  if (isResilienceMissing) {
+    return {
+      type: 'RESILIENCE_CHECK',
+      source: 'PROPERTY',
+      title: 'Home resilience check',
+      description: 'Heavy rain predicted. Do you have a battery backup for your sump pump?',
+      question: 'Heavy rain predicted. Do you have a battery backup for your sump pump?',
+      field: 'hasSumpPumpBackup',
+      options: [
+        { label: 'Yes', value: true },
+        { label: 'No', value: false },
+        { label: 'Not Sure', value: null },
+      ],
+    };
+  }
+
+  const normalizedFuel = String(property.primaryHeatingFuel || '').trim();
+  const isUtilityMissing = normalizedFuel.length === 0 && !property.isUtilityVerified;
+
+  if (isUtilityMissing) {
+    return {
+      type: 'UTILITY_SETUP',
+      source: 'PROPERTY',
+      title: 'Utility setup',
+      description: 'Set your primary heating fuel to improve risk and cost guidance.',
+      question: 'What is your primary heating fuel?',
+      field: 'primaryHeatingFuel',
+      options: [
+        { label: 'Natural Gas', value: 'NATURAL_GAS' },
+        { label: 'Electric', value: 'ELECTRIC' },
+        { label: 'Propane', value: 'PROPANE' },
+        { label: 'Fuel Oil', value: 'FUEL_OIL' },
+        { label: 'Wood / Pellet', value: 'WOOD_PELLET' },
+        { label: 'Other', value: 'OTHER' },
+      ],
+    };
+  }
+
+  return null;
 }
 
 /**
@@ -806,6 +893,22 @@ export async function updateProperty(
   if (data.hasCoDetectors !== undefined) updatePayload.hasCoDetectors = data.hasCoDetectors;
   if (data.hasSecuritySystem !== undefined) updatePayload.hasSecuritySystem = data.hasSecuritySystem;
   if (data.hasFireExtinguisher !== undefined) updatePayload.hasFireExtinguisher = data.hasFireExtinguisher;
+  if (data.hasSumpPumpBackup !== undefined) {
+    updatePayload.hasSumpPumpBackup = data.hasSumpPumpBackup;
+    if (data.isResilienceVerified === undefined) {
+      updatePayload.isResilienceVerified = data.hasSumpPumpBackup !== null;
+    }
+  }
+  if (data.primaryHeatingFuel !== undefined) {
+    const normalizedFuel = data.primaryHeatingFuel?.trim() || null;
+    updatePayload.primaryHeatingFuel = normalizedFuel;
+    if (data.isUtilityVerified === undefined) {
+      updatePayload.isUtilityVerified = normalizedFuel !== null;
+    }
+  }
+  if (data.hasSecondaryHeat !== undefined) updatePayload.hasSecondaryHeat = data.hasSecondaryHeat;
+  if (data.isResilienceVerified !== undefined) updatePayload.isResilienceVerified = data.isResilienceVerified;
+  if (data.isUtilityVerified !== undefined) updatePayload.isUtilityVerified = data.isUtilityVerified;
 
   const property = await prisma.property.update({
     where: { id: propertyId },

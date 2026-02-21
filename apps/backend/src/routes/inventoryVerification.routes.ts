@@ -4,12 +4,24 @@ import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
-import { getNudge, verifyItem, getStats } from '../controllers/inventoryVerification.controller';
+import {
+  getNudge,
+  getNextDashboardNudge,
+  verifyItem,
+  getStats,
+} from '../controllers/inventoryVerification.controller';
 
 const router = Router();
 
 router.use(apiRateLimiter);
 router.use(authenticate);
+
+// GET /api/properties/:propertyId/nudges/next
+router.get(
+  '/properties/:propertyId/nudges/next',
+  propertyAuthMiddleware,
+  getNextDashboardNudge
+);
 
 // GET /api/properties/:propertyId/inventory/verification/nudge
 router.get(
