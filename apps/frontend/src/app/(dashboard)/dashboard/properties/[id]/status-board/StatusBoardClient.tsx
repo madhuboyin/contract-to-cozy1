@@ -62,6 +62,10 @@ import {
   Box,
 } from "lucide-react";
 import Link from "next/link";
+import { useCallback } from "react";
+import InventoryItemDrawer from '../../../components/inventory/InventoryItemDrawer';
+import { getInventoryItem, listInventoryRooms } from '../../../inventory/inventoryApi';
+import { InventoryItem, InventoryRoom } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Badge helpers
@@ -180,6 +184,36 @@ export default function StatusBoardClient() {
   const [includeHidden, setIncludeHidden] = useState(false);
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Inventory item drawer state
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerItem, setDrawerItem] = useState<InventoryItem | null>(null);
+  const [drawerRooms, setDrawerRooms] = useState<InventoryRoom[]>([]);
+  const [drawerLoading, setDrawerLoading] = useState<string | null>(null);
+
+  const handleViewItem = useCallback(async (item: StatusBoardItemDTO) => {
+    if (!item.inventoryItemId) return;
+    setDrawerLoading(item.id);
+    try {
+      const [invItem, rooms] = await Promise.all([
+        getInventoryItem(propertyId, item.inventoryItemId),
+        listInventoryRooms(propertyId),
+      ]);
+      setDrawerItem(invItem);
+      setDrawerRooms(rooms);
+      setDrawerOpen(true);
+    } catch (err) {
+      console.error('Failed to load inventory item:', err);
+    } finally {
+      setDrawerLoading(null);
+    }
+  }, [propertyId]);
+
+  const handleDrawerSaved = useCallback(() => {
+    setDrawerOpen(false);
+    setDrawerItem(null);
+    queryClient.invalidateQueries({ queryKey: ["status-board", propertyId] });
+  }, [propertyId, queryClient]);
 
   // Override form state
   const [overrideCondition, setOverrideCondition] = useState<string>("");
@@ -541,12 +575,20 @@ export default function StatusBoardClient() {
 
                 {/* Deep links */}
                 <div className="flex flex-wrap gap-2 rounded-2xl border border-white/70 bg-white/50 p-3 backdrop-blur-sm overflow-hidden dark:border-slate-700/70 dark:bg-slate-900/40">
-                  {item.deepLinks.viewItem && (
-                    <Link href={item.deepLinks.viewItem}>
-                      <Button variant="outline" size="sm" className={LINK_ACTION_BUTTON_CLASS}>
-                        <ExternalLink className="h-3.5 w-3.5 mr-1" /> View Item
-                      </Button>
-                    </Link>
+                  {item.inventoryItemId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={LINK_ACTION_BUTTON_CLASS}
+                      disabled={drawerLoading === item.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleViewItem(item);
+                      }}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                      {drawerLoading === item.id ? 'Loading...' : 'View Item'}
+                    </Button>
                   )}
                   {item.deepLinks.viewRoom && (
                     <Link href={item.deepLinks.viewRoom}>
@@ -939,6 +981,15 @@ export default function StatusBoardClient() {
         </div>
       )}
       </div>
+
+      <InventoryItemDrawer
+        open={drawerOpen}
+        onClose={() => { setDrawerOpen(false); setDrawerItem(null); }}
+        propertyId={propertyId}
+        rooms={drawerRooms}
+        initialItem={drawerItem}
+        onSaved={handleDrawerSaved}
+      />
     </TooltipProvider>
   );
 }
