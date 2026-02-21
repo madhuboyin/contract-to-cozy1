@@ -103,26 +103,35 @@ function isWaterHeaterItem(item: Pick<InventoryItem, 'category' | 'name'>): bool
   return WATER_HEATER_HINTS.some((hint) => lower.includes(hint));
 }
 
+/**
+ * All rule groups require isVerified — predictions are only generated for
+ * assets the homeowner has confirmed, ensuring schedule accuracy.
+ */
 function resolveRuleGroup(item: Pick<InventoryItem, 'category' | 'name' | 'isVerified'>): RuleGroupKey | null {
-  if (item.category === InventoryItemCategory.HVAC && item.isVerified) {
-    return 'HVAC';
-  }
+  if (!item.isVerified) return null;
 
-  if (item.category === InventoryItemCategory.ROOF_EXTERIOR) {
-    return 'ROOF';
-  }
-
-  if (isWaterHeaterItem(item)) {
-    return 'WATER_HEATER';
-  }
+  if (item.category === InventoryItemCategory.HVAC) return 'HVAC';
+  if (item.category === InventoryItemCategory.ROOF_EXTERIOR) return 'ROOF';
+  if (isWaterHeaterItem(item)) return 'WATER_HEATER';
 
   return null;
 }
 
-function getConfidenceScore(item: Pick<InventoryItem, 'isVerified' | 'sourceType'>): number {
-  if (item.isVerified) return 0.9;
-  if (item.sourceType === 'MANUAL') return 0.5;
-  return 0.6;
+/**
+ * Confidence scoring per spec:
+ *   0.95 — verified via OCR label scan or AI photo oracle (high signal fidelity)
+ *   0.60 — manually entered by homeowner (self-reported)
+ *   0.85 — verified by other means (e.g. mobile scan, integration)
+ *   0.50 — unverified item (category-average fallback only)
+ */
+function getConfidenceScore(
+  item: Pick<InventoryItem, 'isVerified' | 'sourceType' | 'verificationSource'>
+): number {
+  if (!item.isVerified) return 0.50;
+  const src = String(item.verificationSource ?? '').toUpperCase().trim();
+  if (src === 'OCR_LABEL' || src === 'AI_ORACLE') return 0.95;
+  if (src === 'MANUAL') return 0.60;
+  return 0.85; // verified but source not OCR/manual (e.g. mobile scan, integration)
 }
 
 function getAssetAgeYears(
@@ -203,25 +212,27 @@ function buildReasoning(
   group: RuleGroupKey,
   rule: RuleDefinition,
   climateRegion: ClimateRegion,
-  assetAgeYears: number | null
+  assetAgeYears: number | null,
+  itemName?: string
 ): { reasoning: string; priority: number } {
-  const groupReason =
-    group === 'HVAC'
-      ? 'Generated from HVAC care rules.'
-      : group === 'WATER_HEATER'
-        ? 'Generated from water-heater reliability rules.'
-        : 'Generated from roof/exterior maintenance rules.';
+  const assetRef = itemName ? `your ${itemName}` : (
+    group === 'HVAC' ? 'your HVAC system'
+      : group === 'WATER_HEATER' ? 'your water heater'
+      : 'your roof/exterior'
+  );
 
-  let reasoning = `${groupReason} ${rule.taskName} is recommended every ${rule.intervalMonths} month${rule.intervalMonths === 1 ? '' : 's'}.`;
+  let reasoning = `Based on ${assetRef}: ${rule.taskName} is recommended every ${rule.intervalMonths} month${rule.intervalMonths === 1 ? '' : 's'}.`;
   let priority = rule.basePriority;
 
   if (rule.seasonalTuneUp) {
-    reasoning = `${reasoning} Scheduled for ${climateRegion.toLowerCase().replace(/_/g, ' ')} climate timing (spring/fall preference).`;
+    const climateLabel = climateRegion.toLowerCase().replace(/_/g, ' ');
+    reasoning = `${reasoning} Timed for ${climateLabel} climate (spring/fall service windows).`;
   }
 
   if (assetAgeYears !== null && assetAgeYears > 10) {
     priority = clampPriority(priority + 1);
-    reasoning = `${reasoning} System age exceeds 10 years; increased frequency recommended to prevent failure.`;
+    const ageStr = assetAgeYears.toFixed(0);
+    reasoning = `${reasoning} System is approximately ${ageStr} years old — increased frequency recommended to prevent failure.`;
   }
 
   return { reasoning, priority };
@@ -304,6 +315,7 @@ export async function generateForecast(propertyId: string) {
       category: true,
       isVerified: true,
       sourceType: true,
+      verificationSource: true,
       installedOn: true,
       purchasedOn: true,
       lastServicedOn: true,
@@ -344,7 +356,7 @@ export async function generateForecast(propertyId: string) {
 
     for (const rule of rules) {
       const scheduleDates = buildRuleDates(now, windowEnd, baseDate, rule, climateRegion);
-      const { reasoning, priority } = buildReasoning(group, rule, climateRegion, assetAgeYears);
+      const { reasoning, priority } = buildReasoning(group, rule, climateRegion, assetAgeYears, item.name);
 
       for (const predictedDate of scheduleDates) {
         candidates.push({

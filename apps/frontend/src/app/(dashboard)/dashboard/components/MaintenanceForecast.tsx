@@ -4,7 +4,7 @@ import React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, CheckCircle2, Loader2, Search, Wrench } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Flame, Loader2, Search, Wrench } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { MaintenancePrediction } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,6 +38,31 @@ function priorityBadgeClass(priority: number) {
   return 'bg-slate-100 text-slate-700 border-slate-200';
 }
 
+/** True when a PENDING prediction's scheduled date has passed. */
+function isOverdue(prediction: MaintenancePrediction): boolean {
+  return (
+    prediction.status === 'OVERDUE' ||
+    (prediction.status === 'PENDING' && new Date(prediction.predictedDate) < new Date())
+  );
+}
+
+/** Visual indicator for the confidence score (0–1). */
+function ConfidenceBadge({ score }: { score: number }) {
+  const pct = Math.round(score * 100);
+  const dotClass =
+    score >= 0.9
+      ? 'bg-emerald-500'
+      : score >= 0.6
+        ? 'bg-amber-400'
+        : 'bg-slate-400';
+  return (
+    <span className="flex items-center gap-1 text-xs text-gray-400">
+      <span className={`inline-block h-1.5 w-1.5 rounded-full ${dotClass}`} />
+      {pct}% confidence
+    </span>
+  );
+}
+
 function TimelineCard({
   prediction,
   onMarkDone,
@@ -51,15 +76,28 @@ function TimelineCard({
   onFindPro: (prediction: MaintenancePrediction) => void;
   isPending: boolean;
 }) {
+  const overdue = isOverdue(prediction);
   const hasActiveBooking =
     prediction.booking &&
     ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(prediction.booking.status);
 
   return (
-    <Card className="min-w-[280px] max-w-[320px] shrink-0 border-gray-200">
+    <Card
+      className={`min-w-[280px] max-w-[320px] shrink-0 ${
+        overdue ? 'border-red-300 bg-red-50/30' : 'border-gray-200'
+      }`}
+    >
       <CardHeader className="space-y-2 pb-3">
         <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-base leading-snug">{prediction.taskName}</CardTitle>
+          <div className="min-w-0">
+            <CardTitle className="text-base leading-snug">{prediction.taskName}</CardTitle>
+            {overdue && (
+              <span className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-red-600">
+                <AlertTriangle className="h-3 w-3" />
+                Overdue
+              </span>
+            )}
+          </div>
           <Badge className={priorityBadgeClass(prediction.priority)}>
             {priorityLabel(prediction.priority)} · P{prediction.priority}
           </Badge>
@@ -69,10 +107,11 @@ function TimelineCard({
           {prediction.inventoryItem?.name ? ` · ${prediction.inventoryItem.name}` : ''}
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3">
         <p className="text-sm text-gray-600">
           {prediction.reasoning ?? 'Predicted by your maintenance intelligence engine.'}
         </p>
+        <ConfidenceBadge score={prediction.confidenceScore} />
         <Button
           type="button"
           size="sm"
@@ -91,7 +130,11 @@ function TimelineCard({
             disabled={isPending}
             onClick={() => onMarkDone(prediction)}
           >
-            {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+            {isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <CheckCircle2 className="mr-2 h-4 w-4" />
+            )}
             Mark as Done
           </Button>
           <Button
@@ -139,22 +182,42 @@ export function MaintenanceForecast({ propertyId, mode = 'timeline' }: Maintenan
       prediction: MaintenancePrediction;
       status: 'COMPLETED' | 'DISMISSED';
     }) => {
-      const response = await api.updateMaintenancePredictionStatus(propertyId!, prediction.id, { status });
+      const response = await api.updateMaintenancePredictionStatus(propertyId!, prediction.id, {
+        status,
+      });
       if (!response.success) {
         throw new Error(response.message || 'Unable to update maintenance prediction.');
       }
-      return { response: response.data, status, prediction };
+      return { apiData: response.data, status, prediction };
     },
-    onSuccess: ({ status, prediction }) => {
+    onSuccess: ({ status, prediction, apiData }) => {
       queryClient.invalidateQueries({ queryKey: [FORECAST_QUERY_KEY, propertyId] });
       queryClient.invalidateQueries({ queryKey: [PROPERTY_QUERY_KEY, propertyId] });
       queryClient.invalidateQueries({ queryKey: [PROPERTIES_QUERY_KEY] });
       queryClient.invalidateQueries({ queryKey: [MAINTENANCE_TASK_QUERY_KEY, propertyId] });
+
       const message =
         status === 'COMPLETED'
           ? `${prediction.taskName} marked complete.`
           : `${prediction.taskName} dismissed from your timeline.`;
       toast({ title: 'Forecast updated', description: message });
+
+      // Streak / milestone toast — shown when a task is completed on time
+      if (status === 'COMPLETED' && apiData?.streak) {
+        const { currentStreak, milestoneReached, bonusMultiplier } = apiData.streak;
+        if (milestoneReached) {
+          const bonusPct = Math.round((bonusMultiplier - 1) * 100);
+          toast({
+            title: `🔥 ${currentStreak}-day streak milestone!`,
+            description: `Maintenance bonus unlocked: +${bonusPct}% multiplier. Keep it up!`,
+          });
+        } else if (currentStreak > 1) {
+          toast({
+            title: `🔥 ${currentStreak}-day streak`,
+            description: 'Complete more tasks to hit your next streak milestone.',
+          });
+        }
+      }
     },
     onError: (error: any) => {
       toast({
@@ -236,64 +299,82 @@ export function MaintenanceForecast({ propertyId, mode = 'timeline' }: Maintenan
           <CardDescription>Your 3 most immediate forecasted maintenance tasks.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {predictions.slice(0, 3).map((prediction) => (
-            <div
-              key={prediction.id}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-3"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-gray-900">{prediction.taskName}</p>
-                  <p className="text-xs text-gray-500">
-                    {format(new Date(prediction.predictedDate), 'MMM d')} ·{' '}
-                    {prediction.inventoryItem?.name ?? 'Property-wide'}
-                  </p>
+          {predictions.slice(0, 3).map((prediction) => {
+            const overdue = isOverdue(prediction);
+            return (
+              <div
+                key={prediction.id}
+                className={`rounded-lg border px-3 py-3 ${
+                  overdue ? 'border-red-200 bg-red-50/40' : 'border-gray-200 bg-white'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className="truncate text-sm font-semibold text-gray-900">
+                        {prediction.taskName}
+                      </p>
+                      {overdue && (
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-500" />
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {format(new Date(prediction.predictedDate), 'MMM d')} ·{' '}
+                      {prediction.inventoryItem?.name ?? 'Property-wide'}
+                    </p>
+                    <ConfidenceBadge score={prediction.confidenceScore} />
+                  </div>
+                  <Badge className={priorityBadgeClass(prediction.priority)}>
+                    P{prediction.priority}
+                  </Badge>
                 </div>
-                <Badge className={priorityBadgeClass(prediction.priority)}>
-                  P{prediction.priority}
-                </Badge>
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="min-h-[44px] px-3"
+                    disabled={updateStatusMutation.isPending}
+                    onClick={() => openMarketplaceForPrediction(prediction)}
+                  >
+                    <Search className="mr-1 h-4 w-4" />
+                    {prediction.booking &&
+                    ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(prediction.booking.status)
+                      ? 'View Booking'
+                      : 'Find a Pro'}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="min-h-[44px] px-3"
+                    disabled={updateStatusMutation.isPending}
+                    onClick={() =>
+                      updateStatusMutation.mutate({ prediction, status: 'COMPLETED' })
+                    }
+                  >
+                    {updateStatusMutation.isPending ? (
+                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Flame className="mr-1 h-4 w-4" />
+                    )}
+                    Mark as Done
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="min-h-[44px] px-3"
+                    disabled={updateStatusMutation.isPending}
+                    onClick={() =>
+                      updateStatusMutation.mutate({ prediction, status: 'DISMISSED' })
+                    }
+                  >
+                    Dismiss
+                  </Button>
+                </div>
               </div>
-              <div className="mt-3 flex gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  className="min-h-[44px] px-3"
-                  disabled={updateStatusMutation.isPending}
-                  onClick={() => openMarketplaceForPrediction(prediction)}
-                >
-                  <Search className="mr-1 h-4 w-4" />
-                  {prediction.booking &&
-                  ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(prediction.booking.status)
-                    ? 'View Booking'
-                    : 'Find a Pro'}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="min-h-[44px] px-3"
-                  disabled={updateStatusMutation.isPending}
-                  onClick={() =>
-                    updateStatusMutation.mutate({ prediction, status: 'COMPLETED' })
-                  }
-                >
-                  Mark as Done
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="min-h-[44px] px-3"
-                  disabled={updateStatusMutation.isPending}
-                  onClick={() =>
-                    updateStatusMutation.mutate({ prediction, status: 'DISMISSED' })
-                  }
-                >
-                  Dismiss
-                </Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </CardContent>
       </Card>
     );
