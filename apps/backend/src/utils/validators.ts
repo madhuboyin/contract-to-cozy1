@@ -157,6 +157,11 @@ export const createPropertySchema = z.object({
   hasSecondaryHeat: z.boolean().nullable().optional(),
   isResilienceVerified: z.boolean().optional(),
   isUtilityVerified: z.boolean().optional(),
+  purchasePriceCents: z.number().int().nonnegative().nullable().optional(),
+  purchaseDate: z.coerce.date().nullable().optional(),
+  lastAppraisedValue: z.number().int().nonnegative().nullable().optional(),
+  lastAppraisalDate: z.coerce.date().nullable().optional(),
+  isEquityVerified: z.boolean().optional(),
   
   // FIX: REMOVED applianceAges and ADDED homeAssets array
   homeAssets: z.array(HomeAssetInputSchema).optional(), // NEW STRUCTURED FIELD

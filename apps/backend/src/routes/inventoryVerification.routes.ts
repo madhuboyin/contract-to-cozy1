@@ -12,6 +12,7 @@ import {
   getStats,
 } from '../controllers/inventoryVerification.controller';
 import { getProtectionGap } from '../controllers/insuranceAuditor.controller';
+import { getHomeEquity } from '../controllers/valueIntelligence.controller';
 import {
   extractInsuranceOcr,
   confirmInsuranceOcr,
@@ -44,6 +45,12 @@ router.get(
   '/properties/:propertyId/insurance/protection-gap',
   propertyAuthMiddleware,
   getProtectionGap
+);
+
+router.get(
+  '/properties/:propertyId/value/home-equity',
+  propertyAuthMiddleware,
+  getHomeEquity
 );
 
 router.post(

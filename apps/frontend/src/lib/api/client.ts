@@ -26,6 +26,7 @@ import {
   UpdateInsurancePolicyInput,
   InsurancePolicy,
   InsuranceProtectionGapSummary,
+  HomeEquitySummary,
   APISuccess, 
   // NEW DOCUMENT IMPORTS
   Document,
@@ -862,6 +863,11 @@ class APIClient {
       hasSecondaryHeat?: boolean | null;
       isResilienceVerified?: boolean;
       isUtilityVerified?: boolean;
+      purchasePriceCents?: number | null;
+      purchaseDate?: string | null;
+      lastAppraisedValue?: number | null;
+      lastAppraisalDate?: string | null;
+      isEquityVerified?: boolean;
       applianceAges?: any;
     }
   ): Promise<APIResponse<Property>> {
@@ -1065,6 +1071,15 @@ class APIClient {
   ): Promise<APIResponse<InsuranceProtectionGapSummary>> {
     return this.request<InsuranceProtectionGapSummary>(
       `/api/properties/${propertyId}/insurance/protection-gap`,
+      { method: 'GET' }
+    );
+  }
+
+  async getHomeEquitySummary(
+    propertyId: string
+  ): Promise<APIResponse<HomeEquitySummary>> {
+    return this.request<HomeEquitySummary>(
+      `/api/properties/${propertyId}/value/home-equity`,
       { method: 'GET' }
     );
   }

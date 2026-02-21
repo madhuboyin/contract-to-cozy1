@@ -60,11 +60,23 @@ export interface InsuranceGapReviewNudgeDTO {
   underInsuredCents: number;
 }
 
+export interface EquityCheckNudgeDTO {
+  type: 'EQUITY_CHECK';
+  source: 'PROPERTY';
+  title: string;
+  description: string;
+  question: string;
+  purchasePriceCents: number | null;
+  purchaseDate: string | null;
+  lastAppraisedValueCents: number;
+}
+
 export type HomeHealthNudgeDTO =
   | AssetVerificationNudgeDTO
   | ResilienceCheckNudgeDTO
   | UtilitySetupNudgeDTO
-  | InsuranceGapReviewNudgeDTO;
+  | InsuranceGapReviewNudgeDTO
+  | EquityCheckNudgeDTO;
 
 export interface VerifyItemPayload {
   source: 'OCR_LABEL' | 'MANUAL' | 'AI_ORACLE';

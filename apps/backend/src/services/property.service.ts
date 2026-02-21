@@ -64,6 +64,11 @@ interface CreatePropertyData {
   hasSecondaryHeat?: boolean | null;
   isResilienceVerified?: boolean;
   isUtilityVerified?: boolean;
+  purchasePriceCents?: number | null;
+  purchaseDate?: Date | null;
+  lastAppraisedValue?: number | null;
+  lastAppraisalDate?: Date | null;
+  isEquityVerified?: boolean;
   
   homeAssets?: HomeAssetInput[];
 }
@@ -225,6 +230,16 @@ export type PropertyNudge =
       totalInventoryValueCents: number;
       personalPropertyLimitCents: number;
       underInsuredCents: number;
+    }
+  | {
+      type: 'EQUITY_CHECK';
+      source: 'PROPERTY';
+      title: string;
+      description: string;
+      question: string;
+      purchasePriceCents: number | null;
+      purchaseDate: Date | null;
+      lastAppraisedValueCents: number;
     };
 
 async function hydrateHomeAssetsFromInventory<T extends { id: string }>(
@@ -395,6 +410,16 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       hasSecondaryHeat: data.hasSecondaryHeat ?? null,
       isResilienceVerified: data.isResilienceVerified ?? false,
       isUtilityVerified: data.isUtilityVerified ?? false,
+      purchasePriceCents: data.purchasePriceCents ?? null,
+      purchaseDate: data.purchaseDate ?? null,
+      lastAppraisedValue: data.lastAppraisedValue ?? null,
+      lastAppraisalDate: data.lastAppraisalDate ?? null,
+      isEquityVerified:
+        data.isEquityVerified ??
+        (data.purchasePriceCents !== null &&
+          data.purchasePriceCents !== undefined &&
+          data.purchaseDate !== null &&
+          data.purchaseDate !== undefined),
       // END PHASE 2 ADDITIONS
     },
   });
@@ -458,6 +483,10 @@ export async function getNextPropertyNudge(propertyId: string): Promise<Property
       primaryHeatingFuel: true,
       isResilienceVerified: true,
       isUtilityVerified: true,
+      purchasePriceCents: true,
+      purchaseDate: true,
+      lastAppraisedValue: true,
+      isEquityVerified: true,
     },
   });
 
@@ -524,6 +553,26 @@ export async function getNextPropertyNudge(propertyId: string): Promise<Property
       totalInventoryValueCents: protectionGap.totalInventoryValueCents,
       personalPropertyLimitCents: protectionGap.personalPropertyLimitCents,
       underInsuredCents: protectionGap.underInsuredCents,
+    };
+  }
+
+  const isEquityMissing =
+    !property.isEquityVerified ||
+    property.purchasePriceCents === null ||
+    property.purchaseDate === null;
+
+  if (!hasPendingCriticalVerification && isEquityMissing) {
+    return {
+      type: 'EQUITY_CHECK',
+      source: 'PROPERTY',
+      title: 'Track your home equity',
+      description:
+        "What is your home worth today? Enter your purchase details to track your equity and see how much value your maintenance has added.",
+      question:
+        "What is your home worth today? Enter your purchase details to track your equity and see how much value your maintenance has added.",
+      purchasePriceCents: property.purchasePriceCents,
+      purchaseDate: property.purchaseDate,
+      lastAppraisedValueCents: property.lastAppraisedValue ?? 0,
     };
   }
 
@@ -948,6 +997,19 @@ export async function updateProperty(
   if (data.hasSecondaryHeat !== undefined) updatePayload.hasSecondaryHeat = data.hasSecondaryHeat;
   if (data.isResilienceVerified !== undefined) updatePayload.isResilienceVerified = data.isResilienceVerified;
   if (data.isUtilityVerified !== undefined) updatePayload.isUtilityVerified = data.isUtilityVerified;
+  if (data.purchasePriceCents !== undefined) updatePayload.purchasePriceCents = data.purchasePriceCents ?? null;
+  if (data.purchaseDate !== undefined) updatePayload.purchaseDate = data.purchaseDate ?? null;
+  if (data.lastAppraisedValue !== undefined) updatePayload.lastAppraisedValue = data.lastAppraisedValue ?? null;
+  if (data.lastAppraisalDate !== undefined) updatePayload.lastAppraisalDate = data.lastAppraisalDate ?? null;
+  if (data.isEquityVerified !== undefined) {
+    updatePayload.isEquityVerified = data.isEquityVerified;
+  } else if (data.purchasePriceCents !== undefined || data.purchaseDate !== undefined) {
+    const nextPurchasePriceCents =
+      data.purchasePriceCents !== undefined ? data.purchasePriceCents : existingProperty.purchasePriceCents;
+    const nextPurchaseDate =
+      data.purchaseDate !== undefined ? data.purchaseDate : existingProperty.purchaseDate;
+    updatePayload.isEquityVerified = nextPurchasePriceCents !== null && nextPurchaseDate !== null;
+  }
 
   const property = await prisma.property.update({
     where: { id: propertyId },

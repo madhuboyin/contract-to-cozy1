@@ -650,6 +650,23 @@ export interface InsuranceProtectionGapSummary {
   underInsuredCents: number;
 }
 
+export interface HomeEquitySummary {
+  propertyId: string;
+  isEquityVerified: boolean;
+  purchasePriceCents: number | null;
+  purchaseDate: string | null;
+  lastAppraisedValueCents: number;
+  appreciationCents: number;
+  baseEquityCents: number;
+  maintenanceSpendCents: number;
+  maintenancePremiumRate: number;
+  maintenancePremiumCents: number;
+  totalEquityWithMaintenanceCents: number;
+  healthScore: number | null;
+  resaleAdvantageBaseline: number;
+  hasResaleAdvantage: boolean;
+}
+
 // --- CHECKLIST TYPES (FIX: ADDED MISSING TYPES) ---
 /**
  * Checklist Item Interface
@@ -881,6 +898,12 @@ export interface Property {
   hasSecondaryHeat: boolean | null;
   isResilienceVerified: boolean;
   isUtilityVerified: boolean;
+  purchasePriceCents: number | null;
+  purchaseDate: string | null;
+  lastAppraisedValue: number | null;
+  lastAppraisalDate: string | null;
+  estimatedMaintenancePremiumCents: number;
+  isEquityVerified: boolean;
   applianceAges: any;
   
   // Home Assets relation

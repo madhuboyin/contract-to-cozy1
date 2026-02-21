@@ -27,7 +27,7 @@ export async function getNextDashboardNudge(
   try {
     const { propertyId } = req.params;
 
-    // Priority 1: Property-level resilience/utility nudges
+    // Priority 1: Property-level nudges (resilience, utility, insurance, equity)
     const propertyNudge = await getNextPropertyNudge(propertyId);
     if (propertyNudge) {
       return res.json({ success: true, data: propertyNudge });

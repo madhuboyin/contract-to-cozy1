@@ -16,6 +16,7 @@ import { api } from '@/lib/api/client';
 import { HomePulse } from './HomePulse';
 import { HomeHealthNudge } from './verification/HomeHealthNudge';
 import { InsuranceSummaryCard } from './InsuranceSummaryCard';
+import { EquityOverviewCard } from './EquityOverviewCard';
 
 
 interface ExistingOwnerDashboardProps {
@@ -102,6 +103,10 @@ export const ExistingOwnerDashboard = ({
 
       {/* Verification Nudge */}
       <HomeHealthNudge propertyId={selectedPropertyId} />
+      <EquityOverviewCard
+        propertyId={selectedPropertyId}
+        healthScore={selectedProperty?.healthScore?.totalScore ?? null}
+      />
       <InsuranceSummaryCard propertyId={selectedPropertyId} />
 
       <div className="w-full border-t border-gray-200" />

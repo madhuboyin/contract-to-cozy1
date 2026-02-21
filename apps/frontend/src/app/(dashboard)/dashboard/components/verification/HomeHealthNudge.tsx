@@ -10,6 +10,7 @@ import { getHomeHealthNudge, verifyItem, getMissingFields } from './verification
 import LabelOcrModal from '../inventory/LabelOcrModal';
 import InventoryItemDrawer from '../inventory/InventoryItemDrawer';
 import { InsuranceGapNudge } from './InsuranceGapNudge';
+import { HomeEquityNudge } from './HomeEquityNudge';
 import {
   ocrLabelToDraft,
   confirmInventoryDraft,
@@ -24,6 +25,7 @@ interface HomeHealthNudgeProps {
 
 const HOME_NUDGE_QUERY_KEY = 'home-health-nudge';
 const INSURANCE_PROTECTION_GAP_QUERY_KEY = 'insurance-protection-gap';
+const HOME_EQUITY_QUERY_KEY = 'home-equity-summary';
 
 export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   const queryClient = useQueryClient();
@@ -37,6 +39,9 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
     personalPropertyLimitCents: number | null;
     deductibleCents: number | null;
   } | null>(null);
+  const [equityPriceDollars, setEquityPriceDollars] = useState('');
+  const [equityPurchaseDate, setEquityPurchaseDate] = useState('');
+  const [equitySaving, setEquitySaving] = useState(false);
   const insuranceFileRef = useRef<HTMLInputElement | null>(null);
 
   // Edit drawer state (asset verification path)
@@ -65,6 +70,20 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
     }
   }, [nudge?.type]);
 
+  useEffect(() => {
+    if (nudge?.type !== 'EQUITY_CHECK') {
+      setEquityPriceDollars('');
+      setEquityPurchaseDate('');
+      setEquitySaving(false);
+      return;
+    }
+
+    setEquityPriceDollars(
+      typeof nudge.purchasePriceCents === 'number' ? String(nudge.purchasePriceCents / 100) : ''
+    );
+    setEquityPurchaseDate(nudge.purchaseDate ? nudge.purchaseDate.slice(0, 10) : '');
+  }, [nudge]);
+
   const handleOcrCapture = useCallback(
     async (file: File) => {
       if (!propertyId || nudge?.type !== 'ASSET_VERIFICATION') return;
@@ -75,7 +94,12 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
           await confirmInventoryDraft(propertyId, draft.draftId);
         }
         await verifyItem(propertyId, nudge.item.id, { source: 'OCR_LABEL' });
-        await refreshNudge();
+        await Promise.all([
+          refreshNudge(),
+          queryClient.invalidateQueries({
+            queryKey: [HOME_EQUITY_QUERY_KEY, propertyId],
+          }),
+        ]);
       } catch (err) {
         console.error('OCR verification failed:', err);
       } finally {
@@ -83,7 +107,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
         setLabelOpen(false);
       }
     },
-    [propertyId, nudge, refreshNudge]
+    [propertyId, nudge, refreshNudge, queryClient]
   );
 
   const handleAddDetails = useCallback(async () => {
@@ -114,8 +138,13 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
     }
     setDrawerOpen(false);
     setDrawerItem(null);
-    await refreshNudge();
-  }, [propertyId, drawerItem, refreshNudge]);
+    await Promise.all([
+      refreshNudge(),
+      queryClient.invalidateQueries({
+        queryKey: [HOME_EQUITY_QUERY_KEY, propertyId],
+      }),
+    ]);
+  }, [propertyId, drawerItem, refreshNudge, queryClient]);
 
   const handleResilienceChoice = useCallback(
     async (value: boolean | null, choiceKey: string) => {
@@ -203,6 +232,42 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
       setInsuranceConfirming(false);
     }
   }, [propertyId, nudge, insuranceExtracted, refreshNudge, queryClient]);
+
+  const handleEquitySubmit = useCallback(async () => {
+    if (!propertyId || nudge?.type !== 'EQUITY_CHECK') return;
+    const normalizedPrice = Number(equityPriceDollars);
+
+    if (!Number.isFinite(normalizedPrice) || normalizedPrice < 0 || !equityPurchaseDate) {
+      return;
+    }
+
+    setEquitySaving(true);
+    try {
+      const purchasePriceCents = Math.round(normalizedPrice * 100);
+      await api.patch(`/api/properties/${propertyId}`, {
+        purchasePriceCents,
+        purchaseDate: equityPurchaseDate,
+        isEquityVerified: true,
+      });
+      await Promise.all([
+        refreshNudge(),
+        queryClient.invalidateQueries({
+          queryKey: [HOME_EQUITY_QUERY_KEY, propertyId],
+        }),
+      ]);
+    } catch (err) {
+      console.error('Failed to save equity baseline:', err);
+    } finally {
+      setEquitySaving(false);
+    }
+  }, [
+    propertyId,
+    nudge,
+    equityPriceDollars,
+    equityPurchaseDate,
+    refreshNudge,
+    queryClient,
+  ]);
 
   if (isLoading || !propertyId || !nudge) return null;
 
@@ -317,6 +382,21 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
           onConfirm={() => void handleInsuranceConfirm()}
         />
       </>
+    );
+  }
+
+  if (nudge.type === 'EQUITY_CHECK') {
+    return (
+      <HomeEquityNudge
+        title={nudge.title}
+        question={nudge.question}
+        purchasePriceDollars={equityPriceDollars}
+        purchaseDate={equityPurchaseDate}
+        isSaving={equitySaving}
+        onPurchasePriceChange={setEquityPriceDollars}
+        onPurchaseDateChange={setEquityPurchaseDate}
+        onSubmit={() => void handleEquitySubmit()}
+      />
     );
   }
 
