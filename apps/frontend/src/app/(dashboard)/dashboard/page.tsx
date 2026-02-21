@@ -2,15 +2,17 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
-import { Loader2, ShieldAlert, TrendingUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, ClipboardList, Loader2, ShieldAlert, TrendingUp } from 'lucide-react';
 import { Booking, ChecklistItem, Warranty, InsurancePolicy, LocalUpdate } from '@/types';
 import { ScoredProperty } from './types'; 
 import { differenceInDays, isPast, parseISO } from 'date-fns'; 
 
 // NEW IMPORTS FOR SCORECARDS AND LAYOUT
 import { DashboardShell } from '@/components/DashboardShell';
+import { ActionCenter } from '@/components/orchestration/ActionCenter';
 import { PropertyHealthScoreCard } from './components/PropertyHealthScoreCard'; 
 import { PropertyRiskScoreCard } from './components/PropertyRiskScoreCard'; 
 import { FinancialEfficiencyScoreCard } from './components/FinancialEfficiencyScoreCard'; 
@@ -25,10 +27,6 @@ import { useHomeownerSegment } from '@/lib/hooks/useHomeownerSegment';
 import { WelcomeSection } from '@/components/WelcomeSection';
 import { RoomsSnapshotSection } from './components/RoomsSnapshotSection';
 import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCarousel';
-import CoverageIntelligenceToolCard from './components/CoverageIntelligenceToolCard';
-import RiskPremiumOptimizerToolCard from './components/RiskPremiumOptimizerToolCard';
-import DoNothingSimulatorToolCard from './components/DoNothingSimulatorToolCard';
-import HomeSavingsCheckToolCard from './components/HomeSavingsCheckToolCard';
 import MorningHomePulseCard from './components/MorningHomePulseCard';
 import { HomeScoreReportCard } from './components/HomeScoreReportCard';
 import { ShareVaultButton } from './components/ShareVaultButton';
@@ -167,6 +165,7 @@ export default function DashboardPage() {
   const { user, loading: userLoading } = useAuth();
   const [redirectChecked, setRedirectChecked] = useState(false);
   const [showWelcomeScreen, setShowWelcomeScreen] = useState(false);
+  const [showAllDecisionTools, setShowAllDecisionTools] = useState(false);
   const [orchestrationSummary, setOrchestrationSummary] = useState<{
     pendingActionCount: number;
   } | null>(null);
@@ -374,7 +373,32 @@ export default function DashboardPage() {
   
   // Derived property values using the context state
   const properties = data.properties;
-  const selectedProperty = properties.find(p => p.id === selectedPropertyId); 
+  const selectedProperty = properties.find(p => p.id === selectedPropertyId);
+  const decisionTools = selectedPropertyId
+    ? [
+        {
+          title: 'Home Savings Check',
+          description: 'Find recurring bill savings opportunities.',
+          href: `/dashboard/properties/${selectedPropertyId}/tools/home-savings`,
+        },
+        {
+          title: 'Coverage Intelligence',
+          description: 'Assess insurance and warranty fit.',
+          href: `/dashboard/properties/${selectedPropertyId}/tools/coverage-intelligence`,
+        },
+        {
+          title: 'Risk-to-Premium Optimizer',
+          description: 'Lower premium pressure without increasing risk.',
+          href: `/dashboard/properties/${selectedPropertyId}/tools/risk-premium-optimizer`,
+        },
+        {
+          title: 'Do-Nothing Simulator',
+          description: 'See the downside of delayed action.',
+          href: `/dashboard/properties/${selectedPropertyId}/tools/do-nothing`,
+        },
+      ]
+    : [];
+  const visibleDecisionTools = showAllDecisionTools ? decisionTools : decisionTools.slice(0, 2);
   
   if (userSegment === 'HOME_BUYER') {
     return (
@@ -404,15 +428,43 @@ export default function DashboardPage() {
           <div className="space-y-6 lg:col-span-8">
             {selectedPropertyId && <MorningHomePulseCard propertyId={selectedPropertyId} />}
 
-            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+            {selectedPropertyId && (
+              <section className="rounded-2xl border border-slate-300 bg-white p-4 shadow-sm md:p-5">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-lg bg-blue-100 p-2">
+                      <ClipboardList className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold text-slate-900">Action Center</h2>
+                      <p className="text-sm text-slate-600">
+                        Your most important tasks right now.
+                      </p>
+                    </div>
+                  </div>
+                  <Link
+                    href={`/dashboard/actions?propertyId=${selectedPropertyId}`}
+                    className="inline-flex min-h-[40px] w-fit items-center whitespace-nowrap text-sm font-semibold text-blue-600 transition-colors hover:text-blue-700"
+                  >
+                    View all actions
+                  </Link>
+                </div>
+
+                <ActionCenter propertyId={selectedPropertyId} maxItems={5} />
+              </section>
+            )}
+
+            <RoomsSnapshotSection propertyId={selectedPropertyId} />
+
+            <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm md:p-5">
               <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                   <div className="rounded-lg bg-blue-100 p-2">
                     <TrendingUp className="h-5 w-5 text-blue-600" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-slate-900">Property Intelligence Scores</h2>
-                    <p className="text-sm text-slate-500">Health, risk, and financial signals in one glance.</p>
+                    <h2 className="text-base font-semibold text-slate-900">Property Intelligence Scores</h2>
+                    <p className="text-sm text-slate-600">Weekly health, risk, and financial trendline.</p>
                   </div>
                 </div>
                 {selectedPropertyId && (
@@ -430,8 +482,6 @@ export default function DashboardPage() {
                 <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
               </div>
             </section>
-
-            <RoomsSnapshotSection propertyId={selectedPropertyId} />
           </div>
 
           <aside className="space-y-4 lg:col-span-4">
@@ -461,21 +511,45 @@ export default function DashboardPage() {
 
             {selectedPropertyId && (
               <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="mb-4 flex items-start gap-3">
+                <div className="mb-3 flex items-start gap-3">
                   <div className="rounded-lg bg-teal-100 p-2">
                     <ShieldAlert className="h-5 w-5 text-teal-700" />
                   </div>
                   <div>
                     <h2 className="text-base font-semibold text-slate-900">Decision Tools</h2>
-                    <p className="text-sm text-slate-500">Compare coverage, premium pressure, and inaction downside.</p>
+                    <p className="text-sm text-slate-600">Compact shortcuts to the highest-impact analyses.</p>
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                  <HomeSavingsCheckToolCard propertyId={selectedPropertyId} />
-                  <CoverageIntelligenceToolCard propertyId={selectedPropertyId} />
-                  <RiskPremiumOptimizerToolCard propertyId={selectedPropertyId} />
-                  <DoNothingSimulatorToolCard propertyId={selectedPropertyId} />
+                <div className="space-y-2">
+                  {visibleDecisionTools.map((tool) => (
+                    <Link
+                      key={tool.href}
+                      href={tool.href}
+                      className="flex items-start justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 transition-colors hover:border-slate-300 hover:bg-white"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{tool.title}</p>
+                        <p className="text-xs text-slate-600">{tool.description}</p>
+                      </div>
+                      <span className="ml-3 text-xs font-semibold text-teal-700">Open</span>
+                    </Link>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowAllDecisionTools((prev) => !prev)}
+                  className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-blue-600 transition-colors hover:text-blue-700"
+                >
+                  {showAllDecisionTools ? 'Show fewer tools' : 'Show all tools'}
+                  {showAllDecisionTools ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </button>
+
+                <div className="mt-1 text-xs text-slate-500">
+                  {orchestrationSummary?.pendingActionCount
+                    ? `${orchestrationSummary.pendingActionCount} pending orchestrated actions detected.`
+                    : 'No pending orchestrated actions right now.'}
                 </div>
               </section>
             )}
