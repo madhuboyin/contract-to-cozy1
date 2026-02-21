@@ -12,6 +12,7 @@ import BarcodeScannerModal, { BarcodeLookupResult } from './BarcodeScannerModal'
 import LabelOcrModal from './LabelOcrModal';
 import { lookupBarcode as lookupInventoryBarcode } from '../../inventory/inventoryApi';
 import QrScannerModal from './QrScannerModal';
+import { CheckCircle as CheckCircleIcon, ShieldAlert as ShieldAlertIcon } from 'lucide-react';
 
 
 import {
@@ -29,6 +30,7 @@ import {
   confirmInventoryDraft,
   dismissInventoryDraft,
 } from '../../inventory/inventoryApi';
+import { verifyItem } from '../verification/verificationApi';
 
 const CATEGORIES: InventoryItemCategory[] = [
   'APPLIANCE',
@@ -369,6 +371,9 @@ export default function InventoryItemDrawer(props: {
   const [purchaseDate, setPurchaseDate] = useState<string>('');
   
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
+
+  // verification state
+  const [verifying, setVerifying] = useState(false);
 
   /**
  * Check for duplicate major appliances (client-side)
@@ -931,8 +936,114 @@ useEffect(() => {
           </button>
         </div>
 
+        {/* Verification status banner */}
+        {isEdit && props.initialItem && (
+          <div className="mt-4">
+            {(props.initialItem as any).isVerified ? (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-200">
+                <CheckCircleIcon className="w-4 h-4 text-green-600" />
+                <span className="text-sm font-medium text-green-800">
+                  Verified via {((props.initialItem as any).verificationSource || 'unknown').replace('_', ' ')}
+                </span>
+              </div>
+            ) : (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <ShieldAlertIcon className="w-4 h-4 text-amber-600" />
+                  <span className="text-sm font-medium text-amber-800">Unverified Item</span>
+                </div>
+                <p className="text-xs text-amber-700 mb-2">
+                  Verify this item to unlock lifespan predictions and better maintenance insights.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setLabelOpen(true)}
+                    disabled={verifying || ocrLoading}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md
+                      border border-amber-300 text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                  >
+                    Scan Label
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!props.initialItem) return;
+                      setVerifying(true);
+                      try {
+                        await verifyItem(props.propertyId, props.initialItem.id, { source: 'MANUAL' });
+                        props.onSaved();
+                      } catch (err) {
+                        console.error('Manual verification failed:', err);
+                      } finally {
+                        setVerifying(false);
+                      }
+                    }}
+                    disabled={verifying}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md
+                      border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    {verifying ? 'Verifying...' : 'Mark as Verified'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Remaining Life progress bar */}
+            {(props.initialItem as any).expectedExpiryDate && (props.initialItem as any).purchasedOn && (() => {
+              const purchased = new Date((props.initialItem as any).purchasedOn).getTime();
+              const expiry = new Date((props.initialItem as any).expectedExpiryDate).getTime();
+              const now = Date.now();
+              const totalSpan = expiry - purchased;
+              const elapsed = now - purchased;
+              const remaining = expiry - now;
+              const pctRemaining = totalSpan > 0 ? Math.max(0, Math.min(100, (remaining / totalSpan) * 100)) : 0;
+              const yearsRemaining = remaining / (365.25 * 24 * 60 * 60 * 1000);
+              const barColor = pctRemaining > 50 ? 'bg-green-500' : pctRemaining > 20 ? 'bg-amber-500' : 'bg-red-500';
+
+              return (
+                <div className="mt-2 px-3 py-2 rounded-lg bg-gray-50 border border-gray-200">
+                  <div className="flex justify-between text-xs text-gray-600 mb-1">
+                    <span>Remaining Life</span>
+                    <span>
+                      {yearsRemaining > 0
+                        ? `~${Math.round(yearsRemaining)} year${Math.round(yearsRemaining) !== 1 ? 's' : ''} remaining`
+                        : 'Past expected life'}
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${barColor}`}
+                      style={{ width: `${pctRemaining}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Ghost slots for missing technical specs */}
+            {!(props.initialItem as any).isVerified && (
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {!((props.initialItem as any).manufacturer) && (
+                  <div className="flex items-center gap-1 px-2 py-1.5 rounded border border-dashed border-gray-300 text-xs text-gray-400">
+                    Manufacturer
+                  </div>
+                )}
+                {!((props.initialItem as any).modelNumber) && (
+                  <div className="flex items-center gap-1 px-2 py-1.5 rounded border border-dashed border-gray-300 text-xs text-gray-400">
+                    Model #
+                  </div>
+                )}
+                {!((props.initialItem as any).serialNumber) && (
+                  <div className="flex items-center gap-1 px-2 py-1.5 rounded border border-dashed border-gray-300 text-xs text-gray-400">
+                    Serial #
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="mt-6 space-y-4 flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1">
-          {/* ✅ Unified "Smart scan" section */}
+          {/* Unified "Smart scan" section */}
           {!isEdit ? (
             <div className="rounded-2xl border border-black/10 p-4">
               <div className="flex items-start justify-between gap-3">

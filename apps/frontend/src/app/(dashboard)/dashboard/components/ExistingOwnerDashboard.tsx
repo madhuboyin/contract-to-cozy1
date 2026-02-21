@@ -14,6 +14,7 @@ import { ArrowRight, Activity, AlertTriangle, ClipboardList } from 'lucide-react
 import { ActionCenter } from '@/components/orchestration/ActionCenter';
 import { api } from '@/lib/api/client';
 import { HomePulse } from './HomePulse';
+import { HomeHealthNudge } from './verification/HomeHealthNudge';
 
 
 interface ExistingOwnerDashboardProps {
@@ -97,6 +98,10 @@ export const ExistingOwnerDashboard = ({
         </div>
         <HomePulse stats={stats} selectedPropertyId={selectedPropertyId} />
       </section>
+
+      {/* Verification Nudge */}
+      <HomeHealthNudge propertyId={selectedPropertyId} />
+
       <div className="w-full border-t border-gray-200" />
 
 

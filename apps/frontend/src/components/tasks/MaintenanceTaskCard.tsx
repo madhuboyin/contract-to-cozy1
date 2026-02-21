@@ -1,19 +1,21 @@
 // apps/frontend/src/components/tasks/MaintenanceTaskCard.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format, parseISO, isPast, isWithinInterval, addDays } from 'date-fns';
-import { 
-  Calendar, 
-  DollarSign, 
-  Edit, 
-  Trash2, 
+import {
+  Calendar,
+  DollarSign,
+  Edit,
+  Trash2,
   MoreVertical,
   Clock,
   AlertCircle,
   Repeat,
   Link as LinkIcon,
   Wrench,
+  Camera,
+  Shield,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,6 +49,14 @@ export function MaintenanceTaskCard({
   compact = false,
 }: MaintenanceTaskCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showPostCompletionNudge, setShowPostCompletionNudge] = useState(false);
+
+  // Auto-dismiss post-completion nudge after 10 seconds
+  useEffect(() => {
+    if (!showPostCompletionNudge) return;
+    const timer = setTimeout(() => setShowPostCompletionNudge(false), 10000);
+    return () => clearTimeout(timer);
+  }, [showPostCompletionNudge]);
 
   // Calculate due date status
   const getDueDateStatus = () => {
@@ -150,7 +160,12 @@ export function MaintenanceTaskCard({
                     <DropdownMenuItem onClick={() => onStatusChange(task, 'IN_PROGRESS')}>
                       Start Task
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onStatusChange(task, 'COMPLETED')}>
+                    <DropdownMenuItem onClick={() => {
+                      onStatusChange(task, 'COMPLETED');
+                      if ((task as any).inventoryItemId && !(task as any).inventoryItemVerified) {
+                        setShowPostCompletionNudge(true);
+                      }
+                    }}>
                       Mark Complete
                     </DropdownMenuItem>
                   </>
@@ -230,8 +245,13 @@ export function MaintenanceTaskCard({
           {/* Quick Action Buttons - Visible on mobile for better touch UX */}
           <div className="flex flex-col sm:hidden gap-2 pt-2">
              {!onStatusChange || task.status !== 'COMPLETED' ? (
-                <Button 
-                  onClick={() => onStatusChange?.(task, 'COMPLETED')}
+                <Button
+                  onClick={() => {
+                    onStatusChange?.(task, 'COMPLETED');
+                    if ((task as any).inventoryItemId && !(task as any).inventoryItemVerified) {
+                      setShowPostCompletionNudge(true);
+                    }
+                  }}
                   className="w-full bg-green-600 hover:bg-green-700 h-11"
                 >
                   Mark Complete
@@ -295,6 +315,45 @@ export function MaintenanceTaskCard({
             </div>
           )}
         </div>
+
+        {/* Post-completion verification nudge */}
+        {showPostCompletionNudge && (
+          <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg animate-in fade-in slide-in-from-top-1">
+            <div className="flex items-start gap-2">
+              <Shield className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-blue-900">
+                  You just maintained {task.title}. Want to verify its details?
+                </p>
+                <p className="text-xs text-blue-700 mt-0.5">
+                  Scan the label to unlock lifespan predictions
+                </p>
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={() => {
+                      setShowPostCompletionNudge(false);
+                      // Navigate to inventory with verify param
+                      if ((task as any).inventoryItemId) {
+                        window.location.href = `/dashboard/properties/${task.propertyId}/tools/inventory?itemId=${(task as any).inventoryItemId}&verify=true`;
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md
+                      border border-blue-300 text-blue-700 hover:bg-blue-100"
+                  >
+                    <Camera className="w-3 h-3" />
+                    Scan Label
+                  </button>
+                  <button
+                    onClick={() => setShowPostCompletionNudge(false)}
+                    className="px-2.5 py-1 text-xs text-gray-500 hover:text-gray-700"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -1,6 +1,7 @@
 // apps/backend/src/services/inventoryDraft.service.ts
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
+import { calculateExpectedExpiry } from './inventoryVerification.service';
 
 export class InventoryDraftService {
   async createDraftFromOcr(args: {
@@ -58,7 +59,17 @@ export class InventoryDraftService {
     if (!d) throw new APIError('Draft not found', 404, 'DRAFT_NOT_FOUND');
     if (d.status !== 'DRAFT') throw new APIError('Draft not in DRAFT state', 409, 'DRAFT_NOT_CONFIRMABLE');
 
-    // Create inventory item from draft
+    // Build technical specs from OCR draft data
+    const technicalSpecs: Record<string, string | null> = {};
+    if (d.manufacturer) technicalSpecs.manufacturer = d.manufacturer;
+    if (d.modelNumber) technicalSpecs.modelNumber = d.modelNumber;
+    if (d.serialNumber) technicalSpecs.serialNumber = d.serialNumber;
+    if (d.upc) technicalSpecs.upc = d.upc;
+    if (d.sku) technicalSpecs.sku = d.sku;
+
+    const hasTechSpecs = Object.keys(technicalSpecs).length > 0;
+
+    // Create inventory item from draft (with verification data from OCR)
     const item = await prisma.inventoryItem.create({
       data: {
         propertyId,
@@ -77,8 +88,22 @@ export class InventoryDraftService {
 
         manufacturerNorm: d.manufacturer ? d.manufacturer.toLowerCase().replace(/[^a-z0-9]/g, '') : null,
         modelNumberNorm: d.modelNumber ? d.modelNumber.toLowerCase().replace(/[^a-z0-9]/g, '') : null,
+
+        // Verification: OCR-confirmed items are auto-verified
+        isVerified: true,
+        verificationSource: 'OCR_LABEL',
+        ...(hasTechSpecs ? { technicalSpecs } : {}),
       },
     });
+
+    // Calculate and set expected expiry date if possible
+    const expiryDate = calculateExpectedExpiry(item);
+    if (expiryDate) {
+      await prisma.inventoryItem.update({
+        where: { id: item.id },
+        data: { expectedExpiryDate: expiryDate },
+      });
+    }
 
     await prisma.inventoryDraftItem.update({
       where: { id: draftId },
