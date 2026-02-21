@@ -148,9 +148,9 @@ function PasswordGate({
           <div className="rounded-full bg-slate-100 p-4">
             <Lock className="h-8 w-8 text-slate-600" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Seller's Vault</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Seller&apos;s Vault</h1>
           <p className="text-sm text-slate-500">
-            This property's proof-of-care report is password protected.
+            This property&apos;s proof-of-care report is password protected.
             <br />
             Enter the access code provided by the homeowner.
           </p>
@@ -477,7 +477,7 @@ export function VaultView({ propertyId }: { propertyId: string }) {
             </div>
             <span className="text-sm font-semibold text-white">Contract to Cozy</span>
             <span className="text-slate-500">·</span>
-            <span className="text-sm text-slate-400">Seller's Vault</span>
+            <span className="text-sm text-slate-400">Seller&apos;s Vault</span>
           </div>
           <div className="flex items-center gap-1.5 text-xs text-slate-400">
             <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
