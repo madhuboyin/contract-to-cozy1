@@ -82,6 +82,10 @@ export interface InsurancePolicy {
   policyNumber: string;
   coverageType: string | null;
   premiumAmount: number; // Decimal(12, 2) in DB
+  personalPropertyLimitCents: number | null;
+  deductibleCents: number | null;
+  isVerified: boolean;
+  lastVerifiedAt: Date | null;
   startDate: Date;
   expiryDate: Date;
   createdAt: Date;
@@ -126,6 +130,9 @@ export interface CreateInsurancePolicyDTO {
   policyNumber: string;
   coverageType?: string;
   premiumAmount: number;
+  personalPropertyLimitCents?: number | null;
+  deductibleCents?: number | null;
+  isVerified?: boolean;
   startDate: Date;
   expiryDate: Date;
 }

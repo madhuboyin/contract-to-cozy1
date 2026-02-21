@@ -48,10 +48,23 @@ export interface UtilitySetupNudgeDTO {
   options: Array<{ label: string; value: string }>;
 }
 
+export interface InsuranceGapReviewNudgeDTO {
+  type: 'INSURANCE_GAP_REVIEW';
+  source: 'INSURANCE';
+  title: string;
+  description: string;
+  question: string;
+  policyId: string;
+  totalInventoryValueCents: number;
+  personalPropertyLimitCents: number;
+  underInsuredCents: number;
+}
+
 export type HomeHealthNudgeDTO =
   | AssetVerificationNudgeDTO
   | ResilienceCheckNudgeDTO
-  | UtilitySetupNudgeDTO;
+  | UtilitySetupNudgeDTO
+  | InsuranceGapReviewNudgeDTO;
 
 export interface VerifyItemPayload {
   source: 'OCR_LABEL' | 'MANUAL' | 'AI_ORACLE';

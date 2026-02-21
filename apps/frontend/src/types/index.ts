@@ -627,11 +627,27 @@ export interface InsurancePolicy {
   policyNumber: string;
   coverageType: string | null;
   premiumAmount: number;
+  personalPropertyLimitCents: number | null;
+  deductibleCents: number | null;
+  isVerified: boolean;
+  lastVerifiedAt: string | null;
   startDate: string; // ISO Date string
   expiryDate: string; // ISO Date string
   documents: Document[]; // Array of associated documents
   createdAt: string;
   updatedAt: string;
+}
+
+export interface InsuranceProtectionGapSummary {
+  propertyId: string;
+  policyId: string | null;
+  hasActivePolicy: boolean;
+  isPolicyVerified: boolean;
+  totalInventoryValueCents: number;
+  personalPropertyLimitCents: number;
+  deductibleCents: number;
+  gapCents: number;
+  underInsuredCents: number;
 }
 
 // --- CHECKLIST TYPES (FIX: ADDED MISSING TYPES) ---
@@ -1136,6 +1152,9 @@ export interface CreateInsurancePolicyInput {
   policyNumber: string;
   coverageType?: string;
   premiumAmount: number;
+  personalPropertyLimitCents?: number | null;
+  deductibleCents?: number | null;
+  isVerified?: boolean;
   startDate: string; // ISO date string
   expiryDate: string; // ISO date string
 }

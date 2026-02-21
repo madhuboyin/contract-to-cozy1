@@ -15,6 +15,7 @@ import { ActionCenter } from '@/components/orchestration/ActionCenter';
 import { api } from '@/lib/api/client';
 import { HomePulse } from './HomePulse';
 import { HomeHealthNudge } from './verification/HomeHealthNudge';
+import { InsuranceSummaryCard } from './InsuranceSummaryCard';
 
 
 interface ExistingOwnerDashboardProps {
@@ -101,6 +102,7 @@ export const ExistingOwnerDashboard = ({
 
       {/* Verification Nudge */}
       <HomeHealthNudge propertyId={selectedPropertyId} />
+      <InsuranceSummaryCard propertyId={selectedPropertyId} />
 
       <div className="w-full border-t border-gray-200" />
 

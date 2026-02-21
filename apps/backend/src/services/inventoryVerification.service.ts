@@ -22,7 +22,8 @@ const APPLIANCE_LIFESPAN_DATA: Record<string, { avgLife: number; category: strin
 };
 
 // High-priority categories for nudge ordering
-const HIGH_VALUE_CATEGORIES = ['HVAC', 'APPLIANCE', 'PLUMBING'];
+const HIGH_VALUE_CATEGORIES = ['HVAC', 'ROOF_EXTERIOR', 'APPLIANCE', 'PLUMBING'];
+const CRITICAL_VERIFICATION_CATEGORIES = ['HVAC', 'ROOF_EXTERIOR'];
 
 type VerificationSource = 'OCR_LABEL' | 'MANUAL' | 'AI_ORACLE';
 
@@ -124,6 +125,19 @@ export async function getHighestPriorityUnverifiedItem(propertyId: string) {
   if (!fallbackItem) return null;
 
   return { item: fallbackItem, totalUnverified, totalItems };
+}
+
+export async function hasPendingCriticalAssetVerification(propertyId: string) {
+  const item = await prisma.inventoryItem.findFirst({
+    where: {
+      propertyId,
+      isVerified: false,
+      category: { in: CRITICAL_VERIFICATION_CATEGORIES as any },
+    },
+    select: { id: true },
+  });
+
+  return Boolean(item);
 }
 
 export async function markItemVerified(

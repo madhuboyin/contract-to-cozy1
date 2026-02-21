@@ -25,6 +25,7 @@ import {
   CreateInsurancePolicyInput,
   UpdateInsurancePolicyInput,
   InsurancePolicy,
+  InsuranceProtectionGapSummary,
   APISuccess, 
   // NEW DOCUMENT IMPORTS
   Document,
@@ -1057,6 +1058,62 @@ class APIClient {
 
   async deleteInsurancePolicy(policyId: string): Promise<APIResponse<void>> {
     return this.request<void>(`/api/home-management/insurance-policies/${policyId}`, { method: 'DELETE' });
+  }
+
+  async getInsuranceProtectionGap(
+    propertyId: string
+  ): Promise<APIResponse<InsuranceProtectionGapSummary>> {
+    return this.request<InsuranceProtectionGapSummary>(
+      `/api/properties/${propertyId}/insurance/protection-gap`,
+      { method: 'GET' }
+    );
+  }
+
+  async extractInsuranceDeclaration(
+    propertyId: string,
+    policyId: string,
+    file: File
+  ): Promise<
+    APIResponse<{
+      policyId: string;
+      provider: string;
+      extracted: {
+        personalPropertyLimitCents: number | null;
+        deductibleCents: number | null;
+      };
+      signals: {
+        personalPropertyLabel: string | null;
+        deductibleLabel: string | null;
+      };
+      rawText: string;
+    }>
+  > {
+    try {
+      this.validateFile(file, {
+        maxSizeMB: 8,
+        allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'],
+      });
+    } catch (e) {
+      return Promise.reject(e);
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.formDataRequest(
+      `/api/properties/${propertyId}/insurance/${policyId}/ocr/extract`,
+      formData
+    );
+  }
+
+  async confirmInsuranceDeclaration(
+    propertyId: string,
+    policyId: string,
+    data: { personalPropertyLimitCents?: number | null; deductibleCents?: number | null }
+  ): Promise<APIResponse<InsurancePolicy>> {
+    return this.request<InsurancePolicy>(
+      `/api/properties/${propertyId}/insurance/${policyId}/ocr/confirm`,
+      { method: 'POST', body: data }
+    );
   }
 
   // ==========================================================================

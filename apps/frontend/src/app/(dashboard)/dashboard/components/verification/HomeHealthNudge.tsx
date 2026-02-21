@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/verification/HomeHealthNudge.tsx
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Shield, Camera, Edit3, ArrowRight, AlertCircle, Home, Droplets } from 'lucide-react';
@@ -9,6 +9,7 @@ import { api } from '@/lib/api/client';
 import { getHomeHealthNudge, verifyItem, getMissingFields } from './verificationApi';
 import LabelOcrModal from '../inventory/LabelOcrModal';
 import InventoryItemDrawer from '../inventory/InventoryItemDrawer';
+import { InsuranceGapNudge } from './InsuranceGapNudge';
 import {
   ocrLabelToDraft,
   confirmInventoryDraft,
@@ -22,6 +23,7 @@ interface HomeHealthNudgeProps {
 }
 
 const HOME_NUDGE_QUERY_KEY = 'home-health-nudge';
+const INSURANCE_PROTECTION_GAP_QUERY_KEY = 'insurance-protection-gap';
 
 export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   const queryClient = useQueryClient();
@@ -29,6 +31,13 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   const [ocrLoading, setOcrLoading] = useState(false);
   const [resilienceChoiceSaving, setResilienceChoiceSaving] = useState<string | null>(null);
   const [utilitySaving, setUtilitySaving] = useState(false);
+  const [insuranceUploading, setInsuranceUploading] = useState(false);
+  const [insuranceConfirming, setInsuranceConfirming] = useState(false);
+  const [insuranceExtracted, setInsuranceExtracted] = useState<{
+    personalPropertyLimitCents: number | null;
+    deductibleCents: number | null;
+  } | null>(null);
+  const insuranceFileRef = useRef<HTMLInputElement | null>(null);
 
   // Edit drawer state (asset verification path)
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -47,6 +56,14 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
     if (!propertyId) return;
     await queryClient.invalidateQueries({ queryKey: [HOME_NUDGE_QUERY_KEY, propertyId] });
   }, [propertyId, queryClient]);
+
+  useEffect(() => {
+    if (nudge?.type !== 'INSURANCE_GAP_REVIEW') {
+      setInsuranceExtracted(null);
+      setInsuranceUploading(false);
+      setInsuranceConfirming(false);
+    }
+  }, [nudge?.type]);
 
   const handleOcrCapture = useCallback(
     async (file: File) => {
@@ -139,6 +156,54 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
     [propertyId, refreshNudge]
   );
 
+  const handleInsuranceFileSelected = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      if (!propertyId || nudge?.type !== 'INSURANCE_GAP_REVIEW') return;
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      setInsuranceUploading(true);
+      try {
+        const res = await api.extractInsuranceDeclaration(propertyId, nudge.policyId, file);
+        if (res.success) {
+          setInsuranceExtracted({
+            personalPropertyLimitCents: res.data.extracted.personalPropertyLimitCents,
+            deductibleCents: res.data.extracted.deductibleCents,
+          });
+        }
+      } catch (err) {
+        console.error('Failed to process insurance OCR:', err);
+      } finally {
+        setInsuranceUploading(false);
+        event.target.value = '';
+      }
+    },
+    [propertyId, nudge]
+  );
+
+  const handleInsuranceConfirm = useCallback(async () => {
+    if (!propertyId || nudge?.type !== 'INSURANCE_GAP_REVIEW' || !insuranceExtracted) return;
+
+    setInsuranceConfirming(true);
+    try {
+      await api.confirmInsuranceDeclaration(propertyId, nudge.policyId, {
+        personalPropertyLimitCents: insuranceExtracted.personalPropertyLimitCents,
+        deductibleCents: insuranceExtracted.deductibleCents,
+      });
+      setInsuranceExtracted(null);
+      await Promise.all([
+        refreshNudge(),
+        queryClient.invalidateQueries({
+          queryKey: [INSURANCE_PROTECTION_GAP_QUERY_KEY, propertyId],
+        }),
+      ]);
+    } catch (err) {
+      console.error('Failed to confirm insurance OCR values:', err);
+    } finally {
+      setInsuranceConfirming(false);
+    }
+  }, [propertyId, nudge, insuranceExtracted, refreshNudge, queryClient]);
+
   if (isLoading || !propertyId || !nudge) return null;
 
   if (nudge.type === 'RESILIENCE_CHECK') {
@@ -229,6 +294,29 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
           </div>
         </div>
       </div>
+    );
+  }
+
+  if (nudge.type === 'INSURANCE_GAP_REVIEW') {
+    return (
+      <>
+        <input
+          ref={insuranceFileRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={handleInsuranceFileSelected}
+        />
+        <InsuranceGapNudge
+          nudge={nudge}
+          insuranceUploading={insuranceUploading}
+          insuranceConfirming={insuranceConfirming}
+          insuranceExtracted={insuranceExtracted}
+          onUploadClick={() => insuranceFileRef.current?.click()}
+          onConfirm={() => void handleInsuranceConfirm()}
+        />
+      </>
     );
   }
 

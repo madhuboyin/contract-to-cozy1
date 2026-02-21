@@ -8,6 +8,11 @@ import {
   syncPropertyApplianceInventoryItems,
   listPropertyAppliancesAsHomeAssets,
 } from './propertyApplianceInventory.service';
+import {
+  calculateProtectionGap,
+  getUnverifiedActiveInsurancePolicy,
+} from './insuranceAuditor.service';
+import { hasPendingCriticalAssetVerification } from './inventoryVerification.service';
 
 import { prisma } from '../lib/prisma';
 
@@ -209,6 +214,17 @@ export type PropertyNudge =
       question: string;
       field: 'primaryHeatingFuel';
       options: Array<{ label: string; value: string }>;
+    }
+  | {
+      type: 'INSURANCE_GAP_REVIEW';
+      source: 'INSURANCE';
+      title: string;
+      description: string;
+      question: string;
+      policyId: string;
+      totalInventoryValueCents: number;
+      personalPropertyLimitCents: number;
+      underInsuredCents: number;
     };
 
 async function hydrateHomeAssetsFromInventory<T extends { id: string }>(
@@ -485,6 +501,29 @@ export async function getNextPropertyNudge(propertyId: string): Promise<Property
         { label: 'Wood / Pellet', value: 'WOOD_PELLET' },
         { label: 'Other', value: 'OTHER' },
       ],
+    };
+  }
+
+  const [hasPendingCriticalVerification, unverifiedPolicy] = await Promise.all([
+    hasPendingCriticalAssetVerification(propertyId),
+    getUnverifiedActiveInsurancePolicy(propertyId),
+  ]);
+
+  if (!hasPendingCriticalVerification && unverifiedPolicy) {
+    const protectionGap = await calculateProtectionGap(propertyId);
+
+    return {
+      type: 'INSURANCE_GAP_REVIEW',
+      source: 'INSURANCE',
+      title: 'Insurance declarations check',
+      description:
+        'Are you fully covered? Snap a photo of your Insurance Declarations page to see if your coverage matches your verified inventory value.',
+      question:
+        'Are you fully covered? Snap a photo of your Insurance Declarations page to see if your coverage matches your verified inventory value.',
+      policyId: unverifiedPolicy.id,
+      totalInventoryValueCents: protectionGap.totalInventoryValueCents,
+      personalPropertyLimitCents: protectionGap.personalPropertyLimitCents,
+      underInsuredCents: protectionGap.underInsuredCents,
     };
   }
 
