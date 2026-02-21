@@ -5,8 +5,8 @@ import React, { useState, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Shield, Camera, CheckCircle, ArrowRight } from 'lucide-react';
-import { getVerificationNudge, verifyItem } from './verificationApi';
+import { Shield, Camera, Edit3, ArrowRight, AlertCircle } from 'lucide-react';
+import { getVerificationNudge, verifyItem, getMissingFields } from './verificationApi';
 import LabelOcrModal from '../inventory/LabelOcrModal';
 import { ocrLabelToDraft, confirmInventoryDraft } from '../../inventory/inventoryApi';
 
@@ -48,9 +48,8 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
     [propertyId, nudge, queryClient]
   );
 
-  const handleManualVerify = useCallback(() => {
+  const handleAddDetails = useCallback(() => {
     if (!propertyId || !nudge?.item) return;
-    // openItemId is the query param the inventory page uses to auto-open the edit drawer
     router.push(
       `/dashboard/properties/${propertyId}/inventory?openItemId=${nudge.item.id}`
     );
@@ -63,11 +62,8 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   const verified = totalItems - totalUnverified;
   const percentVerified = totalItems > 0 ? Math.round((verified / totalItems) * 100) : 0;
 
-  // Build a subtitle with item context
+  const missingFields = getMissingFields(item);
   const locationHint = item.room?.name ? ` in ${item.room.name}` : '';
-  const categoryLabel = item.category
-    ? item.category.replace(/_/g, ' ').toLowerCase()
-    : '';
 
   return (
     <>
@@ -86,16 +82,24 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
           </div>
 
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-semibold text-gray-900 truncate">
-                Verify Your {item.name}
-              </h3>
-            </div>
+            <h3 className="font-semibold text-gray-900">
+              Complete details for {item.name}
+            </h3>
 
             <p className="text-sm text-gray-600 mt-0.5">
-              {categoryLabel ? `This ${categoryLabel}` : 'This item'}
-              {locationHint} needs verification to unlock lifespan predictions
+              Your {item.name}{locationHint} is missing key details needed for lifespan predictions and maintenance alerts.
             </p>
+
+            {/* Missing fields */}
+            {missingFields.length > 0 && (
+              <div className="mt-2 flex items-start gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+                <p className="text-xs text-amber-700">
+                  <span className="font-medium">Missing:</span>{' '}
+                  {missingFields.join(', ')}
+                </p>
+              </div>
+            )}
 
             {/* Progress bar */}
             <div className="mt-3">
@@ -126,14 +130,14 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
               </button>
 
               <button
-                onClick={handleManualVerify}
+                onClick={handleAddDetails}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
                   rounded-lg border border-gray-300 text-gray-700
                   hover:bg-gray-50 hover:border-gray-400
                   transition-colors"
               >
-                <CheckCircle className="w-4 h-4" />
-                Verify Manually
+                <Edit3 className="w-4 h-4" />
+                Add Missing Details
               </button>
 
               {totalUnverified > 1 && (
@@ -150,7 +154,6 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
         </div>
       </div>
 
-      {/* LabelOcrModal */}
       <LabelOcrModal
         open={labelOpen}
         onClose={() => setLabelOpen(false)}

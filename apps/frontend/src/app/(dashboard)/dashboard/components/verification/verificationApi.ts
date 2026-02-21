@@ -2,18 +2,23 @@
 
 import { api } from '@/lib/api/client';
 
+export interface VerificationNudgeItem {
+  id: string;
+  name: string;
+  category: string;
+  condition: string;
+  manufacturer?: string | null;
+  modelNumber?: string | null;
+  serialNumber?: string | null;
+  purchasedOn?: string | null;
+  installedOn?: string | null;
+  isVerified: boolean;
+  room?: { id: string; name: string } | null;
+  homeAsset?: { id: string } | null;
+}
+
 export interface VerificationNudgeDTO {
-  item: {
-    id: string;
-    name: string;
-    category: string;
-    condition: string;
-    manufacturer?: string | null;
-    modelNumber?: string | null;
-    isVerified: boolean;
-    room?: { id: string; name: string } | null;
-    homeAsset?: { id: string } | null;
-  };
+  item: VerificationNudgeItem;
   totalUnverified: number;
   totalItems: number;
 }
@@ -28,6 +33,16 @@ export interface VerificationStats {
   verified: number;
   unverified: number;
   percentVerified: number;
+}
+
+/** Returns list of human-readable missing field names for the item */
+export function getMissingFields(item: VerificationNudgeItem): string[] {
+  const missing: string[] = [];
+  if (!item.manufacturer) missing.push('Manufacturer');
+  if (!item.modelNumber) missing.push('Model number');
+  if (!item.serialNumber) missing.push('Serial number');
+  if (!item.purchasedOn && !item.installedOn) missing.push('Purchase / install date');
+  return missing;
 }
 
 export async function getVerificationNudge(
