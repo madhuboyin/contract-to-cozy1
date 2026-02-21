@@ -23,60 +23,50 @@ export interface VerificationNudgeDTO {
   totalItems: number;
 }
 
-export interface AssetVerificationNudgeDTO extends VerificationNudgeDTO {
-  type: 'ASSET_VERIFICATION';
-  source: 'INVENTORY';
-}
-
-export interface ResilienceCheckNudgeDTO {
-  type: 'RESILIENCE_CHECK';
-  source: 'PROPERTY';
+export interface DiscoveryNudgeBaseDTO {
+  id: string;
   title: string;
   description: string;
-  question: string;
+  actionType: 'PHOTO' | 'TOGGLE' | 'INPUT';
+}
+
+export interface AssetNudgeDTO extends DiscoveryNudgeBaseDTO, VerificationNudgeDTO {
+  type: 'ASSET';
+}
+
+export interface ResilienceNudgeDTO extends DiscoveryNudgeBaseDTO {
+  type: 'RESILIENCE';
   field: 'hasSumpPumpBackup';
   options: Array<{ label: string; value: boolean | null }>;
 }
 
-export interface UtilitySetupNudgeDTO {
-  type: 'UTILITY_SETUP';
-  source: 'PROPERTY';
-  title: string;
-  description: string;
-  question: string;
+export interface UtilityNudgeDTO extends DiscoveryNudgeBaseDTO {
+  type: 'UTILITY';
   field: 'primaryHeatingFuel';
   options: Array<{ label: string; value: string }>;
 }
 
-export interface InsuranceGapReviewNudgeDTO {
-  type: 'INSURANCE_GAP_REVIEW';
-  source: 'INSURANCE';
-  title: string;
-  description: string;
-  question: string;
+export interface InsuranceNudgeDTO extends DiscoveryNudgeBaseDTO {
+  type: 'INSURANCE';
   policyId: string;
   totalInventoryValueCents: number;
   personalPropertyLimitCents: number;
   underInsuredCents: number;
 }
 
-export interface EquityCheckNudgeDTO {
-  type: 'EQUITY_CHECK';
-  source: 'PROPERTY';
-  title: string;
-  description: string;
-  question: string;
+export interface EquityNudgeDTO extends DiscoveryNudgeBaseDTO {
+  type: 'EQUITY';
   purchasePriceCents: number | null;
   purchaseDate: string | null;
   lastAppraisedValueCents: number;
 }
 
 export type HomeHealthNudgeDTO =
-  | AssetVerificationNudgeDTO
-  | ResilienceCheckNudgeDTO
-  | UtilitySetupNudgeDTO
-  | InsuranceGapReviewNudgeDTO
-  | EquityCheckNudgeDTO;
+  | AssetNudgeDTO
+  | ResilienceNudgeDTO
+  | UtilityNudgeDTO
+  | InsuranceNudgeDTO
+  | EquityNudgeDTO;
 
 export interface VerifyItemPayload {
   source: 'OCR_LABEL' | 'MANUAL' | 'AI_ORACLE';
@@ -101,10 +91,16 @@ export function getMissingFields(item: VerificationNudgeItem): string[] {
 }
 
 export async function getHomeHealthNudge(
-  propertyId: string
+  propertyId: string,
+  excludedIds: string[] = []
 ): Promise<HomeHealthNudgeDTO | null> {
   const res = await api.get<HomeHealthNudgeDTO | null>(
-    `/api/properties/${propertyId}/nudges/next`
+    `/api/properties/${propertyId}/nudges/next`,
+    {
+      params: {
+        excludedIds: excludedIds.join(','),
+      },
+    }
   );
   return res.data ?? null;
 }

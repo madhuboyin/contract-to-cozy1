@@ -1,0 +1,349 @@
+// apps/backend/src/services/discovery.service.ts
+
+import { InventoryItemCategory } from '@prisma/client';
+import { prisma } from '../lib/prisma';
+import { calculateProtectionGap } from './insuranceAuditor.service';
+
+const WATER_HEATER_HINTS = ['water heater', 'hot water'];
+
+export type DiscoveryNudge =
+  | {
+      id: string;
+      type: 'ASSET';
+      title: string;
+      description: string;
+      actionType: 'PHOTO';
+      item: {
+        id: string;
+        name: string;
+        category: string;
+        condition: string;
+        manufacturer: string | null;
+        modelNumber: string | null;
+        serialNumber: string | null;
+        purchasedOn: Date | null;
+        installedOn: Date | null;
+        isVerified: boolean;
+        room: { id: string; name: string } | null;
+        homeAsset: { id: string } | null;
+      };
+      totalUnverified: number;
+      totalItems: number;
+    }
+  | {
+      id: string;
+      type: 'RESILIENCE';
+      title: string;
+      description: string;
+      actionType: 'TOGGLE';
+      field: 'hasSumpPumpBackup';
+      options: Array<{ label: string; value: boolean | null }>;
+    }
+  | {
+      id: string;
+      type: 'INSURANCE';
+      title: string;
+      description: string;
+      actionType: 'PHOTO';
+      policyId: string;
+      totalInventoryValueCents: number;
+      personalPropertyLimitCents: number;
+      underInsuredCents: number;
+    }
+  | {
+      id: string;
+      type: 'EQUITY';
+      title: string;
+      description: string;
+      actionType: 'INPUT';
+      purchasePriceCents: number | null;
+      purchaseDate: Date | null;
+      lastAppraisedValueCents: number;
+    }
+  | {
+      id: string;
+      type: 'UTILITY';
+      title: string;
+      description: string;
+      actionType: 'INPUT';
+      field: 'primaryHeatingFuel';
+      options: Array<{ label: string; value: string }>;
+    };
+
+function isExcluded(id: string, excludedIds: Set<string>) {
+  return excludedIds.has(id);
+}
+
+function logSnoozed(propertyId: string, nudgeId: string, nudgeType: DiscoveryNudge['type']) {
+  console.info(
+    `[DISCOVERY] Snoozed nudge skipped: propertyId=${propertyId} id=${nudgeId} type=${nudgeType}`
+  );
+}
+
+function logServed(propertyId: string, nudge: DiscoveryNudge) {
+  console.info(
+    `[DISCOVERY] Nudge served: propertyId=${propertyId} id=${nudge.id} type=${nudge.type}`
+  );
+}
+
+function logNone(propertyId: string) {
+  console.info(`[DISCOVERY] No nudge available: propertyId=${propertyId}`);
+}
+
+function assetNudgeId(itemId: string) {
+  return `asset:${itemId}`;
+}
+
+function resilienceNudgeId(propertyId: string) {
+  return `property:${propertyId}:resilience`;
+}
+
+function insuranceNudgeId(policyId: string) {
+  return `insurance:${policyId}`;
+}
+
+function equityNudgeId(propertyId: string) {
+  return `property:${propertyId}:equity`;
+}
+
+function utilityNudgeId(propertyId: string) {
+  return `property:${propertyId}:utility`;
+}
+
+function buildWaterHeaterNameFilter() {
+  return WATER_HEATER_HINTS.map((hint) => ({
+    name: { contains: hint, mode: 'insensitive' as const },
+  }));
+}
+
+async function getCriticalAssetNudge(
+  propertyId: string,
+  excludedIds: Set<string>
+): Promise<DiscoveryNudge | null> {
+  const [totalItems, totalUnverified, candidates] = await Promise.all([
+    prisma.inventoryItem.count({ where: { propertyId } }),
+    prisma.inventoryItem.count({ where: { propertyId, isVerified: false } }),
+    prisma.inventoryItem.findMany({
+      where: {
+        propertyId,
+        isVerified: false,
+        OR: [
+          { category: InventoryItemCategory.HVAC },
+          { category: InventoryItemCategory.ROOF_EXTERIOR },
+          {
+            AND: [
+              { category: InventoryItemCategory.PLUMBING },
+              { OR: buildWaterHeaterNameFilter() },
+            ],
+          },
+        ],
+      },
+      include: { room: true, homeAsset: true },
+      orderBy: [{ createdAt: 'asc' }],
+      take: 25,
+    }),
+  ]);
+
+  for (const item of candidates) {
+    const nudgeId = assetNudgeId(item.id);
+    if (isExcluded(nudgeId, excludedIds)) {
+      logSnoozed(propertyId, nudgeId, 'ASSET');
+      continue;
+    }
+
+    return {
+      id: nudgeId,
+      type: 'ASSET',
+      title: `Verify ${item.name}`,
+      description:
+        'Capture key details to unlock accurate lifespan predictions and proactive maintenance alerts.',
+      actionType: 'PHOTO',
+      item: {
+        id: item.id,
+        name: item.name,
+        category: item.category,
+        condition: item.condition,
+        manufacturer: item.manufacturer,
+        modelNumber: item.modelNumber,
+        serialNumber: item.serialNumber,
+        purchasedOn: item.purchasedOn,
+        installedOn: item.installedOn,
+        isVerified: item.isVerified,
+        room: item.room ? { id: item.room.id, name: item.room.name } : null,
+        homeAsset: item.homeAsset ? { id: item.homeAsset.id } : null,
+      },
+      totalUnverified,
+      totalItems,
+    };
+  }
+
+  return null;
+}
+
+async function getResilienceNudge(
+  propertyId: string,
+  excludedIds: Set<string>
+): Promise<DiscoveryNudge | null> {
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: { hasSumpPumpBackup: true },
+  });
+
+  if (!property || property.hasSumpPumpBackup !== null) return null;
+
+  const id = resilienceNudgeId(propertyId);
+  if (isExcluded(id, excludedIds)) {
+    logSnoozed(propertyId, id, 'RESILIENCE');
+    return null;
+  }
+
+  return {
+    id,
+    type: 'RESILIENCE',
+    title: 'Home resilience check',
+    description:
+      'Heavy rain predicted. Do you have a battery backup for your sump pump? This unlocks better flood risk guidance.',
+    actionType: 'TOGGLE',
+    field: 'hasSumpPumpBackup',
+    options: [
+      { label: 'Yes', value: true },
+      { label: 'No', value: false },
+      { label: 'Not Sure', value: null },
+    ],
+  };
+}
+
+async function getInsuranceNudge(
+  propertyId: string,
+  excludedIds: Set<string>
+): Promise<DiscoveryNudge | null> {
+  const policy = await prisma.insurancePolicy.findFirst({
+    where: {
+      propertyId,
+      isVerified: false,
+    },
+    orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }],
+    select: { id: true },
+  });
+
+  if (!policy) return null;
+
+  const id = insuranceNudgeId(policy.id);
+  if (isExcluded(id, excludedIds)) {
+    logSnoozed(propertyId, id, 'INSURANCE');
+    return null;
+  }
+
+  const protectionGap = await calculateProtectionGap(propertyId);
+
+  return {
+    id,
+    type: 'INSURANCE',
+    title: 'Insurance declarations check',
+    description:
+      'Snap your declarations page to verify personal property coverage and unlock protection gap insights.',
+    actionType: 'PHOTO',
+    policyId: policy.id,
+    totalInventoryValueCents: protectionGap.totalInventoryValueCents,
+    personalPropertyLimitCents: protectionGap.personalPropertyLimitCents,
+    underInsuredCents: protectionGap.underInsuredCents,
+  };
+}
+
+async function getEquityNudge(
+  propertyId: string,
+  excludedIds: Set<string>
+): Promise<DiscoveryNudge | null> {
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: {
+      isEquityVerified: true,
+      purchasePriceCents: true,
+      purchaseDate: true,
+      lastAppraisedValue: true,
+    },
+  });
+
+  if (!property || property.isEquityVerified) return null;
+
+  const id = equityNudgeId(propertyId);
+  if (isExcluded(id, excludedIds)) {
+    logSnoozed(propertyId, id, 'EQUITY');
+    return null;
+  }
+
+  return {
+    id,
+    type: 'EQUITY',
+    title: 'Track your home equity',
+    description:
+      'Enter purchase details to unlock equity tracking and maintenance premium intelligence.',
+    actionType: 'INPUT',
+    purchasePriceCents: property.purchasePriceCents,
+    purchaseDate: property.purchaseDate,
+    lastAppraisedValueCents: property.lastAppraisedValue ?? 0,
+  };
+}
+
+async function getUtilityNudge(
+  propertyId: string,
+  excludedIds: Set<string>
+): Promise<DiscoveryNudge | null> {
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: { primaryHeatingFuel: true },
+  });
+
+  const normalizedFuel = String(property?.primaryHeatingFuel || '').trim();
+  if (!property || normalizedFuel.length > 0) return null;
+
+  const id = utilityNudgeId(propertyId);
+  if (isExcluded(id, excludedIds)) {
+    logSnoozed(propertyId, id, 'UTILITY');
+    return null;
+  }
+
+  return {
+    id,
+    type: 'UTILITY',
+    title: 'Utility setup',
+    description:
+      'Set your primary heating fuel to improve risk modeling and cost guidance quality.',
+    actionType: 'INPUT',
+    field: 'primaryHeatingFuel',
+    options: [
+      { label: 'Natural Gas', value: 'NATURAL_GAS' },
+      { label: 'Electric', value: 'ELECTRIC' },
+      { label: 'Propane', value: 'PROPANE' },
+      { label: 'Fuel Oil', value: 'FUEL_OIL' },
+      { label: 'Wood / Pellet', value: 'WOOD_PELLET' },
+      { label: 'Other', value: 'OTHER' },
+    ],
+  };
+}
+
+export async function getNextDiscoveryNudge(
+  propertyId: string,
+  excludedIds: string[] = []
+): Promise<DiscoveryNudge | null> {
+  const excludedSet = new Set(
+    excludedIds
+      .map((id) => id.trim())
+      .filter(Boolean)
+  );
+
+  const nudge =
+    (await getCriticalAssetNudge(propertyId, excludedSet)) ??
+    (await getResilienceNudge(propertyId, excludedSet)) ??
+    (await getInsuranceNudge(propertyId, excludedSet)) ??
+    (await getEquityNudge(propertyId, excludedSet)) ??
+    (await getUtilityNudge(propertyId, excludedSet));
+
+  if (!nudge) {
+    logNone(propertyId);
+    return null;
+  }
+
+  logServed(propertyId, nudge);
+  return nudge;
+}

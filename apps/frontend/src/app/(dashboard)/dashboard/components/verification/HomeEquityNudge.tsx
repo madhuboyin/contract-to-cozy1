@@ -6,24 +6,26 @@ import { TrendingUp } from 'lucide-react';
 
 interface HomeEquityNudgeProps {
   title: string;
-  question: string;
+  description: string;
   purchasePriceDollars: string;
   purchaseDate: string;
   isSaving: boolean;
   onPurchasePriceChange: (value: string) => void;
   onPurchaseDateChange: (value: string) => void;
   onSubmit: () => void;
+  onSnooze: () => void;
 }
 
 export function HomeEquityNudge({
   title,
-  question,
+  description,
   purchasePriceDollars,
   purchaseDate,
   isSaving,
   onPurchasePriceChange,
   onPurchaseDateChange,
   onSubmit,
+  onSnooze,
 }: HomeEquityNudgeProps) {
   const canSubmit = purchasePriceDollars.trim().length > 0 && purchaseDate.trim().length > 0;
 
@@ -35,7 +37,7 @@ export function HomeEquityNudge({
         </div>
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold text-gray-900">{title}</h3>
-          <p className="mt-1 text-sm text-gray-700">{question}</p>
+          <p className="mt-1 text-sm text-gray-700">{description}</p>
 
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <div>
@@ -68,9 +70,16 @@ export function HomeEquityNudge({
             <button
               onClick={onSubmit}
               disabled={!canSubmit || isSaving}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 px-3 py-1.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-emerald-300 px-3 py-1.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
             >
               {isSaving ? 'Saving...' : 'Save equity baseline'}
+            </button>
+            <button
+              onClick={onSnooze}
+              type="button"
+              className="ml-2 inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            >
+              Snooze 24h
             </button>
           </div>
         </div>

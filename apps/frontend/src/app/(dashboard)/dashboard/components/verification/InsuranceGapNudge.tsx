@@ -3,10 +3,10 @@
 
 import React from 'react';
 import { Camera, FileScan } from 'lucide-react';
-import { InsuranceGapReviewNudgeDTO } from './verificationApi';
+import { InsuranceNudgeDTO } from './verificationApi';
 
 interface InsuranceGapNudgeProps {
-  nudge: InsuranceGapReviewNudgeDTO;
+  nudge: InsuranceNudgeDTO;
   insuranceUploading: boolean;
   insuranceConfirming: boolean;
   insuranceExtracted: {
@@ -15,6 +15,7 @@ interface InsuranceGapNudgeProps {
   } | null;
   onUploadClick: () => void;
   onConfirm: () => void;
+  onSnooze: () => void;
 }
 
 function formatCents(cents: number | null | undefined) {
@@ -33,6 +34,7 @@ export function InsuranceGapNudge({
   insuranceExtracted,
   onUploadClick,
   onConfirm,
+  onSnooze,
 }: InsuranceGapNudgeProps) {
   return (
     <div
@@ -63,7 +65,7 @@ export function InsuranceGapNudge({
             <button
               onClick={onUploadClick}
               disabled={insuranceUploading || insuranceConfirming}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-rose-300 text-rose-700 hover:bg-rose-100 disabled:opacity-50 transition-colors"
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-rose-300 px-3 py-1.5 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-100 disabled:opacity-50"
             >
               <Camera className="w-4 h-4" />
               {insuranceUploading ? 'Scanning...' : 'Snap / Upload Declarations'}
@@ -73,11 +75,19 @@ export function InsuranceGapNudge({
               <button
                 onClick={onConfirm}
                 disabled={insuranceConfirming}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
               >
                 {insuranceConfirming ? 'Saving...' : 'Confirm OCR Values'}
               </button>
             )}
+
+            <button
+              onClick={onSnooze}
+              type="button"
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            >
+              Snooze 24h
+            </button>
           </div>
 
           {insuranceExtracted && (

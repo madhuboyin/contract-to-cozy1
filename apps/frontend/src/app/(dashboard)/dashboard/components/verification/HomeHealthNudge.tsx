@@ -11,6 +11,7 @@ import LabelOcrModal from '../inventory/LabelOcrModal';
 import InventoryItemDrawer from '../inventory/InventoryItemDrawer';
 import { InsuranceGapNudge } from './InsuranceGapNudge';
 import { HomeEquityNudge } from './HomeEquityNudge';
+import { useSnoozeManager } from './useSnoozeManager';
 import {
   ocrLabelToDraft,
   confirmInventoryDraft,
@@ -29,6 +30,7 @@ const HOME_EQUITY_QUERY_KEY = 'home-equity-summary';
 
 export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   const queryClient = useQueryClient();
+  const { getExclusionList, snoozeNudge, snoozeVersion } = useSnoozeManager();
   const [labelOpen, setLabelOpen] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [resilienceChoiceSaving, setResilienceChoiceSaving] = useState<string | null>(null);
@@ -51,8 +53,8 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   const [drawerLoading, setDrawerLoading] = useState(false);
 
   const { data: nudge, isLoading } = useQuery({
-    queryKey: [HOME_NUDGE_QUERY_KEY, propertyId],
-    queryFn: () => getHomeHealthNudge(propertyId!),
+    queryKey: [HOME_NUDGE_QUERY_KEY, propertyId, snoozeVersion],
+    queryFn: () => getHomeHealthNudge(propertyId!, getExclusionList()),
     enabled: !!propertyId,
     staleTime: 60 * 1000,
   });
@@ -63,7 +65,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   }, [propertyId, queryClient]);
 
   useEffect(() => {
-    if (nudge?.type !== 'INSURANCE_GAP_REVIEW') {
+    if (nudge?.type !== 'INSURANCE') {
       setInsuranceExtracted(null);
       setInsuranceUploading(false);
       setInsuranceConfirming(false);
@@ -71,7 +73,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   }, [nudge?.type]);
 
   useEffect(() => {
-    if (nudge?.type !== 'EQUITY_CHECK') {
+    if (nudge?.type !== 'EQUITY') {
       setEquityPriceDollars('');
       setEquityPurchaseDate('');
       setEquitySaving(false);
@@ -84,9 +86,15 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
     setEquityPurchaseDate(nudge.purchaseDate ? nudge.purchaseDate.slice(0, 10) : '');
   }, [nudge]);
 
+  const handleSnooze = useCallback(async () => {
+    if (!propertyId || !nudge?.id) return;
+    snoozeNudge(nudge.id);
+    await queryClient.invalidateQueries({ queryKey: [HOME_NUDGE_QUERY_KEY, propertyId] });
+  }, [propertyId, nudge?.id, queryClient, snoozeNudge]);
+
   const handleOcrCapture = useCallback(
     async (file: File) => {
-      if (!propertyId || nudge?.type !== 'ASSET_VERIFICATION') return;
+      if (!propertyId || nudge?.type !== 'ASSET') return;
       setOcrLoading(true);
       try {
         const draft = await ocrLabelToDraft(propertyId, file);
@@ -111,7 +119,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   );
 
   const handleAddDetails = useCallback(async () => {
-    if (!propertyId || nudge?.type !== 'ASSET_VERIFICATION') return;
+    if (!propertyId || nudge?.type !== 'ASSET') return;
     setDrawerLoading(true);
     try {
       const [item, rooms] = await Promise.all([
@@ -187,7 +195,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
 
   const handleInsuranceFileSelected = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
-      if (!propertyId || nudge?.type !== 'INSURANCE_GAP_REVIEW') return;
+      if (!propertyId || nudge?.type !== 'INSURANCE') return;
       const file = event.target.files?.[0];
       if (!file) return;
 
@@ -211,7 +219,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   );
 
   const handleInsuranceConfirm = useCallback(async () => {
-    if (!propertyId || nudge?.type !== 'INSURANCE_GAP_REVIEW' || !insuranceExtracted) return;
+    if (!propertyId || nudge?.type !== 'INSURANCE' || !insuranceExtracted) return;
 
     setInsuranceConfirming(true);
     try {
@@ -234,7 +242,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   }, [propertyId, nudge, insuranceExtracted, refreshNudge, queryClient]);
 
   const handleEquitySubmit = useCallback(async () => {
-    if (!propertyId || nudge?.type !== 'EQUITY_CHECK') return;
+    if (!propertyId || nudge?.type !== 'EQUITY') return;
     const normalizedPrice = Number(equityPriceDollars);
 
     if (!Number.isFinite(normalizedPrice) || normalizedPrice < 0 || !equityPurchaseDate) {
@@ -271,7 +279,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
 
   if (isLoading || !propertyId || !nudge) return null;
 
-  if (nudge.type === 'RESILIENCE_CHECK') {
+  if (nudge.type === 'RESILIENCE') {
     return (
       <div
         className="
@@ -288,30 +296,35 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-gray-900">{nudge.title}</h3>
-            <p className="text-sm text-gray-700 mt-1">
-              Heavy rain predicted. Do you have a battery backup for your sump pump?
-            </p>
+            <p className="text-sm text-gray-700 mt-1">{nudge.description}</p>
             <div className="flex items-center gap-2 mt-3 flex-wrap">
               <button
                 onClick={() => handleResilienceChoice(true, 'yes')}
                 disabled={!!resilienceChoiceSaving}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-cyan-300 text-cyan-700 hover:bg-cyan-100 disabled:opacity-50 transition-colors"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-cyan-300 px-3 py-1.5 text-sm font-medium text-cyan-700 transition-colors hover:bg-cyan-100 disabled:opacity-50"
               >
                 {resilienceChoiceSaving === 'yes' ? 'Saving...' : 'Yes'}
               </button>
               <button
                 onClick={() => handleResilienceChoice(false, 'no')}
                 disabled={!!resilienceChoiceSaving}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-cyan-300 text-cyan-700 hover:bg-cyan-100 disabled:opacity-50 transition-colors"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-cyan-300 px-3 py-1.5 text-sm font-medium text-cyan-700 transition-colors hover:bg-cyan-100 disabled:opacity-50"
               >
                 {resilienceChoiceSaving === 'no' ? 'Saving...' : 'No'}
               </button>
               <button
                 onClick={() => handleResilienceChoice(null, 'not-sure')}
                 disabled={!!resilienceChoiceSaving}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
               >
                 {resilienceChoiceSaving === 'not-sure' ? 'Saving...' : 'Not Sure'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSnooze()}
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                Snooze 24h
               </button>
             </div>
           </div>
@@ -320,7 +333,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
     );
   }
 
-  if (nudge.type === 'UTILITY_SETUP') {
+  if (nudge.type === 'UTILITY') {
     return (
       <div
         className="
@@ -337,10 +350,10 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-gray-900">{nudge.title}</h3>
-            <p className="text-sm text-gray-700 mt-1">{nudge.question}</p>
+            <p className="text-sm text-gray-700 mt-1">{nudge.description}</p>
             <div className="mt-3">
               <select
-                className="w-full max-w-sm rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-60"
+                className="min-h-[44px] w-full max-w-sm rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-60"
                 defaultValue=""
                 disabled={utilitySaving}
                 onChange={(event) => void handleUtilitySelect(event.target.value)}
@@ -355,6 +368,13 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
                 ))}
                 <option value="__NOT_SURE__">Not sure</option>
               </select>
+              <button
+                type="button"
+                onClick={() => void handleSnooze()}
+                className="mt-2 inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                Snooze 24h
+              </button>
             </div>
           </div>
         </div>
@@ -362,7 +382,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
     );
   }
 
-  if (nudge.type === 'INSURANCE_GAP_REVIEW') {
+  if (nudge.type === 'INSURANCE') {
     return (
       <>
         <input
@@ -380,22 +400,24 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
           insuranceExtracted={insuranceExtracted}
           onUploadClick={() => insuranceFileRef.current?.click()}
           onConfirm={() => void handleInsuranceConfirm()}
+          onSnooze={() => void handleSnooze()}
         />
       </>
     );
   }
 
-  if (nudge.type === 'EQUITY_CHECK') {
+  if (nudge.type === 'EQUITY') {
     return (
       <HomeEquityNudge
         title={nudge.title}
-        question={nudge.question}
+        description={nudge.description}
         purchasePriceDollars={equityPriceDollars}
         purchaseDate={equityPurchaseDate}
         isSaving={equitySaving}
         onPurchasePriceChange={setEquityPriceDollars}
         onPurchaseDateChange={setEquityPurchaseDate}
         onSubmit={() => void handleEquitySubmit()}
+        onSnooze={() => void handleSnooze()}
       />
     );
   }
@@ -458,7 +480,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
               <button
                 onClick={() => setLabelOpen(true)}
                 disabled={ocrLoading}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400 disabled:opacity-50 transition-colors"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-blue-300 px-3 py-1.5 text-sm font-medium text-blue-700 transition-colors hover:border-blue-400 hover:bg-blue-50 disabled:opacity-50"
               >
                 <Camera className="w-4 h-4" />
                 {ocrLoading ? 'Scanning...' : 'Scan Label'}
@@ -467,10 +489,18 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
               <button
                 onClick={handleAddDetails}
                 disabled={drawerLoading}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 transition-colors"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50 disabled:opacity-50"
               >
                 <Edit3 className="w-4 h-4" />
                 {drawerLoading ? 'Loading...' : 'Add Missing Details'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void handleSnooze()}
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                Snooze 24h
               </button>
 
               {totalUnverified > 1 && (

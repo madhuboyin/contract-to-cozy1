@@ -7,7 +7,22 @@ import {
   markItemVerified,
   getVerificationStats,
 } from '../services/inventoryVerification.service';
-import { getNextPropertyNudge } from '../services/property.service';
+import { getNextDiscoveryNudge } from '../services/discovery.service';
+
+function parseExcludedIds(value: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((entry) => String(entry).split(','))
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  return String(value)
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
 
 export async function getNudge(req: CustomRequest, res: Response, next: NextFunction) {
   try {
@@ -26,27 +41,9 @@ export async function getNextDashboardNudge(
 ) {
   try {
     const { propertyId } = req.params;
-
-    // Priority 1: Property-level nudges (resilience, utility, insurance, equity)
-    const propertyNudge = await getNextPropertyNudge(propertyId);
-    if (propertyNudge) {
-      return res.json({ success: true, data: propertyNudge });
-    }
-
-    // Priority 2: Inventory verification nudges
-    const inventoryNudge = await getHighestPriorityUnverifiedItem(propertyId);
-    if (!inventoryNudge) {
-      return res.json({ success: true, data: null });
-    }
-
-    return res.json({
-      success: true,
-      data: {
-        type: 'ASSET_VERIFICATION',
-        source: 'INVENTORY',
-        ...inventoryNudge,
-      },
-    });
+    const excludedIds = parseExcludedIds((req as any).query?.excludedIds);
+    const nudge = await getNextDiscoveryNudge(propertyId, excludedIds);
+    return res.json({ success: true, data: nudge });
   } catch (err) {
     next(err);
   }
