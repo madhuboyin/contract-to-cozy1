@@ -486,6 +486,7 @@ model InventoryItem {
 
   homeCapitalTimelineItems     HomeCapitalTimelineItem[]
   homeCapitalTimelineOverrides HomeCapitalTimelineOverride[]
+  maintenancePredictions MaintenancePrediction[]
 
   @@index([manufacturerNorm, modelNumberNorm])
   @@index([upc])
@@ -1520,6 +1521,7 @@ model Property {
   homeSavingsOpportunities HomeSavingsOpportunity[]
   homeSavingsAccounts      HomeSavingsAccount[]
   homeItems HomeItem[]
+  maintenancePredictions MaintenancePrediction[]
 
   estimatedMaintenancePremiumCents Int @default(0)
   isEquityVerified      Boolean @default(false)
