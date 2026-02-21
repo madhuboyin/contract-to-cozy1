@@ -1431,6 +1431,15 @@ model Property {
   hasCoDetectors      Boolean?
   hasSecuritySystem   Boolean?
   hasFireExtinguisher Boolean?
+
+  // Resilience Markers
+  hasSumpPumpBackup   Boolean?  // For Resilience Nudge
+  primaryHeatingFuel  String?   // For Utility Nudge (Gas, Electric, etc.)
+  hasSecondaryHeat    Boolean?  // (Wood stove, Generator)
+
+  // Verification flags for these property-level nudges
+  isResilienceVerified Boolean @default(false)
+  isUtilityVerified    Boolean @default(false)
   // Appliances
   homeAssets          HomeAsset[]
   movingPlans         MovingPlan[]  // Add this line
@@ -1983,6 +1992,9 @@ model InsurancePolicy {
   deductibleAmount   Decimal?  @db.Decimal(12, 2)
   coverageJson       Json?
 
+  personalPropertyLimitCents Int? 
+  deductibleCents            Int?
+  isVerified                 Boolean @default(false)
   // Dates
   startDate          DateTime
   expiryDate         DateTime
