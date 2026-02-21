@@ -72,11 +72,19 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
     }
   }, [propertyId, nudge]);
 
-  const handleDrawerSaved = useCallback(() => {
+  const handleDrawerSaved = useCallback(async () => {
+    // Mark item as manually verified after user fills in details and saves
+    if (propertyId && drawerItem?.id) {
+      try {
+        await verifyItem(propertyId, drawerItem.id, { source: 'MANUAL' });
+      } catch (err) {
+        console.error('Failed to mark item verified:', err);
+      }
+    }
     setDrawerOpen(false);
     setDrawerItem(null);
     queryClient.invalidateQueries({ queryKey: ['verification-nudge', propertyId] });
-  }, [propertyId, queryClient]);
+  }, [propertyId, drawerItem, queryClient]);
 
   // Don't render if loading, no property, or all verified
   if (isLoading || !propertyId || !nudge?.item) return null;
