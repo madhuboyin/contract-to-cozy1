@@ -90,7 +90,7 @@ export const ExistingOwnerDashboard = ({
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-4">
               <EquityOverviewCard
                 propertyId={selectedPropertyId}
                 healthScore={selectedProperty?.healthScore?.totalScore ?? null}

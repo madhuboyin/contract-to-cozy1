@@ -428,6 +428,23 @@ export default function DashboardPage() {
           <div className="space-y-6 lg:col-span-8">
             {selectedPropertyId && <MorningHomePulseCard propertyId={selectedPropertyId} />}
 
+            {localUpdates.length > 0 && (
+              <LocalUpdatesCarousel
+                updates={localUpdates}
+                variant="ticker"
+                onDismiss={async (id) => {
+                  setLocalUpdates((prev) => prev.filter((u) => u.id !== id));
+                  await api.dismissLocalUpdate(id);
+                }}
+                onCtaClick={(id) => {
+                  const update = localUpdates.find((u) => u.id === id);
+                  if (update?.ctaUrl) {
+                    window.open(update.ctaUrl, '_blank', 'noopener,noreferrer');
+                  }
+                }}
+              />
+            )}
+
             {selectedPropertyId && (
               <section className="rounded-2xl border border-slate-300 bg-white p-4 shadow-sm md:p-5">
                 <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -485,23 +502,6 @@ export default function DashboardPage() {
           </div>
 
           <aside className="space-y-4 lg:col-span-4">
-            {localUpdates.length > 0 && (
-              <LocalUpdatesCarousel
-                updates={localUpdates}
-                variant="ticker"
-                onDismiss={async (id) => {
-                  setLocalUpdates((prev) => prev.filter((u) => u.id !== id));
-                  await api.dismissLocalUpdate(id);
-                }}
-                onCtaClick={(id) => {
-                  const update = localUpdates.find((u) => u.id === id);
-                  if (update?.ctaUrl) {
-                    window.open(update.ctaUrl, '_blank', 'noopener,noreferrer');
-                  }
-                }}
-              />
-            )}
-
             {homeownerSegment === 'EXISTING_OWNER' && selectedPropertyId && (
               <>
                 <SeasonalBanner propertyId={selectedPropertyId} />
