@@ -36,6 +36,7 @@ import DoNothingSimulatorToolCard from './components/DoNothingSimulatorToolCard'
 import HomeSavingsCheckToolCard from './components/HomeSavingsCheckToolCard';
 import MorningHomePulseCard from './components/MorningHomePulseCard';
 import { HomeScoreReportCard } from './components/HomeScoreReportCard';
+import { ShareVaultButton } from './components/ShareVaultButton';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -455,14 +456,22 @@ export default function DashboardPage() {
         )}
         
         {/* PROPERTY INTELLIGENCE SCORES - IMMEDIATELY BELOW WELCOME */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-blue-100 rounded-lg">
-            <TrendingUp className="w-5 h-5 text-blue-600" />
+        <div className="flex items-center justify-between gap-3 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <TrendingUp className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Property Intelligence Scores</h2>
+              <p className="text-sm text-gray-500">Real-time health, risk, and financial analysis</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">Property Intelligence Scores</h2>
-            <p className="text-sm text-gray-500">Real-time health, risk, and financial analysis</p>
-          </div>
+          {selectedPropertyId && (
+            <ShareVaultButton
+              propertyId={selectedPropertyId}
+              propertyAddress={selectedProperty?.address}
+            />
+          )}
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mt-6 mb-8">
           <HomeScoreReportCard propertyId={selectedPropertyId} />

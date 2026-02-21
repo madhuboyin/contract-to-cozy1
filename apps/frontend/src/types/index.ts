@@ -1865,4 +1865,51 @@ export interface LinkBookingResponse {
 
 // =============================================================================
 // END PHASE 3 TYPES
+
+// =============================================================================
+// SELLER'S VAULT TYPES
+// =============================================================================
+
+export interface VaultAsset {
+  id: string;
+  name: string;
+  category: string;
+  manufacturer: string | null;
+  modelNumber: string | null;
+  serialNumber: string | null;
+  installedOn: string | null;
+  purchasedOn: string | null;
+  condition: string;
+  expectedExpiryDate: string | null;
+}
+
+export interface VaultServiceEntry {
+  id: string;
+  category: string;
+  description: string;
+  completedAt: string | null;
+  finalPrice: string | null;
+  providerBusinessName: string | null;
+}
+
+export interface VaultData {
+  overview: {
+    address: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    name: string | null;
+    yearBuilt: number | null;
+    propertySize: number | null;
+    healthScore: number;
+  };
+  gamification: {
+    currentStreak: number;
+    longestStreak: number;
+    bonusMultiplier: number;
+    unlockedBadges: string[];
+  };
+  verifiedAssets: VaultAsset[];
+  serviceTimeline: VaultServiceEntry[];
+}
 // =============================================================================

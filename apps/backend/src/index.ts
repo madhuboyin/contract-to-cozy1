@@ -78,6 +78,7 @@ import homeStatusBoardRoutes from './routes/homeStatusBoard.routes';
 import inventoryVerificationRoutes from './routes/inventoryVerification.routes';
 import maintenancePredictionRoutes from './routes/maintenancePrediction.routes';
 import weatherRoutes from './routes/weather.routes';
+import vaultRoutes from './routes/vault.routes';
 dotenv.config();
 
 const app = express();
@@ -358,6 +359,7 @@ app.use('/api', homeStatusBoardRoutes);
 app.use('/api', inventoryVerificationRoutes);
 app.use('/api', maintenancePredictionRoutes);
 app.use('/api/weather', weatherRoutes);
+app.use('/api/vault', vaultRoutes); // public — no auth middleware
 
 //app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // 404 handler

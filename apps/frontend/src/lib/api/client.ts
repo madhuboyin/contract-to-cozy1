@@ -2756,7 +2756,24 @@ class APIClient {
   async rollbackInventoryImportBatch(propertyId: string, batchId: string) {
     const res = await this.post(`/api/properties/${propertyId}/inventory/import-batches/${batchId}/rollback`, {});
     return res.data;
-  } 
+  }
+
+  /**
+   * Seller's Vault — public endpoint, no auth required.
+   * Uses a raw fetch to bypass the JWT token-refresh interceptor so that
+   * a wrong-password 401 does NOT trigger a session-refresh / redirect-to-login.
+   */
+  async getVaultData(
+    propertyId: string,
+    password: string
+  ): Promise<APIResponse<import('@/types').VaultData>> {
+    const res = await fetch(`${this.baseURL}/api/vault/access/${propertyId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    return res.json() as Promise<APIResponse<import('@/types').VaultData>>;
+  }
 }
 
 // Export singleton instance
