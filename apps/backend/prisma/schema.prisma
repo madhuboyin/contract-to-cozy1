@@ -401,100 +401,100 @@ model InventoryRoom {
 }
 
 model InventoryItem {
-  id          String   @id @default(uuid())
-  propertyId  String
-  roomId      String?
+  id              String               @id @default(uuid())
+  propertyId      String
+  roomId          String?
 
-  // Source tracking (future proof)
-  sourceType      InventoryItemSource @default(MANUAL)
+  // Source tracking
+  sourceType      InventoryItemSource  @default(MANUAL)
   sourceBatchId   String?
   sourceRowNumber Int?
   sourceHash      String?
   sourceFileName  String?
   importedAt      DateTime?
 
-  // Optional mapping to your existing "system asset" model
-  homeAssetId String?
-
-  // Optional linkage to existing coverage models
+  // Mapping & Coverage
+  homeAssetId       String?
   warrantyId        String?
   insurancePolicyId String?
 
   // Core fields
-  name       String
-  category   InventoryItemCategory  @default(OTHER)
-  condition  InventoryItemCondition @default(UNKNOWN)
+  name             String
+  category         InventoryItemCategory  @default(OTHER)
+  condition        InventoryItemCondition @default(UNKNOWN)
 
-  // Optional identity fields
-  brand      String?
-  model      String?
-  serialNo   String?
+  // Identity fields
+  brand            String?
+  model            String?
+  serialNo         String?
+
+  // Recall matching & Identity (NEW/REFINED)
+  manufacturer     String?
+  modelNumber      String?
+  serialNumber     String?
+  upc              String?
+  sku              String?
+
+  // Normalized versions for indexing
+  manufacturerNorm String?
+  modelNumberNorm  String?
 
   // Dates
-  installedOn     DateTime?
-  purchasedOn     DateTime?
-  lastServicedOn  DateTime?
+  installedOn      DateTime?
+  purchasedOn      DateTime?
+  lastServicedOn   DateTime?
 
-  // Costs (use Int cents for consistency; your schema also uses Decimal in places)
+  // NEW: Operational Core & Intelligence (For Nudge Logic)
+  // This is the "Master Switch" for the Dashboard Nudge
+  isVerified         Boolean   @default(false) 
+  verificationSource String?   // e.g., "MANUAL", "OCR_LABEL", "RECEIPT_SCAN"
+  
+  // Storage for high-level technical specs extracted via AI lookup
+  // (e.g., HVAC SEER rating, Water Heater Tank Size, BTU)
+  technicalSpecs     Json?     
+  
+  // Intelligence result from AI Oracle
+  expectedExpiryDate DateTime? 
+
+  // Costs
   purchaseCostCents     Int?
   replacementCostCents  Int?
   currency              String @default("USD")
 
   // Notes + tags
-  notes     String?
-  tags      String[] @default([])
+  notes      String?
+  tags       String[] @default([])
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   // Relations
-  property        Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  room            InventoryRoom?  @relation(fields: [roomId], references: [id], onDelete: SetNull)
-  homeAsset       HomeAsset?      @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
-  warranty        Warranty?       @relation(fields: [warrantyId], references: [id], onDelete: SetNull)
-  linkedWarranties Warranty[]     @relation("WarrantyToInventoryItem")
-  insurancePolicy InsurancePolicy? @relation(fields: [insurancePolicyId], references: [id], onDelete: SetNull)
-  importBatch   InventoryImportBatch? @relation(fields: [sourceBatchId], references: [id], onDelete: SetNull)
+  property         Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  room             InventoryRoom?        @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  homeAsset        HomeAsset?            @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
+  warranty         Warranty?             @relation(fields: [warrantyId], references: [id], onDelete: SetNull)
+  linkedWarranties Warranty[]            @relation("WarrantyToInventoryItem")
+  insurancePolicy  InsurancePolicy?      @relation(fields: [insurancePolicyId], references: [id], onDelete: SetNull)
+  importBatch      InventoryImportBatch? @relation(fields: [sourceBatchId], references: [id], onDelete: SetNull)
 
-
-  // Reuse your existing Document table for receipts/photos/manuals
-  documents        Document[]
+  documents              Document[]
   insuranceQuoteRequests InsuranceQuoteRequest[]
-  homeEvents HomeEvent[]
-  homeItems HomeItem[]
-
-  // Recall matching fields (NEW)
-  manufacturer   String?
-  modelNumber    String?
-  serialNumber   String?
-  upc            String?
-  sku            String?
-
-  // Optional normalized versions to improve matching & indexing
-  manufacturerNorm String?
-  modelNumberNorm  String?
-
-  // relations (NEW)
-  recallMatches  RecallMatch[]
-  replaceRepairAnalyses ReplaceRepairAnalysis[]
+  homeEvents             HomeEvent[]
+  homeItems              HomeItem[]
+  recallMatches          RecallMatch[]
+  replaceRepairAnalyses  ReplaceRepairAnalysis[]
 
   homeCapitalTimelineItems     HomeCapitalTimelineItem[]
   homeCapitalTimelineOverrides HomeCapitalTimelineOverride[]
 
   @@index([manufacturerNorm, modelNumberNorm])
   @@index([upc])
-
   @@index([propertyId])
   @@index([roomId])
-  @@index([homeAssetId])
-  @@index([warrantyId])
-  @@index([insurancePolicyId])
-
-  // Filter-friendly composite indexes
+  @@index([isVerified]) // NEW: Index added for performant nudge filtering
   @@index([propertyId, category])
   @@index([propertyId, roomId])
-  @@index([propertyId, sourceBatchId])
-
+  
   @@unique([propertyId, sourceHash])
 
   @@map("inventory_items")
