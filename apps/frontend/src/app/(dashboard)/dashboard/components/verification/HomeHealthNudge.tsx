@@ -340,7 +340,8 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
         personalPropertyLimitCents: insuranceExtracted.personalPropertyLimitCents,
         deductibleCents: insuranceExtracted.deductibleCents,
       });
-      await triggerSuccessFeedback(response.data?.streak || null);
+      const streak = response.success ? response.data.streak : null;
+      await triggerSuccessFeedback(streak);
       setInsuranceExtracted(null);
       await Promise.all([
         invalidateAfterNudgeAction(),
