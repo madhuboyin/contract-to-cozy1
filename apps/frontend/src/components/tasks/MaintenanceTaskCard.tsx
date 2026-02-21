@@ -334,7 +334,7 @@ export function MaintenanceTaskCard({
                       setShowPostCompletionNudge(false);
                       // Navigate to inventory with verify param
                       if ((task as any).inventoryItemId) {
-                        window.location.href = `/dashboard/properties/${task.propertyId}/tools/inventory?itemId=${(task as any).inventoryItemId}&verify=true`;
+                        window.location.href = `/dashboard/properties/${task.propertyId}/inventory?itemId=${(task as any).inventoryItemId}&verify=true`;
                       }
                     }}
                     className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md

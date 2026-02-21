@@ -51,7 +51,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   const handleManualVerify = useCallback(() => {
     if (!propertyId || !nudge?.item) return;
     router.push(
-      `/dashboard/properties/${propertyId}/tools/inventory?itemId=${nudge.item.id}&verify=true`
+      `/dashboard/properties/${propertyId}/inventory?itemId=${nudge.item.id}&verify=true`
     );
   }, [propertyId, nudge, router]);
 
