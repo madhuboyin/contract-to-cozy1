@@ -3,22 +3,28 @@
 
 import React, { useState, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Shield, Camera, Edit3, ArrowRight, AlertCircle } from 'lucide-react';
 import { getVerificationNudge, verifyItem, getMissingFields } from './verificationApi';
 import LabelOcrModal from '../inventory/LabelOcrModal';
-import { ocrLabelToDraft, confirmInventoryDraft } from '../../inventory/inventoryApi';
+import InventoryItemDrawer from '../inventory/InventoryItemDrawer';
+import { ocrLabelToDraft, confirmInventoryDraft, getInventoryItem, listInventoryRooms } from '../../inventory/inventoryApi';
+import { InventoryItem, InventoryRoom } from '@/types';
 
 interface HomeHealthNudgeProps {
   propertyId: string | undefined;
 }
 
 export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const [labelOpen, setLabelOpen] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
+
+  // Edit drawer state
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerItem, setDrawerItem] = useState<InventoryItem | null>(null);
+  const [drawerRooms, setDrawerRooms] = useState<InventoryRoom[]>([]);
+  const [drawerLoading, setDrawerLoading] = useState(false);
 
   const { data: nudge, isLoading } = useQuery({
     queryKey: ['verification-nudge', propertyId],
@@ -48,12 +54,29 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
     [propertyId, nudge, queryClient]
   );
 
-  const handleAddDetails = useCallback(() => {
+  const handleAddDetails = useCallback(async () => {
     if (!propertyId || !nudge?.item) return;
-    router.push(
-      `/dashboard/properties/${propertyId}/inventory?openItemId=${nudge.item.id}`
-    );
-  }, [propertyId, nudge, router]);
+    setDrawerLoading(true);
+    try {
+      const [item, rooms] = await Promise.all([
+        getInventoryItem(propertyId, nudge.item.id),
+        listInventoryRooms(propertyId),
+      ]);
+      setDrawerItem(item);
+      setDrawerRooms(rooms);
+      setDrawerOpen(true);
+    } catch (err) {
+      console.error('Failed to load item details:', err);
+    } finally {
+      setDrawerLoading(false);
+    }
+  }, [propertyId, nudge]);
+
+  const handleDrawerSaved = useCallback(() => {
+    setDrawerOpen(false);
+    setDrawerItem(null);
+    queryClient.invalidateQueries({ queryKey: ['verification-nudge', propertyId] });
+  }, [propertyId, queryClient]);
 
   // Don't render if loading, no property, or all verified
   if (isLoading || !propertyId || !nudge?.item) return null;
@@ -131,13 +154,14 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
 
               <button
                 onClick={handleAddDetails}
+                disabled={drawerLoading}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
                   rounded-lg border border-gray-300 text-gray-700
                   hover:bg-gray-50 hover:border-gray-400
-                  transition-colors"
+                  disabled:opacity-50 transition-colors"
               >
                 <Edit3 className="w-4 h-4" />
-                Add Missing Details
+                {drawerLoading ? 'Loading...' : 'Add Missing Details'}
               </button>
 
               {totalUnverified > 1 && (
@@ -158,6 +182,16 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
         open={labelOpen}
         onClose={() => setLabelOpen(false)}
         onCaptured={handleOcrCapture}
+      />
+
+      {/* Edit drawer opens directly on the dashboard */}
+      <InventoryItemDrawer
+        open={drawerOpen}
+        onClose={() => { setDrawerOpen(false); setDrawerItem(null); }}
+        propertyId={propertyId}
+        rooms={drawerRooms}
+        initialItem={drawerItem}
+        onSaved={handleDrawerSaved}
       />
     </>
   );
