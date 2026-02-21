@@ -32,6 +32,8 @@ export default function BookProviderPage() {
   // NEW: Extract health insight tracking from URL
   const insightFactor = searchParams.get('insightFactor');
   const insightContext = searchParams.get('insightContext');
+  const maintenancePredictionId = searchParams.get('predictionId');
+  const inventoryItemId = searchParams.get('itemId');
   //const preSelectedServiceId = searchParams.get('service');
   const providerId = params.id as string;
 
@@ -170,6 +172,8 @@ export default function BookProviderPage() {
       // NEW: Include health insight tracking fields
       ...(insightFactor && { insightFactor }),
       ...(insightContext && { insightContext }),
+      ...(maintenancePredictionId && { maintenancePredictionId }),
+      ...(inventoryItemId && { inventoryItemId }),
     };
 
     console.log('Submitting booking:', bookingData);

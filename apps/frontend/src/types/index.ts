@@ -987,6 +987,10 @@ export interface Booking {
   description: string;
   specialRequests: string | null;
   internalNotes: string | null;
+  insightFactor: string | null;
+  insightContext: string | null;
+  maintenancePredictionId: string | null;
+  inventoryItemId: string | null;
   cancelledAt: string | null;
   cancelledBy: string | null;
   cancellationReason: string | null;
@@ -1109,6 +1113,8 @@ export interface CreateBookingInput {
   // NEW: Health Insight Tracking
   insightFactor?: string;     // e.g., "Age Factor", "Roof Age"
   insightContext?: string;    // e.g., "Property age: 35 years"
+  maintenancePredictionId?: string;
+  inventoryItemId?: string;
 }
 
 /**
@@ -1802,6 +1808,11 @@ export interface MaintenancePrediction {
   reasoning: string | null;
   confidenceScore: number;
   status: MaintenancePredictionStatus;
+  recommendedServiceCategory: ServiceCategory;
+  booking: {
+    id: string;
+    status: BookingStatus;
+  } | null;
   createdAt: string;
   updatedAt: string;
   inventoryItem: {

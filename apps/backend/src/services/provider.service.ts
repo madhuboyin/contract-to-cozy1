@@ -158,11 +158,9 @@ export class ProviderService {
     const where: Prisma.ProviderProfileWhereInput = { AND: filters };
 
 
-    // TEMPORARILY COMMENT OUT ALL LOCATION FINDING LOGIC FOR DEBUGGING
     let searchLat: number | undefined;
     let searchLon: number | undefined;
-    /*
-    // Original location finding logic has been commented out to prevent location-based exclusion
+
     if (query.latitude && query.longitude) {
       searchLat = query.latitude;
       searchLon = query.longitude;
@@ -174,6 +172,10 @@ export class ProviderService {
       if (address?.latitude && address?.longitude) {
         searchLat = address.latitude;
         searchLon = address.longitude;
+      } else {
+        console.info(
+          `[ProviderService] No geocoded coordinate found for zipCode=${query.zipCode}. Returning category-filtered providers without distance filter.`
+        );
       }
     } else if (query.city && query.state) {
       const address = await prisma.address.findFirst({
@@ -188,7 +190,6 @@ export class ProviderService {
         searchLon = address.longitude;
       }
     }
-    */
 
     // Fetch providers
     const providers = await prisma.providerProfile.findMany({
@@ -279,10 +280,8 @@ export class ProviderService {
     // Filter by radius if location provided
     if (searchLat && searchLon) {
       providersWithDistance = providersWithDistance.filter((provider) => {
-        return (
-          provider.distance === undefined ||
-          provider.distance <= radius
-        );
+        if (provider.distance === undefined) return false;
+        return provider.distance <= radius && provider.distance <= provider.serviceRadius;
       });
     }
 

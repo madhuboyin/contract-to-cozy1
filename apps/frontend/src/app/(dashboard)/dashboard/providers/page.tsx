@@ -33,11 +33,12 @@ const CATEGORIES: { value: ServiceCategory; label: string; icon?: string }[] = [
 interface ServiceFilterProps {
   onFilterChange: (filters: { zipCode: string; category: string | undefined }) => void;
   defaultCategory?: string;
+  defaultZipCode?: string;
   isHomeBuyer: boolean;
 }
 
-const ServiceFilter = React.memo(({ onFilterChange, defaultCategory, isHomeBuyer }: ServiceFilterProps) => {
-  const [zipCode, setZipCode] = useState('');
+const ServiceFilter = React.memo(({ onFilterChange, defaultCategory, defaultZipCode, isHomeBuyer }: ServiceFilterProps) => {
+  const [zipCode, setZipCode] = useState(defaultZipCode || '');
   // FIX 1: Use 'ALL' as the placeholder value instead of ''.
   const [selectedCategory, setSelectedCategory] = useState<string>(defaultCategory || 'ALL');
 
@@ -67,6 +68,12 @@ const ServiceFilter = React.memo(({ onFilterChange, defaultCategory, isHomeBuyer
       handleSearch();
     }
   }, [defaultCategory, handleSearch, selectedCategory]);
+
+  useEffect(() => {
+    if (typeof defaultZipCode === 'string' && defaultZipCode !== zipCode) {
+      setZipCode(defaultZipCode);
+    }
+  }, [defaultZipCode, zipCode]);
 
   return (
     <Card className="shadow-lg">
@@ -141,13 +148,17 @@ const ProviderList = ({
   targetPropertyId, 
   insightContext, 
   category,
-  fromSource
+  fromSource,
+  predictionId,
+  inventoryItemId,
 }: { 
   providers: Provider[]; 
   targetPropertyId?: string;
   insightContext?: string;
   category?: string;
   fromSource?: string;
+  predictionId?: string;
+  inventoryItemId?: string;
 }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -157,6 +168,8 @@ const ProviderList = ({
         if (insightContext) queryParams.append('insightFactor', insightContext);
         if (category) queryParams.append('category', category);
         if (fromSource) queryParams.append('from', fromSource);
+        if (predictionId) queryParams.append('predictionId', predictionId);
+        if (inventoryItemId) queryParams.append('itemId', inventoryItemId);
         
         const profileLink = queryParams.toString() 
           ? `/dashboard/providers/${provider.id}?${queryParams.toString()}`
@@ -228,10 +241,14 @@ export default function ProvidersPage() {
   const defaultCategory = searchParams.get('category') || searchParams.get('service') || undefined;
   const insightContext = searchParams.get('insightFactor') || undefined;
   const targetPropertyId = searchParams.get('propertyId') || undefined;
+  const predictionId = searchParams.get('predictionId') || undefined;
+  const inventoryItemId = searchParams.get('itemId') || undefined;
 
   const [providers, setProviders] = useState<Provider[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [contextItemName, setContextItemName] = useState<string | null>(null);
+  const [propertyZipCode, setPropertyZipCode] = useState<string>('');
 
   const isHomeBuyer = user?.segment === 'HOME_BUYER';
   const initialZipCode = ''; 
@@ -296,16 +313,54 @@ export default function ProvidersPage() {
 
   // Fetch providers on initial load only (not on every filter change)
   useEffect(() => {
-    // Only fetch once on mount if we have a category from URL
-    if (initialCategory && !hasInitialFetchedRef.current) {
-      hasInitialFetchedRef.current = true;
-      fetchProviders({ 
-        zipCode: '', 
-        category: initialCategory 
-      });
-    }
+    if (hasInitialFetchedRef.current) return;
+    hasInitialFetchedRef.current = true;
+
+    const run = async () => {
+      let zipForInitialSearch = '';
+
+      if (targetPropertyId) {
+        try {
+          const propertyRes = await api.getProperty(targetPropertyId);
+          if (propertyRes.success && propertyRes.data?.zipCode) {
+            zipForInitialSearch = propertyRes.data.zipCode;
+            setPropertyZipCode(propertyRes.data.zipCode);
+          }
+        } catch (error) {
+          console.error('Failed to load target property context:', error);
+        }
+      }
+
+      if (targetPropertyId && inventoryItemId) {
+        try {
+          const itemRes = await api.get<{ item: { name: string } }>(
+            `/api/properties/${targetPropertyId}/inventory/items/${inventoryItemId}`
+          );
+          if (itemRes.data?.item?.name) {
+            setContextItemName(itemRes.data.item.name);
+          }
+        } catch (error) {
+          console.error('Failed to load inventory context:', error);
+        }
+      }
+
+      const initialFilterState = {
+        zipCode: zipForInitialSearch,
+        category: initialCategory || 'ALL',
+      };
+      setFilters(initialFilterState);
+
+      if (initialFilterState.zipCode || initialCategory) {
+        fetchProviders({
+          zipCode: initialFilterState.zipCode,
+          category: initialCategory || 'ALL',
+        });
+      }
+    };
+
+    run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Intentionally empty - initialCategory is captured, only run once on mount
+  }, []);
 
 
   if (loading) {
@@ -341,10 +396,31 @@ export default function ProvidersPage() {
           </CardContent>
         </Card>
       )}
+
+      {contextItemName && (
+        <Card className="bg-emerald-50 border-emerald-200">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center gap-3">
+              <Info className="h-5 w-5 text-emerald-600 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-emerald-900">
+                  Showing pros for your {contextItemName} Maintenance.
+                </p>
+                {propertyZipCode && (
+                  <p className="text-xs text-emerald-700 mt-1">
+                    Local radius filter applied using property ZIP {propertyZipCode}.
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
   
       <ServiceFilter 
         onFilterChange={handleFilterChange} 
         defaultCategory={defaultCategory}
+        defaultZipCode={propertyZipCode}
         isHomeBuyer={isHomeBuyer}
       />
 
@@ -373,8 +449,10 @@ export default function ProvidersPage() {
           providers={providers} 
           targetPropertyId={targetPropertyId}
           insightContext={insightContext}
-          category={defaultCategory}
+          category={filters.category === 'ALL' ? undefined : filters.category}
           fromSource={fromSource}
+          predictionId={predictionId}
+          inventoryItemId={inventoryItemId}
         />
       ) : (
         <div className="text-center p-6 sm:p-8 bg-gray-50 border rounded-lg">

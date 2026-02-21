@@ -4,6 +4,7 @@ import { InventoryItemCategory } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { calculateProtectionGap } from './insuranceAuditor.service';
 import { evaluateStreakExpiry, PropertyStreakState } from './gamification.service';
+export { mapInventoryToServiceCategory } from '../utils/inventoryServiceCategory.util';
 
 const WATER_HEATER_HINTS = ['water heater', 'hot water'];
 

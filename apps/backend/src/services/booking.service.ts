@@ -1,6 +1,13 @@
 // apps/backend/src/services/booking.service.ts
 
-import { PrismaClient, BookingStatus, UserRole, Prisma } from '@prisma/client';
+import {
+  BookingStatus,
+  InventoryItemCategory,
+  PredictionStatus,
+  Prisma,
+  ServiceCategory,
+  UserRole,
+} from '@prisma/client';
 import {
   CreateBookingInput,
   UpdateBookingInput,
@@ -18,6 +25,8 @@ import JobQueueService from './JobQueue.service';
 
 import { prisma } from '../lib/prisma';
 import { NotificationService } from './notification.service';
+import { incrementStreak } from './gamification.service';
+import { mapInventoryToServiceCategory } from '../utils/inventoryServiceCategory.util';
 
 export class BookingService {
   /**
@@ -90,8 +99,116 @@ export class BookingService {
       throw new Error('Provider ID does not match service provider');
     }
 
+    // Validate predictive-maintenance links if provided
+    let linkedPrediction:
+      | {
+          id: string;
+          propertyId: string;
+          inventoryItemId: string | null;
+        }
+      | null = null;
+
+    if (input.maintenancePredictionId) {
+      linkedPrediction = await prisma.maintenancePrediction.findUnique({
+        where: { id: input.maintenancePredictionId },
+        select: {
+          id: true,
+          propertyId: true,
+          inventoryItemId: true,
+        },
+      });
+
+      if (!linkedPrediction) {
+        throw new Error('Linked maintenance prediction not found');
+      }
+
+      if (linkedPrediction.propertyId !== input.propertyId) {
+        throw new Error('Maintenance prediction does not belong to selected property');
+      }
+
+      const existingActivePredictionBooking = await prisma.booking.findFirst({
+        where: {
+          maintenancePredictionId: linkedPrediction.id,
+          status: {
+            in: ['PENDING', 'CONFIRMED', 'IN_PROGRESS'],
+          },
+        },
+        select: { id: true, status: true },
+      });
+
+      if (existingActivePredictionBooking) {
+        throw new Error(
+          `A booking is already active for this prediction (${existingActivePredictionBooking.status}).`
+        );
+      }
+    }
+
+    const resolvedInventoryItemId =
+      input.inventoryItemId ?? linkedPrediction?.inventoryItemId ?? null;
+
+    let linkedInventoryItem:
+      | {
+          id: string;
+          propertyId: string;
+          name: string;
+          category: InventoryItemCategory;
+          manufacturer: string | null;
+          modelNumber: string | null;
+          serialNumber: string | null;
+          brand: string | null;
+          model: string | null;
+          serialNo: string | null;
+        }
+      | null = null;
+
+    if (resolvedInventoryItemId) {
+      linkedInventoryItem = await prisma.inventoryItem.findFirst({
+        where: {
+          id: resolvedInventoryItemId,
+          propertyId: input.propertyId,
+        },
+        select: {
+          id: true,
+          propertyId: true,
+          name: true,
+          category: true,
+          manufacturer: true,
+          modelNumber: true,
+          serialNumber: true,
+          brand: true,
+          model: true,
+          serialNo: true,
+        },
+      });
+
+      if (!linkedInventoryItem) {
+        throw new Error('Linked inventory item not found for this property');
+      }
+    }
+
+    if (
+      linkedPrediction?.inventoryItemId &&
+      resolvedInventoryItemId &&
+      linkedPrediction.inventoryItemId !== resolvedInventoryItemId
+    ) {
+      throw new Error('maintenancePredictionId and inventoryItemId point to different assets');
+    }
+
     // Generate booking number
     const bookingNumber = await this.generateBookingNumber();
+
+    const specSheet = this.buildInventorySpecSheet(linkedInventoryItem);
+    const bookingDescription = specSheet
+      ? `${input.description.trim()}\n\n${specSheet}`
+      : input.description.trim();
+
+    const predictiveInsightFactor = input.maintenancePredictionId
+      ? 'PREDICTIVE_MAINTENANCE'
+      : input.insightFactor || null;
+    const predictiveInsightContext =
+      input.maintenancePredictionId && linkedInventoryItem
+        ? `Prediction-driven service for ${linkedInventoryItem.name}`
+        : input.insightContext || null;
 
     // Create booking with initial timeline
     const booking = await prisma.booking.create({
@@ -110,11 +227,13 @@ export class BookingService {
         endTime: input.endTime ? new Date(input.endTime) : null,
         estimatedPrice: input.estimatedPrice,
         depositAmount: input.depositAmount || null,
-        description: input.description,
+        description: bookingDescription,
         specialRequests: input.specialRequests || null,
         // NEW: Capture health insight tracking fields
-        insightFactor: input.insightFactor || null,
-        insightContext: input.insightContext || null,
+        insightFactor: predictiveInsightFactor,
+        insightContext: predictiveInsightContext,
+        maintenancePredictionId: input.maintenancePredictionId || null,
+        inventoryItemId: resolvedInventoryItemId,
         timeline: {
           create: {
             status: 'PENDING',
@@ -489,6 +608,14 @@ export class BookingService {
   ): Promise<BookingResponse> {
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
+      include: {
+        inventoryItem: {
+          select: {
+            id: true,
+            category: true,
+          },
+        },
+      },
     });
 
     if (!booking) {
@@ -511,42 +638,84 @@ export class BookingService {
       throw new Error('End time must be after start time');
     }
 
-    const updated = await prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        status: 'COMPLETED',
-        actualStartTime: startTime,
-        actualEndTime: endTime,
-        finalPrice: input.finalPrice,
-        completedAt: new Date(),
-        ...(input.internalNotes && { internalNotes: input.internalNotes }),
-        timeline: {
-          create: {
-            status: 'COMPLETED',
-            note: 'Service completed',
-            createdBy: providerId,
+    const updated = await prisma.$transaction(async (tx) => {
+      const completedBooking = await tx.booking.update({
+        where: { id: bookingId },
+        data: {
+          status: 'COMPLETED',
+          actualStartTime: startTime,
+          actualEndTime: endTime,
+          finalPrice: input.finalPrice,
+          completedAt: new Date(),
+          ...(input.internalNotes && { internalNotes: input.internalNotes }),
+          timeline: {
+            create: {
+              status: 'COMPLETED',
+              note: 'Service completed',
+              createdBy: providerId,
+            },
           },
         },
-      },
-      include: {
-        homeowner: true,
-        provider: true,
-        providerProfile: true,
-        service: true,
-        property: true,
-        timeline: {
-          orderBy: { createdAt: 'asc' },
+        include: {
+          homeowner: true,
+          provider: true,
+          providerProfile: true,
+          service: true,
+          property: true,
+          timeline: {
+            orderBy: { createdAt: 'asc' },
+          },
         },
-      },
+      });
+
+      await tx.providerProfile.update({
+        where: { id: booking.providerProfileId },
+        data: {
+          totalCompletedJobs: { increment: 1 },
+        },
+      });
+
+      let servicedInventoryItemId = booking.inventoryItemId ?? null;
+      if (!servicedInventoryItemId && booking.maintenancePredictionId) {
+        const prediction = await tx.maintenancePrediction.findUnique({
+          where: { id: booking.maintenancePredictionId },
+          select: { inventoryItemId: true },
+        });
+        servicedInventoryItemId = prediction?.inventoryItemId ?? null;
+      }
+
+      if (servicedInventoryItemId) {
+        await tx.inventoryItem.update({
+          where: { id: servicedInventoryItemId },
+          data: {
+            lastServicedOn: endTime,
+          },
+        });
+      }
+
+      if (booking.maintenancePredictionId) {
+        await tx.maintenancePrediction.updateMany({
+          where: { id: booking.maintenancePredictionId },
+          data: { status: PredictionStatus.COMPLETED },
+        });
+      }
+
+      return completedBooking;
     });
 
-    // Update provider's completed jobs count
-    await prisma.providerProfile.update({
-      where: { id: booking.providerProfileId },
-      data: {
-        totalCompletedJobs: { increment: 1 },
-      },
-    });
+    if (booking.maintenancePredictionId) {
+      try {
+        await incrementStreak(booking.propertyId);
+      } catch (error) {
+        console.error('[BOOKING] Failed to increment streak from predictive completion:', error);
+      }
+
+      await this.awardPredictiveMaintenanceBadgeIfEligible(
+        booking.propertyId,
+        booking.inventoryItem?.category ?? null,
+        booking.category
+      );
+    }
 
     return this.formatBookingResponse(updated);
   }
@@ -622,6 +791,125 @@ export class BookingService {
     });
     
     return this.formatBookingResponse(updated);
+  }
+
+  private static buildInventorySpecSheet(
+    item:
+      | {
+          name: string;
+          manufacturer: string | null;
+          modelNumber: string | null;
+          serialNumber: string | null;
+          brand: string | null;
+          model: string | null;
+          serialNo: string | null;
+        }
+      | null
+  ): string | null {
+    if (!item) return null;
+
+    const manufacturer = item.manufacturer || item.brand || 'Unknown';
+    const model = item.modelNumber || item.model || 'Unknown';
+    const serial = item.serialNumber || item.serialNo || 'Unknown';
+
+    return [
+      `Spec Sheet (${item.name})`,
+      `- Manufacturer: ${manufacturer}`,
+      `- Model: ${model}`,
+      `- Serial: ${serial}`,
+    ].join('\n');
+  }
+
+  private static badgeForServiceCategory(category: ServiceCategory): string {
+    switch (category) {
+      case ServiceCategory.HVAC:
+        return 'PREDICTIVE_HVAC_STEWARD';
+      case ServiceCategory.PLUMBING:
+        return 'PREDICTIVE_PLUMBING_STEWARD';
+      case ServiceCategory.ELECTRICAL:
+        return 'PREDICTIVE_ELECTRICAL_STEWARD';
+      default:
+        return 'PREDICTIVE_HOME_CARE_STEWARD';
+    }
+  }
+
+  private static inventoryCategoriesForService(category: ServiceCategory): InventoryItemCategory[] {
+    if (category === ServiceCategory.HVAC) {
+      return [InventoryItemCategory.HVAC];
+    }
+    if (category === ServiceCategory.PLUMBING) {
+      return [InventoryItemCategory.PLUMBING];
+    }
+    if (category === ServiceCategory.ELECTRICAL) {
+      return [InventoryItemCategory.ELECTRICAL];
+    }
+
+    return [
+      InventoryItemCategory.APPLIANCE,
+      InventoryItemCategory.ROOF_EXTERIOR,
+      InventoryItemCategory.SAFETY,
+      InventoryItemCategory.SMART_HOME,
+      InventoryItemCategory.FURNITURE,
+      InventoryItemCategory.ELECTRONICS,
+      InventoryItemCategory.OTHER,
+    ];
+  }
+
+  private static async awardPredictiveMaintenanceBadgeIfEligible(
+    propertyId: string,
+    inventoryCategory: InventoryItemCategory | null,
+    fallbackServiceCategory: ServiceCategory
+  ): Promise<void> {
+    try {
+      const mappedServiceCategory = inventoryCategory
+        ? mapInventoryToServiceCategory(inventoryCategory)
+        : fallbackServiceCategory;
+      const inventoryCategories = this.inventoryCategoriesForService(mappedServiceCategory);
+
+      const relevantItems = await prisma.inventoryItem.findMany({
+        where: {
+          propertyId,
+          isVerified: true,
+          category: {
+            in: inventoryCategories,
+          },
+        },
+        select: {
+          id: true,
+          lastServicedOn: true,
+        },
+      });
+
+      if (relevantItems.length === 0) return;
+
+      const threshold = new Date();
+      threshold.setDate(threshold.getDate() - 365);
+
+      const categoryCompleted = relevantItems.every(
+        (item) => item.lastServicedOn && item.lastServicedOn >= threshold
+      );
+
+      if (!categoryCompleted) return;
+
+      const property = await prisma.property.findUnique({
+        where: { id: propertyId },
+        select: { unlockedBadges: true },
+      });
+
+      if (!property) return;
+
+      const badge = this.badgeForServiceCategory(mappedServiceCategory);
+      if (property.unlockedBadges.includes(badge)) return;
+
+      await prisma.property.update({
+        where: { id: propertyId },
+        data: {
+          unlockedBadges: [...property.unlockedBadges, badge],
+        },
+      });
+    } catch (error) {
+      console.error('[BOOKING] Failed to award predictive maintenance badge:', error);
+    }
   }
 
   /**
@@ -710,6 +998,8 @@ export class BookingService {
       // NEW: Include health insight tracking fields
       insightFactor: booking.insightFactor || null,
       insightContext: booking.insightContext || null,
+      maintenancePredictionId: booking.maintenancePredictionId || null,
+      inventoryItemId: booking.inventoryItemId || null,
       cancelledAt: booking.cancelledAt,
       cancelledBy: booking.cancelledBy,
       cancellationReason: booking.cancellationReason,

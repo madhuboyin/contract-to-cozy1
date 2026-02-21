@@ -4,10 +4,12 @@ import {
   InventoryItemCategory,
   PredictionStatus,
   Prisma,
+  ServiceCategory,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { incrementStreak, StreakUpdateResult } from './gamification.service';
+import { mapInventoryToServiceCategory } from '../utils/inventoryServiceCategory.util';
 
 type RuleGroupKey = 'HVAC' | 'WATER_HEATER' | 'ROOF';
 
@@ -77,11 +79,21 @@ type MaintenancePredictionWithItem = Prisma.MaintenancePredictionGetPayload<{
         isVerified: true;
       };
     };
+    booking: {
+      select: {
+        id: true;
+        status: true;
+      };
+    };
   };
 }>;
 
+export type ForecastPredictionDTO = MaintenancePredictionWithItem & {
+  recommendedServiceCategory: ServiceCategory;
+};
+
 export type ForecastStatusUpdateResult = {
-  prediction: MaintenancePredictionWithItem;
+  prediction: ForecastPredictionDTO;
   streak: StreakUpdateResult | null;
 };
 
@@ -228,6 +240,14 @@ async function resolveClimateRegion(propertyId: string): Promise<ClimateRegion> 
   });
 
   return setting?.climateRegion ?? ClimateRegion.MODERATE;
+}
+
+function toForecastDTO(prediction: MaintenancePredictionWithItem): ForecastPredictionDTO {
+  const categoryHint = prediction.inventoryItem?.category ?? 'OTHER';
+  return {
+    ...prediction,
+    recommendedServiceCategory: mapInventoryToServiceCategory(categoryHint),
+  };
 }
 
 function buildRuleDates(
@@ -396,14 +416,14 @@ export async function listForecast(
     statuses?: PredictionStatus[];
     limit?: number;
   }
-): Promise<MaintenancePredictionWithItem[]> {
+): Promise<ForecastPredictionDTO[]> {
   const statuses = options?.statuses?.length
     ? options.statuses
     : [PredictionStatus.PENDING, PredictionStatus.OVERDUE];
 
   const limit = options?.limit && options.limit > 0 ? options.limit : undefined;
 
-  return prisma.maintenancePrediction.findMany({
+  const rows = await prisma.maintenancePrediction.findMany({
     where: {
       propertyId,
       status: { in: statuses },
@@ -418,10 +438,18 @@ export async function listForecast(
           isVerified: true,
         },
       },
+      booking: {
+        select: {
+          id: true,
+          status: true,
+        },
+      },
     },
     orderBy: [{ predictedDate: 'asc' }, { priority: 'desc' }],
     ...(limit ? { take: limit } : {}),
   });
+
+  return rows.map(toForecastDTO);
 }
 
 export async function updateForecastStatus(
@@ -448,6 +476,12 @@ export async function updateForecastStatus(
           isVerified: true,
         },
       },
+      booking: {
+        select: {
+          id: true,
+          status: true,
+        },
+      },
     },
   });
 
@@ -472,6 +506,12 @@ export async function updateForecastStatus(
             isVerified: true,
           },
         },
+        booking: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
       },
     });
 
@@ -493,5 +533,5 @@ export async function updateForecastStatus(
     });
   }
 
-  return { prediction: updated, streak };
+  return { prediction: toForecastDTO(updated), streak };
 }

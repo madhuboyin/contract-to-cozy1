@@ -3,7 +3,8 @@
 import React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { AlertTriangle, CheckCircle2, Loader2, Wrench } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { AlertTriangle, CheckCircle2, Loader2, Search, Wrench } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { MaintenancePrediction } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -41,13 +42,19 @@ function TimelineCard({
   prediction,
   onMarkDone,
   onDismiss,
+  onFindPro,
   isPending,
 }: {
   prediction: MaintenancePrediction;
   onMarkDone: (prediction: MaintenancePrediction) => void;
   onDismiss: (prediction: MaintenancePrediction) => void;
+  onFindPro: (prediction: MaintenancePrediction) => void;
   isPending: boolean;
 }) {
+  const hasActiveBooking =
+    prediction.booking &&
+    ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(prediction.booking.status);
+
   return (
     <Card className="min-w-[280px] max-w-[320px] shrink-0 border-gray-200">
       <CardHeader className="space-y-2 pb-3">
@@ -66,6 +73,16 @@ function TimelineCard({
         <p className="text-sm text-gray-600">
           {prediction.reasoning ?? 'Predicted by your maintenance intelligence engine.'}
         </p>
+        <Button
+          type="button"
+          size="sm"
+          className="min-h-[44px] w-full px-4"
+          disabled={isPending}
+          onClick={() => onFindPro(prediction)}
+        >
+          <Search className="mr-2 h-4 w-4" />
+          {hasActiveBooking ? 'View Booking' : 'Find a Pro'}
+        </Button>
         <div className="flex items-center gap-2">
           <Button
             type="button"
@@ -94,6 +111,7 @@ function TimelineCard({
 }
 
 export function MaintenanceForecast({ propertyId, mode = 'timeline' }: MaintenanceForecastProps) {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const limit = mode === 'next-up' ? 3 : 24;
@@ -146,6 +164,29 @@ export function MaintenanceForecast({ propertyId, mode = 'timeline' }: Maintenan
       });
     },
   });
+
+  const openMarketplaceForPrediction = (prediction: MaintenancePrediction) => {
+    const hasActiveBooking =
+      prediction.booking &&
+      ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(prediction.booking.status);
+
+    if (hasActiveBooking && prediction.booking) {
+      router.push(`/dashboard/bookings/${prediction.booking.id}`);
+      return;
+    }
+
+    const params = new URLSearchParams();
+    params.set('category', prediction.recommendedServiceCategory);
+    params.set('predictionId', prediction.id);
+    if (prediction.inventoryItemId) {
+      params.set('itemId', prediction.inventoryItemId);
+    }
+    if (propertyId) {
+      params.set('propertyId', propertyId);
+    }
+
+    router.push(`/marketplace?${params.toString()}`);
+  };
 
   if (!propertyId) return null;
 
@@ -218,6 +259,20 @@ export function MaintenanceForecast({ propertyId, mode = 'timeline' }: Maintenan
                   size="sm"
                   className="min-h-[44px] px-3"
                   disabled={updateStatusMutation.isPending}
+                  onClick={() => openMarketplaceForPrediction(prediction)}
+                >
+                  <Search className="mr-1 h-4 w-4" />
+                  {prediction.booking &&
+                  ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(prediction.booking.status)
+                    ? 'View Booking'
+                    : 'Find a Pro'}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="min-h-[44px] px-3"
+                  disabled={updateStatusMutation.isPending}
                   onClick={() =>
                     updateStatusMutation.mutate({ prediction, status: 'COMPLETED' })
                   }
@@ -265,6 +320,7 @@ export function MaintenanceForecast({ propertyId, mode = 'timeline' }: Maintenan
               key={prediction.id}
               prediction={prediction}
               isPending={updateStatusMutation.isPending}
+              onFindPro={(item) => openMarketplaceForPrediction(item)}
               onMarkDone={(item) =>
                 updateStatusMutation.mutate({ prediction: item, status: 'COMPLETED' })
               }

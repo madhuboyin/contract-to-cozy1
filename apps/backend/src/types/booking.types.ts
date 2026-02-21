@@ -28,6 +28,8 @@ export const createBookingSchema = z.object({
   // NEW: Health Insight Tracking
   insightFactor: z.string().max(100).optional(),     // e.g., "Age Factor", "Roof Age"
   insightContext: z.string().max(500).optional(),    // e.g., "Property age: 35 years"
+  maintenancePredictionId: z.string().uuid('Invalid maintenance prediction ID').optional(),
+  inventoryItemId: z.string().uuid('Invalid inventory item ID').optional(),
 });
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
@@ -152,6 +154,8 @@ export interface BookingResponse {
   // NEW: Health Insight Tracking
   insightFactor: string | null;
   insightContext: string | null;
+  maintenancePredictionId: string | null;
+  inventoryItemId: string | null;
   
   // Cancellation
   cancelledAt: Date | null;

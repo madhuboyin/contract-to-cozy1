@@ -54,6 +54,8 @@ export default function ProviderDetailPage() {
   const propertyId = searchParams.get('propertyId');
   const insightFactor = searchParams.get('insightFactor');
   const category = searchParams.get('category');
+  const predictionId = searchParams.get('predictionId');
+  const itemId = searchParams.get('itemId');
 
   // FIX: Use CompleteProvider type for the state
   const [provider, setProvider] = useState<CompleteProvider | null>(null);
@@ -261,6 +263,8 @@ export default function ProviderDetailPage() {
     if (propertyId) queryParams.append('propertyId', propertyId);
     if (insightFactor) queryParams.append('insightFactor', insightFactor);
     if (category) queryParams.append('category', category);
+    if (predictionId) queryParams.append('predictionId', predictionId);
+    if (itemId) queryParams.append('itemId', itemId);
     
     // 🔑 NEW: Pass through 'from' parameter
     const fromParam = searchParams.get('from');
