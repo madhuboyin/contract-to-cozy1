@@ -487,6 +487,7 @@ model InventoryItem {
   homeCapitalTimelineItems     HomeCapitalTimelineItem[]
   homeCapitalTimelineOverrides HomeCapitalTimelineOverride[]
   maintenancePredictions MaintenancePrediction[]
+  bookings Booking[]
 
   @@index([manufacturerNorm, modelNumberNorm])
   @@index([upc])
