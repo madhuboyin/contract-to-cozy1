@@ -32,8 +32,8 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
       setOcrLoading(true);
       try {
         const draft = await ocrLabelToDraft(propertyId, file);
-        if (draft?.id) {
-          await confirmInventoryDraft(propertyId, draft.id);
+        if (draft?.draftId) {
+          await confirmInventoryDraft(propertyId, draft.draftId);
         }
         // Also mark the current nudge item as verified via OCR
         await verifyItem(propertyId, nudge.item.id, { source: 'OCR_LABEL' });
