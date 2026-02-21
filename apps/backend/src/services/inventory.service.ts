@@ -5,6 +5,7 @@ import { InventoryItemCategory } from '@prisma/client';
 import crypto from 'crypto';
 import { HomeEventsAutoGen } from './homeEvents/homeEvents.autogen';
 import { NextFunction } from 'express';
+import { applianceOracleService } from './applianceOracle.service';
 
 function normalize(v: any) {
   return String(v ?? '').trim().toLowerCase();
@@ -481,12 +482,13 @@ export class InventoryService {
   async updateItem(propertyId: string, itemId: string, patch: any) {
     const existing = await prisma.inventoryItem.findFirst({
       where: { id: itemId, propertyId },
-      select: { 
-        id: true, 
-        category: true, 
+      select: {
+        id: true,
+        category: true,
         tags: true,
         sourceHash: true,
         name: true,
+        isVerified: true,
       },
     });
     
@@ -576,7 +578,7 @@ export class InventoryService {
     if ('manufacturer' in patch) updateData.manufacturerNorm = norm(patch.manufacturer);
     if ('modelNumber' in patch) updateData.modelNumberNorm = norm(patch.modelNumber);
   
-    return prisma.inventoryItem.update({
+    const updated = await prisma.inventoryItem.update({
       where: { id: itemId },
       data: updateData,
       include: {
@@ -587,6 +589,15 @@ export class InventoryService {
         documents: { orderBy: { createdAt: 'desc' } },
       },
     });
+
+    // Recalculate lifespan if relevant fields changed on a verified item
+    if (existing.isVerified && ('technicalSpecs' in patch || 'installedOn' in patch || 'purchasedOn' in patch)) {
+      applianceOracleService.recalculateLifespan(itemId).catch((err) => {
+        console.error('[INVENTORY_UPDATE] Lifespan recalculation failed (non-blocking):', err);
+      });
+    }
+
+    return updated;
   }
 
   // ✅ NEW: barcode → product lookup (server-side)

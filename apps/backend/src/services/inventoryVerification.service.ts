@@ -2,6 +2,7 @@
 
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
+import { applianceOracleService } from './applianceOracle.service';
 
 const APPLIANCE_LIFESPAN_DATA: Record<string, { avgLife: number; category: string }> = {
   'HVAC': { avgLife: 15, category: 'HVAC' },
@@ -154,21 +155,19 @@ export async function markItemVerified(
     throw new APIError('Inventory item not found', 404, 'ITEM_NOT_FOUND');
   }
 
-  // Calculate expected expiry if we have enough data
-  let expectedExpiryDate: Date | null = null;
-  if (item.manufacturer || item.modelNumber) {
-    expectedExpiryDate = calculateExpectedExpiry(item);
-  }
-
   const updated = await prisma.inventoryItem.update({
     where: { id: itemId },
     data: {
       isVerified: true,
       verificationSource: source,
       ...(technicalSpecs ? { technicalSpecs } : {}),
-      ...(expectedExpiryDate ? { expectedExpiryDate } : {}),
     },
     include: { room: true, homeAsset: true },
+  });
+
+  // Fire-and-forget lifespan recalculation
+  applianceOracleService.recalculateLifespan(itemId).catch((err) => {
+    console.error('[VERIFICATION] Lifespan recalculation failed (non-blocking):', err);
   });
 
   return updated;

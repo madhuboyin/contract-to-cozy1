@@ -365,6 +365,102 @@ export class ApplianceOracleService {
     ];
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // POST-VERIFICATION LIFESPAN RECALCULATION
+  // Called fire-and-forget after item verification or relevant field updates.
+  // Never throws — all errors are caught and logged internally.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  private static readonly PREMIUM_MANUFACTURERS = new Set(
+    ['carrier', 'trane', 'lennox', 'rheem', 'bosch']
+  );
+
+  async recalculateLifespan(itemId: string): Promise<void> {
+    try {
+      const item = await prisma.inventoryItem.findUnique({
+        where: { id: itemId },
+        include: { homeAsset: true },
+      });
+
+      if (!item) {
+        console.error(`[LIFESPAN] Item ${itemId} not found — skipping recalculation`);
+        return;
+      }
+
+      // Get base lifespan from category/name lookup
+      const lifespanData = this.getLifespanData(item.name);
+      let adjustedLife = lifespanData.avgLife;
+
+      // Check technicalSpecs for precision adjustments
+      const specs = (item.technicalSpecs as Record<string, any>) || {};
+      let usedPrecision = false;
+
+      // HVAC: SEER rating adjustments
+      if (lifespanData.category === 'HVAC' && specs.seer_rating != null) {
+        const seer = Number(specs.seer_rating);
+        if (!isNaN(seer)) {
+          if (seer >= 16) {
+            adjustedLife += 2;
+            usedPrecision = true;
+          } else if (seer < 13) {
+            adjustedLife -= 2;
+            usedPrecision = true;
+          }
+        }
+      }
+
+      // Water Heater: tankless vs tank, tank size
+      const nameLower = item.name.toLowerCase();
+      if (nameLower.includes('water heater') || nameLower.includes('water_heater')) {
+        if (nameLower.includes('tankless') || specs.type === 'tankless') {
+          adjustedLife = 20; // Tankless base
+          usedPrecision = true;
+        } else if (specs.tank_gallons != null) {
+          const gallons = Number(specs.tank_gallons);
+          if (!isNaN(gallons) && gallons > 50) {
+            adjustedLife -= 1; // Larger tanks degrade faster
+            usedPrecision = true;
+          }
+        }
+      }
+
+      // Premium manufacturer bonus
+      const manufacturer = (specs.manufacturer || item.manufacturer || '').toLowerCase().trim();
+      if (manufacturer && ApplianceOracleService.PREMIUM_MANUFACTURERS.has(manufacturer)) {
+        adjustedLife += 1;
+        usedPrecision = true;
+      }
+
+      if (usedPrecision) {
+        console.log(`[LIFESPAN] Precision calculation for item ${itemId} — adjusted life: ${adjustedLife}yr`);
+      } else {
+        console.log(`[LIFESPAN] Category default calculation for item ${itemId} — base life: ${adjustedLife}yr`);
+      }
+
+      // Determine base date: purchasedOn → homeAsset.installedAt → installedOn
+      const baseDate = item.purchasedOn
+        || (item.homeAsset as any)?.installedAt
+        || item.installedOn;
+
+      if (!baseDate) {
+        console.log(`[LIFESPAN] No base date for item ${itemId} — cannot compute expiry`);
+        return;
+      }
+
+      const expectedExpiryDate = new Date(baseDate);
+      expectedExpiryDate.setFullYear(expectedExpiryDate.getFullYear() + adjustedLife);
+
+      await prisma.inventoryItem.update({
+        where: { id: itemId },
+        data: { expectedExpiryDate },
+      });
+
+      console.log(`[LIFESPAN] Updated expectedExpiryDate for item ${itemId} → ${expectedExpiryDate.toISOString()}`);
+    } catch (err) {
+      console.error(`[LIFESPAN] Recalculation failed for item ${itemId}:`, err);
+    }
+  }
+
   private getMaintenanceImpact(failureRisk: number, urgency: string): string {
     if (urgency === 'CRITICAL') {
       return 'Replace immediately to avoid emergency failure and higher costs';

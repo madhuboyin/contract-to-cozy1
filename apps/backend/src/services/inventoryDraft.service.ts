@@ -1,7 +1,7 @@
 // apps/backend/src/services/inventoryDraft.service.ts
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
-import { calculateExpectedExpiry } from './inventoryVerification.service';
+import { applianceOracleService } from './applianceOracle.service';
 
 export class InventoryDraftService {
   async createDraftFromOcr(args: {
@@ -96,14 +96,10 @@ export class InventoryDraftService {
       },
     });
 
-    // Calculate and set expected expiry date if possible
-    const expiryDate = calculateExpectedExpiry(item);
-    if (expiryDate) {
-      await prisma.inventoryItem.update({
-        where: { id: item.id },
-        data: { expectedExpiryDate: expiryDate },
-      });
-    }
+    // Fire-and-forget lifespan recalculation for OCR-verified item
+    applianceOracleService.recalculateLifespan(item.id).catch((err) => {
+      console.error('[OCR_CONFIRM] Lifespan recalculation failed (non-blocking):', err);
+    });
 
     await prisma.inventoryDraftItem.update({
       where: { id: draftId },
