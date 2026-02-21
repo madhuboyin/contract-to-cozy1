@@ -230,19 +230,24 @@ async function getResilienceNudge(
   // Gate on live weather: only surface the sump-pump nudge when heavy rain
   // is actually forecast. Falls back gracefully if weather fetch fails.
   const zipCode = property.zipCode?.trim();
-  let cityName: string | null = null;
-  if (zipCode) {
-    const meta = await weatherService
-      .getLocalForecastMeta(zipCode)
-      .catch(() => ({ signals: [] as SignalType[], cityName: null }));
-    if (!meta.signals.includes(SignalType.WEATHER_FORECAST_HEAVY_RAIN)) {
-      console.info(
-        `[DISCOVERY] Resilience nudge suppressed — no WEATHER_FORECAST_HEAVY_RAIN for zip=${zipCode}`
-      );
-      return null;
-    }
-    cityName = meta.cityName;
+  if (!zipCode) {
+    console.info(
+      `[DISCOVERY] Resilience nudge suppressed — missing zip code for propertyId=${propertyId}`
+    );
+    return null;
   }
+
+  let cityName: string | null = null;
+  const meta = await weatherService
+    .getLocalForecastMeta(zipCode)
+    .catch(() => ({ signals: [] as SignalType[], cityName: null }));
+  if (!meta.signals.includes(SignalType.WEATHER_FORECAST_HEAVY_RAIN)) {
+    console.info(
+      `[DISCOVERY] Resilience nudge suppressed — no WEATHER_FORECAST_HEAVY_RAIN for zip=${zipCode}`
+    );
+    return null;
+  }
+  cityName = meta.cityName;
 
   const rainLocation = cityName ? ` in ${cityName}` : '';
 
@@ -406,8 +411,8 @@ export async function getNextDiscoveryNudge(
   );
 
   const nudge =
-    (await getCriticalAssetNudge(propertyId, excludedSet, streak)) ??
     (await getResilienceNudge(propertyId, excludedSet, streak)) ??
+    (await getCriticalAssetNudge(propertyId, excludedSet, streak)) ??
     (await getInsuranceNudge(propertyId, excludedSet, streak)) ??
     (await getEquityNudge(propertyId, excludedSet, streak)) ??
     (await getUtilityNudge(propertyId, excludedSet, streak));

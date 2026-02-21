@@ -24,6 +24,7 @@ const FORECAST_QUERY_KEY = 'maintenance-predictions';
 const PROPERTY_QUERY_KEY = 'property';
 const PROPERTIES_QUERY_KEY = 'properties';
 const MAINTENANCE_TASK_QUERY_KEY = 'maintenance-tasks';
+const FORECAST_FETCH_LIMIT = 24;
 
 type ForecastQueryResult = {
   predictions: MaintenancePrediction[];
@@ -163,7 +164,6 @@ export function MaintenanceForecast({ propertyId, mode = 'timeline' }: Maintenan
   const router = useRouter();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const limit = mode === 'next-up' ? 3 : 24;
 
   const {
     data: forecastData,
@@ -172,7 +172,7 @@ export function MaintenanceForecast({ propertyId, mode = 'timeline' }: Maintenan
     error,
     refetch,
   } = useQuery<ForecastQueryResult>({
-    queryKey: [FORECAST_QUERY_KEY, propertyId, mode],
+    queryKey: [FORECAST_QUERY_KEY, propertyId],
     enabled: Boolean(propertyId),
     staleTime: 60 * 1000,
     queryFn: async () => {
@@ -185,7 +185,7 @@ export function MaintenanceForecast({ propertyId, mode = 'timeline' }: Maintenan
       }
       const response = await api.getMaintenanceForecast(id, {
         status: ['PENDING', 'OVERDUE'],
-        limit,
+        limit: FORECAST_FETCH_LIMIT,
       });
       if (!response.success) {
         throw new Error(response.message || 'Unable to load maintenance forecast.');
@@ -342,7 +342,12 @@ export function MaintenanceForecast({ propertyId, mode = 'timeline' }: Maintenan
               Verify Key Assets
             </Link>
           </Button>
-          <Button type="button" variant="outline" onClick={() => void refetch()} className="min-h-[44px]">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void refetch()}
+            className="min-h-[44px]"
+          >
             Refresh Forecast
           </Button>
         </CardContent>

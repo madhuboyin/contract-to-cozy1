@@ -97,6 +97,17 @@ export type ForecastStatusUpdateResult = {
   streak: StreakUpdateResult | null;
 };
 
+type ForecastGenerationResult = {
+  propertyId: string;
+  windowMonths: number;
+  generatedAt: string;
+  totalCandidates: number;
+  created: number;
+  updated: number;
+};
+
+const forecastGenerationInFlight = new Map<string, Promise<ForecastGenerationResult>>();
+
 function isWaterHeaterItem(item: Pick<InventoryItem, 'category' | 'name'>): boolean {
   if (
     item.category !== InventoryItemCategory.PLUMBING &&
@@ -249,6 +260,12 @@ function predictionKey(inventoryItemId: string | null, taskName: string, predict
   return `${inventoryItemId ?? 'none'}::${taskName.toLowerCase()}::${year}-${month}`;
 }
 
+function isOnTimeCompletion(predictedDate: Date, completedAt: Date): boolean {
+  const dueAt = new Date(predictedDate);
+  dueAt.setHours(23, 59, 59, 999);
+  return completedAt.getTime() <= dueAt.getTime();
+}
+
 async function resolveClimateRegion(propertyId: string): Promise<ClimateRegion> {
   const setting = await prisma.propertyClimateSetting.findUnique({
     where: { propertyId },
@@ -296,7 +313,7 @@ function buildRuleDates(
   return dates;
 }
 
-export async function generateForecast(propertyId: string) {
+async function generateForecastInternal(propertyId: string): Promise<ForecastGenerationResult> {
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
     select: { id: true },
@@ -341,11 +358,43 @@ export async function generateForecast(propertyId: string) {
   });
 
   const existingByKey = new Map<string, (typeof existingPredictions)[number]>();
+  const duplicatePendingIds = new Set<string>();
   for (const prediction of existingPredictions) {
     const key = predictionKey(prediction.inventoryItemId, prediction.taskName, prediction.predictedDate);
-    if (!existingByKey.has(key)) {
+    const existing = existingByKey.get(key);
+
+    if (!existing) {
       existingByKey.set(key, prediction);
+      continue;
     }
+
+    const existingTerminal =
+      existing.status === PredictionStatus.COMPLETED || existing.status === PredictionStatus.DISMISSED;
+    const incomingTerminal =
+      prediction.status === PredictionStatus.COMPLETED || prediction.status === PredictionStatus.DISMISSED;
+
+    // Prefer terminal rows as canonical; otherwise keep first-created row.
+    if (!existingTerminal && incomingTerminal) {
+      existingByKey.set(key, prediction);
+      if (existing.status === PredictionStatus.PENDING || existing.status === PredictionStatus.OVERDUE) {
+        duplicatePendingIds.add(existing.id);
+      }
+      continue;
+    }
+
+    if (prediction.status === PredictionStatus.PENDING || prediction.status === PredictionStatus.OVERDUE) {
+      duplicatePendingIds.add(prediction.id);
+    }
+  }
+
+  if (duplicatePendingIds.size > 0) {
+    await prisma.maintenancePrediction.deleteMany({
+      where: {
+        id: {
+          in: Array.from(duplicatePendingIds),
+        },
+      },
+    });
   }
 
   const candidates: ForecastCandidate[] = [];
@@ -427,6 +476,20 @@ export async function generateForecast(propertyId: string) {
   };
 }
 
+export async function generateForecast(propertyId: string): Promise<ForecastGenerationResult> {
+  const inFlight = forecastGenerationInFlight.get(propertyId);
+  if (inFlight) return inFlight;
+
+  const run = generateForecastInternal(propertyId).finally(() => {
+    if (forecastGenerationInFlight.get(propertyId) === run) {
+      forecastGenerationInFlight.delete(propertyId);
+    }
+  });
+
+  forecastGenerationInFlight.set(propertyId, run);
+  return run;
+}
+
 export async function listForecast(
   propertyId: string,
   options?: {
@@ -506,8 +569,11 @@ export async function updateForecastStatus(
     throw new APIError('Maintenance prediction not found', 404, 'PREDICTION_NOT_FOUND');
   }
 
+  const completionTimestamp = new Date();
   const shouldIncrementStreak =
-    status === PredictionStatus.COMPLETED && existing.status !== PredictionStatus.COMPLETED;
+    status === PredictionStatus.COMPLETED &&
+    existing.status !== PredictionStatus.COMPLETED &&
+    isOnTimeCompletion(existing.predictedDate, completionTimestamp);
 
   const updated = await prisma.$transaction(async (tx) => {
     const updatedPrediction = await tx.maintenancePrediction.update({
@@ -535,7 +601,7 @@ export async function updateForecastStatus(
     if (status === PredictionStatus.COMPLETED && existing.inventoryItemId) {
       await tx.inventoryItem.update({
         where: { id: existing.inventoryItemId },
-        data: { lastServicedOn: new Date() },
+        data: { lastServicedOn: completionTimestamp },
       });
     }
 
