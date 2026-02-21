@@ -1391,19 +1391,13 @@ model Property {
   zipCode     String
   
   isPrimary   Boolean  @default(true)
-  
-  // ============================================================================
-  // NEW PROPERTY DETAILS (FROM HOMEOWNERPROFILE & NEW REQUIREMENTS) - PHASE 1 ADDITIONS
-  // ============================================================================
-  
-  // Migrated from HomeownerProfile (Layer 1 - Basic)
+
   propertyType        PropertyType?
   propertySize        Int?    // Square footage
   yearBuilt           Int?
-  // Migrated from HomeownerProfile (Layer 2 - Advanced)
   bedrooms            Int?
   bathrooms           Float?
-  // New Basic/Advanced Fields
+
   ownershipType       OwnershipType?
   occupantsCount      Int? // Number of Occupants (Layer 2 - Usage/Wear Factor)
   
@@ -1437,6 +1431,12 @@ model Property {
   primaryHeatingFuel  String?   // For Utility Nudge (Gas, Electric, etc.)
   hasSecondaryHeat    Boolean?  // (Wood stove, Generator)
 
+  // NEW: Equity Baseline
+  purchasePriceCents    Int?      
+  purchaseDate          DateTime?
+  lastAppraisedValue    Int?      
+  lastAppraisalDate     DateTime?
+
   // Verification flags for these property-level nudges
   isResilienceVerified Boolean @default(false)
   isUtilityVerified    Boolean @default(false)
@@ -1444,10 +1444,6 @@ model Property {
   homeAssets          HomeAsset[]
   movingPlans         MovingPlan[]  // Add this line
 
-  // ============================================================================
-  // END NEW PROPERTY DETAILS
-  // ============================================================================
-  
   // Relations
   homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
   bookings         Booking[]
@@ -1457,12 +1453,8 @@ model Property {
   insurancePolicies InsurancePolicy[]
   expenses         Expense[]
   checklistItems   ChecklistItem[]
-  
-  // PHASE 1: NEW RELATION
-  maintenanceTasks PropertyMaintenanceTask[]
- 
+  maintenanceTasks PropertyMaintenanceTask[] 
   documents        Document[]
-
 
   // NEW RELATION FOR RISK ASSESSMENT (Phase 1): ***FIX APPLIED: Added @relation(name: "PropertyRiskReport")***
   riskReport       RiskAssessmentReport? @relation(name: "PropertyRiskReport")
@@ -1516,6 +1508,9 @@ model Property {
   homeSavingsOpportunities HomeSavingsOpportunity[]
   homeSavingsAccounts      HomeSavingsAccount[]
   homeItems HomeItem[]
+
+  estimatedMaintenancePremiumCents Int @default(0)
+  isEquityVerified      Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
