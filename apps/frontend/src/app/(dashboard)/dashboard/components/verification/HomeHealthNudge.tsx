@@ -4,7 +4,8 @@
 import React, { useState, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { Shield, Camera, CheckCircle } from 'lucide-react';
+import Link from 'next/link';
+import { Shield, Camera, CheckCircle, ArrowRight } from 'lucide-react';
 import { getVerificationNudge, verifyItem } from './verificationApi';
 import LabelOcrModal from '../inventory/LabelOcrModal';
 import { ocrLabelToDraft, confirmInventoryDraft } from '../../inventory/inventoryApi';
@@ -35,7 +36,6 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
         if (draft?.draftId) {
           await confirmInventoryDraft(propertyId, draft.draftId);
         }
-        // Also mark the current nudge item as verified via OCR
         await verifyItem(propertyId, nudge.item.id, { source: 'OCR_LABEL' });
         queryClient.invalidateQueries({ queryKey: ['verification-nudge', propertyId] });
       } catch (err) {
@@ -50,8 +50,9 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
 
   const handleManualVerify = useCallback(() => {
     if (!propertyId || !nudge?.item) return;
+    // openItemId is the query param the inventory page uses to auto-open the edit drawer
     router.push(
-      `/dashboard/properties/${propertyId}/inventory?itemId=${nudge.item.id}&verify=true`
+      `/dashboard/properties/${propertyId}/inventory?openItemId=${nudge.item.id}`
     );
   }, [propertyId, nudge, router]);
 
@@ -61,6 +62,12 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   const { item, totalUnverified, totalItems } = nudge;
   const verified = totalItems - totalUnverified;
   const percentVerified = totalItems > 0 ? Math.round((verified / totalItems) * 100) : 0;
+
+  // Build a subtitle with item context
+  const locationHint = item.room?.name ? ` in ${item.room.name}` : '';
+  const categoryLabel = item.category
+    ? item.category.replace(/_/g, ' ').toLowerCase()
+    : '';
 
   return (
     <>
@@ -83,19 +90,17 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
               <h3 className="font-semibold text-gray-900 truncate">
                 Verify Your {item.name}
               </h3>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                {totalUnverified} unverified
-              </span>
             </div>
 
             <p className="text-sm text-gray-600 mt-0.5">
-              Scan the label or confirm details to unlock lifespan predictions
+              {categoryLabel ? `This ${categoryLabel}` : 'This item'}
+              {locationHint} needs verification to unlock lifespan predictions
             </p>
 
             {/* Progress bar */}
             <div className="mt-3">
               <div className="flex justify-between text-xs text-gray-500 mb-1">
-                <span>{verified} of {totalItems} verified</span>
+                <span>{verified} of {totalItems} items verified</span>
                 <span>{percentVerified}%</span>
               </div>
               <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -107,7 +112,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
             </div>
 
             {/* Action buttons */}
-            <div className="flex gap-2 mt-3">
+            <div className="flex items-center gap-2 mt-3 flex-wrap">
               <button
                 onClick={() => setLabelOpen(true)}
                 disabled={ocrLoading}
@@ -130,6 +135,16 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
                 <CheckCircle className="w-4 h-4" />
                 Verify Manually
               </button>
+
+              {totalUnverified > 1 && (
+                <Link
+                  href={`/dashboard/properties/${propertyId}/inventory`}
+                  className="inline-flex items-center gap-1 ml-auto text-sm font-medium text-blue-600 hover:text-blue-700"
+                >
+                  View all {totalUnverified} unverified
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              )}
             </div>
           </div>
         </div>
