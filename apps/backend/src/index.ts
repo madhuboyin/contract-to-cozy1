@@ -291,6 +291,8 @@ app.get('/', (req: Request, res: Response) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/providers', providerRoutes);
 app.use('/api/bookings', bookingRoutes);
+// Keep vault public and mount before any generic '/api' routers that apply auth middleware.
+app.use('/api/vault', vaultRoutes);
 app.use('/api', homeReportExportRoutes);
 app.use('/api/properties', propertyRoutes);
 app.use('/api/users', userRoutes);
@@ -359,7 +361,6 @@ app.use('/api', homeStatusBoardRoutes);
 app.use('/api', inventoryVerificationRoutes);
 app.use('/api', maintenancePredictionRoutes);
 app.use('/api/weather', weatherRoutes);
-app.use('/api/vault', vaultRoutes); // public — no auth middleware
 
 //app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // 404 handler
