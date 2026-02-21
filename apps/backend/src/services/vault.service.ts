@@ -8,6 +8,11 @@ import { APIError } from '../middleware/error.middleware';
 // vaultPassword field on the Property model.
 // ─────────────────────────────────────────────────────────────────────────────
 const VAULT_PASSWORD = process.env.VAULT_PASSWORD ?? 'vault_test_2026';
+const VAULT_BYPASS_PASSWORD = String(process.env.VAULT_BYPASS_PASSWORD ?? '').toLowerCase() === 'true';
+
+if (VAULT_BYPASS_PASSWORD) {
+  console.warn('[VAULT] Password validation is temporarily bypassed (VAULT_BYPASS_PASSWORD=true).');
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Output shape
@@ -64,7 +69,7 @@ export interface VaultData {
 
 export async function getVaultData(propertyId: string, password: string): Promise<VaultData> {
   // 1. Password gate — intentionally generic error message to prevent enumeration
-  if (!password || password !== VAULT_PASSWORD) {
+  if (!VAULT_BYPASS_PASSWORD && (!password || password !== VAULT_PASSWORD)) {
     throw new APIError('Invalid vault password', 401, 'INVALID_VAULT_PASSWORD');
   }
 
