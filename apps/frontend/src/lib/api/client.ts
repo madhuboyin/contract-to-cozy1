@@ -80,6 +80,9 @@ import {
   SeasonalMaintenanceResult,
   RemoveSeasonalMaintenanceResult,
   LinkBookingResponse,
+  MaintenancePrediction,
+  MaintenancePredictionStatus,
+  MaintenanceForecastSummary,
 
   InventoryImportBatch,
 } from '@/types';
@@ -2575,6 +2578,80 @@ class APIClient {
   ): Promise<APIResponse<PropertyMaintenanceTask>> {
     return this.request<PropertyMaintenanceTask>(
       `/api/maintenance-tasks/${taskId}/status`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  /**
+   * Generate or refresh 12-month maintenance predictions for a property.
+   */
+  async generateMaintenanceForecast(
+    propertyId: string
+  ): Promise<APIResponse<MaintenanceForecastSummary>> {
+    return this.request<MaintenanceForecastSummary>(
+      `/api/properties/${propertyId}/maintenance-predictions/generate`,
+      {
+        method: 'POST',
+      }
+    );
+  }
+
+  /**
+   * Get maintenance predictions for timeline/next-up views.
+   */
+  async getMaintenanceForecast(
+    propertyId: string,
+    options?: {
+      status?: MaintenancePredictionStatus[];
+      limit?: number;
+    }
+  ): Promise<APIResponse<MaintenancePrediction[]>> {
+    const query = new URLSearchParams();
+    if (options?.status?.length) {
+      query.set('status', options.status.join(','));
+    }
+    if (options?.limit && options.limit > 0) {
+      query.set('limit', String(Math.floor(options.limit)));
+    }
+
+    const qs = query.toString();
+    const endpoint = `/api/properties/${propertyId}/maintenance-predictions${qs ? `?${qs}` : ''}`;
+    return this.request<MaintenancePrediction[]>(endpoint, { method: 'GET' });
+  }
+
+  /**
+   * Update maintenance prediction status (COMPLETED / DISMISSED).
+   */
+  async updateMaintenancePredictionStatus(
+    propertyId: string,
+    predictionId: string,
+    data: { status: MaintenancePredictionStatus }
+  ): Promise<
+    APIResponse<{
+      prediction: MaintenancePrediction;
+      streak: {
+        currentStreak: number;
+        longestStreak: number;
+        bonusMultiplier: number;
+        lastActivityDate: string | null;
+        milestoneReached: boolean;
+      } | null;
+    }>
+  > {
+    return this.request<{
+      prediction: MaintenancePrediction;
+      streak: {
+        currentStreak: number;
+        longestStreak: number;
+        bonusMultiplier: number;
+        lastActivityDate: string | null;
+        milestoneReached: boolean;
+      } | null;
+    }>(
+      `/api/properties/${propertyId}/maintenance-predictions/${predictionId}/status`,
       {
         method: 'PATCH',
         body: JSON.stringify(data),

@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import { HomeEventsAutoGen } from './homeEvents/homeEvents.autogen';
 import { NextFunction } from 'express';
 import { applianceOracleService } from './applianceOracle.service';
+import { generateForecast } from './maintenancePrediction.service';
 
 function normalize(v: any) {
   return String(v ?? '').trim().toLowerCase();
@@ -594,6 +595,13 @@ export class InventoryService {
     if (existing.isVerified && ('technicalSpecs' in patch || 'installedOn' in patch || 'purchasedOn' in patch)) {
       applianceOracleService.recalculateLifespan(itemId).catch((err) => {
         console.error('[INVENTORY_UPDATE] Lifespan recalculation failed (non-blocking):', err);
+      });
+    }
+
+    const becameVerified = existing.isVerified === false && updateData.isVerified === true;
+    if (becameVerified) {
+      generateForecast(propertyId).catch((err) => {
+        console.error('[INVENTORY_UPDATE] Maintenance forecast generation failed (non-blocking):', err);
       });
     }
 

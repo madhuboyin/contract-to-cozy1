@@ -1786,6 +1786,42 @@ export interface UpdateMaintenanceTaskInput {
   serviceProviderId?: string | null;
 }
 
+export type MaintenancePredictionStatus =
+  | 'PENDING'
+  | 'COMPLETED'
+  | 'DISMISSED'
+  | 'OVERDUE';
+
+export interface MaintenancePrediction {
+  id: string;
+  propertyId: string;
+  inventoryItemId: string | null;
+  taskName: string;
+  predictedDate: string;
+  priority: number;
+  reasoning: string | null;
+  confidenceScore: number;
+  status: MaintenancePredictionStatus;
+  createdAt: string;
+  updatedAt: string;
+  inventoryItem: {
+    id: string;
+    name: string;
+    category: InventoryItemCategory;
+    lastServicedOn: string | null;
+    isVerified: boolean;
+  } | null;
+}
+
+export interface MaintenanceForecastSummary {
+  propertyId: string;
+  windowMonths: number;
+  generatedAt: string;
+  totalCandidates: number;
+  created: number;
+  updated: number;
+}
+
 // -----------------------------------------------------------------------------
 // SEASONAL MAINTENANCE INTEGRATION TYPES
 // -----------------------------------------------------------------------------
