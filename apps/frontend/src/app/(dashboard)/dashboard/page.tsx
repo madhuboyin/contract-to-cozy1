@@ -2,11 +2,10 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
-import { Loader2 } from 'lucide-react';
-import { Booking, Property, User, ChecklistItem, Warranty, InsurancePolicy, LocalUpdate } from '@/types'; 
+import { Loader2, ShieldAlert, TrendingUp } from 'lucide-react';
+import { Booking, ChecklistItem, Warranty, InsurancePolicy, LocalUpdate } from '@/types';
 import { ScoredProperty } from './types'; 
 import { differenceInDays, isPast, parseISO } from 'date-fns'; 
 
@@ -15,15 +14,11 @@ import { DashboardShell } from '@/components/DashboardShell';
 import { PropertyHealthScoreCard } from './components/PropertyHealthScoreCard'; 
 import { PropertyRiskScoreCard } from './components/PropertyRiskScoreCard'; 
 import { FinancialEfficiencyScoreCard } from './components/FinancialEfficiencyScoreCard'; 
-// NEW IMPORTS FOR PROPERTY SELECTION
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { WelcomeModal } from './components/WelcomeModal';
 
 import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
 import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
-import { TrendingUp } from 'lucide-react';
-import { ShieldAlert } from 'lucide-react';
 import { SeasonalBanner } from '@/components/seasonal/SeasonalBanner';
 import { SeasonalWidget } from '@/components/seasonal/SeasonalWidget';
 import { useHomeownerSegment } from '@/lib/hooks/useHomeownerSegment';
@@ -168,27 +163,7 @@ const consolidateUrgentActions = (
 
 // --- END PHASE 1: DATA CONSOLIDATION TYPES ---
 
-const formatAddress = (property: Property) => {
-  return `${property.address}, ${property.city}, ${property.state}`;
-}
-
-// Helper to check if a checklist item could be asset-driven
-function isAssetDrivenForRouting(item: ChecklistItem): boolean {
-  if (
-    item.serviceCategory === 'ADMIN' ||
-    item.serviceCategory === 'FINANCE' ||
-    item.serviceCategory === 'INSURANCE' ||
-    item.serviceCategory === 'WARRANTY' ||
-    item.serviceCategory === 'ATTORNEY'
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
 export default function DashboardPage() {
-  const router = useRouter();
   const { user, loading: userLoading } = useAuth();
   const [redirectChecked, setRedirectChecked] = useState(false);
   const [showWelcomeScreen, setShowWelcomeScreen] = useState(false);
@@ -400,7 +375,6 @@ export default function DashboardPage() {
   // Derived property values using the context state
   const properties = data.properties;
   const selectedProperty = properties.find(p => p.id === selectedPropertyId); 
-  const isMultiProperty = properties.length > 1;
   
   if (userSegment === 'HOME_BUYER') {
     return (
@@ -416,7 +390,6 @@ export default function DashboardPage() {
   // Existing Owner Dashboard (now incorporates the scorecard grid at the top level)
   return (
     <>
-      {/* 1. WELCOME SECTION - FULL WIDTH */}
       {selectedProperty && properties.length > 0 && (
         <WelcomeSection
           userName={user?.firstName || 'there'}
@@ -426,135 +399,99 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* 2. CONSTRAINED WIDTH AREA (Aligns with other cards) */}
-      <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
-        {/* MORNING HOME PULSE */}
-        {userSegment === 'EXISTING_OWNER' && selectedPropertyId && (
-          <section className="mb-5 md:mb-6">
-            <MorningHomePulseCard propertyId={selectedPropertyId} />
-          </section>
-        )}
-
-        {/* LOCAL UPDATES TICKER */}
-        {userSegment === 'EXISTING_OWNER' && localUpdates.length > 0 && (
-          <section className="mb-5 md:mb-6">
-            <LocalUpdatesCarousel
-              updates={localUpdates}
-              variant="ticker"
-              onDismiss={async (id) => {
-                setLocalUpdates((prev) => prev.filter((u) => u.id !== id));
-                await api.dismissLocalUpdate(id);
-              }}
-              onCtaClick={(id) => {
-                const update = localUpdates.find((u) => u.id === id);
-                if (update?.ctaUrl) {
-                  window.open(update.ctaUrl, '_blank', 'noopener,noreferrer');
-                }
-              }}
-            />
-          </section>
-        )}
-        
-        {/* PROPERTY INTELLIGENCE SCORES - IMMEDIATELY BELOW WELCOME */}
-        <div className="flex items-center justify-between gap-3 mb-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <TrendingUp className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">Property Intelligence Scores</h2>
-              <p className="text-sm text-gray-500">Real-time health, risk, and financial analysis</p>
-            </div>
-          </div>
-          {selectedPropertyId && (
-            <ShareVaultButton
-              propertyId={selectedPropertyId}
-              propertyAddress={selectedProperty?.address}
-            />
-          )}
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mt-6 mb-8">
-          <HomeScoreReportCard propertyId={selectedPropertyId} />
-          {selectedProperty && (
-            <PropertyHealthScoreCard property={selectedProperty} />
-          )}
-          <PropertyRiskScoreCard propertyId={selectedPropertyId} />
-          <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
-        </div>
-        <div className="w-full border-t border-gray-200 my-5 md:my-6" />
-
-        {/* ROOMS SNAPSHOT */}
-        <RoomsSnapshotSection propertyId={selectedPropertyId} />
-
-        {/* HORIZONTAL SEPARATOR */}
-        <div className="w-full border-t border-gray-200 my-5 md:my-6" />
-        
-        {/* AI INSURANCE/PREMIUM DECISION TOOLS */}
-        <section className="mb-4">
-          <div className="flex items-start gap-3 mb-4">
-            <div className="p-2 bg-teal-100 rounded-lg">
-              <ShieldAlert className="w-5 h-5 text-teal-700" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">Coverage, Premium & Inaction Intelligence</h2>
-              <p className="text-sm text-gray-600">
-                Educational guidance to compare coverage, premium pressure, and delayed-action downside.
-              </p>
-            </div>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <HomeSavingsCheckToolCard propertyId={selectedPropertyId || ''} />
-            <CoverageIntelligenceToolCard propertyId={selectedPropertyId || ''} />
-            <RiskPremiumOptimizerToolCard propertyId={selectedPropertyId || ''} />
-            <DoNothingSimulatorToolCard propertyId={selectedPropertyId || ''} />
-          </div>
-        </section>
-        <div className="w-full border-t border-gray-200 my-5 md:my-6" />
-      </div>
-
       <DashboardShell className="pt-0 md:pt-0">
-      {/* ========================================= */}
-      {/* SEASONAL MAINTENANCE BANNER - EXISTING_OWNER ONLY */}
-      {/* ========================================= */}
-      {homeownerSegment === 'EXISTING_OWNER' && selectedPropertyId && (
-        <SeasonalBanner propertyId={selectedPropertyId} />
-      )}
+        <div className="grid gap-6 lg:grid-cols-12">
+          <div className="space-y-6 lg:col-span-8">
+            {selectedPropertyId && <MorningHomePulseCard propertyId={selectedPropertyId} />}
 
-      {homeownerSegment === 'EXISTING_OWNER' && selectedPropertyId && (
-        <SeasonalWidget propertyId={selectedPropertyId} />
-      )}
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-lg bg-blue-100 p-2">
+                    <TrendingUp className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-900">Property Intelligence Scores</h2>
+                    <p className="text-sm text-slate-500">Health, risk, and financial signals in one glance.</p>
+                  </div>
+                </div>
+                {selectedPropertyId && (
+                  <ShareVaultButton
+                    propertyId={selectedPropertyId}
+                    propertyAddress={selectedProperty?.address}
+                  />
+                )}
+              </div>
 
-      {/* Filter data by selected property before passing to child components */}
-      {/* This ensures the red banner and other components show data for the currently selected property only */}
-      {(() => {
-        // Filter urgent actions to only those belonging to the selected property
-        const filteredUrgentActions = data.urgentActions.filter(
-          action => action.propertyId === selectedPropertyId
-        );
-        
-        // Filter properties to only the selected one (for consistency)
-        const filteredProperties = selectedProperty ? [selectedProperty] : [];
-        
-        // FIX: Filter checklist items by selected property ID
-        const filteredChecklistItems = selectedPropertyId
-            ? checklistItems.filter(item => item.propertyId === selectedPropertyId)
-            : []; 
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <HomeScoreReportCard propertyId={selectedPropertyId} />
+                {selectedProperty && <PropertyHealthScoreCard property={selectedProperty} />}
+                <PropertyRiskScoreCard propertyId={selectedPropertyId} />
+                <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
+              </div>
+            </section>
 
-        // Calculate if there are any asset-driven actions
-        const hasAssetDrivenActions = filteredChecklistItems.some(item =>
-          isAssetDrivenForRouting(item) &&
-          item.status === 'PENDING'
-        );
+            <RoomsSnapshotSection propertyId={selectedPropertyId} />
+          </div>
 
-        return (
-          <ExistingOwnerDashboard
-            bookings={data.bookings}
-            properties={filteredProperties} // Pass only selected property
-            checklistItems={filteredChecklistItems} // Pass the newly filtered list
-            selectedPropertyId={selectedPropertyId}
-          />
-        );
-      })()}
+          <aside className="space-y-4 lg:col-span-4">
+            {localUpdates.length > 0 && (
+              <LocalUpdatesCarousel
+                updates={localUpdates}
+                variant="ticker"
+                onDismiss={async (id) => {
+                  setLocalUpdates((prev) => prev.filter((u) => u.id !== id));
+                  await api.dismissLocalUpdate(id);
+                }}
+                onCtaClick={(id) => {
+                  const update = localUpdates.find((u) => u.id === id);
+                  if (update?.ctaUrl) {
+                    window.open(update.ctaUrl, '_blank', 'noopener,noreferrer');
+                  }
+                }}
+              />
+            )}
+
+            {homeownerSegment === 'EXISTING_OWNER' && selectedPropertyId && (
+              <>
+                <SeasonalBanner propertyId={selectedPropertyId} />
+                <SeasonalWidget propertyId={selectedPropertyId} />
+              </>
+            )}
+
+            {selectedPropertyId && (
+              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-4 flex items-start gap-3">
+                  <div className="rounded-lg bg-teal-100 p-2">
+                    <ShieldAlert className="h-5 w-5 text-teal-700" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-semibold text-slate-900">Decision Tools</h2>
+                    <p className="text-sm text-slate-500">Compare coverage, premium pressure, and inaction downside.</p>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                  <HomeSavingsCheckToolCard propertyId={selectedPropertyId} />
+                  <CoverageIntelligenceToolCard propertyId={selectedPropertyId} />
+                  <RiskPremiumOptimizerToolCard propertyId={selectedPropertyId} />
+                  <DoNothingSimulatorToolCard propertyId={selectedPropertyId} />
+                </div>
+              </section>
+            )}
+          </aside>
+        </div>
+
+        {(() => {
+          const filteredProperties = selectedProperty ? [selectedProperty] : [];
+
+          return (
+            <ExistingOwnerDashboard
+              properties={filteredProperties}
+              selectedPropertyId={selectedPropertyId}
+            />
+          );
+        })()}
       </DashboardShell>
     </>
   );

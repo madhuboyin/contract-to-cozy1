@@ -4,7 +4,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Booking, ChecklistItem, ScoredProperty, MaintenanceTaskStats, PropertyMaintenanceTask } from '@/types';
+import { Booking, ScoredProperty, MaintenanceTaskStats, PropertyMaintenanceTask } from '@/types';
 import { UpcomingBookingsCard } from './UpcomingBookingsCard';
 import { RecurringMaintenanceCard } from './RecurringMaintenanceCard';
 import { UpcomingRenewalsCard } from './UpcomingRenewalsCard';
@@ -21,16 +21,12 @@ import { MaintenanceForecast } from './MaintenanceForecast';
 
 
 interface ExistingOwnerDashboardProps {
-  bookings: Booking[];
   properties: ScoredProperty[];
-  checklistItems: ChecklistItem[];
   selectedPropertyId: string | undefined;
 }
 
 export const ExistingOwnerDashboard = ({
-  bookings,
   properties,
-  checklistItems,
   selectedPropertyId,
 }: ExistingOwnerDashboardProps) => {
   // PHASE 5: Fetch new PropertyMaintenanceTask statistics
@@ -83,121 +79,116 @@ export const ExistingOwnerDashboard = ({
   const isPropertySelected = !!selectedProperty;
 
   return (
-    <div className="space-y-5 pb-8 md:space-y-6">
-      {/* Attention Summary */}
-      <section className="space-y-3">
-        <div className="flex items-start gap-3">
-          <div className="p-2 bg-blue-100 rounded-lg">
-            <AlertTriangle className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">
-              Here&apos;s what needs your attention today
-            </h2>
-            <p className="text-sm text-gray-500">
-              A quick summary of urgent items, progress, and estimated costs.
-            </p>
-          </div>
-        </div>
-        <HomePulse stats={stats} selectedPropertyId={selectedPropertyId} />
-      </section>
-
-      {/* Verification Nudge */}
-      <HomeHealthNudge propertyId={selectedPropertyId} />
-      <MaintenanceForecast propertyId={selectedPropertyId} mode="next-up" />
-      <EquityOverviewCard
-        propertyId={selectedPropertyId}
-        healthScore={selectedProperty?.healthScore?.totalScore ?? null}
-      />
-      <InsuranceSummaryCard propertyId={selectedPropertyId} />
-
-      <div className="w-full border-t border-gray-200" />
-
-      <MaintenanceForecast propertyId={selectedPropertyId} mode="timeline" />
-      <div className="w-full border-t border-gray-200" />
-
-
-      {/* Action Center (Top Actions) */}
-      {selectedPropertyId && (
-        <section className="space-y-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="pb-8">
+      <div className="grid gap-6 lg:grid-cols-12">
+        <div className="space-y-6 lg:col-span-8">
+          <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="flex items-start gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <ClipboardList className="w-5 h-5 text-blue-600" />
+              <div className="rounded-lg bg-blue-100 p-2">
+                <AlertTriangle className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">
-                  Action Center
-                </h2>
-                <p className="text-sm text-gray-500">
-                  Prioritized tasks to keep your home on track.
+                <h2 className="text-lg font-semibold text-slate-900">Maintenance Attention</h2>
+                <p className="text-sm text-slate-500">
+                  Fast status on overdue items, active tasks, and completion trend.
                 </p>
               </div>
             </div>
+            <HomePulse stats={stats} selectedPropertyId={selectedPropertyId} />
+          </section>
+
+          {selectedPropertyId && (
+            <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-lg bg-blue-100 p-2">
+                    <ClipboardList className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-900">Action Center</h2>
+                    <p className="text-sm text-slate-500">
+                      Prioritized tasks to keep your property on track.
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  href={`/dashboard/actions?propertyId=${selectedPropertyId}`}
+                  className="inline-flex min-h-[40px] w-fit items-center whitespace-nowrap text-sm font-semibold text-blue-600 transition-colors hover:text-blue-700"
+                >
+                  View all
+                </Link>
+              </div>
+
+              <ActionCenter propertyId={selectedPropertyId} maxItems={6} />
+            </section>
+          )}
+
+          <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-slate-100 p-2">
+                <Activity className="h-5 w-5 text-slate-700" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Maintenance Timeline</h2>
+                <p className="text-sm text-slate-500">Planned upkeep and expected cost curve.</p>
+              </div>
+            </div>
+            <MaintenanceForecast propertyId={selectedPropertyId} mode="timeline" />
+          </section>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
             <Link
-              href={`/dashboard/actions${
+              href={`/dashboard/maintenance${
                 selectedPropertyId ? `?propertyId=${selectedPropertyId}` : ''
               }`}
-              className="inline-flex w-fit min-h-[44px] items-center whitespace-nowrap text-base md:text-lg font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+              className="flex items-center text-base font-semibold text-blue-600 transition-colors hover:text-blue-700"
             >
-              View all
+              View full home management checklist
+              <ArrowRight className="ml-1 h-4 w-4" />
             </Link>
           </div>
-
-          <ActionCenter propertyId={selectedPropertyId} maxItems={5} />
-        </section>
-      )}
-      <div className="w-full border-t border-gray-200" />
-
-      {/* NEW ROW: Seasonal Checklist + Favorite Providers */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <SeasonalChecklistCard propertyId={selectedPropertyId} />
-        <FavoriteProvidersCard />
-      </div>
-      <div className="w-full border-t border-gray-200" />
-
-      {/* Activity Center */}
-      <section className="space-y-3">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-100 rounded-lg">
-            <Activity className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">Activity Center</h2>
-            <p className="text-sm text-gray-500">
-              Track upcoming bookings, maintenance, and renewals for your home.
-            </p>
-          </div>
         </div>
 
-        {/* Activity Cards (Original 3 cards) */}
-        <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 items-start">  
-          <UpcomingBookingsCard 
-            bookings={propertyBookings}
-            isPropertySelected={isPropertySelected}
-            selectedPropertyId={selectedPropertyId}
+        <aside className="space-y-4 lg:col-span-4">
+          <HomeHealthNudge propertyId={selectedPropertyId} />
+          <MaintenanceForecast propertyId={selectedPropertyId} mode="next-up" />
+          <EquityOverviewCard
+            propertyId={selectedPropertyId}
+            healthScore={selectedProperty?.healthScore?.totalScore ?? null}
           />
-          <RecurringMaintenanceCard
-            maintenance={maintenanceTasks}
-            isPropertySelected={isPropertySelected}
-            selectedPropertyId={selectedPropertyId}
-          />
-          <UpcomingRenewalsCard propertyId={selectedPropertyId} />
-        </div>
-      </section>
-      <div className="w-full border-t border-gray-200" />
+          <InsuranceSummaryCard propertyId={selectedPropertyId} />
 
-      {/* Footer CTA */}
-      <div className="pt-4">
-        <Link
-          href={`/dashboard/maintenance${
-            selectedPropertyId ? `?propertyId=${selectedPropertyId}` : ''
-          }`}
-          className="text-lg font-semibold text-blue-600 hover:text-blue-700 transition-colors flex items-center"
-        >
-          View Full Home Management Checklist
-          <ArrowRight className="h-4 w-4 ml-1" />
-        </Link>
+          <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="rounded-lg bg-blue-100 p-2">
+                <Activity className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">Activity Center</h2>
+                <p className="text-sm text-slate-500">
+                  Upcoming bookings, maintenance, and renewals.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <UpcomingRenewalsCard propertyId={selectedPropertyId} />
+              <UpcomingBookingsCard
+                bookings={propertyBookings}
+                isPropertySelected={isPropertySelected}
+                selectedPropertyId={selectedPropertyId}
+              />
+              <RecurringMaintenanceCard
+                maintenance={maintenanceTasks}
+                isPropertySelected={isPropertySelected}
+                selectedPropertyId={selectedPropertyId}
+              />
+            </div>
+          </section>
+
+          <SeasonalChecklistCard propertyId={selectedPropertyId} />
+          <FavoriteProvidersCard />
+        </aside>
       </div>
     </div>
   );
