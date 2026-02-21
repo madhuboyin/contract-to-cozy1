@@ -65,6 +65,11 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: GEMINI_CHAT_ENABLED 
+            - name: VAULT_BYPASS_PASSWORD
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: VAULT_BYPASS_PASSWORD 
             - name: GEMINI_MODEL
               valueFrom:
                 configMapKeyRef:
