@@ -1532,6 +1532,39 @@ model Property {
 }
 
 // ============================================================================
+// MAINTENANCE PREDICTION
+// ============================================================================
+
+model MaintenancePrediction {
+  id                String   @id @default(uuid())
+  propertyId        String
+  inventoryItemId   String?  // Link to the specific asset (e.g., HVAC)
+  
+  taskName          String   // e.g., "Replace AC Capacitor"
+  predictedDate     DateTime
+  priority          Int      @default(1) // 1 (Low) to 5 (Critical)
+  
+  // Intelligence Metadata
+  reasoning         String?  // e.g., "Based on 15-year average lifespan for [Model]"
+  confidenceScore   Float    @default(0.0)
+  
+  status            PredictionStatus @default(PENDING) // PENDING, COMPLETED, DISMISSED
+  
+  property          Property       @relation(fields: [propertyId], references: [id])
+  inventoryItem     InventoryItem? @relation(fields: [inventoryItemId], references: [id])
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+enum PredictionStatus {
+  PENDING
+  COMPLETED
+  DISMISSED
+  OVERDUE
+}
+
+// ============================================================================
 // PROVIDER PROFILE
 // ============================================================================
 
