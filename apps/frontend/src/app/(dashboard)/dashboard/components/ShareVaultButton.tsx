@@ -63,100 +63,99 @@ export function ShareVaultButton({ propertyId, propertyAddress }: ShareVaultButt
         Share Vault
       </Button>
 
-      {/* Fix 4: Remove max-w-md override — it's a no-op at ≥640 px (sm:max-w-lg wins)
-          and creates inconsistent width at mobile. Let DialogContent's own sizing rule. */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            {/* Fix 3: pr-10 prevents the dialog's absolute close button (right-3, 44 px wide)
-                from overlapping the title text at all viewport sizes. */}
-            <DialogTitle className="flex items-center gap-2 pr-10 text-slate-900">
-              <Share2 className="h-5 w-5 shrink-0 text-emerald-600" />
-              Share Seller&apos;s Vault
-            </DialogTitle>
-          </DialogHeader>
+        <DialogContent className="w-[min(96vw,40rem)] max-h-[90dvh] overflow-hidden p-0 sm:max-w-[40rem]">
+          <div className="flex max-h-[90dvh] flex-col">
+            <DialogHeader className="border-b border-slate-100 px-5 pb-3 pt-5 sm:px-6">
+              <DialogTitle className="flex items-center gap-2 pr-10 text-slate-900">
+                <Share2 className="h-5 w-5 shrink-0 text-emerald-600" />
+                Share Seller&apos;s Vault
+              </DialogTitle>
+            </DialogHeader>
 
-          <div className="space-y-4 pt-1">
-            {propertyAddress && (
-              // Fix 5: break-words guards against long addresses breaking the layout.
-              <p className="break-words text-sm text-slate-500">
-                Share your property&apos;s verified proof-of-care report for{' '}
-                <span className="font-medium text-slate-700">{propertyAddress}</span> with
-                realtors and prospective buyers.
-              </p>
-            )}
+            <div className="space-y-4 overflow-y-auto px-5 pb-5 pt-3 sm:px-6 sm:pb-6">
+              {propertyAddress && (
+                <p className="break-words text-sm leading-relaxed text-slate-500">
+                  Share your property&apos;s verified proof-of-care report for{' '}
+                  <span className="font-medium text-slate-700">{propertyAddress}</span> with
+                  realtors and prospective buyers.
+                </p>
+              )}
 
-            {/* Vault URL */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Shareable Link
-              </label>
-              <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                <span className="min-w-0 flex-1 truncate text-sm text-slate-700">{vaultUrl}</span>
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(vaultUrl, 'url')}
-                  className="shrink-0 text-slate-400 transition hover:text-emerald-600"
-                  title="Copy link"
-                >
-                  {copiedUrl ? (
-                    <Check className="h-4 w-4 text-emerald-600" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </button>
-                <a
-                  href={vaultUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 text-slate-400 transition hover:text-blue-600"
-                  title="Open in new tab"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                </a>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Shareable Link
+                </label>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <p className="break-all text-sm text-slate-700">{vaultUrl}</p>
+                  <div className="mt-2 flex items-center justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(vaultUrl, 'url')}
+                      className="inline-flex min-h-[36px] items-center gap-1 rounded-md px-2 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-emerald-700"
+                      title="Copy link"
+                      aria-label="Copy shareable link"
+                    >
+                      {copiedUrl ? (
+                        <Check className="h-4 w-4 text-emerald-600" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                      {copiedUrl ? 'Copied' : 'Copy'}
+                    </button>
+                    <a
+                      href={vaultUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex min-h-[36px] items-center gap-1 rounded-md px-2 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-blue-700"
+                      title="Open in new tab"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Open
+                    </a>
+                  </div>
+                </div>
               </div>
-            </div>
 
-            {/* Password */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Access Password
-              </label>
-              <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                <Lock className="h-4 w-4 shrink-0 text-slate-400" />
-                {/* Fix 2: Removed tracking-widest (caused overflow in the flex row).
-                    Added min-w-0 so flex-1 can actually shrink when the container is narrow. */}
-                <span className="min-w-0 flex-1 truncate font-mono text-sm text-slate-700">
-                  {VAULT_PASSWORD}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(VAULT_PASSWORD, 'pwd')}
-                  className="shrink-0 text-slate-400 transition hover:text-emerald-600"
-                  title="Copy password"
-                >
-                  {copiedPwd ? (
-                    <Check className="h-4 w-4 text-emerald-600" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </button>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Access Password
+                </label>
+                <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <Lock className="h-4 w-4 shrink-0 text-slate-400" />
+                  <span className="min-w-0 flex-1 break-all font-mono text-sm text-slate-700">
+                    {VAULT_PASSWORD}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(VAULT_PASSWORD, 'pwd')}
+                    className="inline-flex min-h-[36px] items-center gap-1 rounded-md px-2 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-emerald-700"
+                    title="Copy password"
+                    aria-label="Copy vault password"
+                  >
+                    {copiedPwd ? (
+                      <Check className="h-4 w-4 text-emerald-600" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                    {copiedPwd ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {/* Usage tip */}
-            <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2.5 text-xs text-amber-700">
-              <strong>Tip:</strong> Send both the link and password together — the vault is
-              read-only and shows only verified assets and completed service history.
-            </div>
+              <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2.5 text-xs text-amber-700">
+                <strong>Tip:</strong> Send both the link and password together. The vault is
+                read-only and shows only verified assets and completed service history.
+              </div>
 
-            <Button
-              type="button"
-              className="w-full bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => setOpen(false)}
-            >
-              Done
-            </Button>
+              <Button
+                type="button"
+                className="w-full bg-emerald-600 hover:bg-emerald-700"
+                onClick={() => setOpen(false)}
+              >
+                Done
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
