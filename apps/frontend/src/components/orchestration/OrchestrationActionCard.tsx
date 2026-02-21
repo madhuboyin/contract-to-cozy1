@@ -35,6 +35,11 @@ type Props = {
 
   checklistBasePath?: string;
   bookingBasePath?: string;
+
+  /**
+   * If provided, "View item" opens the drawer on the current page instead of navigating.
+   */
+  onViewItem?: (itemId: string) => void;
 };
 
 function safeGetSuppression(action: OrchestratedActionDTO) {
@@ -215,6 +220,7 @@ export const OrchestrationActionCard: React.FC<Props> = ({
   ctaDisabled = false,
   ctaLabel,
   forceShowCta = false,
+  onViewItem,
 }) => {
   const suppression = safeGetSuppression(action);
   const suppressed = suppression.suppressed;
@@ -269,15 +275,26 @@ export const OrchestrationActionCard: React.FC<Props> = ({
             <p className="text-sm text-gray-600">{description}</p>
           )}
           
-          {inventoryLink && (
+          {inventoryItemId && (
             <div className="mt-2">
-              <Link
-                href={inventoryLink}
-                className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:underline"
-              >
-                <Package className="h-4 w-4" />
-                View item
-              </Link>
+              {onViewItem ? (
+                <button
+                  type="button"
+                  onClick={() => onViewItem(inventoryItemId)}
+                  className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:underline"
+                >
+                  <Package className="h-4 w-4" />
+                  View item
+                </button>
+              ) : inventoryLink ? (
+                <Link
+                  href={inventoryLink}
+                  className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:underline"
+                >
+                  <Package className="h-4 w-4" />
+                  View item
+                </Link>
+              ) : null}
             </div>
           )}
 

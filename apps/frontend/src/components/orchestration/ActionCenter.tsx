@@ -4,9 +4,11 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 
 import { api } from '@/lib/api/client';
-import { OrchestratedActionDTO, Property, SuppressionSourceDTO, CompletionDataDTO } from '@/types';
+import { OrchestratedActionDTO, Property, SuppressionSourceDTO, CompletionDataDTO, InventoryItem, InventoryRoom } from '@/types';
 import { adaptOrchestrationSummary } from '@/adapters/orchestration.adapter';
 import { OrchestrationActionCard } from './OrchestrationActionCard';
+import InventoryItemDrawer from '@/app/(dashboard)/dashboard/components/inventory/InventoryItemDrawer';
+import { getInventoryItem, listInventoryRooms } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 
 import { MaintenanceConfigModal } from '@/app/(dashboard)/dashboard/maintenance-setup/MaintenanceConfigModal';
 import {
@@ -63,6 +65,11 @@ export const ActionCenter: React.FC<Props> = ({
   const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false);
   const [completionAction, setCompletionAction] = useState<OrchestratedActionDTO | null>(null);
   const showInternalDetails = process.env.NODE_ENV !== 'production';
+
+  // Inventory item drawer (opened directly from "View item" links)
+  const [itemDrawerOpen, setItemDrawerOpen] = useState(false);
+  const [itemDrawerItem, setItemDrawerItem] = useState<InventoryItem | null>(null);
+  const [itemDrawerRooms, setItemDrawerRooms] = useState<InventoryRoom[]>([]);
 
   const router = useRouter();
 
@@ -340,10 +347,24 @@ export const ActionCenter: React.FC<Props> = ({
   // Add this with other handlers (around line 100)
   const handleViewTaskFromTrace = useCallback(() => {
     if (!traceAction) return;
-    
+
     // 🔑 FIX: Navigate with propertyId parameter
     router.push(`/dashboard/maintenance?propertyId=${propertyId}`);
   }, [traceAction, propertyId, router]);
+
+  const handleViewItem = useCallback(async (itemId: string) => {
+    try {
+      const [item, rooms] = await Promise.all([
+        getInventoryItem(propertyId, itemId),
+        listInventoryRooms(propertyId),
+      ]);
+      setItemDrawerItem(item);
+      setItemDrawerRooms(rooms);
+      setItemDrawerOpen(true);
+    } catch (err) {
+      console.error('[ActionCenter] Failed to load item for drawer:', err);
+    }
+  }, [propertyId]);
 
   /* ------------------------------------------------------------------
      Derived Groups - 🔑 FIXED: Only group by risk level, don't re-filter
@@ -403,6 +424,7 @@ export const ActionCenter: React.FC<Props> = ({
                 }
                 forceShowCta
                 onOpenTrace={handleOpenDecisionTrace}
+                onViewItem={handleViewItem}
               />
             );
           })}
@@ -620,6 +642,15 @@ export const ActionCenter: React.FC<Props> = ({
         propertyId={propertyId}
         actionKey={completionAction?.actionKey || ''}
         onPhotoUpload={handlePhotoUpload}
+      />
+
+      <InventoryItemDrawer
+        open={itemDrawerOpen}
+        onClose={() => setItemDrawerOpen(false)}
+        propertyId={propertyId}
+        rooms={itemDrawerRooms}
+        initialItem={itemDrawerItem}
+        onSaved={() => setItemDrawerOpen(false)}
       />
     </>
   );
