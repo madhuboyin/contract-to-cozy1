@@ -77,6 +77,7 @@ import homeSavingsRoutes from './routes/homeSavings.routes';
 import homeStatusBoardRoutes from './routes/homeStatusBoard.routes';
 import inventoryVerificationRoutes from './routes/inventoryVerification.routes';
 import maintenancePredictionRoutes from './routes/maintenancePrediction.routes';
+import weatherRoutes from './routes/weather.routes';
 dotenv.config();
 
 const app = express();
@@ -356,6 +357,7 @@ app.use('/api', homeCapitalTimelineRoutes);
 app.use('/api', homeStatusBoardRoutes);
 app.use('/api', inventoryVerificationRoutes);
 app.use('/api', maintenancePredictionRoutes);
+app.use('/api/weather', weatherRoutes);
 
 //app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // 404 handler

@@ -1,9 +1,10 @@
 // apps/backend/src/services/discovery.service.ts
 
-import { InventoryItemCategory } from '@prisma/client';
+import { InventoryItemCategory, SignalType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { calculateProtectionGap } from './insuranceAuditor.service';
 import { evaluateStreakExpiry, PropertyStreakState } from './gamification.service';
+import { weatherService } from './weather.service';
 export { mapInventoryToServiceCategory } from '../utils/inventoryServiceCategory.util';
 
 const WATER_HEATER_HINTS = ['water heater', 'hot water'];
@@ -215,7 +216,7 @@ async function getResilienceNudge(
 ): Promise<DiscoveryNudge | null> {
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
-    select: { hasSumpPumpBackup: true },
+    select: { hasSumpPumpBackup: true, zipCode: true },
   });
 
   if (!property || property.hasSumpPumpBackup !== null) return null;
@@ -224,6 +225,19 @@ async function getResilienceNudge(
   if (isExcluded(id, excludedIds)) {
     logSnoozed(propertyId, id, 'RESILIENCE');
     return null;
+  }
+
+  // Gate on live weather: only surface the sump-pump nudge when heavy rain
+  // is actually forecast. Falls back gracefully if weather fetch fails.
+  const zipCode = property.zipCode?.trim();
+  if (zipCode) {
+    const signals = await weatherService.getLocalSignals(zipCode).catch(() => [] as SignalType[]);
+    if (!signals.includes(SignalType.WEATHER_FORECAST_HEAVY_RAIN)) {
+      console.info(
+        `[DISCOVERY] Resilience nudge suppressed — no WEATHER_FORECAST_HEAVY_RAIN for zip=${zipCode}`
+      );
+      return null;
+    }
   }
 
   return {
