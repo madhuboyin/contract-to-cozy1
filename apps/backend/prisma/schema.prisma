@@ -1554,6 +1554,7 @@ model MaintenancePrediction {
   
   property          Property       @relation(fields: [propertyId], references: [id])
   inventoryItem     InventoryItem? @relation(fields: [inventoryItemId], references: [id])
+  booking   Booking?
 
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -1788,6 +1789,12 @@ model Booking {
   expenses          Expense[] // NEW: Expense link
   insightFactor     String?  // "Age Factor", "Roof Age", etc.
   insightContext    String?  // Optional additional context
+
+  maintenancePredictionId String? @unique
+  maintenancePrediction   MaintenancePrediction? @relation(fields: [maintenancePredictionId], references: [id])
+
+  inventoryItemId String?
+  inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id])
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
