@@ -1437,6 +1437,18 @@ model Property {
   lastAppraisedValue    Int?      
   lastAppraisalDate     DateTime?
 
+  // NEW: Gamification & Streak Tracking
+  currentStreak      Int       @default(0)
+  longestStreak      Int       @default(0)
+  lastActivityDate   DateTime?
+
+  // High-Intelligence Health Score (refined by streaks)
+  baseHealthScore    Int       @default(0)
+  bonusMultiplier    Float     @default(1.0) // Incremented by completion streaks
+  
+  // Achievement Flags
+  unlockedBadges     String[]  @default([]) // e.g., ["ELITE_VERIFIER", "RESILIENCE_PRO"]
+
   // Verification flags for these property-level nudges
   isResilienceVerified Boolean @default(false)
   isUtilityVerified    Boolean @default(false)
