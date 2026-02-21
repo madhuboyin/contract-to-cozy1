@@ -407,22 +407,8 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-gray-900">You&apos;re all caught up</h3>
             <p className="mt-1 text-sm text-gray-700">
-              Keep improving your insights by verifying more assets or updating your equity details.
+              No active verification nudges right now.
             </p>
-            <div className="mt-3 flex items-center gap-2 flex-wrap">
-              <Link
-                href={`/dashboard/properties/${propertyId}/inventory`}
-                className="inline-flex min-h-[44px] items-center rounded-lg border border-blue-300 px-3 py-1.5 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100"
-              >
-                Verify Assets
-              </Link>
-              <Link
-                href={`/dashboard/properties/${propertyId}/edit`}
-                className="inline-flex min-h-[44px] items-center rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-              >
-                Update Property Details
-              </Link>
-            </div>
           </div>
         </div>
       </div>

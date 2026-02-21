@@ -324,36 +324,7 @@ export function MaintenanceForecast({ propertyId, mode = 'timeline' }: Maintenan
     );
   }
 
-  if (predictions.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Wrench className="h-5 w-5 text-blue-600" />
-            {mode === 'next-up' ? 'Next Up' : 'Maintenance Forecast'}
-          </CardTitle>
-          <CardDescription>
-            Verify HVAC, roof, and water-heater assets to unlock forecast tasks.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-2">
-          <Button asChild className="min-h-[44px]">
-            <Link href={`/dashboard/properties/${propertyId}/inventory`}>
-              Verify Key Assets
-            </Link>
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void refetch()}
-            className="min-h-[44px]"
-          >
-            Refresh Forecast
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
+  if (predictions.length === 0) return null;
 
   if (mode === 'next-up') {
     return (
