@@ -1995,6 +1995,7 @@ model InsurancePolicy {
   personalPropertyLimitCents Int? 
   deductibleCents            Int?
   isVerified                 Boolean @default(false)
+  lastVerifiedAt             DateTime?
   // Dates
   startDate          DateTime
   expiryDate         DateTime
