@@ -6,7 +6,16 @@ import { ConfidenceBar } from './ConfidenceBar';
 import { ConfidencePopover } from './ConfidencePopover';
 import { TaskStatusBadge } from './TaskStatusBadge';
 import Link from 'next/link';
-import { Package } from 'lucide-react';
+import {
+  Droplets,
+  Package,
+  Shield,
+  Thermometer,
+  TrendingUp,
+  Wrench,
+  Zap,
+} from 'lucide-react';
+import humanizeActionType from '@/lib/utils/humanize';
 
 
 type Props = {
@@ -66,6 +75,8 @@ function formatMoney(amount?: number | null) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(amount);
 }
 
@@ -80,19 +91,21 @@ function riskBadge(riskLevel?: string | null) {
   if (!riskLevel) return null;
 
   const level = safeUpper(riskLevel);
-  const base = 'text-xs font-semibold px-2 py-0.5 rounded';
+  const base = 'inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded border';
+  const pulseDot = <span className="pulse-dot inline-block h-1.5 w-1.5 rounded-full bg-current" />;
 
   switch (level) {
     case 'CRITICAL':
     case 'HIGH':
-      return <span className={`${base} bg-red-100 text-red-700`}>{level}</span>;
+      return <span className={`${base} bg-red-100 text-red-700 border-red-200`}>{pulseDot}{level}</span>;
     case 'ELEVATED':
     case 'MODERATE':
-      return <span className={`${base} bg-amber-100 text-amber-700`}>{level}</span>;
+    case 'MEDIUM':
+      return <span className={`${base} bg-amber-100 text-amber-700 border-amber-200`}>{level}</span>;
     case 'LOW':
-      return <span className={`${base} bg-green-100 text-green-700`}>{level}</span>;
+      return <span className={`${base} bg-blue-100 text-blue-700 border-blue-200`}>{level}</span>;
     default:
-      return <span className={`${base} bg-gray-100 text-gray-700`}>{level}</span>;
+      return <span className={`${base} bg-gray-100 text-gray-700 border-gray-200`}>{level}</span>;
   }
 }
 
@@ -211,6 +224,25 @@ function extractInventoryItemId(action: OrchestratedActionDTO): string | null {
   return trimmed ? trimmed : null;
 }
 
+function getActionIcon(action: OrchestratedActionDTO) {
+  const typeText = safeUpper(`${action.systemType || ''} ${action.title || ''}`);
+
+  if (isCoverageGapAction(action)) return Shield;
+  if (typeText.includes('FREEZE') || typeText.includes('STORM') || typeText.includes('WEATHER')) {
+    return Thermometer;
+  }
+  if (typeText.includes('ELECTRICAL') || typeText.includes('PANEL')) return Zap;
+  if (
+    typeText.includes('PLUMBING') ||
+    typeText.includes('WATER') ||
+    typeText.includes('LEAK')
+  ) {
+    return Droplets;
+  }
+  if (action.source === 'RISK') return TrendingUp;
+  if (action.source === 'CHECKLIST') return Wrench;
+  return Wrench;
+}
 
 export const OrchestrationActionCard: React.FC<Props> = ({
   action,
@@ -234,6 +266,8 @@ export const OrchestrationActionCard: React.FC<Props> = ({
   const shouldShowCta = forceShowCta || Boolean(action.cta?.show);
 
   const suppressionCopy = suppressed ? getSuppressionCopy(action) : null;
+  const ActionIcon = getActionIcon(action);
+  const actionTitle = humanizeActionType(action.title);
 
   const confidence = action.confidence;
   const confidenceScore =
@@ -255,16 +289,19 @@ export const OrchestrationActionCard: React.FC<Props> = ({
         
   return (
     <div
-      className={`rounded-lg border p-3 sm:p-4 shadow-sm ${
+      className={`rounded-lg border p-3 sm:p-4 shadow-sm transition-all duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md ${
         suppressed ? 'bg-gray-50 opacity-70' : 'bg-white'
-      }`}
+      } cursor-pointer select-none`}
     >
       {/* Header */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
         <div className="space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-teal-50 text-teal-600">
+              <ActionIcon className="h-4 w-4" />
+            </span>
             <h3 className="text-base font-semibold text-gray-900">
-              {action.title}
+              {actionTitle}
             </h3>
 
             {riskBadge(action.riskLevel)}
@@ -313,7 +350,12 @@ export const OrchestrationActionCard: React.FC<Props> = ({
         </div>
 
         <div className="text-left sm:text-right space-y-1">
-          {exposure && <div className="text-sm font-semibold whitespace-nowrap">{exposure}</div>}
+          {exposure && (
+            <>
+              <div className="text-sm font-semibold whitespace-nowrap">{exposure}</div>
+              <div className="text-xs text-gray-400">Est. replacement cost</div>
+            </>
+          )}
           {dueDateLabel && (
             <div className="text-xs text-gray-600">Due {dueDateLabel}</div>
           )}
@@ -340,10 +382,10 @@ export const OrchestrationActionCard: React.FC<Props> = ({
             type="button"
             disabled={isDisabled}
             onClick={() => !isDisabled && onCtaClick?.(action)}
-            className={`min-h-[44px] px-3 py-2 rounded-md text-sm font-semibold ${
+            className={`min-h-[44px] w-full sm:w-auto px-3 py-2 rounded-md text-sm font-semibold ${
               isDisabled
                 ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-brand-600 text-white hover:bg-brand-700'
             }`}
           >
             {resolvedLabel}

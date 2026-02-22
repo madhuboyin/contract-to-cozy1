@@ -10,6 +10,7 @@ module.exports = {
       fontFamily: {
         heading: ['var(--font-poppins)', 'Poppins', 'sans-serif'],
         body: ['var(--font-inter)', 'Inter', 'sans-serif'],
+        display: ['var(--font-display)', 'Fraunces', 'serif'],
         sans: ['var(--font-inter)', 'Inter', 'sans-serif'],
       },
       fontSize: {
@@ -109,10 +110,22 @@ module.exports = {
           900: 'hsl(0 0% 13%)',
         },
         brand: {
+          50: '#f0fdfa',
+          100: '#ccfbf1',
+          500: '#14b8a6',
+          600: '#0d9488',
+          700: '#0f766e',
+          900: '#134e4a',
           primary: 'hsl(var(--color-primary))',
           'primary-light': 'hsl(var(--color-primary-light))',
           background: 'hsl(var(--color-background))',
           'background-dark': 'hsl(var(--color-background-dark))',
+        },
+        risk: {
+          low: '#10b981',
+          medium: '#f59e0b',
+          high: '#ef4444',
+          critical: '#7f1d1d',
         }
       },
       borderRadius: {

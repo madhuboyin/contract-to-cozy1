@@ -30,6 +30,7 @@ import { Badge } from '@/components/ui/badge';
 import { TaskStatusBadge } from './TaskStatusBadge';
 import { TaskPriorityBadge } from './TaskPriorityBadge';
 import { PropertyMaintenanceTask } from '@/types';
+import humanizeActionType from '@/lib/utils/humanize';
 
 interface MaintenanceTaskCardProps {
   task: PropertyMaintenanceTask;
@@ -115,7 +116,9 @@ export function MaintenanceTaskCard({
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1.5">
-                <h3 className="font-bold text-base sm:text-lg truncate leading-tight">{task.title}</h3>
+                <h3 className="font-bold text-base sm:text-lg truncate leading-tight">
+                  {humanizeActionType(task.title)}
+                </h3>
                 {task.isRecurring && (
                   <span title="Recurring task">
                     <Repeat className="h-4 w-4 text-blue-600 flex-shrink-0" />
@@ -134,7 +137,7 @@ export function MaintenanceTaskCard({
                 {task.serviceCategory && (
                   <Badge variant="outline" className="text-[11px] sm:text-xs bg-gray-50 px-1.5 py-0">
                     <Wrench className="h-3 w-3 mr-1" />
-                    {task.serviceCategory}
+                    {humanizeActionType(task.serviceCategory)}
                   </Badge>
                 )}
               </div>
@@ -289,7 +292,7 @@ export function MaintenanceTaskCard({
                   {task.assetType && (
                     <div className="flex justify-between">
                       <span className="text-gray-500">Asset:</span> 
-                      <span className="font-medium">{task.assetType}</span>
+                      <span className="font-medium">{humanizeActionType(task.assetType)}</span>
                     </div>
                   )}
                   {task.actualCost && (
@@ -323,7 +326,7 @@ export function MaintenanceTaskCard({
               <Shield className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-blue-900">
-                  You just maintained {task.title}. Want to verify its details?
+                  You just maintained {humanizeActionType(task.title)}. Want to verify its details?
                 </p>
                 <p className="text-xs text-blue-700 mt-0.5">
                   Scan the label to unlock lifespan predictions

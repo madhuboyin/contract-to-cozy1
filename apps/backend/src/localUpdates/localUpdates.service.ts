@@ -2,29 +2,6 @@
 import { prisma } from "../lib/prisma";
 import { LocalUpdateDTO } from "./localUpdates.types";
 
-const ALWAYS_ON_TEST_UPDATES: LocalUpdateDTO[] = [
-  {
-    id: "test-verizon-local-update",
-    title: "Verizon Home Internet offer in your area",
-    shortDescription: "Compare plans and lock in a promotional rate for high-speed home internet.",
-    category: "INTERNET",
-    sourceName: "Verizon",
-    isSponsored: true,
-    ctaText: "View Verizon offer",
-    ctaUrl: "https://www.verizon.com/home/internet/",
-  },
-  {
-    id: "test-tmobile-local-update",
-    title: "T-Mobile 5G Home Internet promotion",
-    shortDescription: "Check availability and current savings for 5G home internet service.",
-    category: "INTERNET",
-    sourceName: "T-Mobile",
-    isSponsored: true,
-    ctaText: "View T-Mobile offer",
-    ctaUrl: "https://www.t-mobile.com/home-internet",
-  },
-];
-
 export async function getOwnerLocalUpdates(params: {
   userId: string;
   zip: string;
@@ -33,6 +10,7 @@ export async function getOwnerLocalUpdates(params: {
   propertyType?: string;
 }): Promise<LocalUpdateDTO[]> {
   const now = new Date();
+  const dismissalCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
   const updates = await prisma.localUpdate.findMany({
     where: {
@@ -42,7 +20,10 @@ export async function getOwnerLocalUpdates(params: {
 
       NOT: {
         dismissals: {
-          some: { userId: params.userId },
+          some: {
+            userId: params.userId,
+            dismissedAt: { gte: dismissalCutoff },
+          },
         },
       },
 
@@ -109,15 +90,10 @@ export async function getOwnerLocalUpdates(params: {
     ctaUrl: u.ctaUrl,
   }));
 
-  // Keep Verizon + T-Mobile test promotions always visible for dashboard validation.
-  return [...ALWAYS_ON_TEST_UPDATES, ...rankedUpdates].slice(0, 3);
+  return rankedUpdates.slice(0, 3);
 }
 
 export async function dismissLocalUpdate(userId: string, updateId: string) {
-  if (updateId.startsWith("test-")) {
-    return;
-  }
-
   await prisma.userLocalUpdateDismissal.upsert({
     where: {
       userId_localUpdateId: { userId, localUpdateId: updateId },

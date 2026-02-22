@@ -1,9 +1,10 @@
 // apps/frontend/src/app/layout.tsx
 
 import type { Metadata, Viewport } from 'next';
-import { Inter, Poppins } from 'next/font/google';
+import { Fraunces, Inter, Poppins } from 'next/font/google';
 import { Providers } from './providers';
 import './globals.css';
+import 'react-circular-progressbar/dist/styles.css';
 
 // Inter for body text
 const inter = Inter({
@@ -18,6 +19,14 @@ const poppins = Poppins({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
   variable: '--font-poppins',
+  display: 'swap',
+});
+
+// Fraunces for score displays and premium numeric emphasis
+const fraunces = Fraunces({
+  subsets: ['latin'],
+  weight: ['600', '700'],
+  variable: '--font-display',
   display: 'swap',
 });
 
@@ -57,7 +66,7 @@ export const viewport: Viewport = {
   maximumScale: 5,
   userScalable: true,
   viewportFit: 'cover',
-  themeColor: '#2563eb',
+  themeColor: '#0d9488',
 };
 
 export default function RootLayout({
@@ -67,7 +76,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${poppins.variable} ${inter.className}`}>
+      <body className={`${inter.variable} ${poppins.variable} ${fraunces.variable} ${inter.className}`}>
         <Providers>
           {children}
         </Providers>

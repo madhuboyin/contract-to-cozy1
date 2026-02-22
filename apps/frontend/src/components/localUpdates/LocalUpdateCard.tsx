@@ -27,17 +27,26 @@ export function LocalUpdateCard({
   onDismiss: () => void;
   onCtaClick: () => void;
 }) {
+  const isPartner = update.isSponsored;
+
   return (
-    <div className="w-full rounded-2xl border bg-white shadow-sm px-4 py-3">
+    <div
+      className={`w-full rounded-2xl px-4 py-3 ${
+        isPartner
+          ? 'border border-dashed border-gray-200 bg-gray-50 opacity-90 shadow-sm'
+          : 'border border-gray-200 bg-white shadow-sm'
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-600">
-              {categoryLabel(update.category)}
-            </span>
-            {update.isSponsored && (
-              <span className="text-[11px] font-medium text-slate-500 border rounded-full px-2 py-0.5">
-                Partner update
+            {isPartner ? (
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-400">
+                Partner Offer
+              </span>
+            ) : (
+              <span className="text-xs font-semibold text-slate-600">
+                {categoryLabel(update.category)}
               </span>
             )}
           </div>

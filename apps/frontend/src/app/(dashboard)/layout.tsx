@@ -58,10 +58,14 @@ import { NotificationBell } from '@/components/notifications/NotificationBell';
 // Mobile-first imports
 import { BottomNav } from '@/components/mobile/BottomNav';
 import { PullToRefresh } from '@/components/mobile/PullToRefresh';
+import { Input } from '@/components/ui/input';
+import DashboardCommandPalette from '@/components/navigation/DashboardCommandPalette';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
@@ -388,6 +392,23 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
     }
   }, [loading, user, router]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(max-width: 767px)');
+    const applyPadding = () => {
+      document.body.style.paddingBottom = media.matches
+        ? 'calc(4rem + env(safe-area-inset-bottom))'
+        : '0px';
+    };
+
+    applyPadding();
+    media.addEventListener('change', applyPadding);
+    return () => {
+      media.removeEventListener('change', applyPadding);
+      document.body.style.paddingBottom = '';
+    };
+  }, []);
+
   const handleDismissBanner = () => {
     localStorage.setItem(PROPERTY_SETUP_SKIPPED_KEY, 'true');
     setShowBanner(false);
@@ -424,8 +445,8 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
           )}
 
           {/* Desktop Header - Split into utility row + primary nav row */}
-          <header className="sticky top-0 z-10 hidden border-b bg-white lg:block">
-            <div className="border-b border-[#184454] bg-gradient-to-r from-[#213f5a] via-[#1a5468] to-[#187466] px-8 text-white lg:px-14">
+          <header className="sticky top-0 z-10 hidden border-b bg-white md:block">
+            <div className="border-b border-teal-700/50 bg-gradient-to-r from-brand-900 to-brand-700 px-8 text-white lg:px-14">
               <div className="mx-auto flex h-16 w-full max-w-[1360px] items-center gap-4">
                 <Link
                   href="/dashboard"
@@ -442,45 +463,6 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
                 </Link>
 
                 <div className="flex-1 min-w-0" />
-
-                <Link
-                  href="/dashboard/properties"
-                  className={cn(
-                    'font-body flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200',
-                    pathname?.startsWith('/dashboard/properties')
-                      ? 'bg-white/22 text-white font-semibold'
-                      : 'text-white/90 hover:bg-white/18 hover:text-white'
-                  )}
-                >
-                  <Building className="h-4 w-4" />
-                  Properties
-                </Link>
-
-                <Link
-                  href="/dashboard/providers"
-                  className={cn(
-                    'font-body flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200',
-                    pathname?.startsWith('/dashboard/providers')
-                      ? 'bg-white/22 text-white font-semibold'
-                      : 'text-white/90 hover:bg-white/18 hover:text-white'
-                  )}
-                >
-                  <Search className="h-4 w-4" />
-                  Find Services
-                </Link>
-
-                <Link
-                  href="/dashboard/bookings"
-                  className={cn(
-                    'font-body flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200',
-                    pathname?.startsWith('/dashboard/bookings')
-                      ? 'bg-white/22 text-white font-semibold'
-                      : 'text-white/90 hover:bg-white/18 hover:text-white'
-                  )}
-                >
-                  <Calendar className="h-4 w-4" />
-                  Bookings
-                </Link>
                 <DesktopUserNav user={user} inverted />
               </div>
             </div>
@@ -492,7 +474,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
           </header>
 
           {/* Mobile Header - Shown only on mobile */}
-          <header className="lg:hidden sticky top-0 z-40 bg-white border-b border-gray-200">
+          <header className="hidden">
             <div className="px-4 py-3 flex items-center justify-between">
               <Link href="/dashboard" className="flex items-center gap-2">
                 <Image
@@ -548,7 +530,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
           </header>
 
           {/* Main content with pull-to-refresh */}
-          <main className="flex-1 bg-gray-50 pb-[calc(4rem+env(safe-area-inset-bottom)+0.5rem)] lg:pb-0">
+          <main className="dashboard-bg flex-1 pb-16 md:pb-0">
             <PullToRefresh onRefresh={handleRefresh}>
               <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
                 <div key={refreshKey}>
@@ -560,6 +542,8 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 
           {/* Mobile Bottom Navigation - Hidden on desktop */}
           <BottomNav />
+
+          <DashboardCommandPalette />
 
           {/* AI Chat Widget - Available on all screen sizes */}
           <AIChat />
@@ -573,392 +557,229 @@ function DesktopNav({ user }: { user: User | null }) {
   const pathname = usePathname();
   const { selectedPropertyId } = usePropertyContext();
   const resolvedPropertyId = selectedPropertyId || getPropertyIdFromPathname(pathname || '');
-  const isOwner = user?.segment === 'EXISTING_OWNER';
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [moreSearch, setMoreSearch] = useState('');
+  const closeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const isBuyer = user?.segment === 'HOME_BUYER';
-  const [homeToolsOpen, setHomeToolsOpen] = useState(false);
-  const [aiToolsOpen, setAiToolsOpen] = useState(false);
-  const [homeAdminOpen, setHomeAdminOpen] = useState(false);
-  const [protectionOpen, setProtectionOpen] = useState(false);
-  const homeToolsCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const aiToolsCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const homeAdminCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const protectionCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const coreLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
-    { name: 'Dashboard', href: '/dashboard', icon: Home, isActive: (path) => path === '/dashboard' },
-    { name: 'Actions', href: '/dashboard/actions', icon: AlertTriangle, isActive: (path) => path.startsWith('/dashboard/actions') },
-    { name: 'Inventory', href: '/dashboard/inventory', icon: Box, isActive: (path) => path.startsWith('/dashboard/inventory') },
-  ];
+  const roomsHref = isBuyer
+    ? '/dashboard/properties'
+    : buildPropertyAwareHref(resolvedPropertyId, 'rooms', 'rooms');
 
-  const ownerGlobalLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
-    { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench, isActive: (path) => path.startsWith('/dashboard/warranties') },
-    { name: 'Insurance', href: '/dashboard/insurance', icon: Shield, isActive: (path) => path.startsWith('/dashboard/insurance') },
-    { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign, isActive: (path) => path.startsWith('/dashboard/expenses') },
-    { name: 'Documents', href: '/dashboard/documents', icon: FileText, isActive: (path) => path.startsWith('/dashboard/documents') },
-  ];
-  const ownerPropertyAdminLinks: Array<NavLink & { isActive: (path: string) => boolean; navTarget: string }> = [
+  const primaryLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
     {
-      name: 'Reports',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'reports', 'reports'),
-      icon: FileText,
-      navTarget: 'reports',
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/reports(\/|$)/.test(path),
+      name: 'Dashboard',
+      href: '/dashboard',
+      icon: Home,
+      isActive: (path) => path === '/dashboard',
     },
-  ];
-
-  const propertyFeatureLinks: Array<NavLink & { isActive: (path: string) => boolean; navTarget: string }> = [
+    {
+      name: 'Actions',
+      href: '/dashboard/actions',
+      icon: AlertTriangle,
+      isActive: (path) => path.startsWith('/dashboard/actions'),
+    },
     {
       name: 'Rooms',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'rooms', 'rooms'),
+      href: roomsHref,
       icon: LayoutGrid,
-      navTarget: 'rooms',
       isActive: (path) => /^\/dashboard\/properties\/[^/]+\/rooms(\/|$)/.test(path),
     },
+    {
+      name: 'Find Services',
+      href: '/dashboard/providers',
+      icon: Search,
+      isActive: (path) => path.startsWith('/dashboard/providers'),
+    },
   ];
 
-  const protectionLinks: Array<NavLink & { isActive: (path: string) => boolean; navTarget: string }> = [
+  const moreLinks = [
     {
-      name: 'Incidents',
+      key: 'inventory',
+      name: 'Inventory',
+      href: '/dashboard/inventory',
+      icon: Box,
+      group: 'Management',
+      isActive: (path: string) => path.startsWith('/dashboard/inventory'),
+    },
+    {
+      key: 'ai-tools',
+      name: 'AI Tools',
+      href: buildAIToolHref(resolvedPropertyId, '/dashboard/coverage-intelligence'),
+      icon: Sparkles,
+      group: 'Intelligence',
+      isActive: (path: string) => AI_TOOL_LINKS.some((tool) => tool.isActive(path)),
+    },
+    {
+      key: 'home-tools',
+      name: 'Home Tools',
+      href: buildPropertyAwareHref(resolvedPropertyId, 'status-board', 'status-board'),
+      icon: TrendingUp,
+      group: 'Intelligence',
+      isActive: (path: string) => HOME_TOOL_LINKS.some((tool) => tool.isActive(path)),
+    },
+    {
+      key: 'protection',
+      name: 'Protection',
       href: buildPropertyAwareHref(resolvedPropertyId, 'incidents', 'incidents'),
-      icon: ShieldAlert,
-      navTarget: 'incidents',
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/incidents(\/|$)/.test(path),
+      icon: Shield,
+      group: 'Community',
+      isActive: (path: string) =>
+        /^\/dashboard\/properties\/[^/]+\/(incidents|claims|recalls)(\/|$)/.test(path),
     },
     {
-      name: 'Claims',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'claims', 'claims'),
-      icon: ClipboardCheck,
-      navTarget: 'claims',
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/claims(\/|$)/.test(path),
+      key: 'home-admin',
+      name: 'Home Admin',
+      href: '/dashboard/warranties',
+      icon: FileText,
+      group: 'Management',
+      isActive: (path: string) =>
+        path.startsWith('/dashboard/warranties') ||
+        path.startsWith('/dashboard/insurance') ||
+        path.startsWith('/dashboard/expenses') ||
+        path.startsWith('/dashboard/documents'),
     },
     {
-      name: 'Recalls',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'recalls', 'recalls'),
-      icon: ShieldCheck,
-      navTarget: 'recalls',
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/recalls(\/|$)/.test(path),
+      key: 'community-events',
+      name: 'Community Events',
+      href: '/dashboard/community-events',
+      icon: Globe,
+      group: 'Community',
+      isActive: (path: string) => path.startsWith('/dashboard/community-events'),
     },
-  ];
+  ] as const;
 
-  const sharedLinkClass = (isActive: boolean) =>
-    cn(
-      'font-body font-medium text-sm flex items-center gap-2 px-3 py-2 rounded-md transition-colors duration-200 whitespace-nowrap',
-      isActive
-        ? 'text-brand-primary bg-teal-50 font-semibold'
-        : 'text-gray-700 hover:text-brand-primary hover:bg-teal-50'
-    );
+  const filteredMoreLinks = moreLinks.filter((item) => {
+    const query = moreSearch.trim().toLowerCase();
+    if (!query) return true;
+    return item.name.toLowerCase().includes(query);
+  });
 
-  const clearHomeToolsCloseTimer = () => {
-    if (homeToolsCloseTimerRef.current) {
-      clearTimeout(homeToolsCloseTimerRef.current);
-      homeToolsCloseTimerRef.current = null;
+  const groupOrder = ['Intelligence', 'Management', 'Community'] as const;
+  const moreActive = moreLinks.some((item) => item.isActive(pathname || ''));
+
+  const clearCloseTimer = () => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
     }
   };
 
-  const openHomeToolsMenu = () => {
-    clearHomeToolsCloseTimer();
-    setHomeToolsOpen(true);
+  const openMenu = () => {
+    clearCloseTimer();
+    setMoreOpen(true);
   };
 
-  const scheduleCloseHomeToolsMenu = () => {
-    clearHomeToolsCloseTimer();
-    homeToolsCloseTimerRef.current = setTimeout(() => {
-      setHomeToolsOpen(false);
-    }, 120);
-  };
-
-  const clearHomeAdminCloseTimer = () => {
-    if (homeAdminCloseTimerRef.current) {
-      clearTimeout(homeAdminCloseTimerRef.current);
-      homeAdminCloseTimerRef.current = null;
-    }
-  };
-
-  const openHomeAdminMenu = () => {
-    clearHomeAdminCloseTimer();
-    setHomeAdminOpen(true);
-  };
-
-  const scheduleCloseHomeAdminMenu = () => {
-    clearHomeAdminCloseTimer();
-    homeAdminCloseTimerRef.current = setTimeout(() => {
-      setHomeAdminOpen(false);
-    }, 120);
-  };
-
-  const clearAiToolsCloseTimer = () => {
-    if (aiToolsCloseTimerRef.current) {
-      clearTimeout(aiToolsCloseTimerRef.current);
-      aiToolsCloseTimerRef.current = null;
-    }
-  };
-
-  const openAiToolsMenu = () => {
-    clearAiToolsCloseTimer();
-    setAiToolsOpen(true);
-  };
-
-  const scheduleCloseAiToolsMenu = () => {
-    clearAiToolsCloseTimer();
-    aiToolsCloseTimerRef.current = setTimeout(() => {
-      setAiToolsOpen(false);
-    }, 120);
-  };
-
-  const clearProtectionCloseTimer = () => {
-    if (protectionCloseTimerRef.current) {
-      clearTimeout(protectionCloseTimerRef.current);
-      protectionCloseTimerRef.current = null;
-    }
-  };
-
-  const openProtectionMenu = () => {
-    clearProtectionCloseTimer();
-    setProtectionOpen(true);
-  };
-
-  const scheduleCloseProtectionMenu = () => {
-    clearProtectionCloseTimer();
-    protectionCloseTimerRef.current = setTimeout(() => {
-      setProtectionOpen(false);
-    }, 120);
+  const scheduleCloseMenu = () => {
+    clearCloseTimer();
+    closeTimerRef.current = setTimeout(() => setMoreOpen(false), 120);
   };
 
   useEffect(() => {
-    return () => {
-      clearHomeToolsCloseTimer();
-      clearAiToolsCloseTimer();
-      clearHomeAdminCloseTimer();
-      clearProtectionCloseTimer();
-    };
+    return () => clearCloseTimer();
   }, []);
 
   useEffect(() => {
-    setHomeToolsOpen(false);
-    setAiToolsOpen(false);
-    setHomeAdminOpen(false);
-    setProtectionOpen(false);
+    setMoreOpen(false);
+    setMoreSearch('');
   }, [pathname]);
 
-  const homeToolsActive = HOME_TOOL_LINKS.some((tool) => tool.isActive(pathname || ''));
-  const aiToolsActive = AI_TOOL_LINKS.some((tool) => tool.isActive(pathname || ''));
-  const protectionActive = protectionLinks.some((link) => link.isActive(pathname || ''));
-  const homeAdminActive =
-    ownerGlobalLinks.some((link) => link.isActive(pathname || '')) ||
-    ownerPropertyAdminLinks.some((link) => link.isActive(pathname || ''));
+  const topNavClass = (isActive: boolean) =>
+    cn(
+      'inline-flex min-h-[44px] items-center gap-2 border-b-2 px-1 py-3 text-sm transition-colors duration-150',
+      isActive
+        ? 'border-brand-600 text-brand-600 font-semibold'
+        : 'border-transparent text-gray-700 font-medium hover:text-brand-600'
+    );
 
   return (
-    <nav className="w-full overflow-x-auto">
-      <div className="flex min-w-max items-center gap-1 py-2">
-        {coreLinks.map((link) => {
+    <nav className="w-full">
+      <div className="flex items-center gap-6">
+        {primaryLinks.map((link) => {
           const Icon = link.icon;
           const isActive = link.isActive(pathname || '');
           return (
-            <Link key={link.href} href={link.href} className={sharedLinkClass(isActive)}>
+            <Link key={link.name} href={link.href} className={topNavClass(isActive)}>
               <Icon className="h-4 w-4" />
               {link.name}
             </Link>
           );
         })}
 
-        {isBuyer && (
-          <Link
-            href="/dashboard/checklist"
-            className={sharedLinkClass((pathname || '').startsWith('/dashboard/checklist'))}
-          >
-            <ListChecks className="h-4 w-4" />
-            Checklist
-          </Link>
-        )}
-
-        <DropdownMenu open={aiToolsOpen} onOpenChange={setAiToolsOpen}>
+        <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
-              size="sm"
-              className={sharedLinkClass(aiToolsActive)}
-              onMouseEnter={openAiToolsMenu}
-              onMouseLeave={scheduleCloseAiToolsMenu}
+              className={cn(topNavClass(moreActive), 'h-auto rounded-none px-1')}
+              onMouseEnter={openMenu}
+              onMouseLeave={scheduleCloseMenu}
             >
-              <Sparkles className="h-4 w-4" />
-              AI Tools
+              More
               <ChevronDown className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="start"
-            sideOffset={6}
-            className="w-64"
-            onMouseEnter={openAiToolsMenu}
-            onMouseLeave={scheduleCloseAiToolsMenu}
-            onInteractOutside={() => setAiToolsOpen(false)}
-            onPointerDownOutside={() => setAiToolsOpen(false)}
-            onEscapeKeyDown={() => setAiToolsOpen(false)}
+            sideOffset={8}
+            className="w-80 p-0"
+            onMouseEnter={openMenu}
+            onMouseLeave={scheduleCloseMenu}
+            onInteractOutside={() => setMoreOpen(false)}
+            onPointerDownOutside={() => setMoreOpen(false)}
+            onEscapeKeyDown={() => setMoreOpen(false)}
           >
-            {AI_TOOL_LINKS.map((tool) => {
-              const ToolIcon = tool.icon;
-              return (
-                <DropdownMenuItem key={tool.key} asChild>
-                  <Link href={buildAIToolHref(resolvedPropertyId, tool.href)} className="flex items-center gap-2">
-                    <ToolIcon className="h-4 w-4" />
-                    {tool.name}
-                  </Link>
-                </DropdownMenuItem>
-              );
-            })}
+            <div className="border-b border-gray-100 p-3">
+              <Input
+                value={moreSearch}
+                onChange={(event) => setMoreSearch(event.target.value)}
+                placeholder="Search tools and pages..."
+                className="h-9"
+              />
+            </div>
+
+            <div className="max-h-80 overflow-y-auto p-1.5">
+              {groupOrder.map((group) => {
+                const items = filteredMoreLinks.filter((link) => link.group === group);
+                if (!items.length) return null;
+
+                return (
+                  <div key={group} className="mb-2">
+                    <DropdownMenuLabel className="px-2 pb-1 pt-1 text-[10px] uppercase tracking-wide text-gray-400">
+                      {group}
+                    </DropdownMenuLabel>
+                    {items.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <DropdownMenuItem
+                          key={item.key}
+                          asChild
+                          className={cn(
+                            'cursor-pointer',
+                            item.isActive(pathname || '') && 'bg-brand-50 text-brand-700'
+                          )}
+                        >
+                          <Link href={item.href} className="flex items-center gap-2">
+                            <Icon className="h-4 w-4" />
+                            {item.name}
+                          </Link>
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+
+              {!filteredMoreLinks.length && (
+                <p className="px-2 py-4 text-sm text-gray-500">No results found.</p>
+              )}
+            </div>
+
+            <DropdownMenuSeparator />
+            <div className="px-3 py-2 text-xs text-gray-500">
+              Tip: Press <span className="font-medium">⌘K</span> to jump anywhere
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
-
-        {isOwner && (
-          <>
-            <div className="mx-2 h-5 w-px bg-gray-200" />
-
-            <DropdownMenu open={homeToolsOpen} onOpenChange={setHomeToolsOpen}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={sharedLinkClass(homeToolsActive)}
-                  onMouseEnter={openHomeToolsMenu}
-                  onMouseLeave={scheduleCloseHomeToolsMenu}
-                >
-                  <TrendingUp className="h-4 w-4" />
-                  Home Tools
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                sideOffset={6}
-                className="w-64"
-                onMouseEnter={openHomeToolsMenu}
-                onMouseLeave={scheduleCloseHomeToolsMenu}
-                onInteractOutside={() => setHomeToolsOpen(false)}
-                onPointerDownOutside={() => setHomeToolsOpen(false)}
-                onEscapeKeyDown={() => setHomeToolsOpen(false)}
-              >
-                {HOME_TOOL_LINKS.map((tool) => {
-                  const ToolIcon = tool.icon;
-                  const href = buildPropertyAwareHref(resolvedPropertyId, tool.hrefSuffix, tool.navTarget);
-                  return (
-                    <DropdownMenuItem key={tool.key} asChild>
-                      <Link href={href} className="flex items-center gap-2">
-                        <ToolIcon className="h-4 w-4" />
-                        {tool.name}
-                      </Link>
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {propertyFeatureLinks.map((link) => {
-              const Icon = link.icon;
-              const isActive = link.isActive(pathname || '');
-              return (
-                <Link key={link.navTarget} href={link.href} className={sharedLinkClass(isActive)}>
-                  <Icon className="h-4 w-4" />
-                  {link.name}
-                </Link>
-              );
-            })}
-
-            <DropdownMenu open={protectionOpen} onOpenChange={setProtectionOpen}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={sharedLinkClass(protectionActive)}
-                  onMouseEnter={openProtectionMenu}
-                  onMouseLeave={scheduleCloseProtectionMenu}
-                >
-                  <Shield className="h-4 w-4" />
-                  Protection
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                sideOffset={6}
-                className="w-56"
-                onMouseEnter={openProtectionMenu}
-                onMouseLeave={scheduleCloseProtectionMenu}
-                onInteractOutside={() => setProtectionOpen(false)}
-                onPointerDownOutside={() => setProtectionOpen(false)}
-                onEscapeKeyDown={() => setProtectionOpen(false)}
-              >
-                {protectionLinks.map((link) => {
-                  const Icon = link.icon;
-                  return (
-                    <DropdownMenuItem key={link.navTarget} asChild>
-                      <Link href={link.href} className="flex items-center gap-2">
-                        <Icon className="h-4 w-4" />
-                        {link.name}
-                      </Link>
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <DropdownMenu open={homeAdminOpen} onOpenChange={setHomeAdminOpen}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={sharedLinkClass(homeAdminActive)}
-                  onMouseEnter={openHomeAdminMenu}
-                  onMouseLeave={scheduleCloseHomeAdminMenu}
-                >
-                  <FileText className="h-4 w-4" />
-                  Home Admin
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                sideOffset={6}
-                className="w-56"
-                onMouseEnter={openHomeAdminMenu}
-                onMouseLeave={scheduleCloseHomeAdminMenu}
-                onInteractOutside={() => setHomeAdminOpen(false)}
-                onPointerDownOutside={() => setHomeAdminOpen(false)}
-                onEscapeKeyDown={() => setHomeAdminOpen(false)}
-              >
-                {ownerPropertyAdminLinks.map((link) => {
-                  const Icon = link.icon;
-                  return (
-                    <DropdownMenuItem key={link.navTarget} asChild>
-                      <Link href={link.href} className="flex items-center gap-2">
-                        <Icon className="h-4 w-4" />
-                        {link.name}
-                      </Link>
-                    </DropdownMenuItem>
-                  );
-                })}
-                {ownerGlobalLinks.map((link) => {
-                  const Icon = link.icon;
-                  return (
-                    <DropdownMenuItem key={link.href} asChild>
-                      <Link href={link.href} className="flex items-center gap-2">
-                        <Icon className="h-4 w-4" />
-                        {link.name}
-                      </Link>
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
-        )}
-
-        <Link
-          href="/dashboard/community-events"
-          className={sharedLinkClass((pathname || '').startsWith('/dashboard/community-events'))}
-        >
-          <Globe className="h-4 w-4" />
-          Community Events
-        </Link>
       </div>
     </nav>
   );

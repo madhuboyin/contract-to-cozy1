@@ -45,8 +45,11 @@ export const AIChat: React.FC = () => {
   const [sessionId] = useState(() => Date.now().toString());
 
   const [isOpen, setIsOpen] = useState(false);
+  const [showPulse, setShowPulse] = useState(false);
+  const [showTooltip, setShowTooltip] = useState(false);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Memoize welcome message so it only changes when user.segment changes
   const welcomeMessage = useMemo(() => getWelcomeMessage(user), [user]);
@@ -60,6 +63,27 @@ export const AIChat: React.FC = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOpen]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hasInteracted = window.localStorage.getItem('cozy_chat_interacted') === '1';
+    if (hasInteracted) {
+      setShowPulse(false);
+      return;
+    }
+
+    setShowPulse(true);
+    const timer = window.setTimeout(() => setShowPulse(false), 30000);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (tooltipTimerRef.current) {
+        clearTimeout(tooltipTimerRef.current);
+      }
+    };
+  }, []);
 
   // Update welcome message when user changes, but only if conversation hasn't started
   useEffect(() => {
@@ -136,89 +160,144 @@ export const AIChat: React.FC = () => {
     }
   };
 
+  const openChat = () => {
+    setIsOpen(true);
+    setShowPulse(false);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('cozy_chat_interacted', '1');
+    }
+  };
+
+  const closeChat = () => {
+    setIsOpen(false);
+    setShowTooltip(false);
+  };
+
+  const showTooltipWithDelay = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) return;
+    if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
+    tooltipTimerRef.current = setTimeout(() => setShowTooltip(true), 500);
+  };
+
+  const hideTooltip = () => {
+    if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
+    setShowTooltip(false);
+  };
+
 
   return (
-    <div className="fixed right-3 z-50 font-sans bottom-[calc(6.5rem+env(safe-area-inset-bottom))] sm:right-4 sm:bottom-[calc(5rem+env(safe-area-inset-bottom))] lg:bottom-6 lg:right-6">
-      {!isOpen && (
-        <button 
-          onClick={() => setIsOpen(true)}
-          className="group flex items-center bg-stone-900 hover:bg-amber-600 text-white rounded-full px-3.5 py-2.5 sm:px-6 sm:py-4 shadow-2xl transition-all duration-300 hover:-translate-y-1"
-        >
-          <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 mr-2 animate-pulse" />
-          <span className="font-medium text-sm sm:text-base">Ask Cozy</span>
-        </button>
-      )}
-
+    <>
       {isOpen && (
-        <div className={cn(
-            "bg-white rounded-2xl shadow-2xl w-[min(350px,calc(100vw-1.5rem))] md:w-[400px] flex flex-col overflow-hidden border border-stone-200 h-[min(500px,70vh)] sm:h-[500px]",
-            "animate-in fade-in slide-in-from-bottom-10 duration-300" 
-        )}>
-          {/* Header */}
-          <div className="bg-stone-900 p-4 flex justify-between items-center text-white shrink-0">
-            <div className="flex items-center">
-              <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center mr-3">
-                <Sparkles className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h3 className="font-serif font-bold">Cozy</h3>
-                <p className="text-xs text-stone-300">AI Home Concierge</p>
-              </div>
+        <button
+          type="button"
+          onClick={closeChat}
+          className="fixed inset-0 z-40 bg-black/30"
+          aria-label="Close Cozy chat"
+        />
+      )}
+      <div className="fixed right-3 z-50 font-sans bottom-20 sm:right-4 md:bottom-6 md:right-6">
+        <div className="relative flex justify-end">
+          {showTooltip && !isOpen && (
+            <div className="absolute -top-10 right-0 hidden rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 shadow-sm lg:block">
+              Ask Cozy anything about your home
             </div>
-            <button onClick={() => setIsOpen(false)} className="text-stone-400 hover:text-white">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+          )}
+          {showPulse && !isOpen && (
+            <span className="pointer-events-none absolute inset-0 rounded-full border-2 border-amber-400/70 animate-ping" />
+          )}
+          <button
+            onClick={isOpen ? closeChat : openChat}
+            onMouseEnter={showTooltipWithDelay}
+            onMouseLeave={hideTooltip}
+            className={cn(
+              'group relative z-10 flex min-h-12 items-center text-white shadow-2xl transition-all duration-200',
+              isOpen
+                ? 'h-12 w-12 justify-center rounded-full bg-stone-900 hover:bg-stone-800'
+                : 'rounded-full bg-stone-900 px-4 py-3 hover:bg-amber-600'
+            )}
+          >
+            {isOpen ? (
+              <X className="h-5 w-5 rotate-180 transition-transform duration-200" />
+            ) : (
+              <>
+                <Sparkles className="mr-2 h-5 w-5" />
+                <span className="font-medium text-sm">Ask Cozy</span>
+              </>
+            )}
+          </button>
+        </div>
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 bg-stone-50 space-y-4">
-            {messages.map((msg, idx) => (
-              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={cn(
-                  'max-w-[80%] p-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap',
-                  msg.role === 'user' 
-                    ? 'bg-stone-800 text-white rounded-tr-none' 
-                    : 'bg-white text-stone-800 shadow-sm border border-stone-100 rounded-tl-none'
-                )}>
-                  {msg.text}
+        {isOpen && (
+          <div className={cn(
+              "mt-3 bg-white rounded-2xl shadow-2xl w-[min(350px,calc(100vw-1.5rem))] md:w-[400px] flex flex-col overflow-hidden border border-stone-200 h-[min(500px,70vh)] sm:h-[500px]",
+              "animate-in fade-in slide-in-from-bottom-10 duration-300"
+          )}>
+            {/* Header */}
+            <div className="bg-stone-900 p-4 flex justify-between items-center text-white shrink-0">
+              <div className="flex items-center">
+                <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center mr-3">
+                  <Sparkles className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-serif font-bold">Cozy</h3>
+                  <p className="text-xs text-stone-300">AI Home Concierge</p>
                 </div>
               </div>
-            ))}
-            {loading && (
-              <div className="flex justify-start">
-                 <div className="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm border border-stone-100 flex space-x-1">
-                    <div className="w-2 h-2 bg-stone-300 rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-stone-300 rounded-full animate-bounce delay-100" />
-                    <div className="w-2 h-2 bg-stone-300 rounded-full animate-bounce delay-200" />
-                 </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Input */}
-          <div className="p-4 bg-white border-t border-stone-100 shrink-0">
-            <div className="flex items-center bg-stone-50 rounded-full px-4 py-2 border border-stone-200 focus-within:border-amber-500 transition-colors">
-              <input 
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Ask about maintenance, closing..."
-                className="flex-1 bg-transparent border-none outline-none text-sm text-stone-900 placeholder-stone-400"
-                disabled={loading}
-              />
-              <button 
-                onClick={handleSend}
-                disabled={loading || !input.trim()}
-                className="ml-2 text-stone-400 hover:text-amber-600 disabled:opacity-50"
-              >
-                <Send className="w-4 h-4" />
+              <button onClick={closeChat} className="text-stone-400 hover:text-white" aria-label="Close chat">
+                <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 bg-stone-50 space-y-4">
+              {messages.map((msg, idx) => (
+                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={cn(
+                    'max-w-[80%] p-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap',
+                    msg.role === 'user'
+                      ? 'bg-stone-800 text-white rounded-tr-none'
+                      : 'bg-white text-stone-800 shadow-sm border border-stone-100 rounded-tl-none'
+                  )}>
+                    {msg.text}
+                  </div>
+                </div>
+              ))}
+              {loading && (
+                <div className="flex justify-start">
+                   <div className="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm border border-stone-100 flex space-x-1">
+                      <div className="w-2 h-2 bg-stone-300 rounded-full animate-bounce" />
+                      <div className="w-2 h-2 bg-stone-300 rounded-full animate-bounce delay-100" />
+                      <div className="w-2 h-2 bg-stone-300 rounded-full animate-bounce delay-200" />
+                   </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input */}
+            <div className="p-4 bg-white border-t border-stone-100 shrink-0">
+              <div className="flex items-center bg-stone-50 rounded-full px-4 py-2 border border-stone-200 focus-within:border-amber-500 transition-colors">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ask about maintenance, closing..."
+                  className="flex-1 bg-transparent border-none outline-none text-sm text-stone-900 placeholder-stone-400"
+                  disabled={loading}
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={loading || !input.trim()}
+                  className="ml-2 text-stone-400 hover:text-amber-600 disabled:opacity-50"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 };

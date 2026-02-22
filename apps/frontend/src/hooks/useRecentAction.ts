@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { OrchestratedActionDTO } from '@/types';
+import humanizeActionType from '@/lib/utils/humanize';
 
 type RecentActionState = {
   actionId: string;
@@ -51,7 +52,7 @@ export function useRecentAction(storageKey: string) {
 
       persist({
         actionId: action.id,
-        actionTitle: action.title || 'Task',
+        actionTitle: humanizeActionType(action.title) || 'Task',
         createdAt: Date.now(),
         dismissed: false,
       });

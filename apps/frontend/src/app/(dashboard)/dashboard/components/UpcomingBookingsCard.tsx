@@ -7,7 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Booking } from '@/types';
 import { format, isPast } from 'date-fns';
 import Link from 'next/link';
-import { Calendar, ArrowRight } from 'lucide-react';
+import { Calendar, ArrowRight, House } from 'lucide-react';
+import LottieBadge from '@/components/ui/LottieBadge';
+import { housePulseAnimation } from '@/components/animations/lottieData';
 
 const getStatusBadge = (status: string) => {
   switch (status.toUpperCase()) {
@@ -65,7 +67,16 @@ export const UpcomingBookingsCard: React.FC<UpcomingBookingsCardProps> = ({
             </div>
           ) : displayBookings.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 text-center">
-              <Calendar className="h-10 w-10 text-gray-300 mb-3" />
+              <LottieBadge
+                animationData={housePulseAnimation}
+                icon={House}
+                size={66}
+                className="mb-2"
+                iconClassName="absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2 text-brand-700"
+                loop={false}
+                speed={0.8}
+                reducedMotionBgClassName="bg-brand-50"
+              />
               <p className="text-sm text-gray-500">No upcoming bookings found</p>
               <Link href="/dashboard/providers">
                 <Button variant="link" className="mt-2 text-blue-600">

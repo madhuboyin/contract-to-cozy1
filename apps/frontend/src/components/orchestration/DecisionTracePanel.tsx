@@ -83,8 +83,12 @@ export const DecisionTracePanel: React.FC<Props> = ({
   const linkText = suppressed
     ? 'See why this is hidden'
     : checklistExplainOnly
-      ? 'Why am I seeing this?'
-      : 'See how this was decided';
+      ? expanded
+        ? '↑ Hide reasoning'
+        : '↓ See reasoning'
+      : expanded
+        ? '↑ Hide reasoning'
+        : '↓ See reasoning';
 
   const handleToggleExpanded = () => {
     if (shouldOpenModalDirectly && action && onOpenTrace) {

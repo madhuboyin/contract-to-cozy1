@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
+import humanizeActionType from '@/lib/utils/humanize';
 
 type MaintenanceForecastMode = 'timeline' | 'next-up';
 
@@ -97,7 +98,7 @@ function TimelineCard({
       <CardHeader className="space-y-2 pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <CardTitle className="text-base leading-snug">{prediction.taskName}</CardTitle>
+            <CardTitle className="text-base leading-snug">{humanizeActionType(prediction.taskName)}</CardTitle>
             {overdue && (
               <span className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-red-600">
                 <AlertTriangle className="h-3 w-3" />
@@ -224,8 +225,8 @@ export function MaintenanceForecast({ propertyId, mode = 'timeline' }: Maintenan
 
       const message =
         status === 'COMPLETED'
-          ? `${prediction.taskName} marked complete.`
-          : `${prediction.taskName} dismissed from your timeline.`;
+          ? `${humanizeActionType(prediction.taskName)} marked complete.`
+          : `${humanizeActionType(prediction.taskName)} dismissed from your timeline.`;
       toast({ title: 'Forecast updated', description: message });
 
       // Streak / milestone toast — shown when a task is completed on time
@@ -349,8 +350,8 @@ export function MaintenanceForecast({ propertyId, mode = 'timeline' }: Maintenan
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <p className="truncate text-sm font-semibold text-gray-900">
-                        {prediction.taskName}
+                        <p className="truncate text-sm font-semibold text-gray-900">
+                        {humanizeActionType(prediction.taskName)}
                       </p>
                       {overdue && (
                         <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-500" />

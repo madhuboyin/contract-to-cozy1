@@ -37,6 +37,9 @@ import HomeSavingsCheckToolCard from './components/HomeSavingsCheckToolCard';
 import MorningHomePulseCard from './components/MorningHomePulseCard';
 import { HomeScoreReportCard } from './components/HomeScoreReportCard';
 import { ShareVaultButton } from './components/ShareVaultButton';
+import PriorityAlertBanner from '@/components/dashboard/PriorityAlertBanner';
+import { motion } from 'framer-motion';
+import { useToast } from '@/components/ui/use-toast';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -190,6 +193,7 @@ function isAssetDrivenForRouting(item: ChecklistItem): boolean {
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: userLoading } = useAuth();
+  const { toast } = useToast();
   const [redirectChecked, setRedirectChecked] = useState(false);
   const [showWelcomeScreen, setShowWelcomeScreen] = useState(false);
   const [orchestrationSummary, setOrchestrationSummary] = useState<{
@@ -401,6 +405,11 @@ export default function DashboardPage() {
   const properties = data.properties;
   const selectedProperty = properties.find(p => p.id === selectedPropertyId); 
   const isMultiProperty = properties.length > 1;
+  const sectionMotion = (index: number) => ({
+    initial: { opacity: 0, y: 20 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.4, delay: index * 0.08 },
+  });
   
   if (userSegment === 'HOME_BUYER') {
     return (
@@ -428,11 +437,17 @@ export default function DashboardPage() {
 
       {/* 2. CONSTRAINED WIDTH AREA (Aligns with other cards) */}
       <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
+        {userSegment === 'EXISTING_OWNER' && selectedPropertyId && (
+          <motion.div {...sectionMotion(0)}>
+            <PriorityAlertBanner propertyId={selectedPropertyId} />
+          </motion.div>
+        )}
+
         {/* MORNING HOME PULSE */}
         {userSegment === 'EXISTING_OWNER' && selectedPropertyId && (
-          <section className="mb-5 md:mb-6">
+          <motion.section className="mb-5 md:mb-6" {...sectionMotion(1)}>
             <MorningHomePulseCard propertyId={selectedPropertyId} />
-          </section>
+          </motion.section>
         )}
 
         {/* LOCAL UPDATES TICKER */}
@@ -444,6 +459,11 @@ export default function DashboardPage() {
               onDismiss={async (id) => {
                 setLocalUpdates((prev) => prev.filter((u) => u.id !== id));
                 await api.dismissLocalUpdate(id);
+                const toastRef = toast({
+                  title: 'Offer dismissed',
+                  description: 'You can manage offers in Settings.',
+                });
+                window.setTimeout(() => toastRef.dismiss(), 2000);
               }}
               onCtaClick={(id) => {
                 const update = localUpdates.find((u) => u.id === id);
@@ -456,13 +476,13 @@ export default function DashboardPage() {
         )}
         
         {/* PROPERTY INTELLIGENCE SCORES - IMMEDIATELY BELOW WELCOME */}
-        <div className="flex items-center justify-between gap-3 mb-6">
+        <motion.div className="flex items-center justify-between gap-3 mb-6" {...sectionMotion(2)}>
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 rounded-lg">
               <TrendingUp className="w-5 h-5 text-blue-600" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">Property Intelligence Scores</h2>
+              <h2 className="text-2xl font-semibold text-gray-900">Property Intelligence Scores</h2>
               <p className="text-sm text-gray-500">Real-time health, risk, and financial analysis</p>
             </div>
           </div>
@@ -472,25 +492,27 @@ export default function DashboardPage() {
               propertyAddress={selectedProperty?.address}
             />
           )}
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mt-6 mb-8">
+        </motion.div>
+        <motion.div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mt-6 mb-8" {...sectionMotion(2)}>
           <HomeScoreReportCard propertyId={selectedPropertyId} />
           {selectedProperty && (
             <PropertyHealthScoreCard property={selectedProperty} />
           )}
           <PropertyRiskScoreCard propertyId={selectedPropertyId} />
           <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
-        </div>
-        <div className="w-full border-t border-gray-200 my-5 md:my-6" />
+        </motion.div>
+        <div className="section-divider my-5 md:my-6" />
 
         {/* ROOMS SNAPSHOT */}
-        <RoomsSnapshotSection propertyId={selectedPropertyId} />
+        <motion.div {...sectionMotion(3)}>
+          <RoomsSnapshotSection propertyId={selectedPropertyId} />
+        </motion.div>
 
         {/* HORIZONTAL SEPARATOR */}
-        <div className="w-full border-t border-gray-200 my-5 md:my-6" />
+        <div className="section-divider my-5 md:my-6" />
         
         {/* AI INSURANCE/PREMIUM DECISION TOOLS */}
-        <section className="mb-4">
+        <motion.section className="mb-4" {...sectionMotion(6)}>
           <div className="flex items-start gap-3 mb-4">
             <div className="p-2 bg-teal-100 rounded-lg">
               <ShieldAlert className="w-5 h-5 text-teal-700" />
@@ -508,22 +530,11 @@ export default function DashboardPage() {
             <RiskPremiumOptimizerToolCard propertyId={selectedPropertyId || ''} />
             <DoNothingSimulatorToolCard propertyId={selectedPropertyId || ''} />
           </div>
-        </section>
-        <div className="w-full border-t border-gray-200 my-5 md:my-6" />
+        </motion.section>
+        <div className="section-divider my-5 md:my-6" />
       </div>
 
       <DashboardShell className="pt-0 md:pt-0">
-      {/* ========================================= */}
-      {/* SEASONAL MAINTENANCE BANNER - EXISTING_OWNER ONLY */}
-      {/* ========================================= */}
-      {homeownerSegment === 'EXISTING_OWNER' && selectedPropertyId && (
-        <SeasonalBanner propertyId={selectedPropertyId} />
-      )}
-
-      {homeownerSegment === 'EXISTING_OWNER' && selectedPropertyId && (
-        <SeasonalWidget propertyId={selectedPropertyId} />
-      )}
-
       {/* Filter data by selected property before passing to child components */}
       {/* This ensures the red banner and other components show data for the currently selected property only */}
       {(() => {
@@ -547,12 +558,24 @@ export default function DashboardPage() {
         );
 
         return (
-          <ExistingOwnerDashboard
-            bookings={data.bookings}
-            properties={filteredProperties} // Pass only selected property
-            checklistItems={filteredChecklistItems} // Pass the newly filtered list
-            selectedPropertyId={selectedPropertyId}
-          />
+          <>
+            <ExistingOwnerDashboard
+              bookings={data.bookings}
+              properties={filteredProperties} // Pass only selected property
+              checklistItems={filteredChecklistItems} // Pass the newly filtered list
+              selectedPropertyId={selectedPropertyId}
+            />
+
+            {/* ========================================= */}
+            {/* SEASONAL MAINTENANCE BANNER - EXISTING_OWNER ONLY */}
+            {/* ========================================= */}
+            {homeownerSegment === 'EXISTING_OWNER' && selectedPropertyId && (
+              <motion.div {...sectionMotion(6)}>
+                <SeasonalBanner propertyId={selectedPropertyId} />
+                <SeasonalWidget propertyId={selectedPropertyId} />
+              </motion.div>
+            )}
+          </>
         );
       })()}
       </DashboardShell>

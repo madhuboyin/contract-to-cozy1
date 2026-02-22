@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PropertyMaintenanceTask } from '@/types'; 
 import { format, differenceInDays } from 'date-fns';
+import humanizeActionType from '@/lib/utils/humanize';
 
 interface RecurringMaintenanceCardProps {
   maintenance: PropertyMaintenanceTask[]; 
@@ -105,7 +106,7 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
                     <div className="flex items-start justify-between p-3 rounded-lg bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-sm hover:bg-white transition-all cursor-pointer">
                       <div className="flex-1 min-w-0 pr-2">
                         <p className="text-sm font-medium text-gray-900 truncate" title={task.title}>
-                          {task.title}
+                          {humanizeActionType(task.title)}
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
                           Due {task.nextDueDate ? format(new Date(task.nextDueDate), 'MMM dd') : 'N/A'}

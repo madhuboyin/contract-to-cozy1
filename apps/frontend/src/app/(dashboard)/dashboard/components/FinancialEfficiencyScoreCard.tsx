@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api/client';
 import { FinancialReportSummary, FinancialSummaryStatus } from '@/types'; 
 import React from 'react';
+import ScoreGauge from '@/components/ui/ScoreGauge';
 
 const formatCurrency = (amount: number) => new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -18,9 +19,10 @@ const formatCurrency = (amount: number) => new Intl.NumberFormat('en-US', {
 }).format(amount);
 
 const getEfficiencyDetails = (score: number) => {
-    if (score >= 90) return { level: "Excellent", color: "text-emerald-700", progressColor: "bg-emerald-500" };
-    if (score >= 70) return { level: "Average", color: "text-amber-600", progressColor: "bg-amber-500" };
-    return { level: "Below Average", color: "text-rose-600", progressColor: "bg-rose-400" };
+    if (score >= 80) return { level: "Excellent", color: "text-emerald-600" };
+    if (score >= 60) return { level: "Good", color: "text-teal-600" };
+    if (score >= 40) return { level: "Fair", color: "text-amber-500" };
+    return { level: "Poor", color: "text-red-500" };
 };
 
 interface FinancialEfficiencyScoreCardProps {
@@ -70,8 +72,7 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
 
     const score = summary.financialEfficiencyScore || 0;
     const exposure = summary.financialExposureTotal || 0; 
-    const { level, color, progressColor } = getEfficiencyDetails(score);
-    const displayScoreColor = score >= 100 ? 'text-amber-600' : color;
+    const { level, color } = getEfficiencyDetails(score);
     const scoreDelta = snapshotQuery.data?.scores?.FINANCIAL?.deltaFromPreviousWeek ?? null;
     const reportLink = `/dashboard/properties/${propertyId!}/financial-efficiency`; 
 
@@ -128,27 +129,27 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
     // State 4: Calculated Report (Happy path)
     return (
         <Link href={reportLink}>
-            <Card className="h-[190px] flex flex-col border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer">
+            <Card className="h-[190px] flex flex-col border border-white/60 bg-white/80 backdrop-blur-sm shadow-sm hover:shadow-md transition-all cursor-pointer hover:-translate-y-0.5">
                 <CardContent className="flex-1 p-5 flex flex-col">
                     {/* Header */}
                     <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                             <DollarSign className="h-5 w-5 text-gray-600" />
-                            <h3 className="text-base font-semibold text-gray-900">Financial Health</h3>
+                            <h3 className="text-base font-semibold text-gray-900">Financial</h3>
                         </div>
                         <ArrowRight className="h-4 w-4 text-gray-400" />
                     </div>
 
-                    {/* Large Score - Number First */}
-                    <div className="mb-2">
-                        <div className="flex items-baseline gap-2">
-                            <span className={`text-4xl font-bold leading-none ${displayScoreColor}`}>
-                                {score}
-                            </span>
-                            <span className="text-xl text-gray-400 font-normal">/100</span>
-                        </div>
-                        <div className="mt-1 flex items-center justify-between gap-2">
-                            <p className="text-sm text-gray-600">{level}</p>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                        <ScoreGauge
+                            value={score}
+                            label="Financial"
+                            sublabel={level}
+                            size="md"
+                            animate
+                        />
+                        <div className="text-right">
+                            <p className={`text-sm ${color}`}>{level}</p>
                             {scoreDelta === null ? (
                                 <span className="text-xs text-gray-500 inline-flex items-center gap-1">
                                     <Minus className="h-3 w-3" />
@@ -174,18 +175,12 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
                         </div>
                     </div>
 
-                    {/* Thin Horizontal Progress Bar */}
                     <div className="mt-auto">
-                        <div className="flex items-center justify-between text-xs text-gray-500 mb-1.5">
+                        <div className="flex items-center justify-between text-xs text-gray-400 mb-1.5 uppercase tracking-wide">
                             <span className="truncate">Annual Cost</span>
                             <span className="ml-2 whitespace-nowrap">{formatCurrency(exposure)}</span>
                         </div>
-                        <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                            <div 
-                                className={`h-full ${progressColor} transition-all duration-300`}
-                                style={{ width: `${score}%` }}
-                            />
-                        </div>
+                        <p className="text-sm text-gray-600">Score {score}/100</p>
                     </div>
                 </CardContent>
             </Card>

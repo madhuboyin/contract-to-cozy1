@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import {
+  AlertCircle,
   ArrowRight,
   Bath,
   BedDouble,
@@ -10,8 +11,10 @@ import {
   Car,
   ChevronLeft,
   ChevronRight,
+  FileText,
   Home,
   LayoutGrid,
+  Package,
   Shirt,
   Sofa,
   UtensilsCrossed,
@@ -82,10 +85,22 @@ function computeHealthScore(insights: any): number {
 }
 
 function deriveLabel(score: number): string {
-  if (score >= 85) return 'EXCELLENT';
-  if (score >= 70) return 'GOOD';
-  if (score >= 50) return 'NEEDS ATTENTION';
+  if (score >= 80) return 'HEALTHY';
+  if (score >= 40) return 'NEEDS ATTENTION';
   return 'AT RISK';
+}
+
+function statusPillClass(label: string): string {
+  if (label === 'HEALTHY') return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+  if (label === 'NEEDS ATTENTION') return 'bg-amber-50 text-amber-700 border border-amber-200';
+  return 'bg-red-50 text-red-700 border border-red-200';
+}
+
+function roomTip(itemCount: number, docsCount: number, gapCount: number): string {
+  if (docsCount === 0) return '0 docs → Upload your appliance warranties';
+  if (gapCount > 0) return `${gapCount} gaps → Add purchase receipts for tracked items`;
+  if (itemCount < 3) return `${itemCount} items → Add key appliances to improve visibility`;
+  return 'Keep inventory details current to maintain room health.';
 }
 
 function guessRoomType(name: string): string {
@@ -234,7 +249,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
             <LayoutGrid className="w-5 h-5 text-blue-600" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Rooms</h2>
+            <h2 className="text-2xl font-semibold text-gray-900">Rooms</h2>
             <p className="text-sm text-gray-500">Room-level health and item access for this property.</p>
           </div>
         </div>
@@ -294,58 +309,86 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
 
               const statusLabel = safeString(insights?.healthScore?.label) || deriveLabel(score);
               const whyFactors = insights ? buildWhyFactors(insights) : [];
-              const improvements = Array.isArray(insights?.healthScore?.improvements)
-                ? insights.healthScore.improvements
-                : [];
 
               return (
                 <Link
                   key={room.id}
                   href={`/dashboard/properties/${propertyId}/rooms/${room.id}`}
-                  className="snap-start min-w-[86%] sm:min-w-[70%] md:min-w-[calc((100%-1rem)/2)] lg:min-w-[calc((100%-2rem)/3)] flex-shrink-0 rounded-2xl border border-black/10 p-4 bg-white flex flex-col hover:bg-gray-50 transition-colors"
+                  className="snap-start min-w-[86%] sm:min-w-[70%] md:min-w-[calc((100%-1rem)/2)] lg:min-w-[calc((100%-2rem)/3)] flex-shrink-0 rounded-2xl border border-white/60 bg-white/80 p-4 shadow-sm backdrop-blur-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md cursor-pointer select-none"
                 >
                   <div className="min-w-0 flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2 min-w-0">
                       <RoomIcon className="w-4 h-4 text-gray-500 shrink-0" />
-                      <div className="font-medium truncate">{room.name || 'Unnamed room'}</div>
+                      <div className="text-base font-semibold text-gray-900 truncate">
+                        {room.name || 'Unnamed room'}
+                      </div>
                     </div>
                     <ArrowRight className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
                   </div>
 
-                  <div className="mt-4 rounded-xl border border-black/10 bg-black/[0.02] p-3 min-h-[128px]">
+                  <div className="mt-4 rounded-xl border border-black/10 bg-black/[0.02] p-3">
                     {insightsLoading[room.id] ? (
                       <div className="text-sm opacity-70">Loading insights...</div>
                     ) : insights ? (
-                      <div className="space-y-2">
-                        <RoomHealthScoreRing
-                          value={score}
-                          label={statusLabel}
-                          ratingOverride={statusLabel}
-                          sublabel={`${stats?.itemCount ?? 0} items · ${stats?.docsLinkedCount ?? 0} docs · ${stats?.coverageGapsCount ?? 0} gaps`}
-                          whyTitle="Why this score?"
-                          whyFactors={whyFactors}
-                        />
+                      <div className="space-y-3 text-center">
+                        <div className="flex justify-center">
+                          <RoomHealthScoreRing
+                            value={score}
+                            size={80}
+                            strokeWidth={10}
+                            ringOnly
+                            animateMs={600}
+                          />
+                        </div>
 
-                        {improvements.length > 0 && safeString(improvements?.[0]?.title) && (
-                          <div className="text-xs text-gray-500">
-                            Tip:{' '}
-                            <span className="font-medium text-gray-700">
-                              {String(improvements[0].title)}
-                            </span>
-                          </div>
-                        )}
+                        <div className="flex justify-center">
+                          <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide ${statusPillClass(statusLabel)}`}>
+                            {statusLabel}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-gray-600">
+                          <span className="inline-flex items-center gap-1">
+                            <Package className="h-3.5 w-3.5 text-gray-500" />
+                            {stats?.itemCount ?? 0} items
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <FileText className="h-3.5 w-3.5 text-gray-500" />
+                            {stats?.docsLinkedCount ?? 0} docs
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <AlertCircle className="h-3.5 w-3.5 text-gray-500" />
+                            {stats?.coverageGapsCount ?? 0} gaps
+                          </span>
+                        </div>
+
+                        <p className="text-xs italic text-gray-500">
+                          {roomTip(
+                            Number(stats?.itemCount ?? 0),
+                            Number(stats?.docsLinkedCount ?? 0),
+                            Number(stats?.coverageGapsCount ?? 0)
+                          )}
+                        </p>
                       </div>
                     ) : (
                       <div className="text-sm opacity-70">No room insights yet.</div>
                     )}
                   </div>
+                  {whyFactors.length > 0 && (
+                    <p className="mt-2 line-clamp-1 text-xs text-gray-500">
+                      Why: {whyFactors[0]?.label}
+                    </p>
+                  )}
                 </Link>
               );
             })}
           </div>
 
           <div className="mt-3">
-            <Link href={roomsHubHref} className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors">
+            <Link
+              href={roomsHubHref}
+              className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-brand-600 px-4 py-2 text-sm font-medium text-brand-600 transition-colors hover:bg-brand-50"
+            >
               View all rooms
             </Link>
           </div>

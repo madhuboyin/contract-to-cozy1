@@ -17,8 +17,11 @@ import {
   Edit,
   Eye,
   LoaderCircle,
+  House,
   XCircle,
 } from 'lucide-react';
+import LottieBadge from '@/components/ui/LottieBadge';
+import { housePulseAnimation } from '@/components/animations/lottieData';
 
 interface EditFormData {
   scheduledDate: string;
@@ -117,6 +120,42 @@ const isUpcomingSoon = (booking: Booking): boolean => {
   return scheduledAt >= now && scheduledAt <= soonCutoff;
 };
 
+function getEmptyStateTone(filter: 'all' | BookingStatus) {
+  if (filter === 'all') {
+    return {
+      iconClass: 'absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2 text-brand-700',
+      reducedBgClass: 'bg-brand-50',
+      speed: 0.8,
+      loop: false,
+    };
+  }
+
+  if (filter === 'CANCELLED' || filter === 'DISPUTED') {
+    return {
+      iconClass: 'absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2 text-rose-600',
+      reducedBgClass: 'bg-rose-50',
+      speed: 0.75,
+      loop: false,
+    };
+  }
+
+  if (filter === 'COMPLETED') {
+    return {
+      iconClass: 'absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2 text-emerald-600',
+      reducedBgClass: 'bg-emerald-50',
+      speed: 0.75,
+      loop: false,
+    };
+  }
+
+  return {
+    iconClass: 'absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2 text-amber-600',
+    reducedBgClass: 'bg-amber-50',
+    speed: 0.9,
+    loop: false,
+  };
+}
+
 export default function HomeownerBookingsPage() {
   const { user } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -169,6 +208,7 @@ export default function HomeownerBookingsPage() {
   const filteredBookings = filter === 'all' 
     ? bookings 
     : bookings.filter(b => b.status === filter);
+  const emptyStateTone = getEmptyStateTone(filter);
 
   const canEditBooking = (status: BookingStatus) => {
     return status === 'PENDING' || status === 'CONFIRMED';
@@ -360,7 +400,17 @@ export default function HomeownerBookingsPage() {
           </div>
         ) : filteredBookings.length === 0 ? (
           <div className="rounded-xl border bg-white p-10 text-center">
-            <Calendar className="mx-auto mb-3 h-10 w-10 text-gray-400" />
+            <div className="mx-auto mb-3 flex justify-center">
+              <LottieBadge
+                animationData={housePulseAnimation}
+                icon={House}
+                size={72}
+                iconClassName={emptyStateTone.iconClass}
+                reducedMotionBgClassName={emptyStateTone.reducedBgClass}
+                speed={emptyStateTone.speed}
+                loop={emptyStateTone.loop}
+              />
+            </div>
             <h3 className="mb-2 text-base sm:text-lg font-medium text-gray-900">No bookings found</h3>
             <p className="mb-6 text-gray-600">
               {filter === 'all'

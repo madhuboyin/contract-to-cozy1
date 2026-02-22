@@ -62,10 +62,10 @@ function norm(s?: string) {
 
 /** Subtle color banding */
 function ringToneClass(v: number) {
-  // subtle but clear
-  if (v >= 75) return 'text-emerald-600';
-  if (v >= 50) return 'text-amber-600';
-  return 'text-orange-600';
+  if (v >= 80) return 'text-emerald-500';
+  if (v >= 60) return 'text-teal-500';
+  if (v >= 40) return 'text-amber-500';
+  return 'text-red-500';
 }
 
 function prefersReducedMotion(): boolean {

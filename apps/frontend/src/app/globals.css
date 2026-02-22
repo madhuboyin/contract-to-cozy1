@@ -68,6 +68,7 @@
     /* === PHASE 2: TYPOGRAPHY VARIABLES === */
     --font-heading: var(--font-poppins), 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --font-body: var(--font-inter), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-score: var(--font-display), 'Fraunces', 'Playfair Display', serif;
   }
   
   .dark {
@@ -231,6 +232,10 @@ html {
   
   .font-body {
     font-family: var(--font-body);
+  }
+
+  .font-display {
+    font-family: var(--font-score);
   }
   
   /* Reading-Optimized Text */
@@ -444,5 +449,22 @@ html {
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+
+  .dashboard-bg {
+    background-color: #fafaf7;
+    background-image:
+      radial-gradient(at 20% 20%, rgb(20 184 166 / 0.06) 0px, transparent 50%),
+      radial-gradient(at 80% 10%, rgb(99 102 241 / 0.04) 0px, transparent 50%),
+      radial-gradient(at 50% 80%, rgb(245 158 11 / 0.04) 0px, transparent 50%);
+  }
+
+  .section-divider {
+    height: 1px;
+    background: linear-gradient(to right, transparent, #e5e7eb 20%, #e5e7eb 80%, transparent);
+  }
+
+  .pulse-dot {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
 }

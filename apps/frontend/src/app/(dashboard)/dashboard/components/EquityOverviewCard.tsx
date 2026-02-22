@@ -3,7 +3,8 @@
 
 import React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LineChart, Sparkles } from 'lucide-react';
+import Link from 'next/link';
+import { CheckCircle2, Info, LineChart, Sparkles } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
@@ -39,7 +40,11 @@ function clampPercent(value: number) {
 }
 
 function hasMaintenanceAlphaAdvantage(healthScore: number | null | undefined) {
-  return typeof healthScore === 'number' && Number.isFinite(healthScore) && healthScore > RESALE_ADVANTAGE_BASELINE;
+  return (
+    typeof healthScore === 'number' &&
+    Number.isFinite(healthScore) &&
+    healthScore >= RESALE_ADVANTAGE_BASELINE
+  );
 }
 
 export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCardProps) {
@@ -117,10 +122,28 @@ export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCa
     !data.isEquityVerified || isMissingPurchasePrice || isMissingPurchaseDate;
   const appraisedCents = data.lastAppraisedValueCents;
   const purchaseCents = data.purchasePriceCents ?? 0;
-  const positiveEquityCents = Math.max(0, appraisedCents - purchaseCents);
-  const equityPercent =
-    appraisedCents > 0 ? clampPercent((positiveEquityCents / appraisedCents) * 100) : 0;
-  const showMaintenanceAlpha = hasMaintenanceAlphaAdvantage(healthScore);
+  const hasValidAppraisal = typeof appraisedCents === 'number' && appraisedCents > 0;
+  const hasValidPurchasePrice = typeof purchaseCents === 'number' && purchaseCents > 0;
+  const appreciationCents =
+    hasValidAppraisal && hasValidPurchasePrice ? appraisedCents - purchaseCents : null;
+  const equityProgress =
+    hasValidAppraisal && hasValidPurchasePrice
+      ? ((appraisedCents - purchaseCents) / purchaseCents) * 100
+      : null;
+  const equityPercent = equityProgress === null ? null : clampPercent(equityProgress);
+  const healthLoaded = typeof healthScore === 'number' && Number.isFinite(healthScore);
+  const showMaintenanceAlpha = healthLoaded && hasMaintenanceAlphaAdvantage(healthScore);
+  const showMaintenanceAlphaUnlock = healthLoaded && !showMaintenanceAlpha;
+  const completenessChecks = [
+    !isMissingPurchasePrice,
+    !isMissingPurchaseDate,
+    hasValidAppraisal,
+    healthLoaded,
+  ];
+  const completenessPct = Math.round(
+    (completenessChecks.filter(Boolean).length / completenessChecks.length) * 100
+  );
+  const appraisalSettingsHref = `/dashboard/properties/${propertyId}/edit`;
   const normalizedPrice = Number(purchasePriceDollars);
   const canSaveBaseline =
     Number.isFinite(normalizedPrice) &&
@@ -144,10 +167,28 @@ export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCa
         <div className="min-w-0 flex-1">
           <h3 className="text-lg font-semibold text-gray-900">Home Equity Overview</h3>
           <p className="mt-1 text-sm text-gray-700">
-            {isMissingPurchasePrice
-              ? 'Add purchase price to calculate appreciation.'
-              : `Appreciation since purchase: ${formatCents(data.appreciationCents)}`}
+            {!hasValidAppraisal
+              ? "Add your home's appraised value to track equity growth."
+              : isMissingPurchasePrice
+                ? 'Add purchase price to calculate appreciation.'
+                : `Appreciation since purchase: ${formatCents(appreciationCents)}`}
           </p>
+          {!hasValidAppraisal && (
+            <div className="mt-3">
+              <Button asChild size="sm" className="min-h-[44px]">
+                <Link href={appraisalSettingsHref}>Add Appraisal Value →</Link>
+              </Button>
+            </div>
+          )}
+
+          <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+            <span className="inline-flex items-center gap-1.5">
+              <Info className="h-3.5 w-3.5" />
+              Property data: {completenessPct}% complete
+              {!hasValidAppraisal ? ' — Add appraisal to improve accuracy' : ''}
+            </span>
+          </div>
+
           {needsEquitySetup && (
             <div className="mt-3 rounded-lg border border-emerald-200 bg-white/80 p-3">
               <p className="text-sm text-emerald-900">{setupPrompt}</p>
@@ -189,32 +230,39 @@ export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCa
           <div className="mt-3">
             <div className="mb-1 flex justify-between text-sm text-gray-600">
               <span>Equity progress</span>
-              <span>{Math.round(equityPercent)}%</span>
+              <span>{equityPercent === null ? 'No data yet' : `${Math.round(equityPercent)}%`}</span>
             </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-emerald-100">
+            <div className={`h-2 w-full overflow-hidden rounded-full ${equityPercent === null ? 'bg-gray-200' : 'bg-emerald-100'}`}>
               <div
-                className="h-full rounded-full bg-emerald-500 transition-all duration-500"
-                style={{ width: `${equityPercent}%` }}
+                className={`h-full rounded-full transition-all duration-500 ${equityPercent === null ? 'bg-gray-300' : 'bg-emerald-500'}`}
+                style={{ width: `${equityPercent === null ? 100 : equityPercent}%` }}
               />
             </div>
           </div>
 
           <div className="mt-3 grid gap-1 text-sm text-gray-700 sm:grid-cols-3">
             <p>Purchase: {formatCentsOrPlaceholder(data.purchasePriceCents)}</p>
-            <p>Appraised: {formatCents(data.lastAppraisedValueCents)}</p>
+            <p>Appraised: {formatCentsOrPlaceholder(hasValidAppraisal ? data.lastAppraisedValueCents : null, 'Not set')}</p>
             <p>Maintenance Premium: {formatCents(data.maintenancePremiumCents)}</p>
           </div>
 
+          {showMaintenanceAlpha && (
+            <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-sm font-medium text-amber-900">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Maintenance Alpha badge earned
+            </div>
+          )}
           {showMaintenanceAlpha ? (
-            <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800">
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800">
               <Sparkles className="h-3.5 w-3.5" />
               Documented care has added ~{formatCents(data.maintenancePremiumCents)} to your home&apos;s resale attractiveness.
             </div>
-          ) : (
+          ) : null}
+          {showMaintenanceAlphaUnlock ? (
             <p className="mt-3 text-sm text-emerald-800">
               Keep your health score above {RESALE_ADVANTAGE_BASELINE} to unlock your Maintenance Alpha resale badge.
             </p>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

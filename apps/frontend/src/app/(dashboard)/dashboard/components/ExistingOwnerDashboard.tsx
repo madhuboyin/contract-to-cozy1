@@ -18,6 +18,7 @@ import { HomeHealthNudge } from './verification/HomeHealthNudge';
 import { InsuranceSummaryCard } from './InsuranceSummaryCard';
 import { EquityOverviewCard } from './EquityOverviewCard';
 import { MaintenanceForecast } from './MaintenanceForecast';
+import { motion } from 'framer-motion';
 
 
 interface ExistingOwnerDashboardProps {
@@ -81,6 +82,11 @@ export const ExistingOwnerDashboard = ({
 
   const selectedProperty = properties.find((p) => p.id === selectedPropertyId);
   const isPropertySelected = !!selectedProperty;
+  const sectionMotion = (index: number) => ({
+    initial: { opacity: 0, y: 20 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.4, delay: index * 0.08 },
+  });
 
   return (
     <div className="space-y-5 pb-8 md:space-y-6">
@@ -91,7 +97,7 @@ export const ExistingOwnerDashboard = ({
             <AlertTriangle className="w-5 h-5 text-blue-600" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">
+            <h2 className="text-2xl font-semibold text-gray-900">
               Here&apos;s what needs your attention today
             </h2>
             <p className="text-sm text-gray-500">
@@ -111,22 +117,22 @@ export const ExistingOwnerDashboard = ({
       />
       <InsuranceSummaryCard propertyId={selectedPropertyId} />
 
-      <div className="w-full border-t border-gray-200" />
+      <div className="section-divider" />
 
       <MaintenanceForecast propertyId={selectedPropertyId} mode="timeline" />
-      <div className="w-full border-t border-gray-200" />
+      <div className="section-divider" />
 
 
       {/* Action Center (Top Actions) */}
       {selectedPropertyId && (
-        <section className="space-y-3">
+        <motion.section className="space-y-3" {...sectionMotion(4)}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-start gap-3">
               <div className="p-2 bg-blue-100 rounded-lg">
                 <ClipboardList className="w-5 h-5 text-blue-600" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">
+                <h2 className="text-2xl font-semibold text-gray-900">
                   Action Center
                 </h2>
                 <p className="text-sm text-gray-500">
@@ -145,25 +151,25 @@ export const ExistingOwnerDashboard = ({
           </div>
 
           <ActionCenter propertyId={selectedPropertyId} maxItems={5} />
-        </section>
+        </motion.section>
       )}
-      <div className="w-full border-t border-gray-200" />
+      <div className="section-divider" />
 
       {/* NEW ROW: Seasonal Checklist + Favorite Providers */}
       <div className="grid gap-6 md:grid-cols-2">
         <SeasonalChecklistCard propertyId={selectedPropertyId} />
         <FavoriteProvidersCard />
       </div>
-      <div className="w-full border-t border-gray-200" />
+      <div className="section-divider" />
 
       {/* Activity Center */}
-      <section className="space-y-3">
+      <motion.section className="space-y-3" {...sectionMotion(5)}>
         <div className="flex items-center gap-3">
           <div className="p-2 bg-blue-100 rounded-lg">
             <Activity className="w-5 h-5 text-blue-600" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Activity Center</h2>
+            <h2 className="text-2xl font-semibold text-gray-900">Activity Center</h2>
             <p className="text-sm text-gray-500">
               Track upcoming bookings, maintenance, and renewals for your home.
             </p>
@@ -184,8 +190,8 @@ export const ExistingOwnerDashboard = ({
           />
           <UpcomingRenewalsCard propertyId={selectedPropertyId} />
         </div>
-      </section>
-      <div className="w-full border-t border-gray-200" />
+      </motion.section>
+      <div className="section-divider" />
 
       {/* Footer CTA */}
       <div className="pt-4">

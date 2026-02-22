@@ -25,6 +25,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import humanizeActionType from '@/lib/utils/humanize';
 
 type Props = {
   propertyId: string;
@@ -135,7 +136,7 @@ export const ActionCenter: React.FC<Props> = ({
 
     setTemplate({
       id: `orchestration:${action.actionKey}`,
-      title: action.title,
+      title: humanizeActionType(action.title),
       description: action.description ?? '',
       serviceCategory:
         (action.serviceCategory as ServiceCategory) ??

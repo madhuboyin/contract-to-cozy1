@@ -43,6 +43,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { ArrowLeft } from 'lucide-react';
+import humanizeActionType from '@/lib/utils/humanize';
 
 import {
   Dialog,
@@ -57,8 +58,7 @@ import {
 // --- Helper Functions ---
 
 function formatEnumString(val: string | null | undefined): string {
-  if (!val) return 'N/A';
-  return val.toString().replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+  return humanizeActionType(val);
 }
 
 function formatCategory(category: MaintenanceTaskServiceCategory | null) {
@@ -114,7 +114,7 @@ function getTaskSourceBadge(task: PropertyMaintenanceTask): {
 
   if (task.source) {
     return {
-      label: task.source.replace(/_/g, ' '),
+      label: humanizeActionType(task.source),
       variant: 'outline',
     };
   }
@@ -560,7 +560,7 @@ export default function MaintenancePage() {
                   const isCompleted = task.status === 'COMPLETED';
                   return (
                     <TableRow key={task.id} className={cn(isCompleted && 'opacity-80')}>
-                      <TableCell className="font-medium">{task.title}</TableCell>
+                      <TableCell className="font-medium">{humanizeActionType(task.title)}</TableCell>
                       <TableCell className="text-sm text-gray-600">{task.description || 'No description'}</TableCell>
                       <TableCell>
                         <span
@@ -638,7 +638,7 @@ export default function MaintenancePage() {
               <Card key={task.id} className={cn("p-4 border", isCompleted && "opacity-80")}>
                 <div className="flex justify-between items-start mb-2">
                   <div>
-                    <h3 className="font-bold text-base leading-tight">{task.title}</h3>
+                    <h3 className="font-bold text-base leading-tight">{humanizeActionType(task.title)}</h3>
                     <p className="text-xs text-muted-foreground">{formatCategory(task.serviceCategory)}</p>
                   </div>
                   <Badge 
@@ -732,7 +732,7 @@ export default function MaintenancePage() {
 
                       return (
                         <TableRow key={task.id}>
-                          <TableCell className="font-medium">{task.title}</TableCell>
+                          <TableCell className="font-medium">{humanizeActionType(task.title)}</TableCell>
                           <TableCell className="text-sm text-gray-600">
                             {task.description || 'No description'}
                           </TableCell>
@@ -802,7 +802,7 @@ export default function MaintenancePage() {
                     <Card key={task.id} className="p-4 border">
                       <div className="flex justify-between items-start mb-2 gap-2">
                         <div className="min-w-0">
-                          <h3 className="font-bold text-base leading-tight">{task.title}</h3>
+                          <h3 className="font-bold text-base leading-tight">{humanizeActionType(task.title)}</h3>
                           <p className="text-xs text-muted-foreground">{formatCategory(task.serviceCategory)}</p>
                         </div>
                         <Badge
@@ -894,7 +894,7 @@ export default function MaintenancePage() {
 
                       return (
                         <TableRow key={task.id} className="opacity-80">
-                          <TableCell className="font-medium">{task.title}</TableCell>
+                          <TableCell className="font-medium">{humanizeActionType(task.title)}</TableCell>
                           <TableCell className="text-sm text-gray-600">
                             {task.description || 'No description'}
                           </TableCell>
@@ -955,7 +955,7 @@ export default function MaintenancePage() {
                     <Card key={task.id} className="p-4 border opacity-80">
                       <div className="flex justify-between items-start mb-2 gap-2">
                         <div className="min-w-0">
-                          <h3 className="font-bold text-base leading-tight">{task.title}</h3>
+                          <h3 className="font-bold text-base leading-tight">{humanizeActionType(task.title)}</h3>
                           <p className="text-xs text-muted-foreground">{formatCategory(task.serviceCategory)}</p>
                         </div>
                         <Badge
@@ -1004,7 +1004,7 @@ export default function MaintenancePage() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <DialogTitle className="truncate">
-                  Task Details{viewTask?.title ? `: ${viewTask.title}` : ''}
+                  Task Details{viewTask?.title ? `: ${humanizeActionType(viewTask.title)}` : ''}
                 </DialogTitle>
 
                 <div className="mt-1 flex items-center gap-2">
@@ -1035,7 +1035,7 @@ export default function MaintenancePage() {
             <div className="space-y-4">
               <div className="space-y-1">
                 <div className="text-xs text-gray-500">Task</div>
-                <div className="text-sm font-medium text-gray-900">{viewTask.title}</div>
+                <div className="text-sm font-medium text-gray-900">{humanizeActionType(viewTask.title)}</div>
               </div>
 
               <div className="space-y-1">

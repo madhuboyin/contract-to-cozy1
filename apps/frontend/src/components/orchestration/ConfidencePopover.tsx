@@ -89,7 +89,7 @@ export const ConfidencePopover: React.FC<Props> = ({ level, score, explanation =
           className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-gray-900 min-h-[44px] touch-manipulation"
         >
           <Info className="h-4 w-4" />
-          How confident is this recommendation?
+          Confidence details
         </button>
       </PopoverTrigger>
 
@@ -103,7 +103,7 @@ export const ConfidencePopover: React.FC<Props> = ({ level, score, explanation =
 
         {explanation.length === 0 ? (
           <div className="text-xs text-muted-foreground">
-            Confidence is derived from risk severity, asset age, exposure, coverage, and whether this is already scheduled.
+            Confidence reflects how certain our AI is about this recommendation based on your property data, local averages, and item age.
           </div>
         ) : (
           <div className="space-y-3">
