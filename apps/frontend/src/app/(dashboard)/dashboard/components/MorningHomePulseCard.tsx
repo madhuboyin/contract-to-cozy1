@@ -45,8 +45,8 @@ type SummaryKind = 'HEALTH' | 'RISK' | 'FINANCIAL';
 const RISK_EXPOSURE_CAP = 15000;
 
 function toneForSeverity(severity: 'LOW' | 'MEDIUM' | 'HIGH') {
-  if (severity === 'HIGH') return 'border-red-200 bg-red-50 text-red-700 shadow-lg';
-  if (severity === 'MEDIUM') return 'border-amber-200 bg-amber-50 text-amber-700 shadow-lg';
+  if (severity === 'HIGH') return 'border-red-200 bg-red-50 text-red-700';
+  if (severity === 'MEDIUM') return 'border-amber-200 bg-amber-50 text-amber-700';
   return 'border-blue-200 bg-blue-50 text-blue-700';
 }
 
@@ -188,14 +188,14 @@ function formatDeltaPoints(delta: number) {
 
 function getPulseCardStyle(kind: SummaryKind, score: number) {
   if (kind === 'RISK') {
-    if (score >= 80) return 'bg-red-50/40 border-red-200/60';
-    if (score >= 60) return 'bg-amber-50/40 border-amber-200/60';
-    return 'bg-emerald-50/40 border-emerald-200/60';
+    if (score >= 80) return 'bg-red-50/30 border-red-200/50';
+    if (score >= 60) return 'bg-amber-50/30 border-amber-200/50';
+    return 'bg-emerald-50/30 border-emerald-200/50';
   }
 
-  if (score >= 80) return 'bg-emerald-50/40 border-emerald-200/60';
-  if (score >= 60) return 'bg-teal-50/40 border-teal-200/60';
-  return 'bg-amber-50/40 border-amber-200/60';
+  if (score >= 80) return 'bg-emerald-50/30 border-emerald-200/50';
+  if (score >= 60) return 'bg-teal-50/30 border-teal-200/50';
+  return 'bg-amber-50/30 border-amber-200/50';
 }
 
 function extractFirstCount(input: string): number | null {
@@ -336,13 +336,13 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
   const noOverdueActive = snapshot.streaks.noOverdueTasks > 0;
 
   const weatherAlert = (
-    <div className={`rounded-xl border px-3 py-3 ${toneForSeverity(payload.weatherInsight.severity)}`}>
-      <div className="flex items-start gap-2">
+    <div className={`rounded-xl border p-3 ${toneForSeverity(payload.weatherInsight.severity)}`}>
+      <div className="flex items-start gap-2.5">
         {showWeatherAsPrimary && freezeRiskMatch ? (
           <LottieBadge
             animationData={snowflakePulseAnimation}
             icon={Snowflake}
-            size={30}
+            size={28}
             className="mt-0.5 shrink-0"
             iconClassName={freezeTone.iconClass}
             speed={freezeTone.speed}
@@ -354,15 +354,15 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
           <Sparkles className="mt-0.5 h-4 w-4 shrink-0" />
         )}
         <div className="min-w-0">
-          <p className="text-sm font-semibold">{secondaryHeadline}</p>
-          <p className="text-sm">{secondaryDetail}</p>
+          <p className="line-clamp-1 text-xs font-semibold">{secondaryHeadline}</p>
+          <p className="mt-0.5 line-clamp-1 text-xs">{secondaryDetail}</p>
         </div>
       </div>
     </div>
   );
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 shadow-lg ring-1 ring-black/[0.04] md:p-6">
+    <section className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-lg ring-1 ring-black/[0.04]">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-teal-400 via-teal-500 to-emerald-400" />
 
       <div className="mb-5 flex items-start justify-between gap-3 border-b border-gray-100 pb-4">
@@ -393,9 +393,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
         </span>
       </div>
 
-      <div className="mb-4 md:hidden">{weatherAlert}</div>
-
-      <div className="grid items-stretch gap-4 md:grid-cols-3">
+      <div className="grid items-stretch gap-3 md:grid-cols-3">
         {payload.summary.map((row) => {
           const label = getMetricLabel(row.kind, row.value);
           const gaugeLabel = row.kind === 'RISK' ? 'RISK LEVEL' : row.label.toUpperCase();
@@ -515,7 +513,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
           return (
             <div
               key={row.kind}
-              className={`min-h-[340px] rounded-xl border p-5 ${getPulseCardStyle(row.kind, scoreValue)} flex flex-col justify-between`}
+              className={`rounded-xl border p-4 ${getPulseCardStyle(row.kind, scoreValue)} flex flex-col`}
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-widest text-gray-400">
@@ -526,14 +524,14 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
                 </span>
               </div>
 
-              <div className="mt-2 flex flex-col items-center">
+              <div className="mt-1 flex flex-col items-center">
                 <div className="md:hidden">
                   <ScoreGauge
                     value={scoreValue}
                     label={gaugeLabel}
                     sublabel={label}
                     size="pulse-sm"
-                    strokeWidth={9}
+                    strokeWidth={8}
                     animate
                     showLabel={false}
                     showSublabel={false}
@@ -547,7 +545,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
                     label={gaugeLabel}
                     sublabel={label}
                     size="pulse-md"
-                    strokeWidth={9}
+                    strokeWidth={8}
                     animate
                     showLabel={false}
                     showSublabel={false}
@@ -555,20 +553,20 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
                     direction={row.kind === 'RISK' ? 'lower-better' : 'higher-better'}
                   />
                 </div>
-                <span className={`mt-2 text-base font-semibold ${scoreStatusClass(row.kind, scoreValue)}`}>
+                <span className={`mt-1.5 text-sm font-semibold ${scoreStatusClass(row.kind, scoreValue)}`}>
                   {label}
                 </span>
               </div>
 
-              <div className="mt-4 border-t border-gray-100 pt-3">
+              <div className="mt-3 border-t border-gray-100 pt-2">
                 <div className="space-y-0 px-1">
                   {detailRows.map((detail) => (
                     <div
                       key={detail.key}
-                      className="flex items-center justify-between border-b border-gray-100 py-1.5 last:border-0"
+                      className="flex items-center justify-between border-b border-gray-100 py-1 last:border-0"
                     >
                       <div className="flex items-center gap-2 text-gray-500">
-                        <detail.icon className="h-3.5 w-3.5 flex-shrink-0" />
+                        <detail.icon className="h-3 w-3 flex-shrink-0" />
                         <span className="text-xs">{detail.label}</span>
                       </div>
                       <span className={detail.valueClassName || 'text-xs font-semibold text-gray-800'}>
@@ -583,22 +581,22 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
         })}
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <div className="hidden md:block">{weatherAlert}</div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div>{weatherAlert}</div>
 
         <div className="rounded-xl border border-gray-200 bg-white p-3">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-base font-semibold text-gray-900">
+              <p className="text-xs font-semibold text-gray-800">
                 {humanizeActionType(payload.microAction.title)}
               </p>
-              <p className="mt-0.5 text-sm text-gray-600">{payload.microAction.detail}</p>
+              <p className="mt-0.5 line-clamp-1 text-xs text-gray-500">{payload.microAction.detail}</p>
             </div>
             {!isActionDone ? (
               <div className="flex shrink-0 items-center gap-1.5">
                 <Button
                   size="sm"
-                  className="min-h-[44px] bg-brand-600 px-3 hover:bg-brand-700 md:h-8 md:min-h-0"
+                  className="h-8 min-h-[32px] bg-brand-600 px-3 text-xs font-medium hover:bg-brand-700"
                   onClick={handleComplete}
                   disabled={actionBusy !== null}
                 >
@@ -614,7 +612,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-11 w-11 p-0 md:h-8 md:w-8"
+                  className="h-8 w-8 p-0 text-gray-400 hover:text-gray-600"
                   onClick={handleDismiss}
                   disabled={actionBusy !== null}
                   aria-label="Dismiss action"
@@ -636,7 +634,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
         </div>
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-4">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3">
         <div
           className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
             noOverdueActive

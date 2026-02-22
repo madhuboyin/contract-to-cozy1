@@ -24,7 +24,6 @@ import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
 import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
 import { TrendingUp } from 'lucide-react';
 import { ShieldAlert } from 'lucide-react';
-import { CircleHelp } from 'lucide-react';
 import { SeasonalBanner } from '@/components/seasonal/SeasonalBanner';
 import { SeasonalWidget } from '@/components/seasonal/SeasonalWidget';
 import { useHomeownerSegment } from '@/lib/hooks/useHomeownerSegment';
@@ -201,7 +200,6 @@ export default function DashboardPage() {
     pendingActionCount: number;
   } | null>(null);
   const [localUpdates, setLocalUpdates] = useState<LocalUpdate[]>([]);
-  const [showRiskHelp, setShowRiskHelp] = useState(false);
   
   const [data, setData] = useState<DashboardData>({
     bookings: [],
@@ -486,14 +484,6 @@ export default function DashboardPage() {
             <div>
               <h2 className="text-2xl font-semibold text-gray-900">Property Intelligence Scores</h2>
               <p className="text-sm text-gray-500">Real-time health, risk, and financial analysis</p>
-              <button
-                type="button"
-                className="mt-2 inline-flex min-h-[44px] items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700"
-                onClick={() => setShowRiskHelp((prev) => !prev)}
-              >
-                <CircleHelp className="h-3.5 w-3.5" />
-                Why are there two risk numbers?
-              </button>
             </div>
           </div>
           {selectedPropertyId && (
@@ -503,13 +493,7 @@ export default function DashboardPage() {
             />
           )}
         </motion.div>
-        {showRiskHelp && (
-          <div className="mb-4 rounded-lg border border-teal-200 bg-teal-50 p-3 text-sm text-teal-900">
-            Morning Home Pulse shows <span className="font-semibold">Risk Level</span> (weather + overdue maintenance exposure, lower is better).
-            Property Intelligence shows <span className="font-semibold">Protection Score</span> and <span className="font-semibold">Risk Exposure</span> (how protected your home is overall and current dollar exposure).
-          </div>
-        )}
-        <motion.div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mt-6 mb-8" {...sectionMotion(2)}>
+        <motion.div className="grid grid-cols-1 gap-3 mt-6 mb-8 sm:grid-cols-2 lg:grid-cols-5" {...sectionMotion(2)}>
           <HomeScoreReportCard propertyId={selectedPropertyId} />
           {selectedProperty && (
             <PropertyHealthScoreCard property={selectedProperty} />

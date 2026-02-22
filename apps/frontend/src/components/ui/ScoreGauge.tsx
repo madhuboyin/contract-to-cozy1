@@ -15,13 +15,16 @@ export interface ScoreGaugeProps {
   sublabel: string;
   prefix?: string;
   animate?: boolean;
-  size?: 'sm' | 'md' | 'lg' | 'pulse-sm' | 'pulse-md';
+  size?: 'sm' | 'md' | 'lg' | 'summary' | 'pulse-sm' | 'pulse-md';
   displayValue?: string;
   tooltipText?: string;
   direction?: 'higher-better' | 'lower-better';
   strokeWidth?: number;
   showLabel?: boolean;
   showSublabel?: boolean;
+  minVisualValue?: number;
+  pathColorOverride?: string;
+  trailColorOverride?: string;
 }
 
 function clamp(value: number, min = 0, max = 100) {
@@ -111,22 +114,32 @@ function defaultTooltip(label: string) {
   return `${label} score is based on your latest property data.`;
 }
 
-function centerFontSize(size: 'sm' | 'md' | 'lg' | 'pulse-sm' | 'pulse-md', display: string) {
+function centerFontSize(
+  size: 'sm' | 'md' | 'lg' | 'summary' | 'pulse-sm' | 'pulse-md',
+  display: string
+) {
   const compact = display.replace(/[^\da-zA-Z]/g, '');
   const length = compact.length;
 
   if (size === 'pulse-md') {
-    if (length >= 8) return 24;
-    if (length >= 6) return 28;
-    if (length >= 4) return 32;
-    return 36;
+    if (length >= 8) return 20;
+    if (length >= 6) return 24;
+    if (length >= 4) return 28;
+    return 30;
   }
 
   if (size === 'pulse-sm') {
-    if (length >= 8) return 18;
-    if (length >= 6) return 22;
-    if (length >= 4) return 26;
-    return 30;
+    if (length >= 8) return 17;
+    if (length >= 6) return 20;
+    if (length >= 4) return 23;
+    return 24;
+  }
+
+  if (size === 'summary') {
+    if (length >= 8) return 16;
+    if (length >= 6) return 19;
+    if (length >= 4) return 22;
+    return 24;
   }
 
   if (size === 'lg') {
@@ -161,6 +174,9 @@ export default function ScoreGauge({
   strokeWidth = 8,
   showLabel = true,
   showSublabel = true,
+  minVisualValue,
+  pathColorOverride,
+  trailColorOverride,
 }: ScoreGaugeProps) {
   const safeValue = clamp(Number.isFinite(value) ? value : 0);
   const animatedValue = useCountUp(safeValue, 800, animate);
@@ -170,10 +186,17 @@ export default function ScoreGauge({
     sm: 60,
     md: 88,
     lg: 110,
-    'pulse-sm': 120,
-    'pulse-md': 160,
+    summary: 80,
+    'pulse-sm': 96,
+    'pulse-md': 112,
   } as const;
   const px = sizeMap[size];
+  const visualFloor =
+    typeof minVisualValue === 'number' ? clamp(minVisualValue, 0, 100) : 0;
+  const gaugeValue =
+    safeValue <= visualFloor ? Math.max(renderedValue, visualFloor) : renderedValue;
+  const pathColor = pathColorOverride ?? gaugePathColor(safeValue, direction);
+  const trailColor = trailColorOverride ?? '#e5e7eb';
 
   const display =
     displayValue ??
@@ -193,11 +216,11 @@ export default function ScoreGauge({
               style={{ width: px, height: px }}
             >
               <CircularProgressbarWithChildren
-                value={renderedValue}
+                value={gaugeValue}
                 strokeWidth={strokeWidth}
                 styles={buildStyles({
-                  pathColor: gaugePathColor(safeValue, direction),
-                  trailColor: '#e5e7eb',
+                  pathColor,
+                  trailColor,
                   strokeLinecap: 'round',
                 })}
               >
