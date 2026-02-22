@@ -116,7 +116,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
   const [actionBusy, setActionBusy] = useState<'COMPLETE' | 'DISMISS' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const loadSnapshot = useCallback(async () => {
+  const loadSnapshot = useCallback(async (force = false) => {
     if (!propertyId) {
       setSnapshot(null);
       setLoading(false);
@@ -126,7 +126,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
     setLoading(true);
     setError(null);
     try {
-      const data = await getDailySnapshot(propertyId);
+      const data = await getDailySnapshot(propertyId, { force });
       setSnapshot(data);
     } catch (err: any) {
       setError(err?.message ?? 'Failed to load Morning Home Pulse.');
@@ -137,7 +137,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
   }, [propertyId]);
 
   useEffect(() => {
-    loadSnapshot();
+    loadSnapshot(false);
   }, [loadSnapshot]);
 
   const isActionDone = useMemo(
@@ -150,7 +150,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
     setActionBusy('COMPLETE');
     try {
       await completeMicroAction(propertyId, snapshot.microAction.id);
-      await loadSnapshot();
+      await loadSnapshot(true);
     } catch (err: any) {
       setError(err?.message ?? 'Failed to complete micro action.');
     } finally {
@@ -163,7 +163,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
     setActionBusy('DISMISS');
     try {
       await dismissMicroAction(propertyId, snapshot.microAction.id);
-      await loadSnapshot();
+      await loadSnapshot(true);
     } catch (err: any) {
       setError(err?.message ?? 'Failed to dismiss micro action.');
     } finally {
@@ -188,7 +188,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
     return (
       <section className="rounded-2xl border border-red-200 bg-red-50 p-5">
         <p className="text-sm font-medium text-red-700">{error || 'Unable to load Morning Home Pulse.'}</p>
-        <Button size="sm" variant="outline" className="mt-3" onClick={loadSnapshot}>
+        <Button size="sm" variant="outline" className="mt-3" onClick={() => loadSnapshot(true)}>
           Try again
         </Button>
       </section>

@@ -59,11 +59,75 @@ export type DailySnapshotDTO = {
   generatedAt: string;
 };
 
-export async function getDailySnapshot(propertyId: string): Promise<DailySnapshotDTO> {
-  const res = await api.get<{ snapshot: DailySnapshotDTO }>(
-    `/api/properties/${propertyId}/daily-snapshot`
-  );
-  return res.data.snapshot;
+type CachedSnapshot = {
+  snapshot: DailySnapshotDTO;
+  fetchedAt: number;
+};
+
+type GetDailySnapshotOptions = {
+  force?: boolean;
+  allowStaleOnRateLimit?: boolean;
+};
+
+const SNAPSHOT_CACHE_TTL_MS = 2 * 60 * 1000;
+const snapshotCache = new Map<string, CachedSnapshot>();
+const inFlightSnapshotRequests = new Map<string, Promise<DailySnapshotDTO>>();
+
+function isRateLimitedError(error: unknown): boolean {
+  const anyErr = error as { status?: number | string; message?: string } | undefined;
+  if (!anyErr) return false;
+  if (anyErr.status === 429 || anyErr.status === '429') return true;
+  return String(anyErr.message || '').toLowerCase().includes('too many requests');
+}
+
+function getFreshCachedSnapshot(propertyId: string): DailySnapshotDTO | null {
+  const cached = snapshotCache.get(propertyId);
+  if (!cached) return null;
+  if (Date.now() - cached.fetchedAt > SNAPSHOT_CACHE_TTL_MS) return null;
+  return cached.snapshot;
+}
+
+function setSnapshotCache(propertyId: string, snapshot: DailySnapshotDTO) {
+  snapshotCache.set(propertyId, { snapshot, fetchedAt: Date.now() });
+}
+
+export async function getDailySnapshot(
+  propertyId: string,
+  options: GetDailySnapshotOptions = {}
+): Promise<DailySnapshotDTO> {
+  const { force = false, allowStaleOnRateLimit = true } = options;
+
+  const freshCached = getFreshCachedSnapshot(propertyId);
+  if (!force && freshCached) {
+    return freshCached;
+  }
+
+  const inFlight = inFlightSnapshotRequests.get(propertyId);
+  if (inFlight) {
+    return inFlight;
+  }
+
+  const request = api
+    .get<{ snapshot: DailySnapshotDTO }>(`/api/properties/${propertyId}/daily-snapshot`)
+    .then((res) => {
+      setSnapshotCache(propertyId, res.data.snapshot);
+      return res.data.snapshot;
+    })
+    .catch((error) => {
+      if (allowStaleOnRateLimit && isRateLimitedError(error)) {
+        const stale = snapshotCache.get(propertyId)?.snapshot;
+        if (stale) {
+          return stale;
+        }
+      }
+      throw error;
+    })
+    .finally(() => {
+      inFlightSnapshotRequests.delete(propertyId);
+    });
+
+  inFlightSnapshotRequests.set(propertyId, request);
+  return request;
 }
 
 export async function checkinDailySnapshot(
@@ -98,4 +162,3 @@ export async function dismissMicroAction(
   }>(`/api/properties/${propertyId}/micro-actions/${actionId}/dismiss`);
   return res.data;
 }
-
