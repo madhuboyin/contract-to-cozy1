@@ -1,55 +1,51 @@
-// apps/frontend/src/app/(dashboard)/dashboard/components/PropertyRiskScoreCard.tsx
 "use client";
 
-import React from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
-import {
-  Loader2,
-  Shield,
-  Home,
-  ArrowRight,
-  CircleHelp,
-} from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowRight, HelpCircle, Loader2, Shield } from "lucide-react";
+import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
 import { api } from "@/lib/api/client";
 import { PrimaryRiskSummary, RiskSummaryStatus } from "@/types";
-import ScoreGauge from "@/components/ui/ScoreGauge";
-
-const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-
-const getRiskDetails = (score: number) => {
-  if (score >= 80) return { level: "Low Risk", color: "text-emerald-600" };
-  if (score >= 60) return { level: "Elevated", color: "text-amber-600" };
-  if (score >= 40) return { level: "High Risk", color: "text-red-500" };
-  return { level: "High Risk", color: "text-red-600" };
-};
-
-const getRiskCardTone = (score: number) => {
-  if (score >= 80) return "bg-emerald-50/30 border-emerald-200/50";
-  if (score >= 60) return "bg-amber-50/30 border-amber-200/50";
-  return "bg-red-50/30 border-red-200/50";
-};
 
 interface PropertyRiskScoreCardProps {
   propertyId?: string;
 }
 
-export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({
-  propertyId,
-}) => {
-  const router = useRouter();
-  const [showHow, setShowHow] = React.useState(false);
-  const enabled = !!propertyId;
+const CARD_SHELL = "rounded-xl border p-4 flex flex-col gap-3";
 
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function getRiskTone(score: number) {
+  if (score >= 80) return "bg-emerald-50/30 border-emerald-200/50";
+  if (score >= 60) return "bg-amber-50/30 border-amber-200/50";
+  return "bg-red-50/30 border-red-200/50";
+}
+
+function getRiskStatus(score: number) {
+  if (score >= 80) return { label: "Low Risk", color: "text-emerald-600" };
+  if (score >= 60) return { label: "Elevated", color: "text-amber-600" };
+  return { label: "High Risk", color: "text-red-600" };
+}
+
+function getRiskPathColor(score: number) {
+  if (score >= 80) return "#10b981";
+  if (score >= 60) return "#f59e0b";
+  return "#ef4444";
+}
+
+function formatWeeklyDelta(delta: number | null) {
+  if (delta === null || Math.abs(delta) < 0.05) return "No change";
+  return `${delta > 0 ? "+" : ""}${delta.toFixed(1)}`;
+}
+
+export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps) {
   const FALLBACK_SUMMARY: PrimaryRiskSummary = {
     propertyId: propertyId || "",
     propertyName: null,
@@ -59,215 +55,147 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({
     status: "NO_PROPERTY" as RiskSummaryStatus,
   };
 
-  const riskQuery = useQuery({
+  const summaryQuery = useQuery({
     queryKey: ["primary-risk-summary", propertyId],
     queryFn: async () => {
-      if (!propertyId) {
-        return FALLBACK_SUMMARY;
-      }
-
+      if (!propertyId) return FALLBACK_SUMMARY;
       const reportOrStatus = await api.getRiskReportSummary(propertyId);
-
       if (typeof reportOrStatus === "string") {
         return {
+          ...FALLBACK_SUMMARY,
           propertyId,
-          propertyName: null,
-          riskScore: 0,
-          financialExposureTotal: 0,
-          lastCalculatedAt: null,
           status: reportOrStatus as RiskSummaryStatus,
-        } as PrimaryRiskSummary;
+        };
       }
-
-      const report = reportOrStatus;
       return {
-        propertyId: report.propertyId,
+        propertyId: reportOrStatus.propertyId,
         propertyName: null,
-        riskScore: report.riskScore,
+        riskScore: reportOrStatus.riskScore,
         financialExposureTotal:
-          typeof report.financialExposureTotal === "number"
-            ? report.financialExposureTotal
-            : parseFloat(String(report.financialExposureTotal || 0)) || 0,
-        lastCalculatedAt: report.lastCalculatedAt,
+          typeof reportOrStatus.financialExposureTotal === "number"
+            ? reportOrStatus.financialExposureTotal
+            : Number(reportOrStatus.financialExposureTotal || 0),
+        lastCalculatedAt: reportOrStatus.lastCalculatedAt,
         status: "CALCULATED" as RiskSummaryStatus,
-      } as PrimaryRiskSummary;
+      };
     },
-    retry: (failureCount, error: any) =>
-      error?.message?.includes("No property") || error?.message?.includes("5000")
-        ? false
-        : failureCount < 2,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
-    refetchInterval: (query) => {
-      const currentStatus = (query.state.data as PrimaryRiskSummary)?.status;
-      return currentStatus === "QUEUED" ? 10000 : false;
-    },
+    enabled: !!propertyId,
     staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    enabled,
   });
 
-  const riskSnapshotQuery = useQuery({
+  const snapshotQuery = useQuery({
     queryKey: ["property-score-snapshot", propertyId, "RISK"],
     queryFn: async () => {
       if (!propertyId) return null;
       return api.getPropertyScoreSnapshots(propertyId, 16);
     },
-    enabled,
+    enabled: !!propertyId,
     staleTime: 10 * 60 * 1000,
   });
 
-  const summary = riskQuery.data || FALLBACK_SUMMARY;
-  const isInitialLoading = riskQuery.isLoading && !summary.lastCalculatedAt;
-
-  const riskScore = summary.riskScore || 0;
-  const exposure = summary.financialExposureTotal || 0;
-  const { level, color } = getRiskDetails(riskScore);
-  const protectionLabel = riskScore === 0 && exposure > 0 ? "High Risk" : level;
-  const riskDelta = riskSnapshotQuery.data?.scores?.RISK?.deltaFromPreviousWeek ?? 0;
-  const reportLink = `/dashboard/properties/${propertyId}/risk-assessment`;
-  const changeBadgeClass =
-    riskDelta > 0
-      ? "bg-red-100 text-red-700"
-      : riskDelta < 0
-      ? "bg-emerald-100 text-emerald-700"
-      : "bg-gray-100 text-gray-500";
-  const changeLabel =
-    riskDelta > 0
-      ? `+${riskDelta.toFixed(1)}`
-      : riskDelta < 0
-      ? `${riskDelta.toFixed(1)}`
-      : "No change";
+  const summary = summaryQuery.data || FALLBACK_SUMMARY;
+  const isLoading = summaryQuery.isLoading;
+  const reportLink = propertyId
+    ? `/dashboard/properties/${propertyId}/risk-assessment`
+    : "/dashboard/properties";
 
   if (!propertyId || summary.status === "NO_PROPERTY") {
     return (
-      <Card className="flex h-full flex-col border-2 border-dashed border-gray-300">
-        <CardContent className="flex flex-1 flex-col items-center justify-center p-4">
-          <Shield className="mb-2 h-8 w-8 text-gray-400" />
-          <p className="mb-3 text-center text-sm text-gray-500">Select a property</p>
-          <Link href="/dashboard/properties" passHref>
-            <Button variant="secondary" size="sm" className="text-xs">
-              Manage Properties
-            </Button>
-          </Link>
-        </CardContent>
-      </Card>
+      <div className={`${CARD_SHELL} bg-white border-gray-200`}>
+        <div className="flex items-center justify-between">
+          <div className="flex min-w-0 items-center gap-2">
+            <Shield className="h-4 w-4 flex-shrink-0 text-gray-400" />
+            <span className="truncate whitespace-nowrap text-sm font-semibold text-gray-800">
+              Risk Exposure
+            </span>
+          </div>
+          <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+        </div>
+        <div className="text-sm text-gray-500">Select a property to view risk.</div>
+      </div>
     );
   }
 
-  if (isInitialLoading || summary.status === "QUEUED") {
+  if (isLoading) {
     return (
-      <Card className="flex h-full flex-col border border-gray-200">
-        <CardContent className="flex flex-1 flex-col items-center justify-center p-4">
-          <Loader2 className="mb-2 h-8 w-8 animate-spin text-blue-500" />
-          <p className="text-center text-sm text-gray-500">
-            {summary.status === "QUEUED" ? "Calculating..." : "Loading..."}
-          </p>
-          <p className="mt-1 text-xs text-gray-400">Please wait</p>
-        </CardContent>
-      </Card>
+      <div className={`${CARD_SHELL} bg-white border-gray-200`}>
+        <div className="flex items-center justify-between">
+          <div className="flex min-w-0 items-center gap-2">
+            <Shield className="h-4 w-4 flex-shrink-0 text-gray-400" />
+            <span className="truncate whitespace-nowrap text-sm font-semibold text-gray-800">
+              Risk Exposure
+            </span>
+          </div>
+          <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+        </div>
+        <div className="inline-flex items-center gap-2 text-sm text-gray-500">
+          <Loader2 className="h-4 w-4 animate-spin text-brand-600" />
+          Loading risk...
+        </div>
+      </div>
     );
   }
 
-  if (summary.status === "MISSING_DATA") {
-    return (
-      <Card className="flex h-full flex-col border-2 border-gray-300">
-        <CardContent className="flex flex-1 flex-col items-center justify-center p-4">
-          <Home className="mb-2 h-8 w-8 text-gray-400" />
-          <p className="mb-1 text-center text-sm font-semibold text-gray-700">
-            More Details Needed
-          </p>
-          <p className="mb-3 text-center text-xs text-gray-500">
-            Complete property info
-          </p>
-          <Link href={reportLink} passHref>
-            <Button variant="secondary" size="sm" className="text-xs">
-              Update Details
-            </Button>
-          </Link>
-        </CardContent>
-      </Card>
-    );
-  }
+  const riskScore = Math.max(0, Math.round(summary.riskScore || 0));
+  const displayValue = riskScore === 0 ? 3 : riskScore;
+  const exposure = Math.max(0, Math.round(summary.financialExposureTotal || 0));
+  const riskStatus = getRiskStatus(riskScore);
+  const weeklyChange = formatWeeklyDelta(
+    snapshotQuery.data?.scores?.RISK?.deltaFromPreviousWeek ?? null
+  );
 
   return (
-    <Card
-      className={`h-full border p-0 shadow-sm transition-all cursor-pointer hover:-translate-y-0.5 hover:shadow-md ${getRiskCardTone(
-        riskScore
-      )}`}
-      onClick={() => router.push(reportLink)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          router.push(reportLink);
-        }
-      }}
-    >
-      <CardContent className="flex h-full flex-col p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-gray-600" />
-            <h3 className="text-base font-semibold text-gray-900">Risk Exposure</h3>
-          </div>
-          <div className="flex items-center gap-2">
-            <span
-              className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${changeBadgeClass}`}
-            >
-              {changeLabel}
-            </span>
-            <ArrowRight className="h-4 w-4 text-gray-400" />
-          </div>
+    <div className={`${CARD_SHELL} ${getRiskTone(riskScore)}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex min-w-0 items-center gap-2">
+          <Shield className="h-4 w-4 flex-shrink-0 text-gray-400" />
+          <span className="truncate whitespace-nowrap text-sm font-semibold text-gray-800">
+            Risk Exposure
+          </span>
         </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className="whitespace-nowrap text-xs text-gray-400">{weeklyChange}</span>
+          <Link href={reportLink} className="inline-flex">
+            <ArrowRight className="h-3.5 w-3.5 text-gray-400" />
+          </Link>
+        </div>
+      </div>
 
-        <div className="my-3 flex flex-col items-center gap-1.5">
-          <ScoreGauge
-            value={riskScore}
-            label="Protection Score"
-            sublabel={protectionLabel}
-            size="summary"
-            strokeWidth={7}
-            animate
-            showLabel={false}
-            showSublabel={false}
-            minVisualValue={5}
-            pathColorOverride={riskScore < 20 ? "#ef4444" : undefined}
-            trailColorOverride={riskScore < 20 ? "#fecaca" : undefined}
-            tooltipText="Your overall risk assessment score across all monitored categories. 0/100 indicates high exposure and weak protection coverage."
+      <div className="flex flex-col items-center gap-1.5">
+        <div className="h-[88px] w-[88px]">
+          <CircularProgressbar
+            value={displayValue}
+            text={`${riskScore}`}
+            strokeWidth={8}
+            styles={buildStyles({
+              textSize: "28px",
+              textColor: "#111827",
+              pathColor: getRiskPathColor(riskScore),
+              trailColor: "#e5e7eb",
+              pathTransitionDuration: 0.6,
+            })}
           />
-          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+        </div>
+        <div className="text-center">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
             PROTECTION SCORE
-          </span>
-          <span className={`text-sm font-bold ${color}`}>{protectionLabel}</span>
+          </p>
+          <p className={`text-sm font-bold ${riskStatus.color}`}>{riskStatus.label}</p>
         </div>
+      </div>
 
-        <div className="mt-auto border-t border-gray-100 pt-2 text-center">
-          <span className="text-xs text-gray-400">EXPOSURE</span>
-          <span className="ml-2 text-xs font-semibold text-red-600">
-            {formatCurrency(exposure)}
+      <div className="flex flex-col gap-1.5 border-t border-red-200/50 pt-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
+            Exposure
           </span>
+          <span className="text-xs font-bold text-red-600">{formatCurrency(exposure)}</span>
         </div>
-
-        <div className="mt-2 border-t border-gray-100 pt-2">
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              setShowHow((prev) => !prev);
-            }}
-            className="inline-flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700"
-          >
-            <CircleHelp className="h-3 w-3" />
-            How is this calculated?
-          </button>
-          {showHow ? (
-            <p className="mt-1.5 text-xs text-gray-600">
-              This combines overdue maintenance, active hazards, coverage gaps,
-              and local risk factors. Lower protection scores indicate higher risk.
-            </p>
-          ) : null}
-        </div>
-      </CardContent>
-    </Card>
+        <button className="mt-1 inline-flex items-center gap-1 text-[10px] text-brand-600 hover:underline">
+          <HelpCircle className="h-3 w-3" />
+          How is this calculated?
+        </button>
+      </div>
+    </div>
   );
-};
+}

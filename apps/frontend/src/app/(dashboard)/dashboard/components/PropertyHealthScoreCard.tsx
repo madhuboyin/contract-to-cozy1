@@ -1,106 +1,133 @@
-// apps/frontend/src/app/(dashboard)/dashboard/components/PropertyHealthScoreCard.tsx
 "use client";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { Activity, ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { ScoredProperty } from "@/app/(dashboard)/dashboard/types";
-import React from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Activity, ArrowRight } from "lucide-react";
+import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
 import { api } from "@/lib/api/client";
-import ScoreGauge from "@/components/ui/ScoreGauge";
-
-const getHealthDetails = (score: number) => {
-    if (score >= 85) {
-        return { level: "Excellent", color: "text-emerald-600" };
-    } else if (score >= 70) {
-        return { level: "Good", color: "text-teal-600" };
-    } else if (score >= 50) {
-        return { level: "Fair", color: "text-amber-500" };
-    } else {
-        return { level: "Poor", color: "text-red-500" };
-    }
-};
+import { ScoredProperty } from "@/app/(dashboard)/dashboard/types";
 
 interface PropertyHealthScoreCardProps {
-    property: ScoredProperty;
+  property?: ScoredProperty;
 }
 
-const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data'];
+const HIGH_PRIORITY_STATUSES = [
+  "Needs Attention",
+  "Needs Review",
+  "Needs Inspection",
+  "Missing Data",
+];
 
-function getHealthCardTone(score: number) {
-    if (score >= 80) return "bg-emerald-50/30 border-emerald-200/50";
-    if (score >= 60) return "bg-teal-50/30 border-teal-200/50";
-    return "bg-amber-50/30 border-amber-200/50";
+const CARD_SHELL = "rounded-xl border p-4 flex flex-col gap-3";
+
+function getHealthTone(score: number) {
+  if (score >= 80) return "bg-emerald-50/30 border-emerald-200/50";
+  if (score >= 60) return "bg-teal-50/30 border-teal-200/50";
+  return "bg-amber-50/30 border-amber-200/50";
+}
+
+function getHealthPathColor(score: number) {
+  if (score >= 80) return "#10b981";
+  if (score >= 60) return "#14b8a6";
+  if (score >= 40) return "#f59e0b";
+  return "#ef4444";
+}
+
+function getHealthLabel(score: number) {
+  if (score >= 80) return { label: "Excellent", color: "text-emerald-600" };
+  if (score >= 60) return { label: "Good", color: "text-teal-600" };
+  if (score >= 40) return { label: "Fair", color: "text-amber-500" };
+  return { label: "Poor", color: "text-red-500" };
+}
+
+function formatWeeklyDelta(delta: number | null) {
+  if (delta === null || Math.abs(delta) < 0.05) return "No change";
+  return `${delta > 0 ? "+" : ""}${delta.toFixed(1)}`;
 }
 
 export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardProps) {
-    const healthScore = property.healthScore?.totalScore || 0;
-    const { level, color } = getHealthDetails(healthScore);
-    const snapshotQuery = useQuery({
-        queryKey: ['property-score-snapshot', property.id, 'HEALTH'],
-        queryFn: async () => api.getPropertyScoreSnapshots(property.id, 16),
-        enabled: !!property.id,
-        staleTime: 10 * 60 * 1000,
-    });
-    const healthDelta = snapshotQuery.data?.scores?.HEALTH?.deltaFromPreviousWeek ?? 0;
-
-    const totalRequiredActions = property.healthScore?.insights.filter(i => 
-        HIGH_PRIORITY_STATUSES.includes(i.status)
-    ).length || 0;
-    const changeBadgeClass =
-        healthDelta > 0
-            ? "bg-emerald-100 text-emerald-700"
-            : healthDelta < 0
-                ? "bg-red-100 text-red-700"
-                : "bg-gray-100 text-gray-500";
-    const changeLabel =
-        healthDelta > 0
-            ? `+${healthDelta.toFixed(1)}`
-            : healthDelta < 0
-                ? `${healthDelta.toFixed(1)}`
-                : "No change";
-
+  if (!property) {
     return (
-        <Link href={`/dashboard/properties/${property.id}/health-score`}>
-            <Card className={`h-full border p-0 shadow-sm transition-all cursor-pointer hover:-translate-y-0.5 hover:shadow-md ${getHealthCardTone(healthScore)}`}>
-                <CardContent className="flex h-full flex-col p-4">
-                    <div className="mb-2 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <Activity className="h-5 w-5 text-gray-600" />
-                            <h3 className="text-base font-semibold text-gray-900">Health</h3>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${changeBadgeClass}`}>
-                                {changeLabel}
-                            </span>
-                            <ArrowRight className="h-4 w-4 text-gray-400" />
-                        </div>
-                    </div>
-
-                    <div className="my-3 flex flex-col items-center gap-1.5">
-                        <ScoreGauge
-                            value={healthScore}
-                            label="Health"
-                            sublabel={level}
-                            size="summary"
-                            strokeWidth={7}
-                            animate
-                            showLabel={false}
-                            showSublabel={false}
-                        />
-                        <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">HEALTH</span>
-                        <span className={`text-sm font-bold ${color}`}>{level}</span>
-                    </div>
-
-                    <div className="mt-auto border-t border-gray-100 pt-2 text-center">
-                        <span className="text-xs text-gray-400">MAINTENANCE ACTIONS</span>
-                        <span className={`ml-2 text-xs font-semibold ${totalRequiredActions > 0 ? "text-amber-600" : "text-emerald-600"}`}>
-                            {totalRequiredActions > 0 ? `${totalRequiredActions} Required` : "All clear"}
-                        </span>
-                    </div>
-                </CardContent>
-            </Card>
-        </Link>
+      <div className={`${CARD_SHELL} bg-white border-gray-200`}>
+        <div className="flex items-center justify-between">
+          <div className="flex min-w-0 items-center gap-2">
+            <Activity className="h-4 w-4 flex-shrink-0 text-gray-400" />
+            <span className="truncate whitespace-nowrap text-sm font-semibold text-gray-800">
+              Health
+            </span>
+          </div>
+          <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+        </div>
+        <div className="text-sm text-gray-500">Select a property to view health score.</div>
+      </div>
     );
+  }
+
+  const healthScore = Math.max(0, Math.round(property.healthScore?.totalScore || 0));
+  const healthDetails = getHealthLabel(healthScore);
+  const maintenanceCount =
+    property.healthScore?.insights.filter((insight) =>
+      HIGH_PRIORITY_STATUSES.includes(insight.status)
+    ).length || 0;
+
+  const snapshotQuery = useQuery({
+    queryKey: ["property-score-snapshot", property.id, "HEALTH"],
+    queryFn: async () => api.getPropertyScoreSnapshots(property.id, 16),
+    enabled: !!property.id,
+    staleTime: 10 * 60 * 1000,
+  });
+  const weeklyChange = formatWeeklyDelta(
+    snapshotQuery.data?.scores?.HEALTH?.deltaFromPreviousWeek ?? null
+  );
+
+  return (
+    <div className={`${CARD_SHELL} ${getHealthTone(healthScore)}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex min-w-0 items-center gap-2">
+          <Activity className="h-4 w-4 flex-shrink-0 text-gray-400" />
+          <span className="truncate whitespace-nowrap text-sm font-semibold text-gray-800">
+            Health
+          </span>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className="whitespace-nowrap text-xs text-gray-400">{weeklyChange}</span>
+          <Link href={`/dashboard/properties/${property.id}/health-score`} className="inline-flex">
+            <ArrowRight className="h-3.5 w-3.5 text-gray-400" />
+          </Link>
+        </div>
+      </div>
+
+      <div className="flex flex-col items-center gap-1.5">
+        <div className="h-[88px] w-[88px]">
+          <CircularProgressbar
+            value={healthScore}
+            text={`${healthScore}`}
+            strokeWidth={8}
+            styles={buildStyles({
+              textSize: "28px",
+              textColor: "#111827",
+              pathColor: getHealthPathColor(healthScore),
+              trailColor: "#e5e7eb",
+              pathTransitionDuration: 0.6,
+            })}
+          />
+        </div>
+        <div className="text-center">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
+            HEALTH
+          </p>
+          <p className={`text-sm font-bold ${healthDetails.color}`}>{healthDetails.label}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between border-t border-teal-200/50 pt-2">
+        <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
+          Maintenance
+        </span>
+        <span className="text-xs font-bold text-amber-600">
+          {maintenanceCount} Required
+        </span>
+      </div>
+    </div>
+  );
 }

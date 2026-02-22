@@ -493,11 +493,9 @@ export default function DashboardPage() {
             />
           )}
         </motion.div>
-        <motion.div className="grid grid-cols-1 gap-3 mt-6 mb-8 sm:grid-cols-2 lg:grid-cols-5" {...sectionMotion(2)}>
+        <motion.div className="grid grid-cols-1 gap-3 mt-4 mb-8 md:grid-cols-2 lg:grid-cols-4" {...sectionMotion(2)}>
           <HomeScoreReportCard propertyId={selectedPropertyId} />
-          {selectedProperty && (
-            <PropertyHealthScoreCard property={selectedProperty} />
-          )}
+          <PropertyHealthScoreCard property={selectedProperty} />
           <PropertyRiskScoreCard propertyId={selectedPropertyId} />
           <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
         </motion.div>
