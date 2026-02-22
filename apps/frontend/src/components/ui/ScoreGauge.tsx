@@ -15,10 +15,13 @@ export interface ScoreGaugeProps {
   sublabel: string;
   prefix?: string;
   animate?: boolean;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'pulse-sm' | 'pulse-md';
   displayValue?: string;
   tooltipText?: string;
   direction?: 'higher-better' | 'lower-better';
+  strokeWidth?: number;
+  showLabel?: boolean;
+  showSublabel?: boolean;
 }
 
 function clamp(value: number, min = 0, max = 100) {
@@ -108,9 +111,23 @@ function defaultTooltip(label: string) {
   return `${label} score is based on your latest property data.`;
 }
 
-function centerFontSize(size: 'sm' | 'md' | 'lg', display: string) {
+function centerFontSize(size: 'sm' | 'md' | 'lg' | 'pulse-sm' | 'pulse-md', display: string) {
   const compact = display.replace(/[^\da-zA-Z]/g, '');
   const length = compact.length;
+
+  if (size === 'pulse-md') {
+    if (length >= 8) return 24;
+    if (length >= 6) return 28;
+    if (length >= 4) return 32;
+    return 36;
+  }
+
+  if (size === 'pulse-sm') {
+    if (length >= 8) return 18;
+    if (length >= 6) return 22;
+    if (length >= 4) return 26;
+    return 30;
+  }
 
   if (size === 'lg') {
     if (length >= 8) return 22;
@@ -141,6 +158,9 @@ export default function ScoreGauge({
   displayValue,
   tooltipText,
   direction = 'higher-better',
+  strokeWidth = 8,
+  showLabel = true,
+  showSublabel = true,
 }: ScoreGaugeProps) {
   const safeValue = clamp(Number.isFinite(value) ? value : 0);
   const animatedValue = useCountUp(safeValue, 800, animate);
@@ -150,6 +170,8 @@ export default function ScoreGauge({
     sm: 60,
     md: 88,
     lg: 110,
+    'pulse-sm': 120,
+    'pulse-md': 160,
   } as const;
   const px = sizeMap[size];
 
@@ -172,7 +194,7 @@ export default function ScoreGauge({
             >
               <CircularProgressbarWithChildren
                 value={renderedValue}
-                strokeWidth={8}
+                strokeWidth={strokeWidth}
                 styles={buildStyles({
                   pathColor: gaugePathColor(safeValue, direction),
                   trailColor: '#e5e7eb',
@@ -188,10 +210,16 @@ export default function ScoreGauge({
                 </span>
               </CircularProgressbarWithChildren>
             </div>
-            <span className="mt-2 text-xs font-medium uppercase tracking-wide text-gray-500">
-              {label}
-            </span>
-            <span className={`text-sm ${sublabelColorClass(safeValue, direction)}`}>{sublabel}</span>
+            {showLabel ? (
+              <span className="mt-2 text-xs font-semibold uppercase tracking-widest text-gray-400">
+                {label}
+              </span>
+            ) : null}
+            {showSublabel ? (
+              <span className={`text-base font-semibold ${sublabelColorClass(safeValue, direction)}`}>
+                {sublabel}
+              </span>
+            ) : null}
           </button>
         </TooltipTrigger>
         <TooltipContent className="max-w-xs text-left">

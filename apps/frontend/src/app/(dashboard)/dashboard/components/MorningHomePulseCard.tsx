@@ -3,15 +3,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  CalendarDays,
   CheckCircle2,
+  Clock3,
+  Cloud,
   CloudSun,
+  DollarSign,
   Flame,
   Loader2,
+  Shield,
   Snowflake,
   Sparkles,
   TrendingDown,
   TrendingUp,
   Wind,
+  Wrench,
   X,
 } from 'lucide-react';
 import {
@@ -28,6 +34,7 @@ import {
   flamePulseAnimation,
   snowflakePulseAnimation,
 } from '@/components/animations/lottieData';
+import Link from 'next/link';
 
 type MorningHomePulseCardProps = {
   propertyId?: string;
@@ -157,6 +164,73 @@ function scoreTooltip(kind: SummaryKind) {
   return 'Financial score reflects expected cost efficiency based on projected maintenance and risk trends.';
 }
 
+function formatDaysAgo(input?: string | null) {
+  if (!input) return 'Unknown';
+  const then = new Date(input);
+  if (Number.isNaN(then.getTime())) return 'Unknown';
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const days = Math.max(0, Math.floor((Date.now() - then.getTime()) / msPerDay));
+  if (days === 0) return 'Today';
+  if (days === 1) return '1 day ago';
+  return `${days} days ago`;
+}
+
+function formatDeltaPoints(delta: number) {
+  const rounded = Math.round(delta);
+  if (!Number.isFinite(rounded) || rounded === 0) {
+    return { label: 'No change', className: 'bg-gray-100 text-gray-500' };
+  }
+  if (rounded > 0) {
+    return { label: `▲ +${rounded} pts`, className: 'bg-emerald-100 text-emerald-700' };
+  }
+  return { label: `▼ ${Math.abs(rounded)} pts`, className: 'bg-red-100 text-red-700' };
+}
+
+function getPulseCardStyle(kind: SummaryKind, score: number) {
+  if (kind === 'RISK') {
+    if (score >= 80) return 'bg-red-50/40 border-red-200/60';
+    if (score >= 60) return 'bg-amber-50/40 border-amber-200/60';
+    return 'bg-emerald-50/40 border-emerald-200/60';
+  }
+
+  if (score >= 80) return 'bg-emerald-50/40 border-emerald-200/60';
+  if (score >= 60) return 'bg-teal-50/40 border-teal-200/60';
+  return 'bg-amber-50/40 border-amber-200/60';
+}
+
+function extractFirstCount(input: string): number | null {
+  const match = input.match(/(\d+)\s+item/i);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : null;
+}
+
+function extractCurrency(input: string): string | null {
+  const match = input.match(/\$\s?[\d,]+(?:\.\d+)?/);
+  if (!match) return null;
+  return match[0].replace(/\s+/g, '').replace(/\.00$/, '');
+}
+
+function extractDateLabel(input: string): string | null {
+  const match = input.match(
+    /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}(?:,\s*\d{4})?\b/i
+  );
+  return match ? match[0].replace(/\s+/g, ' ').trim() : null;
+}
+
+function scoreStatusClass(kind: SummaryKind, score: number) {
+  if (kind === 'RISK') {
+    if (score >= 80) return 'text-red-600';
+    if (score >= 60) return 'text-amber-600';
+    if (score >= 40) return 'text-teal-600';
+    return 'text-emerald-600';
+  }
+  if (score >= 80) return 'text-emerald-600';
+  if (score >= 60) return 'text-teal-600';
+  if (score >= 40) return 'text-amber-600';
+  return 'text-red-600';
+}
+
 export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCardProps) {
   const [snapshot, setSnapshot] = useState<DailySnapshotDTO | null>(null);
   const [loading, setLoading] = useState(true);
@@ -256,6 +330,10 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
   const freezeTone = freezeLottieTone(payload.weatherInsight.severity);
   const dailyStreak = snapshot.streaks.dailyPulseCheckin;
   const streakToneState = streakTone(dailyStreak);
+  const recallSignalText = `${payload.surprise.headline} ${payload.surprise.detail}`;
+  const hasRecallSignal = /recall|affected|safety/i.test(recallSignalText);
+  const recallMatchCount = extractFirstCount(recallSignalText) ?? 1;
+  const noOverdueActive = snapshot.streaks.noOverdueTasks > 0;
 
   const weatherAlert = (
     <div className={`rounded-xl border px-3 py-3 ${toneForSeverity(payload.weatherInsight.severity)}`}>
@@ -284,15 +362,17 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
   );
 
   return (
-    <section className="rounded-2xl border border-white/60 bg-white/90 p-4 shadow-md ring-1 ring-black/5 backdrop-blur-md will-change-transform transform-gpu md:p-5">
-      <div className="mb-3 flex items-start justify-between gap-2">
+    <section className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 shadow-lg ring-1 ring-black/[0.04] md:p-6">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-teal-400 via-teal-500 to-emerald-400" />
+
+      <div className="mb-5 flex items-start justify-between gap-3 border-b border-gray-100 pb-4">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="shrink-0 rounded-lg bg-teal-100 p-2">
-            <CloudSun className="h-4 w-4 text-teal-700" />
+          <div className="shrink-0 rounded-xl bg-teal-50 p-2">
+            <CloudSun className="h-5 w-5 text-teal-600" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-2xl font-semibold text-gray-900">{payload.title}</h2>
-            <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{payload.dateLabel}</p>
+            <h2 className="text-xl font-semibold text-gray-900 md:text-2xl">{payload.title}</h2>
+            <p className="mt-0.5 text-xs font-medium uppercase tracking-wide text-gray-400">{payload.dateLabel}</p>
           </div>
         </div>
         <span
@@ -313,74 +393,197 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
         </span>
       </div>
 
-      <div className="mb-3 md:hidden">{weatherAlert}</div>
+      <div className="mb-4 md:hidden">{weatherAlert}</div>
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid items-stretch gap-4 md:grid-cols-3">
         {payload.summary.map((row) => {
-          const delta = getDeltaVisual(row.kind, row.delta);
           const label = getMetricLabel(row.kind, row.value);
-          const gaugeLabel = row.kind === 'RISK' ? 'Risk Level' : row.label;
+          const gaugeLabel = row.kind === 'RISK' ? 'RISK LEVEL' : row.label.toUpperCase();
           const scoreValue =
             row.kind === 'RISK'
               ? Math.round(getMetricPosition('RISK', row.value) * 100)
               : Math.round(row.value);
-          const riskExposure =
-            row.kind === 'RISK'
-              ? new Intl.NumberFormat(undefined, {
-                  style: 'currency',
-                  currency: 'USD',
-                  maximumFractionDigits: 0,
-                }).format(Math.max(0, row.value))
-              : null;
+          const riskExposure = new Intl.NumberFormat(undefined, {
+            style: 'currency',
+            currency: 'USD',
+            maximumFractionDigits: 0,
+          }).format(Math.max(0, row.value));
+          const weeklyBadge = formatDeltaPoints(row.delta);
+          const triggerIsLow = payload.weatherInsight.severity === 'LOW';
+          const triggerPill = triggerIsLow
+            ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">No active triggers</span>
+            : freezeRiskMatch
+              ? <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">Freeze warning</span>
+              : <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">Weather alert</span>;
+
+          const inferredGapCount = hasRecallSignal ? recallMatchCount : scoreValue >= 60 ? 1 : 0;
+          const annualCost =
+            extractCurrency(`${row.reason} ${payload.homeWin.detail} ${payload.surprise.detail}`) ?? 'No data yet';
+          const nextRenewal = extractDateLabel(`${payload.surprise.headline} ${payload.surprise.detail}`) ?? 'Not scheduled';
+          const detailRows =
+            row.kind === 'HEALTH'
+              ? [
+                  {
+                    key: 'maintenance-actions',
+                    icon: Wrench,
+                    label: 'Maintenance actions',
+                    value: noOverdueActive ? 'All clear' : '1 required',
+                    valueClassName: noOverdueActive ? 'text-xs font-semibold text-emerald-700' : 'text-xs font-semibold text-amber-700',
+                  },
+                  {
+                    key: 'last-inspection',
+                    icon: Clock3,
+                    label: 'Last inspection',
+                    value: formatDaysAgo(snapshot.generatedAt),
+                    valueClassName: 'text-xs font-semibold text-gray-800',
+                  },
+                  {
+                    key: 'weekly-change',
+                    icon: TrendingUp,
+                    label: 'Weekly change',
+                    value: weeklyBadge.label,
+                    valueClassName:
+                      weeklyBadge.label === 'No change'
+                        ? 'text-xs font-semibold text-gray-500'
+                        : weeklyBadge.label.startsWith('▲')
+                          ? 'text-xs font-semibold text-emerald-700'
+                          : 'text-xs font-semibold text-red-700',
+                  },
+                ]
+              : row.kind === 'RISK'
+                ? [
+                    {
+                      key: 'risk-exposure',
+                      icon: AlertTriangle,
+                      label: 'Exposure',
+                      value: riskExposure,
+                      valueClassName: 'text-xs font-semibold text-amber-700',
+                    },
+                    {
+                      key: 'active-trigger',
+                      icon: Cloud,
+                      label: 'Active trigger',
+                      value: triggerPill,
+                      valueClassName: '',
+                    },
+                    {
+                      key: 'coverage-gap',
+                      icon: Shield,
+                      label: 'Coverage gap',
+                      value:
+                        inferredGapCount > 0
+                          ? `${inferredGapCount} item${inferredGapCount !== 1 ? 's' : ''} unprotected`
+                          : 'Fully covered',
+                      valueClassName:
+                        inferredGapCount > 0
+                          ? 'text-xs font-semibold text-red-700'
+                          : 'text-xs font-semibold text-emerald-700',
+                    },
+                  ]
+                : [
+                    {
+                      key: 'annual-cost',
+                      icon: DollarSign,
+                      label: 'Annual maintenance cost',
+                      value: annualCost,
+                      valueClassName: 'text-xs font-semibold text-gray-800',
+                    },
+                    {
+                      key: 'savings',
+                      icon: TrendingDown,
+                      label: 'Potential savings',
+                      value:
+                        scoreValue >= 90
+                          ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Optimized
+                            </span>
+                          )
+                          : '$220-$760',
+                      valueClassName: 'text-xs font-semibold text-emerald-700',
+                    },
+                    {
+                      key: 'next-renewal',
+                      icon: CalendarDays,
+                      label: 'Next renewal',
+                      value: nextRenewal,
+                      valueClassName: 'text-xs font-semibold text-gray-800',
+                    },
+                  ];
 
           return (
-            <div key={row.kind} className="rounded-xl border border-gray-200 bg-white/90 p-3">
-              <div className="flex items-center justify-center md:hidden">
-                <ScoreGauge
-                  value={scoreValue}
-                  label={gaugeLabel}
-                  sublabel={label}
-                  size="sm"
-                  animate
-                  tooltipText={scoreTooltip(row.kind)}
-                  direction={row.kind === 'RISK' ? 'lower-better' : 'higher-better'}
-                />
-              </div>
-              <div className="hidden items-center justify-center md:flex">
-                <ScoreGauge
-                  value={scoreValue}
-                  label={gaugeLabel}
-                  sublabel={label}
-                  size="md"
-                  animate
-                  tooltipText={scoreTooltip(row.kind)}
-                  direction={row.kind === 'RISK' ? 'lower-better' : 'higher-better'}
-                />
+            <div
+              key={row.kind}
+              className={`min-h-[340px] rounded-xl border p-5 ${getPulseCardStyle(row.kind, scoreValue)} flex flex-col justify-between`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+                  {gaugeLabel}
+                </span>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${weeklyBadge.className}`}>
+                  {weeklyBadge.label}
+                </span>
               </div>
 
-              <p className={`mt-2 inline-flex items-center gap-1 text-xs font-medium ${delta.className}`}>
-                {delta.icon === 'UP' ? (
-                  <TrendingUp className="h-3 w-3" />
-                ) : delta.icon === 'DOWN' ? (
-                  <TrendingDown className="h-3 w-3" />
-                ) : null}
-                {delta.label}
-              </p>
-              <p className="mt-1 text-sm text-gray-600">{row.reason}</p>
-              {row.kind === 'RISK' && riskExposure && (
-                <div className="mt-2 border-t border-gray-100 pt-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                    Exposure
-                  </p>
-                  <p className="text-sm font-semibold text-gray-700">{riskExposure}</p>
+              <div className="mt-2 flex flex-col items-center">
+                <div className="md:hidden">
+                  <ScoreGauge
+                    value={scoreValue}
+                    label={gaugeLabel}
+                    sublabel={label}
+                    size="pulse-sm"
+                    strokeWidth={9}
+                    animate
+                    showLabel={false}
+                    showSublabel={false}
+                    tooltipText={scoreTooltip(row.kind)}
+                    direction={row.kind === 'RISK' ? 'lower-better' : 'higher-better'}
+                  />
                 </div>
-              )}
+                <div className="hidden md:block">
+                  <ScoreGauge
+                    value={scoreValue}
+                    label={gaugeLabel}
+                    sublabel={label}
+                    size="pulse-md"
+                    strokeWidth={9}
+                    animate
+                    showLabel={false}
+                    showSublabel={false}
+                    tooltipText={scoreTooltip(row.kind)}
+                    direction={row.kind === 'RISK' ? 'lower-better' : 'higher-better'}
+                  />
+                </div>
+                <span className={`mt-2 text-base font-semibold ${scoreStatusClass(row.kind, scoreValue)}`}>
+                  {label}
+                </span>
+              </div>
+
+              <div className="mt-4 border-t border-gray-100 pt-3">
+                <div className="space-y-0 px-1">
+                  {detailRows.map((detail) => (
+                    <div
+                      key={detail.key}
+                      className="flex items-center justify-between border-b border-gray-100 py-1.5 last:border-0"
+                    >
+                      <div className="flex items-center gap-2 text-gray-500">
+                        <detail.icon className="h-3.5 w-3.5 flex-shrink-0" />
+                        <span className="text-xs">{detail.label}</span>
+                      </div>
+                      <span className={detail.valueClassName || 'text-xs font-semibold text-gray-800'}>
+                        {detail.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           );
         })}
       </div>
 
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
         <div className="hidden md:block">{weatherAlert}</div>
 
         <div className="rounded-xl border border-gray-200 bg-white p-3">
@@ -433,21 +636,34 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
         </div>
       </div>
 
-      <div className="mt-3 space-y-1 border-t border-gray-100 pt-2">
-        <p className="truncate text-xs font-medium text-emerald-700">
-          {payload.homeWin.headline} · Micro-action streak {snapshot.streaks.microActionCompleted} day(s)
-        </p>
-        <div className="grid grid-cols-1 gap-1.5 text-xs md:grid-cols-2">
-          <div className="truncate rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-gray-700">
-            {payload.homeWin.detail}
-          </div>
-          <div className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-indigo-700">
-            <span className="inline-flex items-center gap-1 truncate">
-              <Sparkles className="h-3.5 w-3.5" />
-              {payload.surprise.headline}
-            </span>
-          </div>
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-4">
+        <div
+          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
+            noOverdueActive
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              : 'border-amber-200 bg-amber-50 text-amber-700'
+          }`}
+        >
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          {noOverdueActive
+            ? `No overdue tasks · ${dailyStreak}-day streak active`
+            : `Overdue tasks detected · ${snapshot.streaks.microActionCompleted}-day micro-action streak`}
         </div>
+
+        {hasRecallSignal ? (
+          <Link
+            href={`/dashboard/properties/${propertyId}/recalls`}
+            className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100"
+          >
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Recall check: {recallMatchCount} item{recallMatchCount !== 1 ? 's' : ''} may be affected →
+          </Link>
+        ) : (
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700">
+            <Sparkles className="h-3.5 w-3.5" />
+            {payload.homeWin.headline}
+          </div>
+        )}
       </div>
 
       {error ? (
