@@ -159,8 +159,8 @@ export default function RoomHealthScoreRing({
 
   const valueTextClass =
     variant === 'hero'
-      ? 'fill-slate-900 text-[28px] font-bold drop-shadow-[0_2px_4px_rgba(15,23,42,0.18)] dark:fill-slate-100'
-      : 'fill-slate-900 text-[18px] font-bold drop-shadow-[0_1px_2px_rgba(15,23,42,0.14)] dark:fill-slate-100';
+      ? 'font-display fill-slate-900 text-[28px] font-bold tracking-tight drop-shadow-[0_2px_4px_rgba(15,23,42,0.18)] dark:fill-slate-100'
+      : 'font-display fill-slate-900 text-[18px] font-bold tracking-tight drop-shadow-[0_1px_2px_rgba(15,23,42,0.14)] dark:fill-slate-100';
 
   const ringClass = useMemo(() => ringToneClass(v), [v]);
 

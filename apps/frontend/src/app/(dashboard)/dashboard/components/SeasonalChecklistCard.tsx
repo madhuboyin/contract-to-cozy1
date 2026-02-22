@@ -7,6 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, Calendar, AlertCircle } from 'lucide-react';
 import { seasonalAPI } from '@/lib/api/seasonal.api';
+import { calculateSeasonalProgress } from '@/lib/utils/seasonalProgress';
+import humanizeActionType from '@/lib/utils/humanize';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Season emoji mapping
 const SEASON_EMOJI: Record<string, string> = {
@@ -159,10 +162,18 @@ export const SeasonalChecklistCard: React.FC<SeasonalChecklistCardProps> = ({
     );
   }
 
-  // Calculate completion percentage
-  const completionPercentage = checklist.totalTasks > 0
-    ? Math.round((checklist.tasksCompleted / checklist.totalTasks) * 100)
-    : 0;
+  const progress = calculateSeasonalProgress(checklist.items, {
+    completedCount: checklist.tasksCompleted,
+    totalCount: checklist.totalTasks,
+  });
+  if (progress.capped) {
+    console.warn('[SeasonalChecklistCard] completedCount exceeded totalCount. Capping at 100%.', {
+      checklistId: checklist.id,
+      completedCount: progress.completedCount,
+      totalCount: progress.totalCount,
+    });
+  }
+  const completionPercentage = progress.progress;
 
   // Days remaining in season (using seasonEndDate)
   const daysRemaining = Math.max(0, Math.floor(
@@ -182,7 +193,9 @@ export const SeasonalChecklistCard: React.FC<SeasonalChecklistCardProps> = ({
 
   // Critical tasks — include both RECOMMENDED and ADDED statuses
   const criticalTasks = checklist.items.filter(
-    (item) => item.priority === 'CRITICAL' && (item.status === 'RECOMMENDED' || item.status === 'ADDED')
+    (item) =>
+      item.priority === 'CRITICAL' &&
+      ['recommended', 'added'].includes(String(item.status || '').toLowerCase())
   );
 
   // Count of critical tasks that have been added to maintenance
@@ -194,7 +207,7 @@ export const SeasonalChecklistCard: React.FC<SeasonalChecklistCardProps> = ({
     : 'View Full Checklist';
 
   return (
-    <Card className="hover:shadow-md transition-shadow overflow-hidden">
+    <Card className="overflow-hidden border border-white/70 bg-white/85 shadow-sm backdrop-blur-sm will-change-transform transform-gpu transition-all hover:shadow-md">
       <CardHeader className="pb-3">
         <CardTitle className="text-lg font-semibold flex items-center gap-2 min-w-0">
           <span className="text-2xl" aria-hidden="true">{SEASON_EMOJI[checklist.season]}</span>
@@ -217,7 +230,9 @@ export const SeasonalChecklistCard: React.FC<SeasonalChecklistCardProps> = ({
         <div className="space-y-1">
           <div className="flex justify-between text-xs text-gray-600">
             <span>Progress</span>
-            <span className="font-medium">{completionPercentage}%</span>
+            <span className="font-medium">
+              {progress.noTasks ? 'No tasks yet' : `${completionPercentage}%`}
+            </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div
@@ -226,7 +241,9 @@ export const SeasonalChecklistCard: React.FC<SeasonalChecklistCardProps> = ({
             />
           </div>
           <p className="text-xs text-gray-500">
-            {checklist.tasksCompleted} of {checklist.totalTasks} tasks completed
+            {progress.noTasks
+              ? 'No tasks yet'
+              : `${progress.completedCount} of ${progress.totalCount} tasks completed`}
           </p>
         </div>
 
@@ -244,7 +261,16 @@ export const SeasonalChecklistCard: React.FC<SeasonalChecklistCardProps> = ({
               {criticalTasks.slice(0, 2).map((task) => (
                 <li key={task.id} className="text-xs text-gray-700 flex items-start gap-2">
                   <span className="text-red-500 mt-0.5">•</span>
-                  <span className="flex-1 line-clamp-1">{task.title}</span>
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="flex-1 line-clamp-1">{humanizeActionType(task.title)}</span>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-sm text-left">
+                        {humanizeActionType(task.title)}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </li>
               ))}
             </ul>

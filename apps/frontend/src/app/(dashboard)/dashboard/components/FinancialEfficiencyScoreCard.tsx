@@ -129,7 +129,7 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
     // State 4: Calculated Report (Happy path)
     return (
         <Link href={reportLink}>
-            <Card className="min-h-[230px] flex flex-col border border-white/60 bg-white/80 backdrop-blur-sm shadow-sm hover:shadow-md transition-all cursor-pointer hover:-translate-y-0.5">
+            <Card className="min-h-[230px] flex flex-col border border-white/60 bg-white/85 backdrop-blur-sm shadow-sm will-change-transform transform-gpu transition-all cursor-pointer hover:-translate-y-0.5 hover:shadow-md">
                 <CardContent className="flex-1 p-5 flex flex-col">
                     {/* Header */}
                     <div className="flex items-center justify-between mb-2">
@@ -178,7 +178,7 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
                     <div className="mt-auto">
                         <div className="flex items-center justify-between text-xs text-gray-400 mb-1.5 uppercase tracking-wide">
                             <span className="truncate">Annual Cost</span>
-                            <span className="ml-2 whitespace-nowrap">{formatCurrency(exposure)}</span>
+                            <span className="ml-2 whitespace-nowrap font-display text-base text-gray-700">{formatCurrency(exposure)}</span>
                         </div>
                         <p className="text-sm text-gray-600">Score {score}/100</p>
                     </div>

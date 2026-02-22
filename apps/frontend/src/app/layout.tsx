@@ -10,7 +10,7 @@ import 'react-circular-progressbar/dist/styles.css';
 const inter = Inter({
   subsets: ['latin'],
   weight: ['300', '400', '500', '600'],
-  variable: '--font-inter',
+  variable: '--font-sans',
   display: 'swap',
 });
 
@@ -75,8 +75,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={`${inter.variable} ${poppins.variable} ${fraunces.variable} ${inter.className}`}>
+    <html lang="en" className={`${fraunces.variable} ${inter.variable} ${poppins.variable}`}>
+      <body className={inter.className}>
         <Providers>
           {children}
         </Providers>

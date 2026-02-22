@@ -5,6 +5,8 @@ import React, { useEffect, useState } from 'react';
 import type { RecallMatchDTO, RecallResolutionType } from '@/types/recalls.types';
 import RecallStatusBadge from '@/app/(dashboard)/dashboard/components/recalls/RecallStatusBadge';
 import ResolveRecallModal from '@/app/(dashboard)/dashboard/components/recalls/ResolveRecallModal';
+import humanizeActionType, { titleCase } from '@/lib/utils/humanize';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   listInventoryItemRecalls,
   confirmRecallMatch,
@@ -107,7 +109,7 @@ export default function InventoryItemRecallPanel(props: {
     
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-slate-900 text-sm">Safety / Recall Alerts (FIXED_V3)</h3>
+        <h3 className="font-semibold text-slate-900 text-sm">Safety / Recall Alerts</h3>
         {loading && (
           <span className="text-[10px] text-slate-400 animate-pulse font-medium uppercase tracking-wider">
             Scanning...
@@ -137,9 +139,18 @@ export default function InventoryItemRecallPanel(props: {
                     <span className="text-[10px] font-bold text-red-600 uppercase tracking-widest">Recall Alert</span>
                     <RecallStatusBadge status={m.status} />
                   </div>
-                  <h4 className="text-sm font-bold text-slate-900 leading-snug">
-                    {m.recall?.title || 'Product Safety Alert'}
-                  </h4>
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <h4 className="truncate text-sm font-bold leading-snug text-slate-900">
+                          {formatRecallTitle(m.recall?.title)}
+                        </h4>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-sm text-left">
+                        {formatRecallTitle(m.recall?.title)}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                   <p className="text-xs text-slate-500 line-clamp-2">
                     {m.recall?.hazard || 'Please review official notice for hazard details.'}
                   </p>
@@ -220,3 +231,9 @@ export default function InventoryItemRecallPanel(props: {
     </div>
   );
 }
+  const formatRecallTitle = (raw?: string | null) => {
+    if (!raw) return 'Product Safety Alert';
+    const trimmed = String(raw).trim();
+    const enumLike = /^[A-Z0-9_]+(\.\.\.|…)?$/.test(trimmed);
+    return enumLike ? humanizeActionType(trimmed) : titleCase(trimmed);
+  };

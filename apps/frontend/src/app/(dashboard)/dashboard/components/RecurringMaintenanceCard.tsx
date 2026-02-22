@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { PropertyMaintenanceTask } from '@/types'; 
 import { format, differenceInDays } from 'date-fns';
 import humanizeActionType from '@/lib/utils/humanize';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface RecurringMaintenanceCardProps {
   maintenance: PropertyMaintenanceTask[]; 
@@ -94,6 +95,7 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
             <div className="space-y-3">
               {displayTasks.map((task) => {
                 const statusBadge = getStatusBadge(task);
+                const formattedTitle = humanizeActionType(task.title);
                 const queryParts = [
                   `taskId=${encodeURIComponent(task.id)}`,
                   selectedPropertyId ? `propertyId=${encodeURIComponent(selectedPropertyId)}` : null,
@@ -105,9 +107,18 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
                   <Link key={task.id} href={taskHref} className="block">
                     <div className="flex items-start justify-between p-3 rounded-lg bg-gray-50 border border-gray-200 hover:border-blue-300 hover:shadow-sm hover:bg-white transition-all cursor-pointer">
                       <div className="flex-1 min-w-0 pr-2">
-                        <p className="text-sm font-medium text-gray-900 truncate" title={task.title}>
-                          {humanizeActionType(task.title)}
-                        </p>
+                        <TooltipProvider delayDuration={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <p className="truncate text-sm font-medium text-gray-900">
+                                {formattedTitle}
+                              </p>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-sm text-left">
+                              {formattedTitle}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                         <p className="text-xs text-gray-500 mt-1">
                           Due {task.nextDueDate ? format(new Date(task.nextDueDate), 'MMM dd') : 'N/A'}
                         </p>

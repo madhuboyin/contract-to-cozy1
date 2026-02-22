@@ -66,7 +66,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
 
   return (
     <Link href={reportLink}>
-      <Card className="min-h-[230px] border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer">
+      <Card className="min-h-[230px] border border-white/60 bg-white/85 backdrop-blur-sm shadow-sm will-change-transform transform-gpu transition-all cursor-pointer hover:-translate-y-0.5 hover:shadow-md">
         <CardContent className="h-full p-5 flex flex-col">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
@@ -78,7 +78,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
 
           <div className="mb-2">
             <div className="flex items-baseline gap-2">
-              <span className={`text-4xl font-bold leading-none ${styles.scoreColor}`}>{score}</span>
+              <span className={`font-display text-4xl font-bold leading-none tracking-tight ${styles.scoreColor}`}>{score}</span>
               <span className="text-xl text-gray-400 font-normal">/100</span>
             </div>
             <div className="mt-1 flex items-center justify-between gap-2">

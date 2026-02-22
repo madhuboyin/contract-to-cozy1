@@ -27,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { TaskStatusBadge } from './TaskStatusBadge';
 import { TaskPriorityBadge } from './TaskPriorityBadge';
 import { PropertyMaintenanceTask } from '@/types';
@@ -107,6 +108,7 @@ export function MaintenanceTaskCard({
   };
 
   const sourceBadge = getSourceBadge();
+  const readableTitle = humanizeActionType(task.title);
 
   return (
     <Card className={`hover:shadow-md transition-shadow active:scale-[0.99] ${compact ? 'mb-2' : 'mb-4'}`}>
@@ -116,9 +118,16 @@ export function MaintenanceTaskCard({
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1.5">
-                <h3 className="font-bold text-base sm:text-lg truncate leading-tight">
-                  {humanizeActionType(task.title)}
-                </h3>
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <h3 className="truncate font-bold leading-tight text-base sm:text-lg">
+                        {readableTitle}
+                      </h3>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-sm text-left">{readableTitle}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 {task.isRecurring && (
                   <span title="Recurring task">
                     <Repeat className="h-4 w-4 text-blue-600 flex-shrink-0" />

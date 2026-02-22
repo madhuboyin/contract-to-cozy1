@@ -46,7 +46,7 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
 
     return (
         <Link href={`/dashboard/properties/${property.id}/health-score`}>
-            <Card className="min-h-[230px] flex flex-col border border-white/60 bg-white/80 backdrop-blur-sm shadow-sm hover:shadow-md transition-all cursor-pointer hover:-translate-y-0.5">
+            <Card className="min-h-[230px] flex flex-col border border-white/60 bg-white/85 backdrop-blur-sm shadow-sm will-change-transform transform-gpu transition-all cursor-pointer hover:-translate-y-0.5 hover:shadow-md">
                 <CardContent className="flex-1 p-5 flex flex-col">
                     {/* Header */}
                     <div className="flex items-center justify-between mb-2">

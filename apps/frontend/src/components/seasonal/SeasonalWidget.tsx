@@ -7,12 +7,13 @@ import { useSeasonalChecklists, useClimateInfo } from '@/lib/hooks/useSeasonalCh
 import {
   getSeasonIcon,
   getSeasonName,
-  getCompletionPercentage,
   getProgressBarColor,
   formatDaysRemaining,
 } from '@/lib/utils/seasonHelpers';
 import { SeasonalChecklistModal } from './SeasonalChecklistModal';
 import { useHomeownerSegment } from '@/lib/hooks/useHomeownerSegment';
+import { calculateSeasonalProgress } from '@/lib/utils/seasonalProgress';
+import humanizeActionType from '@/lib/utils/humanize';
 
 interface SeasonalWidgetProps {
   propertyId: string;
@@ -49,12 +50,20 @@ export function SeasonalWidget({ propertyId }: SeasonalWidgetProps) {
 
   const seasonName = getSeasonName(currentChecklist.season);
   const seasonIcon = getSeasonIcon(currentChecklist.season);
-  const completionPercentage = getCompletionPercentage(
-    currentChecklist.tasksCompleted,
-    currentChecklist.totalTasks
-  );
+  const progress = calculateSeasonalProgress(currentChecklist.items, {
+    completedCount: currentChecklist.tasksCompleted,
+    totalCount: currentChecklist.totalTasks,
+  });
+  if (progress.capped) {
+    console.warn('[SeasonalWidget] completedCount exceeded totalCount. Capping at 100%.', {
+      checklistId: currentChecklist.id,
+      completedCount: progress.completedCount,
+      totalCount: progress.totalCount,
+    });
+  }
+  const completionPercentage = progress.progress;
   const progressColor = getProgressBarColor(completionPercentage);
-  const remainingTasks = currentChecklist.totalTasks - currentChecklist.tasksCompleted;
+  const remainingTasks = Math.max(0, progress.totalCount - progress.completedCount);
 
   const handleViewChecklist = () => {
     setSelectedChecklistId(currentChecklist.id);
@@ -67,7 +76,7 @@ export function SeasonalWidget({ propertyId }: SeasonalWidgetProps) {
 
   return (
     <>
-      <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
+      <div className="rounded-lg border border-white/70 bg-white/85 p-6 shadow-sm backdrop-blur-sm will-change-transform transform-gpu transition-all hover:shadow-md">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-2">
             <span className="text-2xl">{seasonIcon}</span>
@@ -84,9 +93,13 @@ export function SeasonalWidget({ propertyId }: SeasonalWidgetProps) {
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-gray-700">
-                  {currentChecklist.tasksCompleted} of {currentChecklist.totalTasks} completed
+                  {progress.noTasks
+                    ? 'No tasks yet'
+                    : `${progress.completedCount} of ${progress.totalCount} completed`}
                 </span>
-                <span className="text-sm text-gray-600">{completionPercentage}%</span>
+                <span className="text-sm text-gray-600">
+                  {progress.noTasks ? 'No tasks yet' : `${completionPercentage}%`}
+                </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
@@ -97,14 +110,16 @@ export function SeasonalWidget({ propertyId }: SeasonalWidgetProps) {
             </div>
 
             <div className="text-sm text-gray-600 mb-4">
-              <span className="font-medium">{remainingTasks} remaining tasks</span>
+              <span className="font-medium">
+                {progress.noTasks ? 'No tasks yet' : `${remainingTasks} remaining tasks`}
+              </span>
             </div>
 
             {currentChecklist.items?.[0] && (
               <div className="mb-4 p-3 bg-gray-50 rounded-md">
                 <p className="text-xs text-gray-500 mb-1">Next task:</p>
                 <p className="text-sm font-medium text-gray-900">
-                  {currentChecklist.items[0].title}
+                  {humanizeActionType(currentChecklist.items[0].title)}
                 </p>
                 {currentChecklist.items[0].recommendedDate && (
                   <p className="text-xs text-gray-500 mt-1">

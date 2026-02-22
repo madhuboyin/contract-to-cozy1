@@ -18,6 +18,7 @@ export interface ScoreGaugeProps {
   size?: 'sm' | 'md' | 'lg';
   displayValue?: string;
   tooltipText?: string;
+  direction?: 'higher-better' | 'lower-better';
 }
 
 function clamp(value: number, min = 0, max = 100) {
@@ -55,21 +56,39 @@ function useCountUp(target: number, duration = 800, enabled = true) {
   return count;
 }
 
-function gaugeColorClass(value: number) {
+function gaugeColorClass(value: number, direction: 'higher-better' | 'lower-better') {
+  if (direction === 'lower-better') {
+    if (value >= 80) return 'text-red-500';
+    if (value >= 60) return 'text-amber-500';
+    if (value >= 40) return 'text-teal-500';
+    return 'text-emerald-500';
+  }
   if (value >= 80) return 'text-emerald-500';
   if (value >= 60) return 'text-teal-500';
   if (value >= 40) return 'text-amber-500';
   return 'text-red-500';
 }
 
-function gaugePathColor(value: number) {
+function gaugePathColor(value: number, direction: 'higher-better' | 'lower-better') {
+  if (direction === 'lower-better') {
+    if (value >= 80) return '#ef4444';
+    if (value >= 60) return '#f59e0b';
+    if (value >= 40) return '#14b8a6';
+    return '#10b981';
+  }
   if (value >= 80) return '#10b981';
   if (value >= 60) return '#14b8a6';
   if (value >= 40) return '#f59e0b';
   return '#ef4444';
 }
 
-function sublabelColorClass(value: number) {
+function sublabelColorClass(value: number, direction: 'higher-better' | 'lower-better') {
+  if (direction === 'lower-better') {
+    if (value >= 80) return 'text-red-500';
+    if (value >= 60) return 'text-amber-500';
+    if (value >= 40) return 'text-teal-600';
+    return 'text-emerald-600';
+  }
   if (value >= 80) return 'text-emerald-600';
   if (value >= 60) return 'text-teal-600';
   if (value >= 40) return 'text-amber-500';
@@ -121,6 +140,7 @@ export default function ScoreGauge({
   size = 'md',
   displayValue,
   tooltipText,
+  direction = 'higher-better',
 }: ScoreGaugeProps) {
   const safeValue = clamp(Number.isFinite(value) ? value : 0);
   const animatedValue = useCountUp(safeValue, 800, animate);
@@ -147,14 +167,14 @@ export default function ScoreGauge({
             className="inline-flex min-h-[44px] flex-col items-center rounded-lg px-2 py-1 text-center"
           >
             <div
-              className={`relative ${gaugeColorClass(safeValue)}`}
+              className={`relative ${gaugeColorClass(safeValue, direction)}`}
               style={{ width: px, height: px }}
             >
               <CircularProgressbarWithChildren
                 value={renderedValue}
                 strokeWidth={8}
                 styles={buildStyles({
-                  pathColor: gaugePathColor(safeValue),
+                  pathColor: gaugePathColor(safeValue, direction),
                   trailColor: '#e5e7eb',
                   strokeLinecap: 'round',
                 })}
@@ -171,7 +191,7 @@ export default function ScoreGauge({
             <span className="mt-2 text-xs font-medium uppercase tracking-wide text-gray-500">
               {label}
             </span>
-            <span className={`text-sm ${sublabelColorClass(safeValue)}`}>{sublabel}</span>
+            <span className={`text-sm ${sublabelColorClass(safeValue, direction)}`}>{sublabel}</span>
           </button>
         </TooltipTrigger>
         <TooltipContent className="max-w-xs text-left">

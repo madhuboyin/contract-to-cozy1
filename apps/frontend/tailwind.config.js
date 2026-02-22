@@ -9,9 +9,9 @@ module.exports = {
       /* ===== PHASE 2: TYPOGRAPHY ===== */
       fontFamily: {
         heading: ['var(--font-poppins)', 'Poppins', 'sans-serif'],
-        body: ['var(--font-inter)', 'Inter', 'sans-serif'],
+        body: ['var(--font-sans)', 'Inter', 'sans-serif'],
         display: ['var(--font-display)', 'Fraunces', 'serif'],
-        sans: ['var(--font-inter)', 'Inter', 'sans-serif'],
+        sans: ['var(--font-sans)', 'Inter', 'sans-serif'],
       },
       fontSize: {
         // Precise control over font sizes

@@ -222,6 +222,9 @@ export function MaintenanceForecast({ propertyId, mode = 'timeline' }: Maintenan
       queryClient.invalidateQueries({ queryKey: [PROPERTY_QUERY_KEY, propertyId] });
       queryClient.invalidateQueries({ queryKey: [PROPERTIES_QUERY_KEY] });
       queryClient.invalidateQueries({ queryKey: [MAINTENANCE_TASK_QUERY_KEY, propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['seasonal-checklist'] });
+      queryClient.invalidateQueries({ queryKey: ['seasonal-checklists'] });
+      queryClient.invalidateQueries({ queryKey: ['seasonal-checklists', propertyId] });
 
       const message =
         status === 'COMPLETED'

@@ -67,7 +67,7 @@
     
     /* === PHASE 2: TYPOGRAPHY VARIABLES === */
     --font-heading: var(--font-poppins), 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    --font-body: var(--font-inter), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-body: var(--font-sans), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --font-score: var(--font-display), 'Fraunces', 'Playfair Display', serif;
   }
   
@@ -454,14 +454,16 @@ html {
   .dashboard-bg {
     background-color: #fafaf7;
     background-image:
-      radial-gradient(at 20% 20%, rgb(20 184 166 / 0.06) 0px, transparent 50%),
-      radial-gradient(at 80% 10%, rgb(99 102 241 / 0.04) 0px, transparent 50%),
-      radial-gradient(at 50% 80%, rgb(245 158 11 / 0.04) 0px, transparent 50%);
+      radial-gradient(at 15% 15%, rgb(20 184 166 / 0.07) 0px, transparent 55%),
+      radial-gradient(at 85% 8%, rgb(99 102 241 / 0.04) 0px, transparent 50%),
+      radial-gradient(at 50% 85%, rgb(245 158 11 / 0.04) 0px, transparent 50%),
+      radial-gradient(at 90% 90%, rgb(20 184 166 / 0.04) 0px, transparent 40%);
+    min-height: 100vh;
   }
 
   .section-divider {
     height: 1px;
-    background: linear-gradient(to right, transparent, #e5e7eb 20%, #e5e7eb 80%, transparent);
+    background: linear-gradient(to right, transparent 0%, #d1d5db 15%, #d1d5db 85%, transparent 100%);
   }
 
   .pulse-dot {

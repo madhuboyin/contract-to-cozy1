@@ -45,6 +45,8 @@ const DISPLAY_LABELS: Record<string, string> = {
   STORM_PREP: 'Storm Prep',
   WARRANTY_EXPIRING: 'Warranty Expiring',
   RECALL_ALERT: 'Recall Alert',
+  SAFETY_RECALL_SIM_TEST_BATTERY: 'Battery Safety Recall Check',
+  SAFETY_RECALL_SIMULATION_KITCHEN: 'Kitchen Appliance Safety Recall',
   UTILITY_REBATE: 'Utility Rebate Review',
   INSURANCE_REVIEW: 'Insurance Review',
 };
@@ -78,6 +80,17 @@ function titleCaseFromEnumKey(value: string): string {
     .join(' ');
 }
 
+export function titleCase(input?: string | null): string {
+  if (!input || !String(input).trim()) return '—';
+  return String(input)
+    .replace(/(\.\.\.|…)+$/g, '')
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .replace(/\s+/g, ' ')
+    .trim() || '—';
+}
+
 export default function humanizeActionType(key?: string | null): string {
   if (!key || !String(key).trim()) return '—';
 
@@ -99,7 +112,7 @@ export default function humanizeActionType(key?: string | null): string {
 
   // Preserve non-enum freeform phrases instead of forcing title-case.
   if (!normalized.includes('_') && /[a-z]/.test(String(key))) {
-    return String(key).replace(/(\.\.\.|…)+$/g, '').trim() || '—';
+    return titleCase(key);
   }
 
   return titleCaseFromEnumKey(normalized);

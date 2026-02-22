@@ -10,7 +10,7 @@ const config: Config = {
     extend: {
       fontFamily: {
         display: ['var(--font-display)', 'Fraunces', 'serif'],
-        sans: ['var(--font-inter)', 'Inter', 'sans-serif'],
+        sans: ['var(--font-sans)', 'Inter', 'sans-serif'],
       },
       colors: {
         border: 'hsl(var(--border))',

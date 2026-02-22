@@ -23,9 +23,10 @@ import { SnoozeModal } from './SnoozeModal';
 import { CompletionModal } from './CompletionModal';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import humanizeActionType from '@/lib/utils/humanize';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 type Props = {
   propertyId: string;
@@ -378,6 +379,12 @@ export const ActionCenter: React.FC<Props> = ({
     a => a.riskLevel !== 'CRITICAL' && a.riskLevel !== 'HIGH'
   ), [actions]);
 
+  useEffect(() => {
+    if (!loading && actions.length === 0 && suppressedActions.length > 0) {
+      setShowSuppressed(true);
+    }
+  }, [loading, actions.length, suppressedActions.length]);
+
   /* ------------------------------------------------------------------
      Render Group
   ------------------------------------------------------------------- */
@@ -481,6 +488,19 @@ export const ActionCenter: React.FC<Props> = ({
   return (
     <>
       <div className="space-y-6">
+        {actions.length === 0 && suppressedActions.length > 0 && (
+          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
+            <div className="flex flex-col items-center gap-2">
+              <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+              <p className="font-semibold text-gray-700">No active priority actions</p>
+              <p className="text-sm text-gray-500">
+                {suppressedActions.length} action{suppressedActions.length !== 1 ? 's are' : ' is'} currently suppressed
+                {' '}review below to confirm or reactivate.
+              </p>
+            </div>
+          </div>
+        )}
+
         {renderGroup('Critical', critical, 'text-red-700')}
         {renderGroup('High Priority', high, 'text-amber-700')}
         {renderGroup('Other Actions', other, 'text-gray-700')}
@@ -494,9 +514,25 @@ export const ActionCenter: React.FC<Props> = ({
               className="inline-flex min-h-[44px] items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 touch-manipulation"
             >
               {showSuppressed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              {showSuppressed
+              <span>
+                {showSuppressed
                 ? 'Hide suppressed actions'
-                : `Show suppressed actions (${suppressedActions.length})`}
+                : actions.length === 0
+                  ? `↓ ${suppressedActions.length} suppressed actions — snoozed or auto-filtered`
+                  : `↓ Show ${suppressedActions.length} lower-priority items`}
+              </span>
+              <TooltipProvider delayDuration={180}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center text-gray-500" aria-label="Suppressed actions info">
+                      <Info className="h-3.5 w-3.5" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs text-left">
+                    Suppressed actions are lower-priority or snoozed items. They won&apos;t appear in your active queue but can be reactivated anytime.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </button>
 
             {showSuppressed && (

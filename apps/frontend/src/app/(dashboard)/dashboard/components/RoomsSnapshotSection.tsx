@@ -314,7 +314,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
                 <Link
                   key={room.id}
                   href={`/dashboard/properties/${propertyId}/rooms/${room.id}`}
-                  className="snap-start min-w-[86%] sm:min-w-[70%] md:min-w-[calc((100%-1rem)/2)] lg:min-w-[calc((100%-2rem)/3)] flex-shrink-0 rounded-2xl border border-white/60 bg-white/80 p-4 shadow-sm backdrop-blur-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md cursor-pointer select-none"
+                  className="snap-start min-w-[86%] sm:min-w-[70%] md:min-w-[calc((100%-1rem)/2)] lg:min-w-[calc((100%-2rem)/3)] flex-shrink-0 rounded-2xl border border-white/60 bg-white/85 p-4 shadow-sm backdrop-blur-sm will-change-transform transform-gpu transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md cursor-pointer select-none"
                 >
                   <div className="min-w-0 flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2 min-w-0">

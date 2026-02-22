@@ -101,6 +101,7 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
     const riskScore = summary.riskScore || 0;
     const exposure = summary.financialExposureTotal || 0;
     const { level, color } = getRiskDetails(riskScore);
+    const protectionLabel = riskScore === 0 && exposure > 0 ? 'High Risk' : level;
     const riskDelta = riskSnapshotQuery.data?.scores?.RISK?.deltaFromPreviousWeek ?? null;
     const reportLink = `/dashboard/properties/${propertyId}/risk-assessment`; 
 
@@ -157,13 +158,13 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
     // State 4: Calculated Report (Happy path)
     return (
         <Link href={reportLink}>
-            <Card className="min-h-[230px] flex flex-col border border-white/60 bg-white/80 backdrop-blur-sm shadow-sm hover:shadow-md transition-all cursor-pointer hover:-translate-y-0.5">
+            <Card className="min-h-[230px] flex flex-col border border-white/60 bg-white/85 backdrop-blur-sm shadow-sm will-change-transform transform-gpu transition-all cursor-pointer hover:-translate-y-0.5 hover:shadow-md">
                 <CardContent className="flex-1 p-5 flex flex-col">
                     {/* Header */}
                     <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                             <Shield className="h-5 w-5 text-gray-600" />
-                            <h3 className="text-base font-semibold text-gray-900">Risk</h3>
+                            <h3 className="text-base font-semibold text-gray-900">Risk Exposure</h3>
                         </div>
                         <ArrowRight className="h-4 w-4 text-gray-400" />
                     </div>
@@ -171,13 +172,14 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
                     <div className="mb-2 flex items-center justify-between gap-2">
                         <ScoreGauge
                             value={riskScore}
-                            label="Risk"
-                            sublabel={riskScore === 0 && exposure > 0 ? 'High Risk' : level}
+                            label="Protection Score"
+                            sublabel={protectionLabel}
                             size="md"
                             animate
+                            tooltipText="Your overall risk assessment score across monitored categories. 0/100 indicates high exposure and weak protection coverage."
                         />
                         <div className="text-right">
-                            <p className={`text-sm ${color}`}>{riskScore === 0 && exposure > 0 ? 'High Risk' : level}</p>
+                            <p className={`text-sm ${color}`}>{protectionLabel}</p>
                             {riskDelta === null ? (
                                 <span className="text-xs text-gray-500 inline-flex items-center gap-1">
                                     <Minus className="h-3 w-3" />
@@ -205,10 +207,10 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
 
                     <div className="mt-auto">
                         <div className="flex items-center justify-between text-xs text-gray-400 mb-1.5 uppercase tracking-wide">
-                            <span className="truncate">Exposure</span>
-                            <span className="ml-2 whitespace-nowrap">{formatCurrency(exposure)}</span>
+                            <span className="truncate">Risk Exposure</span>
+                            <span className="ml-2 whitespace-nowrap font-display text-base text-gray-700">{formatCurrency(exposure)}</span>
                         </div>
-                        <p className="text-sm text-gray-600">Risk score {riskScore}/100</p>
+                        <p className="text-sm text-gray-600">Protection score {riskScore}/100</p>
                     </div>
                 </CardContent>
             </Card>

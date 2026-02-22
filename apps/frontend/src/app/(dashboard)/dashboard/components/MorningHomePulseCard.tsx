@@ -152,7 +152,7 @@ function scoreTooltip(kind: SummaryKind) {
     return 'Health score measures how well-maintained your home is across all tracked items.';
   }
   if (kind === 'RISK') {
-    return 'Risk score estimates your current exposure based on condition, coverage, and local hazards.';
+    return 'Your risk level score (0-100) based on current weather conditions, overdue maintenance, and property-specific factors. Lower is better.';
   }
   return 'Financial score reflects expected cost efficiency based on projected maintenance and risk trends.';
 }
@@ -284,7 +284,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
   );
 
   return (
-    <section className="rounded-2xl border border-white/60 bg-white/80 p-4 shadow-md ring-1 ring-black/5 backdrop-blur-sm md:p-5">
+    <section className="rounded-2xl border border-white/60 bg-white/90 p-4 shadow-md ring-1 ring-black/5 backdrop-blur-md will-change-transform transform-gpu md:p-5">
       <div className="mb-3 flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-3">
           <div className="shrink-0 rounded-lg bg-teal-100 p-2">
@@ -319,6 +319,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
         {payload.summary.map((row) => {
           const delta = getDeltaVisual(row.kind, row.delta);
           const label = getMetricLabel(row.kind, row.value);
+          const gaugeLabel = row.kind === 'RISK' ? 'Risk Level' : row.label;
           const scoreValue =
             row.kind === 'RISK'
               ? Math.round(getMetricPosition('RISK', row.value) * 100)
@@ -337,21 +338,23 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
               <div className="flex items-center justify-center md:hidden">
                 <ScoreGauge
                   value={scoreValue}
-                  label={row.label}
+                  label={gaugeLabel}
                   sublabel={label}
                   size="sm"
                   animate
                   tooltipText={scoreTooltip(row.kind)}
+                  direction={row.kind === 'RISK' ? 'lower-better' : 'higher-better'}
                 />
               </div>
               <div className="hidden items-center justify-center md:flex">
                 <ScoreGauge
                   value={scoreValue}
-                  label={row.label}
+                  label={gaugeLabel}
                   sublabel={label}
                   size="md"
                   animate
                   tooltipText={scoreTooltip(row.kind)}
+                  direction={row.kind === 'RISK' ? 'lower-better' : 'higher-better'}
                 />
               </div>
 

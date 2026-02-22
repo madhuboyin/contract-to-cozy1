@@ -5,6 +5,8 @@ import React, { useMemo, useState } from 'react';
 import type { RecallMatchDTO } from '@/types/recalls.types';
 import RecallStatusBadge from './RecallStatusBadge';
 import ResolveRecallModal from './ResolveRecallModal';
+import humanizeActionType, { titleCase } from '@/lib/utils/humanize';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 type Props = {
   match: RecallMatchDTO;
@@ -17,7 +19,13 @@ type Props = {
 export default function RecallMatchCard({ match, highlighted, onConfirm, onDismiss, onResolve }: Props) {
   const [resolveOpen, setResolveOpen] = useState(false);
 
-  const title = match.recall?.title || 'Recall alert';
+  const title = useMemo(() => {
+    const raw = match.recall?.title;
+    if (!raw) return 'Recall alert';
+    const trimmed = String(raw).trim();
+    const enumLike = /^[A-Z0-9_]+(\.\.\.|…)?$/.test(trimmed);
+    return enumLike ? humanizeActionType(trimmed) : titleCase(trimmed);
+  }, [match.recall?.title]);
   const assetLabel = useMemo(() => {
     const mfg = match.inventoryItem?.manufacturer || '';
     const model = match.inventoryItem?.modelNumber || '';
@@ -36,7 +44,16 @@ export default function RecallMatchCard({ match, highlighted, onConfirm, onDismi
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="truncate text-sm font-semibold text-slate-900">{title}</h3>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <h3 className="truncate text-sm font-semibold text-slate-900">{title}</h3>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-sm text-left">
+                  {title}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <RecallStatusBadge status={match.status} />
           </div>
           <div className="mt-1 text-xs text-slate-600">

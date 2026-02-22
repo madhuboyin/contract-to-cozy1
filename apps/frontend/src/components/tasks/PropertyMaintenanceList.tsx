@@ -116,9 +116,10 @@ export function PropertyMaintenanceList({
       // Refetch to ensure consistency
       queryClient.invalidateQueries({ queryKey: ['maintenance-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['maintenance-stats'] });
-        // FIX: Invalidate seasonal cache for cross-page sync
+      // Ensure seasonal widgets refresh after maintenance completion changes.
       queryClient.invalidateQueries({ queryKey: ['seasonal-checklist'] });
       queryClient.invalidateQueries({ queryKey: ['seasonal-checklists'] });
+      queryClient.invalidateQueries({ queryKey: ['seasonal-checklists', propertyId] });
       toast({
         title: 'Status updated',
         description: 'Task status has been updated successfully',
@@ -134,9 +135,10 @@ export function PropertyMaintenanceList({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['maintenance-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['maintenance-stats'] });
-        // FIX: Invalidate seasonal cache for cross-page sync
+      // Ensure seasonal widgets refresh after maintenance task deletion changes.
       queryClient.invalidateQueries({ queryKey: ['seasonal-checklist'] });
       queryClient.invalidateQueries({ queryKey: ['seasonal-checklists'] });
+      queryClient.invalidateQueries({ queryKey: ['seasonal-checklists', propertyId] });
       toast({
         title: 'Task deleted',
         description: 'Task has been deleted successfully',
