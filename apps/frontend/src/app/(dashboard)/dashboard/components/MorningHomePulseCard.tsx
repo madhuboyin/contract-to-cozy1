@@ -116,7 +116,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
   const [actionBusy, setActionBusy] = useState<'COMPLETE' | 'DISMISS' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const loadSnapshot = useCallback(async (force = false) => {
+  const loadSnapshot = useCallback(async () => {
     if (!propertyId) {
       setSnapshot(null);
       setLoading(false);
@@ -126,7 +126,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
     setLoading(true);
     setError(null);
     try {
-      const data = await getDailySnapshot(propertyId, { force });
+      const data = await getDailySnapshot(propertyId);
       setSnapshot(data);
     } catch (err: any) {
       setError(err?.message ?? 'Failed to load Morning Home Pulse.');
@@ -137,7 +137,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
   }, [propertyId]);
 
   useEffect(() => {
-    loadSnapshot(false);
+    loadSnapshot();
   }, [loadSnapshot]);
 
   const isActionDone = useMemo(
@@ -150,7 +150,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
     setActionBusy('COMPLETE');
     try {
       await completeMicroAction(propertyId, snapshot.microAction.id);
-      await loadSnapshot(true);
+      await loadSnapshot();
     } catch (err: any) {
       setError(err?.message ?? 'Failed to complete micro action.');
     } finally {
@@ -163,7 +163,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
     setActionBusy('DISMISS');
     try {
       await dismissMicroAction(propertyId, snapshot.microAction.id);
-      await loadSnapshot(true);
+      await loadSnapshot();
     } catch (err: any) {
       setError(err?.message ?? 'Failed to dismiss micro action.');
     } finally {
@@ -188,7 +188,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
     return (
       <section className="rounded-2xl border border-red-200 bg-red-50 p-5">
         <p className="text-sm font-medium text-red-700">{error || 'Unable to load Morning Home Pulse.'}</p>
-        <Button size="sm" variant="outline" className="mt-3" onClick={() => loadSnapshot(true)}>
+        <Button size="sm" variant="outline" className="mt-3" onClick={loadSnapshot}>
           Try again
         </Button>
       </section>
@@ -221,10 +221,10 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
         </span>
       </div>
 
-      <div className="space-y-3">
-        <div className="-mx-1 overflow-x-auto">
-          <div className="min-w-max px-1 py-1 md:min-w-0 md:px-0">
-            <div className="flex min-w-max gap-1.5 md:min-w-0 md:grid md:grid-cols-3 md:gap-2">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1.2fr)]">
+        <div className="-mx-1 overflow-x-auto lg:mx-0 lg:overflow-visible">
+          <div className="min-w-max px-1 py-1 lg:min-w-0 lg:px-0">
+            <div className="flex min-w-max gap-1 lg:min-w-0 lg:gap-1.5">
             {payload.summary.map((row) => {
               const delta = getDeltaVisual(row.kind, row.delta);
               const position = getMetricPosition(row.kind, row.value);
@@ -233,9 +233,9 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
               return (
                 <div
                   key={row.kind}
-                  className="w-[156px] shrink-0 rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 md:w-auto"
+                  className="w-[146px] shrink-0 rounded-md border border-gray-200 bg-gray-50 px-1.5 py-1 lg:w-1/3 lg:px-2 lg:py-1"
                 >
-                  <div className="min-h-[84px]">
+                  <div className="min-h-[74px]">
                     <p className="text-sm font-bold text-gray-900">{row.label}</p>
                     <p
                       className={`mt-0.5 leading-none font-bold tracking-tight text-gray-900 ${
@@ -274,8 +274,8 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className={`rounded-md border px-3 py-2.5 ${toneForSeverity(payload.weatherInsight.severity)}`}>
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-2.5 space-y-2">
+          <div className={`rounded-md border px-2.5 py-2 ${toneForSeverity(payload.weatherInsight.severity)}`}>
             <div className="flex items-start gap-2">
               {showWeatherAsPrimary ? (
                 <Wind className="h-4 w-4 mt-0.5 shrink-0" />

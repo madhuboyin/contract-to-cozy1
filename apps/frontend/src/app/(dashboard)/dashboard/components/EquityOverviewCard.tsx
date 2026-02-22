@@ -142,7 +142,7 @@ export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCa
           <LineChart className="h-5 w-5 text-emerald-700" />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="text-lg font-semibold text-gray-900">Home Equity Overview</h3>
+          <h3 className="font-semibold text-gray-900">Home Equity Overview</h3>
           <p className="mt-1 text-sm text-gray-700">
             {isMissingPurchasePrice
               ? 'Add purchase price to calculate appreciation.'
