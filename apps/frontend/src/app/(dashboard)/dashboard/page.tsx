@@ -5,7 +5,16 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
-import { ChevronDown, ChevronUp, ClipboardList, Loader2, ShieldAlert, TrendingUp } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  ClipboardList,
+  Loader2,
+  ShieldAlert,
+  TrendingUp,
+} from 'lucide-react';
 import { Booking, ChecklistItem, Warranty, InsurancePolicy, LocalUpdate } from '@/types';
 import { ScoredProperty } from './types'; 
 import { differenceInDays, isPast, parseISO } from 'date-fns'; 
@@ -167,6 +176,7 @@ export default function DashboardPage() {
   const [redirectChecked, setRedirectChecked] = useState(false);
   const [showWelcomeScreen, setShowWelcomeScreen] = useState(false);
   const [showAllDecisionTools, setShowAllDecisionTools] = useState(false);
+  const scoreCardsScrollerRef = React.useRef<HTMLDivElement | null>(null);
   const [orchestrationSummary, setOrchestrationSummary] = useState<{
     pendingActionCount: number;
   } | null>(null);
@@ -424,6 +434,11 @@ export default function DashboardPage() {
         },
       ]
     : [];
+  const scrollScoreCards = useCallback((direction: 'left' | 'right') => {
+    if (!scoreCardsScrollerRef.current) return;
+    const delta = direction === 'left' ? -420 : 420;
+    scoreCardsScrollerRef.current.scrollBy({ left: delta, behavior: 'smooth' });
+  }, []);
   
   if (userSegment === 'HOME_BUYER') {
     return (
@@ -509,19 +524,48 @@ export default function DashboardPage() {
                     <p className="text-sm text-slate-600">Weekly health, risk, and financial trendline.</p>
                   </div>
                 </div>
-                {selectedPropertyId && (
-                  <ShareVaultButton
-                    propertyId={selectedPropertyId}
-                    propertyAddress={selectedProperty?.address}
-                  />
-                )}
+                <div className="flex items-center gap-2">
+                  {selectedPropertyId && (
+                    <ShareVaultButton
+                      propertyId={selectedPropertyId}
+                      propertyAddress={selectedProperty?.address}
+                    />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => scrollScoreCards('left')}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-600 transition-colors hover:bg-slate-100"
+                    aria-label="Scroll score cards left"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scrollScoreCards('right')}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-600 transition-colors hover:bg-slate-100"
+                    aria-label="Scroll score cards right"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <HomeScoreReportCard propertyId={selectedPropertyId} />
-                {selectedProperty && <PropertyHealthScoreCard property={selectedProperty} />}
-                <PropertyRiskScoreCard propertyId={selectedPropertyId} />
-                <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
+              <div
+                ref={scoreCardsScrollerRef}
+                className="flex gap-4 overflow-x-auto pb-2 scroll-smooth snap-x"
+              >
+                <div className="w-full flex-shrink-0 snap-start md:w-[calc((100%-1rem)/2)] xl:w-[calc((100%-2rem)/3)]">
+                  <HomeScoreReportCard propertyId={selectedPropertyId} />
+                </div>
+                <div className="w-full flex-shrink-0 snap-start md:w-[calc((100%-1rem)/2)] xl:w-[calc((100%-2rem)/3)]">
+                  {selectedProperty && <PropertyHealthScoreCard property={selectedProperty} />}
+                </div>
+                <div className="w-full flex-shrink-0 snap-start md:w-[calc((100%-1rem)/2)] xl:w-[calc((100%-2rem)/3)]">
+                  <PropertyRiskScoreCard propertyId={selectedPropertyId} />
+                </div>
+                <div className="w-full flex-shrink-0 snap-start md:w-[calc((100%-1rem)/2)] xl:w-[calc((100%-2rem)/3)]">
+                  <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
+                </div>
               </div>
             </section>
           </div>

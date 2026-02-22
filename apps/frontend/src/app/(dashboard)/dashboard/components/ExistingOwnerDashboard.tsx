@@ -112,7 +112,14 @@ export const ExistingOwnerDashboard = ({
           </div>
         </section>
 
-        <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-4">
+        <aside className="space-y-4 lg:col-span-4">
+          <SeasonalChecklistCard propertyId={selectedPropertyId} />
+          <FavoriteProvidersCard />
+        </aside>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-12">
+        <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-8">
           <div className="flex items-start gap-3">
             <div className="rounded-lg bg-blue-100 p-2">
               <Activity className="h-5 w-5 text-blue-600" />
@@ -139,6 +146,8 @@ export const ExistingOwnerDashboard = ({
             />
           </div>
         </section>
+
+        <div className="lg:col-span-4" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-12">
@@ -155,11 +164,7 @@ export const ExistingOwnerDashboard = ({
             </Link>
           </div>
         </div>
-
-        <aside className="space-y-4 lg:col-span-4">
-          <SeasonalChecklistCard propertyId={selectedPropertyId} />
-          <FavoriteProvidersCard />
-        </aside>
+        <div className="lg:col-span-4" />
       </div>
     </div>
   );
