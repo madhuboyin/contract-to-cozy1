@@ -30,6 +30,7 @@ import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCaro
 import MorningHomePulseCard from './components/MorningHomePulseCard';
 import { HomeScoreReportCard } from './components/HomeScoreReportCard';
 import { ShareVaultButton } from './components/ShareVaultButton';
+import { HomeHealthNudge } from './components/verification/HomeHealthNudge';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -399,6 +400,30 @@ export default function DashboardPage() {
       ]
     : [];
   const visibleDecisionTools = showAllDecisionTools ? decisionTools : decisionTools.slice(0, 2);
+  const homeTools = selectedPropertyId
+    ? [
+        {
+          title: 'Cost Volatility',
+          description: 'Track expense swings and stability.',
+          href: `/dashboard/properties/${selectedPropertyId}/tools/cost-volatility`,
+        },
+        {
+          title: 'Capital Timeline',
+          description: 'Plan improvements and capital milestones.',
+          href: `/dashboard/properties/${selectedPropertyId}/tools/capital-timeline`,
+        },
+        {
+          title: 'True Cost',
+          description: 'See all-in ownership cost signals.',
+          href: `/dashboard/properties/${selectedPropertyId}/tools/true-cost`,
+        },
+        {
+          title: 'Break-Even',
+          description: 'Evaluate payoff horizon and options.',
+          href: `/dashboard/properties/${selectedPropertyId}/tools/break-even`,
+        },
+      ]
+    : [];
   
   if (userSegment === 'HOME_BUYER') {
     return (
@@ -502,13 +527,6 @@ export default function DashboardPage() {
           </div>
 
           <aside className="space-y-4 lg:col-span-4">
-            {homeownerSegment === 'EXISTING_OWNER' && selectedPropertyId && (
-              <>
-                <SeasonalBanner propertyId={selectedPropertyId} />
-                <SeasonalWidget propertyId={selectedPropertyId} />
-              </>
-            )}
-
             {selectedPropertyId && (
               <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="mb-3 flex items-start gap-3">
@@ -552,6 +570,40 @@ export default function DashboardPage() {
                     : 'No pending orchestrated actions right now.'}
                 </div>
               </section>
+            )}
+
+            {selectedPropertyId && (
+              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-3">
+                  <h2 className="text-base font-semibold text-slate-900">Home Tools</h2>
+                  <p className="text-sm text-slate-600">Quick access to core homeowner planning tools.</p>
+                </div>
+
+                <div className="space-y-2">
+                  {homeTools.map((tool) => (
+                    <Link
+                      key={tool.href}
+                      href={tool.href}
+                      className="flex items-start justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 transition-colors hover:border-slate-300 hover:bg-white"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{tool.title}</p>
+                        <p className="text-xs text-slate-600">{tool.description}</p>
+                      </div>
+                      <span className="ml-3 text-xs font-semibold text-blue-700">Open</span>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {selectedPropertyId && <HomeHealthNudge propertyId={selectedPropertyId} />}
+
+            {homeownerSegment === 'EXISTING_OWNER' && selectedPropertyId && (
+              <>
+                <SeasonalBanner propertyId={selectedPropertyId} />
+                <SeasonalWidget propertyId={selectedPropertyId} />
+              </>
             )}
           </aside>
         </div>
