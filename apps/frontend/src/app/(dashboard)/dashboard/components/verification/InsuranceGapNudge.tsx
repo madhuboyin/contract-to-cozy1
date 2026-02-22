@@ -54,7 +54,7 @@ export function InsuranceGapNudge({
           <FileScan className="w-5 h-5 text-rose-700" />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900">{nudge.title}</h3>
+          <h3 className="text-lg font-semibold text-gray-900">{nudge.title}</h3>
           <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
             <Flame className="h-3.5 w-3.5" />
             🔥 {nudge.currentStreak} Task Streak

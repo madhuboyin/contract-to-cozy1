@@ -142,7 +142,7 @@ export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCa
           <LineChart className="h-5 w-5 text-emerald-700" />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="font-semibold text-gray-900">Home Equity Overview</h3>
+          <h3 className="text-lg font-semibold text-gray-900">Home Equity Overview</h3>
           <p className="mt-1 text-sm text-gray-700">
             {isMissingPurchasePrice
               ? 'Add purchase price to calculate appreciation.'
@@ -150,7 +150,7 @@ export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCa
           </p>
           {needsEquitySetup && (
             <div className="mt-3 rounded-lg border border-emerald-200 bg-white/80 p-3">
-              <p className="text-xs text-emerald-900">{setupPrompt}</p>
+              <p className="text-sm text-emerald-900">{setupPrompt}</p>
               <div className="mt-2 grid gap-2 sm:grid-cols-3">
                 <input
                   inputMode="decimal"
@@ -180,14 +180,14 @@ export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCa
                   {saveEquityBaselineMutation.isPending ? 'Saving...' : 'Save Baseline'}
                 </Button>
               </div>
-              <p className="mt-1 text-xs text-gray-600">
+              <p className="mt-1 text-sm text-gray-600">
                 This updates your equity model without opening full property edit.
               </p>
             </div>
           )}
 
           <div className="mt-3">
-            <div className="mb-1 flex justify-between text-xs text-gray-600">
+            <div className="mb-1 flex justify-between text-sm text-gray-600">
               <span>Equity progress</span>
               <span>{Math.round(equityPercent)}%</span>
             </div>
@@ -199,19 +199,19 @@ export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCa
             </div>
           </div>
 
-          <div className="mt-3 grid gap-1 text-xs text-gray-700 sm:grid-cols-3">
+          <div className="mt-3 grid gap-1 text-sm text-gray-700 sm:grid-cols-3">
             <p>Purchase: {formatCentsOrPlaceholder(data.purchasePriceCents)}</p>
             <p>Appraised: {formatCents(data.lastAppraisedValueCents)}</p>
             <p>Maintenance Premium: {formatCents(data.maintenancePremiumCents)}</p>
           </div>
 
           {showMaintenanceAlpha ? (
-            <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800">
+            <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800">
               <Sparkles className="h-3.5 w-3.5" />
               Documented care has added ~{formatCents(data.maintenancePremiumCents)} to your home&apos;s resale attractiveness.
             </div>
           ) : (
-            <p className="mt-3 text-xs text-emerald-800">
+            <p className="mt-3 text-sm text-emerald-800">
               Keep your health score above {RESALE_ADVANTAGE_BASELINE} to unlock your Maintenance Alpha resale badge.
             </p>
           )}

@@ -44,7 +44,7 @@ export function HomeEquityNudge({
           <TrendingUp className="h-5 w-5 text-emerald-700" />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="font-semibold text-gray-900">{title}</h3>
+          <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
           <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
             <Flame className="h-3.5 w-3.5" />
             🔥 {currentStreak} Task Streak

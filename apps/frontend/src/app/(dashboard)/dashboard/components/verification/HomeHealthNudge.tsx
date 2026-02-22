@@ -38,6 +38,7 @@ const PROPERTIES_QUERY_KEY = 'properties';
 const CONFETTI_SCRIPT_ID = 'ctc-canvas-confetti';
 const CONFETTI_CDN_SRC =
   'https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js';
+const SUPPORTED_NUDGE_TYPES = new Set(['ASSET', 'RESILIENCE', 'UTILITY', 'INSURANCE', 'EQUITY']);
 
 export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   const queryClient = useQueryClient();
@@ -405,9 +406,28 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
             <Shield className="w-5 h-5 text-blue-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-gray-900">You&apos;re all caught up</h3>
+            <h3 className="text-lg font-semibold text-gray-900">You&apos;re all caught up</h3>
             <p className="mt-1 text-sm text-gray-700">
               No active verification nudges right now.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const nudgeType = (nudge as { type?: string }).type;
+  if (!nudgeType || !SUPPORTED_NUDGE_TYPES.has(nudgeType)) {
+    return (
+      <div className="w-full rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="rounded-lg bg-amber-100 p-2 shrink-0">
+            <AlertCircle className="w-5 h-5 text-amber-700" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-lg font-semibold text-gray-900">Verification reminder unavailable</h3>
+            <p className="mt-1 text-sm text-gray-700">
+              We could not load this reminder right now. Try again in a moment.
             </p>
           </div>
         </div>
@@ -432,7 +452,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
             <Droplets className="w-5 h-5 text-cyan-700" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-gray-900">{nudge.title}</h3>
+            <h3 className="text-lg font-semibold text-gray-900">{nudge.title}</h3>
             {streakBadge}
             <p className="text-sm text-gray-700 mt-1">{nudge.description}</p>
             <div className="flex items-center gap-2 mt-3 flex-wrap">
@@ -472,6 +492,8 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   }
 
   if (nudge.type === 'UTILITY') {
+    const utilityOptions = Array.isArray(nudge.options) ? nudge.options : [];
+
     return (
       <div
         className={`
@@ -488,7 +510,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
             <Home className="w-5 h-5 text-amber-700" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-gray-900">{nudge.title}</h3>
+            <h3 className="text-lg font-semibold text-gray-900">{nudge.title}</h3>
             {streakBadge}
             <p className="text-sm text-gray-700 mt-1">{nudge.description}</p>
             <div className="mt-3">
@@ -501,7 +523,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
                 <option value="" disabled>
                   Select heating fuel
                 </option>
-                {nudge.options.map((option) => (
+                {utilityOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -566,6 +588,23 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   }
 
   const { item, totalUnverified, totalItems } = nudge;
+  if (!item) {
+    return (
+      <div className="w-full rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="rounded-lg bg-amber-100 p-2 shrink-0">
+            <AlertCircle className="w-5 h-5 text-amber-700" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-lg font-semibold text-gray-900">Asset reminder unavailable</h3>
+            <p className="mt-1 text-sm text-gray-700">
+              The verification payload is incomplete. Please refresh and try again.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const verified = totalItems - totalUnverified;
   const percentVerified = totalItems > 0 ? Math.round((verified / totalItems) * 100) : 0;
   const missingFields = getMissingFields(item);
@@ -588,7 +627,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
           </div>
 
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-gray-900">
+            <h3 className="text-lg font-semibold text-gray-900">
               Complete details for {item.name}
             </h3>
             {streakBadge}

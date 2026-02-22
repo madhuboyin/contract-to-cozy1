@@ -46,7 +46,7 @@ export function InsuranceSummaryCard({ propertyId }: InsuranceSummaryCardProps) 
             <ShieldAlert className="h-5 w-5 text-red-700" />
           </div>
           <div className="min-w-0">
-            <h3 className="font-semibold text-gray-900">Protection Gap Detected</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Protection Gap Detected</h3>
             <p className="mt-1 text-sm text-gray-700">
               Protection Gap Detected: Your inventory is valued at {formatCents(data.totalInventoryValueCents)}, but your policy only covers {formatCents(data.personalPropertyLimitCents)}. You are under-insured by {formatCents(data.underInsuredCents)}.
             </p>
@@ -66,7 +66,7 @@ export function InsuranceSummaryCard({ propertyId }: InsuranceSummaryCardProps) 
           <ShieldCheck className="h-5 w-5 text-green-700" />
         </div>
         <div className="min-w-0">
-          <h3 className="font-semibold text-gray-900">Coverage Check Complete</h3>
+          <h3 className="text-lg font-semibold text-gray-900">Coverage Check Complete</h3>
           <p className="mt-1 text-sm text-gray-700">
             Your verified inventory value ({formatCents(data.totalInventoryValueCents)}) is within your policy limit ({formatCents(data.personalPropertyLimitCents)}).
           </p>
