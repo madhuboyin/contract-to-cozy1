@@ -89,6 +89,29 @@ function defaultTooltip(label: string) {
   return `${label} score is based on your latest property data.`;
 }
 
+function centerFontSize(size: 'sm' | 'md' | 'lg', display: string) {
+  const compact = display.replace(/[^\da-zA-Z]/g, '');
+  const length = compact.length;
+
+  if (size === 'lg') {
+    if (length >= 8) return 22;
+    if (length >= 6) return 28;
+    if (length >= 4) return 34;
+    return 42;
+  }
+
+  if (size === 'md') {
+    if (length >= 8) return 16;
+    if (length >= 6) return 20;
+    if (length >= 4) return 24;
+    return 30;
+  }
+
+  if (length >= 6) return 14;
+  if (length >= 4) return 16;
+  return 20;
+}
+
 export default function ScoreGauge({
   value,
   label,
@@ -113,6 +136,7 @@ export default function ScoreGauge({
   const display =
     displayValue ??
     `${prefix ?? ''}${Math.round(renderedValue).toLocaleString()}`;
+  const displayFontSize = centerFontSize(size, display);
 
   return (
     <TooltipProvider delayDuration={150}>
@@ -136,13 +160,9 @@ export default function ScoreGauge({
                 })}
               >
                 <span
-                  className={`font-display font-bold tracking-tight text-gray-900 ${
-                    size === 'lg'
-                      ? 'text-[clamp(28px,8vw,48px)]'
-                      : size === 'md'
-                        ? 'text-3xl'
-                        : 'text-xl'
-                  }`}
+                  className="max-w-[84%] truncate text-center font-display font-bold leading-none tracking-tight text-gray-900"
+                  style={{ fontSize: `${displayFontSize}px` }}
+                  title={display}
                 >
                   {display}
                 </span>

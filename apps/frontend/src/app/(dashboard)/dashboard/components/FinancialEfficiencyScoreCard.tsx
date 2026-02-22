@@ -79,7 +79,7 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
     // State 1: No property selected
     if (!propertyId) {
         return (
-            <Card className="h-[190px] flex flex-col border-2 border-dashed border-gray-300">
+            <Card className="min-h-[230px] flex flex-col border-2 border-dashed border-gray-300">
                 <CardContent className="flex-1 p-5 flex flex-col items-center justify-center">
                     <DollarSign className="h-8 w-8 text-gray-400 mb-2" />
                     <p className="text-sm text-gray-500 text-center mb-3">Select a property</p>
@@ -96,7 +96,7 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
     // State 2: Loading or Queued
     if (isInitialLoading || summary.status === 'QUEUED') {
         return (
-            <Card className="h-[190px] flex flex-col border border-gray-200">
+            <Card className="min-h-[230px] flex flex-col border border-gray-200">
                 <CardContent className="flex-1 p-5 flex flex-col items-center justify-center">
                     <Loader2 className="h-8 w-8 text-blue-500 animate-spin mb-2" />
                     <p className="text-sm text-gray-500 text-center">
@@ -111,7 +111,7 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
     // State 3: Missing data
     if (summary.status === 'MISSING_DATA') {
         return (
-            <Card className="h-[190px] flex flex-col border-2 border-gray-300">
+            <Card className="min-h-[230px] flex flex-col border-2 border-gray-300">
                 <CardContent className="flex-1 p-5 flex flex-col items-center justify-center">
                     <Home className="h-8 w-8 text-gray-400 mb-2" />
                     <p className="text-sm font-semibold text-gray-700 text-center mb-1">More Data Needed</p>
@@ -129,7 +129,7 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
     // State 4: Calculated Report (Happy path)
     return (
         <Link href={reportLink}>
-            <Card className="h-[190px] flex flex-col border border-white/60 bg-white/80 backdrop-blur-sm shadow-sm hover:shadow-md transition-all cursor-pointer hover:-translate-y-0.5">
+            <Card className="min-h-[230px] flex flex-col border border-white/60 bg-white/80 backdrop-blur-sm shadow-sm hover:shadow-md transition-all cursor-pointer hover:-translate-y-0.5">
                 <CardContent className="flex-1 p-5 flex flex-col">
                     {/* Header */}
                     <div className="flex items-center justify-between mb-2">

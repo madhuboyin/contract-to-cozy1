@@ -34,7 +34,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
 
   if (!propertyId) {
     return (
-      <Card className="h-[190px] border-2 border-dashed border-gray-300">
+      <Card className="min-h-[230px] border-2 border-dashed border-gray-300">
         <CardContent className="h-full p-5 flex flex-col items-center justify-center gap-2">
           <Gauge className="h-8 w-8 text-gray-400" />
           <p className="text-sm text-gray-500">Select a property</p>
@@ -48,7 +48,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
 
   if (reportQuery.isLoading) {
     return (
-      <Card className="h-[190px] border border-gray-200">
+      <Card className="min-h-[230px] border border-gray-200">
         <CardContent className="h-full p-5 flex flex-col items-center justify-center gap-2">
           <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
           <p className="text-sm text-gray-500">Loading HomeScore...</p>
@@ -66,7 +66,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
 
   return (
     <Link href={reportLink}>
-      <Card className="h-[190px] border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer">
+      <Card className="min-h-[230px] border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer">
         <CardContent className="h-full p-5 flex flex-col">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
