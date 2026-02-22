@@ -175,7 +175,6 @@ export const PropertyRiskScoreCard: React.FC<PropertyRiskScoreCardProps> = ({ pr
                             sublabel={riskScore === 0 && exposure > 0 ? 'High Risk' : level}
                             size="md"
                             animate
-                            displayValue={formatCurrency(exposure)}
                         />
                         <div className="text-right">
                             <p className={`text-sm ${color}`}>{riskScore === 0 && exposure > 0 ? 'High Risk' : level}</p>

@@ -323,14 +323,14 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
             row.kind === 'RISK'
               ? Math.round(getMetricPosition('RISK', row.value) * 100)
               : Math.round(row.value);
-          const riskDisplay =
+          const riskExposure =
             row.kind === 'RISK'
               ? new Intl.NumberFormat(undefined, {
                   style: 'currency',
                   currency: 'USD',
                   maximumFractionDigits: 0,
                 }).format(Math.max(0, row.value))
-              : undefined;
+              : null;
 
           return (
             <div key={row.kind} className="rounded-xl border border-gray-200 bg-white/90 p-3">
@@ -341,7 +341,6 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
                   sublabel={label}
                   size="sm"
                   animate
-                  displayValue={riskDisplay}
                   tooltipText={scoreTooltip(row.kind)}
                 />
               </div>
@@ -352,7 +351,6 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
                   sublabel={label}
                   size="md"
                   animate
-                  displayValue={riskDisplay}
                   tooltipText={scoreTooltip(row.kind)}
                 />
               </div>
@@ -366,6 +364,14 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
                 {delta.label}
               </p>
               <p className="mt-1 text-sm text-gray-600">{row.reason}</p>
+              {row.kind === 'RISK' && riskExposure && (
+                <div className="mt-2 border-t border-gray-100 pt-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                    Exposure
+                  </p>
+                  <p className="text-sm font-semibold text-gray-700">{riskExposure}</p>
+                </div>
+              )}
             </div>
           );
         })}
