@@ -38,20 +38,47 @@ export function InsuranceGapNudge({
   onSnooze,
   showSuccessFlash = false,
 }: InsuranceGapNudgeProps) {
+  const underInsuredCents = Math.max(0, nudge.underInsuredCents ?? 0);
+  // Keep red rare: only use it for materially high uncovered exposure.
+  const isHighUrgency = underInsuredCents >= 5_000_000;
+
+  const tone = isHighUrgency
+    ? {
+        container:
+          'bg-gradient-to-r from-rose-50 to-orange-50 border border-rose-200 border-l-4 border-l-rose-600',
+        iconWrap: 'bg-rose-100',
+        icon: 'text-rose-700',
+        detailText: 'text-rose-800',
+        ctaBorder: 'border-rose-300',
+        ctaText: 'text-rose-700',
+        ctaHover: 'hover:bg-rose-100',
+        extractedBorder: 'border-rose-200',
+      }
+    : {
+        container:
+          'bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 border-l-4 border-l-amber-500',
+        iconWrap: 'bg-amber-100',
+        icon: 'text-amber-700',
+        detailText: 'text-amber-800',
+        ctaBorder: 'border-amber-300',
+        ctaText: 'text-amber-700',
+        ctaHover: 'hover:bg-amber-100',
+        extractedBorder: 'border-amber-200',
+      };
+
   return (
     <div
       className={`
         w-full rounded-xl shadow-sm
-        bg-gradient-to-r from-rose-50 to-orange-50
-        border-2 border-rose-200 border-l-4 border-l-rose-600
+        ${tone.container}
         px-5 py-4
         hover:shadow-md transition-shadow
         ${showSuccessFlash ? 'ring-2 ring-emerald-300 animate-pulse' : ''}
       `}
     >
       <div className="flex items-start gap-3">
-        <div className="p-2 bg-rose-100 rounded-lg shrink-0">
-          <FileScan className="w-5 h-5 text-rose-700" />
+        <div className={`p-2 rounded-lg shrink-0 ${tone.iconWrap}`}>
+          <FileScan className={`w-5 h-5 ${tone.icon}`} />
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="text-lg font-semibold text-gray-900">{nudge.title}</h3>
@@ -63,7 +90,7 @@ export function InsuranceGapNudge({
             {nudge.description}
           </p>
 
-          <div className="mt-2 text-xs text-rose-800">
+          <div className={`mt-2 text-xs ${tone.detailText}`}>
             Verified inventory: {formatCents(nudge.totalInventoryValueCents)} • Policy limit on file:{' '}
             {formatCents(nudge.personalPropertyLimitCents)}
           </div>
@@ -72,7 +99,7 @@ export function InsuranceGapNudge({
             <button
               onClick={onUploadClick}
               disabled={insuranceUploading || insuranceConfirming}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-rose-300 px-3 py-1.5 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-100 disabled:opacity-50"
+              className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 ${tone.ctaBorder} ${tone.ctaText} ${tone.ctaHover}`}
             >
               <Camera className="w-4 h-4" />
               {insuranceUploading ? 'Scanning...' : 'Snap / Upload Declarations'}
@@ -98,7 +125,7 @@ export function InsuranceGapNudge({
           </div>
 
           {insuranceExtracted && (
-            <div className="mt-3 rounded-lg border border-rose-200 bg-white/80 p-3 text-xs text-gray-700">
+            <div className={`mt-3 rounded-lg border bg-white/80 p-3 text-xs text-gray-700 ${tone.extractedBorder}`}>
               <div>
                 Personal Property Limit: {formatCents(insuranceExtracted.personalPropertyLimitCents)}
               </div>
