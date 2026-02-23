@@ -18,8 +18,8 @@ import RoomScanModal from '@/app/(dashboard)/dashboard/components/inventory/Room
 import QuickWins from '@/components/rooms/QuickWins';
 import RoomAtAGlance from '@/components/rooms/RoomAtAGlance';
 import RoomIntelligenceCard from '@/components/rooms/RoomIntelligenceCard';
-import RoomItemCard from '@/components/rooms/RoomItemCard';
 import RoomPageHeader from '@/components/rooms/RoomPageHeader';
+import ItemCard from '@/components/shared/ItemCard';
 
 import {
   getDraftsCsvExportUrl,
@@ -27,6 +27,7 @@ import {
   listInventoryItems,
   listInventoryRooms,
   listRoomScanSessions,
+  updateInventoryItem,
 } from '../../../../inventory/inventoryApi';
 
 const MilestoneCelebration = dynamic(
@@ -232,6 +233,18 @@ export default function RoomShowcaseClient() {
     router.push(withStatusBoardParam(`/dashboard/properties/${propertyId}/inventory?roomId=${roomId}`));
   }
 
+  async function onSaveRoomInlineValue(itemId: string, value: number) {
+    const replacementCostCents = Math.round(value * 100);
+    const updated = await updateInventoryItem(propertyId, itemId, { replacementCostCents });
+
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        return { ...item, ...updated };
+      }),
+    );
+  }
+
   function handleTipAction(tip: { title: string }) {
     const normalized = tip.title.toLowerCase();
     if (normalized.includes('coverage')) {
@@ -353,13 +366,13 @@ export default function RoomShowcaseClient() {
                   </button>
                 ) : (
                   items.map((item) => (
-                    <RoomItemCard
+                    <ItemCard
                       key={item.id}
                       item={item}
-                      roomName={room?.name}
-                      onOpenItem={openItem}
-                      onOpenValueEditor={openItemById}
-                      onOpenDocUpload={openItemById}
+                      variant="room"
+                      onClick={openItem}
+                      onAddValue={onSaveRoomInlineValue}
+                      onAttachDocument={openItemById}
                     />
                   ))
                 )}

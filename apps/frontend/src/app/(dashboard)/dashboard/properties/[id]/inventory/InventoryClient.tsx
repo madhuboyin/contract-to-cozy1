@@ -15,7 +15,6 @@ import {
   updateInventoryItem,
 } from '../../../inventory/inventoryApi';
 import InventoryItemDrawer from '../../../components/inventory/InventoryItemDrawer';
-import InventoryItemCard from '../../../components/inventory/InventoryItemCard';
 import InventoryBulkUploadModal from '../../../components/inventory/InventoryBulkUploadModal';
 import InventoryImportHistoryModal from '../../../components/inventory/InventoryImportHistoryModal';
 import InventoryPageHeader from '../../../components/inventory/InventoryPageHeader';
@@ -27,6 +26,7 @@ import CoverageHealthBanner from '../../../components/inventory/CoverageHealthBa
 import InventoryFilterBar, { type SmartFilterId } from '../../../components/inventory/InventoryFilterBar';
 import CoverageTab from '../../../components/inventory/CoverageTab';
 import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
+import ItemCard from '@/components/shared/ItemCard';
 
 function getCoverageStatus(item: InventoryItem): 'uncovered' | 'partial' | 'covered' {
   const hasWarranty = Boolean(item.warrantyId);
@@ -282,6 +282,12 @@ export default function InventoryClient() {
     setDrawerOpen(true);
   }
 
+  function openItemById(itemId: string) {
+    const found = items.find((item) => item.id === itemId);
+    if (!found) return;
+    onEdit(found);
+  }
+
   async function onSaveInlineValue(itemId: string, value: number) {
     const replacementCostCents = Math.round(value * 100);
 
@@ -434,10 +440,12 @@ export default function InventoryClient() {
                 transition={{ duration: 0.2, delay: index * 0.03 }}
                 className={highlightItemId === item.id ? 'rounded-2xl ring-2 ring-amber-300' : ''}
               >
-                <InventoryItemCard
+                <ItemCard
                   item={item}
-                  onClick={() => onEdit(item)}
-                  onValueSave={onSaveInlineValue}
+                  variant="inventory"
+                  onClick={onEdit}
+                  onAddValue={onSaveInlineValue}
+                  onAttachDocument={openItemById}
                 />
               </motion.div>
             ))}
