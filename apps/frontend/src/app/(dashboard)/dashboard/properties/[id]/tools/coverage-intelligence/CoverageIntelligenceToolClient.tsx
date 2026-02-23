@@ -14,7 +14,7 @@ export default function CoverageIntelligenceToolClient() {
       <SectionHeader
         icon="🛡️"
         title="Coverage Intelligence"
-        description="Insurance + warranty worth-it assessment for this property."
+        description="Insurance + warranty coverage assessment for this property."
       />
 
       <HomeToolsRail propertyId={propertyId} />

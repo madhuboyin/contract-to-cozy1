@@ -208,7 +208,7 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
   return (
     <div className="space-y-4">
       <section className="rounded-2xl border border-black/10 bg-white p-5">
-        <h4 className="text-base font-semibold text-gray-900">Coverage worth-it for any inventory item</h4>
+        <h4 className="text-base font-semibold text-gray-900">Get coverage for any inventory item</h4>
         <p className="text-sm text-gray-600 mt-1">
           Select an item to run a dedicated item-level coverage assessment. Known item details will be pre-filled.
         </p>
@@ -239,7 +239,7 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
             disabled={!selectedItemId}
             onClick={() => router.push(`/dashboard/properties/${propertyId}/inventory/items/${selectedItemId}/coverage`)}
           >
-            Coverage worth-it
+            Get coverage
           </Button>
         </div>
 

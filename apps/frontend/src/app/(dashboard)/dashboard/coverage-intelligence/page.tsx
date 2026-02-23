@@ -76,7 +76,7 @@ function CoverageIntelligenceContent() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Coverage Intelligence</h1>
           <p className="text-sm sm:text-base text-gray-600 mt-1">
-            Insurance + warranty worth-it assessment for your home.
+            Insurance + warranty coverage assessment for your home.
           </p>
         </div>
       </div>

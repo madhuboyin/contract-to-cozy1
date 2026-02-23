@@ -108,7 +108,7 @@ export default function CoverageIntelligenceToolCard({
           <div>
             <h3 className="text-base font-semibold text-gray-900">Coverage Intelligence</h3>
             <p className="text-sm text-gray-500">
-              Insurance + warranty worth-it assessment
+              Insurance + warranty coverage assessment
             </p>
           </div>
         </div>

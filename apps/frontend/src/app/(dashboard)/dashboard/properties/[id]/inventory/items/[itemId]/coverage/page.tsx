@@ -1,5 +1,5 @@
-import ItemCoverageWorthItClient from './ItemCoverageWorthItClient';
+import ItemGetCoverageClient from './ItemGetCoverageClient';
 
 export default function InventoryItemCoveragePage() {
-  return <ItemCoverageWorthItClient />;
+  return <ItemGetCoverageClient />;
 }

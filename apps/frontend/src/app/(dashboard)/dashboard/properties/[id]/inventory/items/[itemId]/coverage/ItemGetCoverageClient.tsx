@@ -143,7 +143,7 @@ function mergeOverridesWithPrefill(
   };
 }
 
-export default function ItemCoverageWorthItClient() {
+export default function ItemGetCoverageClient() {
   const router = useRouter();
   const params = useParams<{ id: string; itemId: string }>();
   const propertyId = params.id;
@@ -247,7 +247,7 @@ export default function ItemCoverageWorthItClient() {
       <div className="rounded-2xl border border-black/10 bg-white p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Coverage worth-it</h1>
+            <h1 className="text-2xl font-semibold text-gray-900">Get coverage</h1>
             <p className="text-sm text-gray-600 mt-1">
               Evaluate whether coverage is worth buying now for this specific item.
             </p>

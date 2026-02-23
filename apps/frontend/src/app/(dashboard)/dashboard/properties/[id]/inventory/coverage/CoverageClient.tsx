@@ -170,7 +170,7 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
                         href={`/dashboard/properties/${propertyId}/inventory/items/${g.inventoryItemId}/coverage`}
                         className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
                       >
-                        Coverage worth-it
+                        Get coverage
                       </Link>
 
                       <button

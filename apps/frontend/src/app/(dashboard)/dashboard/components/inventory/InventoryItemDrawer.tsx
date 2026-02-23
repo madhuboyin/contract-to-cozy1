@@ -904,7 +904,7 @@ useEffect(() => {
     }
   }
 
-  function openCoverageWorthIt() {
+  function openGetCoverage() {
     if (!props.initialItem?.id) return;
     props.onClose();
     router.push(
@@ -1425,12 +1425,12 @@ useEffect(() => {
               </div>
               <button
                 type="button"
-                onClick={openCoverageWorthIt}
+                onClick={openGetCoverage}
                 disabled={!isEdit}
                 className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
                 title={!isEdit ? 'Save this item first to run analysis' : undefined}
               >
-                Coverage worth-it
+                Get coverage
               </button>
               <button
                 type="button"
