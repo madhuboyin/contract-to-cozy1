@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, PiggyBank } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   getHomeSavingsSummary,
   HomeSavingsSummaryDTO,
@@ -159,9 +160,19 @@ export default function HomeSavingsCheckToolCard({ propertyId }: HomeSavingsChec
             </span>
           </div>
           {topOpportunity?.headline && (
-            <div className="truncate">
-              Top opportunity: <span className="font-medium text-gray-800">{topOpportunity.headline}</span>
-            </div>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <p className="cursor-help text-xs text-gray-600 line-clamp-2">
+                    Top opportunity:{' '}
+                    <span className="font-medium text-gray-800">{topOpportunity.headline}</span>
+                  </p>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs text-left">
+                  Top opportunity: {topOpportunity.headline}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
         </div>
       )}
@@ -181,4 +192,3 @@ export default function HomeSavingsCheckToolCard({ propertyId }: HomeSavingsChec
     </div>
   );
 }
-

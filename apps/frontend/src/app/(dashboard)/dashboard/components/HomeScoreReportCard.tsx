@@ -144,11 +144,21 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
         </div>
       </div>
 
-      <div className="flex items-center justify-between border-t border-amber-200/50 pt-2">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
-          Elevated assets
-        </span>
-        <span className="text-xs font-bold text-amber-600">{elevatedAssetsLabel}</span>
+      <div className="flex flex-col gap-1.5 border-t border-amber-200/50 pt-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
+            Elevated assets
+          </span>
+          <span className="text-xs font-bold text-amber-600">{elevatedAssetsLabel}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
+            Weekly Change
+          </span>
+          <span className="text-xs font-medium text-gray-400">
+            {weeklyChange === "No change" ? "— No change" : weeklyChange}
+          </span>
+        </div>
       </div>
     </div>
   );

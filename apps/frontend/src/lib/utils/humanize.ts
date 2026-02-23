@@ -21,6 +21,7 @@ const DISPLAY_LABELS: Record<string, string> = {
   MAJOR_APPLIANCE_FRIDGE: 'Refrigerator Service',
   MAJOR_APPLIANCE_DISHWASHER: 'Dishwasher Service',
   HVAC_FURNACE: 'HVAC Furnace Service',
+  HVAC_FURNACE_FILTER: 'HVAC Filter Replacement',
   HVAC_HEAT_PUMP: 'HVAC Heat Pump Service',
 
   // MitigationActionType

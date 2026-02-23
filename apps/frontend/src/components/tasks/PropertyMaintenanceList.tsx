@@ -120,6 +120,8 @@ export function PropertyMaintenanceList({
       queryClient.invalidateQueries({ queryKey: ['seasonal-checklist'] });
       queryClient.invalidateQueries({ queryKey: ['seasonal-checklists'] });
       queryClient.invalidateQueries({ queryKey: ['seasonal-checklists', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['seasonalTasks', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['seasonalProgress', propertyId] });
       toast({
         title: 'Status updated',
         description: 'Task status has been updated successfully',
@@ -139,6 +141,8 @@ export function PropertyMaintenanceList({
       queryClient.invalidateQueries({ queryKey: ['seasonal-checklist'] });
       queryClient.invalidateQueries({ queryKey: ['seasonal-checklists'] });
       queryClient.invalidateQueries({ queryKey: ['seasonal-checklists', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['seasonalTasks', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['seasonalProgress', propertyId] });
       toast({
         title: 'Task deleted',
         description: 'Task has been deleted successfully',

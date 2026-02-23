@@ -137,7 +137,7 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
   }
 
   const riskScore = Math.max(0, Math.round(summary.riskScore || 0));
-  const displayValue = riskScore === 0 ? 3 : riskScore;
+  const displayValue = Math.max(riskScore, 8);
   const exposure = Math.max(0, Math.round(summary.financialExposureTotal || 0));
   const riskStatus = getRiskStatus(riskScore);
   const weeklyChange = formatWeeklyDelta(
@@ -172,6 +172,7 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
               textColor: "#111827",
               pathColor: getRiskPathColor(riskScore),
               trailColor: "#e5e7eb",
+              strokeLinecap: "butt",
               pathTransitionDuration: 0.6,
             })}
           />

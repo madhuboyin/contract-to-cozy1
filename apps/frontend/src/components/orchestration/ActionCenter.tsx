@@ -208,6 +208,8 @@ export const ActionCenter: React.FC<Props> = ({
       await loadActions();
       queryClient.invalidateQueries({ queryKey: ['seasonal-checklists'] });
       queryClient.invalidateQueries({ queryKey: ['seasonal-checklist'] });
+      queryClient.invalidateQueries({ queryKey: ['seasonalTasks', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['seasonalProgress', propertyId] });
     } catch (e: any) {
       toast({
         title: 'Unable to undo completion',
@@ -320,6 +322,8 @@ export const ActionCenter: React.FC<Props> = ({
       await loadActions();
       queryClient.invalidateQueries({ queryKey: ['seasonal-checklists'] });
       queryClient.invalidateQueries({ queryKey: ['seasonal-checklist'] });
+      queryClient.invalidateQueries({ queryKey: ['seasonalTasks', propertyId] });
+      queryClient.invalidateQueries({ queryKey: ['seasonalProgress', propertyId] });
     } catch (e: any) {
       toast({
         title: 'Unable to mark completed',

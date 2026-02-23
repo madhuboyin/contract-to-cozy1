@@ -3,15 +3,15 @@ type SeasonalTaskLike = {
 };
 
 function normalizeStatus(status?: string | null): string {
-  return String(status ?? '').trim().toLowerCase();
+  return String(status ?? '').trim().toUpperCase();
 }
 
 function isCompletedStatus(status?: string | null): boolean {
-  return normalizeStatus(status) === 'completed';
+  return normalizeStatus(status) === 'COMPLETED';
 }
 
 function shouldIncludeInProgress(status?: string | null): boolean {
-  return normalizeStatus(status) !== 'dismissed';
+  return normalizeStatus(status) !== 'DISMISSED';
 }
 
 export type SeasonalProgressSummary = {
@@ -44,7 +44,8 @@ export function calculateSeasonalProgress(
     capped = true;
   }
 
-  const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  const rawProgress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  const progress = Math.min(100, Math.max(0, rawProgress));
   return {
     displayedTasks,
     completedCount,
@@ -54,4 +55,3 @@ export function calculateSeasonalProgress(
     capped,
   };
 }
-

@@ -9,6 +9,7 @@ import {
   runRiskPremiumOptimizer,
 } from '@/lib/api/riskPremiumOptimizerApi';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 type RiskPremiumOptimizerToolCardProps = {
   propertyId: string;
@@ -133,10 +134,19 @@ export default function RiskPremiumOptimizerToolCard({
             </span>
           </div>
           {analysis.recommendations.length > 0 && (
-            <div className="truncate">
-              Top recommendation:{' '}
-              <span className="font-medium text-gray-800">{analysis.recommendations[0].title}</span>
-            </div>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <p className="cursor-help text-xs text-gray-600 line-clamp-2">
+                    Top recommendation:{' '}
+                    <span className="font-medium text-gray-800">{analysis.recommendations[0].title}</span>
+                  </p>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs text-left">
+                  Top recommendation: {analysis.recommendations[0].title}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
         </div>
       )}

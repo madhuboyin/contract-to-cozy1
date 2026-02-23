@@ -62,8 +62,12 @@ export function SeasonalWidget({ propertyId }: SeasonalWidgetProps) {
     });
   }
   const completionPercentage = progress.progress;
-  const progressColor = getProgressBarColor(completionPercentage);
+  const displayProgress = Math.min(100, Math.max(0, completionPercentage));
+  const progressColor = getProgressBarColor(displayProgress);
   const remainingTasks = Math.max(0, progress.totalCount - progress.completedCount);
+  const displayText = progress.noTasks
+    ? 'No tasks yet'
+    : `${progress.completedCount} of ${progress.totalCount} tasks completed`;
 
   const handleViewChecklist = () => {
     setSelectedChecklistId(currentChecklist.id);
@@ -93,18 +97,16 @@ export function SeasonalWidget({ propertyId }: SeasonalWidgetProps) {
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-gray-700">
-                  {progress.noTasks
-                    ? 'No tasks yet'
-                    : `${progress.completedCount} of ${progress.totalCount} completed`}
+                  {displayText}
                 </span>
                 <span className="text-sm text-gray-600">
-                  {progress.noTasks ? 'No tasks yet' : `${completionPercentage}%`}
+                  {progress.noTasks ? 'No tasks yet' : `${displayProgress}%`}
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
                   className={`${progressColor} h-2 rounded-full transition-all`}
-                  style={{ width: `${completionPercentage}%` }}
+                  style={{ width: `${displayProgress}%` }}
                 ></div>
               </div>
             </div>

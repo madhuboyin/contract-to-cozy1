@@ -136,10 +136,11 @@ function getSuppressionCopy(action: OrchestratedActionDTO) {
   if (suppressionSource?.type === 'PROPERTY_MAINTENANCE_TASK') {
     const t = suppressionSource.task;
     const due = t.nextDueDate ? formatMonthYear(t.nextDueDate) : null;
+    const taskLabel = humanizeActionType(t.title);
 
     return {
       title: 'Already tracked as a maintenance task',
-      detail: due ? `"${t.title}" due ${due}` : `"${t.title}"`,
+      detail: due ? `Already tracked: "${taskLabel}" due ${due}` : `Already tracked: "${taskLabel}"`,
     };
   }
 
@@ -147,10 +148,11 @@ function getSuppressionCopy(action: OrchestratedActionDTO) {
   if (suppressionSource?.type === 'CHECKLIST_ITEM') {
     const item = suppressionSource.checklistItem;
     const due = item.nextDueDate ? formatMonthYear(item.nextDueDate) : null;
+    const itemLabel = humanizeActionType(item.title);
 
     return {
       title: 'This recommendation is already covered',
-      detail: due ? `Covered by "${item.title}", due ${due}` : `Covered by "${item.title}"`,
+      detail: due ? `Covered by "${itemLabel}", due ${due}` : `Covered by "${itemLabel}"`,
     };
   }
 
