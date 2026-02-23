@@ -7,12 +7,25 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { InventoryItem, InventoryItemCategory, InventoryItemCondition, InventoryRoom } from '@/types';
 import DocumentPickerModal from './DocumentPickerModal';
-import InventoryItemRecallPanel from './InventoryItemRecallPanel';
+import DocumentUploadZone from './DocumentUploadZone';
 import BarcodeScannerModal, { BarcodeLookupResult } from './BarcodeScannerModal';
 import LabelOcrModal from './LabelOcrModal';
 import { lookupBarcode as lookupInventoryBarcode } from '../../inventory/inventoryApi';
 import QrScannerModal from './QrScannerModal';
-import { CheckCircle as CheckCircleIcon, ShieldAlert as ShieldAlertIcon } from 'lucide-react';
+import {
+  AlertTriangle,
+  BadgeCheck,
+  CheckCircle2,
+  Circle,
+  Loader2,
+  ScanLine,
+  Shield,
+  ShieldAlert as ShieldAlertIcon,
+  Trash2,
+  Wrench,
+  X,
+} from 'lucide-react';
+import { titleCase, titleCaseCategory } from '@/lib/utils/string';
 
 
 import {
@@ -30,6 +43,7 @@ import {
   confirmInventoryDraft,
   dismissInventoryDraft,
 } from '../../inventory/inventoryApi';
+import { listInventoryItemRecalls } from '../../properties/[id]/recalls/recallsApi';
 import { verifyItem } from '../verification/verificationApi';
 
 const CATEGORIES: InventoryItemCategory[] = [
@@ -165,7 +179,9 @@ function dollarsToCents(v: string) {
 }
 function centsToDollars(cents: number | null | undefined) {
   if (cents === null || cents === undefined) return '';
-  return (cents / 100).toFixed(2);
+  const value = cents / 100;
+  if (value % 1 === 0) return String(value);
+  return value.toFixed(2);
 }
 
 function unwrapBarcodeLookupResponse(raw: any): Partial<BarcodeLookupResult> {
@@ -354,11 +370,10 @@ export default function InventoryItemDrawer(props: {
 
   // docs
   const [docPickerOpen, setDocPickerOpen] = useState(false);
-  const [manualDocId, setManualDocId] = useState('');
   const [linkedDocs, setLinkedDocs] = useState<any[]>([]);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [autoCreateWarranty, setAutoCreateWarranty] = useState(true);
+  const [documentUploading, setDocumentUploading] = useState(false);
+  const autoCreateWarranty = true;
   const [mounted, setMounted] = useState(false);
 
   // coverage links
@@ -374,6 +389,10 @@ export default function InventoryItemDrawer(props: {
 
   // verification state
   const [verifying, setVerifying] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [recallLoading, setRecallLoading] = useState(false);
+  const [recallError, setRecallError] = useState<string | null>(null);
+  const [recallMatches, setRecallMatches] = useState<any[]>([]);
 
   /**
  * Check for duplicate major appliances (client-side)
@@ -469,9 +488,9 @@ useEffect(() => {
     setReplacementCost(centsToDollars(item?.replacementCostCents));
 
     setLinkedDocs((item as any)?.documents ?? []);
-    setManualDocId('');
-    setUploadFile(null);
     setUploadError(null);
+    setDocumentUploading(false);
+    setShowDeleteConfirm(false);
 
     setNotes((item as any)?.notes ?? '');
 
@@ -517,6 +536,37 @@ useEffect(() => {
       sku,
     };
   }, [manufacturer, modelNumber, serialNumber, upc, sku]);
+
+  useEffect(() => {
+    if (!props.open || !props.initialItem?.id) {
+      setRecallMatches([]);
+      setRecallError(null);
+      setRecallLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setRecallLoading(true);
+    setRecallError(null);
+
+    (async () => {
+      try {
+        const response = await listInventoryItemRecalls(props.propertyId, props.initialItem!.id);
+        if (cancelled) return;
+        setRecallMatches(response?.matches ?? []);
+      } catch (error: any) {
+        if (cancelled) return;
+        setRecallError(error?.message || 'Failed to load recall alerts');
+        setRecallMatches([]);
+      } finally {
+        if (!cancelled) setRecallLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [props.open, props.propertyId, props.initialItem?.id]);
   
   useEffect(() => {
     if (!props.open) return;
@@ -598,21 +648,21 @@ useEffect(() => {
     try {
       await linkDocumentToInventoryItem(props.propertyId, props.initialItem.id, id);
       await refreshItemDocs();
-      setManualDocId('');
     } finally {
       setSaving(false);
     }
   }
 
-  async function uploadAndAttach() {
+  async function uploadAndAttach(file: File) {
     if (!props.initialItem) return;
-    if (!uploadFile) return;
+    if (!file) return;
 
+    setDocumentUploading(true);
     setSaving(true);
     setUploadError(null);
     try {
       const result = await uploadAndAnalyzeDocument({
-        file: uploadFile,
+        file,
         propertyId: props.propertyId,
         autoCreateWarranty,
       });
@@ -633,10 +683,10 @@ useEffect(() => {
       }
 
       await refreshItemDocs();
-      setUploadFile(null);
     } catch (e: any) {
       setUploadError(e?.message || 'Upload failed');
     } finally {
+      setDocumentUploading(false);
       setSaving(false);
     }
   }
@@ -652,10 +702,8 @@ useEffect(() => {
     }
   }
 
-  async function onDelete() {
+  async function handleConfirmedDelete() {
     if (!props.initialItem) return;
-    const ok = confirm(`Delete "${props.initialItem.name}"?`);
-    if (!ok) return;
     setSaving(true);
     try {
       await deleteInventoryItem(props.propertyId, props.initialItem.id);
@@ -664,9 +712,6 @@ useEffect(() => {
       setSaving(false);
     }
   }
-
-  // ---------- Barcode lookup ----------
-  const LOOKUP_PATH = `/api/properties/${props.propertyId}/inventory/barcode/lookup`;
 
   async function lookupBarcode(code: string) {
     const trimmed = code.trim();
@@ -832,6 +877,11 @@ useEffect(() => {
     if (duplicateError) {
       return;
     }
+
+    const shouldVerifyOnSave =
+      Boolean(isEdit && props.initialItem && !(props.initialItem as any).isVerified) &&
+      [manufacturer, modelNumber, serialNumber].every((value) => value.trim().length > 0);
+
     setSaving(true);
     try {
       // Determine which date field to send based on category
@@ -891,7 +941,15 @@ useEffect(() => {
           await createInventoryItem(props.propertyId, payload);
         }
       }
-  
+
+      if (shouldVerifyOnSave && props.initialItem) {
+        try {
+          await verifyItem(props.propertyId, props.initialItem.id, { source: 'MANUAL' });
+        } catch (verifyError) {
+          console.error('Auto-verify on save failed:', verifyError);
+        }
+      }
+
       props.onSaved();
     } catch (error: any) {
       console.error('Failed to save inventory item:', error);
@@ -912,6 +970,10 @@ useEffect(() => {
     );
   }
 
+  function handleDeleteIntent() {
+    setShowDeleteConfirm(true);
+  }
+
   function openReplaceRepair() {
     if (!props.initialItem?.id) return;
     props.onClose();
@@ -920,51 +982,92 @@ useEffect(() => {
     );
   }
 
+  const isUnverified = Boolean(isEdit && props.initialItem && !(props.initialItem as any).isVerified);
+  const identifierFields = [
+    { label: 'Manufacturer', value: manufacturer.trim() },
+    { label: 'Model #', value: modelNumber.trim() },
+    { label: 'Serial #', value: serialNumber.trim() },
+  ];
+  const allIdentifiersFilled = identifierFields.every((field) => field.value.length > 0);
+  const activeRecallMatches = recallMatches.filter((match) => {
+    const status = String(match?.status || '').toUpperCase();
+    return status !== 'RESOLVED' && status !== 'DISMISSED';
+  });
+
   if (!props.open || !mounted) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/30" onClick={props.onClose} />
-      <div className="absolute right-0 top-0 w-full max-w-xl bg-white h-full shadow-xl p-6 pb-[max(1rem,env(safe-area-inset-bottom))] overflow-hidden flex flex-col [&_input]:text-base [&_select]:text-base [&_textarea]:text-base [&_input[type='file']]:text-sm sm:[&_input]:text-sm sm:[&_select]:text-sm sm:[&_textarea]:text-sm">
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="text-lg font-semibold">{isEdit ? 'Edit item' : 'Add item'}</div>
-            <div className="text-sm opacity-70">Track assets, receipts, and replacement value.</div>
+      <div className="absolute inset-y-0 right-0 w-full max-w-[640px] bg-white shadow-2xl">
+        <div className="flex h-full flex-col">
+          <div className="flex items-start justify-between border-b border-gray-100 px-6 py-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">{isEdit ? 'Edit item' : 'Add item'}</h2>
+              <p className="mt-0.5 text-sm text-gray-500">Track assets, receipts, and replacement value.</p>
+            </div>
+            <button
+              type="button"
+              onClick={props.onClose}
+              className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+              aria-label="Close drawer"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
-          <button onClick={props.onClose} className="text-sm underline opacity-80 hover:opacity-100">
-            Close
-          </button>
-        </div>
 
-        {/* Verification status banner */}
-        {isEdit && props.initialItem && (
-          <div className="mt-4">
-            {(props.initialItem as any).isVerified ? (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-200">
-                <CheckCircleIcon className="w-4 h-4 text-green-600" />
-                <span className="text-sm font-medium text-green-800">
-                  Verified via {((props.initialItem as any).verificationSource || 'unknown').replace('_', ' ')}
-                </span>
-              </div>
-            ) : (
-              <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <ShieldAlertIcon className="w-4 h-4 text-amber-600" />
-                  <span className="text-sm font-medium text-amber-800">Unverified Item</span>
+          <div className="flex-1 space-y-6 overflow-y-auto overflow-x-hidden px-6 py-5">
+            {isUnverified ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <div className="mb-1 flex items-center gap-2">
+                  <ShieldAlertIcon className="h-4 w-4 flex-shrink-0 text-amber-600" />
+                  <p className="text-sm font-semibold text-amber-800">Unverified Item</p>
                 </div>
-                <p className="text-xs text-amber-700 mb-2">
-                  Verify this item to unlock lifespan predictions and better maintenance insights.
+
+                <p className="mb-3 text-xs leading-relaxed text-amber-700">
+                  Add identifiers below to unlock lifespan predictions and recall monitoring.
                 </p>
-                <div className="flex gap-2">
+
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  {identifierFields.map((field) => (
+                    <div
+                      key={field.label}
+                      className={[
+                        'flex cursor-default select-none items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs',
+                        field.value
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                          : 'border-amber-200 bg-white text-amber-600',
+                      ].join(' ')}
+                    >
+                      {field.value ? (
+                        <CheckCircle2 className="h-3 w-3 flex-shrink-0 text-emerald-500" />
+                      ) : (
+                        <Circle className="h-3 w-3 flex-shrink-0 text-amber-400" />
+                      )}
+                      <span>{field.value || field.label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {allIdentifiersFilled ? (
+                  <div className="mb-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    All identifiers filled - item will be verified on save.
+                  </div>
+                ) : null}
+
+                <div className="flex flex-wrap items-center gap-2">
                   <button
+                    type="button"
                     onClick={() => setLabelOpen(true)}
                     disabled={verifying || ocrLoading}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md
-                      border border-amber-300 text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-50 disabled:opacity-50"
                   >
+                    <ScanLine className="h-3.5 w-3.5" />
                     Scan Label
                   </button>
                   <button
+                    type="button"
                     onClick={async () => {
                       if (!props.initialItem) return;
                       setVerifying(true);
@@ -978,656 +1081,578 @@ useEffect(() => {
                       }
                     }}
                     disabled={verifying}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md
-                      border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-50 disabled:opacity-50"
                   >
+                    <BadgeCheck className="h-3.5 w-3.5" />
                     {verifying ? 'Verifying...' : 'Mark as Verified'}
                   </button>
+                  <p className="text-[10px] leading-relaxed text-amber-500">
+                    Fill identifiers in Product identifiers below to auto-verify
+                  </p>
                 </div>
               </div>
-            )}
+            ) : null}
 
-            {/* Remaining Life progress bar */}
-            {(props.initialItem as any).expectedExpiryDate && (props.initialItem as any).purchasedOn && (() => {
-              const purchased = new Date((props.initialItem as any).purchasedOn).getTime();
-              const expiry = new Date((props.initialItem as any).expectedExpiryDate).getTime();
-              const now = Date.now();
-              const totalSpan = expiry - purchased;
-              const elapsed = now - purchased;
-              const remaining = expiry - now;
-              const pctRemaining = totalSpan > 0 ? Math.max(0, Math.min(100, (remaining / totalSpan) * 100)) : 0;
-              const yearsRemaining = remaining / (365.25 * 24 * 60 * 60 * 1000);
-              const barColor = pctRemaining > 50 ? 'bg-green-500' : pctRemaining > 20 ? 'bg-amber-500' : 'bg-red-500';
-
-              return (
-                <div className="mt-2 px-3 py-2 rounded-lg bg-gray-50 border border-gray-200">
-                  <div className="flex justify-between text-xs text-gray-600 mb-1">
-                    <span>Remaining Life</span>
-                    <span>
-                      {yearsRemaining > 0
-                        ? `~${Math.round(yearsRemaining)} year${Math.round(yearsRemaining) !== 1 ? 's' : ''} remaining`
-                        : 'Past expected life'}
-                    </span>
+            {!isEdit ? (
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-800">Scan & autofill</div>
+                    <div className="text-xs text-gray-500">
+                      Scan first to autofill details before saving. Barcode finds product info; label OCR extracts model/serial.
+                    </div>
                   </div>
-                  <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${barColor}`}
-                      style={{ width: `${pctRemaining}%` }}
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setScannerOpen(true)}
+                      disabled={saving || lookupLoading}
+                      className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:border-gray-300 hover:bg-white disabled:opacity-50"
+                    >
+                      {lookupLoading ? 'Looking up...' : 'Scan barcode'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setLabelOpen(true)}
+                      disabled={saving || ocrLoading}
+                      className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:border-gray-300 hover:bg-white disabled:opacity-50"
+                    >
+                      {ocrLoading ? 'Extracting...' : 'Scan label'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setQrOpen(true)}
+                      disabled={saving || lookupLoading}
+                      className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:border-gray-300 hover:bg-white disabled:opacity-50"
+                    >
+                      {lookupLoading ? 'Looking up...' : 'Scan QR'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 gap-3">
+                  <div>
+                    <div className="text-xs text-gray-500">Barcode (UPC/EAN)</div>
+                    <input
+                      value={lastScannedCode}
+                      readOnly
+                      className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                      placeholder="No barcode scanned yet"
                     />
                   </div>
-                </div>
-              );
-            })()}
-
-            {/* Ghost slots for missing technical specs */}
-            {!(props.initialItem as any).isVerified && (
-              <div className="mt-2 grid grid-cols-3 gap-2">
-                {!((props.initialItem as any).manufacturer) && (
-                  <div className="flex items-center gap-1 px-2 py-1.5 rounded border border-dashed border-gray-300 text-xs text-gray-400">
-                    Manufacturer
+                  <div>
+                    <div className="text-xs text-gray-500">QR code</div>
+                    <input
+                      value={lastQrText ? (lastQrText.length > 60 ? `${lastQrText.slice(0, 60)}...` : lastQrText) : ''}
+                      readOnly
+                      className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                      placeholder="No QR scanned yet"
+                    />
                   </div>
-                )}
-                {!((props.initialItem as any).modelNumber) && (
-                  <div className="flex items-center gap-1 px-2 py-1.5 rounded border border-dashed border-gray-300 text-xs text-gray-400">
-                    Model #
-                  </div>
-                )}
-                {!((props.initialItem as any).serialNumber) && (
-                  <div className="flex items-center gap-1 px-2 py-1.5 rounded border border-dashed border-gray-300 text-xs text-gray-400">
-                    Serial #
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="mt-6 space-y-4 flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1">
-          {/* Unified "Smart scan" section */}
-          {!isEdit ? (
-            <div className="rounded-2xl border border-black/10 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-sm font-medium">Scan & autofill</div>
-                  <div className="text-xs opacity-70">
-                    Scan first to autofill details before saving. Barcode finds product info; label OCR extracts model/serial.
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setScannerOpen(true)}
-                    disabled={saving || lookupLoading}
-                    className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
-                    title="Scan barcode (UPC/EAN)"
-                  >
-                    {lookupLoading ? 'Looking up…' : 'Scan barcode'}
-                  </button>
-
-                  <button
-                    onClick={() => setLabelOpen(true)}
-                    disabled={saving || ocrLoading}
-                    className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
-                    title="Scan appliance label (OCR)"
-                  >
-                    {ocrLoading ? 'Extracting…' : 'Scan label'}
-                  </button>
-                  {/* QR scanner */}
-                  <button
-                    onClick={() => setQrOpen(true)}
-                    disabled={saving || lookupLoading}
-                    className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
-                    title="Scan QR code"
-                  >
-                    {lookupLoading ? 'Looking up…' : 'Scan QR'}
-                  </button>
-
-                </div>
-              </div>
-
-              {/* Lightweight status rows */}
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <div className="text-xs opacity-70">Barcode (UPC/EAN)</div>
-                  <input
-                    value={lastScannedCode}
-                    readOnly
-                    className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm bg-black/5"
-                    placeholder="No barcode scanned yet"
-                  />
-                  <div className="mt-1 text-[11px] opacity-60">Autofills: name, category (best effort), UPC, manufacturer/model (when available).</div>
-                </div>
-
-                <div className="col-span-2">
-                  <div className="text-xs opacity-70">QR code</div>
-                  <input
-                    value={lastQrText ? (lastQrText.length > 60 ? `${lastQrText.slice(0, 60)}…` : lastQrText) : ''}
-                    readOnly
-                    className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm bg-black/5"
-                    placeholder="No QR scanned yet"
-                  />
-                  <div className="mt-1 text-[11px] opacity-60">
-                    Autofills: UPC/name/manufacturer/model (when QR contains UPC/GTIN), or model/serial if present.
-                  </div>
-                </div>
-
-                <div className="col-span-2">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs opacity-70">Label OCR draft</div>
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs text-gray-500">Label OCR draft</div>
+                      {draftId ? (
+                        <button
+                          type="button"
+                          onClick={onDismissDraft}
+                          disabled={saving || ocrLoading}
+                          className="text-[11px] text-gray-500 underline transition-colors hover:text-gray-700 disabled:opacity-50"
+                        >
+                          Dismiss draft
+                        </button>
+                      ) : null}
+                    </div>
+                    <input
+                      value={draftId ? `Draft created (${draftId.slice(0, 8)}...)` : ''}
+                      readOnly
+                      className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                      placeholder="No label scan yet"
+                    />
                     {draftId ? (
-                      <button
-                        onClick={onDismissDraft}
-                        disabled={saving || ocrLoading}
-                        className="text-[11px] underline opacity-70 hover:opacity-100 disabled:opacity-50"
-                        title="Dismiss this draft (does not delete any saved item)"
-                      >
-                        Dismiss draft
-                      </button>
+                      <div className="mt-1 text-[11px] text-gray-500">
+                        Confidence: manufacturer {pct(confidenceByField.manufacturer)} · model {pct(confidenceByField.modelNumber)} · serial{' '}
+                        {pct(confidenceByField.serialNumber)}
+                        <span className="ml-2">Draft is confirmed when you hit Save.</span>
+                      </div>
                     ) : null}
                   </div>
+                  {lookupError ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{lookupError}</div> : null}
+                  {ocrError ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{ocrError}</div> : null}
+                  {qrError ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{qrError}</div> : null}
+                </div>
+              </div>
+            ) : null}
 
-                  <input
-                    value={draftId ? `Draft created (${draftId.slice(0, 8)}…)` : ''}
-                    readOnly
-                    className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm bg-black/5"
-                    placeholder="No label scan yet"
-                  />
+            <section className="space-y-4">
+              <div>
+                <div className="text-sm font-semibold text-gray-800">Name *</div>
+                <input
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setTouched((t) => ({ ...t, name: true }));
+                  }}
+                  className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  placeholder="e.g. Samsung Dishwasher"
+                />
+              </div>
 
-                  {draftId ? (
-                    <div className="mt-1 text-[11px] opacity-60">
-                      Confidence: manufacturer {pct(confidenceByField.manufacturer)} • model {pct(confidenceByField.modelNumber)} • serial{' '}
-                      {pct(confidenceByField.serialNumber)}
-                      <span className="ml-2 opacity-70">Draft is confirmed when you hit Save.</span>
-                    </div>
-                  ) : (
-                    <div className="mt-1 text-[11px] opacity-60">Autofills: manufacturer, model number, serial number (creates a draft).</div>
-                  )}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <div className="text-sm font-semibold text-gray-800">Category</div>
+                  <select
+                    value={category}
+                    onChange={(e) => {
+                      setCategory(e.target.value as any);
+                      setTouched((t) => ({ ...t, category: true }));
+                    }}
+                    className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  >
+                    {CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {titleCaseCategory(c)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                {lookupError ? (
-                  <div className="col-span-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-                    {lookupError}
-                  </div>
-                ) : null}
-
-                {ocrError ? (
-                  <div className="col-span-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-                    {ocrError}
-                  </div>
-                ) : null}
-                {qrError ? (
-                  <div className="col-span-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-                    {qrError}
-                  </div>
-                ) : null}
-
+                <div>
+                  <div className="text-sm font-semibold text-gray-800">Room</div>
+                  <select
+                    value={roomId}
+                    onChange={(e) => setRoomId(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  >
+                    <option value="">Unassigned</option>
+                    {props.rooms.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            </div>
-          ) : null}
 
-          <div>
-            <div className="text-sm font-medium">Name *</div>
-            <input
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                setTouched((t) => ({ ...t, name: true }));
-              }}
-              
-              className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-              placeholder="e.g., Water Heater"
-            />
-          </div>
+              {duplicateError ? (
+                <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3">
+                  <svg className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-sm text-red-700">{duplicateError}</span>
+                </div>
+              ) : null}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <div className="text-sm font-medium">Category</div>
-              <select
-                value={category}
-                onChange={(e) => {
-                  setCategory(e.target.value as any);
-                  setTouched((t) => ({ ...t, category: true }));
-                }}
-                className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-              >
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <div className="text-sm font-semibold text-gray-800">Condition</div>
+                  <select
+                    value={condition}
+                    onChange={(e) => setCondition(e.target.value as any)}
+                    className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  >
+                    {CONDITIONS.map((c) => (
+                      <option key={c} value={c}>
+                        {titleCase(c)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="hidden sm:block" />
+              </div>
+            </section>
 
-            <div>
-              <div className="text-sm font-medium">Room</div>
-              <select
-                value={roomId}
-                onChange={(e) => setRoomId(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-              >
-                <option value="">Unassigned</option>
-                {props.rooms.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          {duplicateError && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-3 flex items-start gap-2">
-              <svg 
-                className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round" 
-                  strokeWidth={2} 
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" 
-                />
-              </svg>
-              <span className="text-sm text-red-700">{duplicateError}</span>
-            </div>
-          )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <div className="text-sm font-medium">Condition</div>
-              <select
-                value={condition}
-                onChange={(e) => setCondition(e.target.value as any)}
-                className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-              >
-                {CONDITIONS.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="hidden sm:block" />
-          </div>
+            <section className="space-y-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-800">Product identifiers</h3>
+                <p className="mt-0.5 text-xs text-gray-500">Improves recall matching and maintenance predictions.</p>
+              </div>
 
-          {/* OCR modal */}
-          <LabelOcrModal open={labelOpen} onClose={() => setLabelOpen(false)} onCaptured={runLabelOcr} />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="min-w-0">
+                  <div className="text-xs text-gray-500">Manufacturer</div>
+                  <input
+                    value={manufacturer}
+                    onChange={(e) => {
+                      setManufacturer(e.target.value);
+                      setTouched((t) => ({ ...t, manufacturer: true }));
+                    }}
+                    placeholder="e.g. Samsung"
+                    className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs text-gray-500">Model number</div>
+                  <input
+                    value={modelNumber}
+                    onChange={(e) => {
+                      setModelNumber(e.target.value);
+                      setTouched((t) => ({ ...t, modelNumber: true }));
+                    }}
+                    placeholder="e.g. DW80R9950US"
+                    className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
 
-          {/* Phase 2 fields */}
-          <div className="rounded-2xl border border-black/10 p-4 overflow-hidden">
-            <div className="text-sm font-medium">Product identifiers</div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
               <div className="min-w-0">
-                <div className="text-xs opacity-70">Manufacturer</div>
-                <input
-                  value={manufacturer}
-                  onChange={(e) => {
-                    setManufacturer(e.target.value);
-                    setTouched((t) => ({ ...t, manufacturer: true }));
-                  }}
-                  
-                  className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-                />
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs opacity-70">Model number</div>
-                <input
-                  value={modelNumber}
-                  onChange={(e) => {
-                    setModelNumber(e.target.value);
-                    setTouched((t) => ({ ...t, modelNumber: true }));
-                  }}
-                  className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-                />
-              </div>
-              <div className="min-w-0 sm:col-span-2">
-                <div className="text-xs opacity-70">Serial number</div>
+                <div className="text-xs text-gray-500">Serial number</div>
                 <input
                   value={serialNumber}
                   onChange={(e) => {
                     setSerialNumber(e.target.value);
                     setTouched((t) => ({ ...t, serialNumber: true }));
                   }}
-                  className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
+                  placeholder="e.g. 0A1B2C3D4E5F"
+                  className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
                 />
               </div>
-              <div className="min-w-0">
-                <div className="text-xs opacity-70">SKU</div>
-                <input
-                  value={sku}
-                  onChange={(e) => {
-                    setSku(e.target.value);
-                    setTouched((t) => ({ ...t, sku: true }));
-                  }}
-                  className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-                />
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs opacity-70">UPC</div>
-                <input
-                  value={upc}
-                  onChange={(e) => {
-                    setUpc(e.target.value);
-                    setTouched((t) => ({ ...t, upc: true }));
-                  }}
-                  className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
 
-            <div className="mt-2 text-[11px] opacity-60">
-              These fields improve recall matching and later “safety/recall” automation.
-            </div>
-          </div>
-
-          {/* Existing recall panel behavior */}
-          {isEdit && props.initialItem ? (
-            <InventoryItemRecallPanel
-              open={props.open}
-              propertyId={props.propertyId}
-              inventoryItemId={props.initialItem.id}
-            />
-          ) : (
-            <div className="rounded-2xl border border-black/10 p-4">
-              <div className="text-sm font-medium">Safety / Recall Alerts</div>
-              <div className="text-xs opacity-70 mt-1">Save this item first to enable recall scanning.</div>
-            </div>
-          )}
-
-          {/* Category-specific date field */}
-          <div className="rounded-2xl border border-black/10 p-4">
-            <div className="text-sm font-medium mb-3">
-              {INSTALL_YEAR_CATEGORIES.includes(category) ? 'Installation' : 'Purchase Information'}
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* APPLIANCE category: Install Year (year picker) */}
-              {INSTALL_YEAR_CATEGORIES.includes(category) && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="min-w-0">
-                  <div className="text-xs opacity-70 mb-1">
-                    Install Year {category === 'APPLIANCE' && <span className="text-red-500">*</span>}
-                  </div>
+                  <div className="text-xs text-gray-500">SKU</div>
                   <input
-                    type="number"
-                    min="1900"
-                    max={CURRENT_YEAR + 1}
-                    step="1"
-                    placeholder="e.g. 2019"
-                    value={installYear}
-                    onChange={(e) => setInstallYear(e.target.value)}
-                    required={category === 'APPLIANCE'}
-                    className={`w-full rounded-xl border px-3 py-2 text-sm ${
-                      category === 'APPLIANCE' && !installYear 
-                        ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
-                        : 'border-black/10'
-                    }`}
+                    value={sku}
+                    onChange={(e) => {
+                      setSku(e.target.value);
+                      setTouched((t) => ({ ...t, sku: true }));
+                    }}
+                    placeholder="Optional"
+                    className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
                   />
-                  {category === 'APPLIANCE' && !installYear && (
-                    <div className="text-xs text-red-500 mt-1">Required for appliances</div>
-                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs text-gray-500">UPC</div>
+                  <input
+                    value={upc}
+                    onChange={(e) => {
+                      setUpc(e.target.value);
+                      setTouched((t) => ({ ...t, upc: true }));
+                    }}
+                    placeholder="Optional"
+                    className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-2">
+              <h3 className="text-sm font-semibold text-gray-800">Safety / Recall Alerts</h3>
+              {isEdit ? (
+                recallLoading ? (
+                  <div className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                    <div className="mt-0.5 rounded-full bg-gray-200 p-1.5">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Checking recall data...</p>
+                      <p className="mt-0.5 text-xs text-gray-500">Scanning current CPSC matches for this item.</p>
+                    </div>
+                  </div>
+                ) : recallError ? (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-red-500" />
+                      <p className="text-sm font-semibold text-red-700">Unable to load recall alerts</p>
+                    </div>
+                    <p className="mt-1 text-xs text-red-600">{recallError}</p>
+                  </div>
+                ) : activeRecallMatches.length === 0 ? (
+                  <div className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                    <div className="mt-0.5 rounded-full bg-emerald-100 p-1.5">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">No active recalls found</p>
+                      <p className="mt-0.5 text-xs text-gray-500">We monitor CPSC data for your appliance models.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                    <div className="mb-1 flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-red-500" />
+                      <p className="text-sm font-semibold text-red-700">
+                        {activeRecallMatches.length} active recall{activeRecallMatches.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                    {activeRecallMatches.map((recallMatch) => (
+                      <p key={recallMatch.id} className="mt-1 text-xs text-red-600">
+                        {recallMatch?.recall?.title || 'Recall notice'}
+                      </p>
+                    ))}
+                  </div>
+                )
+              ) : (
+                <div className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="mt-0.5 rounded-full bg-emerald-100 p-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">No active recalls found</p>
+                    <p className="mt-0.5 text-xs text-gray-500">Save this item first to enable recall monitoring.</p>
+                  </div>
                 </div>
               )}
+            </section>
 
-              {/* ELECTRONICS, FURNITURE, OTHER categories: Purchase Date (date picker) */}
-              {PURCHASE_DATE_CATEGORIES.includes(category) && (
-                <div className="min-w-0">
-                  <div className="text-xs opacity-70 mb-1">Purchase Date</div>
-                  <div className="w-full max-w-full overflow-hidden rounded-xl border border-black/10 bg-white">
+            <section className="space-y-4 rounded-xl border border-gray-200 p-4">
+              <h3 className="text-sm font-semibold text-gray-800">
+                {INSTALL_YEAR_CATEGORIES.includes(category) ? 'Installation' : 'Purchase Information'}
+              </h3>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {INSTALL_YEAR_CATEGORIES.includes(category) ? (
+                  <div className="min-w-0">
+                    <div className="mb-1 text-xs text-gray-500">
+                      Install Year {category === 'APPLIANCE' ? <span className="text-red-500">*</span> : null}
+                    </div>
+                    <input
+                      type="number"
+                      min="1900"
+                      max={CURRENT_YEAR + 1}
+                      step="1"
+                      placeholder="e.g. 2019"
+                      value={installYear}
+                      onChange={(e) => setInstallYear(e.target.value)}
+                      required={category === 'APPLIANCE'}
+                      className={[
+                        'w-full rounded-xl border px-3 py-2 text-sm',
+                        category === 'APPLIANCE' && !installYear ? 'border-red-300' : 'border-gray-200',
+                      ].join(' ')}
+                    />
+                    {category === 'APPLIANCE' && !installYear ? (
+                      <div className="mt-1 text-xs text-red-500">Required for appliances</div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {PURCHASE_DATE_CATEGORIES.includes(category) ? (
+                  <div className="min-w-0">
+                    <div className="mb-1 text-xs text-gray-500">Purchase Date</div>
                     <input
                       type="date"
                       value={purchaseDate}
                       onChange={(e) => setPurchaseDate(e.target.value)}
                       max={new Date().toISOString().split('T')[0]}
-                      className="block w-full min-w-0 max-w-full border-0 px-3 py-2 text-sm bg-transparent"
-                      style={{ width: '100%', maxWidth: '100%', minWidth: 0 }}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
                     />
-                  </div>
-                </div>
-              )}
-
-              {/* Purchase/Replacement cost (shown for all categories) */}
-              <div className="min-w-0">
-                <div className="text-xs opacity-70 mb-1">Purchase Cost ($)</div>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0.00"
-                  value={purchaseCost}
-                  onChange={(e) => setPurchaseCost(e.target.value)}
-                  className="w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-                />
-              </div>
-
-              <div className="min-w-0">
-                <div className="text-xs opacity-70 mb-1">Replacement Cost ($)</div>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0.00"
-                  value={replacementCost}
-                  onChange={(e) => setReplacementCost(e.target.value)}
-                  className="w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Coverage links */}
-          <div className="rounded-2xl border border-black/10 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-medium">Coverage links</div>
-                <div className="text-xs opacity-70">
-                  Link this inventory item to warranty and/or insurance.
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={openGetCoverage}
-                disabled={!isEdit}
-                className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
-                title={!isEdit ? 'Save this item first to run analysis' : undefined}
-              >
-                Get coverage
-              </button>
-              <button
-                type="button"
-                onClick={openReplaceRepair}
-                disabled={!isEdit}
-                className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
-                title={!isEdit ? 'Save this item first to run analysis' : undefined}
-              >
-                Replace or Repair
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-              <div>
-                <div className="text-xs opacity-70">Warranty</div>
-                <select
-                  value={warrantyId}
-                  onChange={(e) => setWarrantyId(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-                >
-                  <option value="">None</option>
-                  {warranties.map((w: any) => (
-                    <option key={w.id} value={w.id}>
-                      {w.providerName}
-                      {w.policyNumber ? ` • ${w.policyNumber}` : ''}
-                      {w.expiryDate ? ` • exp ${new Date(w.expiryDate).toLocaleDateString()}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <div className="text-xs opacity-70">Insurance policy</div>
-                <select
-                  value={insurancePolicyId}
-                  onChange={(e) => setInsurancePolicyId(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-                >
-                  <option value="">None</option>
-                  {policies.map((p: any) => (
-                    <option key={p.id} value={p.id}>
-                      {p.carrierName}
-                      {p.policyNumber ? ` • ${p.policyNumber}` : ''}
-                      {p.expiryDate ? ` • exp ${new Date(p.expiryDate).toLocaleDateString()}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Documents (existing behavior preserved) */}
-          <div className="rounded-2xl border border-black/10 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-medium">Documents</div>
-                <div className="text-xs opacity-70">
-                  Upload and auto-attach receipts/manuals, or attach existing documents for this property.
-                </div>
-              </div>
-
-              <button
-                onClick={() => setDocPickerOpen(true)}
-                disabled={!isEdit || saving}
-                className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
-                title={!isEdit ? 'Save the item first to attach documents' : undefined}
-              >
-                Attach existing
-              </button>
-            </div>
-
-            {!isEdit ? (
-              <div className="mt-3 text-sm opacity-70">Save this item first to attach documents.</div>
-            ) : (
-              <>
-                <div className="mt-3 rounded-xl border border-black/10 p-3">
-                  <div className="text-xs font-medium opacity-80">Upload & auto-attach</div>
-                  <div className="mt-2 flex flex-col md:flex-row gap-2 md:items-center">
-                    <input type="file" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} className="text-sm" />
-                    <button
-                      onClick={uploadAndAttach}
-                      disabled={saving || !uploadFile}
-                      className="rounded-xl px-4 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
-                    >
-                      {saving ? 'Uploading…' : 'Upload & attach'}
-                    </button>
-                  </div>
-                  {uploadError ? <div className="mt-2 text-sm text-red-600">{uploadError}</div> : null}
-                </div>
-
-                {suggestions?.inventoryItemSuggestions?.length > 0 ? (
-                  <div className="mt-3 rounded-xl border border-black/10 p-3">
-                    <div className="text-xs font-medium opacity-80">AI suggested matches</div>
-                    <div className="text-xs opacity-70">Based on extracted model/serial/name. (You can ignore if incorrect.)</div>
-                    <div className="mt-2 space-y-2">
-                      {suggestions.inventoryItemSuggestions.slice(0, 5).map((it: any) => (
-                        <div key={it.id} className="flex items-start justify-between gap-3 rounded-lg border border-black/10 p-2">
-                          <div>
-                            <div className="text-sm font-medium">{it.name}</div>
-                            <div className="text-xs opacity-70">
-                              Score {it.score} • {it.brand || '—'} • {it.model || '—'} • {it.serialNo || '—'}
-                            </div>
-                            {it.reasons?.length > 0 ? <div className="text-xs opacity-60 mt-1">{it.reasons.join(' • ')}</div> : null}
-                          </div>
-                          <div className="text-xs opacity-60">{it.id === props.initialItem?.id ? 'This item' : 'Other item'}</div>
-                        </div>
-                      ))}
-                    </div>
                   </div>
                 ) : null}
 
-                <div className="mt-3 flex gap-2">
+                <div className="min-w-0">
+                  <div className="mb-1 text-xs text-gray-500">Purchase Cost ($)</div>
                   <input
-                    value={manualDocId}
-                    onChange={(e) => setManualDocId(e.target.value)}
-                    placeholder="Paste Document ID to attach…"
-                    className="flex-1 rounded-xl border border-black/10 px-3 py-2 text-sm"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0"
+                    value={purchaseCost}
+                    onChange={(e) => setPurchaseCost(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
                   />
+                </div>
+
+                <div className="min-w-0">
+                  <div className="mb-1 text-xs text-gray-500">Replacement Cost ($)</div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0"
+                    value={replacementCost}
+                    onChange={(e) => setReplacementCost(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-4 rounded-xl border border-gray-200 p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-800">Coverage links</h3>
+                  <p className="mt-0.5 text-xs text-gray-500">Link this item to warranty and/or insurance.</p>
+                </div>
+                <div className="flex flex-shrink-0 items-center gap-2">
                   <button
-                    onClick={() => attachDocumentById(manualDocId)}
-                    disabled={saving || !manualDocId.trim()}
-                    className="rounded-xl px-4 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
+                    type="button"
+                    onClick={openGetCoverage}
+                    disabled={!isEdit}
+                    title={!isEdit ? 'Save this item first to run analysis' : undefined}
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-teal-600 px-3 py-1.5 text-xs font-medium text-teal-600 transition-colors hover:bg-teal-50 disabled:opacity-50"
                   >
-                    Attach
+                    <Shield className="h-3.5 w-3.5" />
+                    Get coverage
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openReplaceRepair}
+                    disabled={!isEdit}
+                    title={!isEdit ? 'Save this item first to run analysis' : undefined}
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <Wrench className="h-3.5 w-3.5" />
+                    Replace/Repair
                   </button>
                 </div>
+              </div>
 
-                <div className="mt-3">
-                  {linkedDocs.length === 0 ? (
-                    <div className="text-sm opacity-70">No documents attached.</div>
-                  ) : (
-                    <div className="rounded-xl border border-black/10 divide-y">
-                      {linkedDocs.map((d: any) => (
-                        <div key={d.id} className="p-3 flex items-start justify-between gap-3">
-                          <div>
-                            <div className="text-sm font-medium">{d.name || d.title || d.fileName || d.id}</div>
-                            <div className="text-xs opacity-70">{d.type || d.documentType || 'DOCUMENT'}</div>
-                          </div>
-                          <button
-                            onClick={() => unlinkDocument(d.id)}
-                            disabled={saving}
-                            className="text-sm underline text-red-600 hover:text-red-700 disabled:opacity-50"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <div className="text-xs text-gray-500">Warranty</div>
+                  <select
+                    value={warrantyId}
+                    onChange={(e) => setWarrantyId(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  >
+                    <option value="">None</option>
+                    {warranties.map((w: any) => (
+                      <option key={w.id} value={w.id}>
+                        {w.providerName}
+                        {w.policyNumber ? ` · ${w.policyNumber}` : ''}
+                        {w.expiryDate ? ` · exp ${new Date(w.expiryDate).toLocaleDateString()}` : ''}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              </>
-            )}
+
+                <div>
+                  <div className="text-xs text-gray-500">Insurance policy</div>
+                  <select
+                    value={insurancePolicyId}
+                    onChange={(e) => setInsurancePolicyId(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  >
+                    <option value="">None</option>
+                    {policies.map((p: any) => (
+                      <option key={p.id} value={p.id}>
+                        {p.carrierName}
+                        {p.policyNumber ? ` · ${p.policyNumber}` : ''}
+                        {p.expiryDate ? ` · exp ${new Date(p.expiryDate).toLocaleDateString()}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-gray-200 p-4">
+              <DocumentUploadZone
+                disabled={!isEdit || saving}
+                uploading={documentUploading}
+                uploadError={uploadError}
+                documents={linkedDocs}
+                onAttachExisting={() => setDocPickerOpen(true)}
+                onUpload={(file) => {
+                  void uploadAndAttach(file);
+                }}
+                onRemove={(docId) => {
+                  void unlinkDocument(docId);
+                }}
+              />
+              {!isEdit ? <p className="mt-3 text-xs text-gray-500">Save this item first to attach documents.</p> : null}
+
+              {suggestions?.inventoryItemSuggestions?.length > 0 ? (
+                <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                  <div className="text-xs font-semibold text-gray-700">AI suggested matches</div>
+                  <div className="text-xs text-gray-500">Based on extracted model/serial/name. You can ignore if incorrect.</div>
+                  <div className="mt-2 space-y-2">
+                    {suggestions.inventoryItemSuggestions.slice(0, 5).map((it: any) => (
+                      <div key={it.id} className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-white p-2">
+                        <div>
+                          <div className="text-sm font-medium text-gray-800">{it.name}</div>
+                          <div className="text-xs text-gray-500">
+                            Score {it.score} · {it.brand || '—'} · {it.model || '—'} · {it.serialNo || '—'}
+                          </div>
+                          {it.reasons?.length > 0 ? <div className="mt-1 text-xs text-gray-400">{it.reasons.join(' · ')}</div> : null}
+                        </div>
+                        <div className="text-xs text-gray-400">{it.id === props.initialItem?.id ? 'This item' : 'Other item'}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </section>
+
+            <section className="space-y-2">
+              <h3 className="text-sm font-semibold text-gray-800">Notes</h3>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="min-h-[80px] w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                rows={4}
+                placeholder="Purchase notes, condition details, service history, warranty info..."
+              />
+            </section>
           </div>
 
-          <div>
-            <div className="text-sm font-medium">Notes</div>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
-              rows={4}
-            />
-          </div>
+          <div className="flex-shrink-0 border-t border-gray-100 bg-white px-6 py-4">
+            {showDeleteConfirm ? (
+              <div className="mb-4 flex items-center justify-between gap-4 rounded-xl border border-red-200 bg-red-50 p-4">
+                <p className="text-sm font-medium text-red-700">Delete this item permanently?</p>
+                <div className="flex flex-shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 transition-colors hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleConfirmedDelete();
+                    }}
+                    className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700"
+                  >
+                    Yes, delete
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
-        </div>
-        <div className="mt-4 pt-3 border-t border-black/10 shrink-0 bg-white">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            {isEdit ? (
-              <button
-                onClick={onDelete}
-                disabled={saving}
-                className="rounded-xl px-4 py-2 text-sm border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
-              >
-                Delete
-              </button>
-            ) : (
-              <span className="hidden sm:block" />
-            )}
+            <div className="flex items-center justify-between">
+              {isEdit ? (
+                <button
+                  type="button"
+                  onClick={handleDeleteIntent}
+                  disabled={saving}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:border-red-300 hover:bg-red-50 disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete
+                </button>
+              ) : (
+                <span />
+              )}
 
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-2">
-              <button
-                onClick={props.onClose}
-                className="rounded-xl px-4 py-2 text-sm border border-black/10 hover:bg-black/5"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={onSave}
-                disabled={saving || !canSave}
-                className="rounded-xl px-4 py-2 text-sm font-medium bg-black text-white hover:bg-black/90 disabled:opacity-50"
-              >
-                {saving ? 'Saving…' : draftId ? 'Save (confirm draft)' : 'Save'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={props.onClose}
+                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={onSave}
+                  disabled={saving || !canSave}
+                  className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-800 disabled:opacity-50"
+                >
+                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                  {saving ? 'Saving...' : draftId ? 'Save (confirm draft)' : 'Save'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      <LabelOcrModal open={labelOpen} onClose={() => setLabelOpen(false)} onCaptured={runLabelOcr} />
 
       <DocumentPickerModal
         open={docPickerOpen}

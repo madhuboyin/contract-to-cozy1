@@ -1,6 +1,8 @@
 const DISPLAY_OVERRIDES: Record<string, string> = {
   HVAC: 'HVAC',
   TV: 'TV',
+  SKU: 'SKU',
+  UPC: 'UPC',
 };
 
 export function titleCase(str: string): string {
