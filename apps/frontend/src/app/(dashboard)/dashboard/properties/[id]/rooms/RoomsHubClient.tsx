@@ -4,32 +4,31 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Lightbulb, Sparkles } from 'lucide-react';
 
 import { InventoryRoom } from '@/types';
-import { listInventoryRooms, patchRoomMeta, getRoomInsights } from '../../../inventory/inventoryApi';
+import { getRoomInsights, listInventoryRooms, patchRoomMeta } from '../../../inventory/inventoryApi';
 import { SectionHeader } from '../../../components/SectionHeader';
-import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
 import RoomScanModal from '@/app/(dashboard)/dashboard/components/inventory/RoomScanModal';
 import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
-
+import RoomListCard from '@/components/rooms/RoomListCard';
 
 function guessRoomType(name: string) {
   const t = (name || '').toLowerCase();
   if (t.includes('kitchen')) return 'KITCHEN';
   if (t.includes('living') || t.includes('family') || t.includes('great')) return 'LIVING_ROOM';
-  if (t.includes('bed') || t.includes('master') || t.includes('guest') || t.includes('kids') || t.includes('nursery'))
+  if (t.includes('bed') || t.includes('master') || t.includes('guest') || t.includes('kids') || t.includes('nursery')) {
     return 'BEDROOM';
+  }
   if (t.includes('bath') || t.includes('toilet') || t.includes('powder') || t.includes('wc')) return 'BATHROOM';
   if (t.includes('dining') || t.includes('breakfast') || t.includes('eat')) return 'DINING';
   if (t.includes('laundry') || t.includes('utility') || t.includes('washer') || t.includes('dryer')) return 'LAUNDRY';
   if (t.includes('garage')) return 'GARAGE';
   if (t.includes('office') || t.includes('study') || t.includes('den')) return 'OFFICE';
-  if (t.includes('basement') || t.includes('cellar') || t.includes('lower level') || t.includes('lower-level'))
+  if (t.includes('basement') || t.includes('cellar') || t.includes('lower level') || t.includes('lower-level')) {
     return 'BASEMENT';
+  }
   return 'OTHER';
 }
-
 
 function computeHealthScore(insights: any): number {
   const stats = insights?.stats || {};
@@ -51,89 +50,6 @@ function computeHealthScore(insights: any): number {
 
   return Math.max(0, Math.min(100, Math.round(score)));
 }
-function asArray<T = any>(v: any): T[] {
-  if (Array.isArray(v)) return v;
-  if (v && typeof v === 'object') return Object.values(v) as T[];
-  return [];
-}
-function safeString(v: any): string | null {
-  const s = String(v ?? '').trim();
-  return s ? s : null;
-}
-
-function normalizeImpact(v: any): 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | undefined {
-  const up = String(v ?? '').toUpperCase();
-  if (up === 'POSITIVE' || up === 'NEGATIVE' || up === 'NEUTRAL') return up as any;
-  return undefined;
-}
-
-function buildWhyFactors(insights: any) {
-  const raw = asArray((insights as any)?.healthScore?.factors);
-
-  // only keep meaningful factors (no placeholders)
-  const out = raw
-    .map((f: any) => {
-      const label = safeString(f?.label || f?.key);
-      const detail = safeString(f?.detail);
-      if (!label && !detail) return null;
-
-      return {
-        label: label || 'Factor',
-        detail: detail || undefined,
-        impact: normalizeImpact(f?.impact),
-      };
-    })
-    .filter(Boolean) as Array<{ label: string; detail?: string; impact?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' }>;
-
-  return out;
-}
-
-function getRoomGlyph(type?: string | null) {
-  switch ((type || 'OTHER').toUpperCase()) {
-    case 'BEDROOM':
-      return '🛏️';
-    case 'KITCHEN':
-      return '🍳';
-    case 'LAUNDRY':
-      return '🧺';
-    case 'LIVING_ROOM':
-      return '🛋️';
-    case 'BATHROOM':
-      return '🛁';
-    case 'DINING':
-      return '🍽️';
-    case 'OFFICE':
-      return '💼';
-    case 'GARAGE':
-      return '🚗';
-    case 'BASEMENT':
-      return '🏚️';
-    default:
-      return '🏠';
-  }
-}
-
-function scoreTone(score: number) {
-  if (score >= 75) {
-    return {
-      panel: 'from-emerald-50/90 via-white/80 to-teal-50/70 border-emerald-200/60',
-      status: 'text-emerald-700',
-      label: 'HEALTHY',
-    };
-  }
-  if (score >= 50) {
-    return {
-      panel: 'from-amber-50/90 via-white/80 to-yellow-50/70 border-amber-200/60',
-      status: 'text-amber-700',
-      label: 'NEEDS ATTENTION',
-    };
-  }
-  return {
-    panel: 'from-orange-50/90 via-white/80 to-rose-50/70 border-rose-200/60',
-    status: 'text-orange-700',
-    label: 'AT RISK',
-  };
-}
 
 export default function RoomsHubClient() {
   const params = useParams<{ id: string }>();
@@ -143,7 +59,6 @@ export default function RoomsHubClient() {
   const [loading, setLoading] = useState(false);
   const [detectingId, setDetectingId] = useState<string | null>(null);
 
-  // insights cache per room
   const [roomInsights, setRoomInsights] = useState<Record<string, any>>({});
   const [insightsLoading, setInsightsLoading] = useState<Record<string, boolean>>({});
 
@@ -152,11 +67,12 @@ export default function RoomsHubClient() {
   const [scanRoomName, setScanRoomName] = useState<string | null>(null);
   const [scanLaunchingId, setScanLaunchingId] = useState<string | null>(null);
 
-  function openScan(room: any) {
+  function openScan(room: InventoryRoom) {
     setScanLaunchingId(room.id);
     setScanRoomId(room.id);
     setScanRoomName(room.name || null);
     setScanOpen(true);
+
     window.setTimeout(() => {
       setScanLaunchingId((current) => (current === room.id ? null : current));
     }, 700);
@@ -165,8 +81,8 @@ export default function RoomsHubClient() {
   async function refreshRooms() {
     setLoading(true);
     try {
-      const r = await listInventoryRooms(propertyId);
-      setRooms(r);
+      const result = await listInventoryRooms(propertyId);
+      setRooms(result);
     } finally {
       setLoading(false);
     }
@@ -179,10 +95,10 @@ export default function RoomsHubClient() {
 
   const sorted = useMemo(
     () => [...rooms].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
-    [rooms]
+    [rooms],
   );
 
-  async function ensureType(room: any) {
+  async function ensureType(room: InventoryRoom & { type?: string | null }) {
     if (room?.type) return;
     const inferred = guessRoomType(room.name);
     if (inferred === 'OTHER') return;
@@ -199,25 +115,24 @@ export default function RoomsHubClient() {
   }
 
   async function loadInsight(roomId: string) {
-    setInsightsLoading((m) => ({ ...m, [roomId]: true }));
+    setInsightsLoading((prev) => ({ ...prev, [roomId]: true }));
     try {
       const data = await getRoomInsights(propertyId, roomId);
       const normalized = (data as any)?.data ?? data;
-      setRoomInsights((m) => ({ ...m, [roomId]: normalized }));
+      setRoomInsights((prev) => ({ ...prev, [roomId]: normalized }));
     } catch {
-      // keep empty
+      // keep empty on failure
     } finally {
-      setInsightsLoading((m) => ({ ...m, [roomId]: false }));
+      setInsightsLoading((prev) => ({ ...prev, [roomId]: false }));
     }
   }
 
-  // Lazy-load insights after rooms load (avoids blocking)
-  const sortedIdsKey = useMemo(() => sorted.map((r) => r.id).join(','), [sorted]);
+  const sortedIdsKey = useMemo(() => sorted.map((room) => room.id).join(','), [sorted]);
+
   useEffect(() => {
     if (!propertyId || sorted.length === 0) return;
 
-    // load first 12 rooms by default (enough for most homes)
-    const targets = sorted.slice(0, 12).map((r) => r.id);
+    const targets = sorted.slice(0, 12).map((room) => room.id);
     for (const id of targets) {
       if (roomInsights[id] || insightsLoading[id]) continue;
       loadInsight(id);
@@ -227,9 +142,10 @@ export default function RoomsHubClient() {
 
   const scoredRooms = useMemo(() => {
     return sorted
-      .map((room: any) => {
+      .map((room) => {
         const insights = roomInsights[room.id];
         if (!insights) return null;
+
         const backendScore = Number(insights?.healthScore?.score);
         const score = Number.isFinite(backendScore) ? backendScore : computeHealthScore(insights);
         return { id: room.id, score };
@@ -239,17 +155,17 @@ export default function RoomsHubClient() {
 
   const overallHealth = useMemo(() => {
     if (scoredRooms.length === 0) return null;
-    return Math.round(scoredRooms.reduce((sum, s) => sum + s.score, 0) / scoredRooms.length);
+    return Math.round(scoredRooms.reduce((sum, room) => sum + room.score, 0) / scoredRooms.length);
   }, [scoredRooms]);
 
   const lowestRoomName = useMemo(() => {
     if (scoredRooms.length === 0) return null;
-    const low = scoredRooms.reduce((min, cur) => (cur.score < min.score ? cur : min), scoredRooms[0]);
-    return sorted.find((r) => r.id === low.id)?.name || null;
+    const lowest = scoredRooms.reduce((min, room) => (room.score < min.score ? room : min), scoredRooms[0]);
+    return sorted.find((room) => room.id === lowest.id)?.name || null;
   }, [scoredRooms, sorted]);
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
+    <div className="space-y-4 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-6">
       <OnboardingReturnBanner />
 
       <div className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[radial-gradient(circle_at_8%_8%,rgba(251,191,36,0.14),transparent_40%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.14),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.82))] p-4 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.6)] dark:border-slate-700/70 dark:bg-[radial-gradient(circle_at_8%_8%,rgba(251,191,36,0.12),transparent_40%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.12),transparent_38%),linear-gradient(180deg,rgba(2,6,23,0.88),rgba(2,6,23,0.78))]">
@@ -278,7 +194,7 @@ export default function RoomsHubClient() {
         </div>
       </div>
 
-      {overallHealth !== null && (
+      {overallHealth !== null ? (
         <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/75 via-amber-50/55 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-amber-950/20 dark:to-teal-950/20">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -292,16 +208,16 @@ export default function RoomsHubClient() {
             </p>
           </div>
         </div>
-      )}
+      ) : null}
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {loading && (
+        {loading ? (
           <div className="rounded-2xl border border-white/70 bg-white/60 p-4 text-sm opacity-70 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45">
-            Loading rooms…
+            Loading rooms...
           </div>
-        )}
+        ) : null}
 
-        {!loading && sorted.length === 0 && (
+        {!loading && sorted.length === 0 ? (
           <div className="rounded-2xl border border-white/70 bg-white/60 p-4 text-sm opacity-70 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45">
             No rooms yet. Create rooms in{' '}
             <Link className="underline" href={`/dashboard/properties/${propertyId}/inventory/rooms`}>
@@ -309,130 +225,78 @@ export default function RoomsHubClient() {
             </Link>
             .
           </div>
-        )}
+        ) : null}
 
-        {sorted.map((r: any) => {
-          const inferred = r.type ? null : guessRoomType(r.name);
-          const showDetect = !r.type && inferred !== 'OTHER';     
-            
-          const insights = roomInsights[r.id];
+        {sorted.map((room) => {
+          const roomWithType = room as InventoryRoom & { type?: string | null };
+          const inferredType = roomWithType.type ? null : guessRoomType(room.name);
+          const showDetect = !roomWithType.type && inferredType !== 'OTHER';
+
+          const insights = roomInsights[room.id];
           const stats = insights?.stats;
 
           const backendScore = Number(insights?.healthScore?.score);
           const score = insights
-            ? (Number.isFinite(backendScore) ? backendScore : computeHealthScore(insights))
+            ? Number.isFinite(backendScore)
+              ? backendScore
+              : computeHealthScore(insights)
             : 0;
 
-          const whyFactors = insights ? buildWhyFactors(insights) : [];
+          const itemCount = Number(stats?.itemCount ?? 0);
+          const docCount = Number(stats?.docsLinkedCount ?? 0);
+          const gapCount = Number(stats?.coverageGapsCount ?? 0);
+          const hasValues = Number(stats?.replacementTotalCents ?? 0) > 0;
+          const completenessPercent = (itemCount > 0 ? 33 : 0) + (docCount > 0 ? 33 : 0) + (hasValues ? 34 : 0);
 
-          const improvements = Array.isArray(insights?.healthScore?.improvements)
-            ? insights.healthScore.improvements
-            : [];
+          const headerActions = (
+            <div className="flex flex-wrap items-center gap-2">
+              {showDetect ? (
+                <button
+                  type="button"
+                  onClick={() => ensureType(roomWithType)}
+                  disabled={detectingId === room.id}
+                  className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-700 transition-colors hover:border-gray-300 hover:text-gray-900 disabled:opacity-50"
+                  title="Auto-detect room template from name"
+                >
+                  {detectingId === room.id ? 'Detecting...' : 'Apply type'}
+                </button>
+              ) : null}
 
+              {!insights && !insightsLoading[room.id] ? (
+                <button
+                  type="button"
+                  onClick={() => loadInsight(room.id)}
+                  className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-700 transition-colors hover:border-gray-300 hover:text-gray-900"
+                >
+                  Load health score
+                </button>
+              ) : null}
+
+              {insightsLoading[room.id] ? <span className="text-xs text-gray-500">Loading insights...</span> : null}
+            </div>
+          );
 
           return (
-            <div
-              key={r.id}
-              className="group flex flex-col rounded-2xl border border-white/70 bg-gradient-to-br from-[#fff7ef]/85 via-white/80 to-[#eef7f2]/70 p-4 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_36px_-24px_rgba(15,23,42,0.6)] dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/45 dark:to-slate-900/35"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/75 text-base shadow-sm dark:bg-slate-800/70">
-                      {getRoomGlyph(r.type || inferred)}
-                    </span>
-                    <div className="font-semibold truncate text-[1.1rem] text-slate-900 dark:text-slate-100">{r.name}</div>
-                  </div>
-                </div>
-
-                {showDetect && (
-                  <button
-                    onClick={() => ensureType(r)}
-                    disabled={detectingId === r.id}
-                    className="rounded-full border border-slate-300/70 bg-white/80 px-2.5 py-1 text-xs shadow-sm transition-colors hover:bg-white disabled:opacity-50 dark:border-slate-700/70 dark:bg-slate-900/60 dark:hover:bg-slate-900"
-                    title="Auto-detect room template from name"
-                  >
-                    {detectingId === r.id ? 'Detecting…' : 'Apply'}
-                  </button>
-                )}
-              </div>
-
-              <div className={`mt-4 rounded-2xl border bg-gradient-to-br p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] ${scoreTone(score).panel} dark:from-slate-900/60 dark:to-slate-900/40`}>
-                {insightsLoading[r.id] ? (
-                  <div className="text-sm opacity-70">Loading insights…</div>
-                ) : insights ? (
-                  <div className="space-y-2">
-                    <RoomHealthScoreRing
-                      value={score}
-                      size={96}
-                      strokeWidth={14}
-                      label={scoreTone(score).label}
-                      sublabel={`${stats?.itemCount ?? 0} items · ${stats?.docsLinkedCount ?? 0} docs · ${stats?.coverageGapsCount ?? 0} gaps`}
-                      whyTitle="Why this score?"
-                      whyFactors={whyFactors}
-                    />
-
-                    {improvements.length > 0 && safeString(improvements?.[0]?.title) && (
-                      <div className="flex items-start gap-1.5 text-xs text-slate-600 dark:text-slate-300">
-                        <Lightbulb className="mt-0.5 h-3.5 w-3.5 text-amber-500" />
-                        <span className="italic">
-                          Tip:{' '}
-                        <span className="font-medium text-slate-700 dark:text-slate-200">
-                          {String(improvements[0].title)}
-                        </span>
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => loadInsight(r.id)}
-                    className="rounded-xl border border-slate-300/70 bg-white/85 px-3 py-2 text-sm shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/60 dark:hover:bg-slate-900"
-                  >
-                    Load health score
-                  </button>
-                )}
-              </div>
-
-              <div className="mt-auto overflow-x-auto pt-4">
-                <div className="flex w-max items-center gap-2">
-                  <Link
-                    href={`/dashboard/properties/${propertyId}/rooms/${r.id}`}
-                    className="inline-flex h-10 items-center justify-center rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-100 dark:hover:bg-slate-900"
-                  >
-                    View
-                  </Link>
-
-                  <Link
-                    href={`/dashboard/properties/${propertyId}/inventory/rooms/${r.id}`}
-                    className="inline-flex h-10 items-center justify-center rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-100 dark:hover:bg-slate-900"
-                  >
-                    Edit
-                  </Link>
-
-                  <Link
-                    href={`/dashboard/properties/${propertyId}/inventory?roomId=${r.id}`}
-                    className="inline-flex h-10 items-center justify-center rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-100 dark:hover:bg-slate-900"
-                  >
-                    Items
-                  </Link>
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      openScan(r);
-                    }}
-                    className="inline-flex h-10 items-center justify-center gap-1 rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-100 dark:hover:bg-slate-900"
-                  >
-                    <Sparkles className={`h-3.5 w-3.5 ${scanLaunchingId === r.id ? 'animate-pulse text-amber-500' : 'text-teal-600 dark:text-teal-300'}`} />
-                    {scanLaunchingId === r.id ? 'Launching…' : 'AI Scan'}
-                  </button>
-                </div>
-              </div>
-            </div>
+            <RoomListCard
+              key={room.id}
+              propertyId={propertyId}
+              roomId={room.id}
+              roomName={room.name}
+              roomType={roomWithType.type || inferredType}
+              healthScore={score}
+              itemCount={itemCount}
+              docCount={docCount}
+              gapCount={gapCount}
+              completenessPercent={completenessPercent}
+              loading={insightsLoading[room.id]}
+              onScan={() => openScan(room)}
+              scanLaunching={scanLaunchingId === room.id}
+              headerAction={headerActions}
+            />
           );
         })}
       </div>
+
       {scanRoomId ? (
         <RoomScanModal
           open={scanOpen}
