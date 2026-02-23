@@ -1,8 +1,9 @@
 // apps/frontend/src/components/seasonal/SeasonalWidget.tsx
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronRight, Calendar } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { useSeasonalChecklists, useClimateInfo } from '@/lib/hooks/useSeasonalChecklists';
 import {
   getSeasonIcon,
@@ -14,46 +15,57 @@ import { SeasonalChecklistModal } from './SeasonalChecklistModal';
 import { useHomeownerSegment } from '@/lib/hooks/useHomeownerSegment';
 import { calculateSeasonalProgress } from '@/lib/utils/seasonalProgress';
 import humanizeActionType from '@/lib/utils/humanize';
+import { useCelebration } from '@/hooks/useCelebration';
+
+const MilestoneCelebration = dynamic(
+  () => import('@/components/ui/MilestoneCelebration').then((m) => m.MilestoneCelebration),
+  { ssr: false },
+);
 
 interface SeasonalWidgetProps {
   propertyId: string;
 }
 
 export function SeasonalWidget({ propertyId }: SeasonalWidgetProps) {
+  // ── ALL HOOKS FIRST (React rules: hooks must not be called after conditional returns) ──
   const { data: segment } = useHomeownerSegment();
-  console.log('👤 Homeowner segment:', segment);
-  // Don't show for home buyers
-  if (segment !== 'EXISTING_OWNER') {
-    return null;
-  }
   const [showModal, setShowModal] = useState(false);
   const [selectedChecklistId, setSelectedChecklistId] = useState<string | null>(null);
-
   const { data: climateInfo } = useClimateInfo(propertyId);
   const { data: checklistsData } = useSeasonalChecklists(propertyId);
+  const { celebration, celebrate, dismiss } = useCelebration(`seasonal-${propertyId}`);
 
-  if (!climateInfo?.data || !checklistsData?.data?.checklists) {
-    return null;
-  }
-
-  const currentSeason = climateInfo.data.currentSeason;
-  
-  // Find current season's checklist
+  // Pre-compute checklist state so the useEffect can watch it before any early returns
   const currentYear = new Date().getFullYear();
-  const currentChecklist = checklistsData.data.checklists.find(
-    (c: any) => c.season === currentSeason && c.year === currentYear
-  );
+  const currentSeason = climateInfo?.data?.currentSeason;
+  const currentChecklist = currentSeason
+    ? (checklistsData?.data?.checklists as any[] | undefined)?.find(
+        (c) => c.season === currentSeason && c.year === currentYear,
+      )
+    : undefined;
 
-  if (!currentChecklist) {
-    return null;
-  }
+  const progress = currentChecklist
+    ? calculateSeasonalProgress(currentChecklist.items, {
+        completedCount: currentChecklist.tasksCompleted,
+        totalCount: currentChecklist.totalTasks,
+      })
+    : null;
 
-  const seasonName = getSeasonName(currentChecklist.season);
-  const seasonIcon = getSeasonIcon(currentChecklist.season);
-  const progress = calculateSeasonalProgress(currentChecklist.items, {
-    completedCount: currentChecklist.tasksCompleted,
-    totalCount: currentChecklist.totalTasks,
-  });
+  const completionPercentage = progress?.progress ?? 0;
+  const isComplete = completionPercentage === 100 && !!currentChecklist;
+
+  // Trigger "Path to Cozy" celebration the first time checklist hits 100%
+  useEffect(() => {
+    if (isComplete) {
+      celebrate('cozy');
+    }
+  }, [isComplete, celebrate]);
+
+  // ── EARLY RETURNS (safe — all hooks already called above) ─────────────
+  if (segment !== 'EXISTING_OWNER') return null;
+  if (!climateInfo?.data || !checklistsData?.data?.checklists) return null;
+  if (!currentChecklist || !progress) return null;
+
   if (progress.capped) {
     console.warn('[SeasonalWidget] completedCount exceeded totalCount. Capping at 100%.', {
       checklistId: currentChecklist.id,
@@ -61,25 +73,26 @@ export function SeasonalWidget({ propertyId }: SeasonalWidgetProps) {
       totalCount: progress.totalCount,
     });
   }
-  const completionPercentage = progress.progress;
+
+  const seasonName = getSeasonName(currentChecklist.season);
+  const seasonIcon = getSeasonIcon(currentChecklist.season);
   const displayProgress = Math.min(100, Math.max(0, completionPercentage));
   const progressColor = getProgressBarColor(displayProgress);
   const remainingTasks = Math.max(0, progress.totalCount - progress.completedCount);
   const displayText = progress.noTasks
     ? 'No tasks yet'
     : `${progress.completedCount} of ${progress.totalCount} tasks completed`;
+  const isBeforeSeason = currentChecklist.daysRemaining && currentChecklist.daysRemaining > 0;
 
   const handleViewChecklist = () => {
     setSelectedChecklistId(currentChecklist.id);
     setShowModal(true);
   };
 
-  // Widget state based on completion
-  const isComplete = completionPercentage === 100;
-  const isBeforeSeason = currentChecklist.daysRemaining && currentChecklist.daysRemaining > 0;
-
   return (
     <>
+      <MilestoneCelebration type={celebration.type} isOpen={celebration.isOpen} onClose={dismiss} />
+
       <div className="rounded-lg border border-white/70 bg-white/85 p-6 shadow-sm backdrop-blur-sm will-change-transform transform-gpu transition-all hover:shadow-md">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-2">

@@ -2,6 +2,13 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { useCelebration } from '@/hooks/useCelebration';
+
+const MilestoneCelebration = dynamic(
+  () => import('@/components/ui/MilestoneCelebration').then((m) => m.MilestoneCelebration),
+  { ssr: false },
+);
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 
@@ -217,6 +224,7 @@ export default function RoomShowcaseClient() {
   const [loading, setLoading] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const { celebration, celebrate, dismiss } = useCelebration(`room-scan-${roomId}`);
 
   async function refresh() {
     setLoading(true);
@@ -229,7 +237,9 @@ export default function RoomShowcaseClient() {
 
       setRooms(rooms);
       setRoom(rooms.find((r) => r.id === roomId) || null);
-      setInsights((insightData as any)?.data ?? insightData);
+      const resolvedInsights = (insightData as any)?.data ?? insightData;
+      setInsights(resolvedInsights);
+      if (resolvedInsights) celebrate('scan');
       setItems(roomItems);
     } finally {
       setLoading(false);
@@ -297,6 +307,8 @@ export default function RoomShowcaseClient() {
   const whyFactors = buildWhyFactors(insights);
   
   return (
+    <>
+    <MilestoneCelebration type={celebration.type} isOpen={celebration.isOpen} onClose={dismiss} />
     <div className="p-4 sm:p-6 space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -713,5 +725,6 @@ export default function RoomShowcaseClient() {
         existingItems={items}
       />
     </div>
+    </>
   );
 }

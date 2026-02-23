@@ -1,11 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, DollarSign, Loader2 } from "lucide-react";
 import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
+import dynamic from "next/dynamic";
 import { api } from "@/lib/api/client";
 import { FinancialReportSummary, FinancialSummaryStatus } from "@/types";
+import { useCelebration } from "@/hooks/useCelebration";
+
+const MilestoneCelebration = dynamic(
+  () => import("@/components/ui/MilestoneCelebration").then((m) => m.MilestoneCelebration),
+  { ssr: false },
+);
 
 interface FinancialEfficiencyScoreCardProps {
   propertyId?: string;
@@ -80,6 +88,23 @@ export const FinancialEfficiencyScoreCard: React.FC<
 
   const summary = summaryQuery.data || FALLBACK_SUMMARY;
   const isLoading = summaryQuery.isLoading;
+
+  const { celebration, celebrate, dismiss } = useCelebration(`financial-${propertyId ?? "none"}`);
+
+  const score = Math.max(0, Math.round(summary.financialEfficiencyScore || 0));
+
+  // Celebrate the first time a savings-worthy score loads
+  useEffect(() => {
+    if (
+      !isLoading &&
+      score >= 60 &&
+      summary.status !== "QUEUED" &&
+      summary.status !== "NO_PROPERTY"
+    ) {
+      celebrate("savings");
+    }
+  }, [isLoading, score, summary.status, celebrate]);
+
   const reportLink = propertyId
     ? `/dashboard/properties/${propertyId}/financial-efficiency`
     : "/dashboard/properties";
@@ -121,7 +146,6 @@ export const FinancialEfficiencyScoreCard: React.FC<
     );
   }
 
-  const score = Math.max(0, Math.round(summary.financialEfficiencyScore || 0));
   const annualCost = Math.max(0, Math.round(summary.financialExposureTotal || 0));
   const status = getFinancialLabel(score);
   const weeklyChange = formatWeeklyDelta(
@@ -182,6 +206,7 @@ export const FinancialEfficiencyScoreCard: React.FC<
           <span className="text-xs font-bold text-emerald-600">$220-$760</span>
         </div>
       </div>
+      <MilestoneCelebration type={celebration.type} isOpen={celebration.isOpen} onClose={dismiss} />
     </div>
   );
 };

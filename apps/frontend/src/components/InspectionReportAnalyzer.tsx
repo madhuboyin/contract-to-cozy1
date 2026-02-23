@@ -2,6 +2,13 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
+import { useCelebration } from '@/hooks/useCelebration';
+
+const MilestoneCelebration = dynamic(
+  () => import('@/components/ui/MilestoneCelebration').then((m) => m.MilestoneCelebration),
+  { ssr: false },
+);
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -72,6 +79,7 @@ export default function InspectionReportAnalyzer({ propertyId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<InspectionReport | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'issues' | 'negotiation' | 'calendar'>('overview');
+  const { celebration, celebrate, dismiss } = useCelebration(`inspection-${propertyId}`);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
@@ -114,6 +122,7 @@ export default function InspectionReportAnalyzer({ propertyId }: Props) {
         if (reportResponse.success && reportResponse.data) {
           setReport(reportResponse.data);
           setFile(null);
+          celebrate('success');
         }
       } else {
         setError(response.message || 'Upload failed');
@@ -260,6 +269,8 @@ export default function InspectionReportAnalyzer({ propertyId }: Props) {
 
   // Report View
   return (
+    <>
+    <MilestoneCelebration type={celebration.type} isOpen={celebration.isOpen} onClose={dismiss} />
     <div className="space-y-6">
       {/* Header Card */}
       <Card className={getConditionColor(report.overallCondition)}>
@@ -567,5 +578,6 @@ export default function InspectionReportAnalyzer({ propertyId }: Props) {
         </CardContent>
       </Card>
     </div>
+    </>
   );
 }
