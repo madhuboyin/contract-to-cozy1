@@ -180,28 +180,27 @@ export default function RoomIntelligenceCard({
   );
   const topPriorityTip = sortedTips[0] ?? null;
 
-  const chartData = scoreHistory.length > 1 ? scoreHistory : new Array(12).fill(healthScore);
+  const hasTrendData = scoreHistory.length > 1;
+  const chartData = hasTrendData ? scoreHistory : new Array(12).fill(healthScore);
   const weeklyDelta = useMemo(() => {
-    if (chartData.length < 2) return 0;
-    const last = chartData[chartData.length - 1] ?? healthScore;
-    const baselineIndex = Math.max(0, chartData.length - 8);
-    const baseline = chartData[baselineIndex] ?? last;
+    if (!hasTrendData) return null;
+    const last = scoreHistory[scoreHistory.length - 1] ?? healthScore;
+    const baselineIndex = Math.max(0, scoreHistory.length - 8);
+    const baseline = scoreHistory[baselineIndex] ?? last;
     return Math.round(last - baseline);
-  }, [chartData, healthScore]);
-
-  const weeklyDeltaColor = weeklyDelta > 0 ? 'text-emerald-600' : weeklyDelta < 0 ? 'text-red-500' : 'text-gray-700';
+  }, [hasTrendData, scoreHistory, healthScore]);
 
   const animatedItemCount = useCountUp(itemCount);
   const animatedDocCount = useCountUp(docCount);
   const animatedGapCount = useCountUp(gapCount);
-  const animatedDelta = useCountUp(weeklyDelta);
+  const animatedDelta = useCountUp(weeklyDelta ?? 0);
 
   const priorityBg = healthScore < 40 ? 'bg-red-50/40' : healthScore <= 65 ? 'bg-amber-50/40' : 'bg-emerald-50/30';
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm ring-1 ring-black/[0.04]">
+    <section className="w-full max-w-none overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm ring-1 ring-black/[0.04]">
       <div className="grid grid-cols-1 divide-y divide-gray-100 lg:grid-cols-5 lg:divide-x lg:divide-y-0">
-        <div className="p-6 lg:col-span-3">
+        <div className="p-5 lg:col-span-3">
           <div className="flex items-start gap-5">
             <div className="relative flex-shrink-0">
               <div className="h-[120px] w-[120px]">
@@ -246,43 +245,53 @@ export default function RoomIntelligenceCard({
           <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Top Priority</p>
 
           {topPriorityTip ? (
-            <>
-              <div className="space-y-2.5">
-                {sortedTips.slice(0, 3).map((tip, index) => {
-                  const { Icon, iconBg, iconColor } = tipVisual(tip.title);
-                  return (
-                    <button
-                      key={tip.id}
-                      type="button"
-                      onClick={() => onTipAction(tip)}
-                      className={[
-                        'flex w-full items-start gap-3 rounded-xl p-3 text-left transition-all duration-150',
-                        index === 0
-                          ? 'border border-gray-200 bg-white shadow-sm'
-                          : 'border border-transparent hover:border-gray-200 hover:bg-white/60',
-                      ].join(' ')}
-                    >
-                      <div className={`mt-0.5 flex-shrink-0 rounded-lg p-1.5 ${iconBg}`}>
-                        <Icon className={`h-3.5 w-3.5 ${iconColor}`} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-gray-800">{tip.title}</p>
-                        {tip.description ? <p className="mt-0.5 text-xs leading-relaxed text-gray-500">{tip.description}</p> : null}
-                      </div>
-                      {index === 0 ? <ChevronRight className="mt-1 h-4 w-4 flex-shrink-0 text-gray-400" /> : null}
-                    </button>
-                  );
-                })}
-              </div>
+            <div className="space-y-2.5">
+              {sortedTips.slice(0, 3).map((tip, index) => {
+                const { Icon, iconBg, iconColor } = tipVisual(tip.title);
 
-              <button
-                type="button"
-                onClick={() => onTipAction(topPriorityTip)}
-                className="mt-4 w-full rounded-lg bg-teal-600 py-2 text-center text-xs font-semibold text-white transition-colors hover:bg-teal-700"
-              >
-                {topPriorityTip.ctaLabel} {'->'}
-              </button>
-            </>
+                if (index === 0) {
+                  return (
+                    <div key={tip.id} className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+                      <div className="mb-3 flex items-start gap-3">
+                        <div className={`mt-0.5 flex-shrink-0 rounded-lg p-1.5 ${iconBg}`}>
+                          <Icon className={`h-3.5 w-3.5 ${iconColor}`} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-gray-800">{tip.title}</p>
+                          {tip.description ? <p className="mt-0.5 text-xs leading-relaxed text-gray-500">{tip.description}</p> : null}
+                        </div>
+                        <ChevronRight className="mt-1 h-4 w-4 flex-shrink-0 text-gray-400" />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => onTipAction(tip)}
+                        className="w-full rounded-lg bg-teal-600 py-2 text-center text-xs font-semibold text-white transition-colors hover:bg-teal-700"
+                      >
+                        {tip.ctaLabel} {'->'}
+                      </button>
+                    </div>
+                  );
+                }
+
+                return (
+                  <button
+                    key={tip.id}
+                    type="button"
+                    onClick={() => onTipAction(tip)}
+                    className="flex w-full items-start gap-3 rounded-xl p-3 text-left opacity-75 transition-all duration-150 hover:bg-gray-50 hover:opacity-100"
+                  >
+                    <div className={`mt-0.5 flex-shrink-0 rounded-lg p-1.5 ${iconBg}`}>
+                      <Icon className={`h-3.5 w-3.5 ${iconColor}`} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-gray-800">{tip.title}</p>
+                      {tip.description ? <p className="mt-0.5 text-xs leading-relaxed text-gray-500">{tip.description}</p> : null}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           ) : (
             <div className="flex h-20 flex-col items-center justify-center gap-1.5">
               <CheckCircle className="h-6 w-6 text-emerald-500" />
@@ -328,9 +337,20 @@ export default function RoomIntelligenceCard({
         </button>
 
         <div className="p-4 text-center">
-          <p className={`text-2xl font-display font-bold ${weeklyDeltaColor}`}>
-            {weeklyDelta > 0 ? `+${animatedDelta}` : weeklyDelta === 0 ? '-' : animatedDelta}
-          </p>
+          {weeklyDelta !== null && weeklyDelta !== undefined ? (
+            <p
+              className={`text-2xl font-display font-bold ${
+                weeklyDelta > 0 ? 'text-emerald-600' : weeklyDelta < 0 ? 'text-red-500' : 'text-gray-400'
+              }`}
+            >
+              {weeklyDelta > 0 ? `+${animatedDelta}` : weeklyDelta === 0 ? '0' : animatedDelta}
+            </p>
+          ) : (
+            <>
+              <p className="text-lg font-display font-bold text-gray-300">—</p>
+              <p className="mt-0.5 text-[9px] text-gray-300">No data yet</p>
+            </>
+          )}
           <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wider text-gray-400">Weekly Change</p>
         </div>
       </div>

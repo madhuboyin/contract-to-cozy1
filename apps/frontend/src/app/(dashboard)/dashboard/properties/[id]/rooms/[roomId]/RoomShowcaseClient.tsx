@@ -295,8 +295,8 @@ export default function RoomShowcaseClient() {
         />
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-          <div className="space-y-4 xl:col-span-8">
-            <motion.div variants={sectionVariants} initial="hidden" animate="visible" custom={1}>
+          <div className="w-full space-y-4 xl:col-span-8">
+            <motion.div variants={sectionVariants} initial="hidden" animate="visible" custom={1} className="w-full">
               <RoomIntelligenceCard
                 healthScore={score}
                 itemCount={itemCount}
