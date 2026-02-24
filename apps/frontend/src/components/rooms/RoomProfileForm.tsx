@@ -155,6 +155,20 @@ function formatDisplayValue(value: string): string {
   return titleCase(String(value || '').replace(/_/g, ' '));
 }
 
+function normalizeValue(savedValue: string, options: ChipOption[]): string {
+  const raw = String(savedValue || '').trim();
+  if (!raw) return '';
+
+  const normalized = raw.toLowerCase();
+  const match = options.find((option) => {
+    const optionValue = String(option.value || '').toLowerCase();
+    const optionLabel = String(option.label || '').toLowerCase();
+    return normalized === optionValue || normalized === optionLabel;
+  });
+
+  return match?.value ?? raw;
+}
+
 function ChipSelector({
   label,
   options,
@@ -171,11 +185,20 @@ function ChipSelector({
   const [customInput, setCustomInput] = useState('');
   const [showCustom, setShowCustom] = useState(false);
 
-  const isCustomValue = Boolean(value) && !options.some((option) => option.value === value);
+  const normalizedValue = String(value || '').trim().toLowerCase();
+  const isSelected = (option: ChipOption) => {
+    const optionValue = String(option.value || '').toLowerCase();
+    const optionLabel = String(option.label || '').toLowerCase();
+    return Boolean(normalizedValue) && (normalizedValue === optionValue || normalizedValue === optionLabel);
+  };
+  const isCustomValue = Boolean(value) && !options.some((option) => isSelected(option));
 
   return (
-    <div className="space-y-2">
-      <label className="text-sm font-medium text-gray-700">{label}</label>
+    <div className="space-y-0">
+      <div className="mb-3 flex items-center gap-3">
+        <span className="whitespace-nowrap text-[11px] font-bold uppercase tracking-widest text-gray-500">{label}</span>
+        <div className="h-px flex-1 bg-gray-100" />
+      </div>
 
       <div className="flex flex-wrap gap-2">
         {options.map((option) => (
@@ -183,15 +206,15 @@ function ChipSelector({
             key={option.value}
             type="button"
             onClick={() => {
-              onChange(option.value);
+              onChange(isSelected(option) ? '' : option.value);
               setShowCustom(false);
               setCustomInput('');
             }}
             className={[
-              'rounded-full border px-3 py-1.5 text-sm transition-all',
-              value === option.value
-                ? 'border-teal-600 bg-teal-600 font-medium text-white'
-                : 'border-gray-200 bg-white text-gray-600 hover:border-teal-300 hover:text-teal-700',
+              'rounded-full border px-3 py-1.5 text-sm transition-all duration-150',
+              isSelected(option)
+                ? 'border-teal-600 bg-teal-600 font-semibold text-white shadow-sm'
+                : 'border-gray-200 bg-white text-gray-600 hover:border-teal-300 hover:bg-teal-50/50 hover:text-teal-700',
             ].join(' ')}
           >
             {option.label}
@@ -244,15 +267,15 @@ function ChipSelector({
       </div>
 
       {isCustomValue ? (
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500">Custom:</span>
-          <span className="rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700">
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-[11px] text-gray-400">Custom:</span>
+          <span className="rounded-full border border-teal-200 bg-teal-50 px-2.5 py-0.5 text-xs font-medium text-teal-700">
             {formatDisplayValue(value)}
           </span>
           <button
             type="button"
             onClick={() => onChange('')}
-            className="text-gray-400 transition-colors hover:text-red-500"
+            className="text-gray-300 transition-colors hover:text-red-400"
             aria-label="Clear custom value"
           >
             <X className="h-3 w-3" />
@@ -303,33 +326,36 @@ export default function RoomProfileForm({ profile, roomType, saving, onChange, o
   }
 
   return (
-    <div className="space-y-5 rounded-xl border border-gray-200 bg-white p-5">
-      <div>
+    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+      <div className="px-5 pb-4 pt-5">
         <h3 className="text-sm font-semibold text-gray-800">Room Profile</h3>
         <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>
       </div>
 
-      {fields.map((field) => (
-        <ChipSelector
-          key={field.key}
-          label={field.label}
-          options={field.options}
-          value={String(p[field.key] || '')}
-          onChange={(value) => updateProfileField(field.key, value)}
-          allowCustom={field.allowCustom !== false}
-        />
-      ))}
+      <div className="divide-y divide-gray-100">
+        {fields.map((field) => (
+          <div key={field.key} className="px-5 py-4">
+            <ChipSelector
+              label={field.label}
+              options={field.options}
+              value={normalizeValue(String(p[field.key] || ''), field.options)}
+              onChange={(value) => updateProfileField(field.key, value)}
+              allowCustom={field.allowCustom !== false}
+            />
+          </div>
+        ))}
+      </div>
 
-      <div className="flex items-center justify-between border-t border-gray-100 pt-2">
-        <p className="text-xs text-gray-400">Tip: changes save automatically when you select a chip.</p>
+      <div className="flex items-center justify-between bg-gray-50/50 px-5 py-3">
+        <p className="text-xs text-gray-400">Changes save automatically when you select a chip.</p>
 
         {saving ? (
-          <span className="inline-flex items-center gap-1 text-xs text-teal-600">
+          <span className="inline-flex items-center gap-1.5 text-xs text-teal-600">
             <Loader2 className="h-3 w-3 animate-spin" />
             Saving...
           </span>
         ) : savedRecently ? (
-          <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
+          <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600">
             <CheckCircle2 className="h-3 w-3" />
             Saved
           </span>

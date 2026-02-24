@@ -26,6 +26,7 @@ import RoomTimeline from '@/components/rooms/RoomTimeline';
 import ScanHistoryCollapsible from '@/components/rooms/ScanHistoryCollapsible';
 import RoomScanModal from '@/app/(dashboard)/dashboard/components/inventory/RoomScanModal';
 import { getHealthOverlay, getRoomConfig, getScoreColorHex, getStatusColor, getStatusLabel } from '@/components/rooms/roomVisuals';
+import { titleCase } from '@/lib/utils/string';
 
 type Tab = 'profile' | 'checklist' | 'timeline';
 
@@ -211,6 +212,16 @@ function formatRelativeDate(dateString?: string | null): string {
   return date.toLocaleDateString();
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  HEALTHY: 'Healthy',
+  GOOD: 'Good',
+  'NEEDS ATTENTION': 'Needs attention',
+  NEEDS_ATTENTION: 'Needs attention',
+  'AT RISK': 'At risk',
+  AT_RISK: 'At risk',
+  CRITICAL: 'Critical',
+};
+
 export default function RoomDetailClient() {
   const params = useParams<{ id: string; roomId: string }>();
   const router = useRouter();
@@ -261,7 +272,8 @@ export default function RoomDetailClient() {
   const roomConfig = getRoomConfig(room?.type || roomBase);
   const RoomIcon = roomConfig.icon;
   const scoreColor = getScoreColorHex(healthScore);
-  const statusLabel = getStatusLabel(healthScore);
+  const statusLabelRaw = getStatusLabel(healthScore);
+  const statusLabel = STATUS_LABELS[statusLabelRaw] ?? titleCase(statusLabelRaw);
   const statusColor = getStatusColor(healthScore);
 
   async function loadRoom() {
@@ -449,34 +461,37 @@ export default function RoomDetailClient() {
 
         <div className="border-b border-gray-100 px-6 py-3">
           <div className="flex flex-wrap items-center gap-4">
-            <div className="h-10 w-10 flex-shrink-0">
+            <div className="h-14 w-14 flex-shrink-0">
               <CircularProgressbar
                 value={healthScore}
                 text={`${healthScore}`}
-                strokeWidth={10}
+                strokeWidth={9}
                 styles={buildStyles({
-                  textSize: '32px',
+                  textSize: '28px',
                   textColor: '#111827',
                   pathColor: scoreColor,
                   trailColor: '#e5e7eb',
+                  pathTransitionDuration: 0.6,
                 })}
               />
             </div>
 
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Room Health</span>
-              <span className={`text-sm font-bold ${statusColor}`}>{statusLabel}</span>
-              <span className="text-xs text-gray-400">
-                · {itemCount} items · {docCount} docs · {gapCount} gaps
-              </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Room Health</span>
+                <span className={`text-sm font-bold ${statusColor}`}>{statusLabel}</span>
+              </div>
+              <p className="mt-0.5 text-xs text-gray-400">
+                {itemCount} items · {docCount} docs · {gapCount} gaps
+              </p>
             </div>
 
             <div className="ml-auto flex items-center gap-2">
-              <span className="text-xs text-gray-400">Profile</span>
-              <div className="h-1.5 w-24 overflow-hidden rounded-full bg-gray-100">
-                <div className="h-full rounded-full bg-teal-500 transition-all duration-300" style={{ width: `${profileCompleteness}%` }} />
+              <span className="text-xs font-medium text-gray-500">Profile</span>
+              <div className="h-1.5 w-28 overflow-hidden rounded-full bg-gray-100">
+                <div className="h-full rounded-full bg-teal-500 transition-all duration-700" style={{ width: `${profileCompleteness}%` }} />
               </div>
-              <span className="text-xs font-semibold text-gray-600">{profileCompleteness}%</span>
+              <span className="w-10 text-right text-xs font-semibold text-gray-700">{profileCompleteness}%</span>
             </div>
           </div>
         </div>
@@ -505,7 +520,7 @@ export default function RoomDetailClient() {
         <div className="bg-gray-50 px-6 pb-6 pt-4">
           <AnimatedTabPanel tabKey={tab}>
             {tab === 'profile' ? (
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <div className="mt-4 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
                 <RoomProfileForm
                   profile={profile}
                   roomType={roomBase}
@@ -514,7 +529,9 @@ export default function RoomDetailClient() {
                   onSave={saveProfile}
                 />
 
-                <QuickInsightsPanel roomType={roomBase} profileData={profile} onAddInsightTask={addInsightAsTask} />
+                <div className="lg:sticky lg:top-4 lg:self-start">
+                  <QuickInsightsPanel roomType={roomBase} profileData={profile} onAddInsightTask={addInsightAsTask} />
+                </div>
               </div>
             ) : null}
 
