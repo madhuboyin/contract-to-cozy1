@@ -1,15 +1,12 @@
 // apps/frontend/src/components/rooms/RoomProfileForm.tsx
 'use client';
 
-import React from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { CheckCircle2, Loader2, Plus, X } from 'lucide-react';
 
-interface Props {
-  profile: any;
-  roomType:
+import { titleCase } from '@/lib/utils/string';
+
+type RoomType =
   | 'KITCHEN'
   | 'LIVING'
   | 'BEDROOM'
@@ -20,735 +17,323 @@ interface Props {
   | 'OFFICE'
   | 'BASEMENT'
   | 'OTHER';
+
+interface Props {
+  profile: Record<string, any>;
+  roomType: RoomType;
   saving: boolean;
-  onChange: (profile: any) => void;
-  onSave: (profile: any) => Promise<void>;
+  onChange: (profile: Record<string, any>) => void;
+  onSave: (profile: Record<string, any>) => Promise<void>;
 }
 
-type BedroomKind = 'MASTER' | 'KIDS' | 'GUEST';
-type YesNo = 'YES' | 'NO';
+type ChipOption = {
+  value: string;
+  label: string;
+};
 
-function safeObj(v: any) {
-  return v && typeof v === 'object' ? v : {};
+type FieldConfig = {
+  key: string;
+  label: string;
+  options: ChipOption[];
+  allowCustom?: boolean;
+};
+
+export const ROOM_SUBTITLE: Record<string, string> = {
+  KITCHEN: 'Tell us about your kitchen to get personalized maintenance tips.',
+  BEDROOM: 'Tell us about your bedroom to get personalized care tips.',
+  BATHROOM: 'Tell us about your bathroom to unlock targeted maintenance advice.',
+  LAUNDRY: 'Tell us about your laundry room for appliance care insights.',
+  LIVING: 'Tell us about your living room to track wear and maintenance.',
+  GARAGE: 'Tell us about your garage for storage and system insights.',
+  OFFICE: 'Tell us about your home office for equipment care tips.',
+  DINING: 'Tell us about your dining room to keep it guest-ready year-round.',
+  BASEMENT: 'Tell us about your basement for moisture and safety insights.',
+  DEFAULT: 'Tell us about this room to get personalized maintenance tips.',
+};
+
+function toOptions(values: string[]): ChipOption[] {
+  return values.map((value) => ({
+    value,
+    label: titleCase(value.replace(/_/g, ' ')),
+  }));
 }
 
-function Divider() {
-  return <div className="h-px bg-black/10" />;
+const COMMON_FIELDS: FieldConfig[] = [
+  {
+    key: 'style',
+    label: 'Primary style',
+    options: toOptions(['TRADITIONAL', 'MODERN', 'TRANSITIONAL', 'MINIMALIST', 'INDUSTRIAL', 'COASTAL']),
+  },
+  {
+    key: 'flooring',
+    label: 'Flooring',
+    options: toOptions(['HARDWOOD', 'TILE', 'VINYL', 'LAMINATE', 'CARPET', 'CONCRETE']),
+  },
+];
+
+const ROOM_PROFILE_FIELDS: Record<RoomType, FieldConfig[]> = {
+  KITCHEN: [
+    ...COMMON_FIELDS,
+    { key: 'countertops', label: 'Countertops', options: toOptions(['GRANITE', 'QUARTZ', 'MARBLE', 'LAMINATE', 'BUTCHER_BLOCK', 'CONCRETE']) },
+    { key: 'cabinets', label: 'Cabinet finish', options: toOptions(['WHITE', 'OAK', 'MAPLE', 'WALNUT', 'PAINTED', 'LAMINATE']) },
+    { key: 'backsplash', label: 'Backsplash', options: toOptions(['TILE', 'GLASS', 'STONE', 'PAINT', 'NONE']) },
+    { key: 'ventHood', label: 'Vent hood type', options: toOptions(['CHIMNEY', 'UNDER_CABINET', 'ISLAND', 'MICROWAVE', 'NONE']) },
+  ],
+  LIVING: [
+    ...COMMON_FIELDS,
+    { key: 'seatingCapacity', label: 'Seating capacity', options: toOptions(['2', '3', '4', '5', '6', '8']) },
+    { key: 'primaryUse', label: 'Primary use', options: toOptions(['FAMILY_TIME', 'ENTERTAINING', 'TV', 'MULTIPURPOSE']) },
+    { key: 'tvMount', label: 'TV mount', options: toOptions(['WALL', 'STAND', 'NONE']) },
+    { key: 'lighting', label: 'Lighting', options: toOptions(['RECESSED', 'LAMPS', 'PENDANT', 'MIXED']) },
+  ],
+  BEDROOM: [
+    ...COMMON_FIELDS,
+    {
+      key: 'bedroomKind',
+      label: 'Bedroom type',
+      options: [
+        { value: 'MASTER', label: 'Master' },
+        { value: 'KIDS', label: 'Kids' },
+        { value: 'GUEST', label: 'Guest' },
+      ],
+      allowCustom: false,
+    },
+    { key: 'bedSize', label: 'Bed size', options: toOptions(['TWIN', 'FULL', 'QUEEN', 'KING']) },
+    { key: 'nightLighting', label: 'Night lighting', options: toOptions(['LAMPS', 'SCONCES', 'NONE']) },
+  ],
+  BATHROOM: [
+    ...COMMON_FIELDS,
+    { key: 'bathroomType', label: 'Bathroom type', options: toOptions(['FULL', 'HALF', 'PRIMARY']) },
+    { key: 'showerType', label: 'Shower / tub type', options: toOptions(['SHOWER_ONLY', 'TUB_ONLY', 'SHOWER_TUB', 'NONE']) },
+    { key: 'exhaustFan', label: 'Exhaust fan present', options: toOptions(['YES', 'NO']), allowCustom: false },
+    { key: 'gfciPresent', label: 'GFCI outlets present', options: toOptions(['YES', 'NO']), allowCustom: false },
+    { key: 'shutoffAccessible', label: 'Shutoff access is easy', options: toOptions(['YES', 'NO']), allowCustom: false },
+  ],
+  DINING: [
+    ...COMMON_FIELDS,
+    { key: 'seatingCapacity', label: 'Seating capacity', options: toOptions(['4', '6', '8', '10']) },
+    { key: 'tableMaterial', label: 'Table material', options: toOptions(['WOOD', 'GLASS', 'MARBLE', 'METAL']) },
+    { key: 'lighting', label: 'Lighting', options: toOptions(['CHANDELIER', 'PENDANT', 'RECESSED', 'MIXED']) },
+    { key: 'highChairUse', label: 'High chair use', options: toOptions(['YES', 'NO']), allowCustom: false },
+  ],
+  LAUNDRY: [
+    ...COMMON_FIELDS,
+    { key: 'washerType', label: 'Washer type', options: toOptions(['FRONT_LOAD', 'TOP_LOAD']) },
+    { key: 'dryerType', label: 'Dryer type', options: toOptions(['ELECTRIC', 'GAS']) },
+    { key: 'ventingType', label: 'Venting type', options: toOptions(['RIGID', 'SEMI_RIGID', 'FLEX']) },
+    { key: 'floorDrain', label: 'Floor drain', options: toOptions(['YES', 'NO']), allowCustom: false },
+    { key: 'leakPan', label: 'Leak pan', options: toOptions(['YES', 'NO']), allowCustom: false },
+  ],
+  GARAGE: [
+    ...COMMON_FIELDS,
+    { key: 'carCapacity', label: 'Car capacity', options: toOptions(['1', '2', '3']) },
+    { key: 'doorType', label: 'Door type', options: toOptions(['AUTO', 'MANUAL']) },
+    { key: 'storageType', label: 'Storage type', options: toOptions(['SHELVES', 'CABINETS', 'MIXED', 'NONE']) },
+    { key: 'waterHeaterLocatedHere', label: 'Water heater located here', options: toOptions(['YES', 'NO']), allowCustom: false },
+    { key: 'fireExtinguisherPresent', label: 'Fire extinguisher present', options: toOptions(['YES', 'NO']), allowCustom: false },
+  ],
+  OFFICE: [
+    ...COMMON_FIELDS,
+    { key: 'primaryUse', label: 'Primary use', options: toOptions(['WFH', 'STUDY', 'GAMING', 'MIXED']) },
+    { key: 'monitorCount', label: 'Monitor count', options: toOptions(['1', '2', '3', '4']) },
+    { key: 'cableManagement', label: 'Cable management', options: toOptions(['TRAY', 'CLIPS', 'SLEEVES', 'NONE']) },
+    { key: 'ergonomicSetup', label: 'Ergonomic setup', options: toOptions(['YES', 'NO']), allowCustom: false },
+    { key: 'surgeProtection', label: 'Surge protection', options: toOptions(['YES', 'NO']), allowCustom: false },
+  ],
+  BASEMENT: [
+    ...COMMON_FIELDS,
+    { key: 'basementType', label: 'Basement type', options: toOptions(['FINISHED', 'UNFINISHED', 'PARTIAL']) },
+    { key: 'humidityControl', label: 'Humidity control', options: toOptions(['DEHUMIDIFIER', 'HVAC', 'SENSOR_ONLY', 'NONE']) },
+    { key: 'sumpPump', label: 'Sump pump present', options: toOptions(['YES', 'NO']), allowCustom: false },
+    { key: 'floorDrain', label: 'Floor drain present', options: toOptions(['YES', 'NO']), allowCustom: false },
+    { key: 'egressWindow', label: 'Egress window', options: toOptions(['YES', 'NO']), allowCustom: false },
+  ],
+  OTHER: [...COMMON_FIELDS],
+};
+
+function formatDisplayValue(value: string): string {
+  return titleCase(String(value || '').replace(/_/g, ' '));
 }
 
-function Row({
+function ChipSelector({
   label,
-  children,
-  hint,
+  options,
+  value,
+  onChange,
+  allowCustom = true,
 }: {
   label: string;
-  children: React.ReactNode;
-  hint?: string;
+  options: ChipOption[];
+  value: string;
+  onChange: (value: string) => void;
+  allowCustom?: boolean;
 }) {
+  const [customInput, setCustomInput] = useState('');
+  const [showCustom, setShowCustom] = useState(false);
+
+  const isCustomValue = Boolean(value) && !options.some((option) => option.value === value);
+
   return (
-    <div className="px-4 py-3">
-      <Label className="text-xs font-medium text-black/70">{label}</Label>
-      <div className="mt-1">{children}</div>
-      {hint ? <div className="mt-1 text-[11px] text-black/50">{hint}</div> : null}
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-gray-700">{label}</label>
+
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => {
+              onChange(option.value);
+              setShowCustom(false);
+              setCustomInput('');
+            }}
+            className={[
+              'rounded-full border px-3 py-1.5 text-sm transition-all',
+              value === option.value
+                ? 'border-teal-600 bg-teal-600 font-medium text-white'
+                : 'border-gray-200 bg-white text-gray-600 hover:border-teal-300 hover:text-teal-700',
+            ].join(' ')}
+          >
+            {option.label}
+          </button>
+        ))}
+
+        {allowCustom && !showCustom ? (
+          <button
+            type="button"
+            onClick={() => setShowCustom(true)}
+            className="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 px-3 py-1.5 text-sm text-gray-400 transition-colors hover:border-gray-400 hover:text-gray-600"
+          >
+            <Plus className="h-3 w-3" />
+            Other
+          </button>
+        ) : null}
+
+        {allowCustom && showCustom ? (
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={customInput}
+              onChange={(event) => setCustomInput(event.target.value)}
+              placeholder="Type value..."
+              className="w-36 rounded-full border border-teal-400 px-3 py-1.5 text-sm outline-none ring-1 ring-teal-300"
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && customInput.trim()) {
+                  onChange(customInput.trim());
+                  setShowCustom(false);
+                  setCustomInput('');
+                }
+                if (event.key === 'Escape') {
+                  setShowCustom(false);
+                  setCustomInput('');
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setShowCustom(false);
+                setCustomInput('');
+              }}
+              className="text-gray-400 transition-colors hover:text-gray-600"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      {isCustomValue ? (
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">Custom:</span>
+          <span className="rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700">
+            {formatDisplayValue(value)}
+          </span>
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            className="text-gray-400 transition-colors hover:text-red-500"
+            aria-label="Clear custom value"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
 
 export default function RoomProfileForm({ profile, roomType, saving, onChange, onSave }: Props) {
-  const p = safeObj(profile);
+  const p = useMemo(() => (profile && typeof profile === 'object' ? profile : {}), [profile]);
+  const [savedRecently, setSavedRecently] = useState(false);
+  const saveTimerRef = useRef<number | null>(null);
 
-  function updateField(key: string, value: any) {
-    onChange({ ...p, [key]: value });
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, []);
+
+  const fields = ROOM_PROFILE_FIELDS[roomType] ?? ROOM_PROFILE_FIELDS.OTHER;
+  const subtitle = ROOM_SUBTITLE[roomType] ?? ROOM_SUBTITLE.DEFAULT;
+
+  function queueAutoSave(nextProfile: Record<string, any>) {
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+    }
+
+    saveTimerRef.current = window.setTimeout(async () => {
+      try {
+        await onSave(nextProfile);
+        setSavedRecently(true);
+        window.setTimeout(() => setSavedRecently(false), 1400);
+      } catch (error) {
+        console.error('Profile auto-save failed:', error);
+      }
+    }, 320);
   }
 
-  async function saveProfile() {
-    await onSave(p);
+  function updateProfileField(fieldKey: string, fieldValue: string) {
+    const nextProfile = { ...p, [fieldKey]: fieldValue };
+    onChange(nextProfile);
+    setSavedRecently(false);
+    queueAutoSave(nextProfile);
   }
-
-  const bedroomKind = (p?.bedroomKind || '') as '' | BedroomKind;
 
   return (
-    <div className="lg:col-span-2 rounded-2xl border border-black/10 bg-white shadow-sm">
-      <div className="p-5">
-        <div className="text-sm font-semibold">Room questionnaire</div>
-        <div className="text-xs text-black/50 mt-1">
-          Lightweight inputs stored in <span className="font-mono">InventoryRoom.profile</span>.
-        </div>
+    <div className="space-y-5 rounded-xl border border-gray-200 bg-white p-5">
+      <div>
+        <h3 className="text-sm font-semibold text-gray-800">Room Profile</h3>
+        <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>
       </div>
 
-      <Divider />
+      {fields.map((field) => (
+        <ChipSelector
+          key={field.key}
+          label={field.label}
+          options={field.options}
+          value={String(p[field.key] || '')}
+          onChange={(value) => updateProfileField(field.key, value)}
+          allowCustom={field.allowCustom !== false}
+        />
+      ))}
 
-      <div className="p-5 pt-0">
-        <div className="rounded-xl border border-black/10 bg-black/[0.02] overflow-hidden">
-          {/* Bedroom kind selector */}
-          {roomType === 'BEDROOM' && (
-            <>
-              <Row label="Bedroom type" hint="Drives insights + suggested checklist defaults (no DB enum changes).">
-                <Select value={bedroomKind} onValueChange={(v) => updateField('bedroomKind', v)}>
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select bedroom type…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="MASTER">Master bedroom</SelectItem>
-                    <SelectItem value="KIDS">Kids bedroom</SelectItem>
-                    <SelectItem value="GUEST">Guest bedroom</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-              <Divider />
-            </>
-          )}
+      <div className="flex items-center justify-between border-t border-gray-100 pt-2">
+        <p className="text-xs text-gray-400">Tip: changes save automatically when you select a chip.</p>
 
-          {/* Common fields */}
-          <Row label="Primary style">
-            <Input
-              value={p.style || ''}
-              onChange={(e) => updateField('style', e.target.value)}
-              placeholder="Modern / Transitional / Traditional…"
-              className="h-10 rounded-xl border-black/10 bg-white"
-            />
-          </Row>
-          <Divider />
-          <Row label="Flooring">
-            <Input
-              value={p.flooring || ''}
-              onChange={(e) => updateField('flooring', e.target.value)}
-              placeholder="Wood / Tile / Vinyl…"
-              className="h-10 rounded-xl border-black/10 bg-white"
-            />
-          </Row>
-
-          {/* Kitchen */}
-          {roomType === 'KITCHEN' && (
-            <>
-              <Divider />
-              <Row label="Countertops">
-                <Input
-                  value={p.countertops || ''}
-                  onChange={(e) => updateField('countertops', e.target.value)}
-                  placeholder="Quartz / Granite / Laminate…"
-                  className="h-10 rounded-xl border-black/10 bg-white"
-                />
-              </Row>
-              <Divider />
-              <Row label="Cabinet finish">
-                <Input
-                  value={p.cabinets || ''}
-                  onChange={(e) => updateField('cabinets', e.target.value)}
-                  placeholder="White / Walnut / Painted…"
-                  className="h-10 rounded-xl border-black/10 bg-white"
-                />
-              </Row>
-              <Divider />
-              <Row label="Backsplash">
-                <Input
-                  value={p.backsplash || ''}
-                  onChange={(e) => updateField('backsplash', e.target.value)}
-                  placeholder="Subway tile / Stone…"
-                  className="h-10 rounded-xl border-black/10 bg-white"
-                />
-              </Row>
-              <Divider />
-              <Row label="Vent hood type">
-                <Input
-                  value={p.ventHood || ''}
-                  onChange={(e) => updateField('ventHood', e.target.value)}
-                  placeholder="Microwave hood / Chimney / Under-cabinet…"
-                  className="h-10 rounded-xl border-black/10 bg-white"
-                />
-              </Row>
-            </>
-          )}
-
-          {/* Living */}
-          {roomType === 'LIVING' && (
-            <>
-              <Divider />
-              <Row label="Seating capacity">
-                <Input
-                  value={p.seatingCapacity || ''}
-                  onChange={(e) => updateField('seatingCapacity', e.target.value)}
-                  placeholder="e.g., 5"
-                  className="h-10 rounded-xl border-black/10 bg-white"
-                />
-              </Row>
-              <Divider />
-              <Row label="Primary use">
-                <Input
-                  value={p.primaryUse || ''}
-                  onChange={(e) => updateField('primaryUse', e.target.value)}
-                  placeholder="Family / Entertaining / TV…"
-                  className="h-10 rounded-xl border-black/10 bg-white"
-                />
-              </Row>
-              <Divider />
-              <Row label="TV mount">
-                <Input
-                  value={p.tvMount || ''}
-                  onChange={(e) => updateField('tvMount', e.target.value)}
-                  placeholder="Wall / Stand / None"
-                  className="h-10 rounded-xl border-black/10 bg-white"
-                />
-              </Row>
-              <Divider />
-              <Row label="Lighting">
-                <Input
-                  value={p.lighting || ''}
-                  onChange={(e) => updateField('lighting', e.target.value)}
-                  placeholder="Recessed / Floor lamps / Pendant…"
-                  className="h-10 rounded-xl border-black/10 bg-white"
-                />
-              </Row>
-            </>
-          )}
-
-          {/* Dining */}
-          {roomType === 'DINING' && (
-            <>
-              <Divider />
-              <Row label="Seating capacity">
-                <Input
-                  value={p.seatingCapacity || ''}
-                  onChange={(e) => updateField('seatingCapacity', e.target.value)}
-                  placeholder="e.g., 6"
-                  className="h-10 rounded-xl border-black/10 bg-white"
-                />
-              </Row>
-              <Divider />
-              <Row label="Table material">
-                <Input
-                  value={p.tableMaterial || ''}
-                  onChange={(e) => updateField('tableMaterial', e.target.value)}
-                  placeholder="Wood / Glass / Marble…"
-                  className="h-10 rounded-xl border-black/10 bg-white"
-                />
-              </Row>
-              <Divider />
-              <Row label="Lighting">
-                <Select value={(p.lighting || '') as string} onValueChange={(v) => updateField('lighting', v)}>
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="CHANDELIER">Chandelier</SelectItem>
-                    <SelectItem value="PENDANT">Pendant</SelectItem>
-                    <SelectItem value="RECESSED">Recessed</SelectItem>
-                    <SelectItem value="MIXED">Mixed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-              <Divider />
-              <Row label="High chair use (optional)">
-                <Select value={(p.highChairUse || '') as '' | YesNo} onValueChange={(v) => updateField('highChairUse', v)}>
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="YES">Yes</SelectItem>
-                    <SelectItem value="NO">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-            </>
-          )}
-          {/* Bathroom */}
-          {roomType === 'BATHROOM' && (
-            <>
-              <Divider />
-              <Row label="Bathroom type">
-                <Select value={(p.bathroomType || '') as string} onValueChange={(v) => updateField('bathroomType', v)}>
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="FULL">Full (shower/tub)</SelectItem>
-                    <SelectItem value="HALF">Half / powder</SelectItem>
-                    <SelectItem value="PRIMARY">Primary ensuite</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-
-              <Divider />
-              <Row label="Shower / tub type">
-                <Select value={(p.showerType || '') as string} onValueChange={(v) => updateField('showerType', v)}>
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="SHOWER_ONLY">Shower only</SelectItem>
-                    <SelectItem value="TUB_ONLY">Tub only</SelectItem>
-                    <SelectItem value="SHOWER_TUB">Shower + tub combo</SelectItem>
-                    <SelectItem value="NONE">None</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-
-              <Divider />
-              <Row label="Exhaust fan present">
-                <Select value={(p.exhaustFan || '') as '' | 'YES' | 'NO'} onValueChange={(v) => updateField('exhaustFan', v)}>
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="YES">Yes</SelectItem>
-                    <SelectItem value="NO">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-
-              <Divider />
-              <Row label="GFCI outlets present">
-                <Select value={(p.gfciPresent || '') as '' | 'YES' | 'NO'} onValueChange={(v) => updateField('gfciPresent', v)}>
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="YES">Yes</SelectItem>
-                    <SelectItem value="NO">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-
-              <Divider />
-              <Row label="Shutoff access is easy">
-                <Select value={(p.shutoffAccessible || '') as '' | 'YES' | 'NO'} onValueChange={(v) => updateField('shutoffAccessible', v)}>
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="YES">Yes</SelectItem>
-                    <SelectItem value="NO">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-            </>
-          )}
-          {/* Basement */}
-          {roomType === 'BASEMENT' && (
-            <>
-              <Divider />
-              <Row label="Basement type">
-                <Select value={(p.basementType || '') as string} onValueChange={(v) => updateField('basementType', v)}>
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="FINISHED">Finished</SelectItem>
-                    <SelectItem value="UNFINISHED">Unfinished</SelectItem>
-                    <SelectItem value="PARTIAL">Partial</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-
-              <Divider />
-              <Row label="Humidity control">
-                <Select value={(p.humidityControl || '') as string} onValueChange={(v) => updateField('humidityControl', v)}>
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="DEHUMIDIFIER">Dehumidifier</SelectItem>
-                    <SelectItem value="HVAC">HVAC / Ventilation</SelectItem>
-                    <SelectItem value="SENSOR_ONLY">Sensor only</SelectItem>
-                    <SelectItem value="NONE">None</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-
-              <Divider />
-              <Row label="Sump pump present">
-                <Select value={(p.sumpPump || '') as '' | 'YES' | 'NO'} onValueChange={(v) => updateField('sumpPump', v)}>
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="YES">Yes</SelectItem>
-                    <SelectItem value="NO">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-
-              <Divider />
-              <Row label="Floor drain present">
-                <Select value={(p.floorDrain || '') as '' | 'YES' | 'NO'} onValueChange={(v) => updateField('floorDrain', v)}>
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="YES">Yes</SelectItem>
-                    <SelectItem value="NO">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-
-              <Divider />
-              <Row label="Egress window">
-                <Select value={(p.egressWindow || '') as '' | 'YES' | 'NO'} onValueChange={(v) => updateField('egressWindow', v)}>
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="YES">Yes</SelectItem>
-                    <SelectItem value="NO">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-            </>
-          )}
-
-          {/* Laundry */}
-          {roomType === 'LAUNDRY' && (
-            <>
-              <Divider />
-              <Row label="Washer type">
-                <Select value={(p.washerType || '') as string} onValueChange={(v) => updateField('washerType', v)}>
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="FRONT_LOAD">Front-load</SelectItem>
-                    <SelectItem value="TOP_LOAD">Top-load</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-              <Divider />
-              <Row label="Dryer type">
-                <Select value={(p.dryerType || '') as string} onValueChange={(v) => updateField('dryerType', v)}>
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ELECTRIC">Electric</SelectItem>
-                    <SelectItem value="GAS">Gas</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-              <Divider />
-              <Row label="Venting type">
-                <Input
-                  value={p.ventingType || ''}
-                  onChange={(e) => updateField('ventingType', e.target.value)}
-                  placeholder="Rigid / Semi-rigid / Flex…"
-                  className="h-10 rounded-xl border-black/10 bg-white"
-                />
-              </Row>
-              <Divider />
-              <Row label="Floor drain">
-                <Select value={(p.floorDrain || '') as '' | YesNo} onValueChange={(v) => updateField('floorDrain', v)}>
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="YES">Yes</SelectItem>
-                    <SelectItem value="NO">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-              <Divider />
-              <Row label="Leak pan">
-                <Select value={(p.leakPan || '') as '' | YesNo} onValueChange={(v) => updateField('leakPan', v)}>
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="YES">Yes</SelectItem>
-                    <SelectItem value="NO">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-            </>
-          )}
-
-          {/* Garage */}
-          {roomType === 'GARAGE' && (
-            <>
-              <Divider />
-              <Row label="Car capacity">
-                <Input
-                  value={p.carCapacity || ''}
-                  onChange={(e) => updateField('carCapacity', e.target.value)}
-                  placeholder="e.g., 2"
-                  className="h-10 rounded-xl border-black/10 bg-white"
-                />
-              </Row>
-              <Divider />
-              <Row label="Door type">
-                <Select value={(p.doorType || '') as string} onValueChange={(v) => updateField('doorType', v)}>
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="AUTO">Automatic opener</SelectItem>
-                    <SelectItem value="MANUAL">Manual</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-              <Divider />
-              <Row label="Storage type">
-                <Select value={(p.storageType || '') as string} onValueChange={(v) => updateField('storageType', v)}>
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="SHELVES">Shelves</SelectItem>
-                    <SelectItem value="CABINETS">Cabinets</SelectItem>
-                    <SelectItem value="MIXED">Mixed</SelectItem>
-                    <SelectItem value="NONE">None</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-              <Divider />
-              <Row label="Water heater located here">
-                <Select
-                  value={(p.waterHeaterLocatedHere || '') as '' | YesNo}
-                  onValueChange={(v) => updateField('waterHeaterLocatedHere', v)}
-                >
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="YES">Yes</SelectItem>
-                    <SelectItem value="NO">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-              <Divider />
-              <Row label="Fire extinguisher present">
-                <Select
-                  value={(p.fireExtinguisherPresent || '') as '' | YesNo}
-                  onValueChange={(v) => updateField('fireExtinguisherPresent', v)}
-                >
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="YES">Yes</SelectItem>
-                    <SelectItem value="NO">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-            </>
-          )}
-
-          {/* Office */}
-          {roomType === 'OFFICE' && (
-            <>
-              <Divider />
-              <Row label="Primary use">
-                <Select value={(p.primaryUse || '') as string} onValueChange={(v) => updateField('primaryUse', v)}>
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="WFH">Work from home</SelectItem>
-                    <SelectItem value="STUDY">Study</SelectItem>
-                    <SelectItem value="GAMING">Gaming</SelectItem>
-                    <SelectItem value="MIXED">Mixed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-              <Divider />
-              <Row label="Monitor count">
-                <Input
-                  value={p.monitorCount || ''}
-                  onChange={(e) => updateField('monitorCount', e.target.value)}
-                  placeholder="e.g., 2"
-                  className="h-10 rounded-xl border-black/10 bg-white"
-                />
-              </Row>
-              <Divider />
-              <Row label="Cable management">
-                <Input
-                  value={p.cableManagement || ''}
-                  onChange={(e) => updateField('cableManagement', e.target.value)}
-                  placeholder="Under-desk tray / clips / none…"
-                  className="h-10 rounded-xl border-black/10 bg-white"
-                />
-              </Row>
-              <Divider />
-              <Row label="Ergonomic setup">
-                <Select
-                  value={(p.ergonomicSetup || '') as '' | YesNo}
-                  onValueChange={(v) => updateField('ergonomicSetup', v)}
-                >
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="YES">Yes</SelectItem>
-                    <SelectItem value="NO">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-              <Divider />
-              <Row label="Surge protection">
-                <Select
-                  value={(p.surgeProtection || '') as '' | YesNo}
-                  onValueChange={(v) => updateField('surgeProtection', v)}
-                >
-                  <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                    <SelectValue placeholder="Select…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="YES">Yes</SelectItem>
-                    <SelectItem value="NO">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Row>
-            </>
-          )}
-
-          {/* Bedroom base fields */}
-          {roomType === 'BEDROOM' && (
-            <>
-              <Divider />
-              <Row label="Bed size">
-                <Input
-                  value={p.bedSize || ''}
-                  onChange={(e) => updateField('bedSize', e.target.value)}
-                  placeholder="King / Queen / Twin…"
-                  className="h-10 rounded-xl border-black/10 bg-white"
-                />
-              </Row>
-              <Divider />
-              <Row label="Night lighting">
-                <Input
-                  value={p.nightLighting || ''}
-                  onChange={(e) => updateField('nightLighting', e.target.value)}
-                  placeholder="Lamps / Sconces / None…"
-                  className="h-10 rounded-xl border-black/10 bg-white"
-                />
-              </Row>
-
-              {bedroomKind === 'MASTER' && (
-                <>
-                  <Divider />
-                  <Row label="Mattress type">
-                    <Input
-                      value={p.mattressType || ''}
-                      onChange={(e) => updateField('mattressType', e.target.value)}
-                      placeholder="Memory foam / Hybrid / Innerspring…"
-                      className="h-10 rounded-xl border-black/10 bg-white"
-                    />
-                  </Row>
-                  <Divider />
-                  <Row label="Noise level">
-                    <Input
-                      value={p.noiseLevel || ''}
-                      onChange={(e) => updateField('noiseLevel', e.target.value)}
-                      placeholder="Quiet / Moderate / Noisy…"
-                      className="h-10 rounded-xl border-black/10 bg-white"
-                    />
-                  </Row>
-                  <Divider />
-                  <Row label="Storage">
-                    <Input
-                      value={p.storage || ''}
-                      onChange={(e) => updateField('storage', e.target.value)}
-                      placeholder="Walk-in closet / Dresser / Under-bed…"
-                      className="h-10 rounded-xl border-black/10 bg-white"
-                    />
-                  </Row>
-                </>
-              )}
-
-              {bedroomKind === 'KIDS' && (
-                <>
-                  <Divider />
-                  <Row label="Age range">
-                    <Input
-                      value={p.ageRange || ''}
-                      onChange={(e) => updateField('ageRange', e.target.value)}
-                      placeholder="e.g., 3–6"
-                      className="h-10 rounded-xl border-black/10 bg-white"
-                    />
-                  </Row>
-                  <Divider />
-                  <Row label="Toy storage">
-                    <Input
-                      value={p.toyStorage || ''}
-                      onChange={(e) => updateField('toyStorage', e.target.value)}
-                      placeholder="Bins / Shelves / Closet…"
-                      className="h-10 rounded-xl border-black/10 bg-white"
-                    />
-                  </Row>
-                  <Divider />
-                  <Row label="Furniture anchored">
-                    <Select
-                      value={(p.anchorFurniture || '') as '' | YesNo}
-                      onValueChange={(v) => updateField('anchorFurniture', v)}
-                    >
-                      <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                        <SelectValue placeholder="Select…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="YES">Yes</SelectItem>
-                        <SelectItem value="NO">No</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </Row>
-                  <Divider />
-                  <Row label="Window safety">
-                    <Select
-                      value={(p.windowSafety || '') as '' | YesNo}
-                      onValueChange={(v) => updateField('windowSafety', v)}
-                    >
-                      <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                        <SelectValue placeholder="Select…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="YES">Yes</SelectItem>
-                        <SelectItem value="NO">No</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </Row>
-                </>
-              )}
-
-              {bedroomKind === 'GUEST' && (
-                <>
-                  <Divider />
-                  <Row label="Blackout curtains">
-                    <Select value={(p.blackout || '') as '' | YesNo} onValueChange={(v) => updateField('blackout', v)}>
-                      <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white">
-                        <SelectValue placeholder="Select…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="YES">Yes</SelectItem>
-                        <SelectItem value="NO">No</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </Row>
-                  <Divider />
-                  <Row label="Charging setup">
-                    <Input
-                      value={p.charging || ''}
-                      onChange={(e) => updateField('charging', e.target.value)}
-                      placeholder="USB outlet / Charger on nightstand…"
-                      className="h-10 rounded-xl border-black/10 bg-white"
-                    />
-                  </Row>
-                  <Divider />
-                  <Row label="Linens / towels">
-                    <Input
-                      value={p.linens || ''}
-                      onChange={(e) => updateField('linens', e.target.value)}
-                      placeholder="Spare sheets / Towels stored where…"
-                      className="h-10 rounded-xl border-black/10 bg-white"
-                    />
-                  </Row>
-                </>
-              )}
-            </>
-          )}
-        </div>
-
-        <div className="mt-4 flex items-center gap-2">
-          <Button onClick={saveProfile} disabled={saving} className="rounded-xl">
-            {saving ? 'Saving…' : 'Save profile'}
-          </Button>
-          <div className="text-xs text-black/50">Tip: keep this quick. Defaults + insights adapt to the room.</div>
-        </div>
+        {saving ? (
+          <span className="inline-flex items-center gap-1 text-xs text-teal-600">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Saving...
+          </span>
+        ) : savedRecently ? (
+          <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
+            <CheckCircle2 className="h-3 w-3" />
+            Saved
+          </span>
+        ) : null}
       </div>
     </div>
   );

@@ -2,30 +2,32 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import { ArrowLeft, Package, Sparkles } from 'lucide-react';
+import { CircularProgressbar, buildStyles } from 'react-circular-progressbar';
 
-import { SectionHeader } from '../../../../../components/SectionHeader';
-import { listInventoryRooms, updateInventoryRoomProfile, getRoomInsights } from '../../../../../inventory/inventoryApi';
+import {
+  createRoomChecklistItem,
+  getDraftsCsvExportUrl,
+  getRoomInsights,
+  getRoomTimeline,
+  listInventoryRooms,
+  listRoomChecklistItems,
+  listRoomScanSessions,
+  updateInventoryRoomProfile,
+  type RoomChecklistItemDTO,
+} from '../../../../../inventory/inventoryApi';
 
-import RoomProfileForm from '@/components/rooms/RoomProfileForm';
-import RoomChecklistPanel from '@/components/rooms/RoomChecklistPanel';
-import RoomTimeline from '@/components/rooms/RoomTimeline';
-import KitchenInsightsCard from '@/components/rooms/KitchenInsightsCard';
-import LivingRoomInsightsCard from '@/components/rooms/LivingRoomInsightsCard';
-import BedroomInsightsCard from '@/components/rooms/BedroomInsightsCard';
-import DiningInsightsCard from '@/components/rooms/DiningInsightsCard';
-import LaundryInsightsCard from '@/components/rooms/LaundryInsightsCard';
-import GarageInsightsCard from '@/components/rooms/GarageInsightsCard';
-import OfficeInsightsCard from '@/components/rooms/OfficeInsightsCard';
-import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
 import AnimatedTabPanel from '@/components/rooms/AnimatedTabPanel';
-import BathroomInsightsCard from '@/components/rooms/BathroomInsightsCard';
-import BasementInsightsCard from '@/components/rooms/BasementInsightsCard';
+import QuickInsightsPanel, { type RoomInsight } from '@/components/rooms/QuickInsightsPanel';
+import RoomChecklistPanel from '@/components/rooms/RoomChecklistPanel';
+import RoomProfileForm from '@/components/rooms/RoomProfileForm';
+import RoomTimeline from '@/components/rooms/RoomTimeline';
+import ScanHistoryCollapsible from '@/components/rooms/ScanHistoryCollapsible';
 import RoomScanModal from '@/app/(dashboard)/dashboard/components/inventory/RoomScanModal';
-import { listRoomScanSessions, getDraftsCsvExportUrl } from '../../../../../inventory/inventoryApi';
+import { getHealthOverlay, getRoomConfig, getScoreColorHex, getStatusColor, getStatusLabel } from '@/components/rooms/roomVisuals';
 
-type Tab = 'PROFILE' | 'CHECKLIST' | 'TIMELINE';
+type Tab = 'profile' | 'checklist' | 'timeline';
 
 type RoomBase =
   | 'KITCHEN'
@@ -41,8 +43,17 @@ type RoomBase =
 
 type BedroomKind = 'MASTER' | 'KIDS' | 'GUEST' | null;
 
-function normalizeBedroomKind(v: any): BedroomKind {
-  if (v === 'MASTER' || v === 'KIDS' || v === 'GUEST') return v;
+type RoomTimelineEventDTO = {
+  type: 'TASK' | 'INCIDENT';
+  id: string;
+  title: string;
+  status: string;
+  at: string;
+  meta?: any;
+};
+
+function normalizeBedroomKind(value: any): BedroomKind {
+  if (value === 'MASTER' || value === 'KIDS' || value === 'GUEST') return value;
   return null;
 }
 
@@ -73,33 +84,43 @@ function resolveRoomBaseFromType(type?: string | null): RoomBase | null {
 }
 
 function resolveRoomBaseFromName(name: string): RoomBase {
-  const t = (name || '').toLowerCase();
+  const text = (name || '').toLowerCase();
 
-  if (t.includes('kitchen')) return 'KITCHEN';
-  if (t.includes('living') || t.includes('family') || t.includes('great')) return 'LIVING';
-  if (t.includes('bed') || t.includes('master') || t.includes('guest') || t.includes('kids') || t.includes('nursery'))
-    return 'BEDROOM';
-  if (t.includes('dining') || t.includes('breakfast') || t.includes('eat')) return 'DINING';
-  if (t.includes('laundry') || t.includes('utility') || t.includes('washer') || t.includes('dryer')) return 'LAUNDRY';
-  if (t.includes('garage')) return 'GARAGE';
-  if (t.includes('office') || t.includes('study') || t.includes('den')) return 'OFFICE';
-  if (t.includes('bath') || t.includes('toilet') || t.includes('powder') || t.includes('wc')) return 'BATHROOM';
-  if (t.includes('basement') || t.includes('cellar') || t.includes('lower level') || t.includes('lower-level')) return 'BASEMENT';
+  if (text.includes('kitchen')) return 'KITCHEN';
+  if (text.includes('living') || text.includes('family') || text.includes('great')) return 'LIVING';
+  if (text.includes('bed') || text.includes('master') || text.includes('guest') || text.includes('kids') || text.includes('nursery')) return 'BEDROOM';
+  if (text.includes('dining') || text.includes('breakfast') || text.includes('eat')) return 'DINING';
+  if (text.includes('laundry') || text.includes('utility') || text.includes('washer') || text.includes('dryer')) return 'LAUNDRY';
+  if (text.includes('garage')) return 'GARAGE';
+  if (text.includes('office') || text.includes('study') || text.includes('den')) return 'OFFICE';
+  if (text.includes('bath') || text.includes('toilet') || text.includes('powder') || text.includes('wc')) return 'BATHROOM';
+  if (text.includes('basement') || text.includes('cellar') || text.includes('lower level') || text.includes('lower-level')) return 'BASEMENT';
+
   return 'OTHER';
 }
 
 function resolveRoomBase(room: any): RoomBase {
-  // ✅ Source of truth: room.type (set by RoomsHub / patchRoomMeta)
   const byType = resolveRoomBaseFromType(room?.type);
   if (byType) return byType;
-
-  // Fallback: name matching
   return resolveRoomBaseFromName(room?.name || '');
 }
 
-function clampScore(v: number) {
-  return Math.max(0, Math.min(100, Math.round(v)));
+function clampScore(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
 }
+
+const PROFILE_COMPLETION_KEYS: Record<RoomBase, string[]> = {
+  KITCHEN: ['style', 'countertops', 'cabinets', 'ventHood', 'flooring'],
+  LIVING: ['style', 'seatingCapacity', 'primaryUse', 'tvMount', 'lighting', 'flooring'],
+  BEDROOM: ['style', 'bedroomKind', 'bedSize', 'nightLighting', 'flooring'],
+  BATHROOM: ['style', 'bathroomType', 'showerType', 'exhaustFan', 'gfciPresent', 'flooring'],
+  DINING: ['style', 'seatingCapacity', 'tableMaterial', 'lighting', 'flooring'],
+  LAUNDRY: ['style', 'washerType', 'dryerType', 'ventingType', 'leakPan', 'floorDrain'],
+  GARAGE: ['style', 'carCapacity', 'doorType', 'storageType', 'fireExtinguisherPresent'],
+  OFFICE: ['style', 'primaryUse', 'monitorCount', 'cableManagement', 'ergonomicSetup', 'surgeProtection'],
+  BASEMENT: ['style', 'basementType', 'humidityControl', 'sumpPump', 'floorDrain', 'egressWindow', 'flooring'],
+  OTHER: ['style', 'flooring'],
+};
 
 function computeHealthScore(roomBase: RoomBase, profile: any, insights: any): number {
   const stats = insights?.stats || {};
@@ -108,13 +129,10 @@ function computeHealthScore(roomBase: RoomBase, profile: any, insights: any): nu
   const gaps = Number(stats.coverageGapsCount || 0);
 
   let score = 55;
-
-  // General readiness signals
   score += Math.min(20, itemCount * 2);
   score += Math.min(20, docs * 5);
   score -= Math.min(30, gaps * 8);
 
-  // Existing room-specific nudges (keep)
   const missing = insights?.kitchen?.missingAppliances?.length || 0;
   if (roomBase === 'KITCHEN') score -= Math.min(20, missing * 6);
 
@@ -124,41 +142,27 @@ function computeHealthScore(roomBase: RoomBase, profile: any, insights: any): nu
     if (hint === 'LOW') score -= 6;
   }
 
-  // Lightweight profile completion boost (explainable)
-  const completionKeys: Record<RoomBase, string[]> = {
-    KITCHEN: ['countertops', 'cabinets', 'ventHood', 'flooring'],
-    LIVING: ['seatingCapacity', 'primaryUse', 'tvMount', 'lighting', 'flooring'],
-    BEDROOM: ['bedroomKind', 'bedSize', 'nightLighting'],
-    BATHROOM: ['bathroomType', 'showerType', 'exhaustFan', 'gfciPresent', 'flooring'],
-    DINING: ['seatingCapacity', 'tableMaterial', 'lighting', 'flooring'],
-    LAUNDRY: ['washerType', 'dryerType', 'ventingType', 'leakPan', 'floorDrain'],
-    GARAGE: ['carCapacity', 'doorType', 'storageType', 'fireExtinguisherPresent', 'waterHeaterLocatedHere'],
-    OFFICE: ['primaryUse', 'monitorCount', 'cableManagement', 'ergonomicSetup', 'surgeProtection'],
-    BASEMENT: ['basementType', 'humidityControl', 'sumpPump', 'floorDrain', 'egressWindow', 'flooring'],
-    OTHER: ['flooring', 'style'],
-  };
-
-  const keys = completionKeys[roomBase] || [];
-  const filled = keys.filter((k) => {
-    const v = profile?.[k];
-    return v !== null && v !== undefined && String(v).trim() !== '';
+  const keys = PROFILE_COMPLETION_KEYS[roomBase] || [];
+  const filled = keys.filter((key) => {
+    const value = profile?.[key];
+    return value !== null && value !== undefined && String(value).trim() !== '';
   }).length;
 
   if (keys.length > 0) {
-    // up to +8 points for completion
     score += Math.min(8, Math.round((filled / keys.length) * 8));
   }
 
-  // Extra simple readiness rules (small deltas)
   if (roomBase === 'LAUNDRY') {
     if (profile?.leakPan === 'YES') score += 2;
     if (profile?.floorDrain === 'YES') score += 1;
     if (profile?.ventingType) score += 1;
   }
+
   if (roomBase === 'GARAGE') {
     if (profile?.fireExtinguisherPresent === 'YES') score += 3;
     if (profile?.doorType === 'AUTO') score += 1;
   }
+
   if (roomBase === 'OFFICE') {
     if (profile?.surgeProtection === 'YES') score += 3;
     if (profile?.ergonomicSetup === 'YES') score += 1;
@@ -176,65 +180,95 @@ function computeHealthScore(roomBase: RoomBase, profile: any, insights: any): nu
     if (profile?.sumpPump === 'YES') score += 2;
     if (profile?.floorDrain === 'YES') score += 1;
   }
-  
+
   return clampScore(score);
 }
 
-function roomIcon(base: RoomBase) {
-  switch (base) {
-    case 'KITCHEN':
-      return '🍳';
-    case 'LIVING':
-      return '🛋️';
-    case 'BEDROOM':
-      return '🛏️';
-    case 'DINING':
-      return '🍽️';
-    case 'LAUNDRY':
-      return '🧺';
-    case 'GARAGE':
-      return '🚗';
-    case 'OFFICE':
-      return '🖥️';
-    case 'BATHROOM':
-      return '🚿';
-    case 'BASEMENT':
-      return '🧱';
-    default:
-      return '🏠';
-  }
+function unwrapChecklist(raw: any): RoomChecklistItemDTO[] {
+  const data = (raw as any)?.data ?? raw;
+  return (Array.isArray(data) ? data : []).filter(Boolean);
+}
+
+function unwrapTimeline(raw: any): RoomTimelineEventDTO[] {
+  if (Array.isArray(raw)) return raw as RoomTimelineEventDTO[];
+  if (raw?.timeline && Array.isArray(raw.timeline)) return raw.timeline as RoomTimelineEventDTO[];
+  if (raw?.data?.timeline && Array.isArray(raw.data.timeline)) return raw.data.timeline as RoomTimelineEventDTO[];
+  return [];
+}
+
+function formatRelativeDate(dateString?: string | null): string {
+  if (!dateString) return 'No events';
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return 'No events';
+
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays <= 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
 }
 
 export default function RoomDetailClient() {
   const params = useParams<{ id: string; roomId: string }>();
+  const router = useRouter();
+
   const propertyId = params.id;
   const roomId = params.roomId;
 
-  const [tab, setTab] = useState<Tab>('PROFILE');
+  const [tab, setTab] = useState<Tab>('profile');
   const [room, setRoom] = useState<any>(null);
-  const [profile, setProfile] = useState<any>({});
+  const [profile, setProfile] = useState<Record<string, any>>({});
   const [savingProfile, setSavingProfile] = useState(false);
 
   const [insights, setInsights] = useState<any>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+
+  const [checklistPreview, setChecklistPreview] = useState<RoomChecklistItemDTO[]>([]);
+  const [timelinePreview, setTimelinePreview] = useState<RoomTimelineEventDTO[]>([]);
+
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanSessions, setScanSessions] = useState<any[]>([]);
+  const [scanSessionsLoading, setScanSessionsLoading] = useState(false);
+  const [historySessionId, setHistorySessionId] = useState<string | null>(null);
 
   const roomBase = useMemo<RoomBase>(() => (room ? resolveRoomBase(room) : 'OTHER'), [room]);
   const bedroomKind = useMemo<BedroomKind>(() => normalizeBedroomKind(profile?.bedroomKind), [profile?.bedroomKind]);
 
   const healthScore = useMemo(() => computeHealthScore(roomBase, profile, insights), [roomBase, profile, insights]);
 
-  const [scanOpen, setScanOpen] = useState(false);
+  const completionKeys = PROFILE_COMPLETION_KEYS[roomBase] || [];
+  const profileFieldsTotal = completionKeys.length;
+  const profileFieldsFilled = completionKeys.filter((key) => {
+    const value = profile?.[key];
+    return value !== null && value !== undefined && String(value).trim() !== '';
+  }).length;
+  const profileCompleteness = profileFieldsTotal > 0 ? Math.round((profileFieldsFilled / profileFieldsTotal) * 100) : 0;
 
-  const [scanSessions, setScanSessions] = useState<any[]>([]);
-  const [scanSessionsLoading, setScanSessionsLoading] = useState(false);
-  const [historySessionId, setHistorySessionId] = useState<string | null>(null);
+  const pendingTaskCount = checklistPreview.filter((item) => item.status !== 'DONE').length;
+  const lastEventDate = timelinePreview
+    .slice()
+    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+    .at(0)?.at;
 
+  const stats = insights?.stats || {};
+  const itemCount = Number(stats.itemCount || 0);
+  const docCount = Number(stats.docsLinkedCount || 0);
+  const gapCount = Number(stats.coverageGapsCount || 0);
+
+  const roomConfig = getRoomConfig(room?.type || roomBase);
+  const RoomIcon = roomConfig.icon;
+  const scoreColor = getScoreColorHex(healthScore);
+  const statusLabel = getStatusLabel(healthScore);
+  const statusColor = getStatusColor(healthScore);
 
   async function loadRoom() {
     const rooms = await listInventoryRooms(propertyId);
-    const r = rooms.find((x: any) => x.id === roomId);
-    setRoom(r || null);
-    setProfile((r as any)?.profile || {});
+    const currentRoom = rooms.find((candidate: any) => candidate.id === roomId);
+    setRoom(currentRoom || null);
+    setProfile((currentRoom as any)?.profile || {});
   }
 
   async function loadSummary() {
@@ -246,6 +280,24 @@ export default function RoomDetailClient() {
       setInsights(null);
     } finally {
       setSummaryLoading(false);
+    }
+  }
+
+  async function loadChecklistPreview() {
+    try {
+      const raw = await listRoomChecklistItems(propertyId, roomId);
+      setChecklistPreview(unwrapChecklist(raw));
+    } catch {
+      setChecklistPreview([]);
+    }
+  }
+
+  async function loadTimelinePreview() {
+    try {
+      const raw = await getRoomTimeline(propertyId, roomId);
+      setTimelinePreview(unwrapTimeline(raw));
+    } catch {
+      setTimelinePreview([]);
     }
   }
 
@@ -263,162 +315,240 @@ export default function RoomDetailClient() {
 
   useEffect(() => {
     if (!propertyId || !roomId) return;
-    loadRoom();
-    loadSummary();
-    loadScanSessions();
+
+    void Promise.all([
+      loadRoom(),
+      loadSummary(),
+      loadChecklistPreview(),
+      loadTimelinePreview(),
+      loadScanSessions(),
+    ]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, roomId]);
 
-  async function saveProfile(nextProfile: any) {
+  async function saveProfile(nextProfile: Record<string, any>) {
     setSavingProfile(true);
     try {
       await updateInventoryRoomProfile(propertyId, roomId, nextProfile);
-      await Promise.all([loadRoom(), loadSummary()]);
+      setProfile(nextProfile);
+      await loadSummary();
     } finally {
       setSavingProfile(false);
     }
   }
 
+  async function addInsightAsTask(insight: RoomInsight) {
+    if (!insight.action) return;
+
+    const title = insight.text.replace(/\.$/, '');
+    const frequency = insight.frequency || 'ONCE';
+
+    await createRoomChecklistItem(propertyId, roomId, {
+      title,
+      frequency,
+    });
+
+    await loadChecklistPreview();
+  }
+
+  function openMaintenanceComposer() {
+    router.push(`/dashboard/maintenance?propertyId=${propertyId}`);
+  }
+
   if (!room) {
     return (
       <div className="p-6">
-        <div className="rounded-2xl border border-black/10 p-4">Loading room…</div>
+        <div className="rounded-2xl border border-black/10 p-4">Loading room...</div>
       </div>
     );
   }
 
-  const stats = insights?.stats;
+  const tabMeta = {
+    profile: {
+      label: 'Profile',
+      badge: profileCompleteness < 100 ? `${profileFieldsFilled}/${profileFieldsTotal} complete` : 'Complete',
+      badgeColor: profileCompleteness === 100 ? 'text-emerald-600' : 'text-amber-500',
+    },
+    checklist: {
+      label: 'Checklist',
+      badge: pendingTaskCount > 0 ? `${pendingTaskCount} due` : 'All done',
+      badgeColor: pendingTaskCount > 0 ? 'text-amber-500' : 'text-emerald-600',
+    },
+    timeline: {
+      label: 'Timeline',
+      badge: lastEventDate ? `Last: ${formatRelativeDate(lastEventDate)}` : 'No events',
+      badgeColor: lastEventDate ? 'text-gray-500' : 'text-gray-400',
+    },
+  } as const;
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <SectionHeader
-          icon={roomIcon(roomBase)}
-          title={room.name}
-          description="Profile, micro-checklists, and maintenance timeline."
-        />
-        <Link
-          href={`/dashboard/properties/${propertyId}/inventory/rooms`}
-          className="inline-flex min-h-[44px] items-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 w-fit"
+    <div className="space-y-4 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-6">
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+        <header
+          className={[
+            'relative border-b px-6 py-5',
+            `bg-gradient-to-br ${roomConfig.gradient}`,
+            roomConfig.borderColor,
+          ].join(' ')}
         >
-          Back to rooms
-        </Link>
-      </div>
+          <div className={`pointer-events-none absolute inset-0 ${getHealthOverlay(healthScore)}`} />
 
-      <div className="rounded-2xl border border-black/10 bg-white p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <RoomHealthScoreRing
-          value={healthScore}
-          label="Room health"
-          sublabel={
-            summaryLoading
-              ? 'Updating…'
-              : stats
-                ? `${stats.itemCount ?? 0} items · ${stats.docsLinkedCount ?? 0} docs · ${stats.coverageGapsCount ?? 0} gaps`
-                : 'Based on your room inventory + readiness signals'
-          }
-        />
+          <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex items-center gap-4">
+              <div className={`rounded-2xl border bg-white/70 p-3 shadow-sm backdrop-blur-sm ${roomConfig.borderColor}`}>
+                <RoomIcon className={`h-6 w-6 ${roomConfig.iconColor}`} />
+              </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href={`/dashboard/properties/${propertyId}/rooms/${roomId}`}
-            className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
-          >
-            View room page
-          </Link>
-          <Link
-            href={`/dashboard/properties/${propertyId}/inventory?roomId=${roomId}`}
-            className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
-          >
-            Manage items
-          </Link>
-        </div>
-      </div>
+              <div>
+                <h1 className="text-2xl font-display font-bold text-gray-900">{room.name}</h1>
+                <p className="mt-0.5 text-sm text-gray-500">
+                  {itemCount} items tracked · Profile {profileCompleteness}% complete · {pendingTaskCount} task
+                  {pendingTaskCount !== 1 ? 's' : ''} this month
+                </p>
+              </div>
+            </div>
 
-      <div className="w-full overflow-x-auto">
-        <div className="inline-flex min-w-max items-center p-1 bg-black/5 rounded-xl border border-black/5">
-          {(['PROFILE', 'CHECKLIST', 'TIMELINE'] as Tab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-3 sm:px-4 py-2 min-h-[44px] text-sm font-medium rounded-lg transition ${
-                tab === t ? 'bg-white text-black shadow-sm border border-black/5' : 'text-black/60 hover:text-black'
-              }`}
-            >
-              {t === 'PROFILE' ? 'Profile' : t === 'CHECKLIST' ? 'Checklist' : 'Timeline'}
-            </button>
-          ))}
-        </div>
-      </div>
-      <button
-      onClick={() => setScanOpen(true)}
-      className="inline-flex w-full sm:w-auto min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
-      >
-        AI Scan Room
-      </button>
-      <div className="mt-3 w-full rounded-2xl border border-black/10 bg-white p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="text-sm font-semibold">Scan history</div>
-            <div className="text-xs opacity-70">Reopen a scan or export the drafts.</div>
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
+              <button
+                type="button"
+                onClick={() => router.push(`/dashboard/properties/${propertyId}/inventory/rooms`)}
+                className="inline-flex min-h-[42px] items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white/70 px-3 py-1.5 text-sm text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-800"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Rooms
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.push(`/dashboard/properties/${propertyId}/rooms/${roomId}`)}
+                className="inline-flex min-h-[42px] items-center justify-center rounded-lg border border-gray-200 bg-white/70 px-3 py-1.5 text-sm text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-800"
+              >
+                View room page
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.push(`/dashboard/properties/${propertyId}/inventory?roomId=${roomId}`)}
+                className="inline-flex min-h-[42px] items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white/70 px-3 py-1.5 text-sm text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-800"
+              >
+                <Package className="h-3.5 w-3.5" />
+                Manage items
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setScanOpen(true)}
+                className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-lg border border-teal-500 bg-teal-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm shadow-teal-600/20 transition-colors hover:bg-teal-700"
+              >
+                <Sparkles className="h-4 w-4" />
+                AI Scan
+              </button>
+            </div>
           </div>
-          <button
-            onClick={loadScanSessions}
-            disabled={scanSessionsLoading}
-            className="inline-flex w-full sm:w-auto min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
-          >
-            {scanSessionsLoading ? 'Refreshing…' : 'Refresh'}
-          </button>
+        </header>
+
+        <div className="border-b border-gray-100 px-6 py-3">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="h-10 w-10 flex-shrink-0">
+              <CircularProgressbar
+                value={healthScore}
+                text={`${healthScore}`}
+                strokeWidth={10}
+                styles={buildStyles({
+                  textSize: '32px',
+                  textColor: '#111827',
+                  pathColor: scoreColor,
+                  trailColor: '#e5e7eb',
+                })}
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Room Health</span>
+              <span className={`text-sm font-bold ${statusColor}`}>{statusLabel}</span>
+              <span className="text-xs text-gray-400">
+                · {itemCount} items · {docCount} docs · {gapCount} gaps
+              </span>
+            </div>
+
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-xs text-gray-400">Profile</span>
+              <div className="h-1.5 w-24 overflow-hidden rounded-full bg-gray-100">
+                <div className="h-full rounded-full bg-teal-500 transition-all duration-300" style={{ width: `${profileCompleteness}%` }} />
+              </div>
+              <span className="text-xs font-semibold text-gray-600">{profileCompleteness}%</span>
+            </div>
+          </div>
         </div>
 
-        {scanSessions.length === 0 ? (
-          <div className="mt-3 text-sm opacity-70">No scans yet for this room.</div>
-        ) : (
-          <div className="mt-3 space-y-2">
-            {scanSessions.slice(0, 6).map((s) => {
-              const created = s?.createdAt ? new Date(s.createdAt) : null;
-              const label = created ? created.toLocaleString() : '—';
-              const c = s?.counts || {};
-              const exportUrl = getDraftsCsvExportUrl({ propertyId, scanSessionId: s.id });
-
-              return (
-                <div key={s.id} className="rounded-xl border border-black/10 p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium truncate">
-                      {label}{' '}
-                      <span className="ml-2 text-xs rounded-full border border-black/10 px-2 py-0.5 opacity-70">
-                        {String(s.status || '—')}
-                      </span>
-                    </div>
-                    <div className="text-xs opacity-70 mt-0.5">
-                      Drafts: <span className="font-medium">{c.drafts ?? 0}</span> · Confirmed:{' '}
-                      <span className="font-medium">{c.confirmed ?? 0}</span> · Dismissed:{' '}
-                      <span className="font-medium">{c.dismissed ?? 0}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row gap-2 shrink-0 w-full sm:w-auto">
-                    <button
-                      onClick={() => {
-                        setHistorySessionId(s.id);
-                        setScanOpen(true);
-                      }}
-                      className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
-                    >
-                      Reopen
-                    </button>
-
-                    <a
-                      href={exportUrl}
-                      className="inline-flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
-                    >
-                      Export CSV
-                    </a>
-                  </div>
-                </div>
-              );
-            })}
+        <div className="border-b border-gray-100 bg-white px-6 py-4">
+          <div className="flex w-fit items-center gap-1 rounded-xl bg-gray-100 p-1">
+            {(['profile', 'checklist', 'timeline'] as const).map((tabKey) => (
+              <button
+                key={tabKey}
+                type="button"
+                onClick={() => setTab(tabKey)}
+                className={[
+                  'flex min-w-[120px] flex-col items-center rounded-lg px-5 py-2 transition-all duration-150',
+                  tab === tabKey ? 'bg-white shadow-sm' : 'hover:bg-white/60',
+                ].join(' ')}
+              >
+                <span className={`text-sm font-semibold ${tab === tabKey ? 'text-gray-900' : 'text-gray-500'}`}>{tabMeta[tabKey].label}</span>
+                <span className={`text-[10px] font-medium ${tab === tabKey ? tabMeta[tabKey].badgeColor : 'text-gray-400'}`}>
+                  {tabMeta[tabKey].badge}
+                </span>
+              </button>
+            ))}
           </div>
-        )}
+        </div>
+
+        <div className="bg-gray-50 px-6 pb-6 pt-4">
+          <AnimatedTabPanel tabKey={tab}>
+            {tab === 'profile' ? (
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <RoomProfileForm
+                  profile={profile}
+                  roomType={roomBase}
+                  saving={savingProfile}
+                  onChange={setProfile}
+                  onSave={saveProfile}
+                />
+
+                <QuickInsightsPanel roomType={roomBase} profileData={profile} onAddInsightTask={addInsightAsTask} />
+              </div>
+            ) : null}
+
+            {tab === 'checklist' ? (
+              <RoomChecklistPanel
+                propertyId={propertyId}
+                roomId={roomId}
+                roomType={roomBase}
+                bedroomKind={bedroomKind}
+                onMutated={loadChecklistPreview}
+              />
+            ) : null}
+
+            {tab === 'timeline' ? (
+              <RoomTimeline
+                propertyId={propertyId}
+                roomId={roomId}
+                roomType={roomBase}
+                onAddEvent={openMaintenanceComposer}
+              />
+            ) : null}
+          </AnimatedTabPanel>
+
+          <ScanHistoryCollapsible
+            scans={scanSessions}
+            loading={scanSessionsLoading}
+            onRefresh={loadScanSessions}
+            onReopen={(sessionId) => {
+              setHistorySessionId(sessionId);
+              setScanOpen(true);
+            }}
+            getExportUrl={(sessionId) => getDraftsCsvExportUrl({ propertyId, scanSessionId: sessionId })}
+          />
+        </div>
       </div>
 
       <RoomScanModal
@@ -426,67 +556,15 @@ export default function RoomDetailClient() {
         onClose={() => {
           setScanOpen(false);
           setHistorySessionId(null);
-          loadScanSessions(); // refresh counts after confirm/dismiss
+          void loadScanSessions();
         }}
         propertyId={propertyId}
         roomId={roomId}
         roomName={room?.name}
         initialSessionId={historySessionId}
       />
-      <AnimatedTabPanel tabKey={tab}>
-        {tab === 'PROFILE' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <RoomProfileForm
-              profile={profile}
-              roomType={roomBase}
-              saving={savingProfile}
-              onChange={setProfile}
-              onSave={saveProfile}
-            />
 
-            <div className="rounded-2xl border border-black/10 bg-white p-5">
-              <div className="text-sm font-semibold">Quick insights</div>
-              <div className="text-xs opacity-70 mt-1">Rule-based, no AI.</div>
-
-              <div className="mt-4 space-y-3">
-                {roomBase === 'KITCHEN' && <KitchenInsightsCard profile={profile} />}
-                {roomBase === 'LIVING' && <LivingRoomInsightsCard profile={profile} />}
-                {roomBase === 'BEDROOM' && <BedroomInsightsCard profile={profile} />}
-                {roomBase === 'DINING' && <DiningInsightsCard profile={profile} />}
-                {roomBase === 'LAUNDRY' && <LaundryInsightsCard profile={profile} />}
-                {roomBase === 'GARAGE' && <GarageInsightsCard profile={profile} />}
-                {roomBase === 'OFFICE' && <OfficeInsightsCard profile={profile} />}
-                {roomBase === 'BATHROOM' && <BathroomInsightsCard profile={profile} />}
-                {roomBase === 'BASEMENT' && <BasementInsightsCard profile={profile} />}
-                {roomBase === 'BEDROOM' && !bedroomKind && (
-                  <div className="rounded-xl border border-black/10 bg-black/[0.02] p-3 text-sm">
-                    Select a bedroom type (Master / Kids / Guest) to unlock tailored insights + checklist defaults.
-                  </div>
-                )}
-
-                {roomBase === 'OTHER' && (
-                  <div className="rounded-xl border border-black/10 bg-black/[0.02] p-3 text-sm">
-                    Add a couple of micro-checklist items to build a maintenance rhythm.
-                  </div>
-                )}
-
-                {roomBase === 'KITCHEN' && insights?.kitchen?.missingAppliances?.length ? (
-                  <div className="rounded-xl border border-black/10 p-3">
-                    <div className="text-xs uppercase tracking-wide opacity-60">Missing common appliances</div>
-                    <div className="text-sm mt-1">{insights.kitchen.missingAppliances.join(', ')}</div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {tab === 'CHECKLIST' && (
-          <RoomChecklistPanel propertyId={propertyId} roomId={roomId} roomType={roomBase} bedroomKind={bedroomKind} />
-        )}
-
-        {tab === 'TIMELINE' && <RoomTimeline propertyId={propertyId} roomId={roomId} />}
-      </AnimatedTabPanel>
+      {summaryLoading ? <p className="px-1 text-xs text-gray-500">Updating room data...</p> : null}
     </div>
   );
 }

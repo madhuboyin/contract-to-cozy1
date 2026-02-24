@@ -2,16 +2,17 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Check, CheckCircle2, CheckSquare, ChevronDown, Plus, Sparkles, Trash2 } from 'lucide-react';
+
 import {
-  listRoomChecklistItems,
   createRoomChecklistItem,
-  updateRoomChecklistItem,
   deleteRoomChecklistItem,
+  listRoomChecklistItems,
+  updateRoomChecklistItem,
   type RoomChecklistItemDTO,
 } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { CheckCircle2, Circle, Plus, Trash2, Sparkles } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface Props {
   propertyId: string;
@@ -28,110 +29,64 @@ interface Props {
     | 'BASEMENT'
     | 'OTHER';
   bedroomKind?: 'MASTER' | 'KIDS' | 'GUEST' | null;
+  onMutated?: () => Promise<void> | void;
 }
 
-function Divider() {
-  return <div className="h-px bg-black/10" />;
-}
+type ChecklistSeed = {
+  title: string;
+  frequency: RoomChecklistItemDTO['frequency'];
+};
 
-function normTitle(t: string) {
-  return t
+const FREQUENCY_ORDER: RoomChecklistItemDTO['frequency'][] = ['WEEKLY', 'MONTHLY', 'QUARTERLY', 'SEASONAL', 'ONCE'];
+
+const FREQUENCY_LABELS: Record<RoomChecklistItemDTO['frequency'], string> = {
+  ONCE: 'One-time',
+  WEEKLY: 'Weekly',
+  MONTHLY: 'Monthly',
+  QUARTERLY: 'Quarterly',
+  SEASONAL: 'Seasonal',
+};
+
+function normTitle(text: string) {
+  return text
     .trim()
     .replace(/\s+/g, ' ')
     .toLowerCase();
 }
 
-type ChecklistSeed = { title: string; frequency: RoomChecklistItemDTO['frequency'] };
-
-function uniqueByTitle(
-  existing: Array<RoomChecklistItemDTO | null | undefined>,
-  seeds: ChecklistSeed[]
-) {
-  const seen = new Set(
-    existing
-      .filter((x): x is RoomChecklistItemDTO => Boolean(x && x.title))
-      .map((i) => normTitle(i.title))
-      .filter(Boolean)
-  );
-
-  return seeds
-    .filter((s) => normTitle(s.title)) // ✅ drop empty titles
-    .filter((s) => !seen.has(normTitle(s.title)));
+function uniqueByTitle(existing: RoomChecklistItemDTO[], seeds: ChecklistSeed[]) {
+  const seen = new Set(existing.filter((item) => item?.title).map((item) => normTitle(item.title)));
+  return seeds.filter((seed) => !seen.has(normTitle(seed.title)));
 }
 
-export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedroomKind }: Props) {
+export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedroomKind, onMutated }: Props) {
   const [items, setItems] = useState<RoomChecklistItemDTO[]>([]);
-  const [newLabel, setNewLabel] = useState('');
   const [loading, setLoading] = useState(false);
   const [mutating, setMutating] = useState(false);
+
+  const [newTaskText, setNewTaskText] = useState('');
+  const [newTaskFrequency, setNewTaskFrequency] = useState<RoomChecklistItemDTO['frequency']>('ONCE');
+  const [completedOpen, setCompletedOpen] = useState(false);
+
+  async function notifyMutated() {
+    await onMutated?.();
+  }
 
   async function load() {
     setLoading(true);
     try {
       const raw = await listRoomChecklistItems(propertyId, roomId);
-  
-      // Handle either: RoomChecklistItemDTO[] OR { data: RoomChecklistItemDTO[] }
-      const arr = (raw as any)?.data ?? raw;
-      setItems((Array.isArray(arr) ? arr : []).filter(Boolean));
+      const data = (raw as any)?.data ?? raw;
+      setItems((Array.isArray(data) ? data : []).filter(Boolean));
     } finally {
       setLoading(false);
     }
   }
-  
 
   useEffect(() => {
-    load();
+    void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, roomId]);
-
-  async function addItem() {
-    const title = newLabel.trim();
-    if (!title) return;
-  
-    setMutating(true);
-    try {
-      const raw = await createRoomChecklistItem(propertyId, roomId, {
-        title,
-        frequency: 'ONCE',
-      });
-  
-      const created = (raw as any)?.data ?? raw;
-      if (!created) return; // ✅ prevents inserting undefined
-  
-      setItems((prev) => [created, ...prev].filter(Boolean));
-      setNewLabel('');
-    } finally {
-      setMutating(false);
-    }
-  }
-  
-
-  async function toggle(item: RoomChecklistItemDTO) {
-    setMutating(true);
-    try {
-      const nextStatus = item.status === 'DONE' ? 'OPEN' : 'DONE';
-      const raw = await updateRoomChecklistItem(propertyId, roomId, item.id, { status: nextStatus });
-      const updated = (raw as any)?.data ?? raw;
-      if (updated) {
-        setItems((prev) => prev.map((i) => (i.id === item.id ? updated : i)));
-      }
-    } finally {
-      setMutating(false);
-    }
-  }
-
-  async function removeItem(item: RoomChecklistItemDTO) {
-    const ok = confirm(`Delete "${item.title}"?`);
-    if (!ok) return;
-
-    setMutating(true);
-    try {
-      await deleteRoomChecklistItem(propertyId, roomId, item.id);
-      setItems((prev) => prev.filter((i) => i.id !== item.id));
-    } finally {
-      setMutating(false);
-    }
-  }
 
   const placeholder =
     roomType === 'KITCHEN'
@@ -163,7 +118,7 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
   const recommended: ChecklistSeed[] = useMemo(() => {
     if (roomType === 'KITCHEN') {
       return [
-        { title: 'Wipe counters + backsplash', frequency: 'WEEKLY' },
+        { title: 'Wipe counters and backsplash', frequency: 'WEEKLY' },
         { title: 'Clean range hood filter', frequency: 'MONTHLY' },
         { title: 'Run dishwasher cleaner', frequency: 'MONTHLY' },
         { title: 'Check under-sink for leaks', frequency: 'MONTHLY' },
@@ -172,18 +127,17 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
 
     if (roomType === 'LIVING') {
       return [
-        { title: 'Vacuum under sofa / chairs', frequency: 'WEEKLY' },
-        { title: 'Dust vents + baseboards', frequency: 'MONTHLY' },
+        { title: 'Vacuum under sofa and chairs', frequency: 'WEEKLY' },
+        { title: 'Dust vents and baseboards', frequency: 'MONTHLY' },
         { title: 'Check smoke/CO detector nearby', frequency: 'SEASONAL' },
       ];
     }
 
     if (roomType === 'DINING') {
       return [
-        { title: 'Wipe table + chairs', frequency: 'WEEKLY' },
-        { title: 'Check chair screws / wobble', frequency: 'SEASONAL' },
-        { title: 'Clean light fixture (wipe dust)', frequency: 'SEASONAL' },
-        { title: 'Inspect smoke/CO detector nearby', frequency: 'SEASONAL' },
+        { title: 'Wipe table and chairs', frequency: 'WEEKLY' },
+        { title: 'Check chair screws for wobble', frequency: 'SEASONAL' },
+        { title: 'Clean light fixture', frequency: 'SEASONAL' },
       ];
     }
 
@@ -191,8 +145,8 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
       return [
         { title: 'Clean lint trap', frequency: 'WEEKLY' },
         { title: 'Run washer drum clean cycle', frequency: 'MONTHLY' },
-        { title: 'Inspect washer hoses for cracks', frequency: 'SEASONAL' },
-        { title: 'Wipe dryer vent area / check airflow', frequency: 'SEASONAL' },
+        { title: 'Inspect washer hoses', frequency: 'SEASONAL' },
+        { title: 'Check dryer vent airflow', frequency: 'SEASONAL' },
       ];
     }
 
@@ -201,34 +155,30 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
         { title: 'Test garage door auto-reverse', frequency: 'SEASONAL' },
         { title: 'Check for leaks near water heater', frequency: 'MONTHLY' },
         { title: 'Organize chemicals safely', frequency: 'SEASONAL' },
-        { title: 'Replace opener remote batteries', frequency: 'SEASONAL' },
       ];
     }
 
     if (roomType === 'OFFICE') {
       return [
-        { title: 'Dust electronics (screens/vents)', frequency: 'MONTHLY' },
-        { title: 'Cable tidy + desk reset', frequency: 'MONTHLY' },
-        { title: 'Check surge protector (test/reset)', frequency: 'SEASONAL' },
-        { title: 'Clean chair casters', frequency: 'SEASONAL' },
+        { title: 'Dust electronics screens and vents', frequency: 'MONTHLY' },
+        { title: 'Cable tidy and desk reset', frequency: 'MONTHLY' },
+        { title: 'Check surge protector', frequency: 'SEASONAL' },
       ];
     }
 
     if (roomType === 'BATHROOM') {
       return [
         { title: 'Clean exhaust fan cover', frequency: 'SEASONAL' },
-        { title: 'Check for slow leaks under sink', frequency: 'MONTHLY' },
+        { title: 'Check under-sink for leaks', frequency: 'MONTHLY' },
         { title: 'Test GFCI outlets', frequency: 'SEASONAL' },
-        { title: 'Re-caulk / inspect grout problem spots', frequency: 'SEASONAL' },
       ];
     }
 
     if (roomType === 'BASEMENT') {
       return [
-        { title: 'Check for damp spots / musty smell', frequency: 'MONTHLY' },
-        { title: 'Test sump pump (if present)', frequency: 'SEASONAL' },
-        { title: 'Inspect foundation cracks (visual)', frequency: 'SEASONAL' },
-        { title: 'Confirm dehumidifier / humidity control', frequency: 'MONTHLY' },
+        { title: 'Check for damp spots and musty smell', frequency: 'MONTHLY' },
+        { title: 'Test sump pump', frequency: 'SEASONAL' },
+        { title: 'Inspect foundation cracks', frequency: 'SEASONAL' },
       ];
     }
 
@@ -236,165 +186,311 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
       if (bedroomKind === 'MASTER') {
         return [
           { title: 'Change sheets', frequency: 'WEEKLY' },
-          { title: 'Flip/rotate mattress', frequency: 'SEASONAL' },
-          { title: 'Dust ceiling fan + vents', frequency: 'MONTHLY' },
-          { title: 'Review nightstand meds/first-aid', frequency: 'SEASONAL' },
+          { title: 'Rotate mattress', frequency: 'SEASONAL' },
+          { title: 'Dust fan and vents', frequency: 'MONTHLY' },
         ];
       }
+
       if (bedroomKind === 'KIDS') {
         return [
-          { title: 'Organize toys + donate 5 items', frequency: 'MONTHLY' },
+          { title: 'Organize toys', frequency: 'MONTHLY' },
           { title: 'Wash bedding', frequency: 'WEEKLY' },
-          { title: 'Check outlet covers / cords', frequency: 'SEASONAL' },
-          { title: 'Wipe high-touch surfaces', frequency: 'WEEKLY' },
+          { title: 'Check outlet covers and cords', frequency: 'SEASONAL' },
         ];
       }
+
       if (bedroomKind === 'GUEST') {
         return [
-          { title: 'Refresh linens + towels', frequency: 'SEASONAL' },
-          { title: 'Dust surfaces + vents', frequency: 'MONTHLY' },
-          { title: 'Air out room for 10 minutes', frequency: 'MONTHLY' },
+          { title: 'Refresh linens and towels', frequency: 'SEASONAL' },
+          { title: 'Dust surfaces and vents', frequency: 'MONTHLY' },
+          { title: 'Air out room', frequency: 'MONTHLY' },
         ];
       }
 
       return [
-        { title: 'Make bed + quick reset', frequency: 'WEEKLY' },
-        { title: 'Dust fan + vents', frequency: 'MONTHLY' },
+        { title: 'Make bed and quick reset', frequency: 'WEEKLY' },
         { title: 'Wash bedding', frequency: 'WEEKLY' },
       ];
     }
 
     return [
       { title: 'Dust vents', frequency: 'MONTHLY' },
-      { title: 'Quick reset / declutter', frequency: 'WEEKLY' },
+      { title: 'Quick reset and declutter', frequency: 'WEEKLY' },
     ];
   }, [roomType, bedroomKind]);
 
   const recommendedToAdd = useMemo(() => uniqueByTitle(items, recommended), [items, recommended]);
 
-  async function addRecommended() {
-    if (recommendedToAdd.length === 0) return;
-  
+  const pendingTasks = useMemo(() => items.filter((item) => item.status !== 'DONE'), [items]);
+  const completedTasks = useMemo(() => items.filter((item) => item.status === 'DONE'), [items]);
+
+  const groupedPending = useMemo(() => {
+    const groups: Partial<Record<RoomChecklistItemDTO['frequency'], RoomChecklistItemDTO[]>> = {};
+
+    for (const item of pendingTasks) {
+      const key = item.frequency || 'ONCE';
+      groups[key] = groups[key] || [];
+      groups[key]!.push(item);
+    }
+
+    for (const key of Object.keys(groups) as RoomChecklistItemDTO['frequency'][]) {
+      groups[key] = (groups[key] || []).slice().sort((a, b) => a.title.localeCompare(b.title));
+    }
+
+    return groups;
+  }, [pendingTasks]);
+
+  const orderedGroups = useMemo(
+    () => FREQUENCY_ORDER.filter((frequency) => (groupedPending[frequency] || []).length > 0),
+    [groupedPending],
+  );
+
+  async function addTask() {
+    const title = newTaskText.trim();
+    if (!title) return;
+
     setMutating(true);
     try {
-      const created: RoomChecklistItemDTO[] = [];
-  
+      const raw = await createRoomChecklistItem(propertyId, roomId, {
+        title,
+        frequency: newTaskFrequency,
+      });
+      const created = (raw as any)?.data ?? raw;
+      if (created) {
+        setItems((prev) => [created, ...prev].filter(Boolean));
+        setNewTaskText('');
+        setNewTaskFrequency('ONCE');
+      }
+      await notifyMutated();
+    } finally {
+      setMutating(false);
+    }
+  }
+
+  async function addRecommendedTasks() {
+    if (recommendedToAdd.length === 0) return;
+
+    setMutating(true);
+    try {
+      const createdItems: RoomChecklistItemDTO[] = [];
+
       for (const seed of recommendedToAdd) {
         // eslint-disable-next-line no-await-in-loop
         const raw = await createRoomChecklistItem(propertyId, roomId, {
           title: seed.title,
           frequency: seed.frequency,
         });
-  
-        const it = (raw as any)?.data ?? raw;
-        if (it) created.push(it);
+
+        const created = (raw as any)?.data ?? raw;
+        if (created) createdItems.push(created);
       }
-  
-      setItems((prev) => [...created, ...prev].filter(Boolean));
+
+      if (createdItems.length > 0) {
+        setItems((prev) => [...createdItems, ...prev].filter(Boolean));
+      }
+
+      await notifyMutated();
     } finally {
       setMutating(false);
     }
   }
-  
+
+  async function toggleTask(item: RoomChecklistItemDTO) {
+    setMutating(true);
+    try {
+      const nextStatus = item.status === 'DONE' ? 'OPEN' : 'DONE';
+      const raw = await updateRoomChecklistItem(propertyId, roomId, item.id, { status: nextStatus });
+      const updated = (raw as any)?.data ?? raw;
+      if (updated) {
+        setItems((prev) => prev.map((entry) => (entry.id === item.id ? updated : entry)));
+      }
+      await notifyMutated();
+    } finally {
+      setMutating(false);
+    }
+  }
+
+  async function deleteTask(item: RoomChecklistItemDTO) {
+    setMutating(true);
+    try {
+      await deleteRoomChecklistItem(propertyId, roomId, item.id);
+      setItems((prev) => prev.filter((entry) => entry.id !== item.id));
+      await notifyMutated();
+    } finally {
+      setMutating(false);
+    }
+  }
 
   return (
-    <div className="rounded-2xl border border-black/10 bg-white shadow-sm">
-      <div className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-sm font-semibold">Micro-checklist</div>
-            <div className="text-xs text-black/50 mt-0.5">Small recurring actions. No AI required.</div>
-          </div>
-        </div>
+    <div className="mt-4 space-y-5 rounded-xl border border-gray-200 bg-white p-5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <input
+          type="text"
+          placeholder={placeholder}
+          value={newTaskText}
+          onChange={(event) => setNewTaskText(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              void addTask();
+            }
+          }}
+          disabled={mutating}
+          className="h-11 flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-700 outline-none transition-colors focus:border-teal-400 focus:ring-1 focus:ring-teal-300 disabled:opacity-60"
+        />
 
-        <div className="mt-4 rounded-xl border border-black/10 bg-black/[0.02] p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <select
+          value={newTaskFrequency}
+          onChange={(event) => setNewTaskFrequency(event.target.value as RoomChecklistItemDTO['frequency'])}
+          disabled={mutating}
+          className="h-11 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-600 outline-none transition-colors focus:border-teal-400"
+        >
+          {FREQUENCY_ORDER.map((frequency) => (
+            <option key={frequency} value={frequency}>
+              {FREQUENCY_LABELS[frequency]}
+            </option>
+          ))}
+        </select>
+
+        <button
+          type="button"
+          onClick={() => {
+            void addTask();
+          }}
+          disabled={mutating || !newTaskText.trim()}
+          className="inline-flex h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-teal-700 disabled:opacity-50"
+        >
+          <Plus className="h-4 w-4" />
+          Add
+        </button>
+      </div>
+
+      {recommendedToAdd.length > 0 ? (
+        <div className="flex flex-col justify-between gap-3 rounded-xl border border-teal-200/60 bg-teal-50/50 px-4 py-3 sm:flex-row sm:items-center">
+          <div className="flex items-start gap-2.5">
+            <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-teal-600" />
             <div>
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-black/60" />
-                <div className="text-sm font-medium text-black/80">Recommended for this room</div>
-              </div>
-              <div className="text-xs text-black/50 mt-1">
-                Adds a starter set based on room type{roomType === 'BEDROOM' ? ' + bedroom kind' : ''}. You can edit
-                anytime.
-              </div>
+              <p className="text-sm font-semibold text-teal-800">Recommended for this room</p>
+              <p className="text-xs text-teal-600">Adds a starter set based on room type. You can edit anytime.</p>
             </div>
-
-            <Button
-              variant="outline"
-              onClick={addRecommended}
-              disabled={mutating || recommendedToAdd.length === 0}
-              className="inline-flex min-h-[44px] w-full sm:w-auto items-center justify-center"
-            >
-              Add recommended
-            </Button>
           </div>
 
-          {recommendedToAdd.length > 0 && (
-            <div className="mt-3 text-xs text-black/60">
-              Will add: {recommendedToAdd.map((r) => r.title).join(' · ')}
-            </div>
-          )}
-          {recommendedToAdd.length === 0 && (
-            <div className="mt-3 text-xs text-black/50">Already added.</div>
-          )}
-        </div>
-
-        <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          <Input
-            value={newLabel}
-            onChange={(e) => setNewLabel(e.target.value)}
-            placeholder={placeholder}
+          <button
+            type="button"
+            onClick={() => {
+              void addRecommendedTasks();
+            }}
             disabled={mutating}
-          />
-          <Button
-            onClick={addItem}
-            disabled={mutating || !newLabel.trim()}
-            className="inline-flex min-h-[44px] w-full sm:w-auto items-center justify-center"
+            className="inline-flex items-center justify-center whitespace-nowrap rounded-lg border border-teal-300 px-3 py-1.5 text-sm font-semibold text-teal-700 transition-colors hover:bg-teal-100 disabled:opacity-50"
           >
-            <Plus className="h-4 w-4 mr-2" />
-            Add
-          </Button>
+            Add recommended
+          </button>
         </div>
+      ) : (
+        <div className="flex items-center gap-2 px-1 text-xs text-gray-400">
+          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+          Recommended tasks added
+        </div>
+      )}
 
-        <div className="mt-4 rounded-xl border border-black/10 bg-black/[0.02] overflow-hidden">
-          {loading ? (
-            <div className="p-4 text-sm text-black/60">Loading…</div>
-          ) : items.length === 0 ? (
-            <div className="p-4 text-sm text-black/60">No checklist items yet.</div>
-          ) : (
-            items.map((item, idx) => (
-              <div key={item.id}>
-                {idx > 0 && <Divider />}
-                <div className="px-4 py-3 flex items-start justify-between gap-3">
-                  <button onClick={() => toggle(item)} className="mt-0.5">
-                    {item.status === 'DONE' ? (
-                      <CheckCircle2 className="h-5 w-5 text-black/70" />
-                    ) : (
-                      <Circle className="h-5 w-5 text-black/40" />
-                    )}
-                  </button>
+      {loading ? (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">Loading checklist...</div>
+      ) : orderedGroups.length === 0 && completedTasks.length === 0 ? (
+        <div className="flex flex-col items-center py-12 text-center">
+          <div className="mb-3 rounded-full bg-teal-50 p-3">
+            <CheckSquare className="h-6 w-6 text-teal-500" />
+          </div>
+          <p className="text-sm font-semibold text-gray-700">No tasks yet</p>
+          <p className="mt-1 max-w-[240px] text-xs leading-relaxed text-gray-400">
+            Add your first task above or use recommended tasks to get started.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {orderedGroups.map((frequency) => {
+            const tasks = groupedPending[frequency] || [];
 
-                  <div className="flex-1 min-w-0">
-                    <div
-                      className={`text-sm ${
-                        item.status === 'DONE' ? 'line-through text-black/50' : 'text-black/80'
-                      }`}
-                    >
-                      {item.title}
-                    </div>
-                    <div className="text-xs text-black/50">{item.frequency}</div>
-                  </div>
+            return (
+              <div key={frequency} className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{FREQUENCY_LABELS[frequency]}</span>
+                  <div className="h-px flex-1 bg-gray-100" />
+                  <span className="text-[10px] text-gray-400">{tasks.length}</span>
+                </div>
 
-                  <button onClick={() => removeItem(item)} className="text-black/50 hover:text-black/80">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                <div className="space-y-1.5">
+                  <AnimatePresence>
+                    {tasks.map((task) => (
+                      <motion.div
+                        key={task.id}
+                        layout
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 transition-all hover:border-gray-300"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void toggleTask(task);
+                          }}
+                          className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 border-gray-300 transition-colors hover:border-teal-400"
+                          aria-label="Mark task complete"
+                        />
+
+                        <span className="flex-1 text-sm text-gray-700">{task.title}</span>
+
+                        <span className="text-[10px] font-medium text-gray-400">{FREQUENCY_LABELS[task.frequency]}</span>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void deleteTask(task);
+                          }}
+                          className="text-gray-300 transition-colors hover:text-red-400"
+                          aria-label="Delete task"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
                 </div>
               </div>
-            ))
-          )}
+            );
+          })}
+
+          {completedTasks.length > 0 ? (
+            <Collapsible open={completedOpen} onOpenChange={setCompletedOpen}>
+              <CollapsibleTrigger className="flex w-full items-center gap-2 text-xs text-gray-400 transition-colors hover:text-gray-600">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                Completed ({completedTasks.length})
+                <ChevronDown className={`ml-auto h-3.5 w-3.5 transition-transform ${completedOpen ? 'rotate-180' : 'rotate-0'}`} />
+              </CollapsibleTrigger>
+
+              <CollapsibleContent className="mt-2 space-y-1.5">
+                {completedTasks.map((task) => (
+                  <div key={task.id} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-2.5 opacity-70">
+                    <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 border-teal-600 bg-teal-600">
+                      <Check className="h-3 w-3 text-white" />
+                    </div>
+                    <span className="flex-1 text-sm text-gray-500 line-through">{task.title}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void toggleTask(task);
+                      }}
+                      className="text-xs text-teal-600 transition-colors hover:underline"
+                    >
+                      Undo
+                    </button>
+                  </div>
+                ))}
+              </CollapsibleContent>
+            </Collapsible>
+          ) : null}
         </div>
-      </div>
+      )}
     </div>
   );
 }
