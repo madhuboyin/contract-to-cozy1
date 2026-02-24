@@ -1115,7 +1115,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
 
       // keep this as inventory item category for UI chips
       systemType: gap.itemCategory ?? null,
-      category: 'INSURANCE',
+      category: gap.itemCategory ?? 'INSURANCE',
       riskLevel: gap.gapType === 'NO_COVERAGE' ? 'HIGH' : 'MODERATE',
       exposure: gap.exposureCents ? gap.exposureCents / 100 : null,
 

@@ -8,6 +8,8 @@ import { TaskStatusBadge } from './TaskStatusBadge';
 import Link from 'next/link';
 import {
   Droplets,
+  Home,
+  MapPin,
   Package,
   Shield,
   Thermometer,
@@ -127,6 +129,13 @@ function humanizeTokenLabel(raw?: string | null) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function normalizeCategoryChipLabel(raw?: string | null) {
+  if (!raw) return null;
+  const text = String(raw).trim();
+  if (!text) return null;
+  return text.replace(/_/g, ' ').toUpperCase();
+}
+
 function normalizeItemName(raw?: string | null) {
   if (!raw) return null;
   const text = String(raw).trim();
@@ -141,6 +150,26 @@ function stripLocationFromDescription(description?: string | null) {
   if (!description) return null;
   const next = description.replace(/\s*\(Location:\s*[^)]+\)\s*$/i, '').trim();
   return next || null;
+}
+
+function getTraceDetailString(action: OrchestratedActionDTO, field: string) {
+  const step = action.decisionTrace?.steps?.find((s) => {
+    const details = s.details as Record<string, unknown> | null | undefined;
+    return details && typeof details[field] === 'string';
+  });
+  const details = step?.details as Record<string, unknown> | null | undefined;
+  const value = typeof details?.[field] === 'string' ? details[field].trim() : null;
+  return value || null;
+}
+
+function getRoomContext(action: OrchestratedActionDTO) {
+  const traceRoom = getTraceDetailString(action, 'roomName');
+  const descriptionRoomMatch = String(action.description ?? '').match(/\(Location:\s*([^)]+)\)/i);
+  const roomFromDescription = descriptionRoomMatch?.[1]?.trim() || null;
+  const titleRoomMatch = String(action.title ?? '').match(/\(([^)]+)\)\s*$/);
+  const roomFromTitle = titleRoomMatch?.[1]?.trim() || null;
+
+  return traceRoom || roomFromDescription || roomFromTitle;
 }
 
 function getCoverageGapContext(action: OrchestratedActionDTO) {
@@ -185,7 +214,11 @@ function getCoverageGapContext(action: OrchestratedActionDTO) {
   }
 
   const itemName = normalizeItemName(itemNameFromDetails || titleCandidate || humanizeActionType(action.title));
-  const categoryLabel = humanizeTokenLabel(categoryFromDetails || action.systemType || null)?.toLowerCase() ?? null;
+  const categoryLabel = normalizeCategoryChipLabel(
+    categoryFromDetails ||
+      action.systemType ||
+      (action.category && action.category !== 'INSURANCE' ? action.category : null)
+  );
 
   return {
     itemName,
@@ -350,6 +383,10 @@ export const OrchestrationActionCard: React.FC<Props> = ({
   const suppressionCopy = suppressed ? getSuppressionCopy(action) : null;
   const ActionIcon = getActionIcon(action);
   const actionTitle = coverageContext?.itemName ?? humanizeActionType(action.title);
+  const categoryChipLabel = coverageContext?.categoryLabel ?? normalizeCategoryChipLabel(
+    action.category || action.systemType || (action.serviceCategory as string | null) || null
+  );
+  const roomChipLabel = coverageContext?.roomName ?? getRoomContext(action);
 
   const confidence = action.confidence;
   const confidenceScore =
@@ -388,14 +425,16 @@ export const OrchestrationActionCard: React.FC<Props> = ({
 
             {riskBadge(action.riskLevel)}
             {signalBadge(action)}
-            {coverageContext?.categoryLabel && (
+            {categoryChipLabel && (
               <span className="inline-flex items-center gap-1 rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-700">
-                {coverageContext.categoryLabel}
+                <Home className="h-3.5 w-3.5" />
+                {categoryChipLabel}
               </span>
             )}
-            {coverageContext?.roomName && (
+            {roomChipLabel && (
               <span className="inline-flex items-center gap-1 rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-700">
-                {coverageContext.roomName}
+                <MapPin className="h-3.5 w-3.5" />
+                {roomChipLabel}
               </span>
             )}
           </div>
