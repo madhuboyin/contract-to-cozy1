@@ -146,6 +146,30 @@ const LINK_ACTION_BUTTON_CLASS =
 const INSTALL_DATE_MISSING_TOOLTIP =
   "Install date is empty. Add install date for accurate prediction.";
 
+/** Normalise HOME_ASSET display names that arrive as ALL_CAPS from the backend. */
+const ASSET_NAME_MAP: Record<string, string> = {
+  "HVAC FURNACE": "HVAC Furnace",
+  "HVAC AC": "HVAC Air Conditioner",
+  "HVAC HEAT PUMP": "HVAC Heat Pump",
+  "WATER HEATER TANK": "Water Heater (Tank)",
+  "WATER HEATER TANKLESS": "Water Heater (Tankless)",
+  "SAFETY SMOKE CO DETECTORS": "Smoke & CO Detectors",
+  "ELECTRICAL PANEL": "Electrical Panel",
+  "SUMP PUMP": "Sump Pump",
+  "WATER SOFTENER": "Water Softener",
+};
+
+function formatDisplayName(raw: string): string {
+  if (!raw) return raw;
+  if (raw !== raw.toUpperCase()) return raw;
+  const mapped = ASSET_NAME_MAP[raw.trim()];
+  if (mapped) return mapped;
+  return raw
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function formatAgeDisplay(ageYears: number | null): string {
   if (ageYears == null) return "—";
   if (ageYears < 1) return "<1 yr";
@@ -375,38 +399,36 @@ export default function StatusBoardClient() {
               <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${categoryVisual.toneClass}`}>
                 <CategoryIcon className="h-4 w-4" />
               </span>
-              <div className="flex min-w-0 flex-col gap-1">
-                <span className="truncate text-base font-semibold text-slate-900 dark:text-slate-100">{item.displayName}</span>
-                <p className="mt-1 text-xs text-muted-foreground lg:hidden">
-                  {item.category}
-                  {item.ageYears != null ? ` • ${formatAgeDisplay(item.ageYears)}` : ""}
-                </p>
+              <div className="flex min-w-0 flex-row flex-wrap items-center gap-2">
+                <span className="truncate text-base font-semibold text-slate-900 dark:text-slate-100">{formatDisplayName(item.displayName)}</span>
                 {item.condition !== "GOOD" && item.computedReasons.length > 0 && (() => {
                   const topReason = item.computedReasons[0];
                   const isEol = topReason.code.includes("EOL") || topReason.code.includes("NEARING_EOL");
-                  const isOverdue = topReason.code.includes("OVERDUE");
                   const isMissingDate = topReason.code === "MISSING_INSTALL_DATE";
                   return (
                     <span
                       className={cn(
-                        "inline-flex w-fit max-w-[240px] items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
-                        "truncate",
+                        "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
                         item.condition === "ACTION_NEEDED"
                           ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800/60 dark:bg-rose-950/40 dark:text-rose-300"
                           : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-300"
                       )}
                     >
-                      {isEol || isOverdue ? (
+                      {isEol ? (
                         <AlertTriangle className="h-3 w-3 shrink-0" />
                       ) : isMissingDate ? (
                         <Info className="h-3 w-3 shrink-0" />
                       ) : (
                         <Clock className="h-3 w-3 shrink-0" />
                       )}
-                      <span className="truncate">{topReason.detail}</span>
+                      <span>{topReason.detail}</span>
                     </span>
                   );
                 })()}
+                <p className="mt-1 text-xs text-muted-foreground lg:hidden">
+                  {item.category}
+                  {item.ageYears != null ? ` • ${formatAgeDisplay(item.ageYears)}` : ""}
+                </p>
               </div>
             </div>
           </TableCell>
@@ -844,59 +866,74 @@ export default function StatusBoardClient() {
 
         {/* Summary strip */}
         {summary && (
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
             <button
               type="button"
               onClick={() => { setConditionFilter("all"); setPage(1); }}
               className={cn(
-                "flex items-center gap-3 rounded-xl border px-4 py-2.5 transition-all hover:shadow-sm",
+                "flex w-full items-center justify-between rounded-xl border px-4 py-3 transition-all hover:shadow-sm",
                 GLASS_CARD_CLASS,
                 conditionFilter === "all" ? "ring-2 ring-slate-400 dark:ring-slate-500" : "",
               )}
             >
-              <Box className="h-4 w-4 text-slate-400 dark:text-slate-500" />
-              <div className="text-left">
-                <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500">All</p>
-                <p className="mt-0.5 text-xl font-bold leading-none text-slate-800 dark:text-slate-100">
-                  {summary.total}
-                </p>
+              <div className="flex items-center gap-3">
+                <Box className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+                <div className="text-left">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500">All</p>
+                  <p className="mt-0.5 text-xl font-bold leading-none text-slate-800 dark:text-slate-100">
+                    {summary.total}
+                  </p>
+                </div>
               </div>
+              {conditionFilter === "all" && (
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 -rotate-90 text-slate-400" />
+              )}
             </button>
 
             <button
               type="button"
               onClick={() => { setConditionFilter(conditionFilter === "GOOD" ? "all" : "GOOD"); setPage(1); }}
               className={cn(
-                "flex items-center gap-3 rounded-xl border px-4 py-2.5 transition-all hover:shadow-sm",
+                "flex w-full items-center justify-between rounded-xl border px-4 py-3 transition-all hover:shadow-sm",
                 "border-emerald-200/70 bg-emerald-50/80 dark:border-emerald-800/50 dark:bg-emerald-950/30",
                 conditionFilter === "GOOD" ? "ring-2 ring-emerald-400 dark:ring-emerald-600" : "",
               )}
             >
-              <CheckCircle2 className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
-              <div className="text-left">
-                <p className="text-[10px] uppercase tracking-wider text-emerald-500 dark:text-emerald-400">Good</p>
-                <p className="mt-0.5 text-xl font-bold leading-none text-emerald-700 dark:text-emerald-300">
-                  {summary.good}
-                </p>
+              <div className="flex items-center gap-3">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500 dark:text-emerald-400" />
+                <div className="text-left">
+                  <p className="text-[10px] uppercase tracking-wider text-emerald-500 dark:text-emerald-400">Good</p>
+                  <p className="mt-0.5 text-xl font-bold leading-none text-emerald-700 dark:text-emerald-300">
+                    {summary.good}
+                  </p>
+                </div>
               </div>
+              {conditionFilter === "GOOD" && (
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 -rotate-90 text-emerald-400" />
+              )}
             </button>
 
             <button
               type="button"
               onClick={() => { setConditionFilter(conditionFilter === "MONITOR" ? "all" : "MONITOR"); setPage(1); }}
               className={cn(
-                "flex items-center gap-3 rounded-xl border px-4 py-2.5 transition-all hover:shadow-sm",
+                "flex w-full items-center justify-between rounded-xl border px-4 py-3 transition-all hover:shadow-sm",
                 "border-amber-200/70 bg-amber-50/80 dark:border-amber-800/50 dark:bg-amber-950/30",
                 conditionFilter === "MONITOR" ? "ring-2 ring-amber-400 dark:ring-amber-600" : "",
               )}
             >
-              <Clock className="h-4 w-4 text-amber-500 dark:text-amber-400" />
-              <div className="text-left">
-                <p className="text-[10px] uppercase tracking-wider text-amber-500 dark:text-amber-400">Monitor</p>
-                <p className="mt-0.5 text-xl font-bold leading-none text-amber-700 dark:text-amber-300">
-                  {summary.monitor}
-                </p>
+              <div className="flex items-center gap-3">
+                <Clock className="h-4 w-4 shrink-0 text-amber-500 dark:text-amber-400" />
+                <div className="text-left">
+                  <p className="text-[10px] uppercase tracking-wider text-amber-500 dark:text-amber-400">Monitor</p>
+                  <p className="mt-0.5 text-xl font-bold leading-none text-amber-700 dark:text-amber-300">
+                    {summary.monitor}
+                  </p>
+                </div>
               </div>
+              {conditionFilter === "MONITOR" && (
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 -rotate-90 text-amber-400" />
+              )}
             </button>
 
             <button
@@ -908,36 +945,41 @@ export default function StatusBoardClient() {
               }}
               disabled={summary.actionNeeded === 0}
               className={cn(
-                "flex items-center gap-3 rounded-xl border px-4 py-2.5 transition-all",
+                "flex w-full items-center justify-between rounded-xl border px-4 py-3 transition-all",
                 summary.actionNeeded > 0
                   ? "cursor-pointer border-rose-600 bg-rose-500 hover:bg-rose-600 hover:shadow-sm"
-                  : "cursor-default border-emerald-200/70 bg-emerald-50/80 opacity-80",
+                  : "cursor-default border-emerald-200/70 bg-emerald-50/80",
                 conditionFilter === "ACTION_NEEDED" && summary.actionNeeded > 0
-                  ? "ring-2 ring-rose-300 dark:ring-rose-400"
+                  ? "ring-2 ring-white/60"
                   : "",
               )}
             >
-              {summary.actionNeeded > 0
-                ? <AlertTriangle className="h-4 w-4 text-white" />
-                : <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
-              <div className="text-left">
-                <p
-                  className={cn(
-                    "text-[10px] uppercase tracking-wider",
-                    summary.actionNeeded > 0 ? "text-white/80" : "text-emerald-500 dark:text-emerald-400",
-                  )}
-                >
-                  Action Needed
-                </p>
-                <p
-                  className={cn(
-                    "mt-0.5 text-xl font-bold leading-none",
-                    summary.actionNeeded > 0 ? "text-white" : "text-emerald-700 dark:text-emerald-300",
-                  )}
-                >
-                  {summary.actionNeeded > 0 ? summary.actionNeeded : "✓"}
-                </p>
+              <div className="flex items-center gap-3">
+                {summary.actionNeeded > 0
+                  ? <AlertTriangle className="h-4 w-4 shrink-0 text-white" />
+                  : <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />}
+                <div className="text-left">
+                  <p
+                    className={cn(
+                      "text-[10px] uppercase tracking-wider",
+                      summary.actionNeeded > 0 ? "text-white/80" : "text-emerald-500 dark:text-emerald-400",
+                    )}
+                  >
+                    Action Needed
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-0.5 text-xl font-bold leading-none",
+                      summary.actionNeeded > 0 ? "text-white" : "text-emerald-700 dark:text-emerald-300",
+                    )}
+                  >
+                    {summary.actionNeeded > 0 ? summary.actionNeeded : "✓"}
+                  </p>
+                </div>
               </div>
+              {conditionFilter === "ACTION_NEEDED" && summary.actionNeeded > 0 && (
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 -rotate-90 text-white/70" />
+              )}
             </button>
           </div>
         )}
