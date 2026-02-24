@@ -844,118 +844,100 @@ export default function StatusBoardClient() {
 
         {/* Summary strip */}
         {summary && (
-          <div className="grid grid-cols-12 gap-3">
-            <div className="col-span-12 grid grid-cols-3 gap-3 lg:col-span-8">
-              <button
-                type="button"
-                onClick={() => { setConditionFilter("all"); setPage(1); }}
-                className={cn(
-                  "rounded-2xl border p-3.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md",
-                  GLASS_CARD_CLASS,
-                  conditionFilter === "all"
-                    ? "ring-2 ring-slate-400 dark:ring-slate-500"
-                    : ""
-                )}
-              >
-                <div className="flex items-center justify-between">
-                  <p className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">All Items</p>
-                  <Box className="h-4 w-4 text-slate-400 dark:text-slate-500" />
-                </div>
-                <p className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">{summary.total}</p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setConditionFilter(conditionFilter === "GOOD" ? "all" : "GOOD"); setPage(1); }}
-                className={cn(
-                  "rounded-2xl border p-3.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md",
-                  "border-emerald-200/70 bg-gradient-to-br from-emerald-50/80 to-green-50/60",
-                  "dark:border-emerald-800/50 dark:from-emerald-950/30 dark:to-emerald-900/20",
-                  conditionFilter === "GOOD"
-                    ? "ring-2 ring-emerald-400 dark:ring-emerald-600"
-                    : ""
-                )}
-              >
-                <div className="flex items-center justify-between">
-                  <p className="text-[11px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Good</p>
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
-                </div>
-                <p className="mt-2 text-3xl font-bold text-emerald-700 dark:text-emerald-300">{summary.good}</p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setConditionFilter(conditionFilter === "MONITOR" ? "all" : "MONITOR"); setPage(1); }}
-                className={cn(
-                  "rounded-2xl border p-3.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md",
-                  "border-amber-200/70 bg-gradient-to-br from-amber-50/80 to-yellow-50/60",
-                  "dark:border-amber-800/50 dark:from-amber-950/30 dark:to-amber-900/20",
-                  conditionFilter === "MONITOR"
-                    ? "ring-2 ring-amber-400 dark:ring-amber-600"
-                    : ""
-                )}
-              >
-                <div className="flex items-center justify-between">
-                  <p className="text-[11px] uppercase tracking-wider text-amber-600 dark:text-amber-400">Monitor</p>
-                  <Clock className="h-4 w-4 text-amber-500 dark:text-amber-400" />
-                </div>
-                <p className="mt-2 text-3xl font-bold text-amber-700 dark:text-amber-300">{summary.monitor}</p>
-              </button>
-            </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => { setConditionFilter("all"); setPage(1); }}
+              className={cn(
+                "flex items-center gap-3 rounded-xl border px-4 py-2.5 transition-all hover:shadow-sm",
+                GLASS_CARD_CLASS,
+                conditionFilter === "all" ? "ring-2 ring-slate-400 dark:ring-slate-500" : "",
+              )}
+            >
+              <Box className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+              <div className="text-left">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500">All</p>
+                <p className="mt-0.5 text-xl font-bold leading-none text-slate-800 dark:text-slate-100">
+                  {summary.total}
+                </p>
+              </div>
+            </button>
 
             <button
               type="button"
-              onClick={() => { setConditionFilter(conditionFilter === "ACTION_NEEDED" ? "all" : "ACTION_NEEDED"); setPage(1); }}
+              onClick={() => { setConditionFilter(conditionFilter === "GOOD" ? "all" : "GOOD"); setPage(1); }}
               className={cn(
-                "col-span-12 rounded-2xl border p-5 text-left transition-all lg:col-span-4",
-                "border-rose-300/70 bg-gradient-to-br from-rose-100/80 via-red-50/70 to-orange-50/60",
-                "shadow-[0_8px_24px_-12px_rgba(225,29,72,0.25)]",
-                "hover:-translate-y-0.5 hover:shadow-[0_12px_32px_-12px_rgba(225,29,72,0.35)]",
-                "dark:border-rose-800/60 dark:from-rose-950/50 dark:via-red-950/40 dark:to-orange-950/30",
-                conditionFilter === "ACTION_NEEDED"
-                  ? "ring-2 ring-rose-500 dark:ring-rose-600"
-                  : "",
-                summary.actionNeeded === 0 ? "cursor-default opacity-60" : "cursor-pointer"
+                "flex items-center gap-3 rounded-xl border px-4 py-2.5 transition-all hover:shadow-sm",
+                "border-emerald-200/70 bg-emerald-50/80 dark:border-emerald-800/50 dark:bg-emerald-950/30",
+                conditionFilter === "GOOD" ? "ring-2 ring-emerald-400 dark:ring-emerald-600" : "",
               )}
-              disabled={summary.actionNeeded === 0}
             >
-              {summary.actionNeeded === 0 ? (
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-950/60">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-                      All clear
-                    </p>
-                    <p className="text-xs text-emerald-600/70 dark:text-emerald-400/60">
-                      No items need attention
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
-                      Action Needed
-                    </p>
-                    <p className="mt-1.5 text-5xl font-bold text-rose-600 dark:text-rose-400">
-                      {summary.actionNeeded}
-                    </p>
-                    <p className="mt-1 text-xs text-rose-500/80 dark:text-rose-400/70">
-                      {summary.actionNeeded === 1 ? "item requires attention" : "items require attention"}
-                    </p>
-                  </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-950/60 animate-pulse">
-                    <AlertTriangle className="h-5 w-5 text-rose-500 dark:text-rose-400" />
-                  </div>
-                </div>
-              )}
-              {summary.actionNeeded > 0 && (
-                <p className="mt-3 text-[11px] font-medium text-rose-600/70 dark:text-rose-400/60">
-                  Click to filter ↓
+              <CheckCircle2 className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
+              <div className="text-left">
+                <p className="text-[10px] uppercase tracking-wider text-emerald-500 dark:text-emerald-400">Good</p>
+                <p className="mt-0.5 text-xl font-bold leading-none text-emerald-700 dark:text-emerald-300">
+                  {summary.good}
                 </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setConditionFilter(conditionFilter === "MONITOR" ? "all" : "MONITOR"); setPage(1); }}
+              className={cn(
+                "flex items-center gap-3 rounded-xl border px-4 py-2.5 transition-all hover:shadow-sm",
+                "border-amber-200/70 bg-amber-50/80 dark:border-amber-800/50 dark:bg-amber-950/30",
+                conditionFilter === "MONITOR" ? "ring-2 ring-amber-400 dark:ring-amber-600" : "",
               )}
+            >
+              <Clock className="h-4 w-4 text-amber-500 dark:text-amber-400" />
+              <div className="text-left">
+                <p className="text-[10px] uppercase tracking-wider text-amber-500 dark:text-amber-400">Monitor</p>
+                <p className="mt-0.5 text-xl font-bold leading-none text-amber-700 dark:text-amber-300">
+                  {summary.monitor}
+                </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (summary.actionNeeded === 0) return;
+                setConditionFilter(conditionFilter === "ACTION_NEEDED" ? "all" : "ACTION_NEEDED");
+                setPage(1);
+              }}
+              disabled={summary.actionNeeded === 0}
+              className={cn(
+                "flex items-center gap-3 rounded-xl border px-4 py-2.5 transition-all",
+                summary.actionNeeded > 0
+                  ? "cursor-pointer border-rose-600 bg-rose-500 hover:bg-rose-600 hover:shadow-sm"
+                  : "cursor-default border-emerald-200/70 bg-emerald-50/80 opacity-80",
+                conditionFilter === "ACTION_NEEDED" && summary.actionNeeded > 0
+                  ? "ring-2 ring-rose-300 dark:ring-rose-400"
+                  : "",
+              )}
+            >
+              {summary.actionNeeded > 0
+                ? <AlertTriangle className="h-4 w-4 text-white" />
+                : <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
+              <div className="text-left">
+                <p
+                  className={cn(
+                    "text-[10px] uppercase tracking-wider",
+                    summary.actionNeeded > 0 ? "text-white/80" : "text-emerald-500 dark:text-emerald-400",
+                  )}
+                >
+                  Action Needed
+                </p>
+                <p
+                  className={cn(
+                    "mt-0.5 text-xl font-bold leading-none",
+                    summary.actionNeeded > 0 ? "text-white" : "text-emerald-700 dark:text-emerald-300",
+                  )}
+                >
+                  {summary.actionNeeded > 0 ? summary.actionNeeded : "✓"}
+                </p>
+              </div>
             </button>
           </div>
         )}
