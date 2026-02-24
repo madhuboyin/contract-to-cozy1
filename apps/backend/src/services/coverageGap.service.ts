@@ -8,6 +8,7 @@ export type CoverageGapResult = {
   propertyId: string;
 
   itemName: string;
+  itemCategory?: string | null;
   roomName?: string | null;
 
   gapType:
@@ -54,6 +55,7 @@ export async function detectCoverageGaps(propertyId: string): Promise<CoverageGa
   const results: CoverageGapResult[] = [];
 
   for (const item of items) {
+    const itemCategory = item.category ? String(item.category) : null;
     const hasWarranty = !!item.warranty;
     const hasInsurance = !!item.insurancePolicy;
 
@@ -70,6 +72,7 @@ export async function detectCoverageGaps(propertyId: string): Promise<CoverageGa
         inventoryItemId: item.id,
         propertyId,
         itemName: item.name,
+        itemCategory,
         roomName: item.room?.name ?? null,
         gapType: 'NO_COVERAGE',
         exposureCents,
@@ -89,6 +92,7 @@ export async function detectCoverageGaps(propertyId: string): Promise<CoverageGa
         inventoryItemId: item.id,
         propertyId,
         itemName: item.name,
+        itemCategory,
         roomName: item.room?.name ?? null,
         gapType: hasInsurance ? 'EXPIRED_INSURANCE' : 'WARRANTY_ONLY',
         exposureCents,
@@ -104,6 +108,7 @@ export async function detectCoverageGaps(propertyId: string): Promise<CoverageGa
         inventoryItemId: item.id,
         propertyId,
         itemName: item.name,
+        itemCategory,
         roomName: item.room?.name ?? null,
         gapType: hasWarranty ? 'EXPIRED_WARRANTY' : 'INSURANCE_ONLY',
         exposureCents,
@@ -119,6 +124,7 @@ export async function detectCoverageGaps(propertyId: string): Promise<CoverageGa
         inventoryItemId: item.id,
         propertyId,
         itemName: item.name,
+        itemCategory,
         roomName: item.room?.name ?? null,
         gapType: !warrantyActive ? 'EXPIRED_WARRANTY' : 'EXPIRED_INSURANCE',
         exposureCents,

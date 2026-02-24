@@ -117,6 +117,83 @@ function resolveDescription(description?: string | null, ctaLabel?: string | nul
     : description;
 }
 
+function humanizeTokenLabel(raw?: string | null) {
+  if (!raw) return null;
+  const text = String(raw).trim();
+  if (!text) return null;
+  return text
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function normalizeItemName(raw?: string | null) {
+  if (!raw) return null;
+  const text = String(raw).trim();
+  if (!text) return null;
+  if (text === text.toUpperCase()) {
+    return humanizeTokenLabel(text);
+  }
+  return text;
+}
+
+function stripLocationFromDescription(description?: string | null) {
+  if (!description) return null;
+  const next = description.replace(/\s*\(Location:\s*[^)]+\)\s*$/i, '').trim();
+  return next || null;
+}
+
+function getCoverageGapContext(action: OrchestratedActionDTO) {
+  if (!isCoverageGapAction(action)) return null;
+
+  const title = String(action.title ?? '').trim();
+  const titleWithoutPrefix = title
+    .replace(/^No coverage for\s*/i, '')
+    .replace(/^Coverage issue for\s*/i, '')
+    .trim();
+
+  const titleRoomMatch = titleWithoutPrefix.match(/\(([^)]+)\)\s*$/);
+  const roomFromTitle = titleRoomMatch?.[1]?.trim() || null;
+  let titleCandidate = titleWithoutPrefix.replace(/\s*\([^)]+\)\s*$/, '').trim();
+
+  const descriptionRoomMatch = String(action.description ?? '').match(/\(Location:\s*([^)]+)\)/i);
+  const roomFromDescription = descriptionRoomMatch?.[1]?.trim() || null;
+
+  const coverageStep =
+    action.decisionTrace?.steps?.find((step) => step.rule === 'COVERAGE_GAP_DETECTOR') ??
+    action.decisionTrace?.steps?.[0];
+  const details = coverageStep?.details as Record<string, unknown> | null | undefined;
+
+  const itemNameFromDetails =
+    typeof details?.itemName === 'string'
+      ? details.itemName.trim()
+      : null;
+  const roomFromDetails =
+    typeof details?.roomName === 'string'
+      ? details.roomName.trim()
+      : null;
+  const categoryFromDetails =
+    typeof details?.itemCategory === 'string'
+      ? details.itemCategory.trim()
+      : null;
+
+  const roomName = roomFromDetails || roomFromTitle || roomFromDescription;
+
+  // Handle legacy titles like "No coverage for King Bed Master"
+  if (roomName && titleCandidate.toLowerCase().endsWith(` ${roomName.toLowerCase()}`)) {
+    titleCandidate = titleCandidate.slice(0, -roomName.length).trim();
+  }
+
+  const itemName = normalizeItemName(itemNameFromDetails || titleCandidate || humanizeActionType(action.title));
+  const categoryLabel = humanizeTokenLabel(categoryFromDetails || action.systemType || null)?.toLowerCase() ?? null;
+
+  return {
+    itemName,
+    categoryLabel,
+    roomName,
+  };
+}
+
 function getSuppressionCopy(action: OrchestratedActionDTO) {
   const { reasons, suppressionSource } = safeGetSuppression(action);
   const primaryReason = reasons[0];
@@ -261,7 +338,10 @@ export const OrchestrationActionCard: React.FC<Props> = ({
 
   const exposure = formatMoney(action.exposure);
   const dueDateLabel = formatDateLabel(action.nextDueDate);
-  const description = resolveDescription(action.description, action.cta?.label);
+  const coverageContext = getCoverageGapContext(action);
+  const description = coverageContext
+    ? stripLocationFromDescription(resolveDescription(action.description, action.cta?.label))
+    : resolveDescription(action.description, action.cta?.label);
 
   const resolvedLabel = ctaLabel || action.cta?.label || 'Schedule task';
   const isDisabled = suppressed || ctaDisabled;
@@ -269,7 +349,7 @@ export const OrchestrationActionCard: React.FC<Props> = ({
 
   const suppressionCopy = suppressed ? getSuppressionCopy(action) : null;
   const ActionIcon = getActionIcon(action);
-  const actionTitle = humanizeActionType(action.title);
+  const actionTitle = coverageContext?.itemName ?? humanizeActionType(action.title);
 
   const confidence = action.confidence;
   const confidenceScore =
@@ -308,6 +388,16 @@ export const OrchestrationActionCard: React.FC<Props> = ({
 
             {riskBadge(action.riskLevel)}
             {signalBadge(action)}
+            {coverageContext?.categoryLabel && (
+              <span className="inline-flex items-center gap-1 rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-700">
+                {coverageContext.categoryLabel}
+              </span>
+            )}
+            {coverageContext?.roomName && (
+              <span className="inline-flex items-center gap-1 rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-700">
+                {coverageContext.roomName}
+              </span>
+            )}
           </div>
 
           {description && (

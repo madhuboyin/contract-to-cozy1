@@ -1078,6 +1078,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
         details: {
           inventoryItemId: gap.inventoryItemId,
           itemName: gap.itemName,
+          itemCategory: gap.itemCategory ?? null,
           roomName: gap.roomName ?? null,
           gapType: gap.gapType,
           exposureCents: gap.exposureCents,
@@ -1112,8 +1113,8 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
 
       description: `${gap.reasons.join('. ')}${gap.roomName ? ` (Location: ${gap.roomName})` : ''}`,
 
-      // keep these empty; this is not a risk-report system item
-      systemType: null,
+      // keep this as inventory item category for UI chips
+      systemType: gap.itemCategory ?? null,
       category: 'INSURANCE',
       riskLevel: gap.gapType === 'NO_COVERAGE' ? 'HIGH' : 'MODERATE',
       exposure: gap.exposureCents ? gap.exposureCents / 100 : null,
