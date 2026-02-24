@@ -9,6 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import DoNothingSimulatorPanel from '@/components/ai/DoNothingSimulatorPanel';
+import ToolExplainerSection, {
+  openToolExplainer,
+} from '@/components/tool-explainer/ToolExplainerSection';
 
 function DoNothingSimulatorContent() {
   const router = useRouter();
@@ -78,6 +81,18 @@ function DoNothingSimulatorContent() {
           <p className="text-sm sm:text-base text-gray-600 mt-1">
             See what happens to risk and cost if you delay action.
           </p>
+          <Button
+            variant="link"
+            className="h-auto p-0 mt-2 text-sm text-brand-primary"
+            onClick={() =>
+              openToolExplainer({
+                id: 'how-it-works',
+                toolKey: 'doNothingSimulator',
+              })
+            }
+          >
+            Learn how it works
+          </Button>
         </div>
       </div>
 
@@ -98,6 +113,8 @@ function DoNothingSimulatorContent() {
           </Select>
         </div>
       )}
+
+      <ToolExplainerSection toolKey="doNothingSimulator" id="how-it-works" />
 
       {selectedPropertyId ? (
         <DoNothingSimulatorPanel propertyId={selectedPropertyId} />

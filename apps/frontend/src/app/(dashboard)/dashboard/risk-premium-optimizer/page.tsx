@@ -9,6 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import RiskPremiumOptimizerPanel from '@/components/ai/RiskPremiumOptimizerPanel';
+import ToolExplainerSection, {
+  openToolExplainer,
+} from '@/components/tool-explainer/ToolExplainerSection';
 
 function RiskPremiumOptimizerContent() {
   const router = useRouter();
@@ -80,6 +83,18 @@ function RiskPremiumOptimizerContent() {
           <p className="text-sm sm:text-base text-gray-600 mt-1">
             Lower premium pressure without increasing risk.
           </p>
+          <Button
+            variant="link"
+            className="h-auto p-0 mt-2 text-sm text-brand-primary"
+            onClick={() =>
+              openToolExplainer({
+                id: 'how-it-works',
+                toolKey: 'riskToPremiumOptimizer',
+              })
+            }
+          >
+            Learn how it works
+          </Button>
         </div>
       </div>
 
@@ -100,6 +115,8 @@ function RiskPremiumOptimizerContent() {
           </Select>
         </div>
       )}
+
+      <ToolExplainerSection toolKey="riskToPremiumOptimizer" id="how-it-works" />
 
       {selectedPropertyId ? (
         <RiskPremiumOptimizerPanel propertyId={selectedPropertyId} />

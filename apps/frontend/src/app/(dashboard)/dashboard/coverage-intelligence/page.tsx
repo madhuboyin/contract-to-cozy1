@@ -9,6 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import CoverageIntelligencePanel from '@/components/ai/CoverageIntelligencePanel';
+import ToolExplainerSection, {
+  openToolExplainer,
+} from '@/components/tool-explainer/ToolExplainerSection';
 
 function CoverageIntelligenceContent() {
   const router = useRouter();
@@ -78,6 +81,18 @@ function CoverageIntelligenceContent() {
           <p className="text-sm sm:text-base text-gray-600 mt-1">
             Insurance + warranty coverage assessment for your home.
           </p>
+          <Button
+            variant="link"
+            className="h-auto p-0 mt-2 text-sm text-brand-primary"
+            onClick={() =>
+              openToolExplainer({
+                id: 'how-it-works',
+                toolKey: 'coverageIntelligence',
+              })
+            }
+          >
+            Learn how it works
+          </Button>
         </div>
       </div>
 
@@ -98,6 +113,8 @@ function CoverageIntelligenceContent() {
           </Select>
         </div>
       )}
+
+      <ToolExplainerSection toolKey="coverageIntelligence" id="how-it-works" />
 
       {selectedPropertyId ? (
         <CoverageIntelligencePanel propertyId={selectedPropertyId} />
