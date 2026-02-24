@@ -87,7 +87,7 @@ export default function BookingDetailsPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 py-8">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="flex items-center justify-center py-12">
             <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-brand-primary" />
           </div>
@@ -100,7 +100,7 @@ export default function BookingDetailsPage() {
     const isRequestFailure = errorState?.kind === 'REQUEST_FAILED';
     return (
       <div className="min-h-screen bg-gray-50 py-8">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="py-12 text-center">
             <p className="text-gray-600">
               {isRequestFailure ? 'Unable to load booking details right now.' : 'Booking not found'}
@@ -127,7 +127,7 @@ export default function BookingDetailsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-4 sm:py-8">
-      <div className="mx-auto max-w-5xl px-4 sm:px-6">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <button
           onClick={() => router.back()}
           className="mb-6 flex min-h-[44px] items-center text-sm text-gray-600 transition-colors hover:text-gray-900"

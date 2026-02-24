@@ -78,7 +78,7 @@ const ServiceFilter = React.memo(
     }, [defaultZipCode, zipCode]);
 
     return (
-      <div className="relative overflow-hidden rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-50 via-white to-emerald-50 p-6 shadow-md">
+      <div className="relative isolate overflow-hidden rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-100 via-white to-emerald-100 p-6 shadow-md">
         <div className="mb-4">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900 sm:text-xl">
             <Search className="h-5 w-5 text-brand-primary" />

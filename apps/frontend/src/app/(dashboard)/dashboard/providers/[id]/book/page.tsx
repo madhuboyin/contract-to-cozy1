@@ -285,22 +285,9 @@ export default function BookProviderPage() {
           )}
         </div>
 
-        <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">Estimated Price *</label>
-          <div className="relative">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">$</span>
-            <input
-              type="number"
-              value={estimatedPrice}
-              onChange={(e) => setEstimatedPrice(Number(e.target.value) || 0)}
-              min="0"
-              step="0.01"
-              className="min-h-[44px] w-full rounded-md border border-gray-300 py-2 pl-7 pr-3 focus:outline-none focus:ring-2 focus:ring-brand-primary"
-              required
-            />
-          </div>
-          <p className="mt-1 text-sm text-gray-500">This is an estimate. The final price may be adjusted by the provider.</p>
-        </div>
+        {estimatedPrice > 0 && (
+          <p className="mt-1 text-xs text-gray-400">* This estimate updates when you change the selected service.</p>
+        )}
 
         <div className="my-5 flex items-center gap-2">
           <div className="h-px flex-1 bg-gray-100" />

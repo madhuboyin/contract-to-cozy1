@@ -197,7 +197,7 @@ export default function ProviderDetailPage() {
 
       <div className="mb-6 rounded-2xl bg-gradient-to-r from-[#0d4f47] to-[#1a7a6e] p-6 text-white shadow-md">
         <div className="flex items-start gap-4">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-white/20 text-xl font-bold text-white backdrop-blur-sm">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-white/25 text-xl font-bold text-white ring-1 ring-white/30 backdrop-blur-sm">
             {getInitials(provider.user.firstName, provider.user.lastName)}
           </div>
 

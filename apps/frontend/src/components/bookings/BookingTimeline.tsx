@@ -68,7 +68,7 @@ export function BookingTimeline({ currentStatus, timeline }: BookingTimelineProp
                     </div>
                     <span
                       className={cn(
-                        'px-1 text-center text-[10px] font-medium leading-tight',
+                        'max-w-[52px] break-words px-0.5 text-center text-[10px] font-medium leading-tight',
                         isCompleted || isCurrent ? 'text-brand-primary' : 'text-gray-400'
                       )}
                     >
