@@ -9,9 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import DoNothingSimulatorPanel from '@/components/ai/DoNothingSimulatorPanel';
-import ToolExplainerSection, {
-  openToolExplainer,
-} from '@/components/tool-explainer/ToolExplainerSection';
+import { ToolTrustBanner } from '@/components/tools/ToolTrustBanner';
+import { ToolMethodologyAccordion } from '@/components/tools/ToolMethodologyAccordion';
 
 function DoNothingSimulatorContent() {
   const router = useRouter();
@@ -81,20 +80,22 @@ function DoNothingSimulatorContent() {
           <p className="text-sm sm:text-base text-gray-600 mt-1">
             See what happens to risk and cost if you delay action.
           </p>
-          <Button
-            variant="link"
-            className="h-auto p-0 mt-2 text-sm text-brand-primary"
-            onClick={() =>
-              openToolExplainer({
-                id: 'how-it-works',
-                toolKey: 'doNothingSimulator',
-              })
-            }
-          >
-            Learn how it works
-          </Button>
         </div>
       </div>
+
+      <ToolTrustBanner
+        tone="amber"
+        dataSources={[
+          'Risk score',
+          'Inventory age',
+          'Maintenance history',
+          'Claims (36-month)',
+          'Insurance policy',
+        ]}
+        calculationMethod="Deterministic model. Compounds aging inventory, skipped maintenance, and claim history into a projected cost range over your chosen horizon. Every factor is traceable - no black-box estimates."
+        disclaimer="Educational only. Not financial or insurance advice."
+        learnMoreHref="#methodology"
+      />
 
       {properties.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-xl p-4">
@@ -114,8 +115,6 @@ function DoNothingSimulatorContent() {
         </div>
       )}
 
-      <ToolExplainerSection toolKey="doNothingSimulator" id="how-it-works" />
-
       {selectedPropertyId ? (
         <DoNothingSimulatorPanel propertyId={selectedPropertyId} />
       ) : (
@@ -123,6 +122,57 @@ function DoNothingSimulatorContent() {
           Select a property to run Do-Nothing Simulator.
         </div>
       )}
+
+      <ToolMethodologyAccordion
+        anchorId="methodology"
+        whatItDoes="This tool shows the financial impact of delaying maintenance - so you can see how small issues grow into bigger costs."
+        steps={[
+          {
+            number: 1,
+            title: 'Select the issue',
+            description: 'Choose the repair, risk, or home item you are evaluating.',
+          },
+          {
+            number: 2,
+            title: "Estimate today's cost",
+            description: 'We calculate the current repair or replacement cost based on your home data.',
+          },
+          {
+            number: 3,
+            title: 'Project cost growth',
+            description: 'We model how costs rise over time using inflation and common escalation patterns.',
+          },
+          {
+            number: 4,
+            title: 'Simulate failure risk',
+            description: 'We estimate how the probability of failure increases as time passes.',
+          },
+          {
+            number: 5,
+            title: 'Compare scenarios',
+            description: 'See proactive vs delayed outcomes side-by-side, including cost ranges.',
+          },
+        ]}
+        columns={[
+          {
+            heading: "Why it's smart",
+            items: [
+              'Models compounding risk over time',
+              'Includes inflation and cost escalation',
+              'Shows best-case and worst-case ranges',
+              'Highlights the cost of inaction clearly',
+            ],
+          },
+          {
+            heading: 'When to use it',
+            items: [
+              "When you're debating whether to repair now or later",
+              'When planning a maintenance budget for the next 6-12 months',
+              'Before ignoring a recurring issue',
+            ],
+          },
+        ]}
+      />
     </div>
   );
 }

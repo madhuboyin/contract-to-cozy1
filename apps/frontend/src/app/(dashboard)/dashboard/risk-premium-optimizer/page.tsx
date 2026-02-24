@@ -9,9 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import RiskPremiumOptimizerPanel from '@/components/ai/RiskPremiumOptimizerPanel';
-import ToolExplainerSection, {
-  openToolExplainer,
-} from '@/components/tool-explainer/ToolExplainerSection';
+import { ToolTrustBanner } from '@/components/tools/ToolTrustBanner';
+import { ToolMethodologyAccordion } from '@/components/tools/ToolMethodologyAccordion';
 
 function RiskPremiumOptimizerContent() {
   const router = useRouter();
@@ -83,20 +82,22 @@ function RiskPremiumOptimizerContent() {
           <p className="text-sm sm:text-base text-gray-600 mt-1">
             Lower premium pressure without increasing risk.
           </p>
-          <Button
-            variant="link"
-            className="h-auto p-0 mt-2 text-sm text-brand-primary"
-            onClick={() =>
-              openToolExplainer({
-                id: 'how-it-works',
-                toolKey: 'riskToPremiumOptimizer',
-              })
-            }
-          >
-            Learn how it works
-          </Button>
         </div>
       </div>
+
+      <ToolTrustBanner
+        tone="teal"
+        dataSources={[
+          'Insurance policy',
+          'Risk signals',
+          'Inventory exposure',
+          'Claims history',
+          'Deductible data',
+        ]}
+        calculationMethod="Identifies your top premium drivers by cross-referencing your policy data with property risk signals. Rankings are deterministic - not influenced by any insurer or carrier."
+        disclaimer="Not a carrier recommendation. For strategic planning only."
+        learnMoreHref="#methodology"
+      />
 
       {properties.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-xl p-4">
@@ -116,8 +117,6 @@ function RiskPremiumOptimizerContent() {
         </div>
       )}
 
-      <ToolExplainerSection toolKey="riskToPremiumOptimizer" id="how-it-works" />
-
       {selectedPropertyId ? (
         <RiskPremiumOptimizerPanel propertyId={selectedPropertyId} />
       ) : (
@@ -125,6 +124,58 @@ function RiskPremiumOptimizerContent() {
           Select a property to run Risk-to-Premium Optimizer.
         </div>
       )}
+
+      <ToolMethodologyAccordion
+        anchorId="methodology"
+        whatItDoes="Identifies your top premium cost drivers and ranks mitigation actions that reduce premium pressure without increasing your risk exposure."
+        steps={[
+          {
+            number: 1,
+            title: 'Read your policy data',
+            description: 'We pull your premium, deductible, and coverage details from your saved insurance records.',
+          },
+          {
+            number: 2,
+            title: 'Map your risk signals',
+            description: "We cross-reference your property's risk score, claim history, and high-exposure inventory items.",
+          },
+          {
+            number: 3,
+            title: 'Identify premium drivers',
+            description: 'We rank the factors contributing most to your current premium posture - from highest to lowest impact.',
+          },
+          {
+            number: 4,
+            title: 'Generate mitigation actions',
+            description: 'We produce ranked recommendations that reduce your risk exposure and may lower premium pressure over time.',
+          },
+          {
+            number: 5,
+            title: 'Estimate savings range',
+            description: 'We provide a conservative savings estimate based on typical outcomes - not guaranteed figures.',
+          },
+        ]}
+        columns={[
+          {
+            heading: "Why it's independent",
+            items: [
+              'No insurer or carrier influences results',
+              'Deterministic logic - no black-box scoring',
+              'Based entirely on your own property data',
+              'Every driver is explained and traceable',
+            ],
+          },
+          {
+            heading: 'When to use it',
+            items: [
+              'Before your annual policy renewal',
+              'After a claim or coverage change',
+              'When your premium increases unexpectedly',
+              'When planning home improvements',
+            ],
+          },
+        ]}
+      />
     </div>
   );
 }

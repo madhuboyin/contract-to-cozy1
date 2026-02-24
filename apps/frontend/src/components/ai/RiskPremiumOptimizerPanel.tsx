@@ -199,10 +199,6 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm text-sky-900">
-        Educational insights only. This tool does not recommend specific insurers or carriers.
-      </div>
-
       {error && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-start gap-2">
           <AlertCircle className="h-4 w-4 mt-0.5" />

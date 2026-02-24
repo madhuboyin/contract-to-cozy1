@@ -9,9 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import CoverageIntelligencePanel from '@/components/ai/CoverageIntelligencePanel';
-import ToolExplainerSection, {
-  openToolExplainer,
-} from '@/components/tool-explainer/ToolExplainerSection';
+import { ToolTrustBanner } from '@/components/tools/ToolTrustBanner';
+import { ToolMethodologyAccordion } from '@/components/tools/ToolMethodologyAccordion';
 
 function CoverageIntelligenceContent() {
   const router = useRouter();
@@ -81,20 +80,22 @@ function CoverageIntelligenceContent() {
           <p className="text-sm sm:text-base text-gray-600 mt-1">
             Insurance + warranty coverage assessment for your home.
           </p>
-          <Button
-            variant="link"
-            className="h-auto p-0 mt-2 text-sm text-brand-primary"
-            onClick={() =>
-              openToolExplainer({
-                id: 'how-it-works',
-                toolKey: 'coverageIntelligence',
-              })
-            }
-          >
-            Learn how it works
-          </Button>
         </div>
       </div>
+
+      <ToolTrustBanner
+        tone="blue"
+        dataSources={[
+          'Warranty records',
+          'Insurance policy',
+          'Inventory items',
+          'System age',
+          'Coverage dates',
+        ]}
+        calculationMethod="Compares your actual coverage documents against your home's inventory to find gaps, overlaps, and expiring protections. Analysis is based on your uploaded and saved records."
+        disclaimer="Gap analysis reflects your uploaded documents. Always verify coverage details directly with your provider."
+        learnMoreHref="#methodology"
+      />
 
       {properties.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-xl p-4">
@@ -114,8 +115,6 @@ function CoverageIntelligenceContent() {
         </div>
       )}
 
-      <ToolExplainerSection toolKey="coverageIntelligence" id="how-it-works" />
-
       {selectedPropertyId ? (
         <CoverageIntelligencePanel propertyId={selectedPropertyId} />
       ) : (
@@ -123,6 +122,58 @@ function CoverageIntelligenceContent() {
           Select a property to load Coverage Intelligence.
         </div>
       )}
+
+      <ToolMethodologyAccordion
+        anchorId="methodology"
+        whatItDoes="Reviews your warranties and insurance policy together to surface gaps, overlaps, and expiring protections across your home's key systems."
+        steps={[
+          {
+            number: 1,
+            title: 'Inventory your systems',
+            description: "We read your home's inventory - appliances, HVAC, plumbing, electrical - including age and condition data.",
+          },
+          {
+            number: 2,
+            title: 'Map your coverage',
+            description: "We parse your saved warranties and insurance policy to understand what is and isn't covered.",
+          },
+          {
+            number: 3,
+            title: 'Detect gaps',
+            description: 'We identify systems that are past warranty, uninsured for failure, or approaching coverage expiry.',
+          },
+          {
+            number: 4,
+            title: 'Flag overlaps',
+            description: 'We surface any redundant coverage so you avoid paying for protection you already have.',
+          },
+          {
+            number: 5,
+            title: 'Prioritise by risk',
+            description: 'Gaps are ranked by the replacement cost and age of the underlying system - highest financial exposure first.',
+          },
+        ]}
+        columns={[
+          {
+            heading: 'What it reviews',
+            items: [
+              'Active and expiring warranties',
+              'Home warranty plan coverage',
+              'Homeowners insurance exclusions',
+              'System age vs. coverage duration',
+            ],
+          },
+          {
+            heading: 'When to use it',
+            items: [
+              'When adding or replacing a major system',
+              'Before a warranty expires',
+              'At policy renewal time',
+              'After buying a home with inherited coverage',
+            ],
+          },
+        ]}
+      />
     </div>
   );
 }
