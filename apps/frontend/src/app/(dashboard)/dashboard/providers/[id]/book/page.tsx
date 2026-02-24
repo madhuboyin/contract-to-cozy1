@@ -7,46 +7,38 @@ import Link from 'next/link';
 import { api } from '@/lib/api/client';
 import { Provider, Service, Property, CreateBookingInput } from '@/types';
 import { useToast } from '@/components/ui/use-toast';
-// FIX: Import useQueryClient for cache invalidation
 import { useQueryClient } from '@tanstack/react-query';
+import { Calendar, Loader2 } from 'lucide-react';
+import { formatEnumLabel } from '@/lib/utils/formatters';
 
-// --- Helper Function ---
-function formatServiceCategory(category: string | null): string {
-  if (!category) return '';
-  return category
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
+function getInitials(firstName: string, lastName: string) {
+  return (firstName?.[0] || '') + (lastName?.[0] || '');
 }
-// ---
 
 export default function BookProviderPage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
+
   const searchParams = useSearchParams();
   const serviceCategory = searchParams.get('service') || searchParams.get('category');
   const preSelectedPropertyId = searchParams.get('propertyId');
-  // NEW: Extract health insight tracking from URL
   const insightFactor = searchParams.get('insightFactor');
   const insightContext = searchParams.get('insightContext');
   const maintenancePredictionId = searchParams.get('predictionId');
   const inventoryItemId = searchParams.get('itemId');
-  //const preSelectedServiceId = searchParams.get('service');
   const providerId = params.id as string;
 
   const [provider, setProvider] = useState<Provider | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string>('');
 
-  // Form state
   const [selectedServiceId, setSelectedServiceId] = useState('');
-  const [selectedPropertyId, setSelectedPropertyId] = useState(preSelectedPropertyId || ''); // MODIFIED
+  const [selectedPropertyId, setSelectedPropertyId] = useState(preSelectedPropertyId || '');
   const [scheduledDate, setScheduledDate] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
@@ -55,8 +47,8 @@ export default function BookProviderPage() {
   const [estimatedPrice, setEstimatedPrice] = useState<number>(0);
 
   useEffect(() => {
-    // Added serviceCategory to dependency array
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [providerId, serviceCategory]);
 
   const loadData = async () => {
@@ -76,21 +68,17 @@ export default function BookProviderPage() {
         if (servicesRes.data.services.length > 0) {
           const servicesList = servicesRes.data.services;
           let defaultService = servicesList[0];
-          
-          // Logic to pre-select service based on URL category hint
-          if (serviceCategory) {
-            const targetCategory = formatServiceCategory(serviceCategory).toLowerCase();
 
-            // Try to find a service where the name contains the target category word (e.g., 'inspection')
-            const matchedService = servicesList.find(s => 
+          if (serviceCategory) {
+            const targetCategory = formatEnumLabel(serviceCategory).toLowerCase();
+            const matchedService = servicesList.find((s) =>
               s.name.toLowerCase().includes(targetCategory.split(' ')[0].toLowerCase())
             );
 
             if (matchedService) {
-                defaultService = matchedService;
+              defaultService = matchedService;
             }
           }
-          // ---
 
           setSelectedServiceId(defaultService.id);
           setEstimatedPrice(Number(defaultService.basePrice));
@@ -99,15 +87,14 @@ export default function BookProviderPage() {
 
       if (propertiesRes.success && propertiesRes.data.properties.length > 0) {
         setProperties(propertiesRes.data.properties);
-        
-        // 🔑 FIX: Only set default property if not already provided via URL
+
         if (!preSelectedPropertyId) {
-          const primaryProperty = propertiesRes.data.properties.find(p => p.isPrimary);
+          const primaryProperty = propertiesRes.data.properties.find((p) => p.isPrimary);
           setSelectedPropertyId(primaryProperty?.id || propertiesRes.data.properties[0].id);
         }
       }
-    } catch (error) {
-      console.error('Failed to load data:', error);
+    } catch (loadError) {
+      console.error('Failed to load data:', loadError);
       setError('Failed to load data');
     } finally {
       setLoading(false);
@@ -116,7 +103,7 @@ export default function BookProviderPage() {
 
   const handleServiceChange = (serviceId: string) => {
     setSelectedServiceId(serviceId);
-    const service = services.find(s => s.id === serviceId);
+    const service = services.find((s) => s.id === serviceId);
     if (service) {
       setEstimatedPrice(Number(service.basePrice));
     }
@@ -169,52 +156,40 @@ export default function BookProviderPage() {
       description: description.trim(),
       specialRequests: specialRequests.trim() || undefined,
       estimatedPrice,
-      // NEW: Include health insight tracking fields
       ...(insightFactor && { insightFactor }),
       ...(insightContext && { insightContext }),
       ...(maintenancePredictionId && { maintenancePredictionId }),
       ...(inventoryItemId && { inventoryItemId }),
     };
 
-    console.log('Submitting booking:', bookingData);
-
-    setSubmitting(true);
+    setIsSubmitting(true);
     try {
       const response = await api.createBooking(bookingData);
-      console.log('Booking response:', response);
-      
+
       if (response.success) {
-        // Invalidate caches to force re-fetch of updated data
         await Promise.all([
-            // Invalidate bookings cache (for Upcoming Bookings card)
-            queryClient.invalidateQueries({ queryKey: ['bookings'] }),
-            // Invalidate properties cache (for health scores and insights)
-            queryClient.invalidateQueries({ queryKey: ['properties'] }),
-            // Invalidate specific property if we know the ID
-            queryClient.invalidateQueries({ queryKey: ['property', selectedPropertyId] }),
+          queryClient.invalidateQueries({ queryKey: ['bookings'] }),
+          queryClient.invalidateQueries({ queryKey: ['properties'] }),
+          queryClient.invalidateQueries({ queryKey: ['property', selectedPropertyId] }),
         ]);
-      
+
         toast({ title: 'Booking created successfully!' });
-        
-        // 🔑 Check if we came from risk assessment page
+
         const fromParam = searchParams.get('from');
-        
+
         if (fromParam === 'risk-assessment' && selectedPropertyId) {
-            // Navigate back to risk assessment with refresh flag
-            router.push(`/dashboard/properties/${selectedPropertyId}/risk-assessment?refreshed=true`);
+          router.push(`/dashboard/properties/${selectedPropertyId}/risk-assessment?refreshed=true`);
         } else {
-            // Default: Navigate to bookings page
-            router.push('/dashboard/bookings');
+          router.push('/dashboard/bookings');
         }
-    } else {
+      } else {
         setError(response.message || 'Failed to create booking');
-        console.error('Booking error:', response);
       }
-    } catch (error: any) {
-      console.error('Failed to create booking:', error);
-      setError(error?.message || 'An error occurred. Please try again.');
+    } catch (submitError: any) {
+      console.error('Failed to create booking:', submitError);
+      setError(submitError?.message || 'An error occurred. Please try again.');
     } finally {
-      setSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -222,8 +197,8 @@ export default function BookProviderPage() {
     return (
       <div className="px-4 sm:px-6 lg:px-8">
         <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-          <div className="h-64 bg-gray-200 rounded"></div>
+          <div className="h-8 w-1/4 rounded bg-gray-200" />
+          <div className="h-64 rounded bg-gray-200" />
         </div>
       </div>
     );
@@ -232,9 +207,9 @@ export default function BookProviderPage() {
   if (!provider) {
     return (
       <div className="px-4 sm:px-6 lg:px-8">
-        <div className="text-center py-12">
+        <div className="py-12 text-center">
           <p className="text-gray-600">Provider not found</p>
-          <button onClick={() => router.back()} className="text-blue-600 hover:text-blue-700 mt-4">
+          <button onClick={() => router.back()} className="mt-4 text-blue-600 hover:text-blue-700">
             ← Go back
           </button>
         </div>
@@ -249,49 +224,47 @@ export default function BookProviderPage() {
   };
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto">
+    <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
       <div className="mb-6">
         <button
           onClick={() => router.back()}
-          className="text-sm text-gray-600 hover:text-gray-900 flex items-center mb-4 min-h-[44px]"
+          className="mb-4 flex min-h-[44px] items-center text-sm text-gray-600 hover:text-gray-900"
         >
-          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
           Back
         </button>
-        
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Book a Service</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Booking with <span className="font-medium">{provider.businessName}</span>
-        </p>
+
+        <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">Book a Service</h1>
       </div>
 
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
-          <div className="flex">
-            <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-            </svg>
-            <div className="ml-3">
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
-          </div>
+        <div className="mb-6 rounded-md border border-red-200 bg-red-50 p-4">
+          <p className="text-sm text-red-800">{error}</p>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="bg-white shadow rounded-lg p-6 space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+        <div className="mb-6 flex items-center gap-3 rounded-xl border border-teal-100 bg-teal-50 p-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-primary text-sm font-bold text-white">
+            {getInitials(provider.user?.firstName ?? '', provider.user?.lastName ?? '') || '?'}
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Booking with</p>
+            <p className="text-base font-semibold text-gray-900">{provider.businessName}</p>
+          </div>
+        </div>
+
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Service *
-          </label>
+          <label className="mb-2 block text-sm font-medium text-gray-700">Service *</label>
           {services.length === 0 ? (
             <p className="text-sm text-gray-500">No services available</p>
           ) : (
             <select
               value={selectedServiceId}
               onChange={(e) => handleServiceChange(e.target.value)}
-              className="w-full px-3 py-2 min-h-[44px] border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="min-h-[44px] w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-primary"
               required
             >
               {services.map((service) => (
@@ -301,22 +274,50 @@ export default function BookProviderPage() {
               ))}
             </select>
           )}
+
+          {estimatedPrice > 0 && (
+            <div className="mt-1.5 flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-sm font-semibold text-green-700">
+                Estimated: ${estimatedPrice.toFixed(2)}
+              </span>
+              <span className="text-xs text-gray-400">Final price set by provider</span>
+            </div>
+          )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Property *
-          </label>
+          <label className="mb-2 block text-sm font-medium text-gray-700">Estimated Price *</label>
+          <div className="relative">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">$</span>
+            <input
+              type="number"
+              value={estimatedPrice}
+              onChange={(e) => setEstimatedPrice(Number(e.target.value) || 0)}
+              min="0"
+              step="0.01"
+              className="min-h-[44px] w-full rounded-md border border-gray-300 py-2 pl-7 pr-3 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+              required
+            />
+          </div>
+          <p className="mt-1 text-sm text-gray-500">This is an estimate. The final price may be adjusted by the provider.</p>
+        </div>
+
+        <div className="my-5 flex items-center gap-2">
+          <div className="h-px flex-1 bg-gray-100" />
+          <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Property</span>
+          <div className="h-px flex-1 bg-gray-100" />
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-gray-700">Property *</label>
           {properties.length === 0 ? (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-              <p className="text-sm text-yellow-800 mb-2">
-                ⚠️ No properties found. Please add a property first.
-              </p>
+            <div className="rounded-md border border-yellow-200 bg-yellow-50 p-4">
+              <p className="mb-2 text-sm text-yellow-800">⚠️ No properties found. Please add a property first.</p>
               <Link
                 href="/dashboard/properties/new"
                 className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700"
               >
-                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
                 Add Property
@@ -326,7 +327,7 @@ export default function BookProviderPage() {
             <select
               value={selectedPropertyId}
               onChange={(e) => setSelectedPropertyId(e.target.value)}
-              className="w-full px-3 py-2 min-h-[44px] border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="min-h-[44px] w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-primary"
               required
             >
               {properties.map((property) => (
@@ -346,114 +347,95 @@ export default function BookProviderPage() {
           )}
         </div>
 
+        <div className="my-5 flex items-center gap-2">
+          <div className="h-px flex-1 bg-gray-100" />
+          <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Scheduling</span>
+          <div className="h-px flex-1 bg-gray-100" />
+        </div>
+
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Date *
-            </label>
+            <label className="mb-2 block text-sm font-medium text-gray-700">Date *</label>
             <input
               type="date"
               value={scheduledDate}
               onChange={(e) => setScheduledDate(e.target.value)}
               min={getTomorrowDate()}
-              className="w-full px-3 py-2 min-h-[44px] border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="min-h-[44px] w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-primary"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Start Time *
-            </label>
+            <label className="mb-2 block text-sm font-medium text-gray-700">Start Time *</label>
             <input
               type="time"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
-              className="w-full px-3 py-2 min-h-[44px] border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="min-h-[44px] w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-primary"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              End Time (Optional)
-            </label>
+            <label className="mb-2 block text-sm font-medium text-gray-700">End Time (Optional)</label>
             <input
               type="time"
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
-              className="w-full px-3 py-2 min-h-[44px] border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="min-h-[44px] w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-primary"
             />
           </div>
         </div>
 
+        <div className="my-5 flex items-center gap-2">
+          <div className="h-px flex-1 bg-gray-100" />
+          <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Description</span>
+          <div className="h-px flex-1 bg-gray-100" />
+        </div>
+
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Description * <span className="text-gray-500 font-normal">(minimum 10 characters)</span>
+          <label className="mb-2 block text-sm font-medium text-gray-700">
+            Description * <span className="font-normal text-gray-500">(minimum 10 characters)</span>
           </label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={4}
             placeholder="Please describe the work needed in detail (at least 10 characters)..."
-            className="w-full px-3 py-2 min-h-[44px] border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="min-h-[44px] w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-primary"
             required
             minLength={10}
           />
-          <p className="mt-1 text-sm text-gray-500">
-            {description.length}/10 characters minimum
-          </p>
+          <p className="mt-1 text-sm text-gray-500">{description.length}/10 characters minimum</p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Special Requests (Optional)
-          </label>
+          <label className="mb-2 block text-sm font-medium text-gray-700">Special Requests (Optional)</label>
           <textarea
             value={specialRequests}
             onChange={(e) => setSpecialRequests(e.target.value)}
             rows={3}
             placeholder="Any special requirements or preferences..."
-            className="w-full px-3 py-2 min-h-[44px] border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="min-h-[44px] w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-primary"
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Estimated Price *
-          </label>
-          <div className="relative">
-            <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500">$</span>
-            <input
-              type="number"
-              value={estimatedPrice}
-              onChange={(e) => setEstimatedPrice(Number(e.target.value) || 0)}
-              min="0"
-              step="0.01"
-              className="w-full pl-7 pr-3 py-2 min-h-[44px] border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-          <p className="mt-1 text-sm text-gray-500">
-            This is an estimate. The final price may be adjusted by the provider.
-          </p>
-        </div>
-
-        <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="px-4 py-2.5 min-h-[44px] text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-          >
-            Cancel
-          </button>
-          
+        <div className="border-t border-gray-200 pt-4">
           <button
             type="submit"
-            disabled={submitting || services.length === 0 || properties.length === 0}
-            className="px-6 py-2.5 min-h-[44px] text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            disabled={isSubmitting || services.length === 0 || properties.length === 0}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-primary py-3 text-base font-semibold text-white transition-opacity disabled:opacity-60"
           >
-            {submitting ? 'Creating Booking...' : 'Create Booking'}
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> Creating Booking...
+              </>
+            ) : (
+              <>
+                <Calendar className="h-4 w-4" /> Create Booking
+              </>
+            )}
           </button>
         </div>
       </form>
