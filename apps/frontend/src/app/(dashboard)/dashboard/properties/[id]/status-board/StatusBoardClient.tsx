@@ -15,7 +15,6 @@ import {
   WarrantyBadge,
 } from "./statusBoardApi";
 
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -63,6 +62,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback } from "react";
+import { cn } from "@/lib/utils";
 import InventoryItemDrawer from '../../../components/inventory/InventoryItemDrawer';
 import { getInventoryItem, listInventoryRooms } from '../../../inventory/inventoryApi';
 import { InventoryItem, InventoryRoom } from '@/types';
@@ -84,6 +84,18 @@ const CONDITION_LABELS: Record<StatusBoardCondition, string> = {
   GOOD: "Good",
   MONITOR: "Monitor",
   ACTION_NEEDED: "Action Needed",
+};
+
+const CONDITION_ROW_BORDER: Record<StatusBoardCondition, string> = {
+  ACTION_NEEDED: "border-l-[3px] border-l-rose-500",
+  MONITOR: "border-l-[3px] border-l-amber-400",
+  GOOD: "border-l-[3px] border-l-emerald-400",
+};
+
+const CONDITION_ROW_BG: Record<StatusBoardCondition, string> = {
+  ACTION_NEEDED: "bg-rose-50/20 dark:bg-rose-950/10",
+  MONITOR: "bg-amber-50/20 dark:bg-amber-950/10",
+  GOOD: "",
 };
 
 const RECOMMENDATION_LABELS: Record<StatusBoardRecommendation, string> = {
@@ -336,13 +348,15 @@ export default function StatusBoardClient() {
           return (
         <>
         <TableRow
-          className={`group cursor-pointer border-b border-white/60 bg-white/35 backdrop-blur-sm transition-colors duration-200 hover:bg-white/70 dark:border-slate-700/70 dark:bg-slate-900/20 dark:hover:bg-slate-900/45 ${
-            item.isPinned ? "bg-amber-50/55 dark:bg-amber-900/15" : ""
-          } ${
-            isUrgentItem
-              ? "shadow-[inset_3px_0_0_0_rgba(239,68,68,0.35)]"
-              : ""
-          }`}
+          className={cn(
+            "group cursor-pointer border-b border-white/60 bg-white/35 backdrop-blur-sm transition-colors duration-200",
+            "hover:bg-white/70 dark:border-slate-700/70 dark:bg-slate-900/20 dark:hover:bg-slate-900/45",
+            CONDITION_ROW_BORDER[item.condition],
+            CONDITION_ROW_BG[item.condition],
+            item.isPinned && "bg-amber-50/55 dark:bg-amber-900/15",
+            expandedId === item.id && "bg-white/90 dark:bg-slate-800/70",
+            isUrgentItem && "shadow-[inset_3px_0_0_0_rgba(239,68,68,0.35)]"
+          )}
           onClick={() => handleExpand(item)}
         >
           <TableCell className="w-10 py-5 align-middle">
@@ -356,17 +370,43 @@ export default function StatusBoardClient() {
               <Pin className="h-5 w-5 sm:h-4 sm:w-4" />
             </button>
           </TableCell>
-          <TableCell className="py-5 align-middle">
-            <div className="flex items-center gap-3">
+          <TableCell className="min-w-0 py-3 align-middle">
+            <div className="flex items-center gap-3 min-w-0">
               <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${categoryVisual.toneClass}`}>
                 <CategoryIcon className="h-4 w-4" />
               </span>
-              <div>
-                <p className="text-base font-semibold text-slate-900 dark:text-slate-100">{item.displayName}</p>
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="truncate text-base font-semibold text-slate-900 dark:text-slate-100">{item.displayName}</span>
                 <p className="mt-1 text-xs text-muted-foreground lg:hidden">
                   {item.category}
                   {item.ageYears != null ? ` • ${formatAgeDisplay(item.ageYears)}` : ""}
                 </p>
+                {item.condition !== "GOOD" && item.computedReasons.length > 0 && (() => {
+                  const topReason = item.computedReasons[0];
+                  const isEol = topReason.code.includes("EOL") || topReason.code.includes("NEARING_EOL");
+                  const isOverdue = topReason.code.includes("OVERDUE");
+                  const isMissingDate = topReason.code === "MISSING_INSTALL_DATE";
+                  return (
+                    <span
+                      className={cn(
+                        "inline-flex w-fit max-w-[240px] items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                        "truncate",
+                        item.condition === "ACTION_NEEDED"
+                          ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800/60 dark:bg-rose-950/40 dark:text-rose-300"
+                          : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-300"
+                      )}
+                    >
+                      {isEol || isOverdue ? (
+                        <AlertTriangle className="h-3 w-3 shrink-0" />
+                      ) : isMissingDate ? (
+                        <Info className="h-3 w-3 shrink-0" />
+                      ) : (
+                        <Clock className="h-3 w-3 shrink-0" />
+                      )}
+                      <span className="truncate">{topReason.detail}</span>
+                    </span>
+                  );
+                })()}
               </div>
             </div>
           </TableCell>
@@ -470,7 +510,15 @@ export default function StatusBoardClient() {
                 <div className="space-y-5 border-l-2 border-teal-200/80 pl-4 dark:border-teal-800/80">
                 {/* Details grid */}
                 <div className="grid grid-cols-2 gap-3 text-sm xl:grid-cols-5">
-                  <div className={DETAIL_BENTO_TILE_CLASS}>
+                  <div
+                    className={cn(
+                      DETAIL_BENTO_TILE_CLASS,
+                      "ring-1",
+                      item.needsInstallDateForPrediction
+                        ? "ring-amber-300/60 dark:ring-amber-700/40"
+                        : "ring-teal-200/60 dark:ring-teal-800/40"
+                    )}
+                  >
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
@@ -573,6 +621,9 @@ export default function StatusBoardClient() {
                   </div>
                 )}
 
+                <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  Actions
+                </p>
                 {/* Deep links */}
                 <div className="flex flex-wrap gap-2 rounded-2xl border border-white/70 bg-white/50 p-3 backdrop-blur-sm overflow-hidden dark:border-slate-700/70 dark:bg-slate-900/40">
                   {item.inventoryItemId && (
@@ -611,14 +662,23 @@ export default function StatusBoardClient() {
                       </Button>
                     </Link>
                   ) : item.recommendation === "REPLACE_SOON" ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled
-                      className="cursor-not-allowed border-slate-200 text-slate-400 opacity-60 dark:border-slate-800 dark:text-slate-500"
-                    >
-                      <Wrench className="h-3.5 w-3.5 mr-1" /> Replace or Repair
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled
+                            className="pointer-events-none cursor-not-allowed border-slate-200 text-slate-400 opacity-60 dark:border-slate-800 dark:text-slate-500"
+                          >
+                            <Wrench className="h-3.5 w-3.5 mr-1" /> Replace or Repair
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        Link your inventory item to enable Replace or Repair analysis
+                      </TooltipContent>
+                    </Tooltip>
                   ) : null}
                   {item.deepLinks.maintenance && item.pendingMaintenance > 0 ? (
                     <Link href={item.deepLinks.maintenance}>
@@ -627,14 +687,23 @@ export default function StatusBoardClient() {
                       </Button>
                     </Link>
                   ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled
-                      className="cursor-not-allowed border-slate-200 text-slate-400 opacity-60 dark:border-slate-800 dark:text-slate-500"
-                    >
-                      <Wrench className="h-3.5 w-3.5 mr-1" /> Maintenance
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled
+                            className="pointer-events-none cursor-not-allowed border-slate-200 text-slate-400 opacity-60 dark:border-slate-800 dark:text-slate-500"
+                          >
+                            <Wrench className="h-3.5 w-3.5 mr-1" /> Maintenance
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        No pending maintenance tasks for this item
+                      </TooltipContent>
+                    </Tooltip>
                   )}
                   {item.deepLinks.riskAssessment && (
                     <Link href={item.deepLinks.riskAssessment}>
@@ -751,61 +820,149 @@ export default function StatusBoardClient() {
         <div className="relative z-10 space-y-3">
         {/* Header */}
         <div className={`p-3 sm:p-4 ${GLASS_PANEL_CLASS}`}>
-          <div className="min-w-0">
-            <h1 className="text-xl font-heading font-bold leading-tight text-slate-900 dark:text-slate-100 sm:text-2xl">
-              Home Status Board
-            </h1>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-              All home items with computed condition statuses
-            </p>
+          <div className="flex items-start justify-between gap-4 min-w-0">
+            <div className="min-w-0">
+              <h1 className="text-xl font-heading font-bold leading-tight text-slate-900 dark:text-slate-100 sm:text-2xl">
+                Home Status Board
+              </h1>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                All home items with computed condition statuses
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0 border-slate-200/80 bg-white/70 text-slate-600 hover:bg-white dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300"
+              disabled={recomputeMutation.isPending}
+              onClick={() => recomputeMutation.mutate()}
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", recomputeMutation.isPending && "animate-spin")} />
+              {recomputeMutation.isPending ? "Recomputing..." : "Recompute"}
+            </Button>
           </div>
         </div>
 
         {/* Summary strip */}
         {summary && (
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Card className={GLASS_CARD_CLASS}>
-              <CardContent className="p-3.5 sm:p-4">
+          <div className="grid grid-cols-12 gap-3">
+            <div className="col-span-12 grid grid-cols-3 gap-3 lg:col-span-8">
+              <button
+                type="button"
+                onClick={() => { setConditionFilter("all"); setPage(1); }}
+                className={cn(
+                  "rounded-2xl border p-3.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md",
+                  GLASS_CARD_CLASS,
+                  conditionFilter === "all"
+                    ? "ring-2 ring-slate-400 dark:ring-slate-500"
+                    : ""
+                )}
+              >
                 <div className="flex items-center justify-between">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-300">Total Items</p>
-                  <Box className="h-4 w-4 text-slate-500 dark:text-slate-300" />
+                  <p className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">All Items</p>
+                  <Box className="h-4 w-4 text-slate-400 dark:text-slate-500" />
                 </div>
-                <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">{summary.total}</p>
-              </CardContent>
-            </Card>
-            <Card className={`${GLASS_CARD_CLASS} bg-gradient-to-br from-emerald-100/70 via-white/55 to-emerald-50/60 dark:from-emerald-900/30 dark:to-emerald-950/20`}>
-              <CardContent className="p-3.5 sm:p-4">
+                <p className="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100">{summary.total}</p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setConditionFilter(conditionFilter === "GOOD" ? "all" : "GOOD"); setPage(1); }}
+                className={cn(
+                  "rounded-2xl border p-3.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md",
+                  "border-emerald-200/70 bg-gradient-to-br from-emerald-50/80 to-green-50/60",
+                  "dark:border-emerald-800/50 dark:from-emerald-950/30 dark:to-emerald-900/20",
+                  conditionFilter === "GOOD"
+                    ? "ring-2 ring-emerald-400 dark:ring-emerald-600"
+                    : ""
+                )}
+              >
                 <div className="flex items-center justify-between">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-300">Good</p>
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
+                  <p className="text-[11px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Good</p>
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
                 </div>
-                <p className="mt-1 text-2xl font-bold text-emerald-700 dark:text-emerald-300">{summary.good}</p>
-              </CardContent>
-            </Card>
-            <Card className={`${GLASS_CARD_CLASS} bg-gradient-to-br from-amber-100/70 via-white/55 to-amber-50/60 dark:from-amber-900/30 dark:to-amber-950/20`}>
-              <CardContent className="p-3.5 sm:p-4">
+                <p className="mt-2 text-3xl font-bold text-emerald-700 dark:text-emerald-300">{summary.good}</p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setConditionFilter(conditionFilter === "MONITOR" ? "all" : "MONITOR"); setPage(1); }}
+                className={cn(
+                  "rounded-2xl border p-3.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md",
+                  "border-amber-200/70 bg-gradient-to-br from-amber-50/80 to-yellow-50/60",
+                  "dark:border-amber-800/50 dark:from-amber-950/30 dark:to-amber-900/20",
+                  conditionFilter === "MONITOR"
+                    ? "ring-2 ring-amber-400 dark:ring-amber-600"
+                    : ""
+                )}
+              >
                 <div className="flex items-center justify-between">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-300">Monitor</p>
-                  <Clock className="h-4 w-4 text-amber-600 dark:text-amber-300" />
+                  <p className="text-[11px] uppercase tracking-wider text-amber-600 dark:text-amber-400">Monitor</p>
+                  <Clock className="h-4 w-4 text-amber-500 dark:text-amber-400" />
                 </div>
-                <p className="mt-1 text-2xl font-bold text-amber-700 dark:text-amber-300">{summary.monitor}</p>
-              </CardContent>
-            </Card>
-            <Card className={`${GLASS_CARD_CLASS} bg-gradient-to-br from-rose-100/70 via-white/55 to-orange-50/60 dark:from-rose-900/30 dark:to-red-950/20`}>
-              <CardContent className="p-3.5 sm:p-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-300">Action Needed</p>
-                  <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-300" />
+                <p className="mt-2 text-3xl font-bold text-amber-700 dark:text-amber-300">{summary.monitor}</p>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => { setConditionFilter(conditionFilter === "ACTION_NEEDED" ? "all" : "ACTION_NEEDED"); setPage(1); }}
+              className={cn(
+                "col-span-12 rounded-2xl border p-5 text-left transition-all lg:col-span-4",
+                "border-rose-300/70 bg-gradient-to-br from-rose-100/80 via-red-50/70 to-orange-50/60",
+                "shadow-[0_8px_24px_-12px_rgba(225,29,72,0.25)]",
+                "hover:-translate-y-0.5 hover:shadow-[0_12px_32px_-12px_rgba(225,29,72,0.35)]",
+                "dark:border-rose-800/60 dark:from-rose-950/50 dark:via-red-950/40 dark:to-orange-950/30",
+                conditionFilter === "ACTION_NEEDED"
+                  ? "ring-2 ring-rose-500 dark:ring-rose-600"
+                  : "",
+                summary.actionNeeded === 0 ? "cursor-default opacity-60" : "cursor-pointer"
+              )}
+              disabled={summary.actionNeeded === 0}
+            >
+              {summary.actionNeeded === 0 ? (
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-950/60">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                      All clear
+                    </p>
+                    <p className="text-xs text-emerald-600/70 dark:text-emerald-400/60">
+                      No items need attention
+                    </p>
+                  </div>
                 </div>
-                <p className="mt-1 text-2xl font-bold text-rose-700 dark:text-rose-300">{summary.actionNeeded}</p>
-              </CardContent>
-            </Card>
+              ) : (
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                      Action Needed
+                    </p>
+                    <p className="mt-1.5 text-5xl font-bold text-rose-600 dark:text-rose-400">
+                      {summary.actionNeeded}
+                    </p>
+                    <p className="mt-1 text-xs text-rose-500/80 dark:text-rose-400/70">
+                      {summary.actionNeeded === 1 ? "item requires attention" : "items require attention"}
+                    </p>
+                  </div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-950/60 animate-pulse">
+                    <AlertTriangle className="h-5 w-5 text-rose-500 dark:text-rose-400" />
+                  </div>
+                </div>
+              )}
+              {summary.actionNeeded > 0 && (
+                <p className="mt-3 text-[11px] font-medium text-rose-600/70 dark:text-rose-400/60">
+                  Click to filter ↓
+                </p>
+              )}
+            </button>
           </div>
         )}
 
       {/* Controls bar */}
       <div className={`flex flex-wrap items-center gap-2 p-2.5 ${GLASS_PANEL_CLASS}`}>
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
+        <div className="relative flex-1 min-w-[180px] max-w-sm">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search items..."
@@ -817,18 +974,6 @@ export default function StatusBoardClient() {
             className="h-9 border-slate-300/80 bg-white/75 pl-9 shadow-sm focus-visible:ring-teal-200 dark:border-slate-700/80 dark:bg-slate-900/60"
           />
         </div>
-
-        <Select value={conditionFilter} onValueChange={(v) => { setConditionFilter(v); setPage(1); }}>
-          <SelectTrigger className="h-9 w-full sm:w-[140px] border-slate-300/80 bg-white/70 shadow-sm dark:border-slate-700/80 dark:bg-slate-900/60">
-            <SelectValue placeholder="Condition" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Conditions</SelectItem>
-            <SelectItem value="GOOD">Good</SelectItem>
-            <SelectItem value="MONITOR">Monitor</SelectItem>
-            <SelectItem value="ACTION_NEEDED">Action Needed</SelectItem>
-          </SelectContent>
-        </Select>
 
         <Select value={categoryFilter} onValueChange={(v) => { setCategoryFilter(v); setPage(1); }}>
           <SelectTrigger className="h-9 w-full sm:w-[140px] border-slate-300/80 bg-white/70 shadow-sm dark:border-slate-700/80 dark:bg-slate-900/60">
@@ -873,18 +1018,72 @@ export default function StatusBoardClient() {
         >
           <EyeOff className="h-3.5 w-3.5 mr-1" /> Hidden
         </Button>
-
-        <Button
-          variant="outline"
-          size="sm"
-          className={`h-9 border-slate-300/80 bg-white/65 shadow-sm transition-all dark:border-slate-700/80 dark:bg-slate-900/40 ${recomputeMutation.isPending ? "bg-slate-100 dark:bg-slate-900/60" : "hover:-translate-y-0.5 hover:bg-white dark:hover:bg-slate-900"}`}
-          onClick={() => recomputeMutation.mutate()}
-          disabled={recomputeMutation.isPending}
-        >
-          <RefreshCw className={`h-3.5 w-3.5 mr-1 ${recomputeMutation.isPending ? "animate-spin" : ""}`} />
-          {recomputeMutation.isPending ? "Recomputing..." : "Recompute"}
-        </Button>
       </div>
+
+      {summary && (
+        <div className="flex flex-wrap gap-2 lg:hidden">
+          {[
+            { label: "All", value: "all", count: summary.total, color: "border-slate-200 text-slate-700 bg-white/80" },
+            {
+              label: "Action Needed",
+              value: "ACTION_NEEDED",
+              count: summary.actionNeeded,
+              color: "border-rose-200 text-rose-700 bg-rose-50/80 dark:border-rose-800/60 dark:text-rose-300 dark:bg-rose-950/40",
+            },
+            {
+              label: "Monitor",
+              value: "MONITOR",
+              count: summary.monitor,
+              color: "border-amber-200 text-amber-700 bg-amber-50/80 dark:border-amber-800/60 dark:text-amber-300 dark:bg-amber-950/40",
+            },
+            {
+              label: "Good",
+              value: "GOOD",
+              count: summary.good,
+              color: "border-emerald-200 text-emerald-700 bg-emerald-50/80 dark:border-emerald-800/60 dark:text-emerald-300 dark:bg-emerald-950/40",
+            },
+          ].map(({ label, value, count, color }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => { setConditionFilter(value); setPage(1); }}
+              className={cn(
+                "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all",
+                color,
+                conditionFilter === value ? "ring-2 ring-current ring-offset-1" : ""
+              )}
+            >
+              {label}
+              <span className="rounded-full bg-white/60 px-1.5 py-0.5 text-[10px] font-bold dark:bg-black/20">
+                {count}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {conditionFilter !== "all" && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500 dark:text-slate-400">
+            Showing:{" "}
+            <strong className="text-slate-700 dark:text-slate-200">
+              {conditionFilter === "ACTION_NEEDED"
+                ? "Action Needed"
+                : conditionFilter === "MONITOR"
+                ? "Monitor"
+                : "Good"}{" "}
+              items
+            </strong>
+          </span>
+          <button
+            type="button"
+            onClick={() => { setConditionFilter("all"); setPage(1); }}
+            className="text-xs text-teal-600 hover:underline dark:text-teal-400"
+          >
+            Clear filter ✕
+          </button>
+        </div>
+      )}
         </div>
       </div>
 

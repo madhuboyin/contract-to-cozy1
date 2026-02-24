@@ -627,7 +627,27 @@ export async function listBoard(propertyId: string, query: ListBoardQuery) {
     // Display name
     let displayName = item.displayName || '';
     if (!displayName && item.inventoryItem) displayName = item.inventoryItem.name;
-    if (!displayName && item.homeAsset) displayName = item.homeAsset.assetType.replace(/_/g, ' ');
+    if (!displayName && item.homeAsset) {
+      const ASSET_NAME_MAP: Record<string, string> = {
+        HVAC_FURNACE: 'HVAC Furnace',
+        HVAC_AC: 'HVAC Air Conditioner',
+        HVAC_HEAT_PUMP: 'HVAC Heat Pump',
+        WATER_HEATER_TANK: 'Water Heater (Tank)',
+        WATER_HEATER_TANKLESS: 'Water Heater (Tankless)',
+        SAFETY_SMOKE_CO_DETECTORS: 'Smoke & CO Detectors',
+        ELECTRICAL_PANEL: 'Electrical Panel',
+        ROOF: 'Roof',
+        FOUNDATION: 'Foundation',
+        SUMP_PUMP: 'Sump Pump',
+        WATER_SOFTENER: 'Water Softener',
+      };
+      displayName =
+        ASSET_NAME_MAP[item.homeAsset.assetType] ??
+        item.homeAsset.assetType
+          .toLowerCase()
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+    }
 
     // Category
     const category = item.categoryKey || 'OTHER';
