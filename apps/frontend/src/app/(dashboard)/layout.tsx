@@ -580,6 +580,12 @@ function DesktopNav({ user }: { user: User | null }) {
       isActive: (path) => path.startsWith('/dashboard/actions'),
     },
     {
+      name: 'Properties',
+      href: '/dashboard/properties',
+      icon: Building,
+      isActive: (path) => path.startsWith('/dashboard/properties'),
+    },
+    {
       name: 'Rooms',
       href: roomsHref,
       icon: LayoutGrid,
