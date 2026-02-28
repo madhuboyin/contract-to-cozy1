@@ -88,16 +88,19 @@ export function SellerPrepDashboardCard({
             <p>✓ Readiness assessment</p>
           </div>
           
-          <Link href={selectedPropertyId ? `/dashboard/properties/${selectedPropertyId}/seller-prep` : '#'}>
-            <Button 
-              size="sm" 
-              disabled={!selectedPropertyId}
-              className="bg-green-600 hover:bg-green-700"
-            >
+          {selectedPropertyId ? (
+            <Link href={`/dashboard/properties/${selectedPropertyId}/seller-prep`}>
+              <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                Get Started
+                <ArrowRight className="h-4 w-4 ml-1" />
+              </Button>
+            </Link>
+          ) : (
+            <Button size="sm" disabled className="bg-green-600 hover:bg-green-700">
               Get Started
               <ArrowRight className="h-4 w-4 ml-1" />
             </Button>
-          </Link>
+          )}
         </div>
       </CardContent>
     </Card>

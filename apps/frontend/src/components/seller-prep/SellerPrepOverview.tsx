@@ -41,6 +41,9 @@ interface SellerPrepItem {
   roiRange: string;
   costBucket: string;
   status: string;
+  createdAt: string;
+  completedAt?: string;
+  skippedAt?: string;
 }
 
 interface ComparableHome {
@@ -64,6 +67,7 @@ interface SellerPrepOverviewProps {
   overview: {
     items: SellerPrepItem[];
     completionPercent: number;
+    createdAt?: string;
     preferences?: any;
     personalizedSummary?: string;
     interviews?: any[];
@@ -140,6 +144,13 @@ export default function SellerPrepOverview({
     onSuccess: () => {
       toast({ title: "Success", description: "Task updated successfully!" });
     },
+    onError: (_error, _variables, context) => {
+      // Roll back the optimistic update if the API call fails
+      if (context?.previousData) {
+        queryClient.setQueryData(['seller-prep', propertyId], context.previousData);
+      }
+      toast({ title: "Error", description: "Failed to update task. Please try again.", variant: "destructive" });
+    },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['seller-prep', propertyId] });
     },
@@ -200,7 +211,10 @@ export default function SellerPrepOverview({
               </CardContent>
             </Card>
 
-            <ProgressTimeline items={overview.items as any} startDate={new Date().toISOString()} />
+            <ProgressTimeline
+              items={overview.items}
+              startDate={overview.createdAt ?? overview.items[0]?.createdAt ?? new Date().toISOString()}
+            />
           </TabsContent>
 
           {/* TAB 2: Budget & Value Estimates */}
@@ -351,7 +365,7 @@ function CompItem({ comp }: { comp: ComparableHome }) {
       <div className="flex-1">
         <p className="text-sm font-medium text-gray-900">{comp.address}</p>
         <p className="text-xs text-gray-500">
-          {comp.sqft?.toLocaleString()} sqft • {comp.beds} bed • {comp.baths} bath
+          {comp.sqft != null ? `${comp.sqft.toLocaleString()} sqft` : 'sqft N/A'} • {comp.beds != null ? `${comp.beds} bed` : 'beds N/A'} • {comp.baths != null ? `${comp.baths} bath` : 'baths N/A'}
         </p>
       </div>
       <div className="text-right">

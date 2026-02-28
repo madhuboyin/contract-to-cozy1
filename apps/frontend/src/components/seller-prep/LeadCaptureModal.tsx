@@ -117,6 +117,17 @@ export function LeadCaptureModal({
       return;
     }
 
+    // Simple phone validation — must contain at least 7 digits
+    const phoneRegex = /^\+?[\d\s\-().]{7,}$/;
+    if (!phoneRegex.test(formData.phone)) {
+      toast({
+        title: "Invalid phone number",
+        description: "Please enter a valid phone number",
+        variant: "destructive",
+      });
+      return;
+    }
+
     mutation.mutate(formData);
   };
 
@@ -160,7 +171,7 @@ export function LeadCaptureModal({
             <div className="space-y-2">
               <h3 className="text-xl font-semibold">Request Sent!</h3>
               <p className="text-sm text-gray-600">
-                Thanks! We'll connect you with local {leadType === 'AGENT' ? 'agents' : leadType === 'STAGER' ? 'stagers' : 'contractors'} within 24 hours.
+                Thanks! We&apos;ll connect you with local {leadType === 'AGENT' ? 'agents' : leadType === 'STAGER' ? 'stagers' : 'contractors'} within 24 hours.
               </p>
             </div>
 
@@ -168,7 +179,7 @@ export function LeadCaptureModal({
               <p className="text-sm font-medium text-blue-900">What happens next:</p>
               <ul className="text-sm text-blue-800 space-y-1">
                 <li>• Up to 3 verified {leadType === 'AGENT' ? 'agents' : leadType === 'STAGER' ? 'stagers' : 'contractors'} will review your request</li>
-                <li>• You'll receive free quotes via email and/or phone</li>
+                <li>• You&apos;ll receive free quotes via email and/or phone</li>
                 <li>• Compare quotes and choose the best fit</li>
                 <li>• Book directly with your chosen {leadType === 'AGENT' ? 'agent' : leadType === 'STAGER' ? 'stager' : 'contractor'}</li>
               </ul>
@@ -197,7 +208,7 @@ export function LeadCaptureModal({
              'Get Free Contractor Quotes'}
           </DialogTitle>
           <DialogDescription>
-            We'll connect you with up to 3 verified local {leadType === 'AGENT' ? 'agents' : leadType === 'STAGER' ? 'stagers' : 'professionals'} within 24 hours
+            We&apos;ll connect you with up to 3 verified local {leadType === 'AGENT' ? 'agents' : leadType === 'STAGER' ? 'stagers' : 'professionals'} within 24 hours
           </DialogDescription>
         </DialogHeader>
 

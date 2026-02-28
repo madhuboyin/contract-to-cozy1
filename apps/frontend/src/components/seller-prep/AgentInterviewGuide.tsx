@@ -73,13 +73,16 @@ export function AgentInterviewGuide({ propertyId, interviews, onInterviewsChange
 
   const resetToDefault = (agentId: string, questionId: string) => {
     const q = DEFAULT_QUESTIONS.find(dq => dq.id === questionId);
-    handleUpdateNote(agentId, questionId, q?.default || "");
-    
-    onInterviewsChange(interviews.map((a: any) => 
-      a.id === agentId ? { 
-        ...a, 
-        isDefault: { ...a.isDefault, [questionId]: true } 
-      } : a
+    const defaultValue = q?.default || "";
+    // Single dispatch: merge notes + isDefault update to avoid stale-closure conflict
+    onInterviewsChange(interviews.map((a: any) =>
+      a.id === agentId
+        ? {
+            ...a,
+            notes: { ...a.notes, [questionId]: defaultValue },
+            isDefault: { ...a.isDefault, [questionId]: true },
+          }
+        : a
     ));
   };
 
@@ -107,10 +110,14 @@ export function AgentInterviewGuide({ propertyId, interviews, onInterviewsChange
           {interviews.map((agent: any) => (
             <Card key={agent.id} className="border-t-4 border-t-purple-500 relative">
               <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-                <Input 
-                  value={agent.agentName} 
+                <Input
+                  value={agent.agentName}
                   className="font-bold border-none p-0 focus-visible:ring-0 h-auto text-base bg-transparent"
-                  onChange={(e) => handleUpdateNote(agent.id, "name", e.target.value)}
+                  onChange={(e) => onInterviewsChange(
+                    interviews.map((a: any) =>
+                      a.id === agent.id ? { ...a, agentName: e.target.value } : a
+                    )
+                  )}
                 />
                 <Button 
                   variant="ghost" 
@@ -190,7 +197,7 @@ export function AgentInterviewGuide({ propertyId, interviews, onInterviewsChange
             <div className="bg-purple-100 p-3 rounded-full"><Users className="h-6 w-6 text-purple-600" /></div>
             <div>
               <h4 className="font-bold text-purple-900">Compare verified local agents</h4>
-              <p className="text-sm text-purple-800 max-w-md">We've identified top agents who specialize in properties like yours to help you get the best price.</p>
+              <p className="text-sm text-purple-800 max-w-md">We&apos;ve identified top agents who specialize in properties like yours to help you get the best price.</p>
             </div>
           </div>
           <Button className="bg-purple-600 hover:bg-purple-700 shadow-lg px-8 transition-all" onClick={() => setShowLeadModal(true)}>
