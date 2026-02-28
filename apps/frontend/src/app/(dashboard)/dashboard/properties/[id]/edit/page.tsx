@@ -979,7 +979,7 @@ export default function EditPropertyPage() {
                     </FormItem>
                   )}
                 />
-                <div className="basics-address-row-2 lg:col-span-12 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,2fr)_80px_100px] sm:items-end">
+                <div className="basics-address-row-2 lg:col-span-12 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(120px,240px)_80px_110px] sm:items-end">
                   <FormField
                     control={form.control}
                     name="city"
@@ -1018,14 +1018,14 @@ export default function EditPropertyPage() {
                   control={form.control}
                   name="isPrimary"
                   render={({ field }) => (
-                    <FormItem className="set-primary-row lg:col-span-12 flex items-start gap-3 rounded-md border border-black/10 bg-gray-50/80 px-3.5 py-3 dark:border-white/10 dark:bg-slate-900/40">
-                      <div>
-                        <FormLabel>Set as main home</FormLabel>
-                        <CardDescription className="text-[11px] text-gray-500 dark:text-slate-400">You can change this anytime.</CardDescription>
-                      </div>
+                    <FormItem className="set-primary-row lg:col-span-12 mt-3 flex items-center gap-2.5 rounded-md border border-black/10 bg-gray-50 px-3 py-2 dark:border-white/10 dark:bg-slate-900/35">
                       <FormControl>
-                        <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} />
+                        <Checkbox id="field-isPrimary" checked={field.value ?? false} onCheckedChange={field.onChange} />
                       </FormControl>
+                      <div className="set-primary-text flex min-w-0 items-center gap-2">
+                        <FormLabel htmlFor="field-isPrimary" className="set-primary-label m-0 text-[13px] font-medium text-gray-900 dark:text-slate-100">Set as main home</FormLabel>
+                        <CardDescription className="set-primary-hint m-0 text-[11px] text-gray-500 dark:text-slate-400">You can change this anytime.</CardDescription>
+                      </div>
                     </FormItem>
                   )}
                 />
@@ -1391,7 +1391,7 @@ export default function EditPropertyPage() {
                   name="occupantsCount"
                   render={({ field }) => (
                     <FormItem className="occupancy-numeric-field w-[80px] min-w-[80px] max-w-[80px]">
-                      <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">People in home</FormLabel>
+                      <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Occupants</FormLabel>
                       <FormControl><Input id="field-occupantsCount" className="h-9 w-[80px] min-w-[80px] max-w-[80px] px-3 text-center text-[15px] font-medium focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="4" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} /></FormControl>
                       <FormMessage />
                     </FormItem>
