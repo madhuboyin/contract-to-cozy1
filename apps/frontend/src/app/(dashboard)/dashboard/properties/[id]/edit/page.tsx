@@ -263,18 +263,18 @@ const ApplianceBentoGrid = () => {
   });
 
   return (
-    <div className="space-y-2">
-      <div className="hidden md:grid grid-cols-12 gap-3 px-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+    <div className="space-y-3">
+      <div className="hidden md:grid grid-cols-12 gap-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         <span className="col-span-6">Appliance</span>
         <span className="col-span-2">Year</span>
         <span className="col-span-3">Status</span>
         <span className="col-span-1 text-right">Remove</span>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-3">
         {fields.map((field, index) => (
           <div
             key={field.id}
-            className="grid grid-cols-1 md:grid-cols-12 items-start gap-3 rounded-md border bg-white p-3 dark:bg-slate-900/30"
+            className="grid grid-cols-1 md:grid-cols-12 items-start gap-3 rounded-md border bg-white p-4 dark:bg-slate-900/30"
           >
             <FormField
               control={control}
@@ -344,7 +344,7 @@ const ApplianceBentoGrid = () => {
                 )}
               />
 
-            <div className="md:col-span-3 flex items-center min-h-10">
+            <div className="md:col-span-3 flex items-center min-h-10 pt-1 md:pt-0">
               {(() => {
                 const yearVal = watch(`appliances.${index}.installYear`);
                 const feedback = getInstallYearFeedback(Number(yearVal));
@@ -1217,7 +1217,7 @@ export default function EditPropertyPage() {
               forceExpandOnMobile={startSectionId === "safety"}
               headerChip={startSectionId === "safety" ? <FieldNudgeChip variant="start" /> : undefined}
             >
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {(Object.keys(CHECKBOX_META) as CheckboxField[]).map((fieldName) => {
                   const meta = CHECKBOX_META[fieldName];
                   const styles = CHECKBOX_IMPACT_STYLES[meta.impact];
@@ -1234,7 +1234,7 @@ export default function EditPropertyPage() {
                               <label
                                 htmlFor={`checkbox-${fieldName}`}
                                 className={cn(
-                                  "flex items-center justify-between gap-3 rounded-md border px-3 py-2.5",
+                                  "flex items-center justify-between gap-3 rounded-md border p-4",
                                   isChecked ? styles.checked : styles.unchecked,
                                 )}
                               >

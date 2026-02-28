@@ -23,8 +23,8 @@ export default function PropertyEditHeaderNudge({
   const reduceMotion = useReducedMotion();
 
   return (
-    <div className={["rounded-lg border border-teal-100 bg-teal-50/70 p-3.5 dark:border-teal-900/40 dark:bg-teal-950/20", className].filter(Boolean).join(" ")}>
-      <div className="flex flex-col gap-2.5 md:flex-row md:items-start md:justify-between">
+    <div className={["rounded-lg border border-teal-100 bg-teal-50/70 p-3 dark:border-teal-900/40 dark:bg-teal-950/20", className].filter(Boolean).join(" ")}>
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div className="space-y-1">
           <h2 className="text-base font-semibold text-foreground">Update home details</h2>
           <p className="text-sm text-muted-foreground">A few updates help us give better reminders and tips.</p>

@@ -45,7 +45,7 @@ export default function PropertyEditSection({
       data-property-section={id}
       className={cn("border-l-4 border-l-teal-400/70 dark:border-l-teal-600/50", className)}
     >
-      <CardHeader className="space-y-2 p-5 pb-3 sm:p-6 sm:pb-3">
+      <CardHeader className="space-y-1.5 p-5 pb-3 sm:p-6 sm:pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1 min-w-0">
             <div className="flex items-center gap-2">
