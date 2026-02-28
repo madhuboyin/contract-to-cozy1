@@ -43,16 +43,19 @@ export default function PropertyEditSection({
     <Card
       id={id}
       data-property-section={id}
-      className={cn("border-l-4 border-l-teal-400/70 dark:border-l-teal-600/50", className)}
+      className={cn(
+        "border border-black/10 bg-white shadow-sm dark:border-white/10 dark:bg-slate-950/40",
+        className
+      )}
     >
       <CardHeader className="space-y-1.5 p-5 pb-3 sm:p-6 sm:pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1 min-w-0">
             <div className="flex items-center gap-2">
-              <CardTitle className="text-base">{title}</CardTitle>
+              <CardTitle className="text-base font-semibold text-gray-900 dark:text-slate-100">{title}</CardTitle>
               {headerChip}
             </div>
-            <CardDescription className="text-sm">{helperText}</CardDescription>
+            <CardDescription className="text-sm text-gray-600 dark:text-slate-400">{helperText}</CardDescription>
           </div>
 
           <div className="flex items-center gap-1">

@@ -263,8 +263,8 @@ const ApplianceBentoGrid = () => {
   });
 
   return (
-    <div className="space-y-3">
-      <div className="hidden md:grid grid-cols-12 gap-3 px-4 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+      <div className="space-y-3">
+      <div className="hidden md:grid grid-cols-12 gap-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
         <span className="col-span-6">Appliance</span>
         <span className="col-span-2">Year</span>
         <span className="col-span-3">Status</span>
@@ -274,7 +274,7 @@ const ApplianceBentoGrid = () => {
         {fields.map((field, index) => (
           <div
             key={field.id}
-            className="grid grid-cols-1 md:grid-cols-12 items-start gap-3 rounded-md border bg-white p-4 dark:bg-slate-900/30"
+            className="grid grid-cols-1 items-start gap-3 rounded-md border border-black/5 bg-white p-4 shadow-sm md:grid-cols-12 dark:border-white/10 dark:bg-slate-900/30"
           >
             <FormField
               control={control}
@@ -284,7 +284,7 @@ const ApplianceBentoGrid = () => {
                   <FormLabel className="text-xs">Appliance</FormLabel>
                   <Select onValueChange={selectField.onChange} value={selectField.value}>
                     <FormControl>
-                      <SelectTrigger className={cn("h-10 text-sm", fieldSizeClass("md"))}>
+                      <SelectTrigger className={cn("h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40", fieldSizeClass("md"))}>
                         <SelectValue placeholder="Select appliance type">
                           {selectField.value ? formatApplianceLabel(selectField.value) : "Select appliance type"}
                         </SelectValue>
@@ -328,7 +328,7 @@ const ApplianceBentoGrid = () => {
                       {...yearField}
                       value={yearField.value ?? ""}
                       onChange={(e) => yearField.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))}
-                      className={cn("h-10 text-sm", fieldSizeClass("xs"))}
+                      className={cn("h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40", fieldSizeClass("xs"))}
                     />
                   </FormControl>
                   {!yearField.value && Number.isFinite(Number(watch("yearBuilt"))) && Number(watch("yearBuilt")) >= 1900 ? (
@@ -352,10 +352,10 @@ const ApplianceBentoGrid = () => {
                 return (
                   <span
                     className={cn(
-                      "inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full w-fit",
-                      feedback.color === "emerald" && "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-                      feedback.color === "amber" && "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-                      feedback.color === "rose" && "bg-rose-50 text-rose-700 font-semibold dark:bg-rose-900/30 dark:text-rose-400",
+                      "inline-flex w-fit items-center rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none",
+                      feedback.color === "emerald" && "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300",
+                      feedback.color === "amber" && "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-300",
+                      feedback.color === "rose" && "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300",
                       feedback.age > 20 && "animate-pulse",
                     )}
                   >
@@ -799,32 +799,32 @@ export default function EditPropertyPage() {
 
   const CHECKBOX_IMPACT_STYLES = {
     positive: {
-      checked: "border-emerald-300 bg-emerald-50/60 dark:border-emerald-700/50 dark:bg-emerald-950/20",
-      unchecked: "border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900/30",
+      checked: "border-emerald-500/20 bg-emerald-500/10 dark:border-emerald-400/20 dark:bg-emerald-400/10",
+      unchecked: "border-black/5 bg-white dark:border-white/10 dark:bg-slate-900/30",
       dot: "bg-emerald-400",
-      hint: "text-emerald-600 dark:text-emerald-400",
+      hint: "text-gray-500 dark:text-slate-400",
     },
     negative: {
-      checked: "border-amber-300 bg-amber-50/60 dark:border-amber-700/50 dark:bg-amber-950/20",
-      unchecked: "border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900/30",
+      checked: "border-amber-500/20 bg-amber-500/10 dark:border-amber-400/20 dark:bg-amber-400/10",
+      unchecked: "border-black/5 bg-white dark:border-white/10 dark:bg-slate-900/30",
       dot: "bg-amber-400",
-      hint: "text-amber-600 dark:text-amber-400",
+      hint: "text-gray-500 dark:text-slate-400",
     },
     neutral: {
-      checked: "border-blue-200 bg-blue-50/40 dark:border-blue-800/50 dark:bg-blue-950/20",
-      unchecked: "border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900/30",
+      checked: "border-slate-500/20 bg-slate-500/10 dark:border-slate-400/20 dark:bg-slate-400/10",
+      unchecked: "border-black/5 bg-white dark:border-white/10 dark:bg-slate-900/30",
       dot: "bg-blue-400",
-      hint: "text-blue-600 dark:text-blue-400",
+      hint: "text-gray-500 dark:text-slate-400",
     },
   } as const;
 
   return (
     <DashboardShell>
       <div className="mx-auto w-full max-w-[1200px] px-4 sm:px-6 lg:px-8">
-        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border bg-background/95 px-4 py-3">
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-black/5 bg-white/95 px-4 py-2.5 shadow-sm dark:border-white/10 dark:bg-slate-950/40">
           <div className="flex items-center gap-2 min-w-0">
             <HomeIcon className="h-5 w-5 text-primary shrink-0" />
-            <h1 className="truncate text-base font-semibold text-foreground">
+            <h1 className="truncate text-base font-semibold text-gray-900 dark:text-slate-100">
               {property?.name || property?.address || "Property"}
             </h1>
           </div>
@@ -834,7 +834,7 @@ export default function EditPropertyPage() {
               size="sm"
               onClick={() => router.push(contextualReturnTo ?? `/dashboard/properties/${propertyId}`)}
               disabled={updateMutation.isPending}
-              className="h-10"
+              className="h-9 border-black/10 text-gray-700 hover:bg-black/[0.02] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.03]"
             >
               <X className="h-4 w-4 mr-1.5" />
               {searchParams.get("from") === "status-board" ? "Back" : "Cancel"}
@@ -844,7 +844,7 @@ export default function EditPropertyPage() {
               onClick={form.handleSubmit(onSubmit)}
               disabled={updateMutation.isPending}
               type="submit"
-              className="h-10"
+              className="h-9 shadow-sm"
             >
               {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Save className="h-4 w-4 mr-1.5" />}
               {updateMutation.isPending ? "Saving..." : "Save Changes"}
@@ -897,7 +897,7 @@ export default function EditPropertyPage() {
                   render={({ field }) => (
                     <FormItem className="lg:col-span-6">
                       <FormLabel>Home nickname</FormLabel>
-                      <FormControl><Input id="field-name" className="h-10 text-sm" placeholder="Main Home" {...field} value={field.value || ""} /></FormControl>
+                      <FormControl><Input id="field-name" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="Main Home" {...field} value={field.value || ""} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -908,7 +908,7 @@ export default function EditPropertyPage() {
                   render={({ field }) => (
                     <FormItem className="lg:col-span-6">
                       <FormLabel>Street address</FormLabel>
-                      <FormControl><Input id="field-address" className="h-10 text-sm" placeholder="123 Main St" {...field} /></FormControl>
+                      <FormControl><Input id="field-address" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="123 Main St" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -919,7 +919,7 @@ export default function EditPropertyPage() {
                   render={({ field }) => (
                     <FormItem className="lg:col-span-7">
                       <FormLabel>City</FormLabel>
-                      <FormControl><Input id="field-city" className="h-10 text-sm" placeholder="Princeton" {...field} /></FormControl>
+                      <FormControl><Input id="field-city" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="Princeton" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -931,7 +931,7 @@ export default function EditPropertyPage() {
                     render={({ field }) => (
                       <FormItem className={fieldSizeClass("xs")}>
                         <FormLabel>State</FormLabel>
-                        <FormControl><Input id="field-state" className="h-10 text-sm" placeholder="NJ" {...field} maxLength={2} /></FormControl>
+                        <FormControl><Input id="field-state" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="NJ" {...field} maxLength={2} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -942,7 +942,7 @@ export default function EditPropertyPage() {
                     render={({ field }) => (
                       <FormItem className={fieldSizeClass("sm")}>
                         <FormLabel>Zip</FormLabel>
-                        <FormControl><Input id="field-zipCode" className="h-10 text-sm" placeholder="08540" {...field} /></FormControl>
+                        <FormControl><Input id="field-zipCode" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="08540" {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -952,10 +952,10 @@ export default function EditPropertyPage() {
                   control={form.control}
                   name="isPrimary"
                   render={({ field }) => (
-                    <FormItem className="lg:col-span-12 flex items-center justify-between rounded-md border px-3 py-2">
+                    <FormItem className="lg:col-span-12 flex items-center justify-between rounded-md border border-black/5 bg-gray-50/40 px-3 py-2 dark:border-white/10 dark:bg-slate-900/30">
                       <div>
                         <FormLabel>Set as main home</FormLabel>
-                        <CardDescription className="text-xs">You can change this anytime.</CardDescription>
+                        <CardDescription className="text-[11px] text-gray-500 dark:text-slate-400">You can change this anytime.</CardDescription>
                       </div>
                       <FormControl>
                         <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} />
@@ -988,7 +988,7 @@ export default function EditPropertyPage() {
                         </div>
                         <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                           <FormControl>
-                            <SelectTrigger id="field-propertyType" className="h-10 text-sm"><SelectValue placeholder="Select type" /></SelectTrigger>
+                            <SelectTrigger id="field-propertyType" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
                           </FormControl>
                           <SelectContent>
                             {Object.values(PropertyTypes).map((type) => (
@@ -1010,7 +1010,7 @@ export default function EditPropertyPage() {
                           {isRecommended("propertySize") ? <FieldNudgeChip variant="recommended" /> : null}
                         </div>
                         <FormControl>
-                          <Input id="field-propertySize" className="h-10 text-sm" placeholder="e.g., 2500" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                          <Input id="field-propertySize" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="e.g., 2500" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1026,7 +1026,7 @@ export default function EditPropertyPage() {
                           {isRecommended("yearBuilt") ? <FieldNudgeChip variant="recommended" /> : null}
                         </div>
                         <FormControl>
-                          <Input id="field-yearBuilt" className="h-10 text-sm" placeholder="e.g., 1995" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                          <Input id="field-yearBuilt" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="e.g., 1995" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1034,9 +1034,9 @@ export default function EditPropertyPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  <div className="rounded-md border p-4 space-y-3">
-                    <p className="text-sm font-medium">HVAC</p>
+                <div className="grid grid-cols-1 gap-4 border-t border-black/5 pt-4 md:grid-cols-2 xl:grid-cols-3 dark:border-white/10">
+                  <div className="space-y-3 rounded-md border border-black/5 bg-gray-50/50 p-4 shadow-sm dark:border-white/10 dark:bg-slate-900/30">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">HVAC</p>
                     <FormField
                       control={form.control}
                       name="heatingType"
@@ -1045,7 +1045,7 @@ export default function EditPropertyPage() {
                           <FormLabel>Heating type</FormLabel>
                           <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                             <FormControl>
-                              <SelectTrigger id="field-heatingType" className="h-10 text-sm"><SelectValue placeholder="Select type" /></SelectTrigger>
+                              <SelectTrigger id="field-heatingType" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
                             </FormControl>
                             <SelectContent>
                               {Object.values(HeatingTypes).map((type) => (
@@ -1065,7 +1065,7 @@ export default function EditPropertyPage() {
                           <FormLabel>Cooling type</FormLabel>
                           <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                             <FormControl>
-                              <SelectTrigger id="field-coolingType" className="h-10 text-sm"><SelectValue placeholder="Select type" /></SelectTrigger>
+                              <SelectTrigger id="field-coolingType" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
                             </FormControl>
                             <SelectContent>
                               {Object.values(CoolingTypes).map((type) => (
@@ -1087,17 +1087,17 @@ export default function EditPropertyPage() {
                             {isRecommended("hvacInstallYear") ? <FieldNudgeChip variant="recommended" /> : null}
                           </div>
                           <FormControl>
-                            <Input id="field-hvacInstallYear" className="h-10 text-sm" placeholder="2018" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                            <Input id="field-hvacInstallYear" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2018" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
                           </FormControl>
                           {(() => {
                             const fb = getInstallYearFeedback(field.value);
                             if (!fb) return null;
                             const colorMap = {
-                              emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50",
-                              amber: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50",
-                              rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800/50",
+                              emerald: "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300",
+                              amber: "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-300",
+                              rose: "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300",
                             };
-                            return <span className={cn("mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium", colorMap[fb.color!])}>{fb.label}</span>;
+                            return <span className={cn("mt-2 inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none", colorMap[fb.color!])}>{fb.label}</span>;
                           })()}
                           <FormMessage />
                         </FormItem>
@@ -1105,8 +1105,8 @@ export default function EditPropertyPage() {
                     />
                   </div>
 
-                  <div className="rounded-md border p-4 space-y-3">
-                    <p className="text-sm font-medium">Water heater</p>
+                  <div className="space-y-3 rounded-md border border-black/5 bg-gray-50/50 p-4 shadow-sm dark:border-white/10 dark:bg-slate-900/30">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Water heater</p>
                     <FormField
                       control={form.control}
                       name="waterHeaterType"
@@ -1115,7 +1115,7 @@ export default function EditPropertyPage() {
                           <FormLabel>Type</FormLabel>
                           <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                             <FormControl>
-                              <SelectTrigger id="field-waterHeaterType" className="h-10 text-sm"><SelectValue placeholder="Select type" /></SelectTrigger>
+                              <SelectTrigger id="field-waterHeaterType" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
                             </FormControl>
                             <SelectContent>
                               {Object.values(WaterHeaterTypes).map((type) => (
@@ -1137,17 +1137,17 @@ export default function EditPropertyPage() {
                             {isRecommended("waterHeaterInstallYear") ? <FieldNudgeChip variant="recommended" /> : null}
                           </div>
                           <FormControl>
-                            <Input id="field-waterHeaterInstallYear" className="h-10 text-sm" placeholder="2020" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                            <Input id="field-waterHeaterInstallYear" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2020" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
                           </FormControl>
                           {(() => {
                             const fb = getInstallYearFeedback(field.value);
                             if (!fb) return null;
                             const colorMap = {
-                              emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50",
-                              amber: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50",
-                              rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800/50",
+                              emerald: "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300",
+                              amber: "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-300",
+                              rose: "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300",
                             };
-                            return <span className={cn("mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium", colorMap[fb.color!])}>{fb.label}</span>;
+                            return <span className={cn("mt-2 inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none", colorMap[fb.color!])}>{fb.label}</span>;
                           })()}
                           <FormMessage />
                         </FormItem>
@@ -1155,8 +1155,8 @@ export default function EditPropertyPage() {
                     />
                   </div>
 
-                  <div className="rounded-md border p-4 space-y-3">
-                    <p className="text-sm font-medium">Roof</p>
+                  <div className="space-y-3 rounded-md border border-black/5 bg-gray-50/50 p-4 shadow-sm dark:border-white/10 dark:bg-slate-900/30">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Roof</p>
                     <FormField
                       control={form.control}
                       name="roofType"
@@ -1165,7 +1165,7 @@ export default function EditPropertyPage() {
                           <FormLabel>Roof type</FormLabel>
                           <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                             <FormControl>
-                              <SelectTrigger id="field-roofType" className="h-10 text-sm"><SelectValue placeholder="Select type" /></SelectTrigger>
+                              <SelectTrigger id="field-roofType" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
                             </FormControl>
                             <SelectContent>
                               {Object.values(RoofTypes).map((type) => (
@@ -1187,17 +1187,17 @@ export default function EditPropertyPage() {
                             {isRecommended("roofReplacementYear") ? <FieldNudgeChip variant="recommended" /> : null}
                           </div>
                           <FormControl>
-                            <Input id="field-roofReplacementYear" className="h-10 text-sm" placeholder="2010" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                            <Input id="field-roofReplacementYear" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2010" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
                           </FormControl>
                           {(() => {
                             const fb = getInstallYearFeedback(field.value);
                             if (!fb) return null;
                             const colorMap = {
-                              emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50",
-                              amber: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50",
-                              rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800/50",
+                              emerald: "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300",
+                              amber: "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-300",
+                              rose: "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300",
                             };
-                            return <span className={cn("mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium", colorMap[fb.color!])}>{fb.label}</span>;
+                            return <span className={cn("mt-2 inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none", colorMap[fb.color!])}>{fb.label}</span>;
                           })()}
                           <FormMessage />
                         </FormItem>
@@ -1234,15 +1234,15 @@ export default function EditPropertyPage() {
                               <label
                                 htmlFor={`checkbox-${fieldName}`}
                                 className={cn(
-                                  "flex items-center justify-between gap-3 rounded-md border p-4",
+                                  "flex items-center justify-between gap-3 rounded-md border p-3.5 transition-colors hover:border-black/10 dark:hover:border-white/20",
                                   isChecked ? styles.checked : styles.unchecked,
                                 )}
                               >
                                 <div className="min-w-0">
-                                  <p className="text-sm font-medium text-foreground">{meta.label}</p>
-                                  <p className="text-xs text-muted-foreground">{meta.hint}</p>
+                                  <p className="text-sm font-medium text-gray-800 dark:text-slate-200">{meta.label}</p>
+                                  <p className="text-xs text-gray-500 dark:text-slate-400">{meta.hint}</p>
                                 </div>
-                                <Checkbox id={`checkbox-${fieldName}`} checked={isChecked} onCheckedChange={field.onChange} />
+                                <Checkbox id={`checkbox-${fieldName}`} checked={isChecked} onCheckedChange={field.onChange} className="h-4 w-4 border-black/20 data-[state=checked]:border-emerald-500 data-[state=checked]:bg-emerald-500 dark:border-white/20" />
                               </label>
                             </FormControl>
                           </FormItem>
@@ -1270,7 +1270,7 @@ export default function EditPropertyPage() {
                   render={({ field }) => (
                     <FormItem className={fieldSizeClass("sm")}>
                       <FormLabel>Bedrooms</FormLabel>
-                      <FormControl><Input id="field-bedrooms" className="h-10 text-sm" placeholder="3" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} /></FormControl>
+                      <FormControl><Input id="field-bedrooms" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="3" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -1281,7 +1281,7 @@ export default function EditPropertyPage() {
                   render={({ field }) => (
                     <FormItem className={fieldSizeClass("sm")}>
                       <FormLabel>Bathrooms</FormLabel>
-                      <FormControl><Input id="field-bathrooms" className="h-10 text-sm" placeholder="2.5" type="number" step="0.5" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl>
+                      <FormControl><Input id="field-bathrooms" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="2.5" type="number" step="0.5" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -1292,7 +1292,7 @@ export default function EditPropertyPage() {
                   render={({ field }) => (
                     <FormItem className={fieldSizeClass("sm")}>
                       <FormLabel>People in home</FormLabel>
-                      <FormControl><Input id="field-occupantsCount" className="h-10 text-sm" placeholder="4" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} /></FormControl>
+                      <FormControl><Input id="field-occupantsCount" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="4" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -1305,7 +1305,7 @@ export default function EditPropertyPage() {
                       <FormLabel>How you use this property</FormLabel>
                       <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                         <FormControl>
-                          <SelectTrigger id="field-ownershipType" className="h-10 text-sm"><SelectValue placeholder="Select type" /></SelectTrigger>
+                          <SelectTrigger id="field-ownershipType" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
                         </FormControl>
                         <SelectContent>
                           {Object.values(OwnershipTypes).map((type) => (
@@ -1330,7 +1330,7 @@ export default function EditPropertyPage() {
               headerChip={startSectionId === "appliances" ? <FieldNudgeChip variant="start" /> : <FieldNudgeChip variant="optional" />}
             >
               <div className="space-y-3">
-                <div className="rounded-md border border-dashed p-3">
+                <div className="rounded-md border border-dashed border-black/10 bg-gray-50/40 p-3 dark:border-white/10 dark:bg-slate-900/30">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       {applianceCount > 0 ? (
@@ -1355,14 +1355,14 @@ export default function EditPropertyPage() {
               </div>
             </PropertyEditSection>
 
-            <div className="hidden md:flex items-center justify-between rounded-lg border px-4 py-3">
-              <p className="text-sm text-muted-foreground">Takes a second. You can edit anytime.</p>
+            <div className="hidden md:flex items-center justify-between rounded-lg border border-black/10 bg-white/90 px-4 py-3 shadow-sm dark:border-white/10 dark:bg-slate-950/40">
+              <p className="text-sm text-gray-600 dark:text-slate-400">Takes a second. You can edit anytime.</p>
               <div className="flex items-center gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => router.back()} disabled={updateMutation.isPending} className="h-10">
+                <Button type="button" variant="outline" size="sm" onClick={() => router.back()} disabled={updateMutation.isPending} className="h-10 border-black/10 text-gray-700 hover:bg-black/[0.02] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.03]">
                   <X className="mr-1.5 h-4 w-4" />
                   Cancel
                 </Button>
-                <Button type="submit" size="sm" disabled={updateMutation.isPending} className="h-10 min-w-[130px]">
+                <Button type="submit" size="sm" disabled={updateMutation.isPending} className="h-10 min-w-[130px] shadow-sm">
                   {updateMutation.isPending ? (
                     <>
                       <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
