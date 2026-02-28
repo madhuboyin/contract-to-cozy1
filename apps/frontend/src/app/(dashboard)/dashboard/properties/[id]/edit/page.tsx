@@ -784,7 +784,7 @@ export default function EditPropertyPage() {
                                 control={form.control}
                                 name="heatingType"
                                 render={({ field }) => (
-                                    <FormItem className="flex-1 min-w-0">
+                                    <FormItem className="flex-1 min-w-0 max-w-xs">
                                         <FormLabel>Heating Type *</FormLabel>
                                         <Select
                                             onValueChange={(value) => field.onChange(value === "" ? null : value)}
@@ -874,7 +874,7 @@ export default function EditPropertyPage() {
                                 control={form.control}
                                 name="waterHeaterType"
                                 render={({ field }) => (
-                                    <FormItem className="flex-1 min-w-0">
+                                    <FormItem className="flex-1 min-w-0 max-w-xs">
                                         <FormLabel>Water Heater Type *</FormLabel>
                                         <Select
                                             onValueChange={(value) => field.onChange(value === "" ? null : value)}
@@ -933,7 +933,7 @@ export default function EditPropertyPage() {
                                 control={form.control}
                                 name="roofType"
                                 render={({ field }) => (
-                                    <FormItem className="flex-1 min-w-0">
+                                    <FormItem className="flex-1 min-w-0 max-w-xs">
                                         <FormLabel>Roof Type *</FormLabel>
                                         <Select
                                             onValueChange={(value) => field.onChange(value === "" ? null : value)}
