@@ -571,27 +571,6 @@ export default function EditPropertyPage() {
     updateMutation.mutate(data);
   };
 
-  if (isLoadingProperty) {
-    return (
-      <DashboardShell>
-        <div className="h-64 rounded-lg bg-gray-100 animate-pulse flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </DashboardShell>
-    );
-  }
-
-  if (!property) {
-    return (
-      <DashboardShell>
-        <PageHeader>
-          <PageHeaderHeading>Property Not Found</PageHeaderHeading>
-          <Card className="mt-4"><CardContent className="py-6">The property you are looking for does not exist or you do not have permission to view it.</CardContent></Card>
-        </PageHeader>
-      </DashboardShell>
-    );
-  }
-
   const hasErrors = Object.keys(form.formState.errors).length > 0;
   const [
     watchName,
@@ -856,6 +835,27 @@ export default function EditPropertyPage() {
       hint: "text-gray-500 dark:text-slate-400",
     },
   } as const;
+
+  if (isLoadingProperty) {
+    return (
+      <DashboardShell>
+        <div className="h-64 rounded-lg bg-gray-100 animate-pulse flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardShell>
+    );
+  }
+
+  if (!property) {
+    return (
+      <DashboardShell>
+        <PageHeader>
+          <PageHeaderHeading>Property Not Found</PageHeaderHeading>
+          <Card className="mt-4"><CardContent className="py-6">The property you are looking for does not exist or you do not have permission to view it.</CardContent></Card>
+        </PageHeader>
+      </DashboardShell>
+    );
+  }
 
   return (
     <DashboardShell>
