@@ -41,7 +41,7 @@ interface SellerPrepItem {
   roiRange: string;
   costBucket: string;
   status: string;
-  createdAt: string;
+  createdAt?: string;
   completedAt?: string;
   skippedAt?: string;
 }

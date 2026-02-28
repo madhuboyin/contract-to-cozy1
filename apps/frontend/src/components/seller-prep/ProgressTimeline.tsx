@@ -18,7 +18,7 @@ interface TimelineItem {
   status: string;
   completedAt?: string;
   skippedAt?: string;
-  createdAt: string;
+  createdAt?: string;
 }
 
 interface ProgressTimelineProps {
