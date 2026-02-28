@@ -3,14 +3,15 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { FinancialEfficiencyReport, PropertyScoreSeries } from "@/types"; 
 import { api } from "@/lib/api/client";
 import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading } from "@/components/page-header";
 import { toast } from "@/components/ui/use-toast";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { DollarSign, Shield, Loader2, Leaf, BarChart, ArrowLeft, RotateCw } from "lucide-react";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { DollarSign, Shield, Loader2, Leaf, BarChart, ArrowLeft, RotateCw, CircleDashed, Info, Wrench, Zap, BookOpen, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -238,6 +239,41 @@ const CostBreakdownTable = ({ report }: { report: FinancialEfficiencyReport }) =
     );
 }
 
+interface SetupStepProps {
+    step: number;
+    icon: React.ElementType;
+    title: string;
+    description: string;
+    href: string;
+    ctaLabel: string;
+}
+
+function SetupStep({ step, icon: Icon, title, description, href, ctaLabel }: SetupStepProps) {
+    return (
+        <div className="flex items-start gap-4 rounded-xl border border-gray-100 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/30">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-50 border border-teal-200 dark:bg-teal-950/40 dark:border-teal-800/50">
+                <span className="text-xs font-bold text-teal-600 dark:text-teal-400">{step}</span>
+            </div>
+
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                    <Icon className="h-4 w-4 text-gray-500 dark:text-slate-400 shrink-0" />
+                    <p className="text-sm font-semibold text-gray-800 dark:text-slate-200">{title}</p>
+                </div>
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400 leading-relaxed">
+                    {description}
+                </p>
+            </div>
+
+            <Link href={href} className="shrink-0">
+                <Button variant="outline" size="sm" className="text-teal-700 border-teal-200 hover:bg-teal-50 dark:text-teal-300 dark:border-teal-800/50 dark:hover:bg-teal-950/40">
+                    {ctaLabel} →
+                </Button>
+            </Link>
+        </div>
+    );
+}
+
 
 // --- Main Page Component ---
 export default function FinancialEfficiencyPage() {
@@ -327,6 +363,7 @@ export default function FinancialEfficiencyPage() {
 
     const actualTotalCost = (report?.actualInsuranceCost || 0) + (report?.actualUtilityCost || 0) + (report?.actualWarrantyCost || 0);
     const marketAverageTotal = report?.marketAverageTotal || 0;
+    const isZeroState = score === 0 && actualTotalCost === 0 && !isQueued && !isCalculating;
     
     const formattedExposure = formatCurrency(actualTotalCost);
     // Score is based on inverse of badness, so a score of 0 (worst efficiency) maps to 100 on the gauge (high risk)
@@ -379,10 +416,95 @@ export default function FinancialEfficiencyPage() {
         
         // Fallback when not loading and no data found
         return (
-            <Card className="md:col-span-4">
-                <CardHeader><CardTitle>No Financial Data Available</CardTitle></CardHeader>
-                <CardContent><CardDescription>Please ensure you have entered your property&apos;s insurance, warranty, and utility expenses in the Home Management section to generate this report. You can trigger a calculation once the data is entered.</CardDescription></CardContent>
-            </Card>
+            <div id="setup-checklist" className="space-y-4">
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 dark:bg-blue-950/30 dark:border-blue-800/50">
+                    <div className="flex items-start gap-3">
+                        <Info className="h-4 w-4 mt-0.5 text-blue-500 shrink-0" />
+                        <div>
+                            <p className="text-sm font-semibold text-blue-800 dark:text-blue-200">
+                                Your score is 0 because no financial data has been linked yet
+                            </p>
+                            <p className="mt-1 text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
+                                The Financial Efficiency Score compares your actual home costs against regional benchmarks.
+                                Link your three cost categories below, then generate your report.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <Card>
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-base font-semibold">
+                            3 steps to unlock your score
+                        </CardTitle>
+                        <CardDescription>
+                            Complete all three to generate an accurate Financial Efficiency Score.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        <SetupStep
+                            step={1}
+                            icon={Shield}
+                            title="Link your insurance policy"
+                            description="Your annual homeowners insurance premium — used to compare against regional averages."
+                            href={`/dashboard/insurance?propertyId=${propertyId}&from=financial-efficiency`}
+                            ctaLabel="Add Insurance"
+                        />
+
+                        <SetupStep
+                            step={2}
+                            icon={Wrench}
+                            title="Add warranty costs"
+                            description="Annual cost of any home warranty plans or extended appliance warranties."
+                            href={`/dashboard/warranties?propertyId=${propertyId}&from=financial-efficiency`}
+                            ctaLabel="Add Warranties"
+                        />
+
+                        <SetupStep
+                            step={3}
+                            icon={Zap}
+                            title="Log utility expenses"
+                            description="Annual electricity, gas, and water costs. Estimates are fine to start."
+                            href={`/dashboard/expenses?propertyId=${propertyId}&from=financial-efficiency`}
+                            ctaLabel="Add Utilities"
+                        />
+                    </CardContent>
+                    <CardFooter className="border-t pt-4">
+                        <div className="w-full">
+                            <Button
+                                className="w-full"
+                                onClick={handleRecalculate}
+                                disabled={isCalculating || isQueued}
+                            >
+                                <RotateCw className="h-4 w-4 mr-2" />
+                                Generate Report
+                            </Button>
+                            <p className="mt-2 text-xs text-muted-foreground text-center w-full">
+                                You can generate a partial report with any data you&apos;ve added so far.
+                            </p>
+                        </div>
+                    </CardFooter>
+                </Card>
+
+                <details className="rounded-xl border border-gray-100 bg-gray-50 dark:border-slate-700 dark:bg-slate-900/40">
+                    <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800/40 rounded-xl list-none flex items-center justify-between">
+                        <span className="flex items-center gap-2">
+                            <BookOpen className="h-4 w-4 text-gray-500" />
+                            How the Financial Efficiency Score is calculated
+                        </span>
+                        <ChevronDown className="h-4 w-4 text-gray-400" />
+                    </summary>
+                    <div className="px-4 pb-4 pt-2 space-y-2 text-xs text-gray-600 dark:text-slate-400">
+                        <p>Your score (0–100) is calculated by comparing your <strong>actual annual home costs</strong> against the <strong>regional market average</strong> for similar properties.</p>
+                        <ul className="space-y-1 pl-3 list-disc">
+                            <li><strong>Insurance:</strong> Annual homeowners insurance premium</li>
+                            <li><strong>Warranties:</strong> Home warranty plans and extended coverage</li>
+                            <li><strong>Utilities:</strong> Electricity, gas, and water annual spend</li>
+                        </ul>
+                        <p>A score of <strong>100</strong> means your costs are at or below the market average. Scores below 75 indicate above-average spending with room to optimise.</p>
+                    </div>
+                </details>
+            </div>
         );
     };
 
@@ -413,19 +535,35 @@ export default function FinancialEfficiencyPage() {
                     <CardContent>
                         {isCalculating || isQueued ? (
                             <div className="flex items-center space-x-2 text-lg text-muted-foreground">
-                                <Loader2 className="h-4 w-4 animate-spin" /> 
-                                {isQueued ? 'Queued for Calculation' : 'Calculating...'}
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <span>{isQueued ? 'Queued...' : 'Calculating...'}</span>
+                            </div>
+                        ) : isZeroState ? (
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <p className="text-4xl font-bold text-slate-300 dark:text-slate-600">—</p>
+                                </div>
+                                <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-1.5 dark:bg-amber-950/30 dark:border-amber-800/50">
+                                    <CircleDashed className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                    <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">Setup needed</span>
+                                </div>
+                                <p className="text-xs text-muted-foreground leading-relaxed">
+                                    Add your insurance, warranty, and utility costs to generate your score.
+                                </p>
                             </div>
                         ) : (
-                            <React.Fragment>
-                                <div className="text-4xl font-extrabold flex items-baseline">
-                                    {score.toFixed(0)}
-                                    <span className="text-xl font-semibold text-muted-foreground ml-1">/100</span>
-                                </div>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                    Status: <Badge variant={getEfficiencyDetails(score).badgeVariant as any}>{level}</Badge>
+                            <div>
+                                <p className="text-4xl font-bold text-foreground">
+                                    {score}
+                                    <span className="text-sm font-normal text-muted-foreground">/100</span>
                                 </p>
-                            </React.Fragment>
+                                <div className="mt-2 flex items-center gap-2">
+                                    <p className="text-xs text-muted-foreground">Status</p>
+                                    <Badge variant={score >= 75 ? 'default' : score >= 50 ? 'outline' : 'destructive'}>
+                                        {level}
+                                    </Badge>
+                                </div>
+                            </div>
                         )}
                     </CardContent>
                 </Card>
@@ -441,14 +579,21 @@ export default function FinancialEfficiencyPage() {
                             <div className="flex items-center space-x-2 text-lg text-muted-foreground">
                                 <Loader2 className="h-4 w-4 animate-spin" /> Awaiting data...
                             </div>
+                        ) : isZeroState ? (
+                            <div className="space-y-2">
+                                <p className="text-3xl font-bold text-slate-300 dark:text-slate-600">$—</p>
+                                <p className="text-xs text-muted-foreground">
+                                    No costs linked yet. Your actual annual spend will appear here once insurance, warranty, and utility data are added.
+                                </p>
+                            </div>
                         ) : (
-                            <div className="text-4xl font-extrabold text-gray-600">
-                                {formattedExposure}
+                            <div>
+                                <p className="text-3xl font-bold">{formattedExposure}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    Calculated annual spending on insurance, utilities, and warranty.
+                                </p>
                             </div>
                         )}
-                        <p className="text-sm text-muted-foreground mt-1">
-                            Calculated annual spending on insurance, utilities, and warranty.
-                        </p>
                     </CardContent>
                 </Card>
                 
@@ -458,101 +603,119 @@ export default function FinancialEfficiencyPage() {
                         <CardTitle className="text-sm font-medium">Report Actions</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="space-y-2">
-                            <Button 
-                                className="w-full" 
-                                disabled={isCalculating || isQueued}
-                                onClick={handleRecalculate}
-                                variant='default'
-                            >
-                                <RotateCw className="h-4 w-4 mr-2" /> 
-                                Generate New Report
-                            </Button>
-                            
-                            {/* Market Average Info */}
-                            {marketAverageTotal > 0 && (
-                                <p className="text-xs text-muted-foreground font-medium text-center">
-                                    Market Average: {formatCurrency(marketAverageTotal)}
+                        {isZeroState ? (
+                            <div className="space-y-3">
+                                <p className="text-xs text-muted-foreground">
+                                    Complete the setup checklist below to generate your first report.
                                 </p>
-                            )}
-
-                            {report?.lastCalculatedAt && (
-                                <p className="text-xs text-muted-foreground text-center">
-                                    Last calculated: {new Date(report.lastCalculatedAt).toLocaleString()}
-                                </p>
-                            )}
-                        </div>
+                                <Button
+                                    variant="outline"
+                                    className="w-full text-sm"
+                                    onClick={() => {
+                                        document.getElementById('setup-checklist')?.scrollIntoView({ behavior: 'smooth' });
+                                    }}
+                                >
+                                    View Setup Steps ↓
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                <Button
+                                    className="w-full"
+                                    disabled={isCalculating || isQueued}
+                                    onClick={handleRecalculate}
+                                    variant='default'
+                                >
+                                    <RotateCw className="h-4 w-4 mr-2" />
+                                    Generate New Report
+                                </Button>
+                                {marketAverageTotal > 0 && (
+                                    <p className="text-xs text-muted-foreground font-medium text-center">
+                                        Market Average: {formatCurrency(marketAverageTotal)}
+                                    </p>
+                                )}
+                                {report?.lastCalculatedAt && (
+                                    <p className="text-xs text-muted-foreground text-center">
+                                        Last calculated: {new Date(report.lastCalculatedAt).toLocaleString()}
+                                    </p>
+                                )}
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             </div>
             
             <div className="mt-8 space-y-6">
                 {/* --- FES Gauge Visualization --- */}
-                <div className="space-y-2">
-                    <h3 className="text-lg md:text-xl font-semibold">Overall Efficiency Gauge: {level}</h3>
-                    <div className="flex justify-between text-xs font-medium text-muted-foreground">
-                        <span>Low Efficiency (0)</span>
-                        <span>High Efficiency (100)</span>
+                {!isZeroState && (
+                    <div className="space-y-2">
+                        <h3 className="text-lg md:text-xl font-semibold">Overall Efficiency Gauge: {level}</h3>
+                        <div className="flex justify-between text-xs font-medium text-muted-foreground">
+                            <span>Low Efficiency (0)</span>
+                            <span>High Efficiency (100)</span>
+                        </div>
+                        <Progress
+                            value={efficiencyProgressValue}
+                            className={`h-4`}
+                            indicatorClassName={progressClass}
+                        />
                     </div>
-                    <Progress 
-                        value={efficiencyProgressValue} 
-                        className={`h-4`} 
-                        indicatorClassName={progressClass} 
-                    />
-                </div>
+                )}
 
-                <div className="grid gap-4 lg:grid-cols-3">
-                    <Card className="lg:col-span-2">
-                        <CardHeader className="pb-2">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                    <CardTitle className="text-base font-medium">Efficiency Score Trend</CardTitle>
-                                    <CardDescription>Weekly score snapshots over 6 months or 1 year.</CardDescription>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Button size="sm" variant={trendWeeks === 26 ? "default" : "outline"} onClick={() => setTrendWeeks(26)}>
-                                        6 Months
-                                    </Button>
-                                    <Button size="sm" variant={trendWeeks === 52 ? "default" : "outline"} onClick={() => setTrendWeeks(52)}>
-                                        1 Year
-                                    </Button>
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            <ScoreTrendChart points={financialTrend} ariaLabel="Financial efficiency score trend" />
-                            <ScoreDeltaIndicator delta={financialSeries?.deltaFromPreviousWeek} />
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-base font-medium">Changes Impacting Score</CardTitle>
-                            <CardDescription>Top weekly factors that moved your efficiency.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            {financialChanges.map((change, idx) => (
-                                <div key={`${change.title}-${idx}`} className="rounded-lg border border-black/10 px-3 py-2">
-                                    <div className="flex items-center justify-between gap-2">
-                                        <p className="text-sm font-medium">{change.title}</p>
-                                        <Badge
-                                            variant={
-                                                change.impact === 'positive'
-                                                    ? 'success'
-                                                    : change.impact === 'negative'
-                                                    ? 'destructive'
-                                                    : 'secondary'
-                                            }
-                                        >
-                                            {change.impact === 'positive' ? 'Positive' : change.impact === 'negative' ? 'Negative' : 'Neutral'}
-                                        </Badge>
+                {!isZeroState && (
+                    <div className="grid gap-4 lg:grid-cols-3">
+                        <Card className="lg:col-span-2">
+                            <CardHeader className="pb-2">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                        <CardTitle className="text-base font-medium">Efficiency Score Trend</CardTitle>
+                                        <CardDescription>Weekly score snapshots over 6 months or 1 year.</CardDescription>
                                     </div>
-                                    <p className="text-xs text-muted-foreground mt-1">{change.detail}</p>
+                                    <div className="flex items-center gap-2">
+                                        <Button size="sm" variant={trendWeeks === 26 ? "default" : "outline"} onClick={() => setTrendWeeks(26)}>
+                                            6 Months
+                                        </Button>
+                                        <Button size="sm" variant={trendWeeks === 52 ? "default" : "outline"} onClick={() => setTrendWeeks(52)}>
+                                            1 Year
+                                        </Button>
+                                    </div>
                                 </div>
-                            ))}
-                        </CardContent>
-                    </Card>
-                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                <ScoreTrendChart points={financialTrend} ariaLabel="Financial efficiency score trend" />
+                                <ScoreDeltaIndicator delta={financialSeries?.deltaFromPreviousWeek} />
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-base font-medium">Changes Impacting Score</CardTitle>
+                                <CardDescription>Top weekly factors that moved your efficiency.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                {financialChanges.map((change, idx) => (
+                                    <div key={`${change.title}-${idx}`} className="rounded-lg border border-black/10 px-3 py-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <p className="text-sm font-medium">{change.title}</p>
+                                            <Badge
+                                                variant={
+                                                    change.impact === 'positive'
+                                                        ? 'success'
+                                                        : change.impact === 'negative'
+                                                        ? 'destructive'
+                                                        : 'secondary'
+                                                }
+                                            >
+                                                {change.impact === 'positive' ? 'Positive' : change.impact === 'negative' ? 'Negative' : 'Neutral'}
+                                            </Badge>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground mt-1">{change.detail}</p>
+                                    </div>
+                                ))}
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
 
                 {/* --- Detailed Section Content --- */}
                 {renderDetailedSections()}
