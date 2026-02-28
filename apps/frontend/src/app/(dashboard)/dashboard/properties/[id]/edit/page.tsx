@@ -29,6 +29,7 @@ import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/components/ui/use-toast";
 import OnboardingReturnBanner from "@/components/onboarding/OnboardingReturnBanner";
+import { cn } from "@/lib/utils";
 
 
 // --- Appliance Constants and Schemas ---
@@ -41,6 +42,33 @@ const MAJOR_APPLIANCE_OPTIONS = [
     'MICROWAVE_HOOD',
     'WATER_SOFTENER',
 ];
+
+const APPLIANCE_DISPLAY_LABELS: Record<string, string> = {
+  DISHWASHER: 'Dishwasher',
+  REFRIGERATOR: 'Refrigerator',
+  OVEN_RANGE: 'Oven / Range',
+  WASHER_DRYER: 'Washer / Dryer',
+  MICROWAVE_HOOD: 'Microwave Hood',
+  WATER_SOFTENER: 'Water Softener',
+};
+
+function formatApplianceLabel(type: string): string {
+  return (
+    APPLIANCE_DISPLAY_LABELS[type] ??
+    type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+  );
+}
+
+function getInstallYearFeedback(year: number | null | undefined): {
+  label: string;
+  color: "emerald" | "amber" | "rose" | null;
+} | null {
+  if (!year || year < 1900 || year > CURRENT_YEAR) return null;
+  const age = CURRENT_YEAR - year;
+  if (age <= 8) return { label: `${age} yrs · Good condition`, color: "emerald" };
+  if (age <= 15) return { label: `${age} yrs · Monitor closely`, color: "amber" };
+  return { label: `${age} yrs · Approaching replacement`, color: "rose" };
+}
 
 // Schema for a single HomeAsset record being sent from the frontend
 const applianceSchema = z.object({
@@ -187,11 +215,7 @@ const ApplianceFieldArray = () => {
     });
 
     return (
-        <div className="border-t border-gray-200 pt-6 space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-3">
-                Major Appliance Details
-            </h3>
-            
+        <div className="space-y-4">
             <div className="space-y-4">
                 {fields.map((field, index) => (
                     <div key={field.id} className="flex flex-col sm:flex-row gap-2 sm:gap-4 items-end bg-gray-50 p-3 rounded-md border border-gray-200">
@@ -208,11 +232,15 @@ const ApplianceFieldArray = () => {
                                         value={selectField.value}
                                     >
                                         <FormControl>
-                                            <SelectTrigger className="h-9"><SelectValue placeholder="Select Appliance" /></SelectTrigger>
+                                            <SelectTrigger className="h-9">
+                                                <SelectValue placeholder="Select appliance type">
+                                                    {selectField.value ? formatApplianceLabel(selectField.value) : "Select appliance type"}
+                                                </SelectValue>
+                                            </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
                                             {MAJOR_APPLIANCE_OPTIONS.map(type => (
-                                                <SelectItem key={type} value={type}>{type.replace(/_/g, ' ')}</SelectItem>
+                                                <SelectItem key={type} value={type}>{formatApplianceLabel(type)}</SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
@@ -247,10 +275,11 @@ const ApplianceFieldArray = () => {
                         {/* Remove Button */}
                         <Button
                             type="button"
-                            variant="destructive"
+                            variant="ghost"
                             size="icon"
                             onClick={() => remove(index)}
-                            className="h-9 w-9 self-end"
+                            className="h-9 w-9 self-end text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 dark:hover:text-rose-400 transition-colors"
+                            title="Remove appliance"
                         >
                             <Trash2 className="h-4 w-4" />
                         </Button>
@@ -262,7 +291,7 @@ const ApplianceFieldArray = () => {
                 type="button"
                 variant="outline"
                 onClick={() => append({ id: Date.now().toString(), type: '', installYear: null as any })}
-                className="w-full px-4 py-2 border-dashed border-blue-400 text-blue-600 hover:bg-blue-50"
+                className="w-full border-dashed border-teal-300 text-teal-700 hover:bg-teal-50 hover:border-teal-400 dark:border-teal-700/50 dark:text-teal-400 dark:hover:bg-teal-950/30 transition-colors"
             >
                 <Plus className="h-4 w-4 mr-2" /> Add Appliance
             </Button>
@@ -467,31 +496,70 @@ export default function EditPropertyPage() {
   }
 
   const hasErrors = Object.keys(form.formState.errors).length > 0;
+  const CHECKBOX_META = {
+    hasSmokeDetectors: { label: "Has Smoke Detectors", hint: "Crucial for SAFETY risk score.", impact: "positive" as const },
+    hasCoDetectors: { label: "Has CO Detectors", hint: "Crucial for SAFETY risk score.", impact: "positive" as const },
+    hasDrainageIssues: { label: "Has Drainage Issues", hint: "Increases STRUCTURE risk penalty.", impact: "negative" as const },
+    hasSecuritySystem: { label: "Has Security System", hint: "Extra safety factor.", impact: "positive" as const },
+    hasFireExtinguisher: { label: "Has Fire Extinguisher", hint: "Safety checklist item.", impact: "positive" as const },
+    hasIrrigation: { label: "Has Irrigation System", hint: "For exterior maintenance.", impact: "neutral" as const },
+  } as const;
+
+  type CheckboxField = keyof typeof CHECKBOX_META;
+
+  const CHECKBOX_IMPACT_STYLES = {
+    positive: {
+      checked: "border-emerald-300 bg-emerald-50/60 dark:border-emerald-700/50 dark:bg-emerald-950/20",
+      unchecked: "border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900/30",
+      dot: "bg-emerald-400",
+      hint: "text-emerald-600 dark:text-emerald-400",
+    },
+    negative: {
+      checked: "border-amber-300 bg-amber-50/60 dark:border-amber-700/50 dark:bg-amber-950/20",
+      unchecked: "border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900/30",
+      dot: "bg-amber-400",
+      hint: "text-amber-600 dark:text-amber-400",
+    },
+    neutral: {
+      checked: "border-blue-200 bg-blue-50/40 dark:border-blue-800/50 dark:bg-blue-950/20",
+      unchecked: "border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900/30",
+      dot: "bg-blue-400",
+      hint: "text-blue-600 dark:text-blue-400",
+    },
+  } as const;
 
   return (
     <DashboardShell>
-      <PageHeader>
-        <PageHeaderHeading className="flex items-center gap-2">
-          <HomeIcon className="h-8 w-8 text-muted-foreground" /> Edit Property: {property.name || property.address}
-        </PageHeaderHeading>
-        <div className="flex space-x-2">
-          <Button
-            variant="outline"
-            onClick={() => router.push(contextualReturnTo ?? `/dashboard/properties/${propertyId}`)}
-            disabled={updateMutation.isPending}
-          >
-            <X className="h-4 w-4 mr-2" /> {searchParams.get("from") === "status-board" ? "Back to Status Board" : "Cancel"}
-          </Button>
-          <Button 
-            onClick={form.handleSubmit(onSubmit)} 
-            disabled={updateMutation.isPending}
-            type="submit"
-          >
-            {updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            <Save className="h-4 w-4 mr-2" /> Save Changes
-          </Button>
+      <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 bg-white/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-gray-100 dark:border-slate-800 py-3 mb-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <HomeIcon className="h-5 w-5 text-primary shrink-0" />
+            <h1 className="text-lg font-bold text-gray-900 dark:text-slate-100 truncate">
+              Edit Property: {property?.name || property?.address || "Property"}
+            </h1>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push(contextualReturnTo ?? `/dashboard/properties/${propertyId}`)}
+              disabled={updateMutation.isPending}
+            >
+              <X className="h-4 w-4 mr-1.5" />
+              {searchParams.get("from") === "status-board" ? "Back" : "Cancel"}
+            </Button>
+            <Button
+              size="sm"
+              onClick={form.handleSubmit(onSubmit)}
+              disabled={updateMutation.isPending}
+              type="submit"
+            >
+              {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Save className="h-4 w-4 mr-1.5" />}
+              {updateMutation.isPending ? "Saving…" : "Save Changes"}
+            </Button>
+          </div>
         </div>
-      </PageHeader>
+      </div>
 
       <OnboardingReturnBanner />
       
@@ -513,7 +581,7 @@ export default function EditPropertyPage() {
       
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-            <Card>
+            <Card className="border-l-4 border-l-teal-400/70 dark:border-l-teal-600/50">
                 <CardHeader>
                     <CardTitle>Basic Details</CardTitle>
                     <CardDescription>General information about the property.</CardDescription>
@@ -598,7 +666,7 @@ export default function EditPropertyPage() {
                 </CardContent>
             </Card>
 
-            <Card>
+            <Card className="border-l-4 border-l-blue-400/70 dark:border-l-blue-600/50">
                 <CardHeader>
                     <CardTitle>Risk & System Details</CardTitle>
                     <CardDescription>These details are crucial for calculating your property&apos;s risk score and maintenance schedules.</CardDescription>
@@ -662,6 +730,23 @@ export default function EditPropertyPage() {
                                 <FormItem>
                                     <FormLabel>HVAC Install Year</FormLabel>
                                     <FormControl><Input placeholder="e.g., 2018" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
+                                    {(() => {
+                                      const fb = getInstallYearFeedback(field.value);
+                                      if (!fb) return null;
+                                      const colorMap = {
+                                        emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50",
+                                        amber: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50",
+                                        rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800/50",
+                                      };
+                                      return (
+                                        <span className={cn(
+                                          "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium mt-1",
+                                          colorMap[fb.color!],
+                                        )}>
+                                          {fb.label}
+                                        </span>
+                                      );
+                                    })()}
                                     <FormMessage />
                                 </FormItem>
                             )}
@@ -673,6 +758,23 @@ export default function EditPropertyPage() {
                                 <FormItem>
                                     <FormLabel>Water Heater Install Year</FormLabel>
                                     <FormControl><Input placeholder="e.g., 2020" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
+                                    {(() => {
+                                      const fb = getInstallYearFeedback(field.value);
+                                      if (!fb) return null;
+                                      const colorMap = {
+                                        emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50",
+                                        amber: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50",
+                                        rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800/50",
+                                      };
+                                      return (
+                                        <span className={cn(
+                                          "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium mt-1",
+                                          colorMap[fb.color!],
+                                        )}>
+                                          {fb.label}
+                                        </span>
+                                      );
+                                    })()}
                                     <FormMessage />
                                 </FormItem>
                             )}
@@ -684,6 +786,23 @@ export default function EditPropertyPage() {
                                 <FormItem>
                                     <FormLabel>Roof Replacement Year</FormLabel>
                                     <FormControl><Input placeholder="e.g., 2010" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
+                                    {(() => {
+                                      const fb = getInstallYearFeedback(field.value);
+                                      if (!fb) return null;
+                                      const colorMap = {
+                                        emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50",
+                                        amber: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50",
+                                        rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800/50",
+                                      };
+                                      return (
+                                        <span className={cn(
+                                          "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium mt-1",
+                                          colorMap[fb.color!],
+                                        )}>
+                                          {fb.label}
+                                        </span>
+                                      );
+                                    })()}
                                     <FormMessage />
                                 </FormItem>
                             )}
@@ -842,110 +961,76 @@ export default function EditPropertyPage() {
                     
                     <Separator className="my-4" />
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <FormField
-                            control={form.control}
-                            name="hasSmokeDetectors"
-                            render={({ field }) => (
-                                <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded-md shadow-sm">
+                    <div className="pt-2">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500 mb-3">
+                        Safety & Property Features
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                        {(Object.keys(CHECKBOX_META) as CheckboxField[]).map((fieldName) => {
+                          const meta = CHECKBOX_META[fieldName];
+                          const styles = CHECKBOX_IMPACT_STYLES[meta.impact];
+
+                          return (
+                            <FormField
+                              key={fieldName}
+                              control={form.control}
+                              name={fieldName}
+                              render={({ field }) => {
+                                const isChecked = Boolean(field.value);
+                                return (
+                                  <FormItem>
                                     <FormControl>
-                                        <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} />
+                                      <label
+                                        htmlFor={`checkbox-${fieldName}`}
+                                        className={cn(
+                                          "flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-all",
+                                          isChecked ? styles.checked : styles.unchecked,
+                                          "hover:border-gray-300 dark:hover:border-slate-600",
+                                        )}
+                                      >
+                                        {isChecked && (
+                                          <span className={cn("mt-0.5 h-2 w-2 shrink-0 rounded-full", styles.dot)} />
+                                        )}
+                                        {!isChecked && (
+                                          <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-gray-200 dark:bg-slate-600" />
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2">
+                                            <Checkbox
+                                              id={`checkbox-${fieldName}`}
+                                              checked={isChecked}
+                                              onCheckedChange={field.onChange}
+                                              className="sr-only"
+                                            />
+                                            <span className="text-sm font-medium text-gray-800 dark:text-slate-200">
+                                              {meta.label}
+                                            </span>
+                                          </div>
+                                          <p className={cn("mt-0.5 text-xs", isChecked ? styles.hint : "text-gray-400 dark:text-slate-500")}>
+                                            {meta.hint}
+                                          </p>
+                                        </div>
+                                      </label>
                                     </FormControl>
-                                    <div className="space-y-1 leading-none">
-                                        <FormLabel>Has Smoke Detectors</FormLabel>
-                                        <CardDescription>Crucial for the SAFETY risk score.</CardDescription>
-                                    </div>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="hasCoDetectors"
-                            render={({ field }) => (
-                                <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded-md shadow-sm">
-                                    <FormControl>
-                                        <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} />
-                                    </FormControl>
-                                    <div className="space-y-1 leading-none">
-                                        <FormLabel>Has CO Detectors</FormLabel>
-                                        <CardDescription>Crucial for the SAFETY risk score.</CardDescription>
-                                    </div>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="hasDrainageIssues"
-                            render={({ field }) => (
-                                <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded-md shadow-sm">
-                                    <FormControl>
-                                        <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} />
-                                    </FormControl>
-                                    <div className="space-y-1 leading-none">
-                                        <FormLabel>Has Drainage Issues</FormLabel>
-                                        <CardDescription>Can increase STRUCTURE risk penalty.</CardDescription>
-                                    </div>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="hasSecuritySystem"
-                            render={({ field }) => (
-                                <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded-md shadow-sm">
-                                    <FormControl>
-                                        <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} />
-                                    </FormControl>
-                                    <div className="space-y-1 leading-none">
-                                        <FormLabel>Has Security System</FormLabel>
-                                        <CardDescription>Extra safety factor.</CardDescription>
-                                    </div>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="hasFireExtinguisher"
-                            render={({ field }) => (
-                                <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded-md shadow-sm">
-                                    <FormControl>
-                                        <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} />
-                                    </FormControl>
-                                    <div className="space-y-1 leading-none">
-                                        <FormLabel>Has Fire Extinguisher</FormLabel>
-                                        <CardDescription>Safety checklist item.</CardDescription>
-                                    </div>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="hasIrrigation"
-                            render={({ field }) => (
-                                <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded-md shadow-sm">
-                                    <FormControl>
-                                        <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} />
-                                    </FormControl>
-                                    <div className="space-y-1 leading-none">
-                                        <FormLabel>Has Irrigation System</FormLabel>
-                                        <CardDescription>For exterior maintenance.</CardDescription>
-                                    </div>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
+                                  </FormItem>
+                                );
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
                     </div>
-                    
-                    <Separator className="my-4" />
 
-                    {/* NEW: Structured Appliance Input */}
+                </CardContent>
+            </Card>
+
+            <Card className="border-l-4 border-l-purple-400/70 dark:border-l-purple-600/50">
+                <CardHeader>
+                    <CardTitle>Major Appliance Details</CardTitle>
+                    <CardDescription>Add and maintain major appliance records for better maintenance planning.</CardDescription>
+                </CardHeader>
+                <CardContent>
                     <ApplianceFieldArray />
-
                 </CardContent>
             </Card>
 
