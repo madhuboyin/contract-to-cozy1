@@ -59,6 +59,38 @@ function formatApplianceLabel(type: string): string {
   );
 }
 
+const SYSTEM_ENUM_DISPLAY_MAP: Record<string, string> = {
+  SINGLE_FAMILY: "Single Family",
+  TOWNHOME: "Townhome",
+  CONDO: "Condo / Apartment",
+  APARTMENT: "Apartment",
+  MULTI_UNIT: "Multi-Unit",
+  INVESTMENT_PROPERTY: "Investment Property",
+  HVAC: "Central HVAC",
+  FURNACE: "Furnace / Forced Air",
+  HEAT_PUMP: "Heat Pump",
+  RADIATORS: "Radiators / Boiler",
+  UNKNOWN: "Unknown / Not Sure",
+  CENTRAL_AC: "Central Air Conditioning",
+  WINDOW_AC: "Window / Portable AC",
+  TANK: "Tank Water Heater",
+  TANKLESS: "Tankless (On-Demand)",
+  SOLAR: "Solar Water Heater",
+  SHINGLE: "Asphalt Shingle",
+  TILE: "Tile Roof",
+  FLAT: "Flat / TPO Roof",
+  METAL: "Metal Roof",
+  OWNER_OCCUPIED: "Owner Occupied",
+  RENTED_OUT: "Rented Out",
+};
+
+function formatEnumLabel(value: string): string {
+  return (
+    SYSTEM_ENUM_DISPLAY_MAP[value] ??
+    value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+  );
+}
+
 function getInstallYearFeedback(year: number | null | undefined): {
   label: string;
   color: "emerald" | "amber" | "rose" | null;
@@ -208,99 +240,119 @@ const mapDbToForm = (property: any): PropertyFormValues => {
 
 // --- Appliance Field Array Component ---
 const ApplianceFieldArray = () => {
-    const { control, formState: { errors } } = useFormContext<PropertyFormValues>();
-    const { fields, append, remove } = useFieldArray({
-        control,
-        name: "appliances",
-    });
+  const {
+    control,
+    formState: { errors },
+    watch,
+  } = useFormContext<PropertyFormValues>();
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "appliances",
+  });
 
-    return (
-        <div className="space-y-4">
-            <div className="space-y-4">
-                {fields.map((field, index) => (
-                    <div key={field.id} className="flex flex-col sm:flex-row gap-2 sm:gap-4 items-end bg-gray-50 p-3 rounded-md border border-gray-200">
-                        
-                        {/* Appliance Type Select */}
-                        <FormField
-                            control={control}
-                            name={`appliances.${index}.type`}
-                            render={({ field: selectField }) => (
-                                <FormItem className="flex-1 w-full sm:w-auto">
-                                    <FormLabel className="text-xs">Appliance Type</FormLabel>
-                                    <Select 
-                                        onValueChange={selectField.onChange} 
-                                        value={selectField.value}
-                                    >
-                                        <FormControl>
-                                            <SelectTrigger className="h-9">
-                                                <SelectValue placeholder="Select appliance type">
-                                                    {selectField.value ? formatApplianceLabel(selectField.value) : "Select appliance type"}
-                                                </SelectValue>
-                                            </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            {MAJOR_APPLIANCE_OPTIONS.map(type => (
-                                                <SelectItem key={type} value={type}>{formatApplianceLabel(type)}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <FormMessage>{(errors.appliances?.[index] as any)?.type?.message}</FormMessage>
-                                </FormItem>
-                            )}
-                        />
-                        
-                        {/* Install Year Input */}
-                        <FormField
-                            control={control}
-                            name={`appliances.${index}.installYear`}
-                            render={({ field: yearField }) => (
-                                <FormItem className="w-full sm:w-24">
-                                    <FormLabel className="text-xs">Install Year</FormLabel>
-                                    <FormControl>
-                                        <Input
-                                            placeholder="YYYY"
-                                            type="number"
-                                            maxLength={4}
-                                            {...yearField}
-                                            value={yearField.value ?? ''}
-                                            onChange={e => yearField.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))}
-                                            className="h-9"
-                                        />
-                                    </FormControl>
-                                    <FormMessage>{(errors.appliances?.[index] as any)?.installYear?.message}</FormMessage>
-                                </FormItem>
-                            )}
-                        />
-
-                        {/* Remove Button */}
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => remove(index)}
-                            className="h-9 w-9 self-end text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 dark:hover:text-rose-400 transition-colors"
-                            title="Remove appliance"
-                        >
-                            <Trash2 className="h-4 w-4" />
-                        </Button>
-                    </div>
-                ))}
-            </div>
-            
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {fields.map((field, index) => (
+          <div
+            key={field.id}
+            className="relative flex flex-col gap-3 bg-gray-50 dark:bg-gray-900/40 p-4 rounded-lg border border-gray-200 dark:border-gray-700"
+          >
             <Button
-                type="button"
-                variant="outline"
-                onClick={() => append({ id: Date.now().toString(), type: '', installYear: null as any })}
-                className="w-full border-dashed border-teal-300 text-teal-700 hover:bg-teal-50 hover:border-teal-400 dark:border-teal-700/50 dark:text-teal-400 dark:hover:bg-teal-950/30 transition-colors"
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => remove(index)}
+              className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              aria-label="Remove appliance"
             >
-                <Plus className="h-4 w-4 mr-2" /> Add Appliance
+              <Trash2 className="h-3.5 w-3.5" />
             </Button>
-            
-            <p className="text-xs text-gray-500 mt-2">
-                Structured appliance data replaces the old JSON format.
-            </p>
-        </div>
-    );
+
+            <FormField
+              control={control}
+              name={`appliances.${index}.type`}
+              render={({ field: selectField }) => (
+                <FormItem className="w-full">
+                  <FormLabel className="text-xs">Appliance Type</FormLabel>
+                  <Select onValueChange={selectField.onChange} value={selectField.value}>
+                    <FormControl>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Select appliance type">
+                          {selectField.value ? formatApplianceLabel(selectField.value) : "Select appliance type"}
+                        </SelectValue>
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {MAJOR_APPLIANCE_OPTIONS.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {formatApplianceLabel(type)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage>{(errors.appliances?.[index] as any)?.type?.message}</FormMessage>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={control}
+              name={`appliances.${index}.installYear`}
+              render={({ field: yearField }) => (
+                <FormItem className="w-full">
+                  <FormLabel className="text-xs">Install Year</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="YYYY"
+                      type="number"
+                      maxLength={4}
+                      {...yearField}
+                      value={yearField.value ?? ""}
+                      onChange={(e) => yearField.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))}
+                      className="h-9"
+                    />
+                  </FormControl>
+                  <FormMessage>{(errors.appliances?.[index] as any)?.installYear?.message}</FormMessage>
+                </FormItem>
+              )}
+            />
+
+            {(() => {
+              const yearVal = watch(`appliances.${index}.installYear`);
+              const feedback = getInstallYearFeedback(Number(yearVal));
+              if (!feedback) return null;
+              return (
+                <span
+                  className={cn(
+                    "inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full w-fit",
+                    feedback.color === "emerald" && "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+                    feedback.color === "amber" && "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+                    feedback.color === "rose" && "bg-rose-50 text-rose-700 font-semibold dark:bg-rose-900/30 dark:text-rose-400",
+                  )}
+                >
+                  {feedback.label}
+                </span>
+              );
+            })()}
+          </div>
+        ))}
+      </div>
+
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => append({ type: "", installYear: CURRENT_YEAR })}
+        className="w-full mt-2 border-dashed text-muted-foreground hover:text-foreground"
+      >
+        <Plus className="mr-2 h-4 w-4" />
+        Add Appliance
+      </Button>
+
+      <p className="text-xs text-gray-500 mt-2">Structured appliance data replaces the old JSON format.</p>
+    </div>
+  );
 };
 
 
@@ -671,7 +723,7 @@ export default function EditPropertyPage() {
                     <CardTitle>Risk & System Details</CardTitle>
                     <CardDescription>These details are crucial for calculating your property&apos;s risk score and maintenance schedules.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <FormField
                             control={form.control}
@@ -679,16 +731,16 @@ export default function EditPropertyPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Property Type *</FormLabel>
-                                    <Select 
-                                        onValueChange={(value) => field.onChange(value === "" ? null : value)} 
+                                    <Select
+                                        onValueChange={(value) => field.onChange(value === "" ? null : value)}
                                         value={field.value || ""}
                                     >
                                         <FormControl>
                                             <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            {Object.values(PropertyTypes).map(type => (
-                                                <SelectItem key={type} value={type}>{type.replace(/_/g, ' ')}</SelectItem>
+                                            {Object.values(PropertyTypes).map((type) => (
+                                                <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
@@ -696,7 +748,7 @@ export default function EditPropertyPage() {
                                 </FormItem>
                             )}
                         />
-                         <FormField
+                        <FormField
                             control={form.control}
                             name="propertySize"
                             render={({ field }) => (
@@ -719,247 +771,285 @@ export default function EditPropertyPage() {
                             )}
                         />
                     </div>
-                    
-                    <Separator className="my-4" />
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                         <FormField
-                            control={form.control}
-                            name="hvacInstallYear"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>HVAC Install Year</FormLabel>
-                                    <FormControl><Input placeholder="e.g., 2018" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
-                                    {(() => {
-                                      const fb = getInstallYearFeedback(field.value);
-                                      if (!fb) return null;
-                                      const colorMap = {
-                                        emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50",
-                                        amber: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50",
-                                        rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800/50",
-                                      };
-                                      return (
-                                        <span className={cn(
-                                          "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium mt-1",
-                                          colorMap[fb.color!],
-                                        )}>
-                                          {fb.label}
-                                        </span>
-                                      );
-                                    })()}
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="waterHeaterInstallYear"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Water Heater Install Year</FormLabel>
-                                    <FormControl><Input placeholder="e.g., 2020" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
-                                    {(() => {
-                                      const fb = getInstallYearFeedback(field.value);
-                                      if (!fb) return null;
-                                      const colorMap = {
-                                        emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50",
-                                        amber: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50",
-                                        rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800/50",
-                                      };
-                                      return (
-                                        <span className={cn(
-                                          "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium mt-1",
-                                          colorMap[fb.color!],
-                                        )}>
-                                          {fb.label}
-                                        </span>
-                                      );
-                                    })()}
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="roofReplacementYear"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Roof Replacement Year</FormLabel>
-                                    <FormControl><Input placeholder="e.g., 2010" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
-                                    {(() => {
-                                      const fb = getInstallYearFeedback(field.value);
-                                      if (!fb) return null;
-                                      const colorMap = {
-                                        emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50",
-                                        amber: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50",
-                                        rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800/50",
-                                      };
-                                      return (
-                                        <span className={cn(
-                                          "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium mt-1",
-                                          colorMap[fb.color!],
-                                        )}>
-                                          {fb.label}
-                                        </span>
-                                      );
-                                    })()}
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        
-                        {/* More Selects for Systems */}
-                        <FormField
-                            control={form.control}
-                            name="heatingType"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Heating Type *</FormLabel>
-                                    <Select 
-                                        onValueChange={(value) => field.onChange(value === "" ? null : value)} 
-                                        value={field.value || ""}
-                                    >
-                                        <FormControl>
-                                            <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            {Object.values(HeatingTypes).map(type => (
-                                                <SelectItem key={type} value={type}>{type.replace(/_/g, ' ')}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="coolingType"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Cooling Type *</FormLabel>
-                                    <Select 
-                                        onValueChange={(value) => field.onChange(value === "" ? null : value)} 
-                                        value={field.value || ""}
-                                    >
-                                        <FormControl>
-                                            <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            {Object.values(CoolingTypes).map(type => (
-                                                <SelectItem key={type} value={type}>{type.replace(/_/g, ' ')}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="roofType"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Roof Type *</FormLabel>
-                                    <Select 
-                                        onValueChange={(value) => field.onChange(value === "" ? null : value)} 
-                                        value={field.value || ""}
-                                    >
-                                        <FormControl>
-                                            <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            {Object.values(RoofTypes).map(type => (
-                                                <SelectItem key={type} value={type}>{type.replace(/_/g, ' ')}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="waterHeaterType"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Water Heater Type *</FormLabel>
-                                    <Select 
-                                        onValueChange={(value) => field.onChange(value === "" ? null : value)} 
-                                        value={field.value || ""}
-                                    >
-                                        <FormControl>
-                                            <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            {Object.values(WaterHeaterTypes).map(type => (
-                                                <SelectItem key={type} value={type}>{type.replace(/_/g, ' ')}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="bedrooms"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Bedrooms</FormLabel>
-                                    <FormControl><Input placeholder="e.g., 3" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="bathrooms"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Bathrooms</FormLabel>
-                                    <FormControl><Input placeholder="e.g., 2.5" type="number" step="0.5" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="ownershipType"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Ownership Type</FormLabel>
-                                    <Select 
-                                        onValueChange={(value) => field.onChange(value === "" ? null : value)} 
-                                        value={field.value || ""}
-                                    >
-                                        <FormControl>
-                                            <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            {Object.values(OwnershipTypes).map(type => (
-                                                <SelectItem key={type} value={type}>{type.replace(/_/g, ' ')}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="occupantsCount"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Occupants Count</FormLabel>
-                                    <FormControl><Input placeholder="e.g., 4" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
+                    <Separator />
+
+                    <div className="space-y-3">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                            HVAC System
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <FormField
+                                control={form.control}
+                                name="heatingType"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Heating Type *</FormLabel>
+                                        <Select
+                                            onValueChange={(value) => field.onChange(value === "" ? null : value)}
+                                            value={field.value || ""}
+                                        >
+                                            <FormControl>
+                                                <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {Object.values(HeatingTypes).map((type) => (
+                                                    <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="hvacInstallYear"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>HVAC Install Year</FormLabel>
+                                        <FormControl><Input placeholder="e.g., 2018" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
+                                        {(() => {
+                                          const fb = getInstallYearFeedback(field.value);
+                                          if (!fb) return null;
+                                          const colorMap = {
+                                            emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50",
+                                            amber: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50",
+                                            rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800/50",
+                                          };
+                                          return (
+                                            <span className={cn(
+                                              "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium mt-1",
+                                              colorMap[fb.color!],
+                                            )}>
+                                              {fb.label}
+                                            </span>
+                                          );
+                                        })()}
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
                     </div>
-                    
-                    <Separator className="my-4" />
+
+                    <div className="space-y-3">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                            Cooling
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <FormField
+                                control={form.control}
+                                name="coolingType"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Cooling Type *</FormLabel>
+                                        <Select
+                                            onValueChange={(value) => field.onChange(value === "" ? null : value)}
+                                            value={field.value || ""}
+                                        >
+                                            <FormControl>
+                                                <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {Object.values(CoolingTypes).map((type) => (
+                                                    <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                            Water Heater
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <FormField
+                                control={form.control}
+                                name="waterHeaterType"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Water Heater Type *</FormLabel>
+                                        <Select
+                                            onValueChange={(value) => field.onChange(value === "" ? null : value)}
+                                            value={field.value || ""}
+                                        >
+                                            <FormControl>
+                                                <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {Object.values(WaterHeaterTypes).map((type) => (
+                                                    <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="waterHeaterInstallYear"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Water Heater Install Year</FormLabel>
+                                        <FormControl><Input placeholder="e.g., 2020" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
+                                        {(() => {
+                                          const fb = getInstallYearFeedback(field.value);
+                                          if (!fb) return null;
+                                          const colorMap = {
+                                            emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50",
+                                            amber: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50",
+                                            rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800/50",
+                                          };
+                                          return (
+                                            <span className={cn(
+                                              "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium mt-1",
+                                              colorMap[fb.color!],
+                                            )}>
+                                              {fb.label}
+                                            </span>
+                                          );
+                                        })()}
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                            Roof
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <FormField
+                                control={form.control}
+                                name="roofType"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Roof Type *</FormLabel>
+                                        <Select
+                                            onValueChange={(value) => field.onChange(value === "" ? null : value)}
+                                            value={field.value || ""}
+                                        >
+                                            <FormControl>
+                                                <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {Object.values(RoofTypes).map((type) => (
+                                                    <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="roofReplacementYear"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Roof Replacement Year</FormLabel>
+                                        <FormControl><Input placeholder="e.g., 2010" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
+                                        {(() => {
+                                          const fb = getInstallYearFeedback(field.value);
+                                          if (!fb) return null;
+                                          const colorMap = {
+                                            emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50",
+                                            amber: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50",
+                                            rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800/50",
+                                          };
+                                          return (
+                                            <span className={cn(
+                                              "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium mt-1",
+                                              colorMap[fb.color!],
+                                            )}>
+                                              {fb.label}
+                                            </span>
+                                          );
+                                        })()}
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-3">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                            Property & Occupancy
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <FormField
+                                control={form.control}
+                                name="bedrooms"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Bedrooms</FormLabel>
+                                        <FormControl><Input placeholder="e.g., 3" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="bathrooms"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Bathrooms</FormLabel>
+                                        <FormControl><Input placeholder="e.g., 2.5" type="number" step="0.5" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="occupantsCount"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Occupants Count</FormLabel>
+                                        <FormControl><Input placeholder="e.g., 4" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <FormField
+                                control={form.control}
+                                name="ownershipType"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Ownership Type</FormLabel>
+                                        <Select
+                                            onValueChange={(value) => field.onChange(value === "" ? null : value)}
+                                            value={field.value || ""}
+                                        >
+                                            <FormControl>
+                                                <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {Object.values(OwnershipTypes).map((type) => (
+                                                    <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
+                    </div>
 
                     <div className="pt-2">
                       <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500 mb-3">
@@ -1034,10 +1124,43 @@ export default function EditPropertyPage() {
                 </CardContent>
             </Card>
 
-            <Button type="submit" className="w-full md:w-auto" disabled={updateMutation.isPending}>
-                {updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                <Save className="h-4 w-4 mr-2" /> Save Changes
-            </Button>
+            <div className="sticky bottom-0 z-20 -mx-6 px-6 py-3 bg-background/95 backdrop-blur-sm border-t border-border shadow-[0_-1px_6px_rgba(0,0,0,0.06)] flex items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground hidden sm:block select-none">
+                {updateMutation.isPending
+                  ? "Saving your changes…"
+                  : "Changes are saved to this property only"}
+              </p>
+              <div className="flex items-center gap-2 ml-auto">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.back()}
+                  disabled={updateMutation.isPending}
+                >
+                  <X className="mr-1.5 h-4 w-4" />
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={updateMutation.isPending}
+                  className="min-w-[120px]"
+                >
+                  {updateMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-1.5 h-4 w-4" />
+                      Save Changes
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
         </form>
       </Form>
     </DashboardShell>
