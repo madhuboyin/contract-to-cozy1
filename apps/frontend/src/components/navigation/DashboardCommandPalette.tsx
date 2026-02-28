@@ -94,13 +94,8 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
         setOpen((prev) => !prev);
       }
     };
-    const onOpen = () => setOpen(true);
     window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('ctc:command-palette:open', onOpen as EventListener);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('ctc:command-palette:open', onOpen as EventListener);
-    };
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
   const propertyRoomsHref = resolvedPropertyId
