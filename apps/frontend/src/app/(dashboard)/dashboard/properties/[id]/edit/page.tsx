@@ -97,6 +97,7 @@ function getInstallYearFeedback(year: number | null | undefined): {
 } | null {
   if (!year || year < 1900 || year > CURRENT_YEAR) return null;
   const age = CURRENT_YEAR - year;
+  if (age === 0) return null;
   if (age <= 8) return { label: `${age} yrs · Good condition`, color: "emerald" };
   if (age <= 15) return { label: `${age} yrs · Monitor closely`, color: "amber" };
   return { label: `${age} yrs · Approaching replacement`, color: "rose" };
@@ -252,11 +253,11 @@ const ApplianceFieldArray = () => {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
         {fields.map((field, index) => (
           <div
             key={field.id}
-            className="relative flex flex-col gap-3 bg-gray-50 dark:bg-gray-900/40 p-4 rounded-lg border border-gray-200 dark:border-gray-700"
+            className="relative flex flex-col gap-2 bg-gray-50 dark:bg-gray-900/40 p-3 rounded-lg border border-gray-200 dark:border-gray-700"
           >
             <Button
               type="button"
@@ -277,7 +278,7 @@ const ApplianceFieldArray = () => {
                   <FormLabel className="text-xs">Appliance Type</FormLabel>
                   <Select onValueChange={selectField.onChange} value={selectField.value}>
                     <FormControl>
-                      <SelectTrigger className="h-9">
+                      <SelectTrigger className="h-8 text-sm">
                         <SelectValue placeholder="Select appliance type">
                           {selectField.value ? formatApplianceLabel(selectField.value) : "Select appliance type"}
                         </SelectValue>
@@ -310,7 +311,7 @@ const ApplianceFieldArray = () => {
                       {...yearField}
                       value={yearField.value ?? ""}
                       onChange={(e) => yearField.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))}
-                      className="h-9"
+                      className="h-8 text-sm"
                     />
                   </FormControl>
                   <FormMessage>{(errors.appliances?.[index] as any)?.installYear?.message}</FormMessage>
@@ -723,7 +724,7 @@ export default function EditPropertyPage() {
                     <CardTitle>Risk & System Details</CardTitle>
                     <CardDescription>These details are crucial for calculating your property&apos;s risk score and maintenance schedules.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-6">
+                <CardContent className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <FormField
                             control={form.control}
@@ -752,7 +753,7 @@ export default function EditPropertyPage() {
                             control={form.control}
                             name="propertySize"
                             render={({ field }) => (
-                                <FormItem>
+                                <FormItem className="max-w-[160px]">
                                     <FormLabel>Square Footage (sqft)</FormLabel>
                                     <FormControl><Input placeholder="e.g., 2500" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
                                     <FormMessage />
@@ -774,16 +775,16 @@ export default function EditPropertyPage() {
 
                     <Separator />
 
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                             HVAC System
                         </p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex flex-col sm:flex-row gap-3 items-start">
                             <FormField
                                 control={form.control}
                                 name="heatingType"
                                 render={({ field }) => (
-                                    <FormItem>
+                                    <FormItem className="flex-1 min-w-0">
                                         <FormLabel>Heating Type *</FormLabel>
                                         <Select
                                             onValueChange={(value) => field.onChange(value === "" ? null : value)}
@@ -806,9 +807,9 @@ export default function EditPropertyPage() {
                                 control={form.control}
                                 name="hvacInstallYear"
                                 render={({ field }) => (
-                                    <FormItem>
+                                    <FormItem className="w-full sm:w-36 flex-none">
                                         <FormLabel>HVAC Install Year</FormLabel>
-                                        <FormControl><Input placeholder="e.g., 2018" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
+                                        <FormControl><Input placeholder="e.g., 2018" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} className="w-full" /></FormControl>
                                         {(() => {
                                           const fb = getInstallYearFeedback(field.value);
                                           if (!fb) return null;
@@ -833,11 +834,11 @@ export default function EditPropertyPage() {
                         </div>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                             Cooling
                         </p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="max-w-sm">
                             <FormField
                                 control={form.control}
                                 name="coolingType"
@@ -864,16 +865,16 @@ export default function EditPropertyPage() {
                         </div>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                             Water Heater
                         </p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex flex-col sm:flex-row gap-3 items-start">
                             <FormField
                                 control={form.control}
                                 name="waterHeaterType"
                                 render={({ field }) => (
-                                    <FormItem>
+                                    <FormItem className="flex-1 min-w-0">
                                         <FormLabel>Water Heater Type *</FormLabel>
                                         <Select
                                             onValueChange={(value) => field.onChange(value === "" ? null : value)}
@@ -896,9 +897,9 @@ export default function EditPropertyPage() {
                                 control={form.control}
                                 name="waterHeaterInstallYear"
                                 render={({ field }) => (
-                                    <FormItem>
+                                    <FormItem className="w-full sm:w-36 flex-none">
                                         <FormLabel>Water Heater Install Year</FormLabel>
-                                        <FormControl><Input placeholder="e.g., 2020" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
+                                        <FormControl><Input placeholder="e.g., 2020" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} className="w-full" /></FormControl>
                                         {(() => {
                                           const fb = getInstallYearFeedback(field.value);
                                           if (!fb) return null;
@@ -923,16 +924,16 @@ export default function EditPropertyPage() {
                         </div>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                             Roof
                         </p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex flex-col sm:flex-row gap-3 items-start">
                             <FormField
                                 control={form.control}
                                 name="roofType"
                                 render={({ field }) => (
-                                    <FormItem>
+                                    <FormItem className="flex-1 min-w-0">
                                         <FormLabel>Roof Type *</FormLabel>
                                         <Select
                                             onValueChange={(value) => field.onChange(value === "" ? null : value)}
@@ -955,9 +956,9 @@ export default function EditPropertyPage() {
                                 control={form.control}
                                 name="roofReplacementYear"
                                 render={({ field }) => (
-                                    <FormItem>
+                                    <FormItem className="w-full sm:w-36 flex-none">
                                         <FormLabel>Roof Replacement Year</FormLabel>
-                                        <FormControl><Input placeholder="e.g., 2010" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
+                                        <FormControl><Input placeholder="e.g., 2010" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} className="w-full" /></FormControl>
                                         {(() => {
                                           const fb = getInstallYearFeedback(field.value);
                                           if (!fb) return null;
@@ -984,7 +985,7 @@ export default function EditPropertyPage() {
 
                     <Separator />
 
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                             Property & Occupancy
                         </p>
