@@ -58,14 +58,11 @@ import { NotificationBell } from '@/components/notifications/NotificationBell';
 // Mobile-first imports
 import { BottomNav } from '@/components/mobile/BottomNav';
 import { PullToRefresh } from '@/components/mobile/PullToRefresh';
-import { Input } from '@/components/ui/input';
 import DashboardCommandPalette from '@/components/navigation/DashboardCommandPalette';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
@@ -339,7 +336,6 @@ const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
 function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth() as { user: User | null, loading: boolean };
   const router = useRouter();
-  const pathname = usePathname();
   const [propertyCount, setPropertyCount] = useState<number | null>(null);
   const [showBanner, setShowBanner] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -444,10 +440,46 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
             <PropertySetupBanner show={showBanner} onDismiss={handleDismissBanner} />
           )}
 
-          {/* Desktop Header - Split into utility row + primary nav row */}
+          {/* Desktop Header */}
           <header className="sticky top-0 z-10 hidden border-b bg-white md:block">
             <div className="border-b border-teal-700/50 bg-gradient-to-r from-brand-900 to-brand-700 px-8 text-white lg:px-14">
               <div className="mx-auto flex h-16 w-full max-w-[1360px] items-center gap-4">
+                <Sheet>
+                  <SheetTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0 border border-white/25 text-white hover:bg-white/15 hover:text-white"
+                      aria-label="Open sidebar navigation"
+                    >
+                      <PanelLeft className="h-5 w-5" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="w-[320px] p-0 flex flex-col">
+                    <div className="flex h-16 items-center border-b px-6">
+                      <Link
+                        href="/dashboard"
+                        className="flex items-center gap-2 font-semibold"
+                      >
+                        <Image
+                          src="/favicon.svg"
+                          alt="Cozy Logo"
+                          width={24}
+                          height={24}
+                          className="h-6 w-6"
+                        />
+                        <span className="text-xl font-bold text-blue-600">Contract to Cozy</span>
+                      </Link>
+                    </div>
+
+                    <div className="py-2 flex-1 overflow-auto">
+                      <SidebarNav user={user} />
+                    </div>
+
+                    <MobileUserNav user={user} />
+                  </SheetContent>
+                </Sheet>
+
                 <Link
                   href="/dashboard"
                   className="flex items-center gap-2 font-semibold shrink-0"
@@ -464,11 +496,6 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 
                 <div className="flex-1 min-w-0" />
                 <DesktopUserNav user={user} inverted />
-              </div>
-            </div>
-            <div className="border-t border-gray-100 px-8 lg:px-14">
-              <div className="mx-auto w-full max-w-[1360px]">
-                <DesktopNav user={user} />
               </div>
             </div>
           </header>
@@ -550,356 +577,6 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
         </div>
       </PropertyProvider>
     </NotificationProvider>
-  );
-}
-
-function DesktopNav({ user }: { user: User | null }) {
-  const pathname = usePathname();
-  const { selectedPropertyId } = usePropertyContext();
-  const resolvedPropertyId = selectedPropertyId || getPropertyIdFromPathname(pathname || '');
-  const [moreOpen, setMoreOpen] = useState(false);
-  const [moreSearch, setMoreSearch] = useState('');
-  const closeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isBuyer = user?.segment === 'HOME_BUYER';
-
-  const roomsHref = isBuyer
-    ? '/dashboard/properties'
-    : buildPropertyAwareHref(resolvedPropertyId, 'rooms', 'rooms');
-
-  const primaryLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
-    {
-      name: 'Dashboard',
-      href: '/dashboard',
-      icon: Home,
-      isActive: (path) => path === '/dashboard',
-    },
-    {
-      name: 'Actions',
-      href: '/dashboard/actions',
-      icon: AlertTriangle,
-      isActive: (path) => path.startsWith('/dashboard/actions'),
-    },
-    {
-      name: 'Properties',
-      href: '/dashboard/properties',
-      icon: Building,
-      isActive: (path) => path.startsWith('/dashboard/properties'),
-    },
-    {
-      name: 'Rooms',
-      href: roomsHref,
-      icon: LayoutGrid,
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/rooms(\/|$)/.test(path),
-    },
-    {
-      name: 'Find Services',
-      href: '/dashboard/providers',
-      icon: Search,
-      isActive: (path) => path.startsWith('/dashboard/providers'),
-    },
-  ];
-
-  type MoreMenuItem = {
-    key: string;
-    name: string;
-    href: string;
-    icon: React.ElementType;
-    isActive: (path: string) => boolean;
-  };
-
-  type MoreMenuBucket = {
-    key: string;
-    label: string;
-    items: MoreMenuItem[];
-  };
-
-  const aiToolItems: MoreMenuItem[] = AI_TOOL_LINKS.map((tool) => ({
-    key: `ai-${tool.key}`,
-    name: tool.name,
-    href: buildAIToolHref(resolvedPropertyId, tool.href),
-    icon: tool.icon,
-    isActive: tool.isActive,
-  }));
-
-  const homeToolItems: MoreMenuItem[] = HOME_TOOL_LINKS.map((tool) => ({
-    key: `home-tool-${tool.key}`,
-    name: tool.name,
-    href: buildPropertyAwareHref(resolvedPropertyId, tool.hrefSuffix, tool.navTarget),
-    icon: tool.icon,
-    isActive: tool.isActive,
-  }));
-
-  const homeAdminItems: MoreMenuItem[] = [
-    {
-      key: 'home-admin-reports',
-      name: 'Reports',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'reports', 'reports'),
-      icon: FileText,
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/reports(\/|$)/.test(path),
-    },
-    {
-      key: 'home-admin-warranties',
-      name: 'Warranties',
-      href: '/dashboard/warranties',
-      icon: Wrench,
-      isActive: (path) => path.startsWith('/dashboard/warranties'),
-    },
-    {
-      key: 'home-admin-insurance',
-      name: 'Insurance',
-      href: '/dashboard/insurance',
-      icon: Shield,
-      isActive: (path) => path.startsWith('/dashboard/insurance'),
-    },
-    {
-      key: 'home-admin-expenses',
-      name: 'Expenses',
-      href: '/dashboard/expenses',
-      icon: DollarSign,
-      isActive: (path) => path.startsWith('/dashboard/expenses'),
-    },
-    {
-      key: 'home-admin-documents',
-      name: 'Documents',
-      href: '/dashboard/documents',
-      icon: FileText,
-      isActive: (path) => path.startsWith('/dashboard/documents'),
-    },
-  ];
-
-  const protectionItems: MoreMenuItem[] = [
-    {
-      key: 'protection-incidents',
-      name: 'Incidents',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'incidents', 'incidents'),
-      icon: ShieldAlert,
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/incidents(\/|$)/.test(path),
-    },
-    {
-      key: 'protection-claims',
-      name: 'Claims',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'claims', 'claims'),
-      icon: ClipboardCheck,
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/claims(\/|$)/.test(path),
-    },
-    {
-      key: 'protection-recalls',
-      name: 'Recalls',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'recalls', 'recalls'),
-      icon: ShieldCheck,
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/recalls(\/|$)/.test(path),
-    },
-  ];
-
-  const moreGroups = [
-    {
-      key: 'group-intelligence',
-      label: 'Intelligence',
-      buckets: [
-        { key: 'bucket-ai-tools', label: 'AI Tools', items: aiToolItems },
-        { key: 'bucket-home-tools', label: 'Home Tools', items: homeToolItems },
-      ],
-    },
-    {
-      key: 'group-management',
-      label: 'Management',
-      buckets: [
-        {
-          key: 'bucket-inventory',
-          label: 'Inventory',
-          items: [
-            {
-              key: 'inventory-main',
-              name: 'Inventory',
-              href: '/dashboard/inventory',
-              icon: Box,
-              isActive: (path: string) => path.startsWith('/dashboard/inventory'),
-            },
-          ],
-        },
-        { key: 'bucket-home-admin', label: 'Home Admin', items: homeAdminItems },
-      ] satisfies MoreMenuBucket[],
-    },
-    {
-      key: 'group-community',
-      label: 'Community',
-      buckets: [
-        { key: 'bucket-protection', label: 'Protection', items: protectionItems },
-        {
-          key: 'bucket-community-events',
-          label: 'Community Events',
-          items: [
-            {
-              key: 'community-events-main',
-              name: 'Community Events',
-              href: '/dashboard/community-events',
-              icon: Globe,
-              isActive: (path: string) => path.startsWith('/dashboard/community-events'),
-            },
-          ],
-        },
-      ] satisfies MoreMenuBucket[],
-    },
-  ] as const;
-
-  const normalizedQuery = moreSearch.trim().toLowerCase();
-  const filteredMoreGroups = moreGroups
-    .map((group) => ({
-      ...group,
-      buckets: group.buckets
-        .map((bucket) => {
-          if (!normalizedQuery) return bucket;
-
-          const bucketMatched =
-            bucket.label.toLowerCase().includes(normalizedQuery) ||
-            group.label.toLowerCase().includes(normalizedQuery);
-
-          return {
-            ...bucket,
-            items: bucketMatched
-              ? bucket.items
-              : bucket.items.filter((item) =>
-                  item.name.toLowerCase().includes(normalizedQuery)
-                ),
-          };
-        })
-        .filter((bucket) => bucket.items.length > 0),
-    }))
-    .filter((group) => group.buckets.length > 0);
-
-  const moreActive = moreGroups.some((group) =>
-    group.buckets.some((bucket) =>
-      bucket.items.some((item) => item.isActive(pathname || ''))
-    )
-  );
-
-  const clearCloseTimer = () => {
-    if (closeTimerRef.current) {
-      clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-  };
-
-  const openMenu = () => {
-    clearCloseTimer();
-    setMoreOpen(true);
-  };
-
-  const scheduleCloseMenu = () => {
-    clearCloseTimer();
-    closeTimerRef.current = setTimeout(() => setMoreOpen(false), 120);
-  };
-
-  useEffect(() => {
-    return () => clearCloseTimer();
-  }, []);
-
-  useEffect(() => {
-    setMoreOpen(false);
-    setMoreSearch('');
-  }, [pathname]);
-
-  const topNavClass = (isActive: boolean) =>
-    cn(
-      'inline-flex min-h-[44px] items-center gap-2 border-b-2 px-1 py-3 text-sm transition-colors duration-150',
-      isActive
-        ? 'border-brand-600 text-brand-600 font-semibold'
-        : 'border-transparent text-gray-700 font-medium hover:text-brand-600'
-    );
-
-  return (
-    <nav className="w-full">
-      <div className="flex items-center gap-6">
-        {primaryLinks.map((link) => {
-          const Icon = link.icon;
-          const isActive = link.isActive(pathname || '');
-          return (
-            <Link key={link.name} href={link.href} className={topNavClass(isActive)}>
-              <Icon className="h-4 w-4" />
-              {link.name}
-            </Link>
-          );
-        })}
-
-        <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className={cn(topNavClass(moreActive), 'h-auto rounded-none px-1')}
-              onMouseEnter={openMenu}
-              onMouseLeave={scheduleCloseMenu}
-            >
-              More
-              <ChevronDown className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            sideOffset={8}
-            className="w-80 p-0"
-            onMouseEnter={openMenu}
-            onMouseLeave={scheduleCloseMenu}
-            onInteractOutside={() => setMoreOpen(false)}
-            onPointerDownOutside={() => setMoreOpen(false)}
-            onEscapeKeyDown={() => setMoreOpen(false)}
-          >
-            <div className="border-b border-gray-100 p-3">
-              <Input
-                value={moreSearch}
-                onChange={(event) => setMoreSearch(event.target.value)}
-                placeholder="Search tools and pages..."
-                className="h-9"
-              />
-            </div>
-
-            <div className="max-h-80 overflow-y-auto p-1.5">
-              {filteredMoreGroups.map((group) => (
-                <div key={group.key} className="mb-2">
-                  <DropdownMenuLabel className="px-2 pb-1 pt-1 text-[10px] uppercase tracking-wide text-gray-400">
-                    {group.label}
-                  </DropdownMenuLabel>
-                  <div className="space-y-1">
-                    {group.buckets.map((bucket) => (
-                      <div key={bucket.key}>
-                        <div className="px-2 pt-1 text-[11px] font-medium text-gray-500">
-                          {bucket.label}
-                        </div>
-                        {bucket.items.map((item) => {
-                          const Icon = item.icon;
-                          return (
-                            <DropdownMenuItem
-                              key={item.key}
-                              asChild
-                              className={cn(
-                                'cursor-pointer',
-                                item.isActive(pathname || '') && 'bg-brand-50 text-brand-700'
-                              )}
-                            >
-                              <Link href={item.href} className="flex items-center gap-2 pl-5">
-                                <Icon className="h-4 w-4" />
-                                {item.name}
-                              </Link>
-                            </DropdownMenuItem>
-                          );
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              {!filteredMoreGroups.length && (
-                <p className="px-2 py-4 text-sm text-gray-500">No results found.</p>
-              )}
-            </div>
-
-            <DropdownMenuSeparator />
-            <div className="px-3 py-2 text-xs text-gray-500">
-              Tip: Press <span className="font-medium">⌘K</span> to jump anywhere
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </nav>
   );
 }
 
