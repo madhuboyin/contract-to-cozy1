@@ -7,8 +7,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, SubmitHandler, useFieldArray, useFormContext } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { motion } from "framer-motion";
-import { Loader2, Save, X, Home as HomeIcon, AlertCircle, Trash2, Plus, Sparkles, ChevronDown } from "lucide-react";
+import { Loader2, Save, X, Home as HomeIcon, AlertCircle, Trash2, Plus, ChevronDown } from "lucide-react";
 
 import {
   PropertyTypes,
@@ -26,7 +25,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/components/ui/use-toast";
 import OnboardingReturnBanner from "@/components/onboarding/OnboardingReturnBanner";
@@ -36,6 +34,7 @@ import PropertyEditHeaderNudge from "@/components/property/PropertyEditHeaderNud
 import PropertyEditSection from "@/components/property/PropertyEditSection";
 import PropertyEditSaveBar from "@/components/property/PropertyEditSaveBar";
 import FieldNudgeChip from "@/components/ui/FieldNudgeChip";
+import { fieldSizeClass } from "@/components/ui/fieldSizing";
 import {
   getPropertyEditPriorityState,
   PROPERTY_SECTION_ORDER,
@@ -251,25 +250,7 @@ const mapDbToForm = (property: any): PropertyFormValues => {
     };
 };
 
-const applianceBentoContainer = {
-  hidden: {},
-  show: {
-    transition: {
-      staggerChildren: 0.05,
-    },
-  },
-};
-
-const applianceBentoItem = {
-  hidden: { opacity: 0, y: 16 },
-  show: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.28, ease: "easeOut" as const },
-  },
-};
-
-// --- Appliance Bento Grid Component ---
+// --- Appliance List Component ---
 const ApplianceBentoGrid = () => {
   const {
     control,
@@ -282,40 +263,28 @@ const ApplianceBentoGrid = () => {
   });
 
   return (
-    <div className="space-y-4">
-      <motion.div
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2"
-        variants={applianceBentoContainer}
-        initial="hidden"
-        animate="show"
-      >
+    <div className="space-y-2">
+      <div className="hidden md:grid grid-cols-12 gap-3 px-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <span className="col-span-6">Appliance</span>
+        <span className="col-span-2">Year</span>
+        <span className="col-span-3">Status</span>
+        <span className="col-span-1 text-right">Remove</span>
+      </div>
+      <div className="space-y-2">
         {fields.map((field, index) => (
-          <motion.div
+          <div
             key={field.id}
-            variants={applianceBentoItem}
-            whileHover={{ scale: 1.02 }}
-            className="relative flex aspect-[5/4] min-h-[220px] flex-col gap-2 overflow-hidden rounded-lg border border-white/70 bg-white/70 p-3 shadow-xl shadow-slate-900/5 backdrop-blur-md before:pointer-events-none before:absolute before:inset-0 before:rounded-lg before:ring-1 before:ring-inset before:ring-white/60 dark:border-slate-700/60 dark:bg-slate-900/60 dark:before:ring-slate-500/20"
+            className="grid grid-cols-1 md:grid-cols-12 items-start gap-3 rounded-md border bg-white p-3 dark:bg-slate-900/30"
           >
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => remove(index)}
-              className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-              aria-label="Remove appliance"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-
             <FormField
               control={control}
               name={`appliances.${index}.type`}
               render={({ field: selectField }) => (
-                <FormItem className="w-full">
-                  <FormLabel className="text-xs">Appliance Type</FormLabel>
+                <FormItem className="md:col-span-6 w-full">
+                  <FormLabel className="text-xs">Appliance</FormLabel>
                   <Select onValueChange={selectField.onChange} value={selectField.value}>
                     <FormControl>
-                      <SelectTrigger className="h-8 text-sm">
+                      <SelectTrigger className={cn("h-10 text-sm", fieldSizeClass("md"))}>
                         <SelectValue placeholder="Select appliance type">
                           {selectField.value ? formatApplianceLabel(selectField.value) : "Select appliance type"}
                         </SelectValue>
@@ -338,8 +307,8 @@ const ApplianceBentoGrid = () => {
               control={control}
               name={`appliances.${index}.installYear`}
               render={({ field: yearField }) => (
-                <FormItem className="w-full">
-                  <FormLabel className="text-xs">Install Year</FormLabel>
+                <FormItem className="md:col-span-2">
+                  <FormLabel className="text-xs">Install year</FormLabel>
                   <FormControl>
                     <Input
                       placeholder={
@@ -359,7 +328,7 @@ const ApplianceBentoGrid = () => {
                       {...yearField}
                       value={yearField.value ?? ""}
                       onChange={(e) => yearField.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))}
-                      className="h-8 text-sm"
+                      className={cn("h-10 text-sm", fieldSizeClass("xs"))}
                     />
                   </FormControl>
                   {!yearField.value && Number.isFinite(Number(watch("yearBuilt"))) && Number(watch("yearBuilt")) >= 1900 ? (
@@ -372,37 +341,52 @@ const ApplianceBentoGrid = () => {
                   ) : null}
                   <FormMessage>{(errors.appliances?.[index] as any)?.installYear?.message}</FormMessage>
                 </FormItem>
-              )}
-            />
+                )}
+              />
 
-            {(() => {
-              const yearVal = watch(`appliances.${index}.installYear`);
-              const feedback = getInstallYearFeedback(Number(yearVal));
-              if (!feedback) return null;
-              return (
-                <span
-                  className={cn(
-                    "inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full w-fit",
-                    feedback.color === "emerald" && "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-                    feedback.color === "amber" && "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-                    feedback.color === "rose" && "bg-rose-50 text-rose-700 font-semibold dark:bg-rose-900/30 dark:text-rose-400",
-                    feedback.age > 20 && "animate-pulse",
-                  )}
-                >
-                  {feedback.label}
-                </span>
-              );
-            })()}
-          </motion.div>
+            <div className="md:col-span-3 flex items-center min-h-10">
+              {(() => {
+                const yearVal = watch(`appliances.${index}.installYear`);
+                const feedback = getInstallYearFeedback(Number(yearVal));
+                if (!feedback) return <span className="text-xs text-muted-foreground">-</span>;
+                return (
+                  <span
+                    className={cn(
+                      "inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full w-fit",
+                      feedback.color === "emerald" && "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+                      feedback.color === "amber" && "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+                      feedback.color === "rose" && "bg-rose-50 text-rose-700 font-semibold dark:bg-rose-900/30 dark:text-rose-400",
+                      feedback.age > 20 && "animate-pulse",
+                    )}
+                  >
+                    {feedback.label}
+                  </span>
+                );
+              })()}
+            </div>
+
+            <div className="md:col-span-1 flex md:justify-end">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => remove(index)}
+                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                aria-label="Remove appliance"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
         ))}
-      </motion.div>
+      </div>
 
       <Button
         type="button"
         variant="outline"
         size="sm"
         onClick={() => append({ type: "", installYear: CURRENT_YEAR })}
-        className="w-full mt-2 border-dashed border-teal-300/80 bg-white/70 text-teal-700 hover:text-teal-900 hover:bg-teal-50/80 dark:border-teal-700/60 dark:bg-slate-900/40 dark:text-teal-300 dark:hover:text-teal-200"
+        className="w-full mt-2 border-dashed border-teal-300/80 text-teal-700 hover:text-teal-900 hover:bg-teal-50/80 dark:border-teal-700/60 dark:text-teal-300 dark:hover:text-teal-200"
       >
         <Plus className="mr-2 h-4 w-4" />
         Add Appliance
@@ -836,37 +820,21 @@ export default function EditPropertyPage() {
 
   return (
     <DashboardShell>
-      <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 bg-white/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-gray-100 dark:border-slate-800 py-3 mb-4">
-        <div className="flex items-center justify-between gap-3">
+      <div className="mx-auto w-full max-w-[1200px] px-4 sm:px-6 lg:px-8">
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border bg-background/95 px-4 py-3">
           <div className="flex items-center gap-2 min-w-0">
             <HomeIcon className="h-5 w-5 text-primary shrink-0" />
-            <h1 className="text-lg font-bold text-gray-900 dark:text-slate-100 truncate">
+            <h1 className="truncate text-base font-semibold text-foreground">
               {property?.name || property?.address || "Property"}
             </h1>
           </div>
-          <motion.div
-            className="hidden xl:flex items-center gap-1.5 rounded-full border border-teal-200/70 bg-white/80 px-3 py-1 text-xs font-medium text-teal-700 shadow-sm"
-            title="The more details you add, the better your reminders and home tips."
-            animate={
-              updateMutation.isPending
-                ? { scale: [1, 1.04, 1], opacity: [0.75, 1, 0.75] }
-                : { scale: 1, opacity: 1 }
-            }
-            transition={
-              updateMutation.isPending
-                ? { duration: 0.8, repeat: Infinity, ease: "easeInOut" }
-                : { duration: 0.2 }
-            }
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            {updateMutation.isPending ? "Saving..." : `Details completeness ${confidenceScore}%`}
-          </motion.div>
-          <div className="hidden md:flex items-center gap-2 shrink-0">
+          <div className="hidden md:flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={() => router.push(contextualReturnTo ?? `/dashboard/properties/${propertyId}`)}
               disabled={updateMutation.isPending}
+              className="h-10"
             >
               <X className="h-4 w-4 mr-1.5" />
               {searchParams.get("from") === "status-board" ? "Back" : "Cancel"}
@@ -876,26 +844,27 @@ export default function EditPropertyPage() {
               onClick={form.handleSubmit(onSubmit)}
               disabled={updateMutation.isPending}
               type="submit"
+              className="h-10"
             >
               {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Save className="h-4 w-4 mr-1.5" />}
-              {updateMutation.isPending ? "Saving…" : "Save Changes"}
+              {updateMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </div>
         </div>
-      </div>
 
-      <OnboardingReturnBanner />
-      <div className="mb-4">
+        <OnboardingReturnBanner />
+        <div className="mb-4">
         <PropertyEditHeaderNudge
           completionCount={priorityState.completionCount}
           completionTotal={priorityState.completionTotal}
           completionPct={priorityState.completionPct}
           nextBestStepText={nextBestStepText}
+          className="py-3"
         />
-      </div>
+        </div>
       
-       {hasErrors && (
-         <div className="mb-4 p-4 border border-red-300 bg-red-50 rounded-md">
+        {hasErrors && (
+          <div className="mb-4 rounded-md border border-red-300 bg-red-50 p-4">
            <div className="flex items-center gap-2 text-red-800 font-medium mb-2">
              <AlertCircle className="h-4 w-4" />
              Please fix the following errors before saving:
@@ -907,571 +876,516 @@ export default function EditPropertyPage() {
                </li>
              ))}
            </ul>
-         </div>
-      )}
+          </div>
+        )}
       
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pb-24 md:pb-8">
-          <PropertyEditSection
-            id="basics"
-            title="Basics"
-            helperText="Keeps your home organized and tips matched to your area."
-            defaultExpandedDesktop={true}
-            defaultExpandedMobile={true}
-            forceExpandOnMobile={startSectionId === "basics"}
-            headerChip={startSectionId === "basics" ? <FieldNudgeChip variant="start" /> : undefined}
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Home nickname</FormLabel>
-                    <FormControl><Input id="field-name" placeholder="Main Home" {...field} value={field.value || ""} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="address"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Street Address</FormLabel>
-                    <FormControl><Input id="field-address" placeholder="123 Main St" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="city"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>City</FormLabel>
-                    <FormControl><Input id="field-city" placeholder="Princeton" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="state"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>State</FormLabel>
-                    <FormControl><Input id="field-state" placeholder="NJ" {...field} maxLength={2} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="zipCode"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Zip Code</FormLabel>
-                    <FormControl><Input id="field-zipCode" placeholder="08540" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="isPrimary"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded-md shadow-sm">
-                    <FormControl>
-                      <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel>Set as main home</FormLabel>
-                      <CardDescription>Your main home gets priority reminders.</CardDescription>
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </PropertyEditSection>
-
-          <PropertyEditSection
-            id="systems"
-            title="Critical systems"
-            helperText="Helps plan maintenance and avoid surprises."
-            defaultExpandedDesktop={true}
-            defaultExpandedMobile={false}
-            forceExpandOnMobile={startSectionId === "systems"}
-            headerChip={startSectionId === "systems" ? <FieldNudgeChip variant="start" /> : undefined}
-          >
-            <div className="space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pb-24 md:pb-8">
+            <PropertyEditSection
+              id="basics"
+              title="Basics"
+              helperText="Keeps your home organized and tips matched to your area."
+              defaultExpandedDesktop={true}
+              defaultExpandedMobile={true}
+              forceExpandOnMobile={startSectionId === "basics"}
+              headerChip={startSectionId === "basics" ? <FieldNudgeChip variant="start" /> : undefined}
+            >
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
                 <FormField
                   control={form.control}
-                  name="propertyType"
+                  name="name"
                   render={({ field }) => (
-                    <FormItem>
-                      <div className="flex items-center gap-2">
-                        <FormLabel>Property Type</FormLabel>
-                        {isRecommended("propertyType") ? <FieldNudgeChip variant="recommended" /> : null}
+                    <FormItem className="lg:col-span-6">
+                      <FormLabel>Home nickname</FormLabel>
+                      <FormControl><Input id="field-name" className="h-10 text-sm" placeholder="Main Home" {...field} value={field.value || ""} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="address"
+                  render={({ field }) => (
+                    <FormItem className="lg:col-span-6">
+                      <FormLabel>Street address</FormLabel>
+                      <FormControl><Input id="field-address" className="h-10 text-sm" placeholder="123 Main St" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="city"
+                  render={({ field }) => (
+                    <FormItem className="lg:col-span-7">
+                      <FormLabel>City</FormLabel>
+                      <FormControl><Input id="field-city" className="h-10 text-sm" placeholder="Princeton" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="lg:col-span-5 flex flex-col gap-3 sm:flex-row sm:items-end lg:justify-end">
+                  <FormField
+                    control={form.control}
+                    name="state"
+                    render={({ field }) => (
+                      <FormItem className={fieldSizeClass("xs")}>
+                        <FormLabel>State</FormLabel>
+                        <FormControl><Input id="field-state" className="h-10 text-sm" placeholder="NJ" {...field} maxLength={2} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="zipCode"
+                    render={({ field }) => (
+                      <FormItem className={fieldSizeClass("sm")}>
+                        <FormLabel>Zip</FormLabel>
+                        <FormControl><Input id="field-zipCode" className="h-10 text-sm" placeholder="08540" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <FormField
+                  control={form.control}
+                  name="isPrimary"
+                  render={({ field }) => (
+                    <FormItem className="lg:col-span-12 flex items-center justify-between rounded-md border px-3 py-2">
+                      <div>
+                        <FormLabel>Set as main home</FormLabel>
+                        <CardDescription className="text-xs">You can change this anytime.</CardDescription>
                       </div>
+                      <FormControl>
+                        <Checkbox checked={field.value ?? false} onCheckedChange={field.onChange} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </PropertyEditSection>
+
+            <PropertyEditSection
+              id="systems"
+              title="Critical systems"
+              helperText="Helps plan maintenance and avoid surprises."
+              defaultExpandedDesktop={true}
+              defaultExpandedMobile={false}
+              forceExpandOnMobile={startSectionId === "systems"}
+              headerChip={startSectionId === "systems" ? <FieldNudgeChip variant="start" /> : undefined}
+            >
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="propertyType"
+                    render={({ field }) => (
+                      <FormItem className={fieldSizeClass("md")}>
+                        <div className="flex items-center gap-2">
+                          <FormLabel>Property type</FormLabel>
+                          {isRecommended("propertyType") ? <FieldNudgeChip variant="recommended" /> : null}
+                        </div>
+                        <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
+                          <FormControl>
+                            <SelectTrigger id="field-propertyType" className="h-10 text-sm"><SelectValue placeholder="Select type" /></SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {Object.values(PropertyTypes).map((type) => (
+                              <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="propertySize"
+                    render={({ field }) => (
+                      <FormItem className={fieldSizeClass("sm")}>
+                        <div className="flex items-center gap-2">
+                          <FormLabel>Approx size (sq ft)</FormLabel>
+                          {isRecommended("propertySize") ? <FieldNudgeChip variant="recommended" /> : null}
+                        </div>
+                        <FormControl>
+                          <Input id="field-propertySize" className="h-10 text-sm" placeholder="e.g., 2500" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="yearBuilt"
+                    render={({ field }) => (
+                      <FormItem className={fieldSizeClass("xs")}>
+                        <div className="flex items-center gap-2">
+                          <FormLabel>Year built</FormLabel>
+                          {isRecommended("yearBuilt") ? <FieldNudgeChip variant="recommended" /> : null}
+                        </div>
+                        <FormControl>
+                          <Input id="field-yearBuilt" className="h-10 text-sm" placeholder="e.g., 1995" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  <div className="rounded-md border p-4 space-y-3">
+                    <p className="text-sm font-medium">HVAC</p>
+                    <FormField
+                      control={form.control}
+                      name="heatingType"
+                      render={({ field }) => (
+                        <FormItem className={fieldSizeClass("md")}>
+                          <FormLabel>Heating type</FormLabel>
+                          <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
+                            <FormControl>
+                              <SelectTrigger id="field-heatingType" className="h-10 text-sm"><SelectValue placeholder="Select type" /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {Object.values(HeatingTypes).map((type) => (
+                                <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="coolingType"
+                      render={({ field }) => (
+                        <FormItem className={fieldSizeClass("md")}>
+                          <FormLabel>Cooling type</FormLabel>
+                          <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
+                            <FormControl>
+                              <SelectTrigger id="field-coolingType" className="h-10 text-sm"><SelectValue placeholder="Select type" /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {Object.values(CoolingTypes).map((type) => (
+                                <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="hvacInstallYear"
+                      render={({ field }) => (
+                        <FormItem className={fieldSizeClass("xs")}>
+                          <div className="flex items-center gap-2">
+                            <FormLabel>Install year</FormLabel>
+                            {isRecommended("hvacInstallYear") ? <FieldNudgeChip variant="recommended" /> : null}
+                          </div>
+                          <FormControl>
+                            <Input id="field-hvacInstallYear" className="h-10 text-sm" placeholder="2018" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                          </FormControl>
+                          {(() => {
+                            const fb = getInstallYearFeedback(field.value);
+                            if (!fb) return null;
+                            const colorMap = {
+                              emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50",
+                              amber: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50",
+                              rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800/50",
+                            };
+                            return <span className={cn("mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium", colorMap[fb.color!])}>{fb.label}</span>;
+                          })()}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="rounded-md border p-4 space-y-3">
+                    <p className="text-sm font-medium">Water heater</p>
+                    <FormField
+                      control={form.control}
+                      name="waterHeaterType"
+                      render={({ field }) => (
+                        <FormItem className={fieldSizeClass("md")}>
+                          <FormLabel>Type</FormLabel>
+                          <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
+                            <FormControl>
+                              <SelectTrigger id="field-waterHeaterType" className="h-10 text-sm"><SelectValue placeholder="Select type" /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {Object.values(WaterHeaterTypes).map((type) => (
+                                <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="waterHeaterInstallYear"
+                      render={({ field }) => (
+                        <FormItem className={fieldSizeClass("xs")}>
+                          <div className="flex items-center gap-2">
+                            <FormLabel>Install year</FormLabel>
+                            {isRecommended("waterHeaterInstallYear") ? <FieldNudgeChip variant="recommended" /> : null}
+                          </div>
+                          <FormControl>
+                            <Input id="field-waterHeaterInstallYear" className="h-10 text-sm" placeholder="2020" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                          </FormControl>
+                          {(() => {
+                            const fb = getInstallYearFeedback(field.value);
+                            if (!fb) return null;
+                            const colorMap = {
+                              emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50",
+                              amber: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50",
+                              rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800/50",
+                            };
+                            return <span className={cn("mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium", colorMap[fb.color!])}>{fb.label}</span>;
+                          })()}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="rounded-md border p-4 space-y-3">
+                    <p className="text-sm font-medium">Roof</p>
+                    <FormField
+                      control={form.control}
+                      name="roofType"
+                      render={({ field }) => (
+                        <FormItem className={fieldSizeClass("md")}>
+                          <FormLabel>Roof type</FormLabel>
+                          <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
+                            <FormControl>
+                              <SelectTrigger id="field-roofType" className="h-10 text-sm"><SelectValue placeholder="Select type" /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {Object.values(RoofTypes).map((type) => (
+                                <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="roofReplacementYear"
+                      render={({ field }) => (
+                        <FormItem className={fieldSizeClass("xs")}>
+                          <div className="flex items-center gap-2">
+                            <FormLabel>Replacement year</FormLabel>
+                            {isRecommended("roofReplacementYear") ? <FieldNudgeChip variant="recommended" /> : null}
+                          </div>
+                          <FormControl>
+                            <Input id="field-roofReplacementYear" className="h-10 text-sm" placeholder="2010" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                          </FormControl>
+                          {(() => {
+                            const fb = getInstallYearFeedback(field.value);
+                            if (!fb) return null;
+                            const colorMap = {
+                              emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50",
+                              amber: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50",
+                              rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800/50",
+                            };
+                            return <span className={cn("mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium", colorMap[fb.color!])}>{fb.label}</span>;
+                          })()}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+              </div>
+            </PropertyEditSection>
+
+            <PropertyEditSection
+              id="safety"
+              title="Safety"
+              helperText="Quick checks that help protect your home."
+              defaultExpandedDesktop={true}
+              defaultExpandedMobile={false}
+              forceExpandOnMobile={startSectionId === "safety"}
+              headerChip={startSectionId === "safety" ? <FieldNudgeChip variant="start" /> : undefined}
+            >
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {(Object.keys(CHECKBOX_META) as CheckboxField[]).map((fieldName) => {
+                  const meta = CHECKBOX_META[fieldName];
+                  const styles = CHECKBOX_IMPACT_STYLES[meta.impact];
+                  return (
+                    <FormField
+                      key={fieldName}
+                      control={form.control}
+                      name={fieldName}
+                      render={({ field }) => {
+                        const isChecked = Boolean(field.value);
+                        return (
+                          <FormItem>
+                            <FormControl>
+                              <label
+                                htmlFor={`checkbox-${fieldName}`}
+                                className={cn(
+                                  "flex items-center justify-between gap-3 rounded-md border px-3 py-2.5",
+                                  isChecked ? styles.checked : styles.unchecked,
+                                )}
+                              >
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-foreground">{meta.label}</p>
+                                  <p className="text-xs text-muted-foreground">{meta.hint}</p>
+                                </div>
+                                <Checkbox id={`checkbox-${fieldName}`} checked={isChecked} onCheckedChange={field.onChange} />
+                              </label>
+                            </FormControl>
+                          </FormItem>
+                        );
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            </PropertyEditSection>
+
+            <PropertyEditSection
+              id="occupancy"
+              title="Occupancy"
+              helperText="Helps personalize your home plan."
+              defaultExpandedDesktop={true}
+              defaultExpandedMobile={false}
+              forceExpandOnMobile={startSectionId === "occupancy"}
+              headerChip={startSectionId === "occupancy" ? <FieldNudgeChip variant="start" /> : undefined}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="bedrooms"
+                  render={({ field }) => (
+                    <FormItem className={fieldSizeClass("sm")}>
+                      <FormLabel>Bedrooms</FormLabel>
+                      <FormControl><Input id="field-bedrooms" className="h-10 text-sm" placeholder="3" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="bathrooms"
+                  render={({ field }) => (
+                    <FormItem className={fieldSizeClass("sm")}>
+                      <FormLabel>Bathrooms</FormLabel>
+                      <FormControl><Input id="field-bathrooms" className="h-10 text-sm" placeholder="2.5" type="number" step="0.5" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="occupantsCount"
+                  render={({ field }) => (
+                    <FormItem className={fieldSizeClass("sm")}>
+                      <FormLabel>People in home</FormLabel>
+                      <FormControl><Input id="field-occupantsCount" className="h-10 text-sm" placeholder="4" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="ownershipType"
+                  render={({ field }) => (
+                    <FormItem className={fieldSizeClass("md")}>
+                      <FormLabel>How you use this property</FormLabel>
                       <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                         <FormControl>
-                          <SelectTrigger id="field-propertyType"><SelectValue placeholder="Select type" /></SelectTrigger>
+                          <SelectTrigger id="field-ownershipType" className="h-10 text-sm"><SelectValue placeholder="Select type" /></SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {Object.values(PropertyTypes).map((type) => (
+                          {Object.values(OwnershipTypes).map((type) => (
                             <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                      {isRecommended("propertyType") ? <p className="text-xs text-muted-foreground mt-1">Recommended — helps plan maintenance.</p> : null}
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="propertySize"
-                  render={({ field }) => (
-                    <FormItem>
-                      <div className="flex items-center gap-2">
-                        <FormLabel>Approximate size (sq ft)</FormLabel>
-                        {isRecommended("propertySize") ? <FieldNudgeChip variant="recommended" /> : null}
-                      </div>
-                      <FormControl>
-                        <Input id="field-propertySize" placeholder="e.g., 2500" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
-                      </FormControl>
-                      {isRecommended("propertySize") ? <p className="text-xs text-muted-foreground mt-1">Recommended — helps plan maintenance.</p> : null}
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="yearBuilt"
-                  render={({ field }) => (
-                    <FormItem className="max-w-[160px]">
-                      <div className="flex items-center gap-2">
-                        <FormLabel>Year built</FormLabel>
-                        {isRecommended("yearBuilt") ? <FieldNudgeChip variant="recommended" /> : null}
-                      </div>
-                      <FormControl>
-                        <Input id="field-yearBuilt" placeholder="e.g., 1995" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
-                      </FormControl>
-                      {isRecommended("yearBuilt") ? <p className="text-xs text-muted-foreground mt-1">Recommended — helps plan maintenance.</p> : null}
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
+            </PropertyEditSection>
 
-              <Separator />
-
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Heating & Cooling</p>
-                <div className="flex flex-col sm:flex-row gap-3 items-start">
-                  <FormField
-                    control={form.control}
-                    name="heatingType"
-                    render={({ field }) => (
-                      <FormItem className="flex-1 min-w-0 max-w-xs">
-                        <div className="flex items-center gap-2">
-                          <FormLabel>Heating Type</FormLabel>
-                          {isRecommended("heatingType") ? <FieldNudgeChip variant="recommended" /> : null}
-                        </div>
-                        <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
-                          <FormControl>
-                            <SelectTrigger id="field-heatingType"><SelectValue placeholder="Select type" /></SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {Object.values(HeatingTypes).map((type) => (
-                              <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {isRecommended("heatingType") ? <p className="text-xs text-muted-foreground mt-1">Recommended — helps plan maintenance.</p> : null}
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="hvacInstallYear"
-                    render={({ field }) => (
-                      <FormItem className="w-full sm:w-36 flex-none">
-                        <div className="flex items-center gap-2">
-                          <FormLabel>HVAC Install Year</FormLabel>
-                          {isRecommended("hvacInstallYear") ? <FieldNudgeChip variant="recommended" /> : null}
-                        </div>
-                        <FormControl>
-                          <Input id="field-hvacInstallYear" placeholder="e.g., 2018" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} className="w-full" />
-                        </FormControl>
-                        {isRecommended("hvacInstallYear") ? <p className="text-xs text-muted-foreground mt-1">Recommended — helps plan maintenance.</p> : null}
-                        {(() => {
-                          const fb = getInstallYearFeedback(field.value);
-                          if (!fb) return null;
-                          const colorMap = {
-                            emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50",
-                            amber: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50",
-                            rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800/50",
-                          };
-                          return (
-                            <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium mt-1", colorMap[fb.color!], fb.age > 20 && "animate-pulse")}>
-                              {fb.label}
-                            </span>
-                          );
-                        })()}
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="coolingType"
-                    render={({ field }) => (
-                      <FormItem className="w-full sm:max-w-xs">
-                        <div className="flex items-center gap-2">
-                          <FormLabel>Cooling Type</FormLabel>
-                          {isRecommended("coolingType") ? <FieldNudgeChip variant="recommended" /> : null}
-                        </div>
-                        <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
-                          <FormControl>
-                            <SelectTrigger id="field-coolingType"><SelectValue placeholder="Select type" /></SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {Object.values(CoolingTypes).map((type) => (
-                              <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {isRecommended("coolingType") ? <p className="text-xs text-muted-foreground mt-1">Recommended — helps plan maintenance.</p> : null}
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Water Heater</p>
-                <div className="flex flex-col sm:flex-row gap-3 items-start">
-                  <FormField
-                    control={form.control}
-                    name="waterHeaterType"
-                    render={({ field }) => (
-                      <FormItem className="flex-1 min-w-0 max-w-xs">
-                        <div className="flex items-center gap-2">
-                          <FormLabel>Water Heater Type</FormLabel>
-                          {isRecommended("waterHeaterType") ? <FieldNudgeChip variant="recommended" /> : null}
-                        </div>
-                        <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
-                          <FormControl>
-                            <SelectTrigger id="field-waterHeaterType"><SelectValue placeholder="Select type" /></SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {Object.values(WaterHeaterTypes).map((type) => (
-                              <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {isRecommended("waterHeaterType") ? <p className="text-xs text-muted-foreground mt-1">Recommended — helps plan maintenance.</p> : null}
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="waterHeaterInstallYear"
-                    render={({ field }) => (
-                      <FormItem className="w-full sm:w-36 flex-none">
-                        <div className="flex items-center gap-2">
-                          <FormLabel>Water Heater Install Year</FormLabel>
-                          {isRecommended("waterHeaterInstallYear") ? <FieldNudgeChip variant="recommended" /> : null}
-                        </div>
-                        <FormControl>
-                          <Input id="field-waterHeaterInstallYear" placeholder="e.g., 2020" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} className="w-full" />
-                        </FormControl>
-                        {isRecommended("waterHeaterInstallYear") ? <p className="text-xs text-muted-foreground mt-1">Recommended — helps plan maintenance.</p> : null}
-                        {(() => {
-                          const fb = getInstallYearFeedback(field.value);
-                          if (!fb) return null;
-                          const colorMap = {
-                            emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50",
-                            amber: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50",
-                            rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800/50",
-                          };
-                          return (
-                            <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium mt-1", colorMap[fb.color!], fb.age > 20 && "animate-pulse")}>
-                              {fb.label}
-                            </span>
-                          );
-                        })()}
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Roof</p>
-                <div className="flex flex-col sm:flex-row gap-3 items-start">
-                  <FormField
-                    control={form.control}
-                    name="roofType"
-                    render={({ field }) => (
-                      <FormItem className="flex-1 min-w-0 max-w-xs">
-                        <div className="flex items-center gap-2">
-                          <FormLabel>Roof Type</FormLabel>
-                          {isRecommended("roofType") ? <FieldNudgeChip variant="recommended" /> : null}
-                        </div>
-                        <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
-                          <FormControl>
-                            <SelectTrigger id="field-roofType"><SelectValue placeholder="Select type" /></SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {Object.values(RoofTypes).map((type) => (
-                              <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {isRecommended("roofType") ? <p className="text-xs text-muted-foreground mt-1">Recommended — helps plan maintenance.</p> : null}
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="roofReplacementYear"
-                    render={({ field }) => (
-                      <FormItem className="w-full sm:w-36 flex-none">
-                        <div className="flex items-center gap-2">
-                          <FormLabel>Roof Replacement Year</FormLabel>
-                          {isRecommended("roofReplacementYear") ? <FieldNudgeChip variant="recommended" /> : null}
-                        </div>
-                        <FormControl>
-                          <Input id="field-roofReplacementYear" placeholder="e.g., 2010" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} className="w-full" />
-                        </FormControl>
-                        {isRecommended("roofReplacementYear") ? <p className="text-xs text-muted-foreground mt-1">Recommended — helps plan maintenance.</p> : null}
-                        {(() => {
-                          const fb = getInstallYearFeedback(field.value);
-                          if (!fb) return null;
-                          const colorMap = {
-                            emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50",
-                            amber: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50",
-                            rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800/50",
-                          };
-                          return (
-                            <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium mt-1", colorMap[fb.color!], fb.age > 20 && "animate-pulse")}>
-                              {fb.label}
-                            </span>
-                          );
-                        })()}
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-            </div>
-          </PropertyEditSection>
-
-          <PropertyEditSection
-            id="safety"
-            title="Safety"
-            helperText="Quick checks that help protect your home."
-            defaultExpandedDesktop={true}
-            defaultExpandedMobile={false}
-            forceExpandOnMobile={startSectionId === "safety"}
-            headerChip={startSectionId === "safety" ? <FieldNudgeChip variant="start" /> : undefined}
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-              {(Object.keys(CHECKBOX_META) as CheckboxField[]).map((fieldName) => {
-                const meta = CHECKBOX_META[fieldName];
-                const styles = CHECKBOX_IMPACT_STYLES[meta.impact];
-
-                return (
-                  <FormField
-                    key={fieldName}
-                    control={form.control}
-                    name={fieldName}
-                    render={({ field }) => {
-                      const isChecked = Boolean(field.value);
-                      return (
-                        <FormItem>
-                          <FormControl>
-                            <label
-                              htmlFor={`checkbox-${fieldName}`}
-                              className={cn(
-                                "flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-all",
-                                isChecked ? styles.checked : styles.unchecked,
-                                "hover:border-gray-300 dark:hover:border-slate-600",
-                              )}
-                            >
-                              {isChecked && <span className={cn("mt-0.5 h-2 w-2 shrink-0 rounded-full", styles.dot)} />}
-                              {!isChecked && <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-gray-200 dark:bg-slate-600" />}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <Checkbox id={`checkbox-${fieldName}`} checked={isChecked} onCheckedChange={field.onChange} className="sr-only" />
-                                  <span className="text-sm font-medium text-gray-800 dark:text-slate-200">{meta.label}</span>
-                                </div>
-                                <p className={cn("mt-0.5 text-xs", isChecked ? styles.hint : "text-gray-400 dark:text-slate-500")}>
-                                  {meta.hint}
-                                </p>
-                              </div>
-                            </label>
-                          </FormControl>
-                        </FormItem>
-                      );
-                    }}
-                  />
-                );
-              })}
-            </div>
-          </PropertyEditSection>
-
-          <PropertyEditSection
-            id="occupancy"
-            title="Occupancy"
-            helperText="Helps personalize your home plan."
-            defaultExpandedDesktop={true}
-            defaultExpandedMobile={false}
-            forceExpandOnMobile={startSectionId === "occupancy"}
-            headerChip={startSectionId === "occupancy" ? <FieldNudgeChip variant="start" /> : undefined}
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="bedrooms"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Bedrooms</FormLabel>
-                    <FormControl><Input id="field-bedrooms" placeholder="e.g., 3" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="bathrooms"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Bathrooms</FormLabel>
-                    <FormControl><Input id="field-bathrooms" placeholder="e.g., 2.5" type="number" step="0.5" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="occupantsCount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>People in home</FormLabel>
-                    <FormControl><Input id="field-occupantsCount" placeholder="e.g., 4" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="ownershipType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>How you use this property</FormLabel>
-                    <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
-                      <FormControl>
-                        <SelectTrigger id="field-ownershipType"><SelectValue placeholder="Select type" /></SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {Object.values(OwnershipTypes).map((type) => (
-                          <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </PropertyEditSection>
-
-          <PropertyEditSection
-            id="appliances"
-            title="Appliances"
-            helperText="Optional — add if you know it."
-            defaultExpandedDesktop={true}
-            defaultExpandedMobile={false}
-            forceExpandOnMobile={startSectionId === "appliances"}
-            headerChip={startSectionId === "appliances" ? <FieldNudgeChip variant="start" /> : <FieldNudgeChip variant="optional" />}
-          >
-            <div className="space-y-3">
-              <div className="rounded-lg border border-dashed border-teal-200 bg-teal-50/40 p-3 dark:border-teal-900/50 dark:bg-teal-950/20">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    {applianceCount > 0 ? (
-                      <>
-                        <p className="text-sm font-medium text-foreground">{applianceCount} appliances added</p>
-                        <p className="text-xs text-muted-foreground">Expand to edit</p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-sm font-medium text-foreground">Optional — add if you know it.</p>
-                        <p className="text-xs text-muted-foreground">Helps with maintenance reminders.</p>
-                      </>
-                    )}
+            <PropertyEditSection
+              id="appliances"
+              title="Appliances"
+              helperText="Optional — add if you know it."
+              defaultExpandedDesktop={true}
+              defaultExpandedMobile={false}
+              forceExpandOnMobile={startSectionId === "appliances"}
+              headerChip={startSectionId === "appliances" ? <FieldNudgeChip variant="start" /> : <FieldNudgeChip variant="optional" />}
+            >
+              <div className="space-y-3">
+                <div className="rounded-md border border-dashed p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      {applianceCount > 0 ? (
+                        <>
+                          <p className="text-sm font-medium text-foreground">{applianceCount} appliances added</p>
+                          <p className="text-xs text-muted-foreground">Expand to edit</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm font-medium text-foreground">Optional — add if you know it.</p>
+                          <p className="text-xs text-muted-foreground">Helps with maintenance reminders.</p>
+                        </>
+                      )}
+                    </div>
+                    <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => setAppliancesExpanded((prev) => !prev)}>
+                      {appliancesExpanded ? "Collapse" : "Expand"}
+                      <ChevronDown className={cn("ml-1.5 h-4 w-4 transition-transform", appliancesExpanded && "rotate-180")} />
+                    </Button>
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={() => setAppliancesExpanded((prev) => !prev)}>
-                    {appliancesExpanded ? "Collapse" : "Expand"}
-                    <ChevronDown className={cn("ml-1.5 h-4 w-4 transition-transform", appliancesExpanded && "rotate-180")} />
-                  </Button>
                 </div>
+                {appliancesExpanded ? <ApplianceBentoGrid /> : null}
               </div>
+            </PropertyEditSection>
 
-              {appliancesExpanded ? (
-                <>
-                  <ApplianceBentoGrid />
-                  <p className="text-xs text-muted-foreground">Tracking your appliances helps us remind you when replacements are coming up.</p>
-                </>
-              ) : null}
-            </div>
-          </PropertyEditSection>
-
-          <div className="hidden md:flex sticky bottom-0 z-20 -mx-6 px-6 py-3 bg-background/95 backdrop-blur-sm border-t border-border shadow-[0_-1px_6px_rgba(0,0,0,0.06)] items-center justify-between gap-3">
-            <div>
+            <div className="hidden md:flex items-center justify-between rounded-lg border px-4 py-3">
               <p className="text-sm text-muted-foreground">Takes a second. You can edit anytime.</p>
-              <p className="text-xs text-muted-foreground">Details completeness {confidenceScore}%</p>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => router.back()} disabled={updateMutation.isPending} className="h-10">
+                  <X className="mr-1.5 h-4 w-4" />
+                  Cancel
+                </Button>
+                <Button type="submit" size="sm" disabled={updateMutation.isPending} className="h-10 min-w-[130px]">
+                  {updateMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-1.5 h-4 w-4" />
+                      Save Changes
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center gap-2 ml-auto">
-              <Button type="button" variant="outline" size="sm" onClick={() => router.back()} disabled={updateMutation.isPending}>
-                <X className="mr-1.5 h-4 w-4" />
-                Cancel
-              </Button>
-              <Button type="submit" size="sm" disabled={updateMutation.isPending} className="min-w-[120px]">
-                {updateMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                    Saving…
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-1.5 h-4 w-4" />
-                    Save Changes
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
 
-          <PropertyEditSaveBar
-            isSaving={updateMutation.isPending}
-            onSave={form.handleSubmit(onSubmit)}
-            onCancel={() => router.back()}
-          />
-        </form>
-      </Form>
+            <PropertyEditSaveBar
+              isSaving={updateMutation.isPending}
+              onSave={form.handleSubmit(onSubmit)}
+              onCancel={() => router.back()}
+            />
+          </form>
+        </Form>
+      </div>
     </DashboardShell>
   );
 }

@@ -15,6 +15,7 @@ interface PropertyEditSectionProps {
   defaultExpandedMobile?: boolean;
   forceExpandOnMobile?: boolean;
   headerChip?: React.ReactNode;
+  className?: string;
   children: React.ReactNode;
 }
 
@@ -26,6 +27,7 @@ export default function PropertyEditSection({
   defaultExpandedMobile,
   forceExpandOnMobile = false,
   headerChip,
+  className,
   children,
 }: PropertyEditSectionProps) {
   const [mobileExpanded, setMobileExpanded] = React.useState(defaultExpandedMobile ?? defaultExpandedDesktop);
@@ -38,8 +40,12 @@ export default function PropertyEditSection({
   }, [forceExpandOnMobile]);
 
   return (
-    <Card id={id} data-property-section={id} className="border-l-4 border-l-teal-400/70 dark:border-l-teal-600/50">
-      <CardHeader className="space-y-2">
+    <Card
+      id={id}
+      data-property-section={id}
+      className={cn("border-l-4 border-l-teal-400/70 dark:border-l-teal-600/50", className)}
+    >
+      <CardHeader className="space-y-2 p-5 pb-3 sm:p-6 sm:pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -79,6 +85,7 @@ export default function PropertyEditSection({
       <CardContent
         id={`${id}-content`}
         className={cn(
+          "p-5 pt-0 sm:p-6 sm:pt-0",
           !mobileExpanded && "hidden",
           desktopExpanded ? "md:block" : "md:hidden",
         )}
