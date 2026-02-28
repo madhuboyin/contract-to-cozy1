@@ -7,7 +7,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, SubmitHandler, useFieldArray, useFormContext } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Loader2, Save, X, Home as HomeIcon, AlertCircle, Trash2, Plus } from "lucide-react";
+import { motion } from "framer-motion";
+import { Loader2, Save, X, Home as HomeIcon, AlertCircle, Trash2, Plus, Sparkles } from "lucide-react";
 
 import {
   PropertyTypes,
@@ -30,6 +31,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/components/ui/use-toast";
 import OnboardingReturnBanner from "@/components/onboarding/OnboardingReturnBanner";
 import { cn } from "@/lib/utils";
+import { humanizeLabel } from "@/lib/utils/string";
 
 
 // --- Appliance Constants and Schemas ---
@@ -55,7 +57,7 @@ const APPLIANCE_DISPLAY_LABELS: Record<string, string> = {
 function formatApplianceLabel(type: string): string {
   return (
     APPLIANCE_DISPLAY_LABELS[type] ??
-    type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    humanizeLabel(type)
   );
 }
 
@@ -87,20 +89,21 @@ const SYSTEM_ENUM_DISPLAY_MAP: Record<string, string> = {
 function formatEnumLabel(value: string): string {
   return (
     SYSTEM_ENUM_DISPLAY_MAP[value] ??
-    value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    humanizeLabel(value)
   );
 }
 
 function getInstallYearFeedback(year: number | null | undefined): {
   label: string;
   color: "emerald" | "amber" | "rose" | null;
+  age: number;
 } | null {
   if (!year || year < 1900 || year > CURRENT_YEAR) return null;
   const age = CURRENT_YEAR - year;
   if (age === 0) return null;
-  if (age <= 8) return { label: `${age} yrs · Good condition`, color: "emerald" };
-  if (age <= 15) return { label: `${age} yrs · Monitor closely`, color: "amber" };
-  return { label: `${age} yrs · Approaching replacement`, color: "rose" };
+  if (age <= 8) return { label: `${age} yrs · Good condition`, color: "emerald", age };
+  if (age <= 15) return { label: `${age} yrs · Monitor closely`, color: "amber", age };
+  return { label: `${age} yrs · Approaching replacement`, color: "rose", age };
 }
 
 // Schema for a single HomeAsset record being sent from the frontend
@@ -239,8 +242,26 @@ const mapDbToForm = (property: any): PropertyFormValues => {
     };
 };
 
-// --- Appliance Field Array Component ---
-const ApplianceFieldArray = () => {
+const applianceBentoContainer = {
+  hidden: {},
+  show: {
+    transition: {
+      staggerChildren: 0.05,
+    },
+  },
+};
+
+const applianceBentoItem = {
+  hidden: { opacity: 0, y: 16 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.28, ease: "easeOut" as const },
+  },
+};
+
+// --- Appliance Bento Grid Component ---
+const ApplianceBentoGrid = () => {
   const {
     control,
     formState: { errors },
@@ -253,11 +274,18 @@ const ApplianceFieldArray = () => {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+      <motion.div
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2"
+        variants={applianceBentoContainer}
+        initial="hidden"
+        animate="show"
+      >
         {fields.map((field, index) => (
-          <div
+          <motion.div
             key={field.id}
-            className="relative flex flex-col gap-2 bg-gray-50 dark:bg-gray-900/40 p-3 rounded-lg border border-gray-200 dark:border-gray-700"
+            variants={applianceBentoItem}
+            whileHover={{ scale: 1.02 }}
+            className="relative flex aspect-[5/4] min-h-[220px] flex-col gap-2 overflow-hidden rounded-lg border border-white/70 bg-white/70 p-3 shadow-xl shadow-slate-900/5 backdrop-blur-md before:pointer-events-none before:absolute before:inset-0 before:rounded-lg before:ring-1 before:ring-inset before:ring-white/60 dark:border-slate-700/60 dark:bg-slate-900/60 dark:before:ring-slate-500/20"
           >
             <Button
               type="button"
@@ -305,7 +333,18 @@ const ApplianceFieldArray = () => {
                   <FormLabel className="text-xs">Install Year</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="YYYY"
+                      placeholder={
+                        yearField.value
+                          ? "YYYY"
+                          : Number.isFinite(Number(watch("yearBuilt"))) && Number(watch("yearBuilt")) >= 1900
+                            ? String(Number(watch("yearBuilt")))
+                            : "YYYY"
+                      }
+                      title={
+                        !yearField.value && Number.isFinite(Number(watch("yearBuilt"))) && Number(watch("yearBuilt")) >= 1900
+                          ? "Suggest based on home age"
+                          : undefined
+                      }
                       type="number"
                       maxLength={4}
                       {...yearField}
@@ -314,6 +353,14 @@ const ApplianceFieldArray = () => {
                       className="h-8 text-sm"
                     />
                   </FormControl>
+                  {!yearField.value && Number.isFinite(Number(watch("yearBuilt"))) && Number(watch("yearBuilt")) >= 1900 ? (
+                    <p
+                      className="mt-0.5 text-[11px] text-muted-foreground"
+                      title={`Suggest based on home age: ${Number(watch("yearBuilt"))}`}
+                    >
+                      Suggest based on home age
+                    </p>
+                  ) : null}
                   <FormMessage>{(errors.appliances?.[index] as any)?.installYear?.message}</FormMessage>
                 </FormItem>
               )}
@@ -330,22 +377,23 @@ const ApplianceFieldArray = () => {
                     feedback.color === "emerald" && "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
                     feedback.color === "amber" && "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
                     feedback.color === "rose" && "bg-rose-50 text-rose-700 font-semibold dark:bg-rose-900/30 dark:text-rose-400",
+                    feedback.age > 20 && "animate-pulse",
                   )}
                 >
                   {feedback.label}
                 </span>
               );
             })()}
-          </div>
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
 
       <Button
         type="button"
         variant="outline"
         size="sm"
         onClick={() => append({ type: "", installYear: CURRENT_YEAR })}
-        className="w-full mt-2 border-dashed text-muted-foreground hover:text-foreground"
+        className="w-full mt-2 border-dashed border-teal-300/80 bg-white/70 text-teal-700 hover:text-teal-900 hover:bg-teal-50/80 dark:border-teal-700/60 dark:bg-slate-900/40 dark:text-teal-300 dark:hover:text-teal-200"
       >
         <Plus className="mr-2 h-4 w-4" />
         Add Appliance
@@ -549,6 +597,46 @@ export default function EditPropertyPage() {
   }
 
   const hasErrors = Object.keys(form.formState.errors).length > 0;
+  const [watchAddress, watchCity, watchState, watchZipCode, watchPropertyType, watchHeatingType, watchCoolingType, watchWaterHeaterType, watchRoofType, watchYearBuilt, watchBedrooms, watchBathrooms, watchOccupantsCount, watchAppliances] = form.watch([
+    "address",
+    "city",
+    "state",
+    "zipCode",
+    "propertyType",
+    "heatingType",
+    "coolingType",
+    "waterHeaterType",
+    "roofType",
+    "yearBuilt",
+    "bedrooms",
+    "bathrooms",
+    "occupantsCount",
+    "appliances",
+  ]);
+  const confidenceScore = React.useMemo(() => {
+    const required = [watchAddress, watchCity, watchState, watchZipCode, watchPropertyType, watchHeatingType, watchCoolingType, watchWaterHeaterType, watchRoofType];
+    const optional = [watchYearBuilt, watchBedrooms, watchBathrooms, watchOccupantsCount];
+    const requiredFilled = required.filter((value) => value !== null && value !== undefined && String(value).trim() !== "").length;
+    const optionalFilled = optional.filter((value) => value !== null && value !== undefined && String(value).trim() !== "").length;
+    const applianceCount = Array.isArray(watchAppliances) ? watchAppliances.length : 0;
+    const score = (requiredFilled / required.length) * 70 + (optionalFilled / optional.length) * 20 + Math.min(10, applianceCount * 2);
+    return Math.max(0, Math.min(100, Math.round(score)));
+  }, [
+    watchAddress,
+    watchCity,
+    watchState,
+    watchZipCode,
+    watchPropertyType,
+    watchHeatingType,
+    watchCoolingType,
+    watchWaterHeaterType,
+    watchRoofType,
+    watchYearBuilt,
+    watchBedrooms,
+    watchBathrooms,
+    watchOccupantsCount,
+    watchAppliances,
+  ]);
   const CHECKBOX_META = {
     hasSmokeDetectors: { label: "Has Smoke Detectors", hint: "Crucial for SAFETY risk score.", impact: "positive" as const },
     hasCoDetectors: { label: "Has CO Detectors", hint: "Crucial for SAFETY risk score.", impact: "positive" as const },
@@ -591,6 +679,22 @@ export default function EditPropertyPage() {
               Edit Property: {property?.name || property?.address || "Property"}
             </h1>
           </div>
+          <motion.div
+            className="hidden xl:flex items-center gap-1.5 rounded-full border border-teal-200/70 bg-white/80 px-3 py-1 text-xs font-medium text-teal-700 shadow-sm"
+            animate={
+              updateMutation.isPending
+                ? { scale: [1, 1.04, 1], opacity: [0.75, 1, 0.75] }
+                : { scale: 1, opacity: 1 }
+            }
+            transition={
+              updateMutation.isPending
+                ? { duration: 0.8, repeat: Infinity, ease: "easeInOut" }
+                : { duration: 0.2 }
+            }
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            {updateMutation.isPending ? "Confidence recalculating..." : `Confidence ${confidenceScore}%`}
+          </motion.div>
           <div className="flex items-center gap-2 shrink-0">
             <Button
               variant="outline"
@@ -634,7 +738,7 @@ export default function EditPropertyPage() {
       
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-            <Card className="border-l-4 border-l-teal-400/70 dark:border-l-teal-600/50">
+            <Card className="border-l-4 border-l-teal-400/70 bg-white/70 backdrop-blur-md shadow-xl shadow-slate-900/5 dark:border-l-teal-600/50 dark:bg-slate-900/50">
                 <CardHeader>
                     <CardTitle>Basic Details</CardTitle>
                     <CardDescription>General information about the property.</CardDescription>
@@ -719,7 +823,7 @@ export default function EditPropertyPage() {
                 </CardContent>
             </Card>
 
-            <Card className="border-l-4 border-l-blue-400/70 dark:border-l-blue-600/50">
+            <Card className="border-l-4 border-l-blue-400/70 bg-white/70 backdrop-blur-md shadow-xl shadow-slate-900/5 dark:border-l-blue-600/50 dark:bg-slate-900/50">
                 <CardHeader>
                     <CardTitle>Risk & System Details</CardTitle>
                     <CardDescription>These details are crucial for calculating your property&apos;s risk score and maintenance schedules.</CardDescription>
@@ -753,7 +857,7 @@ export default function EditPropertyPage() {
                             control={form.control}
                             name="propertySize"
                             render={({ field }) => (
-                                <FormItem className="max-w-[160px]">
+                                <FormItem>
                                     <FormLabel>Square Footage (sqft)</FormLabel>
                                     <FormControl><Input placeholder="e.g., 2500" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
                                     <FormMessage />
@@ -764,7 +868,7 @@ export default function EditPropertyPage() {
                             control={form.control}
                             name="yearBuilt"
                             render={({ field }) => (
-                                <FormItem>
+                                <FormItem className="max-w-[160px]">
                                     <FormLabel>Year Built</FormLabel>
                                     <FormControl><Input placeholder="e.g., 1995" type="number" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl>
                                     <FormMessage />
@@ -822,6 +926,7 @@ export default function EditPropertyPage() {
                                             <span className={cn(
                                               "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium mt-1",
                                               colorMap[fb.color!],
+                                              fb.age > 20 && "animate-pulse",
                                             )}>
                                               {fb.label}
                                             </span>
@@ -912,6 +1017,7 @@ export default function EditPropertyPage() {
                                             <span className={cn(
                                               "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium mt-1",
                                               colorMap[fb.color!],
+                                              fb.age > 20 && "animate-pulse",
                                             )}>
                                               {fb.label}
                                             </span>
@@ -971,6 +1077,7 @@ export default function EditPropertyPage() {
                                             <span className={cn(
                                               "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium mt-1",
                                               colorMap[fb.color!],
+                                              fb.age > 20 && "animate-pulse",
                                             )}>
                                               {fb.label}
                                             </span>
@@ -989,7 +1096,7 @@ export default function EditPropertyPage() {
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                             Property & Occupancy
                         </p>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <FormField
                                 control={form.control}
                                 name="bedrooms"
@@ -1023,9 +1130,6 @@ export default function EditPropertyPage() {
                                     </FormItem>
                                 )}
                             />
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <FormField
                                 control={form.control}
                                 name="ownershipType"
@@ -1115,21 +1219,21 @@ export default function EditPropertyPage() {
                 </CardContent>
             </Card>
 
-            <Card className="border-l-4 border-l-purple-400/70 dark:border-l-purple-600/50">
+            <Card className="border-l-4 border-l-purple-400/70 bg-white/70 backdrop-blur-md shadow-xl shadow-slate-900/5 dark:border-l-purple-600/50 dark:bg-slate-900/50">
                 <CardHeader>
                     <CardTitle>Major Appliance Details</CardTitle>
                     <CardDescription>Add and maintain major appliance records for better maintenance planning.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <ApplianceFieldArray />
+                    <ApplianceBentoGrid />
                 </CardContent>
             </Card>
 
             <div className="sticky bottom-0 z-20 -mx-6 px-6 py-3 bg-background/95 backdrop-blur-sm border-t border-border shadow-[0_-1px_6px_rgba(0,0,0,0.06)] flex items-center justify-between gap-3">
               <p className="text-sm text-muted-foreground hidden sm:block select-none">
                 {updateMutation.isPending
-                  ? "Saving your changes…"
-                  : "Changes are saved to this property only"}
+                  ? "Saving changes and recalculating confidence…"
+                  : `Confidence ${confidenceScore}% · changes are saved to this property only`}
               </p>
               <div className="flex items-center gap-2 ml-auto">
                 <Button

@@ -3,6 +3,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 import { ArrowLeft, Package, Sparkles } from 'lucide-react';
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar';
 
@@ -26,7 +27,7 @@ import RoomTimeline from '@/components/rooms/RoomTimeline';
 import ScanHistoryCollapsible from '@/components/rooms/ScanHistoryCollapsible';
 import RoomScanModal from '@/app/(dashboard)/dashboard/components/inventory/RoomScanModal';
 import { getHealthOverlay, getRoomConfig, getScoreColorHex, getStatusColor, getStatusLabel } from '@/components/rooms/roomVisuals';
-import { titleCase } from '@/lib/utils/string';
+import { humanizeLabel } from '@/lib/utils/string';
 
 type Tab = 'profile' | 'checklist' | 'timeline';
 
@@ -222,6 +223,24 @@ const STATUS_LABELS: Record<string, string> = {
   CRITICAL: 'Critical',
 };
 
+const staggerParent = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.05,
+    },
+  },
+};
+
+const staggerItem = {
+  hidden: { opacity: 0, y: 16 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.32, ease: 'easeOut' as const },
+  },
+};
+
 export default function RoomDetailClient() {
   const params = useParams<{ id: string; roomId: string }>();
   const router = useRouter();
@@ -273,7 +292,7 @@ export default function RoomDetailClient() {
   const RoomIcon = roomConfig.icon;
   const scoreColor = getScoreColorHex(healthScore);
   const statusLabelRaw = getStatusLabel(healthScore);
-  const statusLabel = STATUS_LABELS[statusLabelRaw] ?? titleCase(statusLabelRaw);
+  const statusLabel = STATUS_LABELS[statusLabelRaw] ?? humanizeLabel(statusLabelRaw);
   const statusColor = getStatusColor(healthScore);
 
   async function loadRoom() {
@@ -394,8 +413,16 @@ export default function RoomDetailClient() {
   } as const;
 
   return (
-    <div className="space-y-4 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-6">
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+    <motion.div
+      className="space-y-4 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-6"
+      variants={staggerParent}
+      initial="hidden"
+      animate="visible"
+    >
+      <motion.div
+        variants={staggerItem}
+        className="overflow-hidden rounded-2xl border border-gray-200 bg-white/80 shadow-xl shadow-slate-900/5 backdrop-blur-md"
+      >
         <header
           className={[
             'relative border-b px-6 py-5',
@@ -504,7 +531,7 @@ export default function RoomDetailClient() {
                 type="button"
                 onClick={() => setTab(tabKey)}
                 className={[
-                  'flex min-w-[120px] flex-col items-center rounded-lg px-5 py-2 transition-all duration-150',
+                  'flex min-w-[120px] flex-col items-center rounded-lg px-5 py-2 transition-all duration-150 hover:scale-[1.02]',
                   tab === tabKey ? 'bg-white shadow-sm' : 'hover:bg-white/60',
                 ].join(' ')}
               >
@@ -520,19 +547,21 @@ export default function RoomDetailClient() {
         <div className="bg-gray-50 px-6 pb-6 pt-4">
           <AnimatedTabPanel tabKey={tab}>
             {tab === 'profile' ? (
-              <div className="mt-4 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-                <RoomProfileForm
-                  profile={profile}
-                  roomType={roomBase}
-                  saving={savingProfile}
-                  onChange={setProfile}
-                  onSave={saveProfile}
-                />
+              <motion.div className="mt-4 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_340px]" variants={staggerParent} initial="hidden" animate="visible">
+                <motion.div variants={staggerItem}>
+                  <RoomProfileForm
+                    profile={profile}
+                    roomType={roomBase}
+                    saving={savingProfile}
+                    onChange={setProfile}
+                    onSave={saveProfile}
+                  />
+                </motion.div>
 
-                <div className="lg:sticky lg:top-4 lg:self-start">
+                <motion.div variants={staggerItem} className="lg:sticky lg:top-4 lg:self-start">
                   <QuickInsightsPanel roomType={roomBase} profileData={profile} onAddInsightTask={addInsightAsTask} />
-                </div>
-              </div>
+                </motion.div>
+              </motion.div>
             ) : null}
 
             {tab === 'checklist' ? (
@@ -564,9 +593,10 @@ export default function RoomDetailClient() {
               setScanOpen(true);
             }}
             getExportUrl={(sessionId) => getDraftsCsvExportUrl({ propertyId, scanSessionId: sessionId })}
+            onStartScan={() => setScanOpen(true)}
           />
         </div>
-      </div>
+      </motion.div>
 
       <RoomScanModal
         open={scanOpen}
@@ -582,6 +612,6 @@ export default function RoomDetailClient() {
       />
 
       {summaryLoading ? <p className="px-1 text-xs text-gray-500">Updating room data...</p> : null}
-    </div>
+    </motion.div>
   );
 }

@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ChevronDown, History, RefreshCw } from 'lucide-react';
+import { ChevronDown, History, RefreshCw, Sparkles } from 'lucide-react';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { humanizeLabel } from '@/lib/utils/string';
 
 type ScanHistoryCollapsibleProps = {
   scans: any[];
@@ -11,6 +12,7 @@ type ScanHistoryCollapsibleProps = {
   onRefresh: () => void;
   onReopen: (sessionId: string) => void;
   getExportUrl: (sessionId: string) => string;
+  onStartScan?: () => void;
 };
 
 export default function ScanHistoryCollapsible({
@@ -19,6 +21,7 @@ export default function ScanHistoryCollapsible({
   onRefresh,
   onReopen,
   getExportUrl,
+  onStartScan,
 }: ScanHistoryCollapsibleProps) {
   const [open, setOpen] = useState(false);
 
@@ -50,7 +53,26 @@ export default function ScanHistoryCollapsible({
 
       <CollapsibleContent className="mt-2">
         {scans.length === 0 ? (
-          <p className="pl-6 text-sm text-gray-400">No scans yet - run an AI Scan to analyze this room.</p>
+          <div className="rounded-xl border border-dashed border-teal-200 bg-teal-50/60 p-5">
+            <div className="flex items-start gap-3">
+              <div className="rounded-lg bg-white/80 p-2 text-teal-600">
+                <Sparkles className="h-4 w-4" />
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-gray-900">Unlock your Room Health</p>
+                <p className="text-xs text-gray-600">Start your first AI scan to generate room health insights and actionable drafts.</p>
+                {onStartScan ? (
+                  <button
+                    type="button"
+                    onClick={onStartScan}
+                    className="inline-flex min-h-[36px] items-center justify-center rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-teal-700"
+                  >
+                    Start AI Scan
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
         ) : (
           <div className="space-y-2 rounded-xl border border-gray-200 bg-white p-3">
             {scans.slice(0, 8).map((session) => {
@@ -62,13 +84,13 @@ export default function ScanHistoryCollapsible({
               return (
                 <div
                   key={session.id}
-                  className="flex flex-col gap-3 rounded-xl border border-gray-200 p-3 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-3 rounded-xl border border-gray-200 p-3 transition-transform duration-200 hover:scale-[1.02] hover:border-gray-300 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium text-gray-800">
                       {label}
                       <span className="ml-2 rounded-full border border-gray-200 px-2 py-0.5 text-xs text-gray-500">
-                        {String(session?.status || '-')}
+                        {humanizeLabel(String(session?.status || '-'))}
                       </span>
                     </div>
                     <div className="mt-0.5 text-xs text-gray-500">

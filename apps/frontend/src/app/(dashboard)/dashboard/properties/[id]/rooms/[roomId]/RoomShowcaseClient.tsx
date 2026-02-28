@@ -20,6 +20,7 @@ import RoomAtAGlance from '@/components/rooms/RoomAtAGlance';
 import RoomIntelligenceCard from '@/components/rooms/RoomIntelligenceCard';
 import RoomPageHeader from '@/components/rooms/RoomPageHeader';
 import ItemCard from '@/components/shared/ItemCard';
+import { humanizeLabel } from '@/lib/utils/string';
 
 import {
   getDraftsCsvExportUrl,
@@ -333,7 +334,7 @@ export default function RoomShowcaseClient() {
               initial="hidden"
               animate="visible"
               custom={2}
-              className="rounded-2xl border border-gray-200 bg-white p-4"
+              className="rounded-2xl border border-gray-200 bg-white/80 p-4 shadow-xl shadow-slate-900/5 backdrop-blur-md"
               ref={itemsSectionRef}
             >
               <div className="mb-3 flex items-center justify-between">
@@ -402,7 +403,7 @@ export default function RoomShowcaseClient() {
                 </CollapsibleTrigger>
 
                 <CollapsibleContent>
-                  <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
+                  <div className="mt-3 rounded-xl border border-gray-200 bg-white/80 p-3 shadow-xl shadow-slate-900/5 backdrop-blur-md">
                     <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-xs text-gray-500">Reopen a scan or export its drafts.</p>
 
@@ -417,7 +418,24 @@ export default function RoomShowcaseClient() {
                     </div>
 
                     {scanSessions.length === 0 ? (
-                      <p className="pl-1 text-sm text-gray-400">No scans yet. Run an AI Scan to analyze this room.</p>
+                      <div className="rounded-xl border border-dashed border-teal-200 bg-teal-50/60 p-5">
+                        <div className="flex items-start gap-3">
+                          <div className="rounded-lg bg-white/80 p-2 text-teal-600">
+                            <Plus className="h-4 w-4" />
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-sm font-semibold text-gray-900">Unlock your Room Health</p>
+                            <p className="text-xs text-gray-600">Start your first AI scan to surface risks, recommendations, and draft actions.</p>
+                            <button
+                              type="button"
+                              onClick={() => setScanOpen(true)}
+                              className="inline-flex min-h-[36px] items-center justify-center rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-teal-700"
+                            >
+                              Start AI Scan
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     ) : (
                       <div className="space-y-2">
                         {scanSessions.slice(0, 6).map((session) => {
@@ -432,13 +450,13 @@ export default function RoomShowcaseClient() {
                           return (
                             <div
                               key={session.id}
-                              className="flex flex-col gap-3 rounded-xl border border-gray-200 p-3 sm:flex-row sm:items-center sm:justify-between"
+                              className="flex flex-col gap-3 rounded-xl border border-gray-200 p-3 transition-transform duration-200 hover:scale-[1.02] hover:border-gray-300 sm:flex-row sm:items-center sm:justify-between"
                             >
                               <div className="min-w-0">
                                 <div className="truncate text-sm font-medium text-gray-800">
                                   {label}
                                   <span className="ml-2 rounded-full border border-gray-200 px-2 py-0.5 text-xs text-gray-500">
-                                    {String(session.status || '-')}
+                                    {humanizeLabel(String(session.status || '-'))}
                                   </span>
                                 </div>
                                 <div className="mt-0.5 text-xs text-gray-500">
