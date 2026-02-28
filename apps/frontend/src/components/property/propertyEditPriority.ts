@@ -47,9 +47,9 @@ export const PROPERTY_PRIORITY_FIELDS: PropertyPriorityField[] = [
   { key: "city", label: "city", tier: "P0", impactWeight: 90, sectionId: "basics", fieldRefId: "field-city", isFilled: (v) => hasText(v.city) },
   { key: "state", label: "state", tier: "P0", impactWeight: 90, sectionId: "basics", fieldRefId: "field-state", isFilled: (v) => hasText(v.state) },
   { key: "zipCode", label: "zip code", tier: "P0", impactWeight: 90, sectionId: "basics", fieldRefId: "field-zipCode", isFilled: (v) => hasText(v.zipCode) },
-  { key: "propertyType", label: "property type", tier: "P0", impactWeight: 84, sectionId: "basics", fieldRefId: "field-propertyType", isFilled: (v) => hasText(v.propertyType) },
-  { key: "propertySize", label: "approximate size", tier: "P0", impactWeight: 83, sectionId: "basics", fieldRefId: "field-propertySize", isFilled: (v) => hasNumber(v.propertySize) },
-  { key: "yearBuilt", label: "year built", tier: "P0", impactWeight: 82, sectionId: "basics", fieldRefId: "field-yearBuilt", isFilled: (v) => hasNonNullNumber(v.yearBuilt) },
+  { key: "propertyType", label: "property type", tier: "P0", impactWeight: 84, sectionId: "systems", fieldRefId: "field-propertyType", isFilled: (v) => hasText(v.propertyType) },
+  { key: "propertySize", label: "approximate size", tier: "P0", impactWeight: 83, sectionId: "systems", fieldRefId: "field-propertySize", isFilled: (v) => hasNumber(v.propertySize) },
+  { key: "yearBuilt", label: "year built", tier: "P0", impactWeight: 82, sectionId: "systems", fieldRefId: "field-yearBuilt", isFilled: (v) => hasNonNullNumber(v.yearBuilt) },
 
   { key: "hvacInstallYear", label: "HVAC install year", tier: "P1", impactWeight: 100, sectionId: "systems", fieldRefId: "field-hvacInstallYear", isFilled: (v) => hasNonNullNumber(v.hvacInstallYear) },
   { key: "waterHeaterInstallYear", label: "water heater install year", tier: "P1", impactWeight: 95, sectionId: "systems", fieldRefId: "field-waterHeaterInstallYear", isFilled: (v) => hasNonNullNumber(v.waterHeaterInstallYear) },
