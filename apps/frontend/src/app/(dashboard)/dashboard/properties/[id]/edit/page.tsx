@@ -264,27 +264,27 @@ const ApplianceBentoGrid = () => {
 
   return (
       <div className="space-y-3">
-      <div className="hidden md:grid grid-cols-12 gap-3 px-4 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
-        <span className="col-span-6">Appliance</span>
-        <span className="col-span-2">Year</span>
-        <span className="col-span-3">Status</span>
-        <span className="col-span-1 text-right">Remove</span>
+      <div className="hidden grid-cols-[2fr_140px_180px_40px] gap-4 px-3 text-xs font-semibold uppercase tracking-wide text-gray-500 md:grid dark:text-slate-400">
+        <span>Appliance</span>
+        <span>Year</span>
+        <span>Status</span>
+        <span className="text-center">Remove</span>
       </div>
       <div className="space-y-3">
         {fields.map((field, index) => (
           <div
             key={field.id}
-            className="grid grid-cols-1 items-start gap-3 rounded-md border border-black/5 bg-white p-4 shadow-sm md:grid-cols-12 dark:border-white/10 dark:bg-slate-900/30"
+            className="grid grid-cols-1 items-center gap-4 rounded-md border border-black/5 bg-white p-3 shadow-sm md:grid-cols-[2fr_140px_180px_40px] dark:border-white/10 dark:bg-slate-900/30"
           >
             <FormField
               control={control}
               name={`appliances.${index}.type`}
               render={({ field: selectField }) => (
-                <FormItem className="md:col-span-6 w-full">
-                  <FormLabel className="text-xs">Appliance</FormLabel>
+                <FormItem className="w-full">
+                  <FormLabel className="text-xs md:sr-only">Appliance</FormLabel>
                   <Select onValueChange={selectField.onChange} value={selectField.value}>
                     <FormControl>
-                      <SelectTrigger className={cn("h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40", fieldSizeClass("md"))}>
+                      <SelectTrigger className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40">
                         <SelectValue placeholder="Select appliance type">
                           {selectField.value ? formatApplianceLabel(selectField.value) : "Select appliance type"}
                         </SelectValue>
@@ -307,8 +307,8 @@ const ApplianceBentoGrid = () => {
               control={control}
               name={`appliances.${index}.installYear`}
               render={({ field: yearField }) => (
-                <FormItem className="md:col-span-2">
-                  <FormLabel className="text-xs">Install year</FormLabel>
+                <FormItem className="w-full">
+                  <FormLabel className="text-xs md:sr-only">Install year</FormLabel>
                   <FormControl>
                     <Input
                       placeholder={
@@ -344,7 +344,7 @@ const ApplianceBentoGrid = () => {
                 )}
               />
 
-            <div className="md:col-span-3 flex items-center min-h-10 pt-1 md:pt-0">
+            <div className="flex min-h-10 items-center pt-1 md:pt-0">
               {(() => {
                 const yearVal = watch(`appliances.${index}.installYear`);
                 const feedback = getInstallYearFeedback(Number(yearVal));
@@ -365,7 +365,7 @@ const ApplianceBentoGrid = () => {
               })()}
             </div>
 
-            <div className="md:col-span-1 flex md:justify-end">
+            <div className="flex items-center md:justify-center">
               <Button
                 type="button"
                 variant="ghost"
@@ -799,19 +799,19 @@ export default function EditPropertyPage() {
 
   const CHECKBOX_IMPACT_STYLES = {
     positive: {
-      checked: "border-emerald-500/20 bg-emerald-500/10 dark:border-emerald-400/20 dark:bg-emerald-400/10",
+      checked: "border-emerald-500/20 bg-emerald-50/50 dark:border-emerald-400/20 dark:bg-emerald-900/20",
       unchecked: "border-black/5 bg-white dark:border-white/10 dark:bg-slate-900/30",
       dot: "bg-emerald-400",
       hint: "text-gray-500 dark:text-slate-400",
     },
     negative: {
-      checked: "border-amber-500/20 bg-amber-500/10 dark:border-amber-400/20 dark:bg-amber-400/10",
+      checked: "border-emerald-500/20 bg-emerald-50/50 dark:border-emerald-400/20 dark:bg-emerald-900/20",
       unchecked: "border-black/5 bg-white dark:border-white/10 dark:bg-slate-900/30",
       dot: "bg-amber-400",
       hint: "text-gray-500 dark:text-slate-400",
     },
     neutral: {
-      checked: "border-slate-500/20 bg-slate-500/10 dark:border-slate-400/20 dark:bg-slate-400/10",
+      checked: "border-emerald-500/20 bg-emerald-50/50 dark:border-emerald-400/20 dark:bg-emerald-900/20",
       unchecked: "border-black/5 bg-white dark:border-white/10 dark:bg-slate-900/30",
       dot: "bg-blue-400",
       hint: "text-gray-500 dark:text-slate-400",
@@ -924,30 +924,83 @@ export default function EditPropertyPage() {
                     </FormItem>
                   )}
                 />
-                <div className="lg:col-span-5 flex flex-col gap-3 sm:flex-row sm:items-end lg:justify-end">
-                  <FormField
-                    control={form.control}
-                    name="state"
-                    render={({ field }) => (
-                      <FormItem className={fieldSizeClass("xs")}>
-                        <FormLabel>State</FormLabel>
-                        <FormControl><Input id="field-state" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="NJ" {...field} maxLength={2} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="zipCode"
-                    render={({ field }) => (
-                      <FormItem className={fieldSizeClass("sm")}>
-                        <FormLabel>Zip</FormLabel>
-                        <FormControl><Input id="field-zipCode" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="08540" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                <FormField
+                  control={form.control}
+                  name="state"
+                  render={({ field }) => (
+                    <FormItem className="lg:col-span-2">
+                      <FormLabel>State</FormLabel>
+                      <FormControl><Input id="field-state" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="NJ" {...field} maxLength={2} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="zipCode"
+                  render={({ field }) => (
+                    <FormItem className="lg:col-span-3">
+                      <FormLabel>Zip</FormLabel>
+                      <FormControl><Input id="field-zipCode" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="08540" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="propertyType"
+                  render={({ field }) => (
+                    <FormItem className="lg:col-span-4">
+                      <div className="flex items-center gap-2">
+                        <FormLabel>Property type</FormLabel>
+                        {isRecommended("propertyType") ? <FieldNudgeChip variant="recommended" /> : null}
+                      </div>
+                      <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger id="field-propertyType" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {Object.values(PropertyTypes).map((type) => (
+                            <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="propertySize"
+                  render={({ field }) => (
+                    <FormItem className="lg:col-span-4">
+                      <div className="flex items-center gap-2">
+                        <FormLabel>Approx size (sq ft)</FormLabel>
+                        {isRecommended("propertySize") ? <FieldNudgeChip variant="recommended" /> : null}
+                      </div>
+                      <FormControl>
+                        <Input id="field-propertySize" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="e.g., 2500" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="yearBuilt"
+                  render={({ field }) => (
+                    <FormItem className="lg:col-span-4">
+                      <div className="flex items-center gap-2">
+                        <FormLabel>Year built</FormLabel>
+                        {isRecommended("yearBuilt") ? <FieldNudgeChip variant="recommended" /> : null}
+                      </div>
+                      <FormControl>
+                        <Input id="field-yearBuilt" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="e.g., 1995" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name="isPrimary"
@@ -975,67 +1028,8 @@ export default function EditPropertyPage() {
               forceExpandOnMobile={startSectionId === "systems"}
               headerChip={startSectionId === "systems" ? <FieldNudgeChip variant="start" /> : undefined}
             >
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="propertyType"
-                    render={({ field }) => (
-                      <FormItem className={fieldSizeClass("md")}>
-                        <div className="flex items-center gap-2">
-                          <FormLabel>Property type</FormLabel>
-                          {isRecommended("propertyType") ? <FieldNudgeChip variant="recommended" /> : null}
-                        </div>
-                        <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
-                          <FormControl>
-                            <SelectTrigger id="field-propertyType" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"><SelectValue placeholder="Select type" /></SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {Object.values(PropertyTypes).map((type) => (
-                              <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="propertySize"
-                    render={({ field }) => (
-                      <FormItem className={fieldSizeClass("sm")}>
-                        <div className="flex items-center gap-2">
-                          <FormLabel>Approx size (sq ft)</FormLabel>
-                          {isRecommended("propertySize") ? <FieldNudgeChip variant="recommended" /> : null}
-                        </div>
-                        <FormControl>
-                          <Input id="field-propertySize" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="e.g., 2500" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="yearBuilt"
-                    render={({ field }) => (
-                      <FormItem className={fieldSizeClass("xs")}>
-                        <div className="flex items-center gap-2">
-                          <FormLabel>Year built</FormLabel>
-                          {isRecommended("yearBuilt") ? <FieldNudgeChip variant="recommended" /> : null}
-                        </div>
-                        <FormControl>
-                          <Input id="field-yearBuilt" className="h-10 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="e.g., 1995" type="number" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 border-t border-black/5 pt-4 md:grid-cols-2 xl:grid-cols-3 dark:border-white/10">
-                  <div className="space-y-3 rounded-md border border-black/5 bg-gray-50/50 p-4 shadow-sm dark:border-white/10 dark:bg-slate-900/30">
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                  <div className="flex h-full flex-col space-y-3 rounded-md border border-black/5 bg-gray-50/50 p-3.5 shadow-sm dark:border-white/10 dark:bg-slate-900/30">
                     <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">HVAC</p>
                     <FormField
                       control={form.control}
@@ -1105,7 +1099,7 @@ export default function EditPropertyPage() {
                     />
                   </div>
 
-                  <div className="space-y-3 rounded-md border border-black/5 bg-gray-50/50 p-4 shadow-sm dark:border-white/10 dark:bg-slate-900/30">
+                  <div className="flex h-full flex-col space-y-3 rounded-md border border-black/5 bg-gray-50/50 p-3.5 shadow-sm dark:border-white/10 dark:bg-slate-900/30">
                     <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Water heater</p>
                     <FormField
                       control={form.control}
@@ -1155,7 +1149,7 @@ export default function EditPropertyPage() {
                     />
                   </div>
 
-                  <div className="space-y-3 rounded-md border border-black/5 bg-gray-50/50 p-4 shadow-sm dark:border-white/10 dark:bg-slate-900/30">
+                  <div className="flex h-full flex-col space-y-3 rounded-md border border-black/5 bg-gray-50/50 p-3.5 shadow-sm dark:border-white/10 dark:bg-slate-900/30">
                     <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Roof</p>
                     <FormField
                       control={form.control}
@@ -1204,7 +1198,6 @@ export default function EditPropertyPage() {
                       )}
                     />
                   </div>
-                </div>
               </div>
             </PropertyEditSection>
 
@@ -1217,7 +1210,7 @@ export default function EditPropertyPage() {
               forceExpandOnMobile={startSectionId === "safety"}
               headerChip={startSectionId === "safety" ? <FieldNudgeChip variant="start" /> : undefined}
             >
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {(Object.keys(CHECKBOX_META) as CheckboxField[]).map((fieldName) => {
                   const meta = CHECKBOX_META[fieldName];
                   const styles = CHECKBOX_IMPACT_STYLES[meta.impact];
@@ -1234,7 +1227,7 @@ export default function EditPropertyPage() {
                               <label
                                 htmlFor={`checkbox-${fieldName}`}
                                 className={cn(
-                                  "flex items-center justify-between gap-3 rounded-md border p-3.5 transition-colors hover:border-black/10 dark:hover:border-white/20",
+                                  "flex items-center justify-between gap-3 rounded-lg border border-black/5 px-4 py-3 dark:border-white/10",
                                   isChecked ? styles.checked : styles.unchecked,
                                 )}
                               >
@@ -1263,7 +1256,7 @@ export default function EditPropertyPage() {
               forceExpandOnMobile={startSectionId === "occupancy"}
               headerChip={startSectionId === "occupancy" ? <FieldNudgeChip variant="start" /> : undefined}
             >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
                 <FormField
                   control={form.control}
                   name="bedrooms"
@@ -1301,7 +1294,7 @@ export default function EditPropertyPage() {
                   control={form.control}
                   name="ownershipType"
                   render={({ field }) => (
-                    <FormItem className={fieldSizeClass("md")}>
+                    <FormItem className="w-full max-w-[280px]">
                       <FormLabel>How you use this property</FormLabel>
                       <Select onValueChange={(value) => field.onChange(value === "" ? null : value)} value={field.value || ""}>
                         <FormControl>
