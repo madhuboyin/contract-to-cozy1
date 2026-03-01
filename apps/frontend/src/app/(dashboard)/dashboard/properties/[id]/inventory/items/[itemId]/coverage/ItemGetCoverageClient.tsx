@@ -75,6 +75,15 @@ function recommendationCopy(recommendation?: ItemCoverageAnalysisDTO['warranty']
   return '—';
 }
 
+function mapItemCategoryToWarrantyCategory(category?: string): string {
+  if (category === 'HVAC') return 'HVAC';
+  if (category === 'PLUMBING') return 'PLUMBING';
+  if (category === 'ELECTRICAL') return 'ELECTRICAL';
+  if (category === 'ROOF_EXTERIOR') return 'ROOFING';
+  if (category === 'APPLIANCE') return 'APPLIANCE';
+  return 'OTHER';
+}
+
 function sanitizeReturnTo(raw: string | null): string | null {
   if (!raw || !raw.startsWith('/dashboard/')) return null;
   return raw;
@@ -165,9 +174,10 @@ export default function ItemGetCoverageClient() {
     ? `/dashboard/properties/${propertyId}/inventory?tab=coverage`
     : '/dashboard/properties';
   const backHref = safeReturnTo ?? fallbackBackHref;
+  const defaultWarrantyCategory = mapItemCategoryToWarrantyCategory(analysis?.item?.category);
   const addWarrantyHref =
     propertyId && itemId
-      ? `/dashboard/warranties?action=new&from=coverage-buy&propertyId=${encodeURIComponent(propertyId)}&homeAssetId=${encodeURIComponent(itemId)}&returnTo=${encodeURIComponent(currentPathWithQuery)}`
+      ? `/dashboard/warranties?action=new&from=coverage-buy&propertyId=${encodeURIComponent(propertyId)}&homeAssetId=${encodeURIComponent(itemId)}&category=${encodeURIComponent(defaultWarrantyCategory)}&returnTo=${encodeURIComponent(currentPathWithQuery)}`
       : '/dashboard/warranties';
 
   const [analysis, setAnalysis] = useState<ItemCoverageAnalysisDTO | null>(null);

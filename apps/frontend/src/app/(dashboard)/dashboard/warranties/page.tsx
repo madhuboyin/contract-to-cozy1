@@ -6,6 +6,7 @@ import { FileText, Plus, Loader2, Wrench, Trash2, Edit, X, Save, Upload, Externa
 import { format, parseISO, isPast } from 'date-fns';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
+import { listInventoryItems } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -374,6 +375,8 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
   const title = initialData ? `Edit Warranty: ${initialData.providerName}` : 'Add New Warranty';
   const selectedPropertyId = formData.propertyId || SELECT_NONE_VALUE;
   const selectedCategory = (formData.category || undefined) as string | undefined;
+  const prefilledPropertyMissingFromOptions =
+    !!formData.propertyId && !properties.some((property) => property.id === formData.propertyId);
 
   // *** FIX 1: Blank Placeholder Bug Fix ***
   // When linking is disabled, force the value to undefined so the placeholder shows.
@@ -409,6 +412,8 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
     return assets;
     
   }, [formData.propertyId, formData.category, homeAssets, isAssetLinkingExplicitlyDisabled]);
+  const prefilledAssetMissingFromOptions =
+    !!formData.homeAssetId && !filteredHomeAssets.some((asset) => asset.id === formData.homeAssetId);
 
 
   return (
@@ -482,6 +487,11 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
                 <SelectItem value={SELECT_NONE_VALUE}>
                   None (Not linked to a specific property)
                 </SelectItem> 
+                {prefilledPropertyMissingFromOptions && formData.propertyId && (
+                  <SelectItem value={formData.propertyId}>
+                    Selected property
+                  </SelectItem>
+                )}
                 {properties.map(p => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.name} ({p.zipCode})
@@ -501,7 +511,10 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
               disabled={
                   isAssetLinkingExplicitlyDisabled || 
                   !formData.propertyId || 
-                  (filteredHomeAssets.length === 0 && !isSubmitting && !isAssetLinkingExplicitlyDisabled)
+                  (filteredHomeAssets.length === 0 &&
+                    !formData.homeAssetId &&
+                    !isSubmitting &&
+                    !isAssetLinkingExplicitlyDisabled)
               } 
             >
               <SelectTrigger>
@@ -533,6 +546,11 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
                     {asset.assetType.replace(/_/g, ' ')} {asset.modelNumber ? `(${asset.modelNumber})` : ''}
                   </SelectItem>
                 ))}
+                {prefilledAssetMissingFromOptions && formData.homeAssetId && (
+                  <SelectItem value={formData.homeAssetId}>
+                    Linked appliance
+                  </SelectItem>
+                )}
                 
                 {filteredHomeAssets.length === 0 && formData.category && formData.propertyId && !isAssetLinkingExplicitlyDisabled && (
                     <div className="p-2 text-sm text-muted-foreground italic">
@@ -596,6 +614,7 @@ export default function WarrantiesPage() {
     const propertyId = searchParams.get('propertyId') || undefined;
     const homeAssetId = searchParams.get('homeAssetId') || undefined;
     const categoryParam = searchParams.get('category');
+    const from = searchParams.get('from');
 
     let category: WarrantyCategory | undefined = isWarrantyCategory(categoryParam) ? categoryParam : undefined;
 
@@ -611,6 +630,10 @@ export default function WarrantiesPage() {
       }
     }
 
+    if (!category && from === 'coverage-buy') {
+      category = 'APPLIANCE';
+    }
+
     if (!propertyId && !homeAssetId && !category) {
       return undefined;
     }
@@ -621,6 +644,7 @@ export default function WarrantiesPage() {
       category,
     };
   }, [searchParams, homeAssets]);
+  const [createModalPrefill, setCreateModalPrefill] = useState<WarrantyFormProps['prefill']>(undefined);
   const [openedFromSetup, setOpenedFromSetup] = useState(false); // State to track if the modal opened automatically
 
   const fetchDependencies = useCallback(async () => {
@@ -650,11 +674,7 @@ export default function WarrantiesPage() {
       
       for (const property of propertiesRes.data.properties) {
         try {
-          const inventoryRes = await api.get(`/api/properties/${property.id}/inventory/items`, {
-            params: { category: 'APPLIANCE' }
-          });
-          
-          const items = inventoryRes.data?.data || inventoryRes.data || [];
+          const items = await listInventoryItems(property.id, { category: 'APPLIANCE' });
           
           // Transform InventoryItem to HomeAsset shape
           const transformed = items.map((item: any) => ({
@@ -784,6 +804,7 @@ export default function WarrantiesPage() {
   // Handlers for Add/Edit Modal
   const openAddEditModal = (warranty?: Warranty) => {
     setEditingWarranty(warranty);
+    setCreateModalPrefill(!warranty ? createPrefill : undefined);
     setOpenedFromSetup(false); // Reset for manual opens
     setIsAddEditModalOpen(true);
   };
@@ -793,6 +814,7 @@ export default function WarrantiesPage() {
     const from = searchParams.get('from');
     setIsAddEditModalOpen(false);
     setEditingWarranty(undefined);
+    setCreateModalPrefill(undefined);
     setOpenedFromSetup(false);
     
     if (wasOpenedFromSetup) {
@@ -930,7 +952,7 @@ const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
               initialData={editingWarranty}
               properties={properties}
               homeAssets={homeAssets} // PASSED NEW PROP
-              prefill={!editingWarranty ? createPrefill : undefined}
+              prefill={!editingWarranty ? createModalPrefill : undefined}
               onSave={handleSave}
               onClose={closeAddEditModal}
               isSubmitting={isSubmitting}
