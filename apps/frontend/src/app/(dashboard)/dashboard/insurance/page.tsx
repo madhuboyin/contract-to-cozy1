@@ -30,6 +30,17 @@ import {
 // Placeholder for "None" option, necessary to avoid Radix UI error on value=""
 const SELECT_NONE_VALUE = '__NONE__';
 
+function sanitizeReturnTo(raw: string | null): string | null {
+  if (!raw || !raw.startsWith('/dashboard/')) return null;
+  return raw;
+}
+
+function propertyIdFromDashboardPath(path: string | null): string | undefined {
+  if (!path) return undefined;
+  const match = path.match(/\/dashboard\/properties\/([^/?]+)/);
+  return match?.[1];
+}
+
 // --- Document Type Constants for UI ---
 const DOCUMENT_TYPES: DocumentType[] = [
     'INSPECTION_REPORT',
@@ -169,21 +180,31 @@ const DocumentUploadModal = ({ parentEntityId, parentEntityType, onUploadSuccess
 interface PolicyFormProps {
   initialData?: InsurancePolicy;
   properties: Property[];
+  prefill?: {
+    propertyId?: string;
+    coverageType?: string;
+  };
   onSave: (data: CreateInsurancePolicyInput | UpdateInsurancePolicyInput) => Promise<void>;
   onClose: () => void;
   isSubmitting: boolean;
 }
 
-const PolicyForm = ({ initialData, properties, onSave, onClose, isSubmitting }: PolicyFormProps) => {
-  const [formData, setFormData] = useState<CreateInsurancePolicyInput | UpdateInsurancePolicyInput>({
+const PolicyForm = ({ initialData, properties, prefill, onSave, onClose, isSubmitting }: PolicyFormProps) => {
+  const buildInitialFormData = useCallback((): CreateInsurancePolicyInput | UpdateInsurancePolicyInput => ({
     carrierName: initialData?.carrierName || '',
     policyNumber: initialData?.policyNumber || '',
-    coverageType: initialData?.coverageType || 'Homeowner',
+    coverageType: initialData?.coverageType || prefill?.coverageType || 'Homeowner',
     premiumAmount: initialData?.premiumAmount || 0,
     startDate: initialData?.startDate ? format(parseISO(initialData.startDate), 'yyyy-MM-dd') : '',
     expiryDate: initialData?.expiryDate ? format(parseISO(initialData.expiryDate), 'yyyy-MM-dd') : '',
-    propertyId: initialData?.propertyId || undefined,
-  });
+    propertyId: initialData?.propertyId || prefill?.propertyId || undefined,
+  }), [initialData, prefill]);
+
+  const [formData, setFormData] = useState<CreateInsurancePolicyInput | UpdateInsurancePolicyInput>(buildInitialFormData);
+
+  useEffect(() => {
+    setFormData(buildInitialFormData());
+  }, [buildInitialFormData]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { id, value } = e.target;
@@ -204,6 +225,8 @@ const PolicyForm = ({ initialData, properties, onSave, onClose, isSubmitting }: 
 
   const title = initialData ? `Edit Policy: ${initialData.carrierName}` : 'Add New Insurance Policy';
   const selectedPropertyId = formData.propertyId || SELECT_NONE_VALUE;
+  const prefilledPropertyMissingFromOptions =
+    !!formData.propertyId && !properties.some((property) => property.id === formData.propertyId);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -271,6 +294,11 @@ const PolicyForm = ({ initialData, properties, onSave, onClose, isSubmitting }: 
               <SelectItem value={SELECT_NONE_VALUE}>
                 None (General Policy)
               </SelectItem>
+              {prefilledPropertyMissingFromOptions && formData.propertyId && (
+                <SelectItem value={formData.propertyId}>
+                  Selected property
+                </SelectItem>
+              )}
               {properties.map(p => (
                 <SelectItem key={p.id} value={p.id}>
                   {p.name} ({p.zipCode})
@@ -315,6 +343,19 @@ export default function InsurancePage() {
   // NEW: Navigation Hooks
   const router = useRouter();
   const searchParams = useSearchParams();
+  const createPrefill = useMemo(() => {
+    const returnTo = sanitizeReturnTo(searchParams.get('returnTo'));
+    const propertyId =
+      searchParams.get('propertyId') ||
+      propertyIdFromDashboardPath(returnTo) ||
+      undefined;
+    const from = searchParams.get('from');
+    const coverageType = searchParams.get('coverageType') || (from === 'coverage-buy' ? 'Homeowner' : undefined);
+
+    if (!propertyId && !coverageType) return undefined;
+    return { propertyId, coverageType };
+  }, [searchParams]);
+  const [createModalPrefill, setCreateModalPrefill] = useState<PolicyFormProps['prefill']>(undefined);
   const [openedFromSetup, setOpenedFromSetup] = useState(false); // State to track if the modal opened automatically
   
   const fetchDependencies = useCallback(async () => {
@@ -349,14 +390,14 @@ export default function InsurancePage() {
     const from = searchParams.get('from');
     
     if (action === 'new' && !isAddEditModalOpen) {
-        openAddEditModal(undefined);
+        openAddEditModal(undefined, createPrefill);
         
         // Check if navigation originated from the maintenance setup page
         if (from === 'maintenance-setup') {
             setOpenedFromSetup(true);
         }
     }
-  }, [fetchDependencies]);
+  }, [fetchDependencies, searchParams, createPrefill, isAddEditModalOpen]);
 
   const handleSave = async (data: CreateInsurancePolicyInput | UpdateInsurancePolicyInput) => {
     setIsSubmitting(true);
@@ -409,8 +450,9 @@ export default function InsurancePage() {
   };
   
   // Handlers for Add/Edit Modal
-  const openAddEditModal = (policy?: InsurancePolicy) => {
+  const openAddEditModal = (policy?: InsurancePolicy, prefillOverride?: PolicyFormProps['prefill']) => {
     setEditingPolicy(policy);
+    setCreateModalPrefill(!policy ? (prefillOverride ?? createPrefill) : undefined);
     setOpenedFromSetup(false); // Reset for manual opens
     setIsAddEditModalOpen(true);
   };
@@ -419,6 +461,7 @@ export default function InsurancePage() {
     const wasOpenedFromSetup = openedFromSetup;
     setIsAddEditModalOpen(false);
     setEditingPolicy(undefined);
+    setCreateModalPrefill(undefined);
     setOpenedFromSetup(false);
 
     if (wasOpenedFromSetup) {
@@ -473,6 +516,7 @@ export default function InsurancePage() {
             <PolicyForm 
               initialData={editingPolicy}
               properties={properties}
+              prefill={!editingPolicy ? createModalPrefill : undefined}
               onSave={handleSave}
               onClose={closeAddEditModal}
               isSubmitting={isSubmitting}
@@ -493,7 +537,7 @@ export default function InsurancePage() {
         <Card className="text-center py-10">
           <FileText className="w-10 h-10 text-gray-400 mx-auto mb-3" />
           <CardTitle>No Policies Found</CardTitle>
-          <CardDescription>Click "Add Policy" to create your first policy record.</CardDescription>
+          <CardDescription>Click &quot;Add Policy&quot; to create your first policy record.</CardDescription>
         </Card>
       )}
 

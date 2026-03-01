@@ -153,6 +153,12 @@ function sanitizeReturnTo(raw: string | null): string | null {
   return raw;
 }
 
+function propertyIdFromDashboardPath(path: string | null): string | undefined {
+  if (!path) return undefined;
+  const match = path.match(/\/dashboard\/properties\/([^/?]+)/);
+  return match?.[1];
+}
+
 // --- Document Type Constants for UI (omitted for brevity) ---
 const DOCUMENT_TYPES: DocumentType[] = [
     'INSPECTION_REPORT',
@@ -293,7 +299,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
     expiryDate: initialData?.expiryDate ? format(parseISO(initialData.expiryDate), 'yyyy-MM-dd') : '',
     propertyId: initialData?.propertyId || prefill?.propertyId || undefined,
     homeAssetId: initialData?.homeAssetId || prefill?.homeAssetId || undefined,
-    category: initialData?.category || prefill?.category || ('' as WarrantyCategory),
+    category: initialData?.category || prefill?.category || 'APPLIANCE',
   }), [initialData, prefill]);
 
   const [formData, setFormData] = useState<CreateWarrantyInput | UpdateWarrantyInput>(buildInitialFormData);
@@ -611,23 +617,22 @@ export default function WarrantiesPage() {
   const searchParams = useSearchParams();
   const safeReturnTo = useMemo(() => sanitizeReturnTo(searchParams.get('returnTo')), [searchParams]);
   const createPrefill = useMemo(() => {
-    const propertyId = searchParams.get('propertyId') || undefined;
-    const homeAssetId = searchParams.get('homeAssetId') || undefined;
+    const returnTo = sanitizeReturnTo(searchParams.get('returnTo'));
+    const propertyId =
+      searchParams.get('propertyId') ||
+      propertyIdFromDashboardPath(returnTo) ||
+      undefined;
+    const homeAssetId =
+      searchParams.get('homeAssetId') ||
+      searchParams.get('itemId') ||
+      undefined;
     const categoryParam = searchParams.get('category');
     const from = searchParams.get('from');
 
     let category: WarrantyCategory | undefined = isWarrantyCategory(categoryParam) ? categoryParam : undefined;
 
     if (!category && homeAssetId) {
-      const asset = homeAssets.find((a) => a.id === homeAssetId);
-      if (asset) {
-        const inferred = WARRANTY_CATEGORY_KEYS.find((key) =>
-          CATEGORY_ASSET_MAP[key].includes(asset.assetType)
-        );
-        category = inferred ?? 'APPLIANCE';
-      } else {
-        category = 'APPLIANCE';
-      }
+      category = 'APPLIANCE';
     }
 
     if (!category && from === 'coverage-buy') {
@@ -643,7 +648,7 @@ export default function WarrantiesPage() {
       homeAssetId,
       category,
     };
-  }, [searchParams, homeAssets]);
+  }, [searchParams]);
   const [createModalPrefill, setCreateModalPrefill] = useState<WarrantyFormProps['prefill']>(undefined);
   const [openedFromSetup, setOpenedFromSetup] = useState(false); // State to track if the modal opened automatically
 
@@ -709,7 +714,7 @@ export default function WarrantiesPage() {
       const from = searchParams.get('from');
       
       if (action === 'new' && !isAddEditModalOpen) {
-          openAddEditModal(undefined);
+          openAddEditModal(undefined, createPrefill);
           
           // Check if navigation originated from maintenance-setup OR risk-assessment
           if (from === 'maintenance-setup' || from === 'risk-assessment') {
@@ -717,7 +722,7 @@ export default function WarrantiesPage() {
           }
       }
 
-  }, [fetchDependencies, searchParams]);
+  }, [fetchDependencies, searchParams, createPrefill, isAddEditModalOpen]);
 
   // Use local Create/UpdateWarrantyInput interface
   const handleSave = async (data: CreateWarrantyInput | UpdateWarrantyInput) => {
@@ -804,9 +809,9 @@ export default function WarrantiesPage() {
   };
   
   // Handlers for Add/Edit Modal
-  const openAddEditModal = (warranty?: Warranty) => {
+  const openAddEditModal = (warranty?: Warranty, prefillOverride?: WarrantyFormProps['prefill']) => {
     setEditingWarranty(warranty);
-    setCreateModalPrefill(!warranty ? createPrefill : undefined);
+    setCreateModalPrefill(!warranty ? (prefillOverride ?? createPrefill) : undefined);
     setOpenedFromSetup(false); // Reset for manual opens
     setIsAddEditModalOpen(true);
   };
