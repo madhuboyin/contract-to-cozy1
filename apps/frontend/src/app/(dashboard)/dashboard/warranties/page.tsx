@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { FileText, Plus, Loader2, Wrench, Trash2, Edit, X, Save, Upload, ExternalLink, AlertCircle, ArrowLeft } from 'lucide-react';
+import { FileText, Plus, Loader2, Wrench, Trash2, Edit, Upload, ExternalLink, AlertCircle, ArrowLeft, BadgeCheck, CalendarDays } from 'lucide-react';
 import { format, parseISO, isPast } from 'date-fns';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
@@ -19,6 +19,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
+import {
+  CoverageModalFooter,
+  CoverageModalHeader,
+  COVERAGE_MODAL_CONTENT_CLASS,
+  COVERAGE_MODAL_DATE_INPUT_CLASS,
+  COVERAGE_MODAL_FIELD_HINT_CONDITIONAL_CLASS,
+  COVERAGE_MODAL_FORM_CLASS,
+  COVERAGE_MODAL_INPUT_CLASS,
+  COVERAGE_MODAL_LABEL_CLASS,
+  COVERAGE_MODAL_NOTES_TEXTAREA_CLASS,
+  COVERAGE_MODAL_SELECT_TRIGGER_CLASS,
+  COVERAGE_MODAL_TWO_COL_GRID_CLASS,
+} from '@/components/shared/coverage-modal-chrome';
 // NEW IMPORTS for Table structure
 import {
   Table,
@@ -294,7 +307,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
     providerName: initialData?.providerName || '',
     policyNumber: initialData?.policyNumber || '',
     coverageDetails: initialData?.coverageDetails || '',
-    cost: initialData?.cost || undefined,
+    cost: initialData?.cost ?? undefined,
     startDate: initialData?.startDate ? format(parseISO(initialData.startDate), 'yyyy-MM-dd') : '',
     expiryDate: initialData?.expiryDate ? format(parseISO(initialData.expiryDate), 'yyyy-MM-dd') : '',
     propertyId: initialData?.propertyId || prefill?.propertyId || undefined,
@@ -378,7 +391,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
     onSave(formData as CreateWarrantyInput | UpdateWarrantyInput);
   };
 
-  const title = initialData ? `Edit Warranty: ${initialData.providerName}` : 'Add New Warranty';
+  const title = initialData ? `Edit Warranty: ${initialData.providerName}` : 'Add Warranty';
   const selectedPropertyId = formData.propertyId || SELECT_NONE_VALUE;
   const selectedCategory = (formData.category || undefined) as string | undefined;
   const prefilledPropertyMissingFromOptions =
@@ -423,76 +436,123 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
 
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <DialogHeader>
-        <DialogTitle>{title}</DialogTitle>
-      </DialogHeader>
-      
-      <div className="grid gap-2">
-        <Label htmlFor="providerName">Provider Name *</Label>
-        <Input id="providerName" value={formData.providerName} onChange={handleChange} required />
-      </div>
+    <form onSubmit={handleSubmit} className={COVERAGE_MODAL_FORM_CLASS}>
+      <CoverageModalHeader
+        icon={<BadgeCheck className="h-[18px] w-[18px]" />}
+        iconClassName="warranty-icon"
+        title={title}
+        subtitle="We'll remind you 60 days before this warranty expires."
+      />
 
-      {/* NEW: CATEGORY SELECTION (Fulfills Request 1 - replaces "General" with specific categories) */}
-      <div className="grid gap-2">
-        <Label htmlFor="category">Warranty Category *</Label>
-        <Select 
-            value={selectedCategory} 
-            onValueChange={(v) => handleSelectChange('category', v)}
-            required={!initialData} // Always required on creation
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select the covered category (Required)" />
-          </SelectTrigger>
-          <SelectContent>
-            {WARRANTY_CATEGORY_OPTIONS.map(opt => (
-              <SelectItem key={opt.key} value={opt.key}>
-                {opt.display}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <div className={COVERAGE_MODAL_CONTENT_CLASS}>
+        <div className="grid gap-2">
+          <Label htmlFor="providerName" className={COVERAGE_MODAL_LABEL_CLASS}>
+            Provider name *
+          </Label>
+          <Input
+            id="providerName"
+            value={formData.providerName}
+            onChange={handleChange}
+            required
+            placeholder="e.g. Assurant, American Home Shield"
+            className={COVERAGE_MODAL_INPUT_CLASS}
+          />
+        </div>
 
-      <div className="grid sm:grid-cols-2 gap-4">
         <div className="grid gap-2">
-          <Label htmlFor="policyNumber">Policy Number</Label>
-          <Input id="policyNumber" value={formData.policyNumber} onChange={handleChange} />
+          <Label htmlFor="category" className={COVERAGE_MODAL_LABEL_CLASS}>
+            Warranty category *
+          </Label>
+          <Select value={selectedCategory} onValueChange={(v) => handleSelectChange('category', v)} required={!initialData}>
+            <SelectTrigger className={COVERAGE_MODAL_SELECT_TRIGGER_CLASS}>
+              <SelectValue placeholder="Select the covered category (Required)" />
+            </SelectTrigger>
+            <SelectContent>
+              {WARRANTY_CATEGORY_OPTIONS.map(opt => (
+                <SelectItem key={opt.key} value={opt.key}>
+                  {opt.display}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <div className="grid gap-2">
-          <Label htmlFor="cost">Cost ($)</Label>
-          <Input id="cost" type="number" step="0.01" value={formData.cost ?? ''} onChange={handleChange} />
-        </div>
-      </div>
 
-      <div className="grid sm:grid-cols-2 gap-4">
-        <div className="grid gap-2">
-          <Label htmlFor="startDate">Start Date *</Label>
-          <Input id="startDate" type="date" value={formData.startDate} onChange={handleChange} required />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="expiryDate">Expiry Date *</Label>
-          <Input id="expiryDate" type="date" value={formData.expiryDate} onChange={handleChange} required />
-        </div>
-      </div>
-
-      {/* UPDATED: Property and Asset Selection in one row */}
-      <div className="grid sm:grid-cols-2 gap-4">
+        <div className={COVERAGE_MODAL_TWO_COL_GRID_CLASS}>
           <div className="grid gap-2">
-            <Label htmlFor="propertyId">Associated Property</Label>
-            <Select 
-              value={selectedPropertyId} 
-              onValueChange={(v) => handleSelectChange('propertyId', v)}
-              // PROPERTY IS NEVER DISABLED (Requirement fulfilled)
-              disabled={false} 
-            >
-              <SelectTrigger>
+            <Label htmlFor="policyNumber" className={COVERAGE_MODAL_LABEL_CLASS}>
+              Policy / contract number
+            </Label>
+            <Input
+              id="policyNumber"
+              value={formData.policyNumber}
+              onChange={handleChange}
+              placeholder="e.g. WR-987654321 (optional)"
+              className={COVERAGE_MODAL_INPUT_CLASS}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="cost" className={COVERAGE_MODAL_LABEL_CLASS}>
+              What did it cost? ($)
+            </Label>
+            <Input
+              id="cost"
+              type="number"
+              min={0}
+              step="0.01"
+              value={formData.cost ?? ''}
+              onChange={handleChange}
+              placeholder="e.g. 350"
+              className={COVERAGE_MODAL_INPUT_CLASS}
+            />
+          </div>
+        </div>
+
+        <div className={COVERAGE_MODAL_TWO_COL_GRID_CLASS}>
+          <div className="grid gap-2">
+            <Label htmlFor="startDate" className={COVERAGE_MODAL_LABEL_CLASS}>
+              Start date *
+            </Label>
+            <div className="date-input-wrapper relative">
+              <Input
+                id="startDate"
+                type="date"
+                value={formData.startDate}
+                onChange={handleChange}
+                required
+                className={COVERAGE_MODAL_DATE_INPUT_CLASS}
+              />
+              <CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="expiryDate" className={COVERAGE_MODAL_LABEL_CLASS}>
+              Expiry date *
+            </Label>
+            <div className="date-input-wrapper relative">
+              <Input
+                id="expiryDate"
+                type="date"
+                value={formData.expiryDate}
+                onChange={handleChange}
+                required
+                className={COVERAGE_MODAL_DATE_INPUT_CLASS}
+              />
+              <CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
+            </div>
+          </div>
+        </div>
+
+        <div className={COVERAGE_MODAL_TWO_COL_GRID_CLASS}>
+          <div className="grid gap-2">
+            <Label htmlFor="propertyId" className={COVERAGE_MODAL_LABEL_CLASS}>
+              Which property?
+            </Label>
+            <Select value={selectedPropertyId} onValueChange={(v) => handleSelectChange('propertyId', v)} disabled={false}>
+              <SelectTrigger className={COVERAGE_MODAL_SELECT_TRIGGER_CLASS}>
                 <SelectValue placeholder="Select a property (Optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={SELECT_NONE_VALUE}>
-                  None (Not linked to a specific property)
-                </SelectItem> 
+                <SelectItem value={SELECT_NONE_VALUE}>Not linked to a property</SelectItem>
                 {prefilledPropertyMissingFromOptions && formData.propertyId && (
                   <SelectItem value={formData.propertyId}>
                     Selected property
@@ -506,47 +566,43 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
               </SelectContent>
             </Select>
           </div>
-          
+
           <div className="grid gap-2">
-            <Label htmlFor="homeAssetId">Linked Home System/Appliance</Label>
-            <Select 
-              value={selectedHomeAssetId} 
+            <Label htmlFor="homeAssetId" className={COVERAGE_MODAL_LABEL_CLASS}>
+              Which appliance or system?
+            </Label>
+            <Select
+              value={selectedHomeAssetId}
               onValueChange={(v) => handleSelectChange('homeAssetId', v)}
-              // Disabling Logic: Disabled if category explicitly forbids linking (HVAC, Plumbing, etc.) 
-              // OR if no property is selected OR if the filtered list is empty.
               disabled={
-                  isAssetLinkingExplicitlyDisabled || 
-                  !formData.propertyId || 
-                  (filteredHomeAssets.length === 0 &&
-                    !formData.homeAssetId &&
-                    !isSubmitting &&
-                    !isAssetLinkingExplicitlyDisabled)
-              } 
+                isAssetLinkingExplicitlyDisabled ||
+                !formData.propertyId ||
+                (filteredHomeAssets.length === 0 &&
+                  !formData.homeAssetId &&
+                  !isSubmitting &&
+                  !isAssetLinkingExplicitlyDisabled)
+              }
             >
-              <SelectTrigger>
-                <SelectValue 
-                    placeholder={
-                       isAssetLinkingExplicitlyDisabled 
-                           ? `System/Structural Coverage (${WARRANTY_CATEGORIES[formData.category as WarrantyCategory]})` // Custom message when disabled
-                           : !formData.category
-                           ? 'Select Category First'
-                           : !formData.propertyId
-                           ? 'Select Property First'
-                           : filteredHomeAssets.length === 0
-                               ? `No compatible Assets found for this property` 
-                               : 'Select an Asset (Optional)'
-                    }
+              <SelectTrigger className={COVERAGE_MODAL_SELECT_TRIGGER_CLASS}>
+                <SelectValue
+                  placeholder={
+                    isAssetLinkingExplicitlyDisabled
+                      ? `System/Structural Coverage (${WARRANTY_CATEGORIES[formData.category as WarrantyCategory]})`
+                      : !formData.category
+                      ? 'Select Category First'
+                      : !formData.propertyId
+                      ? 'Select Property First'
+                      : filteredHomeAssets.length === 0
+                      ? 'No compatible assets found for this property'
+                      : 'Select an asset (Optional)'
+                  }
                 />
               </SelectTrigger>
               <SelectContent>
-                {/* FIX: Only render the "None" SelectItem if linking is NOT explicitly disabled. */}
                 {!isAssetLinkingExplicitlyDisabled && (
-                    <SelectItem value={SELECT_NONE_VALUE}> 
-                        {/* FIX 2: Shortened text */}
-                        None (Covers entire category)
-                    </SelectItem> 
+                  <SelectItem value={SELECT_NONE_VALUE}>Entire category</SelectItem>
                 )}
-                
+
                 {filteredHomeAssets.map(asset => (
                   <SelectItem key={asset.id} value={asset.id}>
                     {asset.assetType.replace(/_/g, ' ')} {asset.modelNumber ? `(${asset.modelNumber})` : ''}
@@ -557,36 +613,43 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
                     Linked appliance
                   </SelectItem>
                 )}
-                
+
                 {filteredHomeAssets.length === 0 && formData.category && formData.propertyId && !isAssetLinkingExplicitlyDisabled && (
-                    <div className="p-2 text-sm text-muted-foreground italic">
-                        No compatible assets found.
-                    </div>
+                  <div className="p-2 text-sm text-muted-foreground italic">
+                    No compatible assets found.
+                  </div>
                 )}
               </SelectContent>
             </Select>
+            {!formData.propertyId && (
+              <p className={COVERAGE_MODAL_FIELD_HINT_CONDITIONAL_CLASS}>
+                ↑ Select a property above to link a specific system or appliance.
+              </p>
+            )}
           </div>
+        </div>
+
+        <div className="grid gap-2">
+          <Label htmlFor="coverageDetails" className={COVERAGE_MODAL_LABEL_CLASS}>
+            Coverage notes
+          </Label>
+          <Textarea
+            id="coverageDetails"
+            value={formData.coverageDetails}
+            onChange={handleChange}
+            placeholder="Optional - any specific items or exclusions worth noting."
+            className={COVERAGE_MODAL_NOTES_TEXTAREA_CLASS}
+          />
+        </div>
       </div>
 
-
-      <div className="grid gap-2">
-        <Label htmlFor="coverageDetails">Coverage Details</Label>
-        <Textarea id="coverageDetails" value={formData.coverageDetails} onChange={handleChange} rows={3} />
-      </div>
-
-      <DialogFooter className="mt-6">
-        <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
-          <X className="w-4 h-4 mr-2" /> Cancel
-        </Button>
-        <Button 
-          type="submit" 
-          // Disable submit if category is not selected on a new form
-          disabled={isSubmitting || (!initialData && !formData.category)} 
-        >
-          {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />} 
-          {initialData ? 'Save Changes' : 'Create Warranty'}
-        </Button>
-      </DialogFooter>
+      <CoverageModalFooter
+        onClose={onClose}
+        isSubmitting={isSubmitting}
+        isEditMode={Boolean(initialData)}
+        createLabel="Create Warranty"
+        submitDisabled={!initialData && !formData.category}
+      />
     </form>
   );
 };
@@ -970,7 +1033,7 @@ const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
           </Button>
           {/* FIX: Increased max-width from sm:max-w-[500px] to sm:max-w-[700px] 
              to accommodate the new dual-column dropdowns without overlap/overflow. */}
-          <DialogContent className="sm:max-w-[700px]"> 
+          <DialogContent className="modal-container w-[calc(100vw-2rem)] max-w-[700px] gap-0 overflow-hidden p-0 max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:max-h-[92vh] max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0"> 
             <WarrantyForm 
               initialData={editingWarranty}
               properties={properties}

@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { FileText, Plus, Loader2, Shield, Trash2, Edit, X, Save, ExternalLink, Upload, AlertCircle } from 'lucide-react';
+import { FileText, Plus, Loader2, Shield, Trash2, Edit, X, ExternalLink, Upload, AlertCircle, CalendarDays } from 'lucide-react';
 import { format, parseISO, isPast } from 'date-fns';
 import { api } from '@/lib/api/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +16,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
+import {
+  CoverageModalFooter,
+  CoverageModalHeader,
+  COVERAGE_MODAL_CONTENT_CLASS,
+  COVERAGE_MODAL_DATE_INPUT_CLASS,
+  COVERAGE_MODAL_FIELD_HINT_CLASS,
+  COVERAGE_MODAL_FORM_CLASS,
+  COVERAGE_MODAL_INPUT_CLASS,
+  COVERAGE_MODAL_LABEL_CLASS,
+  COVERAGE_MODAL_SELECT_TRIGGER_CLASS,
+  COVERAGE_MODAL_TWO_COL_GRID_CLASS,
+} from '@/components/shared/coverage-modal-chrome';
 // NEW IMPORTS for Table structure
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -194,7 +206,7 @@ const PolicyForm = ({ initialData, properties, prefill, onSave, onClose, isSubmi
     carrierName: initialData?.carrierName || '',
     policyNumber: initialData?.policyNumber || '',
     coverageType: initialData?.coverageType || prefill?.coverageType || 'Homeowner',
-    premiumAmount: initialData?.premiumAmount || 0,
+    premiumAmount: initialData?.premiumAmount ?? undefined,
     startDate: initialData?.startDate ? format(parseISO(initialData.startDate), 'yyyy-MM-dd') : '',
     expiryDate: initialData?.expiryDate ? format(parseISO(initialData.expiryDate), 'yyyy-MM-dd') : '',
     propertyId: initialData?.propertyId || prefill?.propertyId || undefined,
@@ -210,7 +222,7 @@ const PolicyForm = ({ initialData, properties, prefill, onSave, onClose, isSubmi
     const { id, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [id]: id === 'premiumAmount' ? (Number(value) || 0) : value,
+      [id]: id === 'premiumAmount' ? (value ? Number(value) : undefined) : value,
     }));
   };
 
@@ -223,102 +235,155 @@ const PolicyForm = ({ initialData, properties, prefill, onSave, onClose, isSubmi
     onSave(formData as CreateInsurancePolicyInput | UpdateInsurancePolicyInput);
   };
 
-  const title = initialData ? `Edit Policy: ${initialData.carrierName}` : 'Add New Insurance Policy';
+  const title = initialData ? `Edit Policy: ${initialData.carrierName}` : 'Add Insurance Policy';
   const selectedPropertyId = formData.propertyId || SELECT_NONE_VALUE;
   const prefilledPropertyMissingFromOptions =
     !!formData.propertyId && !properties.some((property) => property.id === formData.propertyId);
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <DialogHeader>
-        <DialogTitle>{title}</DialogTitle>
-      </DialogHeader>
-      
-      <div className="grid gap-2">
-        <Label htmlFor="carrierName">Insurance Carrier *</Label>
-        <Input id="carrierName" value={formData.carrierName} onChange={handleChange} required />
+    <form onSubmit={handleSubmit} className={COVERAGE_MODAL_FORM_CLASS}>
+      <CoverageModalHeader
+        icon={<Shield className="h-[18px] w-[18px]" />}
+        iconClassName="insurance-icon"
+        title={title}
+        subtitle="We'll alert you 30 days before your policy lapses."
+      />
+
+      <div className={COVERAGE_MODAL_CONTENT_CLASS}>
+        <div className="grid gap-2">
+          <Label htmlFor="carrierName" className={COVERAGE_MODAL_LABEL_CLASS}>
+            Insurance carrier *
+          </Label>
+          <Input
+            id="carrierName"
+            value={formData.carrierName}
+            onChange={handleChange}
+            required
+            placeholder="e.g. State Farm, Allstate, Liberty Mutual"
+            className={COVERAGE_MODAL_INPUT_CLASS}
+          />
+          <p className={COVERAGE_MODAL_FIELD_HINT_CLASS}>Found on your insurance card or policy documents.</p>
+        </div>
+
+        <div className={COVERAGE_MODAL_TWO_COL_GRID_CLASS}>
+          <div className="grid gap-2">
+            <Label htmlFor="policyNumber" className={COVERAGE_MODAL_LABEL_CLASS}>
+              Policy number *
+            </Label>
+            <Input
+              id="policyNumber"
+              value={formData.policyNumber}
+              onChange={handleChange}
+              required
+              placeholder="e.g. HO-123456789"
+              className={COVERAGE_MODAL_INPUT_CLASS}
+            />
+            <p className={COVERAGE_MODAL_FIELD_HINT_CLASS}>Found on your declarations page or insurance card.</p>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="premiumAmount" className={COVERAGE_MODAL_LABEL_CLASS}>
+              Yearly cost ($) *
+            </Label>
+            <Input
+              id="premiumAmount"
+              type="number"
+              min={0}
+              step="0.01"
+              value={formData.premiumAmount ?? ''}
+              onChange={handleChange}
+              required
+              placeholder="e.g. 1,200"
+              className={COVERAGE_MODAL_INPUT_CLASS}
+            />
+          </div>
+        </div>
+
+        <div className={COVERAGE_MODAL_TWO_COL_GRID_CLASS}>
+          <div className="grid gap-2">
+            <Label htmlFor="startDate" className={COVERAGE_MODAL_LABEL_CLASS}>
+              Start date *
+            </Label>
+            <div className="date-input-wrapper relative">
+              <Input
+                id="startDate"
+                type="date"
+                value={formData.startDate}
+                onChange={handleChange}
+                required
+                className={COVERAGE_MODAL_DATE_INPUT_CLASS}
+              />
+              <CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="expiryDate" className={COVERAGE_MODAL_LABEL_CLASS}>
+              Renewal date *
+            </Label>
+            <div className="date-input-wrapper relative">
+              <Input
+                id="expiryDate"
+                type="date"
+                value={formData.expiryDate}
+                onChange={handleChange}
+                required
+                className={COVERAGE_MODAL_DATE_INPUT_CLASS}
+              />
+              <CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
+            </div>
+          </div>
+        </div>
+
+        <div className={COVERAGE_MODAL_TWO_COL_GRID_CLASS}>
+          <div className="grid gap-2">
+            <Label htmlFor="coverageType" className={COVERAGE_MODAL_LABEL_CLASS}>
+              What does this cover?
+            </Label>
+            <Select value={formData.coverageType || SELECT_NONE_VALUE} onValueChange={(v) => handleSelectChange('coverageType', v)}>
+              <SelectTrigger className={COVERAGE_MODAL_SELECT_TRIGGER_CLASS}>
+                <SelectValue placeholder="Select type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SELECT_NONE_VALUE}>None / N/A</SelectItem>
+                <SelectItem value="Homeowner">Homeowner</SelectItem>
+                <SelectItem value="Landlord">Landlord</SelectItem>
+                <SelectItem value="Flood">Flood</SelectItem>
+                <SelectItem value="Renter">Renter</SelectItem>
+                <SelectItem value="Other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="propertyId" className={COVERAGE_MODAL_LABEL_CLASS}>
+              Which property?
+            </Label>
+            <Select value={selectedPropertyId} onValueChange={(v) => handleSelectChange('propertyId', v)}>
+              <SelectTrigger className={COVERAGE_MODAL_SELECT_TRIGGER_CLASS}>
+                <SelectValue placeholder="Select a property (Optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SELECT_NONE_VALUE}>Not linked to a property</SelectItem>
+                {prefilledPropertyMissingFromOptions && formData.propertyId && (
+                  <SelectItem value={formData.propertyId}>
+                    Selected property
+                  </SelectItem>
+                )}
+                {properties.map(p => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name} ({p.zipCode})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
 
-      <div className="grid sm:grid-cols-2 gap-4">
-        <div className="grid gap-2">
-          <Label htmlFor="policyNumber">Policy Number *</Label>
-          <Input id="policyNumber" value={formData.policyNumber} onChange={handleChange} required />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="premiumAmount">Annual Premium ($) *</Label>
-          <Input id="premiumAmount" type="number" step="0.01" value={formData.premiumAmount ?? ''} onChange={handleChange} required />
-        </div>
-      </div>
-
-      <div className="grid sm:grid-cols-2 gap-4">
-        <div className="grid gap-2">
-          <Label htmlFor="startDate">Start Date *</Label>
-          <Input id="startDate" type="date" value={formData.startDate} onChange={handleChange} required />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="expiryDate">Expiry Date *</Label>
-          <Input id="expiryDate" type="date" value={formData.expiryDate} onChange={handleChange} required />
-        </div>
-      </div>
-
-      <div className="grid sm:grid-cols-2 gap-4">
-        <div className="grid gap-2">
-          <Label htmlFor="coverageType">Coverage Type</Label>
-          <Select 
-            value={formData.coverageType || SELECT_NONE_VALUE} 
-            onValueChange={(v) => handleSelectChange('coverageType', v)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select type" />
-            </SelectTrigger>
-            <SelectContent>
-               <SelectItem value={SELECT_NONE_VALUE}>None / N/A</SelectItem>
-              <SelectItem value="Homeowner">Homeowner</SelectItem>
-              <SelectItem value="Landlord">Landlord</SelectItem>
-              <SelectItem value="Flood">Flood</SelectItem>
-              <SelectItem value="Renter">Renter</SelectItem>
-              <SelectItem value="Other">Other</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="propertyId">Associated Property</Label>
-          <Select 
-            value={selectedPropertyId} 
-            onValueChange={(v) => handleSelectChange('propertyId', v)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select a property (Optional)" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={SELECT_NONE_VALUE}>
-                None (General Policy)
-              </SelectItem>
-              {prefilledPropertyMissingFromOptions && formData.propertyId && (
-                <SelectItem value={formData.propertyId}>
-                  Selected property
-                </SelectItem>
-              )}
-              {properties.map(p => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name} ({p.zipCode})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-
-      <DialogFooter className="mt-6">
-        <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
-          <X className="w-4 h-4 mr-2" /> Cancel
-        </Button>
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />} 
-          {initialData ? 'Save Changes' : 'Create Policy'}
-        </Button>
-      </DialogFooter>
+      <CoverageModalFooter
+        onClose={onClose}
+        isSubmitting={isSubmitting}
+        isEditMode={Boolean(initialData)}
+        createLabel="Create Policy"
+      />
     </form>
   );
 };
@@ -528,7 +593,7 @@ export default function InsurancePage() {
           <Button onClick={() => openAddEditModal(undefined)}>
             <Plus className="w-4 h-4 mr-2" /> Add Policy
           </Button>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="modal-container w-[calc(100vw-2rem)] max-w-[700px] gap-0 overflow-hidden p-0 max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:max-h-[92vh] max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0">
             <PolicyForm 
               initialData={editingPolicy}
               properties={properties}
