@@ -138,6 +138,14 @@ const DISABLE_ASSET_LINKING_CATEGORIES: WarrantyCategory[] = [
 // Placeholder for "None" option, necessary to avoid Radix UI error on value=""
 const SELECT_NONE_VALUE = '__NONE__';
 
+function sanitizeReturnTo(raw: string | null): string | null {
+  if (!raw || !raw.startsWith('/dashboard/')) {
+    return null;
+  }
+
+  return raw;
+}
+
 // --- Document Type Constants for UI (omitted for brevity) ---
 const DOCUMENT_TYPES: DocumentType[] = [
     'INSPECTION_REPORT',
@@ -568,6 +576,7 @@ export default function WarrantiesPage() {
   // NEW: Navigation Hooks
   const router = useRouter();
   const searchParams = useSearchParams();
+  const safeReturnTo = useMemo(() => sanitizeReturnTo(searchParams.get('returnTo')), [searchParams]);
   const [openedFromSetup, setOpenedFromSetup] = useState(false); // State to track if the modal opened automatically
 
   const fetchDependencies = useCallback(async () => {
@@ -851,7 +860,13 @@ const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
       <Button 
         variant="link" 
         className="p-0 h-auto mb-2 text-sm text-muted-foreground"
-        onClick={() => router.back()}
+        onClick={() => {
+          if (safeReturnTo) {
+            router.push(safeReturnTo);
+            return;
+          }
+          router.back();
+        }}
       >
         <ArrowLeft className="h-4 w-4 mr-1" /> Back
       </Button>
@@ -891,7 +906,7 @@ const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
         <Card className="text-center py-10">
           <FileText className="w-10 h-10 text-gray-400 mx-auto mb-3" />
           <CardTitle>No Warranties Found</CardTitle>
-          <CardDescription>Click "Add Warranty" to create your first record.</CardDescription>
+          <CardDescription>Click &quot;Add Warranty&quot; to create your first record.</CardDescription>
         </Card>
       )}
 

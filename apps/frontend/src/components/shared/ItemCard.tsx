@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { CheckCircle, HelpCircle, Shield, Upload } from 'lucide-react';
 
 import type { InventoryItem } from '@/types';
@@ -74,6 +74,12 @@ export default function ItemCard({
   onAttachDocument,
 }: ItemCardProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentPathWithQuery = React.useMemo(() => {
+    const query = searchParams.toString();
+    return query ? `${pathname}?${query}` : pathname;
+  }, [pathname, searchParams]);
 
   const isCompact = variant === 'inventory';
   const coverageStatus = getCoverageStatus(item);
@@ -101,7 +107,9 @@ export default function ItemCard({
       return;
     }
 
-    router.push(`/dashboard/properties/${item.propertyId}/inventory/items/${item.id}/coverage`);
+    router.push(
+      `/dashboard/properties/${item.propertyId}/inventory/items/${item.id}/coverage?returnTo=${encodeURIComponent(currentPathWithQuery)}`
+    );
   }
 
   function handleOpenReplaceRepair(event: React.MouseEvent<HTMLButtonElement>) {

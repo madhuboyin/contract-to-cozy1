@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, Loader2, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
 import {
   CoverageAnalysisDTO,
@@ -83,6 +83,8 @@ function normalizeOverrides(overrides: CoverageAnalysisOverrides): CoverageAnaly
 
 export default function CoverageIntelligencePanel({ propertyId }: CoverageIntelligencePanelProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [analysis, setAnalysis] = useState<CoverageAnalysisDTO | null>(null);
   const [hasAnalysis, setHasAnalysis] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -195,6 +197,10 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
   }, [items, selectedItemId]);
 
   const selectedItemHasGap = !!selectedItem && (!selectedItem.warrantyId || !selectedItem.insurancePolicyId);
+  const currentPathWithQuery = useMemo(() => {
+    const query = searchParams.toString();
+    return query ? `${pathname}?${query}` : pathname;
+  }, [pathname, searchParams]);
 
   if (loading) {
     return (
@@ -237,7 +243,11 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
           <Button
             type="button"
             disabled={!selectedItemId}
-            onClick={() => router.push(`/dashboard/properties/${propertyId}/inventory/items/${selectedItemId}/coverage`)}
+            onClick={() =>
+              router.push(
+                `/dashboard/properties/${propertyId}/inventory/items/${selectedItemId}/coverage?returnTo=${encodeURIComponent(currentPathWithQuery)}`
+              )
+            }
           >
             Get coverage
           </Button>

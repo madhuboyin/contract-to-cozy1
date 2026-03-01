@@ -3,6 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
 // 1. Import the unified API client
 import { api } from '@/lib/api/client'; 
 import { InventoryItem, InventoryRoom } from '@/types';
@@ -15,6 +16,12 @@ import { getInventoryItem, listInventoryRooms } from '@/app/(dashboard)/dashboar
 export default function CoverageClient({ propertyId }: { propertyId: string }) {
   // Use the standard API URL from the client
   const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentPathWithQuery = React.useMemo(() => {
+    const query = searchParams.toString();
+    return query ? `${pathname}?${query}` : pathname;
+  }, [pathname, searchParams]);
 
   const [loading, setLoading] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
@@ -167,7 +174,7 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
                       </Link>
 
                       <Link
-                        href={`/dashboard/properties/${propertyId}/inventory/items/${g.inventoryItemId}/coverage`}
+                        href={`/dashboard/properties/${propertyId}/inventory/items/${g.inventoryItemId}/coverage?returnTo=${encodeURIComponent(currentPathWithQuery)}`}
                         className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
                       >
                         Get coverage

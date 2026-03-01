@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Search, X } from 'lucide-react';
 
@@ -64,7 +64,12 @@ export default function InventoryClient() {
   const propertyId = params.id;
 
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const currentPathWithQuery = useMemo(() => {
+    const query = searchParams.toString();
+    return query ? `${pathname}?${query}` : pathname;
+  }, [pathname, searchParams]);
 
   const openItemId = searchParams.get('openItemId');
   const scrollToItemId = searchParams.get('scrollToItemId');
@@ -409,7 +414,11 @@ export default function InventoryClient() {
         <CoverageTab
           items={filteredItems}
           rooms={rooms}
-          onOpenCoverage={(item) => router.push(`/dashboard/properties/${propertyId}/inventory/items/${item.id}/coverage`)}
+          onOpenCoverage={(item) =>
+            router.push(
+              `/dashboard/properties/${propertyId}/inventory/items/${item.id}/coverage?returnTo=${encodeURIComponent(currentPathWithQuery)}`
+            )
+          }
           onOpenActions={() => router.push(`/dashboard/actions?propertyId=${propertyId}&filter=coverage-gaps`)}
         />
       ) : !hasFilteredItems ? (

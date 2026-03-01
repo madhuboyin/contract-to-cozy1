@@ -1,7 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, ArrowLeft, Loader2, ShieldCheck } from 'lucide-react';
 import {
   ItemCoverageAnalysisDTO,
@@ -72,6 +73,11 @@ function recommendationCopy(recommendation?: ItemCoverageAnalysisDTO['warranty']
   if (recommendation === 'REPLACE_SOON') return 'Plan replacement soon';
   if (recommendation === 'WAIT') return 'Wait and monitor';
   return '—';
+}
+
+function sanitizeReturnTo(raw: string | null): string | null {
+  if (!raw || !raw.startsWith('/dashboard/')) return null;
+  return raw;
 }
 
 function normalizeOverrides(overrides: ItemCoverageAnalysisOverrides): ItemCoverageAnalysisOverrides {
@@ -145,9 +151,24 @@ function mergeOverridesWithPrefill(
 
 export default function ItemGetCoverageClient() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const params = useParams<{ id: string; itemId: string }>();
   const propertyId = params.id;
   const itemId = params.itemId;
+  const safeReturnTo = useMemo(() => sanitizeReturnTo(searchParams.get('returnTo')), [searchParams]);
+  const currentPathWithQuery = useMemo(() => {
+    const query = searchParams.toString();
+    return query ? `${pathname}?${query}` : pathname;
+  }, [pathname, searchParams]);
+  const fallbackBackHref = propertyId
+    ? `/dashboard/properties/${propertyId}/inventory?tab=coverage`
+    : '/dashboard/properties';
+  const backHref = safeReturnTo ?? fallbackBackHref;
+  const addWarrantyHref =
+    propertyId && itemId
+      ? `/dashboard/warranties?action=new&from=coverage-buy&propertyId=${encodeURIComponent(propertyId)}&homeAssetId=${encodeURIComponent(itemId)}&returnTo=${encodeURIComponent(currentPathWithQuery)}`
+      : '/dashboard/warranties';
 
   const [analysis, setAnalysis] = useState<ItemCoverageAnalysisDTO | null>(null);
   const [hasAnalysis, setHasAnalysis] = useState(false);
@@ -237,7 +258,7 @@ export default function ItemGetCoverageClient() {
     <div className="mx-auto max-w-5xl p-6 space-y-4">
       <button
         type="button"
-        onClick={() => router.back()}
+        onClick={() => router.push(backHref)}
         className="inline-flex items-center gap-2 text-sm text-teal-700 hover:text-teal-800"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -465,6 +486,14 @@ export default function ItemGetCoverageClient() {
                 <div className="text-base font-semibold text-gray-900">{recommendationCopy(analysis.warranty.recommendation)}</div>
               </div>
             </div>
+
+            {analysis.warranty.recommendation === 'BUY_NOW' && (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <Button asChild>
+                  <Link href={addWarrantyHref}>Add warranty coverage</Link>
+                </Button>
+              </div>
+            )}
           </section>
 
           <section className="rounded-2xl border border-black/10 bg-white p-5">

@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { InventoryItem, InventoryItemCategory, InventoryItemCondition, InventoryRoom } from '@/types';
 import DocumentPickerModal from './DocumentPickerModal';
@@ -306,6 +306,10 @@ export default function InventoryItemDrawer(props: {
   existingItems?: InventoryItem[];
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const query = searchParams.toString();
+  const currentPathWithQuery = query ? `${pathname}?${query}` : pathname;
   const isEdit = !!props.initialItem;
 
   // core
@@ -966,7 +970,7 @@ useEffect(() => {
     if (!props.initialItem?.id) return;
     props.onClose();
     router.push(
-      `/dashboard/properties/${props.propertyId}/inventory/items/${props.initialItem.id}/coverage`
+      `/dashboard/properties/${props.propertyId}/inventory/items/${props.initialItem.id}/coverage?returnTo=${encodeURIComponent(currentPathWithQuery)}`
     );
   }
 
