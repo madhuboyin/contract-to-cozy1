@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Lock } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { formatMemberSince, formatPhoneNumber, toTitleCase } from '@/lib/utils/formatters';
 
 type EditableSection = 'profile' | 'address';
 
@@ -40,7 +42,7 @@ function SectionCard({
   return (
     <section className={`overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm ${className || ''}`}>
       <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 sm:px-6">
-        <h2 className="text-xl font-semibold uppercase tracking-wide text-gray-900">{title}</h2>
+        <h2 className="text-[15px] font-semibold tracking-normal text-gray-900">{title}</h2>
         {action}
       </div>
       <div className="px-5 py-5 sm:px-6 sm:py-6">{children}</div>
@@ -52,14 +54,28 @@ function SectionCard({
 function FieldRow({
   label,
   value,
+  className,
 }: {
   label: string;
   value: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-2 py-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:items-start">
-      <div className="text-sm font-semibold text-gray-800">{label}</div>
-      <div className="text-base break-words text-gray-900">{value}</div>
+    <div className={`flex flex-col gap-0.5 border-b border-gray-50 py-2.5 last:border-b-0 ${className || ''}`}>
+      <div className="text-[11px] font-medium tracking-[0.02em] text-gray-500">{label}</div>
+      <div className="text-sm font-normal break-words text-gray-900">{value}</div>
+    </div>
+  );
+}
+
+function ProfileAvatar({ firstName, lastName }: { firstName: string; lastName: string }) {
+  const firstInitial = firstName.trim().charAt(0);
+  const lastInitial = lastName.trim().charAt(0);
+  const initials = `${firstInitial}${lastInitial}`.toUpperCase() || 'U';
+
+  return (
+    <div className="h-14 w-14 shrink-0 rounded-full bg-brand-primary text-xl font-bold text-white shadow-[0_0_0_3px_rgba(13,148,136,0.15)] flex items-center justify-center">
+      {initials}
     </div>
   );
 }
@@ -244,7 +260,8 @@ export default function ProfilePage() {
 
   const profileEditing = editingSection === 'profile';
   const addressEditing = editingSection === 'address';
-  const actionLinkClass = 'text-base font-medium text-brand-primary underline decoration-transparent underline-offset-4 transition-colors hover:text-brand-primary-light hover:decoration-brand-primary-light';
+  const actionLinkClass =
+    'inline-flex min-h-[44px] min-w-[44px] items-center text-base font-medium text-brand-primary underline decoration-transparent underline-offset-4 transition-colors hover:text-brand-primary-light hover:decoration-brand-primary-light';
 
   const inputClass =
     'w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-brand-primary';
@@ -303,8 +320,13 @@ export default function ProfilePage() {
             ) : undefined
           }
         >
+          <div className="mb-4 flex justify-start">
+            <ProfileAvatar firstName={formData.firstName} lastName={formData.lastName} />
+          </div>
+          <hr className="mb-4 border-0 border-t border-gray-200" />
+
           <FieldRow
-            label="First Name"
+            label="First name"
             value={
               profileEditing ? (
                 <input
@@ -320,7 +342,7 @@ export default function ProfilePage() {
             }
           />
           <FieldRow
-            label="Last Name"
+            label="Last name"
             value={
               profileEditing ? (
                 <input
@@ -336,7 +358,7 @@ export default function ProfilePage() {
             }
           />
           <FieldRow
-            label="Phone Number"
+            label="Phone number"
             value={
               profileEditing ? (
                 <input
@@ -348,16 +370,16 @@ export default function ProfilePage() {
                   className={inputClass}
                 />
               ) : (
-                formData.phone || '—'
+                formatPhoneNumber(formData.phone) || '—'
               )
             }
           />
         </SectionCard>
 
         <SectionCard className="h-full" title="Email">
-          <FieldRow label="E-Mail Address" value={formData.email || '—'} />
+          <FieldRow label="Email" value={formData.email || '—'} />
           <p className="mt-2 text-sm text-gray-500">
-            Email is currently managed by account authentication settings.
+            To update your email, contact support or sign in with a different account.
           </p>
         </SectionCard>
 
@@ -374,9 +396,20 @@ export default function ProfilePage() {
             </button>
           }
         >
-          <FieldRow label="Password" value="************" />
-          <p className="mt-2 text-sm text-gray-500">
-            We will send a secure password reset link to your registered email.
+          <div className="mb-2 flex items-center gap-3 border-b border-gray-50 py-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-50">
+              <Lock className="h-4 w-4 text-teal-600" />
+            </div>
+            <div className="flex flex-1 flex-col gap-0.5">
+              <span className="text-[11px] text-gray-500">Password</span>
+              <span className="text-sm tracking-[0.15em] text-gray-900">••••••••••••</span>
+            </div>
+            <span className="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 px-2.5 py-0.5 text-[11px] font-semibold text-teal-700">
+              Protected
+            </span>
+          </div>
+          <p className="m-0 text-xs text-gray-500">
+            We&apos;ll send a secure reset link to your registered email.
           </p>
         </SectionCard>
 
@@ -415,7 +448,7 @@ export default function ProfilePage() {
           }
         >
           <FieldRow
-            label="Street Address"
+            label="Street address"
             value={
               addressEditing ? (
                 <input
@@ -427,15 +460,15 @@ export default function ProfilePage() {
                   className={inputClass}
                 />
               ) : (
-                formData.address || '—'
+                toTitleCase(formData.address) || '—'
               )
             }
           />
 
-          <div className="grid grid-cols-1 gap-4 py-3 sm:grid-cols-3">
-            <div>
-              <div className="mb-2 text-sm font-semibold text-gray-800">City</div>
-              {addressEditing ? (
+          <FieldRow
+            label="City"
+            value={
+              addressEditing ? (
                 <input
                   type="text"
                   name="city"
@@ -445,12 +478,14 @@ export default function ProfilePage() {
                   placeholder="City"
                 />
               ) : (
-                <div className="break-words text-gray-900">{formData.city || '—'}</div>
-              )}
-            </div>
-            <div>
-              <div className="mb-2 text-sm font-semibold text-gray-800">State</div>
-              {addressEditing ? (
+                toTitleCase(formData.city) || '—'
+              )
+            }
+          />
+          <FieldRow
+            label="State"
+            value={
+              addressEditing ? (
                 <select
                   name="state"
                   value={formData.state}
@@ -465,12 +500,14 @@ export default function ProfilePage() {
                   ))}
                 </select>
               ) : (
-                <div className="text-gray-900">{formData.state || '—'}</div>
-              )}
-            </div>
-            <div>
-              <div className="mb-2 text-sm font-semibold text-gray-800">ZIP Code</div>
-              {addressEditing ? (
+                formData.state || '—'
+              )
+            }
+          />
+          <FieldRow
+            label="ZIP code"
+            value={
+              addressEditing ? (
                 <input
                   type="text"
                   name="zipCode"
@@ -481,29 +518,35 @@ export default function ProfilePage() {
                   placeholder="10001"
                 />
               ) : (
-                <div className="text-gray-900">{formData.zipCode || '—'}</div>
-              )}
-            </div>
-          </div>
-        </SectionCard>
-
-        <SectionCard className="h-full" title="Account">
-          <FieldRow
-            label="Account Type"
-            value={<span className="capitalize">{user?.role?.toLowerCase() || 'Homeowner'}</span>}
-          />
-          <FieldRow
-            label="Member Since"
-            value={user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}
-          />
-          <FieldRow
-            label="Account Status"
-            value={
-              <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-                Active
-              </span>
+                formData.zipCode || '—'
+              )
             }
           />
+        </SectionCard>
+
+        <SectionCard className="h-full xl:col-span-2" title="Account">
+          <div className="grid grid-cols-1 md:grid-cols-3 md:divide-x md:divide-gray-200">
+            <FieldRow
+              className="md:border-b-0 md:px-5 md:py-3"
+              label="Account type"
+              value={<span className="capitalize">{user?.role?.toLowerCase() || 'Homeowner'}</span>}
+            />
+            <FieldRow
+              className="md:border-b-0 md:px-5 md:py-3"
+              label="Member since"
+              value={user?.createdAt ? formatMemberSince(user.createdAt) : '—'}
+            />
+            <FieldRow
+              className="md:border-b-0 md:px-5 md:py-3"
+              label="Account status"
+              value={
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-600" />
+                  Active
+                </span>
+              }
+            />
+          </div>
         </SectionCard>
       </div>
     </div>

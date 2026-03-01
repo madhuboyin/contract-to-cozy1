@@ -12,6 +12,31 @@ export function formatEnumLabel(value: string | null | undefined): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+export function formatPhoneNumber(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const cleaned = raw.replace(/\D/g, '');
+  if (cleaned.length === 10) {
+    return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+  }
+  return raw;
+}
+
+export function formatMemberSince(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+export function toTitleCase(str: string | null | undefined): string {
+  if (!str) return '';
+  return str.toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 /**
  * Returns the appropriate Tailwind color classes for a booking status.
  */
