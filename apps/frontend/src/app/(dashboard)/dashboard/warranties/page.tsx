@@ -849,6 +849,22 @@ export default function WarrantiesPage() {
     setUploadingToWarrantyId(null);
   };
 
+  const handleAddEditDialogOpenChange = (open: boolean) => {
+    if (open) {
+      setIsAddEditModalOpen(true);
+      return;
+    }
+    closeAddEditModal();
+  };
+
+  const handleUploadDialogOpenChange = (open: boolean) => {
+    if (open) {
+      setIsUploadModal(true);
+      return;
+    }
+    closeUploadModal();
+  };
+
 
   const sortedWarranties = useMemo(() => {
     return [...warranties].sort((a, b) => {
@@ -948,7 +964,7 @@ const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
           <Wrench className="w-6 h-6 text-blue-600 sm:w-7 sm:h-7" /> My Home Warranties
         </h2>
         
-        <Dialog open={isAddEditModalOpen} onOpenChange={closeAddEditModal}>
+        <Dialog open={isAddEditModalOpen} onOpenChange={handleAddEditDialogOpenChange}>
           <Button onClick={() => openAddEditModal(undefined)}>
             <Plus className="w-4 h-4 mr-2" /> Add Warranty
           </Button>
@@ -1176,7 +1192,7 @@ const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
       )}
       
       {/* Document Upload Dialog (for Warranties) */}
-      <Dialog open={isUploadModalOpen} onOpenChange={closeUploadModal}>
+      <Dialog open={isUploadModalOpen} onOpenChange={handleUploadDialogOpenChange}>
         <DialogContent className="sm:max-w-[500px]">
           {uploadingToWarrantyId && (
             <DocumentUploadModal 

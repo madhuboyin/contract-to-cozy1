@@ -484,6 +484,22 @@ export default function InsurancePage() {
     setUploadingToPolicyId(null);
   };
 
+  const handleAddEditDialogOpenChange = (open: boolean) => {
+    if (open) {
+      setIsAddEditModalOpen(true);
+      return;
+    }
+    closeAddEditModal();
+  };
+
+  const handleUploadDialogOpenChange = (open: boolean) => {
+    if (open) {
+      setIsUploadModalOpen(true);
+      return;
+    }
+    closeUploadModal();
+  };
+
 
   const sortedPolicies = useMemo(() => {
     return [...policies].sort((a, b) => {
@@ -508,7 +524,7 @@ export default function InsurancePage() {
           <Shield className="w-6 h-6 text-green-600 sm:w-7 sm:h-7" /> My Insurance Policies
         </h2>
         
-        <Dialog open={isAddEditModalOpen} onOpenChange={closeAddEditModal}>
+        <Dialog open={isAddEditModalOpen} onOpenChange={handleAddEditDialogOpenChange}>
           <Button onClick={() => openAddEditModal(undefined)}>
             <Plus className="w-4 h-4 mr-2" /> Add Policy
           </Button>
@@ -718,7 +734,7 @@ export default function InsurancePage() {
       )}
       
       {/* Document Upload Dialog (for Insurance Policies) */}
-      <Dialog open={isUploadModalOpen} onOpenChange={closeUploadModal}>
+      <Dialog open={isUploadModalOpen} onOpenChange={handleUploadDialogOpenChange}>
         <DialogContent className="sm:max-w-[500px]">
           {uploadingToPolicyId && (
             <DocumentUploadModal 
