@@ -445,7 +445,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
       />
 
       <div className={COVERAGE_MODAL_CONTENT_CLASS}>
-        <div className="grid gap-2">
+        <div className="grid content-start gap-2">
           <Label htmlFor="providerName" className={COVERAGE_MODAL_LABEL_CLASS}>
             Provider name *
           </Label>
@@ -459,7 +459,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
           />
         </div>
 
-        <div className="grid gap-2">
+        <div className="grid content-start gap-2">
           <Label htmlFor="category" className={COVERAGE_MODAL_LABEL_CLASS}>
             Warranty category *
           </Label>
@@ -478,7 +478,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
         </div>
 
         <div className={COVERAGE_MODAL_TWO_COL_GRID_CLASS}>
-          <div className="grid gap-2">
+          <div className="grid content-start gap-2">
             <Label htmlFor="policyNumber" className={COVERAGE_MODAL_LABEL_CLASS}>
               Policy / contract number
             </Label>
@@ -486,11 +486,11 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
               id="policyNumber"
               value={formData.policyNumber}
               onChange={handleChange}
-              placeholder="e.g. WR-987654321 (optional)"
+              placeholder="e.g. WR-987654321"
               className={COVERAGE_MODAL_INPUT_CLASS}
             />
           </div>
-          <div className="grid gap-2">
+          <div className="grid content-start gap-2">
             <Label htmlFor="cost" className={COVERAGE_MODAL_LABEL_CLASS}>
               What did it cost? ($)
             </Label>
@@ -508,7 +508,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
         </div>
 
         <div className={COVERAGE_MODAL_TWO_COL_GRID_CLASS}>
-          <div className="grid gap-2">
+          <div className="grid content-start gap-2">
             <Label htmlFor="startDate" className={COVERAGE_MODAL_LABEL_CLASS}>
               Start date *
             </Label>
@@ -524,7 +524,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
               <CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
             </div>
           </div>
-          <div className="grid gap-2">
+          <div className="grid content-start gap-2">
             <Label htmlFor="expiryDate" className={COVERAGE_MODAL_LABEL_CLASS}>
               Expiry date *
             </Label>
@@ -543,7 +543,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
         </div>
 
         <div className={COVERAGE_MODAL_TWO_COL_GRID_CLASS}>
-          <div className="grid gap-2">
+          <div className="grid content-start gap-2">
             <Label htmlFor="propertyId" className={COVERAGE_MODAL_LABEL_CLASS}>
               Which property?
             </Label>
@@ -567,7 +567,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
             </Select>
           </div>
 
-          <div className="grid gap-2">
+          <div className="grid content-start gap-2">
             <Label htmlFor="homeAssetId" className={COVERAGE_MODAL_LABEL_CLASS}>
               Which appliance or system?
             </Label>
@@ -623,13 +623,13 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
             </Select>
             {!formData.propertyId && (
               <p className={COVERAGE_MODAL_FIELD_HINT_CONDITIONAL_CLASS}>
-                ↑ Select a property above to link a specific system or appliance.
+                Select a property above to link a system or appliance.
               </p>
             )}
           </div>
         </div>
 
-        <div className="grid gap-2">
+        <div className="grid content-start gap-2">
           <Label htmlFor="coverageDetails" className={COVERAGE_MODAL_LABEL_CLASS}>
             Coverage notes
           </Label>
@@ -1033,7 +1033,7 @@ const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
           </Button>
           {/* FIX: Increased max-width from sm:max-w-[500px] to sm:max-w-[700px] 
              to accommodate the new dual-column dropdowns without overlap/overflow. */}
-          <DialogContent className="modal-container w-[calc(100vw-2rem)] max-w-[700px] gap-0 overflow-hidden p-0 max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:max-h-[92vh] max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0"> 
+          <DialogContent className="modal-container w-[calc(100vw-2rem)] sm:max-w-[700px] gap-0 overflow-hidden p-0 max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:max-h-[92vh] max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0"> 
             <WarrantyForm 
               initialData={editingWarranty}
               properties={properties}

@@ -143,7 +143,7 @@ const DocumentUploadModal = ({ parentEntityId, parentEntityType, onUploadSuccess
       </div>
 
       <div className="grid sm:grid-cols-2 gap-4">
-        <div className="grid gap-2">
+        <div className="grid content-start gap-2">
           <Label htmlFor="name">Document Name *</Label>
           <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required disabled={isUploading} />
         </div>
@@ -266,7 +266,7 @@ const PolicyForm = ({ initialData, properties, prefill, onSave, onClose, isSubmi
         </div>
 
         <div className={COVERAGE_MODAL_TWO_COL_GRID_CLASS}>
-          <div className="grid gap-2">
+          <div className="grid content-start gap-2">
             <Label htmlFor="policyNumber" className={COVERAGE_MODAL_LABEL_CLASS}>
               Policy number *
             </Label>
@@ -280,7 +280,7 @@ const PolicyForm = ({ initialData, properties, prefill, onSave, onClose, isSubmi
             />
             <p className={COVERAGE_MODAL_FIELD_HINT_CLASS}>Found on your declarations page or insurance card.</p>
           </div>
-          <div className="grid gap-2">
+          <div className="grid content-start gap-2">
             <Label htmlFor="premiumAmount" className={COVERAGE_MODAL_LABEL_CLASS}>
               Yearly cost ($) *
             </Label>
@@ -299,7 +299,7 @@ const PolicyForm = ({ initialData, properties, prefill, onSave, onClose, isSubmi
         </div>
 
         <div className={COVERAGE_MODAL_TWO_COL_GRID_CLASS}>
-          <div className="grid gap-2">
+          <div className="grid content-start gap-2">
             <Label htmlFor="startDate" className={COVERAGE_MODAL_LABEL_CLASS}>
               Start date *
             </Label>
@@ -315,7 +315,7 @@ const PolicyForm = ({ initialData, properties, prefill, onSave, onClose, isSubmi
               <CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
             </div>
           </div>
-          <div className="grid gap-2">
+          <div className="grid content-start gap-2">
             <Label htmlFor="expiryDate" className={COVERAGE_MODAL_LABEL_CLASS}>
               Renewal date *
             </Label>
@@ -334,7 +334,7 @@ const PolicyForm = ({ initialData, properties, prefill, onSave, onClose, isSubmi
         </div>
 
         <div className={COVERAGE_MODAL_TWO_COL_GRID_CLASS}>
-          <div className="grid gap-2">
+          <div className="grid content-start gap-2">
             <Label htmlFor="coverageType" className={COVERAGE_MODAL_LABEL_CLASS}>
               What does this cover?
             </Label>
@@ -352,7 +352,7 @@ const PolicyForm = ({ initialData, properties, prefill, onSave, onClose, isSubmi
               </SelectContent>
             </Select>
           </div>
-          <div className="grid gap-2">
+          <div className="grid content-start gap-2">
             <Label htmlFor="propertyId" className={COVERAGE_MODAL_LABEL_CLASS}>
               Which property?
             </Label>
@@ -593,7 +593,7 @@ export default function InsurancePage() {
           <Button onClick={() => openAddEditModal(undefined)}>
             <Plus className="w-4 h-4 mr-2" /> Add Policy
           </Button>
-          <DialogContent className="modal-container w-[calc(100vw-2rem)] max-w-[700px] gap-0 overflow-hidden p-0 max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:max-h-[92vh] max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0">
+          <DialogContent className="modal-container w-[calc(100vw-2rem)] sm:max-w-[700px] gap-0 overflow-hidden p-0 max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:max-h-[92vh] max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0">
             <PolicyForm 
               initialData={editingPolicy}
               properties={properties}

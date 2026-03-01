@@ -64,11 +64,7 @@ export function CoverageModalFooter({
   submitDisabled = false,
 }: CoverageModalFooterProps) {
   return (
-    <div className="modal-footer mt-5 flex flex-col gap-3 border-t border-[#E5E7EB] px-6 py-4 max-sm:px-4 sm:flex-row sm:items-center sm:justify-between">
-      <p className="modal-footer-note m-0 flex items-center justify-center gap-1 text-xs text-[#9CA3AF] sm:justify-start">
-        <span aria-hidden>🔒</span>
-        <span>Private — only visible to you.</span>
-      </p>
+    <div className="modal-footer mt-5 flex flex-col gap-3 border-t border-[#E5E7EB] px-6 py-4 max-sm:px-4 sm:flex-row sm:items-center sm:justify-end">
       <div className="modal-footer-actions flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-[10px]">
         <Button
           type="button"
