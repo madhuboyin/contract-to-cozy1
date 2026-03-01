@@ -75,7 +75,7 @@ function recommendationCopy(recommendation?: ItemCoverageAnalysisDTO['warranty']
   return '—';
 }
 
-function mapItemCategoryToWarrantyCategory(category?: string): string {
+function mapItemCategoryToWarrantyCategory(category?: string | null): string {
   if (category === 'HVAC') return 'HVAC';
   if (category === 'PLUMBING') return 'PLUMBING';
   if (category === 'ELECTRICAL') return 'ELECTRICAL';
@@ -174,11 +174,6 @@ export default function ItemGetCoverageClient() {
     ? `/dashboard/properties/${propertyId}/inventory?tab=coverage`
     : '/dashboard/properties';
   const backHref = safeReturnTo ?? fallbackBackHref;
-  const defaultWarrantyCategory = mapItemCategoryToWarrantyCategory(analysis?.item?.category);
-  const addWarrantyHref =
-    propertyId && itemId
-      ? `/dashboard/warranties?action=new&from=coverage-buy&propertyId=${encodeURIComponent(propertyId)}&homeAssetId=${encodeURIComponent(itemId)}&category=${encodeURIComponent(defaultWarrantyCategory)}&returnTo=${encodeURIComponent(currentPathWithQuery)}`
-      : '/dashboard/warranties';
 
   const [analysis, setAnalysis] = useState<ItemCoverageAnalysisDTO | null>(null);
   const [hasAnalysis, setHasAnalysis] = useState(false);
@@ -189,6 +184,11 @@ export default function ItemGetCoverageClient() {
   const [itemName, setItemName] = useState<string>('Inventory Item');
   const [roomName, setRoomName] = useState<string | null>(null);
   const [didAutoPrefill, setDidAutoPrefill] = useState(false);
+  const defaultWarrantyCategory = mapItemCategoryToWarrantyCategory(analysis?.item?.category);
+  const addWarrantyHref =
+    propertyId && itemId
+      ? `/dashboard/warranties?action=new&from=coverage-buy&propertyId=${encodeURIComponent(propertyId)}&homeAssetId=${encodeURIComponent(itemId)}&category=${encodeURIComponent(defaultWarrantyCategory)}&returnTo=${encodeURIComponent(currentPathWithQuery)}`
+      : '/dashboard/warranties';
 
   useEffect(() => {
     setDidAutoPrefill(false);

@@ -685,7 +685,9 @@ export default function WarrantiesPage() {
               ? new Date(item.installedOn).getUTCFullYear() 
               : null,
             modelNumber: item.modelNumber || item.model || null,
-            name: item.name,
+            serialNumber: item.serialNumber || item.serialNo || null,
+            lastServiced: item.lastServicedOn || null,
+            efficiencyRating: null,
           }));
           
           allAssets.push(...transformed);
