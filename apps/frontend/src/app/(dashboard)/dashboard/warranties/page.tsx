@@ -75,6 +75,12 @@ const WARRANTY_CATEGORY_OPTIONS = Object.entries(WARRANTY_CATEGORIES).map(([key,
     display,
 }));
 
+const WARRANTY_CATEGORY_KEYS = Object.keys(WARRANTY_CATEGORIES) as WarrantyCategory[];
+
+function isWarrantyCategory(value: string | null): value is WarrantyCategory {
+  return !!value && WARRANTY_CATEGORY_KEYS.includes(value as WarrantyCategory);
+}
+
 // Augmented interfaces to include the new required fields
 interface Warranty {
     id: string;
@@ -266,25 +272,34 @@ interface WarrantyFormProps {
   initialData?: Warranty;
   properties: Property[];
   homeAssets: HomeAsset[];
+  prefill?: {
+    propertyId?: string;
+    homeAssetId?: string;
+    category?: WarrantyCategory;
+  };
   onSave: (data: CreateWarrantyInput | UpdateWarrantyInput) => Promise<void>;
   onClose: () => void;
   isSubmitting: boolean;
 }
 
-const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, isSubmitting }: WarrantyFormProps) => {
-  const [formData, setFormData] = useState<CreateWarrantyInput | UpdateWarrantyInput>({
+const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, onClose, isSubmitting }: WarrantyFormProps) => {
+  const buildInitialFormData = useCallback((): CreateWarrantyInput | UpdateWarrantyInput => ({
     providerName: initialData?.providerName || '',
     policyNumber: initialData?.policyNumber || '',
     coverageDetails: initialData?.coverageDetails || '',
     cost: initialData?.cost || undefined,
     startDate: initialData?.startDate ? format(parseISO(initialData.startDate), 'yyyy-MM-dd') : '',
     expiryDate: initialData?.expiryDate ? format(parseISO(initialData.expiryDate), 'yyyy-MM-dd') : '',
-    propertyId: initialData?.propertyId || undefined,
-    homeAssetId: initialData?.homeAssetId || undefined, 
-    
-    // *** NEW FIELD: CATEGORY (Required) ***
-    category: initialData?.category || ('' as WarrantyCategory),
-  });
+    propertyId: initialData?.propertyId || prefill?.propertyId || undefined,
+    homeAssetId: initialData?.homeAssetId || prefill?.homeAssetId || undefined,
+    category: initialData?.category || prefill?.category || ('' as WarrantyCategory),
+  }), [initialData, prefill]);
+
+  const [formData, setFormData] = useState<CreateWarrantyInput | UpdateWarrantyInput>(buildInitialFormData);
+
+  useEffect(() => {
+    setFormData(buildInitialFormData());
+  }, [buildInitialFormData]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { id, value } = e.target;
@@ -358,7 +373,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, onSave, onClose, is
 
   const title = initialData ? `Edit Warranty: ${initialData.providerName}` : 'Add New Warranty';
   const selectedPropertyId = formData.propertyId || SELECT_NONE_VALUE;
-  const selectedCategory = formData.category || SELECT_NONE_VALUE;
+  const selectedCategory = (formData.category || undefined) as string | undefined;
 
   // *** FIX 1: Blank Placeholder Bug Fix ***
   // When linking is disabled, force the value to undefined so the placeholder shows.
@@ -577,6 +592,35 @@ export default function WarrantiesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const safeReturnTo = useMemo(() => sanitizeReturnTo(searchParams.get('returnTo')), [searchParams]);
+  const createPrefill = useMemo(() => {
+    const propertyId = searchParams.get('propertyId') || undefined;
+    const homeAssetId = searchParams.get('homeAssetId') || undefined;
+    const categoryParam = searchParams.get('category');
+
+    let category: WarrantyCategory | undefined = isWarrantyCategory(categoryParam) ? categoryParam : undefined;
+
+    if (!category && homeAssetId) {
+      const asset = homeAssets.find((a) => a.id === homeAssetId);
+      if (asset) {
+        const inferred = WARRANTY_CATEGORY_KEYS.find((key) =>
+          CATEGORY_ASSET_MAP[key].includes(asset.assetType)
+        );
+        category = inferred ?? 'APPLIANCE';
+      } else {
+        category = 'APPLIANCE';
+      }
+    }
+
+    if (!propertyId && !homeAssetId && !category) {
+      return undefined;
+    }
+
+    return {
+      propertyId,
+      homeAssetId,
+      category,
+    };
+  }, [searchParams, homeAssets]);
   const [openedFromSetup, setOpenedFromSetup] = useState(false); // State to track if the modal opened automatically
 
   const fetchDependencies = useCallback(async () => {
@@ -886,6 +930,7 @@ const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
               initialData={editingWarranty}
               properties={properties}
               homeAssets={homeAssets} // PASSED NEW PROP
+              prefill={!editingWarranty ? createPrefill : undefined}
               onSave={handleSave}
               onClose={closeAddEditModal}
               isSubmitting={isSubmitting}
