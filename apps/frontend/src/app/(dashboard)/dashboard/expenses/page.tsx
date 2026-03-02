@@ -15,6 +15,7 @@ import { Expense, CreateExpenseInput, UpdateExpenseInput, Property, ExpenseCateg
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
+import DateField from '@/components/shared/DateField';
 
 // Helper for Expense Category mapping (for display)
 const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
@@ -91,10 +92,13 @@ const ExpenseForm = ({ initialData, properties, onSave, onClose, isSubmitting }:
           <Label htmlFor="amount">Amount ($) *</Label>
           <Input id="amount" type="number" step="0.01" value={formData.amount ?? ''} onChange={handleChange} required />
         </div>
-        <div className="grid gap-2">
-          <Label htmlFor="transactionDate">Transaction Date *</Label>
-          <Input id="transactionDate" type="date" value={formData.transactionDate} onChange={handleChange} required />
-        </div>
+        <DateField
+          id="transactionDate"
+          label="Transaction Date *"
+          value={formData.transactionDate}
+          onChange={(value) => setFormData((prev) => ({ ...prev, transactionDate: value }))}
+          required
+        />
       </div>
 
       <div className="grid sm:grid-cols-2 gap-4">
@@ -192,7 +196,7 @@ export default function ExpensesPage() {
     }
     
     setIsLoading(false); // Set loading false only after processing all results
-  }, [filterPropertyId]); // Depend on filterPropertyId
+  }, [filterPropertyId, toast]); // Depend on filterPropertyId
 
   useEffect(() => {
     fetchDependencies();
@@ -361,7 +365,7 @@ export default function ExpensesPage() {
         <Card className="text-center py-10">
           <DollarSign className="w-10 h-10 text-gray-400 mx-auto mb-3" />
           <CardTitle>No Expenses Found</CardTitle>
-          <CardDescription>Click "Add Expense" to create your first record.</CardDescription>
+          <CardDescription>Click &quot;Add Expense&quot; to create your first record.</CardDescription>
         </Card>
       )}
 

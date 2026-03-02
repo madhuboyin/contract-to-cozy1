@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { Calendar, Loader2 } from 'lucide-react';
 import { formatEnumLabel } from '@/lib/utils/formatters';
+import DateField from '@/components/shared/DateField';
 
 function getInitials(firstName: string, lastName: string) {
   return (firstName?.[0] || '') + (lastName?.[0] || '');
@@ -341,17 +342,15 @@ export default function BookProviderPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">Date *</label>
-            <input
-              type="date"
-              value={scheduledDate}
-              onChange={(e) => setScheduledDate(e.target.value)}
-              min={getTomorrowDate()}
-              className="min-h-[44px] w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-primary"
-              required
-            />
-          </div>
+          <DateField
+            id="scheduledDate"
+            label="Date *"
+            value={scheduledDate}
+            onChange={setScheduledDate}
+            min={getTomorrowDate()}
+            required
+            inputClassName="min-h-[44px]"
+          />
 
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-700">Start Time *</label>

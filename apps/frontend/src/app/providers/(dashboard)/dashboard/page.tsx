@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { CalendarDays } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 
 export default function ProviderDashboardPage() {
@@ -34,7 +35,7 @@ export default function ProviderDashboardPage() {
           Welcome back, {user?.firstName}!
         </h1>
         <p className="mt-2 text-gray-600">
-          Here's what's happening with your business today
+          Here&apos;s what&apos;s happening with your business today
         </p>
       </div>
 
@@ -64,7 +65,7 @@ export default function ProviderDashboardPage() {
         <div className="bg-white rounded-lg shadow p-4 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Today's Jobs</p>
+              <p className="text-sm font-medium text-gray-600">Today&apos;s Jobs</p>
               <p className="mt-2 text-3xl font-bold text-gray-900">{stats.todayBookings}</p>
             </div>
             <div className="p-3 bg-blue-100 rounded-full">
@@ -237,7 +238,7 @@ export default function ProviderDashboardPage() {
                 className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
               >
                 <div className="flex items-center">
-                  <span className="mr-3 text-2xl">🗓️</span>
+                  <CalendarDays className="mr-3 h-5 w-5 text-gray-500" />
                   <div>
                     <p className="text-sm font-medium text-gray-900">Update Calendar</p>
                     <p className="text-xs text-gray-500">Set your availability</p>
