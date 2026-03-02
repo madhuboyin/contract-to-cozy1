@@ -85,6 +85,8 @@ import {
   MaintenanceForecastSummary,
 
   InventoryImportBatch,
+  PropertyDashboardBootstrap,
+  PropertyNarrativeRun,
 } from '@/types';
 
 // REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
@@ -805,6 +807,13 @@ class APIClient {
   }
 
   /**
+   * Get dashboard bootstrap payload for a property (property + onboarding + narrative run)
+   */
+  async getPropertyDashboardBootstrap(id: string): Promise<APIResponse<PropertyDashboardBootstrap>> {
+    return this.request(`/api/properties/${id}/dashboard-bootstrap`);
+  }
+
+  /**
    * Create a new property
    */
   async createProperty(data: {
@@ -886,6 +895,27 @@ class APIClient {
   async deleteProperty(id: string): Promise<APIResponse<void>> {
     return this.request(`/api/properties/${id}`, {
       method: 'DELETE',
+    });
+  }
+
+  async getOrCreatePropertyNarrativeRun(
+    propertyId: string
+  ): Promise<APIResponse<{ run: PropertyNarrativeRun | null }>> {
+    return this.request(`/api/properties/${propertyId}/narrative/run`, {
+      method: 'POST',
+    });
+  }
+
+  async patchPropertyNarrativeRun(
+    runId: string,
+    data: {
+      action: 'VIEWED' | 'CTA_CLICKED' | 'NUDGE_CLICKED' | 'COMPLETED' | 'DISMISSED';
+      metadata?: Record<string, unknown>;
+    }
+  ): Promise<APIResponse<{ run: PropertyNarrativeRun }>> {
+    return this.request(`/api/narrative/${runId}`, {
+      method: 'PATCH',
+      body: data,
     });
   }
     

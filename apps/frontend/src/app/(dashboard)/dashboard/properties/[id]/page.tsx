@@ -2,11 +2,11 @@
 
 "use client";
 
-import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api/client";
-import { Property } from "@/types"; // Base Property type
+import { Property, PropertyDashboardBootstrap } from "@/types"; // Base Property type
 import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading, PageHeaderDescription } from "@/components/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -41,8 +41,17 @@ import IncidentsClient from "./incidents/IncidentsClient";
 
 import RoomsHubClient from "./rooms/RoomsHubClient";
 import HomeToolsRail from './components/HomeToolsRail';
-import { getOnboardingStatus } from "@/lib/api/onboardingApi";
 import SetupChecklistPanel from "@/components/onboarding/SetupChecklistPanel";
+import NarrativeRevealOverlay from "@/components/narrative/NarrativeRevealOverlay";
+import { FEATURE_FLAGS } from "@/lib/featureFlags";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
@@ -503,7 +512,7 @@ const RiskProtectionTab = ({ propertyId }: { propertyId: string }) => (
     <CardContent className="p-4 pt-0 space-y-3">
       <p className="font-body text-base text-gray-700">
         Access the comprehensive risk report to view calculated risk scores, financial exposure,
-        and a detailed breakdown of your home's systems and structure health.
+        and a detailed breakdown of your home&apos;s systems and structure health.
       </p>
       <Link href={`/dashboard/properties/${propertyId}/risk-assessment`}>
         <Button variant="default">
@@ -631,12 +640,36 @@ const ClaimsTab = ({ propertyId }: { propertyId: string }) => (
   </Card>
 );
 
+const NARRATIVE_NUDGE_CONFIG: Record<
+  string,
+  { label: string; placeholder: string; min: number; max: number; cast: (raw: string) => number }
+> = {
+  yearBuilt: {
+    label: "Year Built",
+    placeholder: "e.g. 1998",
+    min: 1800,
+    max: new Date().getFullYear(),
+    cast: (raw) => Number.parseInt(raw, 10),
+  },
+  propertySize: {
+    label: "Square Footage",
+    placeholder: "e.g. 2200",
+    min: 300,
+    max: 20000,
+    cast: (raw) => Number.parseInt(raw, 10),
+  },
+};
+
 export default function PropertyDetailPage() {
   const params = useParams();
   const propertyId = Array.isArray(params.id) ? params.id[0] : (params as any).id;
   const router = useRouter();
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab');
+  const [nudgeFieldKey, setNudgeFieldKey] = useState<string | null>(null);
+  const [nudgeFieldValue, setNudgeFieldValue] = useState('');
+  const [isSavingNudge, setIsSavingNudge] = useState(false);
 
   const defaultTab =
     initialTab &&
@@ -656,16 +689,16 @@ export default function PropertyDetailPage() {
       ? initialTab
       : 'overview';
 
-  const { data: property, isLoading } = useQuery({
-    queryKey: ["property", propertyId],
+  const { data: bootstrap, isLoading } = useQuery({
+    queryKey: ["property-bootstrap", propertyId],
     queryFn: async () => {
-      const response = await api.getProperty(propertyId);
+      const response = await api.getPropertyDashboardBootstrap(propertyId);
       if (response.success) {
-        return response.data as ScoredProperty;
+        return response.data as PropertyDashboardBootstrap;
       }
       toast({
         title: "Error",
-        description: response.message || "Failed to fetch property details.",
+        description: response.message || "Failed to fetch property bootstrap.",
         variant: "destructive",
       });
       return null;
@@ -673,24 +706,71 @@ export default function PropertyDetailPage() {
     enabled: !!propertyId,
   });
 
-  const { data: onboardingStatus } = useQuery({
-    queryKey: ["property-onboarding", propertyId],
-    queryFn: () => getOnboardingStatus(propertyId),
-    enabled: !!propertyId,
-  });
+  const property = bootstrap?.property || null;
+  const onboardingStatus = bootstrap?.onboarding || null;
+  const narrativeRun = bootstrap?.narrativeRun || null;
+
+  const selectedNudgeConfig = useMemo(
+    () => (nudgeFieldKey ? NARRATIVE_NUDGE_CONFIG[nudgeFieldKey] : null),
+    [nudgeFieldKey]
+  );
 
   useEffect(() => {
-    if (!propertyId || !onboardingStatus) return;
+    if (!nudgeFieldKey || !property) return;
 
-    const shouldRedirectToOnboarding =
-      onboardingStatus.status === "IN_PROGRESS" &&
-      onboardingStatus.dismissedAt === null &&
-      onboardingStatus.setupScore < 100;
-
-    if (shouldRedirectToOnboarding) {
-      router.replace(`/dashboard/properties/${propertyId}/onboarding`);
+    if (nudgeFieldKey === 'yearBuilt' && property.yearBuilt) {
+      setNudgeFieldValue(String(property.yearBuilt));
+      return;
     }
-  }, [propertyId, onboardingStatus, router]);
+
+    if (nudgeFieldKey === 'propertySize' && property.propertySize) {
+      setNudgeFieldValue(String(property.propertySize));
+      return;
+    }
+
+    setNudgeFieldValue('');
+  }, [nudgeFieldKey, property]);
+
+  const handleNudgeSave = async () => {
+    if (!property || !nudgeFieldKey || !selectedNudgeConfig) return;
+
+    const nextValue = selectedNudgeConfig.cast(nudgeFieldValue);
+    const isInvalid =
+      Number.isNaN(nextValue) ||
+      nextValue < selectedNudgeConfig.min ||
+      nextValue > selectedNudgeConfig.max;
+
+    if (isInvalid) {
+      toast({
+        title: "Invalid value",
+        description: `Please enter a value between ${selectedNudgeConfig.min} and ${selectedNudgeConfig.max}.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSavingNudge(true);
+    try {
+      await api.updateProperty(property.id, {
+        ...(nudgeFieldKey === 'yearBuilt' ? { yearBuilt: nextValue } : {}),
+        ...(nudgeFieldKey === 'propertySize' ? { propertySize: nextValue } : {}),
+      });
+
+      setNudgeFieldKey(null);
+      setNudgeFieldValue('');
+      toast({ title: "Details updated", description: "Your home snapshot will refresh now." });
+
+      await queryClient.invalidateQueries({ queryKey: ["property-bootstrap", property.id] });
+    } catch (error: any) {
+      toast({
+        title: "Update failed",
+        description: error?.message || "Could not update the property field.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingNudge(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -725,6 +805,27 @@ export default function PropertyDetailPage() {
 
   return (
     <DashboardShell className="gap-2">
+      {FEATURE_FLAGS.PROPERTY_NARRATIVE_ENGINE && narrativeRun?.status === "ACTIVE" && (
+        <NarrativeRevealOverlay
+          run={narrativeRun}
+          propertyId={property.id}
+          onComplete={() => {
+            void queryClient.invalidateQueries({ queryKey: ["property-bootstrap", property.id] });
+          }}
+          onDismiss={() => {
+            void queryClient.invalidateQueries({ queryKey: ["property-bootstrap", property.id] });
+          }}
+          onNudgeClick={(fieldKey) => {
+            if (NARRATIVE_NUDGE_CONFIG[fieldKey]) {
+              setNudgeFieldKey(fieldKey);
+              return;
+            }
+
+            router.push(`/dashboard/properties/${property.id}/edit`);
+          }}
+        />
+      )}
+
       {/* Back Navigation */}
       <div className="mb-2">
         <button
@@ -767,7 +868,7 @@ export default function PropertyDetailPage() {
         <SetupChecklistPanel propertyId={property.id} status={onboardingStatus} />
       )}
 
-      <Tabs defaultValue={defaultTab} className="w-full">
+      <Tabs defaultValue={defaultTab} className="w-full" id="home-snapshot">
         {/* Scrollable tab container with fade indicators */}
         <div className="relative -mx-4 px-4 sm:-mx-6 sm:px-6 md:mx-0 md:px-0">
           {/* Left fade indicator (mobile only) */}
@@ -892,7 +993,7 @@ export default function PropertyDetailPage() {
                 Home Timeline
               </CardTitle>
               <CardDescription className="font-body text-sm">
-                View your home's story: purchases, repairs, claims, improvements, and key documents.
+                View your home&apos;s story: purchases, repairs, claims, improvements, and key documents.
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4 pt-0">
@@ -904,6 +1005,48 @@ export default function PropertyDetailPage() {
         </TabsContent>
 
       </Tabs>
+
+      <Sheet open={Boolean(nudgeFieldKey)} onOpenChange={(open) => !open && setNudgeFieldKey(null)}>
+        <SheetContent side="right">
+          <SheetHeader>
+            <SheetTitle>{selectedNudgeConfig?.label || "Update property detail"}</SheetTitle>
+            <SheetDescription>
+              Add one field to improve narrative confidence and recommendations.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-6 space-y-2">
+            <label htmlFor="nudgeFieldInput" className="block text-sm font-medium text-slate-700">
+              {selectedNudgeConfig?.label || "Value"}
+            </label>
+            <input
+              id="nudgeFieldInput"
+              type="number"
+              value={nudgeFieldValue}
+              placeholder={selectedNudgeConfig?.placeholder}
+              onChange={(event) => setNudgeFieldValue(event.target.value)}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+            />
+          </div>
+
+          <SheetFooter className="mt-6">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setNudgeFieldKey(null);
+                setNudgeFieldValue('');
+              }}
+              disabled={isSavingNudge}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleNudgeSave} disabled={isSavingNudge}>
+              {isSavingNudge ? "Saving..." : "Save"}
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </DashboardShell>
   );
 }

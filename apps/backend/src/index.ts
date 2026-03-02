@@ -79,6 +79,7 @@ import inventoryVerificationRoutes from './routes/inventoryVerification.routes';
 import maintenancePredictionRoutes from './routes/maintenancePrediction.routes';
 import weatherRoutes from './routes/weather.routes';
 import vaultRoutes from './routes/vault.routes';
+import narrativeRoutes from './routes/narrative.routes';
 dotenv.config();
 
 const app = express();
@@ -360,6 +361,7 @@ app.use('/api', homeCapitalTimelineRoutes);
 app.use('/api', homeStatusBoardRoutes);
 app.use('/api', inventoryVerificationRoutes);
 app.use('/api', maintenancePredictionRoutes);
+app.use('/api', narrativeRoutes);
 app.use('/api/weather', weatherRoutes);
 
 //app.use(express.urlencoded({ extended: true, limit: '10mb' }));

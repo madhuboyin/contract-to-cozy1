@@ -147,6 +147,7 @@ router.post('/', authenticate, validateBody(createPropertySchema), propertyContr
  *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.get('/:id', authenticate, propertyController.getProperty);
+router.get('/:id/dashboard-bootstrap', authenticate, propertyController.getPropertyDashboardBootstrap);
 
 /**
  * @swagger

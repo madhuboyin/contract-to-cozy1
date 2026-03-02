@@ -3,6 +3,8 @@ import * as propertyService from '../services/property.service';
 import { AuthRequest } from '../types';
 // IMPORT REQUIRED: Assuming you have defined these in your validators.ts file (Phase 2)
 import { CreatePropertyInput, UpdatePropertyInput } from '../utils/validators'; 
+import { computeSetupStatus } from '../services/propertyOnboarding.service';
+import { getOrCreateActiveNarrativeRun } from '../services/narrativeRun.service';
 
 /**
  * List all properties for the authenticated user
@@ -77,6 +79,46 @@ export const getProperty = async (req: AuthRequest, res: Response) => {
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve property',
+    });
+  }
+};
+
+/**
+ * Get dashboard bootstrap payload for a single property.
+ * Includes property details + onboarding + active narrative run in one response.
+ */
+export const getPropertyDashboardBootstrap = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { id } = req.params;
+
+    const property = await propertyService.getPropertyById(id, userId);
+
+    if (!property) {
+      return res.status(404).json({
+        success: false,
+        message: 'Property not found',
+      });
+    }
+
+    const [onboarding, narrativeRun] = await Promise.all([
+      computeSetupStatus(id, userId),
+      getOrCreateActiveNarrativeRun({ propertyId: id, userId }),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        property,
+        onboarding,
+        narrativeRun,
+      },
+    });
+  } catch (error) {
+    console.error('Error getting property bootstrap:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve property bootstrap',
     });
   }
 };

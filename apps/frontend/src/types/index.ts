@@ -927,6 +927,69 @@ export interface ScoredProperty extends Property {
     healthScore: HealthScoreResult;
 }
 
+export type NarrativeRunStatus = 'ACTIVE' | 'DISMISSED' | 'COMPLETED' | 'EXPIRED';
+
+export interface PropertyNarrativePayloadBlock {
+  id: string;
+  type: 'HERO' | 'WHY_IT_MATTERS' | 'MONEY_AT_RISK' | 'NEXT_90_DAYS' | 'CONFIDENCE_NUDGE' | 'CTA' | string;
+  title?: string;
+  body?: string;
+  bullets?: string[];
+  data?: Record<string, any>;
+  ctas?: Array<{ key: string; label: string; action: string }>;
+}
+
+export interface PropertyNarrativePayload {
+  metadata: {
+    runVersion: string;
+    confidenceScore: number;
+    propertyId: string;
+    computedAt: string;
+    heroVariant: string;
+  };
+  blocks: PropertyNarrativePayloadBlock[];
+}
+
+export interface PropertyNarrativeRun {
+  id: string;
+  propertyId: string;
+  userId: string;
+  version: string;
+  status: NarrativeRunStatus;
+  snapshotId?: string | null;
+  planJson: Record<string, any>;
+  payloadJson: PropertyNarrativePayload;
+  startedAt: string;
+  completedAt?: string | null;
+  dismissedAt?: string | null;
+  expiresAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PropertyOnboardingNarrativeState {
+  propertyId: string;
+  status: 'IN_PROGRESS' | 'COMPLETED' | 'SKIPPED';
+  currentStep: 1 | 2 | 3 | 4 | 5;
+  dismissedAt: string | null;
+  setupScore: number;
+  steps: Array<{
+    step: 1 | 2 | 3 | 4 | 5;
+    title: string;
+    description: string;
+    complete: boolean;
+    ctaLabel: string;
+    href: string;
+  }>;
+  recommendedNextStep: 1 | 2 | 3 | 4 | 5;
+}
+
+export interface PropertyDashboardBootstrap {
+  property: ScoredProperty;
+  onboarding: PropertyOnboardingNarrativeState;
+  narrativeRun: PropertyNarrativeRun | null;
+}
+
 /**
  * Booking Timeline Entry
  */

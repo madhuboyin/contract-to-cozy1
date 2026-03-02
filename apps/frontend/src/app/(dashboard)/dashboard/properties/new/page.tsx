@@ -214,7 +214,11 @@ export default function NewPropertyPage() {
       if (response.success) {
         localStorage.removeItem(PROPERTY_SETUP_SKIPPED_KEY);
         toast({ title: 'Property created successfully!' });
-        router.push('/dashboard/properties');
+        if (response.data?.id) {
+          router.push(`/dashboard/properties/${response.data.id}`);
+        } else {
+          router.push('/dashboard/properties');
+        }
       } else {
         setError(response.message || 'Failed to create property');
       }
