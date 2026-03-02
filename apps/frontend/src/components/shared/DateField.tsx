@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 interface DateFieldProps {
   id: string;
   label: string;
-  value: string;
+  value?: string;
   onChange: (value: string) => void;
   required?: boolean;
   min?: string;
@@ -42,7 +42,7 @@ export default function DateField({
         <Input
           id={id}
           type="date"
-          value={value}
+          value={value ?? ''}
           onChange={(e) => onChange(e.target.value)}
           required={required}
           min={min}
