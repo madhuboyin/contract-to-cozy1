@@ -1,13 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/claims/ClaimStatusBadge.tsx
 import React from 'react';
 import type { ClaimStatus } from '@/types/claims.types';
-
-function label(status: ClaimStatus) {
-  return status
-    .replace(/_/g, ' ')
-    .toLowerCase()
-    .replace(/^\w/, (c) => c.toUpperCase());
-}
+import { formatEnumLabel } from '@/lib/utils/formatters';
 
 export default function ClaimStatusBadge({ status }: { status: ClaimStatus }) {
   const tone =
@@ -31,7 +25,7 @@ export default function ClaimStatusBadge({ status }: { status: ClaimStatus }) {
     <span
       className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${tone}`}
     >
-      {label(status)}
+      {formatEnumLabel(status)}
     </span>
   );
 }

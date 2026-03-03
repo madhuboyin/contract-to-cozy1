@@ -18,6 +18,7 @@ import {
   Zap,
 } from 'lucide-react';
 import humanizeActionType from '@/lib/utils/humanize';
+import { SEVERITY_CHIP } from '@/lib/utils/chipTokens';
 
 
 type Props = {
@@ -93,21 +94,22 @@ function riskBadge(riskLevel?: string | null) {
   if (!riskLevel) return null;
 
   const level = safeUpper(riskLevel);
-  const base = 'inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded border';
+  const base = 'inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full border';
   const pulseDot = <span className="pulse-dot inline-block h-1.5 w-1.5 rounded-full bg-current" />;
 
   switch (level) {
     case 'CRITICAL':
     case 'HIGH':
-      return <span className={`${base} bg-red-100 text-red-700 border-red-200`}>{pulseDot}{level}</span>;
+      return <span className={`${base} ${SEVERITY_CHIP.critical}`}>{pulseDot}{level}</span>;
     case 'ELEVATED':
     case 'MODERATE':
+      return <span className={`${base} ${SEVERITY_CHIP.elevated}`}>{level}</span>;
     case 'MEDIUM':
-      return <span className={`${base} bg-amber-100 text-amber-700 border-amber-200`}>{level}</span>;
+      return <span className={`${base} ${SEVERITY_CHIP.medium}`}>{level}</span>;
     case 'LOW':
-      return <span className={`${base} bg-blue-100 text-blue-700 border-blue-200`}>{level}</span>;
+      return <span className={`${base} ${SEVERITY_CHIP.low}`}>{level}</span>;
     default:
-      return <span className={`${base} bg-gray-100 text-gray-700 border-gray-200`}>{level}</span>;
+      return <span className={`${base} ${SEVERITY_CHIP.neutral}`}>{level}</span>;
   }
 }
 

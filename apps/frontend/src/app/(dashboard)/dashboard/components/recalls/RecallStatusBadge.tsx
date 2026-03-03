@@ -3,6 +3,7 @@
 
 import React from 'react';
 import type { RecallMatchStatus } from '@/types/recalls.types';
+import { formatEnumLabel } from '@/lib/utils/formatters';
 
 function cls(status: RecallMatchStatus) {
   switch (status) {
@@ -22,7 +23,7 @@ function cls(status: RecallMatchStatus) {
 export default function RecallStatusBadge({ status }: { status: RecallMatchStatus }) {
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${cls(status)}`}>
-      {status.replace('_', ' ')}
+      {formatEnumLabel(status)}
     </span>
   );
 }

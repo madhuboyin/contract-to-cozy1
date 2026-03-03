@@ -1,6 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/incidents/IncidentSeverityBadge.tsx
 import React from 'react';
 import type { IncidentSeverity } from '@/types/incidents.types';
+import { formatEnumLabel } from '@/lib/utils/formatters';
 
 export default function IncidentSeverityBadge({ severity }: { severity?: IncidentSeverity | null }) {
   const s = severity ?? 'INFO';
@@ -13,7 +14,7 @@ export default function IncidentSeverityBadge({ severity }: { severity?: Inciden
 
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${cls}`}>
-      {s}
+      {formatEnumLabel(s)}
     </span>
   );
 }

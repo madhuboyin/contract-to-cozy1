@@ -53,7 +53,7 @@ export function TaskStatusBadge({ status, variant = 'default' }: TaskStatusBadge
   return (
     <Badge
       variant="outline"
-      className={`${config.className} ${isCompact ? 'text-xs py-0 px-2' : 'text-sm py-1 px-3'}`}
+      className={`rounded-full ${config.className} ${isCompact ? 'text-xs py-0 px-2' : 'text-sm py-1 px-3'}`}
     >
       <Icon className={`${isCompact ? 'h-3 w-3' : 'h-4 w-4'} ${isCompact ? 'mr-1' : 'mr-1.5'}`} />
       {config.label}

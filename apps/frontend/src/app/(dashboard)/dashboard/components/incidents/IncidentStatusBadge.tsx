@@ -1,6 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/incidents/IncidentStatusBadge.tsx
 import React from 'react';
 import type { IncidentStatus } from '@/types/incidents.types';
+import { formatEnumLabel } from '@/lib/utils/formatters';
 
 export default function IncidentStatusBadge({ status }: { status: IncidentStatus }) {
   const cls =
@@ -14,7 +15,7 @@ export default function IncidentStatusBadge({ status }: { status: IncidentStatus
 
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${cls}`}>
-      {status}
+      {formatEnumLabel(status)}
     </span>
   );
 }
