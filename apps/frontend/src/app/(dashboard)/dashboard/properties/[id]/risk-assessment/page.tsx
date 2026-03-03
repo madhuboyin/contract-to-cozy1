@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import React, { useState } from "react";
+import { SEVERITY_CHIP } from "@/lib/utils/chipTokens";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { MaintenanceConfigModal } from "../../../maintenance-setup/MaintenanceConfigModal"; 
 import { ScoreDeltaIndicator, ScoreTrendChart } from "@/components/scores/ScoreTrendChart";
@@ -323,10 +324,10 @@ const AssetMatrixTable = ({
     onViewBooking: (booking: any) => void;
 }) => {
     const getRiskBadge = (level: AssetRiskDetail['riskLevel']) => {
-        if (level === 'LOW') return <Badge variant="secondary" className="bg-green-500/20 text-green-700 hover:bg-green-500/30 border-green-500">Low</Badge>;
-        if (level === 'MODERATE') return <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-700 hover:bg-yellow-500/30 border-yellow-500">Moderate</Badge>;
-        if (level === 'ELEVATED') return <Badge variant="secondary" className="bg-orange-500/20 text-orange-700 hover:bg-orange-500/30 border-orange-500">Elevated</Badge>;
-        if (level === 'HIGH') return <Badge variant="secondary" className="bg-red-500/20 text-red-700 hover:bg-red-500/30 border-red-500">High</Badge>;
+        if (level === 'LOW') return <Badge variant="outline" className={SEVERITY_CHIP.good}>Low</Badge>;
+        if (level === 'MODERATE') return <Badge variant="outline" className={SEVERITY_CHIP.medium}>Moderate</Badge>;
+        if (level === 'ELEVATED') return <Badge variant="outline" className={SEVERITY_CHIP.elevated}>Elevated</Badge>;
+        if (level === 'HIGH') return <Badge variant="outline" className={SEVERITY_CHIP.high}>High</Badge>;
         return <Badge variant="secondary">N/A</Badge>;
     };
 

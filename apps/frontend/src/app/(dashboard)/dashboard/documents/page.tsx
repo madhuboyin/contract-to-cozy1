@@ -113,12 +113,12 @@ const AISmartUpload = ({ properties, onUploadSuccess, onClose }: AISmartUploadPr
 
   const getDocTypeColor = (type: string) => {
     switch (type) {
-      case 'WARRANTY': return 'text-green-700 bg-green-100';
-      case 'RECEIPT': return 'text-blue-700 bg-blue-100';
-      case 'INVOICE': return 'text-purple-700 bg-purple-100';
-      case 'MANUAL': return 'text-gray-700 bg-gray-100';
-      case 'INSPECTION': return 'text-orange-700 bg-orange-100';
-      default: return 'text-gray-700 bg-gray-100';
+      case 'WARRANTY': return 'text-green-800 bg-green-100 border-green-200';
+      case 'RECEIPT': return 'text-blue-800 bg-blue-100 border-blue-200';
+      case 'INVOICE': return 'text-purple-800 bg-purple-100 border-purple-200';
+      case 'MANUAL': return 'text-gray-800 bg-gray-100 border-gray-200';
+      case 'INSPECTION': return 'text-orange-800 bg-orange-100 border-orange-200';
+      default: return 'text-gray-800 bg-gray-100 border-gray-200';
     }
   };
   
@@ -228,7 +228,7 @@ const AISmartUpload = ({ properties, onUploadSuccess, onClose }: AISmartUploadPr
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-600">Type:</span>
-              <span className={`px-2 py-0.5 rounded text-xs font-medium ${getDocTypeColor(insights.documentType)}`}>
+              <span className={`px-2 py-0.5 rounded-md text-xs font-medium border ${getDocTypeColor(insights.documentType)}`}>
                 {insights.documentType}
               </span>
             </div>

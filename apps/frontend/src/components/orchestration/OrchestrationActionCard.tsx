@@ -316,7 +316,7 @@ function signalBadge(action: OrchestratedActionDTO) {
   if (!s) return null;
 
   const meta = sourceMeta(s.sourceType);
-  const base = 'text-xs font-semibold px-2 py-0.5 rounded inline-flex items-center gap-1';
+  const base = 'text-xs font-semibold px-2 py-0.5 rounded-md inline-flex items-center gap-1';
   const title = s.summary || undefined;
 
   return (
@@ -428,13 +428,13 @@ export const OrchestrationActionCard: React.FC<Props> = ({
             {riskBadge(action.riskLevel)}
             {signalBadge(action)}
             {categoryChipLabel && (
-              <span className="inline-flex items-center gap-1 rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-700">
+              <span className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-700">
                 <Home className="h-3.5 w-3.5" />
                 {categoryChipLabel}
               </span>
             )}
             {roomChipLabel && (
-              <span className="inline-flex items-center gap-1 rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-700">
+              <span className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-700">
                 <MapPin className="h-3.5 w-3.5" />
                 {roomChipLabel}
               </span>

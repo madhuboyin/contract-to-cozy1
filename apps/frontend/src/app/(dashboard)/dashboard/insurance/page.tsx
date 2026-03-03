@@ -642,10 +642,10 @@ export default function InsurancePage() {
                       <span
                         className={cn(
                           "text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap",
-                          expired ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                          expired ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
                         )}
                       >
-                        {expired ? 'EXPIRED' : 'ACTIVE'}
+                        {expired ? 'Expired' : 'Active'}
                       </span>
                     </div>
                     <div className="grid gap-3 text-sm text-muted-foreground">
@@ -753,9 +753,9 @@ export default function InsurancePage() {
                     <TableCell className="text-center">
                       <span className={cn(
                         "text-xs font-semibold px-2 py-0.5 rounded-full",
-                        expired ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                        expired ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
                       )}>
-                        {expired ? 'EXPIRED' : 'ACTIVE'}
+                        {expired ? 'Expired' : 'Active'}
                       </span>
                     </TableCell>
                     <TableCell className="text-center">

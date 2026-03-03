@@ -44,6 +44,8 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { ArrowLeft } from 'lucide-react';
 import humanizeActionType from '@/lib/utils/humanize';
+import { PRIORITY_CHIP, PriorityLevel } from '@/lib/utils/chipTokens';
+import { formatEnumLabel } from '@/lib/utils/formatters';
 
 import {
   Dialog,
@@ -565,14 +567,11 @@ export default function MaintenancePage() {
                       <TableCell>
                         <span
                           className={cn(
-                            'px-2 py-1 rounded text-xs font-medium',
-                            task.priority === 'URGENT' && 'bg-red-100 text-red-700',
-                            task.priority === 'HIGH' && 'bg-orange-100 text-orange-700',
-                            task.priority === 'MEDIUM' && 'bg-yellow-100 text-yellow-700',
-                            task.priority === 'LOW' && 'bg-green-100 text-green-700'
+                            'px-2 py-1 rounded-full text-xs font-medium border',
+                            PRIORITY_CHIP[task.priority.toLowerCase() as PriorityLevel]
                           )}
                         >
-                          {task.priority}
+                          {formatEnumLabel(task.priority)}
                         </span>
                       </TableCell>
                       <TableCell className="text-sm">{formatCategory(task.serviceCategory)}</TableCell>
@@ -641,14 +640,13 @@ export default function MaintenancePage() {
                     <h3 className="font-bold text-base leading-tight">{humanizeActionType(task.title)}</h3>
                     <p className="text-xs text-muted-foreground">{formatCategory(task.serviceCategory)}</p>
                   </div>
-                  <Badge 
+                  <Badge
                     className={cn(
-                      task.priority === 'URGENT' && 'bg-red-100 text-red-700',
-                      task.priority === 'HIGH' && 'bg-orange-100 text-orange-700',
-                      'text-[10px] px-1.5 py-0'
+                      PRIORITY_CHIP[task.priority.toLowerCase() as PriorityLevel],
+                      'rounded-full text-[10px] px-1.5 py-0 border'
                     )}
                   >
-                    {task.priority}
+                    {formatEnumLabel(task.priority)}
                   </Badge>
                 </div>
 
@@ -739,14 +737,11 @@ export default function MaintenancePage() {
                           <TableCell>
                             <span
                               className={cn(
-                                'px-2 py-1 rounded text-xs font-medium',
-                                task.priority === 'URGENT' && 'bg-red-100 text-red-700',
-                                task.priority === 'HIGH' && 'bg-orange-100 text-orange-700',
-                                task.priority === 'MEDIUM' && 'bg-yellow-100 text-yellow-700',
-                                task.priority === 'LOW' && 'bg-green-100 text-green-700'
+                                'px-2 py-1 rounded-full text-xs font-medium border',
+                                PRIORITY_CHIP[task.priority.toLowerCase() as PriorityLevel]
                               )}
                             >
-                              {task.priority}
+                              {formatEnumLabel(task.priority)}
                             </span>
                           </TableCell>
                           <TableCell className="text-sm">
@@ -901,14 +896,11 @@ export default function MaintenancePage() {
                           <TableCell>
                             <span
                               className={cn(
-                                'px-2 py-1 rounded text-xs font-medium',
-                                task.priority === 'URGENT' && 'bg-red-100 text-red-700',
-                                task.priority === 'HIGH' && 'bg-orange-100 text-orange-700',
-                                task.priority === 'MEDIUM' && 'bg-yellow-100 text-yellow-700',
-                                task.priority === 'LOW' && 'bg-green-100 text-green-700'
+                                'px-2 py-1 rounded-full text-xs font-medium border',
+                                PRIORITY_CHIP[task.priority.toLowerCase() as PriorityLevel]
                               )}
                             >
-                              {task.priority}
+                              {formatEnumLabel(task.priority)}
                             </span>
                           </TableCell>
                           <TableCell className="text-sm">
