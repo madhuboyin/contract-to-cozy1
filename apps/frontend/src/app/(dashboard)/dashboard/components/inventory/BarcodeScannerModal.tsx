@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
+import { BarcodeFormat, DecodeHintType } from '@zxing/library';
+import { extractDigitsCandidate } from './scanParsing';
 
 export type BarcodeLookupResult = {
   name?: string | null;
@@ -23,15 +25,26 @@ export default function BarcodeScannerModal(props: {
   const controlsRef = useRef<IScannerControls | null>(null);
 
   const [err, setErr] = useState<string | null>(null);
+  const [manualError, setManualError] = useState<string | null>(null);
   const [manual, setManual] = useState('');
 
-  const reader = useMemo(() => new BrowserMultiFormatReader(), []);
+  const reader = useMemo(() => {
+    const hints = new Map<DecodeHintType, unknown>();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.UPC_E,
+    ]);
+    return new BrowserMultiFormatReader(hints, 300);
+  }, []);
 
   useEffect(() => {
     if (!props.open) return;
 
     let stopped = false;
     setErr(null);
+    setManualError(null);
 
     (async () => {
       try {
@@ -47,6 +60,8 @@ export default function BarcodeScannerModal(props: {
 
             if (result) {
               const text = result.getText();
+              const normalizedCode = extractDigitsCandidate(text);
+              if (!normalizedCode) return;
               stopped = true;
 
               // Stop scanning ASAP
@@ -56,7 +71,7 @@ export default function BarcodeScannerModal(props: {
 
               // Close modal, then run handler
               props.onClose();
-              await props.onDetected(text);
+              await props.onDetected(normalizedCode);
             }
           }
         );
@@ -124,7 +139,10 @@ export default function BarcodeScannerModal(props: {
               <div className="mt-2 flex gap-2">
                 <input
                   value={manual}
-                  onChange={(e) => setManual(e.target.value)}
+                  onChange={(e) => {
+                    setManual(e.target.value);
+                    setManualError(null);
+                  }}
                   className="flex-1 rounded-xl border border-black/10 px-3 py-2 text-sm"
                   placeholder="e.g. 012345678905"
                 />
@@ -132,15 +150,25 @@ export default function BarcodeScannerModal(props: {
                   onClick={async () => {
                     const v = manual.trim();
                     if (!v) return;
+                    const normalized = extractDigitsCandidate(v);
+                    if (!normalized) {
+                      setManualError('Enter a valid UPC/EAN/GTIN code (8, 12, 13, or 14 digits).');
+                      return;
+                    }
 
                     props.onClose();
-                    await props.onDetected(v);
+                    await props.onDetected(normalized);
                   }}
                   className="rounded-xl px-4 py-2 text-sm border border-black/10 hover:bg-black/5"
                 >
                   Lookup
                 </button>
               </div>
+              {manualError ? (
+                <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700">
+                  {manualError}
+                </div>
+              ) : null}
             </div>
           ) : null}
 

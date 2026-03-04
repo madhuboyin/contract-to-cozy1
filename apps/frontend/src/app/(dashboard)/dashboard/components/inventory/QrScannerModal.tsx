@@ -16,6 +16,7 @@ export default function QrScannerModal(props: {
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -58,11 +59,20 @@ export default function QrScannerModal(props: {
             try {
               controls?.stop();
             } catch {}
+            try {
+              const stream = (videoRef.current?.srcObject as MediaStream | null) ?? streamRef.current;
+              stream?.getTracks().forEach((track) => track.stop());
+              streamRef.current = null;
+              if (videoRef.current) videoRef.current.srcObject = null;
+            } catch {}
 
             props.onClose();
             await props.onDetected(text);
           }
         );
+
+        const activeStream = video.srcObject as MediaStream | null;
+        if (activeStream) streamRef.current = activeStream;
       } catch (e: any) {
         setErr(e?.message || 'Unable to access camera. Please allow permission.');
       } finally {
@@ -77,6 +87,12 @@ export default function QrScannerModal(props: {
         readerRef.current?.reset?.();
       } catch {}
       readerRef.current = null;
+      try {
+        const stream = streamRef.current || (videoRef.current?.srcObject as MediaStream | null);
+        stream?.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        if (videoRef.current) videoRef.current.srcObject = null;
+      } catch {}
     };
   }, [props.open, props.onClose, props.onDetected]);
 

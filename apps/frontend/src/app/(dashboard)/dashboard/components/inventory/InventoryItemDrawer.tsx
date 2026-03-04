@@ -4,7 +4,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { api } from '@/lib/api/client';
 import { InventoryItem, InventoryItemCategory, InventoryItemCondition, InventoryRoom } from '@/types';
 import DocumentPickerModal from './DocumentPickerModal';
 import DocumentUploadZone from './DocumentUploadZone';
@@ -12,6 +11,11 @@ import BarcodeScannerModal, { BarcodeLookupResult } from './BarcodeScannerModal'
 import LabelOcrModal from './LabelOcrModal';
 import { lookupBarcode as lookupInventoryBarcode } from '../../inventory/inventoryApi';
 import QrScannerModal from './QrScannerModal';
+import {
+  extractDigitsCandidate,
+  extractModelSerialCandidate,
+  hasMeaningfulLookupData,
+} from './scanParsing';
 import {
   AlertTriangle,
   BadgeCheck,
@@ -42,6 +46,7 @@ import {
   ocrLabelToDraft,
   confirmInventoryDraft,
   dismissInventoryDraft,
+  updateInventoryDraft,
 } from '../../inventory/inventoryApi';
 import { listInventoryItemRecalls } from '../../properties/[id]/recalls/recallsApi';
 import { verifyItem } from '../verification/verificationApi';
@@ -226,68 +231,6 @@ function inferCategoryFromLookup(lookup?: Partial<BarcodeLookupResult> | null): 
     return 'FURNITURE';
 
   return 'OTHER';
-}
-
-function extractDigitsCandidate(text: string): string | null {
-  const t = String(text || '').trim();
-  if (!t) return null;
-
-  // 1) if it’s a URL, try common params first
-  try {
-    const u = new URL(t);
-    const candidates = [
-      u.searchParams.get('upc'),
-      u.searchParams.get('gtin'),
-      u.searchParams.get('ean'),
-      u.searchParams.get('code'),
-      u.searchParams.get('barcode'),
-    ].filter(Boolean) as string[];
-
-    for (const c of candidates) {
-      const d = c.replace(/\D/g, '');
-      if (d.length >= 8) return d;
-    }
-  } catch {
-    // not a URL; ignore
-  }
-
-  // 2) raw text: look for explicit tokens
-  const tokenMatch = t.match(/(upc|gtin|ean|barcode)\s*[:=]\s*([0-9\- ]{8,})/i);
-  if (tokenMatch?.[2]) {
-    const d = tokenMatch[2].replace(/\D/g, '');
-    if (d.length >= 8) return d;
-  }
-
-  // 3) fallback: the longest digit run
-  const runs = t.match(/[0-9]{8,}/g);
-  if (runs?.length) {
-    // choose the longest run
-    runs.sort((a, b) => b.length - a.length);
-    return runs[0];
-  }
-
-  return null;
-}
-
-function extractModelSerialCandidate(text: string): { modelNumber?: string; serialNumber?: string; manufacturer?: string } {
-  const t = String(text || '');
-
-  const model =
-    t.match(/model\s*(no\.|number|#)?\s*[:=]\s*([A-Za-z0-9\-_.]+)/i)?.[2] ||
-    t.match(/\bmdl\s*[:=]\s*([A-Za-z0-9\-_.]+)/i)?.[1] ||
-    undefined;
-
-  const serial =
-    t.match(/serial\s*(no\.|number|#)?\s*[:=]\s*([A-Za-z0-9\-_.]+)/i)?.[2] ||
-    t.match(/\bs\/n\s*[:=]\s*([A-Za-z0-9\-_.]+)/i)?.[1] ||
-    undefined;
-
-  const mfg =
-    t.match(/manufacturer\s*[:=]\s*([A-Za-z0-9 &.'\-]+)/i)?.[1] ||
-    t.match(/\bmfg\s*[:=]\s*([A-Za-z0-9 &.'\-]+)/i)?.[1] ||
-    undefined;
-
-  return { modelNumber: model, serialNumber: serial, manufacturer: mfg };
 }
 
 function pct(n?: number) {
@@ -596,16 +539,6 @@ useEffect(() => {
 
   const canSave = name.trim().length > 0 && !duplicateError;
 
-  function shouldAutofill(touchedField: boolean, currentValue: string, incoming: any) {
-    if (!incoming) return false;
-  
-    // If user never edited, always autofill
-    if (!touchedField) return true;
-  
-    // If user "touched" but left empty, still autofill
-    return !String(currentValue || '').trim();
-  }  
-
   function normalizeSerial(v: any): string {
     const s = String(v ?? '').trim();
     if (!s) return '';
@@ -720,18 +653,31 @@ useEffect(() => {
   async function lookupBarcode(code: string) {
     const trimmed = code.trim();
     if (!trimmed) return;
+
+    const normalizedCode = extractDigitsCandidate(trimmed);
+    if (!normalizedCode) {
+      setLookupError('Scanned value is not a valid UPC/EAN/GTIN code.');
+      return;
+    }
   
     setLookupLoading(true);
     setLookupError(null);
   
     try {
       // ✅ use shared API helper (normalizes wrapper shapes)
-      const raw = await lookupInventoryBarcode(props.propertyId, trimmed);
+      const raw = await lookupInventoryBarcode(props.propertyId, normalizedCode);
   
       // IMPORTANT: backend returns {success:true,data:{...}} now
       const data = unwrapBarcodeLookupResponse(raw);
   
-      setLastScannedCode(trimmed);
+      setLastScannedCode(normalizedCode);
+      if (!touched.upc) setUpc(String((data as any)?.upc || normalizedCode));
+
+      if (!hasMeaningfulLookupData(data as Record<string, unknown> | null)) {
+        setLookupError('Barcode captured, but no product catalog match was found. You can continue manually.');
+        setScannerOpen(false);
+        return;
+      }
   
       // name/category (best-effort)
       if (!touched.name && !name.trim() && data?.name) setName(String(data.name));
@@ -742,9 +688,6 @@ useEffect(() => {
       // identifiers (fill unless user edited)
       if (!touched.manufacturer && data?.manufacturer) setManufacturer(String(data.manufacturer));
       if (!touched.modelNumber && data?.modelNumber) setModelNumber(String(data.modelNumber));
-  
-      // UPC: always set from scan unless user typed a different UPC
-      if (!touched.upc) setUpc(String((data as any)?.upc || trimmed));
   
       // SKU: fill unless user edited
       if (!touched.sku && (data as any)?.sku) setSku(String((data as any).sku));
@@ -816,37 +759,43 @@ useEffect(() => {
   
     setQrError(null);
     setLastQrText(trimmedText);
+
+    let lookupMsg: string | null = null;
   
     // 1) Try to find UPC/GTIN digits → use barcode lookup for rich autofill
     const digits = extractDigitsCandidate(trimmedText);
     if (digits) {
       try {
         setLookupLoading(true);
-        const data = await lookupInventoryBarcode(props.propertyId, digits);
+        const raw = await lookupInventoryBarcode(props.propertyId, digits);
+        const data = unwrapBarcodeLookupResponse(raw);
   
-        // name/category
-        if (!touched.name && !name.trim() && (data as any)?.name) setName(String((data as any).name));
-        if (!touched.category && category === 'OTHER') setCategory(inferCategoryFromLookup(data));
-  
-        // identifiers
-        if (!touched.manufacturer && (data as any)?.manufacturer) setManufacturer(String((data as any).manufacturer));
-        if (!touched.modelNumber && (data as any)?.modelNumber) setModelNumber(String((data as any).modelNumber));
-        if (!touched.upc) setUpc(String((data as any)?.upc || digits));
-        if (!touched.sku && (data as any)?.sku) setSku(String((data as any).sku));
-  
-        // legacy sync (optional)
-        if (!brand.trim() && (data as any)?.manufacturer) setBrand(String((data as any).manufacturer));
-        if (!model.trim() && (data as any)?.modelNumber) setModel(String((data as any).modelNumber));
-  
-        return;
+        if (hasMeaningfulLookupData(data as Record<string, unknown> | null)) {
+          setLastScannedCode(digits);
+
+          // name/category
+          if (!touched.name && !name.trim() && (data as any)?.name) setName(String((data as any).name));
+          if (!touched.category && category === 'OTHER') setCategory(inferCategoryFromLookup(data));
+
+          // identifiers
+          if (!touched.manufacturer && (data as any)?.manufacturer) setManufacturer(String((data as any).manufacturer));
+          if (!touched.modelNumber && (data as any)?.modelNumber) setModelNumber(String((data as any).modelNumber));
+          if (!touched.upc) setUpc(String((data as any)?.upc || digits));
+          if (!touched.sku && (data as any)?.sku) setSku(String((data as any).sku));
+
+          // legacy sync (optional)
+          if (!brand.trim() && (data as any)?.manufacturer) setBrand(String((data as any).manufacturer));
+          if (!model.trim() && (data as any)?.modelNumber) setModel(String((data as any).modelNumber));
+          return;
+        }
+
+        lookupMsg = 'QR code contained a valid GTIN, but no product match was found.';
       } catch (e: any) {
-        const msg =
+        lookupMsg =
           e?.response?.data?.message ||
           e?.response?.data?.detail ||
           e?.message ||
           'QR lookup failed';
-        setQrError(msg);
-        return;
       } finally {
         setLookupLoading(false);
       }
@@ -861,7 +810,12 @@ useEffect(() => {
   
     // If nothing matched, show a gentle error
     if (!ms.manufacturer && !ms.modelNumber && !ms.serialNumber) {
-      setQrError('QR code did not contain a recognizable UPC/GTIN or model/serial info.');
+      setQrError(lookupMsg || 'QR code did not contain a recognizable UPC/GTIN or model/serial info.');
+      return;
+    }
+
+    if (lookupMsg) {
+      setQrError(`${lookupMsg} Applied any model/serial fields found in the QR text.`);
     }
   }
   
@@ -940,7 +894,28 @@ useEffect(() => {
         await refreshItemDocs();
       } else {
         if (draftId) {
-          await confirmInventoryDraft(props.propertyId, draftId);
+          await updateInventoryDraft(props.propertyId, draftId, {
+            name: payload.name,
+            category: payload.category,
+            condition: payload.condition,
+            roomId: payload.roomId,
+            brand: payload.brand,
+            model: payload.model,
+            serialNo: payload.serialNo,
+            manufacturer: payload.manufacturer,
+            modelNumber: payload.modelNumber,
+            serialNumber: payload.serialNumber,
+            upc: payload.upc,
+            sku: payload.sku,
+          });
+
+          const createdItem = await confirmInventoryDraft(props.propertyId, draftId);
+          const createdItemId = String((createdItem as any)?.id || '');
+          if (!createdItemId) {
+            throw new Error('Draft was confirmed but item id was missing in response.');
+          }
+
+          await updateInventoryItem(props.propertyId, createdItemId, payload);
         } else {
           await createInventoryItem(props.propertyId, payload);
         }
