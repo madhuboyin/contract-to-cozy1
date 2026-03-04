@@ -36,7 +36,9 @@ export default function BarcodeScannerModal(props: {
       BarcodeFormat.UPC_A,
       BarcodeFormat.UPC_E,
     ]);
-    return new BrowserMultiFormatReader(hints, 300);
+    return new BrowserMultiFormatReader(hints, {
+      delayBetweenScanAttempts: 300,
+    });
   }, []);
 
   useEffect(() => {
