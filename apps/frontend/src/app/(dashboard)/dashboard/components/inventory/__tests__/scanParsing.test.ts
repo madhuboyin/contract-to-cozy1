@@ -37,7 +37,7 @@ describe('scanParsing', () => {
   });
 
   describe('extractModelSerialCandidate', () => {
-    it('extracts model, serial, and manufacturer fields', () => {
+    it('extracts model, serial, and manufacturer from colon-separated labels', () => {
       const input = 'Manufacturer: ACME Appliances\nModel No: DW80R9950US\nSerial Number: SN-000123';
       expect(extractModelSerialCandidate(input)).toEqual({
         manufacturer: 'ACME Appliances',
@@ -45,16 +45,42 @@ describe('scanParsing', () => {
         serialNumber: 'SN-000123',
       });
     });
+
+    it('extracts model and serial from space-separated label formats', () => {
+      const input = 'MFG Samsung\nMODEL  RF28R7201SR\nSER NO  0A1B2C3D4E5F';
+      expect(extractModelSerialCandidate(input)).toEqual({
+        manufacturer: 'Samsung',
+        modelNumber: 'RF28R7201SR',
+        serialNumber: '0A1B2C3D4E5F',
+      });
+    });
+
+    it('extracts P/N as model number', () => {
+      expect(extractModelSerialCandidate('P/N: WPW10195039')).toMatchObject({
+        modelNumber: 'WPW10195039',
+      });
+    });
+
+    it('handles SER. NO. and S/N serial abbreviations', () => {
+      expect(extractModelSerialCandidate('SER. NO. ABC123').serialNumber).toBe('ABC123');
+      expect(extractModelSerialCandidate('S/N: XYZ-9876').serialNumber).toBe('XYZ-9876');
+    });
+
+    it('trims whitespace from captured manufacturer values', () => {
+      expect(
+        extractModelSerialCandidate('Manufacturer: ACME Corp  \nModel: ABC123').manufacturer
+      ).toBe('ACME Corp');
+    });
   });
 
   describe('hasMeaningfulLookupData', () => {
     it('returns true when payload has useful fields', () => {
       expect(hasMeaningfulLookupData({ name: 'Dishwasher' })).toBe(true);
       expect(hasMeaningfulLookupData({ manufacturer: 'Samsung' })).toBe(true);
+      expect(hasMeaningfulLookupData({ upc: '012345678905' })).toBe(true);
     });
 
-    it('returns false for empty payloads', () => {
-      expect(hasMeaningfulLookupData({ upc: '012345678905' })).toBe(false);
+    it('returns false for empty or null payloads', () => {
       expect(hasMeaningfulLookupData({})).toBe(false);
       expect(hasMeaningfulLookupData(null)).toBe(false);
     });

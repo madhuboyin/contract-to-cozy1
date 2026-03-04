@@ -10,6 +10,7 @@ export default function LabelOcrModal(props: {
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -93,6 +94,23 @@ export default function LabelOcrModal(props: {
   }
   
 
+  async function uploadFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset so the same file can be re-selected after an error
+    e.target.value = '';
+    setBusy(true);
+    setErr(null);
+    try {
+      await props.onCaptured(file);
+      props.onClose();
+    } catch (err: any) {
+      setErr(err?.message || 'Upload failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!props.open) return null;
 
   return (
@@ -136,6 +154,23 @@ export default function LabelOcrModal(props: {
             className="w-full rounded-xl px-4 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
           >
             {busy ? 'Capturing…' : 'Capture & Extract'}
+          </button>
+
+          {/* Hidden file input — triggered by the button below */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={uploadFile}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={busy}
+            className="w-full rounded-xl px-4 py-2 text-sm border border-black/10 hover:bg-black/5 disabled:opacity-50"
+          >
+            Choose from gallery
           </button>
 
           <div className="text-[11px] opacity-60">

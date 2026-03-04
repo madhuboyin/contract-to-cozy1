@@ -74,20 +74,32 @@ export function extractDigitsCandidate(text: string): string | null {
 export function extractModelSerialCandidate(text: string): ModelSerialCandidate {
   const source = String(text || '');
 
-  const model =
-    source.match(/model\s*(no\.?|number|#)?\s*[:=]\s*([A-Za-z0-9\-_.]+)/i)?.[2] ||
-    source.match(/\bmdl\s*[:=]\s*([A-Za-z0-9\-_.]+)/i)?.[1] ||
-    undefined;
+  // Separator: colon, equals, or plain whitespace (one or more of any mix).
+  // Using [\s:=]+ means "MODEL DW80R9950US", "MODEL: DW80R9950US", and
+  // "MODEL = DW80R9950US" all work. Non-capturing groups keep [1] as the value.
+  const model = (
+    source.match(
+      /\b(?:model(?:\s*(?:no\.?|number|#))?|mdl\.?|p\/?n)[\s:=]+([A-Za-z0-9\-_.]+)/i
+    )?.[1]
+  )?.trim() || undefined;
 
-  const serial =
-    source.match(/serial\s*(no\.?|number|#)?\s*[:=]\s*([A-Za-z0-9\-_.]+)/i)?.[2] ||
-    source.match(/\bs\/n\s*[:=]\s*([A-Za-z0-9\-_.]+)/i)?.[1] ||
-    undefined;
+  const serial = (
+    source.match(
+      /\b(?:serial(?:\s*(?:no\.?|number|#))?|ser(?:\.?\s*(?:no\.?|#))?|s\/?n)[\s:=]+([A-Za-z0-9\-_.]+)/i
+    )?.[1]
+  )?.trim() || undefined;
 
-  const manufacturer =
-    source.match(/manufacturer\s*[:=]\s*([A-Za-z0-9 &.'\-]+)/i)?.[1] ||
-    source.match(/\bmfg\s*[:=]\s*([A-Za-z0-9 &.'\-]+)/i)?.[1] ||
-    undefined;
+  const manufacturer = (
+    // colon/equals separator: allow multi-word brand names (e.g. "LG Electronics")
+    source.match(
+      /\b(?:manufacturer|mfg\.?|mfr\.?|brand|make)\s*[=:]\s*([A-Za-z0-9 &.'\-]+)/i
+    )?.[1] ||
+    // space separator: single word only to avoid greedy over-matching
+    source.match(
+      /\b(?:mfg\.?|mfr\.?)\s+([A-Za-z0-9&.'\-]+)/i
+    )?.[1] ||
+    undefined
+  )?.trim() || undefined;
 
   return { modelNumber: model, serialNumber: serial, manufacturer };
 }
