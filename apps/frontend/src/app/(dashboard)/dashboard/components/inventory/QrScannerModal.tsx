@@ -2,12 +2,8 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  BrowserMultiFormatReader,
-  BarcodeFormat,
-  DecodeHintType,
-  Result,
-} from '@zxing/library';
+import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
+import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 
 export default function QrScannerModal(props: {
   open: boolean;
@@ -15,8 +11,7 @@ export default function QrScannerModal(props: {
   onDetected: (text: string) => Promise<void> | void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const controlsRef = useRef<IScannerControls | null>(null);
 
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -30,39 +25,34 @@ export default function QrScannerModal(props: {
 
     (async () => {
       try {
-        // Prefer QR only for speed + fewer false positives
-        const hints = new Map<DecodeHintType, any>();
+        const hints = new Map<DecodeHintType, unknown>();
+        // QR only for speed + fewer false positives
         hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]);
 
-        const reader = new BrowserMultiFormatReader(hints, 300);
-        readerRef.current = reader;
+        const reader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 300 });
 
         const video = videoRef.current;
         if (!video) return;
 
-        // ✅ Pass null (not undefined) to use default camera
-        await reader.decodeFromVideoDevice(
-          null,
+        // Prefer rear/environment camera for scanning physical labels
+        const controls = await reader.decodeFromConstraints(
+          { video: { facingMode: { ideal: 'environment' } } },
           video,
-          async (
-            result: Result | undefined,
-            _error: unknown,
-            controls?: { stop: () => void }
-          ) => {
+          async (result, _error, controls: IScannerControls) => {
             if (cancelled) return;
             if (!result) return;
 
             const text = result.getText?.() ?? '';
             if (!text) return;
 
-            // stop immediately after first hit
+            // Stop immediately after first hit
             try {
-              controls?.stop();
+              controls.stop();
             } catch {}
+            // Belt-and-suspenders: stop any lingering MediaStream tracks
             try {
-              const stream = (videoRef.current?.srcObject as MediaStream | null) ?? streamRef.current;
+              const stream = videoRef.current?.srcObject as MediaStream | null;
               stream?.getTracks().forEach((track) => track.stop());
-              streamRef.current = null;
               if (videoRef.current) videoRef.current.srcObject = null;
             } catch {}
 
@@ -71,10 +61,14 @@ export default function QrScannerModal(props: {
           }
         );
 
-        const activeStream = video.srcObject as MediaStream | null;
-        if (activeStream) streamRef.current = activeStream;
+        if (!cancelled) {
+          controlsRef.current = controls;
+        } else {
+          // If cancelled before controls were saved, stop immediately
+          try { controls.stop(); } catch {}
+        }
       } catch (e: any) {
-        setErr(e?.message || 'Unable to access camera. Please allow permission.');
+        if (!cancelled) setErr(e?.message || 'Unable to access camera. Please allow permission.');
       } finally {
         if (!cancelled) setBusy(false);
       }
@@ -83,14 +77,12 @@ export default function QrScannerModal(props: {
     return () => {
       cancelled = true;
       try {
-        // Some zxing builds expose reset(); some rely on stopping tracks internally
-        readerRef.current?.reset?.();
+        controlsRef.current?.stop();
       } catch {}
-      readerRef.current = null;
+      controlsRef.current = null;
       try {
-        const stream = streamRef.current || (videoRef.current?.srcObject as MediaStream | null);
+        const stream = videoRef.current?.srcObject as MediaStream | null;
         stream?.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
         if (videoRef.current) videoRef.current.srcObject = null;
       } catch {}
     };
@@ -124,7 +116,7 @@ export default function QrScannerModal(props: {
           )}
 
           <div className="text-[11px] opacity-60">
-            {busy ? 'Scanning…' : 'Tip: keep the QR code centered and steady.'}
+            {busy ? 'Starting camera…' : 'Tip: keep the QR code centered and steady.'}
           </div>
         </div>
       </div>

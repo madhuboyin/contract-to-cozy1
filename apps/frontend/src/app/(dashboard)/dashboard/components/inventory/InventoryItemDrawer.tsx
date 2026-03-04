@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/inventory/InventoryItemDrawer.tsx
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { InventoryItem, InventoryItemCategory, InventoryItemCondition, InventoryRoom } from '@/types';
@@ -291,7 +291,8 @@ export default function InventoryItemDrawer(props: {
 
   // scanning UX
   const [scannerOpen, setScannerOpen] = useState(false);
-  const [lookupLoading, setLookupLoading] = useState(false);
+  const [barcodeLookupLoading, setBarcodeLookupLoading] = useState(false);
+  const [qrLookupLoading, setQrLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [lastScannedCode, setLastScannedCode] = useState<string>('');
 
@@ -333,6 +334,7 @@ export default function InventoryItemDrawer(props: {
   const [purchaseDate, setPurchaseDate] = useState<string>('');
   
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // verification state
   const [verifying, setVerifying] = useState(false);
@@ -445,8 +447,10 @@ useEffect(() => {
     setInsurancePolicyId((item as any)?.insurancePolicyId ?? '');
 
     // scanning state reset
+    setSaveError(null);
     setScannerOpen(false);
-    setLookupLoading(false);
+    setBarcodeLookupLoading(false);
+    setQrLookupLoading(false);
     setLookupError(null);
     setLastScannedCode('');
     setLabelOpen(false);
@@ -559,16 +563,32 @@ useEffect(() => {
     const incRaw = incoming;
     const inc = normalizer ? normalizer(incRaw) : String(incRaw ?? '').trim();
     if (!inc) return;
-  
+
     const t = touchedRef.current[field];
     const current = String((valuesRef.current as any)[field] ?? '').trim();
-  
+
     // Same rule we used for barcode: fill if user hasn't edited OR field is still blank
     if (!t || !current) {
       setter(inc);
     }
   }
-  
+
+  /**
+   * Apply catalog lookup result to form fields, respecting touched state.
+   * Shared by barcode and QR lookup flows to keep autofill behaviour in sync.
+   */
+  function applyLookupAutofill(data: Partial<BarcodeLookupResult>, scannedCode: string) {
+    if (!touched.name && !name.trim() && data?.name) setName(String(data.name));
+    if (!touched.category && category === 'OTHER') setCategory(inferCategoryFromLookup(data));
+    if (!touched.manufacturer && data?.manufacturer) setManufacturer(String(data.manufacturer));
+    if (!touched.modelNumber && data?.modelNumber) setModelNumber(String(data.modelNumber));
+    if (!touched.upc) setUpc(String((data as any)?.upc || scannedCode));
+    if (!touched.sku && (data as any)?.sku) setSku(String((data as any).sku));
+    // Legacy field sync
+    if (!brand.trim() && data?.manufacturer) setBrand(String(data.manufacturer));
+    if (!model.trim() && data?.modelNumber) setModel(String(data.modelNumber));
+  }
+
 
   async function refreshItemDocs() {
     if (!props.initialItem) return;
@@ -660,9 +680,9 @@ useEffect(() => {
       return;
     }
   
-    setLookupLoading(true);
+    setBarcodeLookupLoading(true);
     setLookupError(null);
-  
+
     try {
       // ✅ use shared API helper (normalizes wrapper shapes)
       const raw = await lookupInventoryBarcode(props.propertyId, normalizedCode);
@@ -679,32 +699,16 @@ useEffect(() => {
         return;
       }
   
-      // name/category (best-effort)
-      if (!touched.name && !name.trim() && data?.name) setName(String(data.name));
-  
-      // only auto-infer category if user hasn't touched category
-      if (!touched.category && category === 'OTHER') setCategory(inferCategoryFromLookup(data));
-  
-      // identifiers (fill unless user edited)
-      if (!touched.manufacturer && data?.manufacturer) setManufacturer(String(data.manufacturer));
-      if (!touched.modelNumber && data?.modelNumber) setModelNumber(String(data.modelNumber));
-  
-      // SKU: fill unless user edited
-      if (!touched.sku && (data as any)?.sku) setSku(String((data as any).sku));
-  
-      // legacy sync (optional)
-      if (!brand.trim() && data?.manufacturer) setBrand(String(data.manufacturer));
-      if (!model.trim() && data?.modelNumber) setModel(String(data.modelNumber));
-  
+      applyLookupAutofill(data, normalizedCode);
       setScannerOpen(false);
     } catch (e: any) {
       console.error('Barcode lookup failed', e);
       const msg = e?.message || 'Lookup failed';
       setLookupError(msg);
     } finally {
-      setLookupLoading(false);
+      setBarcodeLookupLoading(false);
     }
-  }  
+  }
    
   async function runLabelOcr(file: File) {
     setOcrLoading(true);
@@ -766,26 +770,13 @@ useEffect(() => {
     const digits = extractDigitsCandidate(trimmedText);
     if (digits) {
       try {
-        setLookupLoading(true);
+        setQrLookupLoading(true);
         const raw = await lookupInventoryBarcode(props.propertyId, digits);
         const data = unwrapBarcodeLookupResponse(raw);
   
         if (hasMeaningfulLookupData(data as Record<string, unknown> | null)) {
           setLastScannedCode(digits);
-
-          // name/category
-          if (!touched.name && !name.trim() && (data as any)?.name) setName(String((data as any).name));
-          if (!touched.category && category === 'OTHER') setCategory(inferCategoryFromLookup(data));
-
-          // identifiers
-          if (!touched.manufacturer && (data as any)?.manufacturer) setManufacturer(String((data as any).manufacturer));
-          if (!touched.modelNumber && (data as any)?.modelNumber) setModelNumber(String((data as any).modelNumber));
-          if (!touched.upc) setUpc(String((data as any)?.upc || digits));
-          if (!touched.sku && (data as any)?.sku) setSku(String((data as any).sku));
-
-          // legacy sync (optional)
-          if (!brand.trim() && (data as any)?.manufacturer) setBrand(String((data as any).manufacturer));
-          if (!model.trim() && (data as any)?.modelNumber) setModel(String((data as any).modelNumber));
+          applyLookupAutofill(data, digits);
           return;
         }
 
@@ -797,7 +788,7 @@ useEffect(() => {
           e?.message ||
           'QR lookup failed';
       } finally {
-        setLookupLoading(false);
+        setQrLookupLoading(false);
       }
     }
   
@@ -818,16 +809,50 @@ useEffect(() => {
       setQrError(`${lookupMsg} Applied any model/serial fields found in the QR text.`);
     }
   }
-  
+
+  // ---------------------------------------------------------------------------
+  // Stable scanner callbacks
+  // Inline arrow functions passed as props recreate on every parent render,
+  // which re-fires the scanner useEffect (stops + restarts the camera mid-use).
+  // The ref-wrapper pattern gives scanner modals a stable function reference
+  // while always calling the latest closure.
+  // ---------------------------------------------------------------------------
+  const lookupBarcodeRef = React.useRef(lookupBarcode);
+  lookupBarcodeRef.current = lookupBarcode;
+  const stableOnBarcodeDetected = useCallback(
+    async (code: string) => { await lookupBarcodeRef.current(code); },
+    []
+  );
+
+  const onQrDetectedRef = React.useRef(onQrDetected);
+  onQrDetectedRef.current = onQrDetected;
+  const stableOnQrDetected = useCallback(
+    async (text: string) => { await onQrDetectedRef.current(text); },
+    []
+  );
+
+  const runLabelOcrRef = React.useRef(runLabelOcr);
+  runLabelOcrRef.current = runLabelOcr;
+  const stableRunLabelOcr = useCallback(
+    async (file: File) => { await runLabelOcrRef.current(file); },
+    []
+  );
+
+  const closeBarcodeScanner = useCallback(() => setScannerOpen(false), []);
+  const closeQrScanner = useCallback(() => setQrOpen(false), []);
+  const closeLabelScanner = useCallback(() => setLabelOpen(false), []);
+
   async function onSave() {
+    setSaveError(null);
+
     if (!name.trim()) {
-      alert('Name is required');
+      setSaveError('Name is required.');
       return;
     }
     if (category === 'APPLIANCE') {
       const year = Number(installYear);
       if (!installYear || !Number.isFinite(year) || year < 1900 || year > CURRENT_YEAR + 1) {
-        alert('Install Year is required for appliances.');
+        setSaveError('Install year is required for appliances.');
         return;
       }
     }
@@ -932,10 +957,7 @@ useEffect(() => {
       props.onSaved();
     } catch (error: any) {
       console.error('Failed to save inventory item:', error);
-      
-      // Show simple error message for duplicate appliance
-      const message = error?.message || 'Save failed. Please try again.';
-      alert(message);
+      setSaveError(error?.message || 'Save failed. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -1086,10 +1108,10 @@ useEffect(() => {
                     <button
                       type="button"
                       onClick={() => setScannerOpen(true)}
-                      disabled={saving || lookupLoading}
+                      disabled={saving || barcodeLookupLoading}
                       className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:border-gray-300 hover:bg-white disabled:opacity-50"
                     >
-                      {lookupLoading ? 'Looking up...' : 'Scan barcode'}
+                      {barcodeLookupLoading ? 'Looking up...' : 'Scan barcode'}
                     </button>
 
                     <button
@@ -1104,10 +1126,10 @@ useEffect(() => {
                     <button
                       type="button"
                       onClick={() => setQrOpen(true)}
-                      disabled={saving || lookupLoading}
+                      disabled={saving || qrLookupLoading}
                       className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:border-gray-300 hover:bg-white disabled:opacity-50"
                     >
-                      {lookupLoading ? 'Looking up...' : 'Scan QR'}
+                      {qrLookupLoading ? 'Looking up...' : 'Scan QR'}
                     </button>
                   </div>
                 </div>
@@ -1593,7 +1615,13 @@ useEffect(() => {
               </div>
             ) : null}
 
-            <div className="flex items-center justify-between">
+            {saveError ? (
+              <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {saveError}
+              </div>
+            ) : null}
+
+          <div className="flex items-center justify-between">
               {isEdit ? (
                 <button
                   type="button"
@@ -1631,7 +1659,7 @@ useEffect(() => {
         </div>
       </div>
 
-      <LabelOcrModal open={labelOpen} onClose={() => setLabelOpen(false)} onCaptured={runLabelOcr} />
+      <LabelOcrModal open={labelOpen} onClose={closeLabelScanner} onCaptured={stableRunLabelOcr} />
 
       <DocumentPickerModal
         open={docPickerOpen}
@@ -1646,17 +1674,15 @@ useEffect(() => {
 
       <BarcodeScannerModal
         open={scannerOpen}
-        onClose={() => setScannerOpen(false)}
+        onClose={closeBarcodeScanner}
         allowManualEntry
-        onDetected={async (code) => {
-          await lookupBarcode(code);
-        }}
+        onDetected={stableOnBarcodeDetected}
       />
       {/* QR scanner */}
       <QrScannerModal
         open={qrOpen}
-        onClose={() => setQrOpen(false)}
-        onDetected={onQrDetected}
+        onClose={closeQrScanner}
+        onDetected={stableOnQrDetected}
       />
     </div>,
     document.body

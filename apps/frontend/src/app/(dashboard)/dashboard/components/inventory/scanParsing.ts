@@ -95,6 +95,6 @@ export function extractModelSerialCandidate(text: string): ModelSerialCandidate 
 export function hasMeaningfulLookupData(payload: Record<string, unknown> | null | undefined): boolean {
   if (!payload || typeof payload !== 'object') return false;
 
-  const keys = ['name', 'manufacturer', 'modelNumber', 'categoryHint', 'imageUrl'];
+  const keys = ['name', 'manufacturer', 'modelNumber', 'categoryHint', 'imageUrl', 'upc'];
   return keys.some((key) => String(payload[key] ?? '').trim().length > 0);
 }

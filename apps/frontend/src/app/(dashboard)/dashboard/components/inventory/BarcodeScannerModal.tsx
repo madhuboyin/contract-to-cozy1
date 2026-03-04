@@ -27,6 +27,8 @@ export default function BarcodeScannerModal(props: {
   const [err, setErr] = useState<string | null>(null);
   const [manualError, setManualError] = useState<string | null>(null);
   const [manual, setManual] = useState('');
+  const [scanStatus, setScanStatus] = useState<'idle' | 'rejected'>('idle');
+  const rejectedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const reader = useMemo(() => {
     const hints = new Map<DecodeHintType, unknown>();
@@ -47,15 +49,17 @@ export default function BarcodeScannerModal(props: {
     let stopped = false;
     setErr(null);
     setManualError(null);
+    setScanStatus('idle');
+    if (rejectedTimerRef.current) clearTimeout(rejectedTimerRef.current);
 
     (async () => {
       try {
         const video = videoRef.current;
         if (!video) return;
 
-        // Start decoding from the default camera device (prefer environment camera automatically)
-        const controls = await reader.decodeFromVideoDevice(
-          undefined,
+        // Prefer rear/environment camera for scanning
+        const controls = await reader.decodeFromConstraints(
+          { video: { facingMode: { ideal: 'environment' } } },
           video,
           async (result, _error, controls) => {
             if (stopped) return;
@@ -63,7 +67,13 @@ export default function BarcodeScannerModal(props: {
             if (result) {
               const text = result.getText();
               const normalizedCode = extractDigitsCandidate(text);
-              if (!normalizedCode) return;
+              if (!normalizedCode) {
+                // Code was decoded by ZXing but is not a valid UPC/EAN/GTIN
+                if (rejectedTimerRef.current) clearTimeout(rejectedTimerRef.current);
+                setScanStatus('rejected');
+                rejectedTimerRef.current = setTimeout(() => setScanStatus('idle'), 2500);
+                return;
+              }
               stopped = true;
 
               // Stop scanning ASAP
@@ -86,6 +96,10 @@ export default function BarcodeScannerModal(props: {
 
     return () => {
       stopped = true;
+      if (rejectedTimerRef.current) {
+        clearTimeout(rejectedTimerRef.current);
+        rejectedTimerRef.current = null;
+      }
 
       // Stop ZXing scanner controls (releases camera in most cases)
       try {
@@ -174,9 +188,15 @@ export default function BarcodeScannerModal(props: {
             </div>
           ) : null}
 
-          <div className="text-[11px] opacity-60">
-            Tip: Ensure HTTPS and allow camera permissions.
-          </div>
+          {scanStatus === 'rejected' ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-700">
+              Code detected, but not a UPC/EAN product barcode. Try the barcode on the product packaging.
+            </div>
+          ) : (
+            <div className="text-[11px] opacity-60">
+              Tip: Ensure HTTPS and allow camera permissions.
+            </div>
+          )}
         </div>
       </div>
     </div>

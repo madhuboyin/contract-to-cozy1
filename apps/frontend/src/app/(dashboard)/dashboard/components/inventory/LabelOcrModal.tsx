@@ -23,7 +23,11 @@ export default function LabelOcrModal(props: {
     (async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } },
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
           audio: false,
         });
 
@@ -55,13 +59,17 @@ export default function LabelOcrModal(props: {
   async function capture() {
     const v = videoRef.current;
     if (!v) return;
+    if (!v.videoWidth || !v.videoHeight) {
+      setErr('Camera is not ready yet. Please wait a moment and try again.');
+      return;
+    }
     setBusy(true);
     setErr(null);
-  
+
     try {
       const canvas = document.createElement('canvas');
-      canvas.width = v.videoWidth || 1280;
-      canvas.height = v.videoHeight || 720;
+      canvas.width = v.videoWidth;
+      canvas.height = v.videoHeight;
   
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error('Canvas not supported');
@@ -105,8 +113,20 @@ export default function LabelOcrModal(props: {
           {err ? (
             <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{err}</div>
           ) : (
-            <div className="rounded-2xl border border-black/10 overflow-hidden">
+            <div className="relative rounded-2xl border border-black/10 overflow-hidden">
               <video ref={videoRef} className="w-full h-[300px] object-cover bg-black" playsInline />
+              {/* Framing guide — corner brackets show where to position the label */}
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div className="relative h-[55%] w-3/4">
+                  <span className="absolute left-0 top-0 h-6 w-6 border-l-[3px] border-t-[3px] border-white/90" />
+                  <span className="absolute right-0 top-0 h-6 w-6 border-r-[3px] border-t-[3px] border-white/90" />
+                  <span className="absolute bottom-0 left-0 h-6 w-6 border-b-[3px] border-l-[3px] border-white/90" />
+                  <span className="absolute bottom-0 right-0 h-6 w-6 border-b-[3px] border-r-[3px] border-white/90" />
+                  <span className="absolute bottom-1 left-1/2 -translate-x-1/2 rounded bg-black/50 px-2 py-0.5 text-[10px] text-white/80">
+                    Center label here
+                  </span>
+                </div>
+              </div>
             </div>
           )}
 
