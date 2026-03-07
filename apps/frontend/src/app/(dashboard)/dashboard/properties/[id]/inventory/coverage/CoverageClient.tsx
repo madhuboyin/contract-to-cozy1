@@ -1,20 +1,28 @@
-// src/app/(dashboard)/dashboard/properties/[id]/inventory/coverage/CoverageClient.tsx
 'use client';
 
 import React from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-// 1. Import the unified API client
-import { api } from '@/lib/api/client'; 
+import { ArrowLeft } from 'lucide-react';
+
+import { api } from '@/lib/api/client';
 import { InventoryItem, InventoryRoom } from '@/types';
-import { SectionHeader } from '../../../../components/SectionHeader';
 import InsuranceQuoteModal from '@/app/(dashboard)/dashboard/components/coverage/InsuranceQuoteModal';
 import WhatsCoveredModal from '@/app/(dashboard)/dashboard/components/coverage/WhatsCoveredModal';
 import InventoryItemDrawer from '@/app/(dashboard)/dashboard/components/inventory/InventoryItemDrawer';
 import { getInventoryItem, listInventoryRooms } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
+import { Button } from '@/components/ui/button';
+import {
+  EmptyStateCard,
+  MobileActionRow,
+  MobileCard,
+  MobileKpiStrip,
+  MobileKpiTile,
+  MobilePageContainer,
+  MobilePageIntro,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 export default function CoverageClient({ propertyId }: { propertyId: string }) {
-  // Use the standard API URL from the client
   const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -47,7 +55,6 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
         setLoading(true);
         setErr(null);
 
-        // Load coverage summary and room options in parallel for inline item editing.
         const [coverageRes, roomsRes] = await Promise.allSettled([
           api.get(`/api/properties/${propertyId}/inventory/coverage-gaps`),
           listInventoryRooms(propertyId),
@@ -72,8 +79,10 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
       }
     })();
 
-    return () => { cancelled = true; };
-  }, [propertyId]); // Removed apiBase dependency as it's now internal to the client
+    return () => {
+      cancelled = true;
+    };
+  }, [propertyId]);
 
   const gaps = data?.gaps || [];
   const counts = data?.counts || {};
@@ -93,123 +102,129 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
   }
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-        <SectionHeader
-          icon="🛡️"
-          title="Coverage"
-          description="Review high-value items missing warranty or insurance coverage."
-        />
+    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
+        <Link href={`/dashboard/properties/${propertyId}/inventory`}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to inventory
+        </Link>
+      </Button>
 
-        {/* Tabs */}
-        <div className="inline-flex items-center p-1 bg-black/5 rounded-xl border border-black/5 shrink-0">
-          <Link
-            href={`/dashboard/properties/${propertyId}/inventory`}
-            className="px-4 py-1.5 text-sm font-medium text-black/50 hover:text-black transition-colors duration-200"
-          >
-            Items
-          </Link>
-          <div className="px-4 py-1.5 text-sm font-medium bg-white text-black shadow-sm rounded-lg border border-black/5">
-            Coverage
-          </div>
+      <MobilePageIntro
+        eyebrow="Inventory"
+        title="Coverage"
+        subtitle="Review high-value items missing warranty or insurance coverage."
+      />
+
+      <MobileActionRow className="rounded-2xl border border-black/10 bg-white p-1.5 w-fit">
+        <Link
+          href={`/dashboard/properties/${propertyId}/inventory`}
+          className="rounded-xl px-3 py-2 text-sm font-medium text-black/60 hover:text-black"
+        >
+          Items
+        </Link>
+        <div className="rounded-xl border border-black/10 bg-black px-3 py-2 text-sm font-medium text-white">
+          Coverage
         </div>
-      </div>
+      </MobileActionRow>
 
       {loading ? (
-        <div className="text-sm opacity-70">Loading…</div>
+        <MobileCard variant="compact" className="text-sm text-slate-600">
+          Loading coverage summary...
+        </MobileCard>
       ) : err ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{err}</div>
       ) : (
         <>
-          {/* Summary */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="rounded-2xl border border-black/10 p-4">
-              <div className="text-xs opacity-70">Total gaps</div>
-              <div className="text-2xl font-semibold mt-1">{counts.total || 0}</div>
-            </div>
-            <div className="rounded-2xl border border-black/10 p-4">
-              <div className="text-xs opacity-70">Uncovered</div>
-              <div className="text-2xl font-semibold mt-1">{counts.NO_COVERAGE || 0}</div>
-            </div>
-            <div className="rounded-2xl border border-black/10 p-4">
-              <div className="text-xs opacity-70">Partial / expired</div>
-              <div className="text-2xl font-semibold mt-1">
-                {(counts.WARRANTY_ONLY || 0) + (counts.INSURANCE_ONLY || 0) + (counts.EXPIRED_WARRANTY || 0) + (counts.EXPIRED_INSURANCE || 0)}
-              </div>
-            </div>
-          </div>
+          <MobileKpiStrip>
+            <MobileKpiTile label="Total gaps" value={counts.total || 0} tone={(counts.total || 0) > 0 ? 'warning' : 'neutral'} />
+            <MobileKpiTile
+              label="Uncovered"
+              value={counts.NO_COVERAGE || 0}
+              tone={(counts.NO_COVERAGE || 0) > 0 ? 'danger' : 'neutral'}
+            />
+            <MobileKpiTile
+              label="Partial / expired"
+              value={
+                (counts.WARRANTY_ONLY || 0) +
+                (counts.INSURANCE_ONLY || 0) +
+                (counts.EXPIRED_WARRANTY || 0) +
+                (counts.EXPIRED_INSURANCE || 0)
+              }
+              tone="warning"
+            />
+          </MobileKpiStrip>
 
-          {/* List */}
-          <div className="rounded-2xl border border-black/10 overflow-hidden">
-            <div className="px-4 py-3 border-b border-black/10 text-sm font-medium">
-              Items needing attention
-            </div>
-
-            {gaps.length === 0 ? (
-              <div className="p-4 text-sm opacity-70">No high-value coverage gaps detected.</div>
-            ) : (
-              <div className="divide-y divide-black/10">
-                {gaps.map((g: any) => (
-                  <div key={g.inventoryItemId} className="p-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium">
-                        {g.itemName}
-                        {g.roomName ? <span className="text-xs opacity-70"> • {g.roomName}</span> : null}
-                      </div>
-                      <div className="text-xs opacity-70 mt-1">
-                        {g.reasons?.join('. ') || 'Coverage gap detected'}
-                      </div>
-                      <div className="text-xs opacity-70 mt-1">
-                        Exposure: ${Math.round((g.exposureCents || 0) / 100)} {g.currency || 'USD'} • {g.gapType}
-                      </div>
-                    </div>
-
-                    {/* Buttons - always horizontal */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Link
-                        href={`/dashboard/properties/${propertyId}/inventory/items/${g.inventoryItemId}/replace-repair`}
-                        className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
-                      >
-                        Replace/Repair
-                      </Link>
-
-                      <Link
-                        href={`/dashboard/properties/${propertyId}/inventory/items/${g.inventoryItemId}/coverage?returnTo=${encodeURIComponent(currentPathWithQuery)}`}
-                        className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
-                      >
-                        Get coverage
-                      </Link>
-
-                      <button
-                        onClick={() => handleViewItem(g.inventoryItemId)}
-                        disabled={openingItemId === g.inventoryItemId}
-                        className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
-                      >
-                        {openingItemId === g.inventoryItemId ? 'Opening…' : 'View'}
-                      </button>
-
-                      <button
-                        onClick={() => { setSelected(g); setQuoteOpen(true); }}
-                        className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
-                      >
-                        Quotes
-                      </button>
-
-                      <button
-                        onClick={() => { setSelected(g); setCoveredOpen(true); }}
-                        className="rounded-xl px-3 py-2 text-sm border border-black/10 hover:bg-black/5"
-                      >
-                        Info
-                      </button>
-                    </div>
+          {gaps.length === 0 ? (
+            <EmptyStateCard
+              title="No high-value coverage gaps"
+              description="All tracked high-value items currently have coverage or no gaps were detected."
+            />
+          ) : (
+            <div className="grid gap-3">
+              {gaps.map((gap: any) => (
+                <MobileCard key={gap.inventoryItemId} variant="compact" className="space-y-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {gap.itemName}
+                      {gap.roomName ? <span className="text-xs font-normal text-slate-500"> • {gap.roomName}</span> : null}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">{gap.reasons?.join('. ') || 'Coverage gap detected'}</p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      Exposure: ${Math.round((gap.exposureCents || 0) / 100)} {gap.currency || 'USD'} • {gap.gapType}
+                    </p>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+
+                  <MobileActionRow>
+                    <Link
+                      href={`/dashboard/properties/${propertyId}/inventory/items/${gap.inventoryItemId}/replace-repair`}
+                      className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
+                    >
+                      Replace/Repair
+                    </Link>
+
+                    <Link
+                      href={`/dashboard/properties/${propertyId}/inventory/items/${gap.inventoryItemId}/coverage?returnTo=${encodeURIComponent(currentPathWithQuery)}`}
+                      className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
+                    >
+                      Get coverage
+                    </Link>
+
+                    <button
+                      onClick={() => handleViewItem(gap.inventoryItemId)}
+                      disabled={openingItemId === gap.inventoryItemId}
+                      className="min-h-[40px] rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5 disabled:opacity-60"
+                    >
+                      {openingItemId === gap.inventoryItemId ? 'Opening...' : 'View'}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setSelected(gap);
+                        setQuoteOpen(true);
+                      }}
+                      className="min-h-[40px] rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
+                    >
+                      Quotes
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setSelected(gap);
+                        setCoveredOpen(true);
+                      }}
+                      className="min-h-[40px] rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
+                    >
+                      Info
+                    </button>
+                  </MobileActionRow>
+                </MobileCard>
+              ))}
+            </div>
+          )}
         </>
       )}
-      {/* Modals */}
+
       <InsuranceQuoteModal
         open={quoteOpen}
         onClose={() => setQuoteOpen(false)}
@@ -228,7 +243,7 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
         }
       />
 
-      {selected?.inventoryItemId && (
+      {selected?.inventoryItemId ? (
         <WhatsCoveredModal
           open={coveredOpen}
           onClose={() => setCoveredOpen(false)}
@@ -236,7 +251,7 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
           propertyId={propertyId}
           itemId={selected.inventoryItemId}
         />
-      )}
+      ) : null}
 
       <InventoryItemDrawer
         open={drawerOpen}
@@ -249,6 +264,6 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
           await refreshCoverageOnly();
         }}
       />
-    </div>
+    </MobilePageContainer>
   );
 }

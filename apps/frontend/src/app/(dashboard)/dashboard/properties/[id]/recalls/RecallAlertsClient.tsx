@@ -1,10 +1,10 @@
-// apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/recalls/RecallAlertsClient.tsx
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams, useSearchParams ,useRouter} from 'next/navigation';
+import Link from 'next/link';
+import { useParams, useSearchParams } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
 
-import { SectionHeader } from '../../../components/SectionHeader';
 import type { RecallMatchDTO, RecallResolutionType } from '@/types/recalls.types';
 import {
   confirmRecallMatch,
@@ -15,10 +15,16 @@ import {
 
 import RecallMatchCard from '@/app/(dashboard)/dashboard/components/recalls/RecallMatchCard';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
+import {
+  EmptyStateCard,
+  MobileActionRow,
+  MobileFilterSurface,
+  MobilePageContainer,
+  MobilePageIntro,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 export default function RecallAlertsClient() {
-  const router = useRouter();
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
 
@@ -34,14 +40,13 @@ export default function RecallAlertsClient() {
     setError(null);
     try {
       const res = await listPropertyRecalls(propertyId);
-      // Add a null check for 'res'
       if (res) {
-        setRows(res.matches || []); 
+        setRows(res.matches || []);
       } else {
         setRows([]);
       }
     } catch (e: any) {
-      console.error("Recall Load Error:", e);
+      console.error('Recall Load Error:', e);
       setError(e?.message || 'Failed to load recall alerts');
     } finally {
       setLoading(false);
@@ -55,88 +60,76 @@ export default function RecallAlertsClient() {
 
   const counts = useMemo(() => {
     const c = { open: 0, confirm: 0, resolved: 0, dismissed: 0 };
-    for (const r of rows) {
-      if (r.status === 'OPEN') c.open++;
-      if (r.status === 'NEEDS_CONFIRMATION') c.confirm++;
-      if (r.status === 'RESOLVED') c.resolved++;
-      if (r.status === 'DISMISSED') c.dismissed++;
+    for (const row of rows) {
+      if (row.status === 'OPEN') c.open++;
+      if (row.status === 'NEEDS_CONFIRMATION') c.confirm++;
+      if (row.status === 'RESOLVED') c.resolved++;
+      if (row.status === 'DISMISSED') c.dismissed++;
     }
     return c;
   }, [rows]);
 
   async function onConfirm(matchId: string) {
-    await confirmRecallMatch(propertyId as string, matchId);
+    await confirmRecallMatch(propertyId, matchId);
     await refresh();
   }
 
   async function onDismiss(matchId: string) {
-    await dismissRecallMatch(propertyId as string, matchId);
+    await dismissRecallMatch(propertyId, matchId);
     await refresh();
   }
 
   async function onResolve(matchId: string, payload: { resolutionType: RecallResolutionType; resolutionNotes?: string }) {
-    await resolveRecallMatch({ propertyId: propertyId as string, matchId, ...payload });
+    await resolveRecallMatch({ propertyId, matchId, ...payload });
     await refresh();
   }
 
   return (
-    <div className="space-y-4">
-      {/* Back Navigation */}
-      {propertyId && router && (
-        <Button 
-          variant="link" 
-          className="p-0 h-auto mb-2 text-sm text-muted-foreground"
-          onClick={() => router.back()}
-        >
-          <ArrowLeft className="h-4 w-4 mr-1" /> Back
-        </Button>
-      )}
-      <SectionHeader
-        icon="⚠️"
+    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
+        <Link href={`/dashboard/properties/${propertyId}`}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to property
+        </Link>
+      </Button>
+
+      <MobilePageIntro
+        eyebrow="Safety"
         title="Recall & Safety Alerts"
-        description="We scan your home inventory for safety recalls and create actions to help you resolve them."
+        subtitle="Inventory-linked recall matches and guided resolution actions."
       />
 
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className="rounded-full border border-slate-200 bg-white px-2 py-1">
-          OPEN: <span className="font-semibold">{counts.open}</span>
-        </span>
-        <span className="rounded-full border border-slate-200 bg-white px-2 py-1">
-          NEEDS CONFIRMATION: <span className="font-semibold">{counts.confirm}</span>
-        </span>
-        <span className="rounded-full border border-slate-200 bg-white px-2 py-1">
-          RESOLVED: <span className="font-semibold">{counts.resolved}</span>
-        </span>
-        <span className="rounded-full border border-slate-200 bg-white px-2 py-1">
-          DISMISSED: <span className="font-semibold">{counts.dismissed}</span>
-        </span>
+      <MobileFilterSurface>
+        <MobileActionRow>
+          <StatusChip tone={counts.open > 0 ? 'danger' : 'good'}>Open: {counts.open}</StatusChip>
+          <StatusChip tone={counts.confirm > 0 ? 'elevated' : 'info'}>Needs confirmation: {counts.confirm}</StatusChip>
+          <StatusChip tone="good">Resolved: {counts.resolved}</StatusChip>
+          <StatusChip tone="info">Dismissed: {counts.dismissed}</StatusChip>
+        </MobileActionRow>
 
-        <button
-          className="ml-auto rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs hover:bg-slate-50 disabled:opacity-60"
-          onClick={refresh}
-          disabled={loading}
-        >
-          Refresh
-        </button>
-      </div>
+        <Button variant="outline" className="min-h-[44px]" onClick={refresh} disabled={loading}>
+          {loading ? 'Refreshing...' : 'Refresh'}
+        </Button>
+      </MobileFilterSurface>
 
       {error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
       ) : null}
 
       {loading ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">Loading…</div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">Loading...</div>
       ) : rows.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-          No recall alerts found for this property.
-        </div>
+        <EmptyStateCard
+          title="No recall alerts"
+          description="No open recall matches were found for this property inventory."
+        />
       ) : (
         <div className="space-y-3">
-          {rows.map((m) => (
+          {rows.map((match) => (
             <RecallMatchCard
-              key={m.id}
-              match={m}
-              highlighted={highlightId === m.id}
+              key={match.id}
+              match={match}
+              highlighted={highlightId === match.id}
               onConfirm={onConfirm}
               onDismiss={onDismiss}
               onResolve={onResolve}
@@ -144,6 +137,6 @@ export default function RecallAlertsClient() {
           ))}
         </div>
       )}
-    </div>
+    </MobilePageContainer>
   );
 }

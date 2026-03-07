@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ChevronDown, History, Plus } from 'lucide-react';
+import { ArrowLeft, ChevronDown, History, Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 import { useCelebration } from '@/hooks/useCelebration';
@@ -21,6 +21,13 @@ import RoomIntelligenceCard from '@/components/rooms/RoomIntelligenceCard';
 import RoomPageHeader from '@/components/rooms/RoomPageHeader';
 import ItemCard from '@/components/shared/ItemCard';
 import { humanizeLabel } from '@/lib/utils/string';
+import {
+  MobileActionRow,
+  MobileFilterSurface,
+  MobilePageContainer,
+  MobilePageIntro,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 import {
   getDraftsCsvExportUrl,
@@ -215,6 +222,13 @@ export default function RoomShowcaseClient() {
     return [score];
   }, [scanSessions, score]);
 
+  const backHref = fromStatusBoard
+    ? `/dashboard/properties/${propertyId}/status-board`
+    : `/dashboard/properties/${propertyId}/rooms`;
+  const itemsHref = withStatusBoardParam(`/dashboard/properties/${propertyId}/inventory?roomId=${roomId}`);
+  const editHref = withStatusBoardParam(`/dashboard/properties/${propertyId}/inventory/rooms/${roomId}`);
+  const checklistHref = withStatusBoardParam(`/dashboard/properties/${propertyId}/inventory/rooms/${roomId}?tab=CHECKLIST`);
+
   function scrollToItems() {
     itemsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
@@ -272,8 +286,57 @@ export default function RoomShowcaseClient() {
     <>
       <MilestoneCelebration type={celebration.type} isOpen={celebration.isOpen} onClose={dismiss} />
 
-      <div className="space-y-4 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-6">
-        <motion.div variants={sectionVariants} initial="hidden" animate="visible" custom={0}>
+      <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
+        <div className="space-y-3 md:hidden">
+          <button
+            type="button"
+            onClick={() => router.push(backHref)}
+            className="inline-flex min-h-[44px] items-center text-sm text-muted-foreground"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            {fromStatusBoard ? 'Back to Status Board' : 'Back to Rooms'}
+          </button>
+
+          <MobilePageIntro
+            eyebrow="Room"
+            title={room?.name || insights?.room?.name || 'Room'}
+            subtitle={`${itemCount} items • ${gapCount} gaps • ${docCount} docs`}
+          />
+
+          <MobileFilterSurface>
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusChip tone={score >= 80 ? 'good' : score >= 60 ? 'elevated' : 'danger'}>
+                Health {score}
+              </StatusChip>
+              <StatusChip tone="info">Value-linked items: {valueCount}</StatusChip>
+            </div>
+            <MobileActionRow>
+              <button
+                type="button"
+                onClick={() => router.push(itemsHref)}
+                className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-slate-200 px-3 text-sm"
+              >
+                Items
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push(editHref)}
+                className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-slate-200 px-3 text-sm"
+              >
+                Edit room
+              </button>
+              <button
+                type="button"
+                onClick={() => setScanOpen(true)}
+                className="inline-flex min-h-[40px] items-center justify-center rounded-xl bg-teal-600 px-3 text-sm font-semibold text-white"
+              >
+                AI Scan
+              </button>
+            </MobileActionRow>
+          </MobileFilterSurface>
+        </div>
+
+        <motion.div variants={sectionVariants} initial="hidden" animate="visible" custom={0} className="hidden md:block">
           <RoomPageHeader
             roomName={room?.name || insights?.room?.name || 'Room'}
             roomType={template}
@@ -282,15 +345,9 @@ export default function RoomShowcaseClient() {
             gapCount={gapCount}
             docCount={docCount}
             backLabel={fromStatusBoard ? 'Back to Status Board' : 'Back'}
-            onBack={() =>
-              router.push(
-                fromStatusBoard
-                  ? `/dashboard/properties/${propertyId}/status-board`
-                  : `/dashboard/properties/${propertyId}/rooms`,
-              )
-            }
-            onItems={() => router.push(withStatusBoardParam(`/dashboard/properties/${propertyId}/inventory?roomId=${roomId}`))}
-            onEdit={() => router.push(withStatusBoardParam(`/dashboard/properties/${propertyId}/inventory/rooms/${roomId}`))}
+            onBack={() => router.push(backHref)}
+            onItems={() => router.push(itemsHref)}
+            onEdit={() => router.push(editHref)}
             onScan={() => setScanOpen(true)}
           />
         </motion.div>
@@ -320,12 +377,8 @@ export default function RoomShowcaseClient() {
                 tips={improvements}
                 onTipAction={handleTipAction}
                 onScrollToItems={scrollToItems}
-                onOpenAddDocument={() =>
-                  router.push(withStatusBoardParam(`/dashboard/properties/${propertyId}/inventory?roomId=${roomId}`))
-                }
-                onScrollToGaps={() =>
-                  router.push(withStatusBoardParam(`/dashboard/properties/${propertyId}/inventory?roomId=${roomId}`))
-                }
+                onOpenAddDocument={() => router.push(itemsHref)}
+                onScrollToGaps={() => router.push(itemsHref)}
               />
             </motion.div>
 
@@ -344,9 +397,7 @@ export default function RoomShowcaseClient() {
                 </div>
                 <button
                   type="button"
-                  onClick={() =>
-                    router.push(withStatusBoardParam(`/dashboard/properties/${propertyId}/inventory?roomId=${roomId}`))
-                  }
+                  onClick={() => router.push(itemsHref)}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-teal-600 px-3 py-1.5 text-sm font-medium text-teal-600 transition-colors hover:bg-teal-50"
                 >
                   <Plus className="h-3.5 w-3.5" />
@@ -358,9 +409,7 @@ export default function RoomShowcaseClient() {
                 {items.length === 0 ? (
                   <button
                     type="button"
-                    onClick={() =>
-                      router.push(withStatusBoardParam(`/dashboard/properties/${propertyId}/inventory?roomId=${roomId}`))
-                    }
+                    onClick={() => router.push(itemsHref)}
                     className="col-span-full rounded-xl border-2 border-dashed border-gray-200 p-6 text-left text-sm text-gray-500 transition-colors hover:border-teal-300 hover:bg-teal-50/30"
                   >
                     No items assigned to this room yet. Add your first item to unlock room insights.
@@ -383,12 +432,8 @@ export default function RoomShowcaseClient() {
             <motion.div variants={sectionVariants} initial="hidden" animate="visible" custom={3}>
               <QuickWins
                 quickWins={quickWins}
-                onAddItem={() =>
-                  router.push(withStatusBoardParam(`/dashboard/properties/${propertyId}/inventory?roomId=${roomId}`))
-                }
-                onOpenChecklist={() =>
-                  router.push(withStatusBoardParam(`/dashboard/properties/${propertyId}/inventory/rooms/${roomId}?tab=CHECKLIST`))
-                }
+                onAddItem={() => router.push(itemsHref)}
+                onOpenChecklist={() => router.push(checklistHref)}
               />
             </motion.div>
 
@@ -508,12 +553,8 @@ export default function RoomShowcaseClient() {
                 gapCount={gapCount}
                 docCount={docCount}
                 valueCount={valueCount}
-                onEditProfile={() =>
-                  router.push(withStatusBoardParam(`/dashboard/properties/${propertyId}/inventory/rooms/${roomId}`))
-                }
-                onManageItems={() =>
-                  router.push(withStatusBoardParam(`/dashboard/properties/${propertyId}/inventory?roomId=${roomId}`))
-                }
+                onEditProfile={() => router.push(editHref)}
+                onManageItems={() => router.push(itemsHref)}
               />
 
               {loading ? <p className="mt-2 text-xs text-gray-500">Updating room data...</p> : null}
@@ -533,7 +574,7 @@ export default function RoomShowcaseClient() {
           }}
           existingItems={items}
         />
-      </div>
+      </MobilePageContainer>
     </>
   );
 }

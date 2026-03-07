@@ -1,13 +1,22 @@
-// apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/incidents/IncidentsClient.tsx
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
 
-import { SectionHeader } from '../../../components/SectionHeader';
 import { listIncidents } from './incidentsApi';
 import type { IncidentDTO, IncidentStatus } from '@/types/incidents.types';
 import IncidentCard from '@/app/(dashboard)/dashboard/components/incidents/IncidentCard';
+import { Button } from '@/components/ui/button';
+import {
+  EmptyStateCard,
+  MobileActionRow,
+  MobileFilterSurface,
+  MobilePageContainer,
+  MobilePageIntro,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 const STATUS_OPTIONS: Array<{ label: string; value: IncidentStatus | 'ALL' }> = [
   { label: 'All', value: 'ALL' },
@@ -28,8 +37,6 @@ export default function IncidentsClient() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // ✅ Keep filters consistent:
-  // - If user selects "Suppressed", we must include suppressed or list will appear empty.
   useEffect(() => {
     if (status === 'SUPPRESSED' && !includeSuppressed) {
       setIncludeSuppressed(true);
@@ -47,12 +54,8 @@ export default function IncidentsClient() {
         includeSuppressed,
         limit: 30,
       });
-      
-      // ✅ FIX: Added optional chaining and nullish coalescing to ensure we never 
-      // set items to anything other than an array, even if the API structure changes.
       setItems(res?.items ?? []);
     } catch (e: unknown) {
-      // ✅ Better error extraction for Axios/API responses
       const errorMessage = e instanceof Error ? e.message : 'Failed to load incidents';
       setErr(errorMessage);
     } finally {
@@ -67,70 +70,73 @@ export default function IncidentsClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, status, includeSuppressed]);
 
-  const headerRight = useMemo(() => {
-    return (
-      <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
-        <select
-          className="min-h-[44px] w-full rounded-lg border bg-white px-3 py-2 text-sm sm:w-auto"
-          value={status}
-          onChange={(e) => setStatus(e.target.value as any)}
-        >
-          {STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-
-        <label className="flex min-h-[44px] w-full items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm sm:w-auto">
-          <input
-            type="checkbox"
-            className="h-4 w-4 shrink-0"
-            checked={includeSuppressed}
-            onChange={(e) => setIncludeSuppressed(e.target.checked)}
-          />
-          Include suppressed
-        </label>
-
-        <button
-          className="min-h-[44px] w-full rounded-lg border bg-white px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50 sm:w-auto"
-          onClick={load}
-          disabled={loading}
-        >
-          {loading ? 'Refreshing...' : 'Refresh'}
-        </button>
-      </div>
-    );
-  }, [status, includeSuppressed, loading]);
+  const openCount = useMemo(() => items.filter((item) => item.status === 'ACTIVE').length, [items]);
 
   return (
-    <div className="space-y-4">
-      <SectionHeader
-        icon="⚠️"
+    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
+        <Link href={`/dashboard/properties/${propertyId}`}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to property
+        </Link>
+      </Button>
+
+      <MobilePageIntro
+        eyebrow="Incidents"
         title="Incidents"
-        // ✅ FIX: Added optional chaining here to prevent crash if items is momentarily null
-        description={items?.length ? `${items.length} shown` : undefined}
-        action={headerRight}
+        subtitle="Track active risk signals, actions, and resolution status."
       />
+
+      <MobileFilterSurface>
+        <MobileActionRow>
+          <select
+            className="min-h-[44px] flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+            value={status}
+            onChange={(e) => setStatus(e.target.value as IncidentStatus | 'ALL')}
+          >
+            {STATUS_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+
+          <label className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm">
+            <input
+              type="checkbox"
+              className="h-4 w-4 shrink-0"
+              checked={includeSuppressed}
+              onChange={(e) => setIncludeSuppressed(e.target.checked)}
+            />
+            Include suppressed
+          </label>
+
+          <Button variant="outline" className="min-h-[44px]" onClick={load} disabled={loading}>
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </Button>
+        </MobileActionRow>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusChip tone="info">{items.length} shown</StatusChip>
+          <StatusChip tone={openCount > 0 ? 'elevated' : 'good'}>{openCount} active</StatusChip>
+        </div>
+      </MobileFilterSurface>
 
       {err ? (
         <div className="rounded-xl border bg-red-50 p-3 text-sm text-red-700">{err}</div>
       ) : null}
 
       {loading ? (
-        <div className="rounded-xl border bg-white p-4 text-sm text-slate-600">Loading…</div>
-      ) : items && items.length > 0 ? (
+        <div className="rounded-xl border bg-white p-4 text-sm text-slate-600">Loading...</div>
+      ) : items.length > 0 ? (
         <div className="grid grid-cols-1 gap-3">
-          {items.map((i) => (
-            // ✅ Important: pass propertyId so IncidentCard can link to detail route
-            <IncidentCard key={i.id} incident={i} propertyId={propertyId} />
+          {items.map((incident) => (
+            <IncidentCard key={incident.id} incident={incident} propertyId={propertyId} />
           ))}
         </div>
       ) : (
-        <div className="rounded-xl border bg-white p-4 text-sm text-slate-600">
-          No incidents found.
-        </div>
+        <EmptyStateCard title="No incidents found" description="Try adjusting status filters or include suppressed items." />
       )}
-    </div>
+    </MobilePageContainer>
   );
 }

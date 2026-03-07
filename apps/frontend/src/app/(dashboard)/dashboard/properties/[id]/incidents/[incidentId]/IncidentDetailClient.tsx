@@ -1,12 +1,11 @@
-// apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/incidents/[incidentId]/IncidentDetailClient.tsx
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
 
-import { SectionHeader } from '../../../../components/SectionHeader';
-import type { IncidentDTO, IncidentEventDTO, GetIncidentDetailResponse } from '@/types/incidents.types';
+import type { GetIncidentDetailResponse, IncidentDTO, IncidentEventDTO } from '@/types/incidents.types';
 import {
   getIncident,
   listIncidentEvents,
@@ -21,7 +20,16 @@ import IncidentEventsPanel from '@/app/(dashboard)/dashboard/components/incident
 import IncidentSeverityExplainPanel from '@/app/(dashboard)/dashboard/components/incidents/IncidentSeverityExplainPanel';
 import IncidentAckControls from '@/app/(dashboard)/dashboard/components/incidents/IncidentAckControls';
 import IncidentDecisionTracePanel from '@/app/(dashboard)/dashboard/components/incidents/IncidentDecisionTracePanel';
-
+import { Button } from '@/components/ui/button';
+import {
+  EmptyStateCard,
+  MobileActionRow,
+  MobileCard,
+  MobileFilterSurface,
+  MobilePageContainer,
+  MobilePageIntro,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 export default function IncidentDetailClient() {
   const params = useParams<{ id: string; incidentId: string }>();
@@ -40,17 +48,15 @@ export default function IncidentDetailClient() {
     setErr(null);
     setLoading(true);
     try {
-      const [detail, e] = await Promise.all([
+      const [detail, eventData] = await Promise.all([
         getIncident({ propertyId, incidentId }),
         listIncidentEvents({ propertyId, incidentId, limit: 50 }),
       ]);
 
-      // getIncident now returns { incident, decisionTrace, latestActionProposedEvent }
-      const d = detail as GetIncidentDetailResponse;
-
-      setIncident(d.incident);
-      setDecisionTrace(d.decisionTrace ?? null);
-      setEvents(e.items ?? []);
+      const response = detail as GetIncidentDetailResponse;
+      setIncident(response.incident);
+      setDecisionTrace(response.decisionTrace ?? null);
+      setEvents(eventData.items ?? []);
     } catch (ex: any) {
       setErr(ex?.message ?? 'Failed to load incident');
     } finally {
@@ -63,138 +69,122 @@ export default function IncidentDetailClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, incidentId]);
 
-  const right = useMemo(() => {
-    return (
-      <div className="flex flex-wrap items-center gap-2">
-        <Link
-          className="rounded-lg border bg-white px-3 py-2 text-sm hover:bg-slate-50"
-          href={`/dashboard/properties/${propertyId}?tab=incidents`}
-        >
-          ← Back
-        </Link>
-
-        <button
-          className="rounded-lg border bg-white px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
-          disabled={loading || busy}
-          onClick={async () => {
-            setBusy(true);
-            try {
-              // ✅ New combined endpoint
-              await reevaluateIncidentNow({ propertyId, incidentId });
-              await load();
-            } finally {
-              setBusy(false);
-            }
-          }}
-          title="Evaluate + orchestrate (recommended)"
-        >
-          {busy ? 'Re-evaluating…' : 'Re-evaluate'}
-        </button>
-
-        <button
-          className="rounded-lg border bg-white px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
-          disabled={loading || busy}
-          onClick={async () => {
-            setBusy(true);
-            try {
-              // Optional debugging: orchestration only
-              await orchestrateIncidentNow({ propertyId, incidentId });
-              await load();
-            } finally {
-              setBusy(false);
-            }
-          }}
-          title="Orchestrate only (debug)"
-        >
-          Re-orchestrate
-        </button>
-
-        <button
-          className="rounded-lg border bg-white px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
-          disabled={loading || busy}
-          onClick={load}
-        >
-          Refresh
-        </button>
-      </div>
-    );
-  }, [propertyId, incidentId, loading, busy]);
-
   if (loading && !incident) {
     return (
-      <div className="space-y-4">
-        <SectionHeader icon="⚠️" title="Incident" action={right} />
-        <div className="rounded-xl border bg-white p-4 text-sm text-slate-600">Loading…</div>
-      </div>
+      <MobilePageContainer className="py-6">
+        <MobileCard variant="compact" className="text-sm text-slate-600">
+          Loading incident...
+        </MobileCard>
+      </MobilePageContainer>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <SectionHeader icon="⚠️" title="Incident" action={right} />
+    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
+        <Link href={`/dashboard/properties/${propertyId}?tab=incidents`}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to incidents
+        </Link>
+      </Button>
 
-      {err ? (
-        <div className="rounded-xl border bg-red-50 p-3 text-sm text-red-700">{err}</div>
-      ) : null}
+      <MobilePageIntro
+        eyebrow="Incident"
+        title={incident?.title || 'Incident'}
+        subtitle={incident?.summary || 'View signal details, severity rationale, and recommended actions.'}
+      />
+
+      <MobileFilterSurface>
+        <MobileActionRow>
+          <Button
+            variant="outline"
+            className="min-h-[44px]"
+            disabled={loading || busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await reevaluateIncidentNow({ propertyId, incidentId });
+                await load();
+              } finally {
+                setBusy(false);
+              }
+            }}
+            title="Evaluate + orchestrate (recommended)"
+          >
+            {busy ? 'Re-evaluating...' : 'Re-evaluate'}
+          </Button>
+
+          <Button
+            variant="outline"
+            className="min-h-[44px]"
+            disabled={loading || busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await orchestrateIncidentNow({ propertyId, incidentId });
+                await load();
+              } finally {
+                setBusy(false);
+              }
+            }}
+            title="Orchestrate only (debug)"
+          >
+            Re-orchestrate
+          </Button>
+
+          <Button variant="outline" className="min-h-[44px]" disabled={loading || busy} onClick={load}>
+            Refresh
+          </Button>
+        </MobileActionRow>
+      </MobileFilterSurface>
+
+      {err ? <div className="rounded-xl border bg-red-50 p-3 text-sm text-red-700">{err}</div> : null}
 
       {incident ? (
         <>
-          <div className="rounded-xl border bg-white p-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <h2 className="text-lg font-semibold">{incident.title}</h2>
-                {incident.summary ? (
-                  <p className="mt-1 text-sm text-slate-700">{incident.summary}</p>
-                ) : null}
-
-                <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
-                  <span className="rounded-md bg-slate-50 px-2 py-1">Type: {incident.typeKey}</span>
-                  {incident.category ? (
-                    <span className="rounded-md bg-slate-50 px-2 py-1">Cat: {incident.category}</span>
-                  ) : null}
-                  <span className="rounded-md bg-slate-50 px-2 py-1">Source: {incident.sourceType}</span>
-                  {incident.severityScore != null ? (
-                    <span className="rounded-md bg-slate-50 px-2 py-1">Score: {incident.severityScore}</span>
-                  ) : null}
-                  {incident.confidence != null ? (
-                    <span className="rounded-md bg-slate-50 px-2 py-1">
-                      Conf: {Number(incident.confidence).toFixed(2)}
-                    </span>
-                  ) : null}
-                </div>
+          <MobileCard>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <IncidentSeverityBadge severity={incident.severity} />
+                <IncidentStatusBadge status={incident.status} />
+                <StatusChip tone="info">{incident.typeKey}</StatusChip>
+                {incident.category ? <StatusChip tone="elevated">{incident.category}</StatusChip> : null}
               </div>
+
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                <span className="rounded-md bg-slate-50 px-2 py-1">Source: {incident.sourceType}</span>
+                {incident.severityScore != null ? (
+                  <span className="rounded-md bg-slate-50 px-2 py-1">Score: {incident.severityScore}</span>
+                ) : null}
+                {incident.confidence != null ? (
+                  <span className="rounded-md bg-slate-50 px-2 py-1">Conf: {Number(incident.confidence).toFixed(2)}</span>
+                ) : null}
+              </div>
+
               <IncidentAckControls
                 propertyId={propertyId}
                 incidentId={incident.id}
                 disabled={loading || busy}
                 onDone={load}
               />
-              <div className="flex items-center gap-2">
-                <IncidentSeverityBadge severity={incident.severity} />
-                <IncidentStatusBadge status={incident.status} />
-              </div>
-            </div>
 
-            <div className="mt-4">
               <IncidentSeverityExplainPanel incident={incident} decisionTrace={decisionTrace} />
-            </div>
 
-            {incident.details ? (
-              <div className="mt-4 rounded-lg border bg-white p-3">
-                <p className="text-xs font-semibold text-slate-700">Details</p>
-                <pre className="mt-2 overflow-auto text-xs text-slate-700">
-                  {JSON.stringify(incident.details, null, 2)}
-                </pre>
-              </div>
-            ) : null}
-          </div>
+              {incident.details ? (
+                <div className="rounded-lg border bg-white p-3">
+                  <p className="text-xs font-semibold text-slate-700">Details</p>
+                  <pre className="mt-2 overflow-auto text-xs text-slate-700">{JSON.stringify(incident.details, null, 2)}</pre>
+                </div>
+              ) : null}
+            </div>
+          </MobileCard>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <IncidentActionsPanel
               propertyId={propertyId}
               incidentId={incident.id}
               actions={incident.actions ?? []}
-              decisionTrace={decisionTrace} // ✅ pass it
+              decisionTrace={decisionTrace}
               onExecuted={load}
             />
             <div className="space-y-4">
@@ -203,33 +193,26 @@ export default function IncidentDetailClient() {
             </div>
           </div>
 
-
           {!!incident.signals?.length && (
-            <div className="rounded-xl border bg-white p-4">
+            <MobileCard>
               <h3 className="text-sm font-semibold">Signals</h3>
               <div className="mt-3 space-y-2">
-                {incident.signals.map((s) => (
-                  <div key={s.id} className="rounded-lg border p-3">
+                {incident.signals.map((signal) => (
+                  <div key={signal.id} className="rounded-lg border p-3">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-slate-800">{s.signalType}</p>
-                      <p className="text-xs text-slate-500">
-                        {new Date(s.observedAt).toLocaleString()}
-                      </p>
+                      <p className="text-xs font-semibold text-slate-800">{signal.signalType}</p>
+                      <p className="text-xs text-slate-500">{new Date(signal.observedAt).toLocaleString()}</p>
                     </div>
-                    <pre className="mt-2 overflow-auto text-xs text-slate-700">
-                      {JSON.stringify(s.payload, null, 2)}
-                    </pre>
+                    <pre className="mt-2 overflow-auto text-xs text-slate-700">{JSON.stringify(signal.payload, null, 2)}</pre>
                   </div>
                 ))}
               </div>
-            </div>
+            </MobileCard>
           )}
         </>
       ) : (
-        <div className="rounded-xl border bg-white p-4 text-sm text-slate-600">
-          Incident not found.
-        </div>
+        <EmptyStateCard title="Incident not found" description="This incident is unavailable for the selected property." />
       )}
-    </div>
+    </MobilePageContainer>
   );
 }

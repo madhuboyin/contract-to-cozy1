@@ -1,25 +1,41 @@
 'use client';
 
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { SectionHeader } from '@/app/(dashboard)/dashboard/components/SectionHeader';
+import { ArrowLeft } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import HomeSavingsCheckPanel from '@/components/ai/HomeSavingsCheckPanel';
+import { Button } from '@/components/ui/button';
+import {
+  MobileFilterSurface,
+  MobilePageContainer,
+  MobilePageIntro,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 export default function HomeSavingsToolClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
 
   return (
-    <div className="p-4 sm:p-6 space-y-4">
-      <SectionHeader
-        icon="💸"
+    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
+      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
+        <Link href={`/dashboard/properties/${propertyId}`}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to property
+        </Link>
+      </Button>
+
+      <MobilePageIntro
+        eyebrow="Home Tool"
         title="Home Savings Check"
-        description="See where you may be overpaying and compare simple savings opportunities."
+        subtitle="See where you may be overpaying and compare simple savings opportunities."
       />
 
-      <HomeToolsRail propertyId={propertyId} />
+      <MobileFilterSurface>
+        <HomeToolsRail propertyId={propertyId} />
+      </MobileFilterSurface>
 
       <HomeSavingsCheckPanel propertyId={propertyId} />
-    </div>
+    </MobilePageContainer>
   );
 }

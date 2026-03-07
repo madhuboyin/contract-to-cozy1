@@ -2,8 +2,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
+  ArrowLeft,
   Calendar,
   ChevronDown,
   ChevronRight,
@@ -17,13 +19,19 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
-import { SectionHeader } from '@/app/(dashboard)/dashboard/components/SectionHeader';
 import {
   getLatestTimeline,
   runTimeline,
   TimelineAnalysisDTO,
   TimelineItemDTO,
 } from './capitalTimelineApi';
+import { Button } from '@/components/ui/button';
+import {
+  MobileActionRow,
+  MobileFilterSurface,
+  MobilePageContainer,
+  MobilePageIntro,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function money(cents: number | null | undefined) {
@@ -184,45 +192,49 @@ export default function CapitalTimelineClient() {
   const highPriorityCount = items.filter((i) => i.priority === 'HIGH').length;
 
   return (
-    <div className="space-y-5 p-4 sm:p-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
-      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[radial-gradient(circle_at_10%_10%,rgba(251,191,36,0.14),transparent_40%),radial-gradient(circle_at_88%_14%,rgba(20,184,166,0.14),transparent_40%),linear-gradient(180deg,rgba(255,255,255,0.9),rgba(248,250,252,0.8))] p-4 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.6)] dark:border-slate-700/70 dark:bg-[radial-gradient(circle_at_10%_10%,rgba(251,191,36,0.12),transparent_40%),radial-gradient(circle_at_88%_14%,rgba(20,184,166,0.12),transparent_40%),linear-gradient(180deg,rgba(2,6,23,0.9),rgba(2,6,23,0.78))]">
-        <div className="rounded-2xl border border-white/70 bg-white/60 p-4 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45">
-          <SectionHeader
-            icon="🗓️"
-            title="Capital Timeline"
-            description={`Predicted major expenses for your home over the next ${horizonYears} years`}
-          />
-          <div className="mt-4">
-            <HomeToolsRail propertyId={propertyId} />
-          </div>
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/75 p-1 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55">
-              {([5, 10] as const).map((h) => (
-                <button
-                  key={h}
-                  onClick={() => handleHorizonChange(h)}
-                  className={`inline-flex min-h-[36px] items-center rounded-full px-3 text-sm font-medium transition-all ${
-                    horizonYears === h
-                      ? 'border border-slate-900 bg-slate-900 text-white shadow-sm dark:border-white dark:bg-white dark:text-slate-900'
-                      : 'border border-transparent text-slate-600 hover:border-slate-300/70 hover:bg-white/80 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900/60'
-                  }`}
-                >
-                  {h}yr
-                </button>
-              ))}
-            </div>
+    <MobilePageContainer className="space-y-5 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
+      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
+        <Link href={`/dashboard/properties/${propertyId}`}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to property
+        </Link>
+      </Button>
 
-            <button
-              onClick={() => doRun(horizonYears)}
-              disabled={running}
-              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-white disabled:opacity-50 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200 dark:hover:bg-slate-900"
-            >
-              <RefreshCw className={`h-4 w-4 ${running ? 'animate-spin' : ''}`} />
-              Re-analyze
-            </button>
+      <MobilePageIntro
+        eyebrow="Home Tool"
+        title="Capital Timeline"
+        subtitle={`Predicted major expenses over the next ${horizonYears} years.`}
+      />
+
+      <MobileFilterSurface>
+        <HomeToolsRail propertyId={propertyId} />
+        <MobileActionRow className="justify-between">
+          <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/75 p-1 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55">
+            {([5, 10] as const).map((h) => (
+              <button
+                key={h}
+                onClick={() => handleHorizonChange(h)}
+                className={`inline-flex min-h-[36px] items-center rounded-full px-3 text-sm font-medium transition-all ${
+                  horizonYears === h
+                    ? 'border border-slate-900 bg-slate-900 text-white shadow-sm dark:border-white dark:bg-white dark:text-slate-900'
+                    : 'border border-transparent text-slate-600 hover:border-slate-300/70 hover:bg-white/80 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900/60'
+                }`}
+              >
+                {h}yr
+              </button>
+            ))}
           </div>
-        </div>
-      </div>
+
+          <button
+            onClick={() => doRun(horizonYears)}
+            disabled={running}
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-white disabled:opacity-50 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200 dark:hover:bg-slate-900"
+          >
+            <RefreshCw className={`h-4 w-4 ${running ? 'animate-spin' : ''}`} />
+            Re-analyze
+          </button>
+        </MobileActionRow>
+      </MobileFilterSurface>
 
       {/* Loading */}
       {(loading || running) && !data && (
@@ -379,6 +391,6 @@ export default function CapitalTimelineClient() {
           )}
         </>
       )}
-    </div>
+    </MobilePageContainer>
   );
 }

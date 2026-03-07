@@ -2,11 +2,18 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { SectionHeader } from '@/app/(dashboard)/dashboard/components/SectionHeader';
+import { ArrowLeft } from 'lucide-react';
 import { getCostExplainer, CostExplainerDTO } from './costExplainerApi';
 import MultiLineChart from '../insurance-trend/MultiLineChart';
 import HomeToolsRail from '../../components/HomeToolsRail';
+import { Button } from '@/components/ui/button';
+import {
+  MobileFilterSurface,
+  MobilePageContainer,
+  MobilePageIntro,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 function money(n: number | null | undefined, currency = 'USD') {
   if (n === null || n === undefined) return '—';
   return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(n);
@@ -97,19 +104,23 @@ export default function CostExplainerClient() {
   }, [data, years]);
 
   return (
-    <div className="space-y-5 p-4 sm:p-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
-      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[radial-gradient(circle_at_10%_10%,rgba(251,191,36,0.14),transparent_40%),radial-gradient(circle_at_88%_14%,rgba(20,184,166,0.14),transparent_40%),linear-gradient(180deg,rgba(255,255,255,0.9),rgba(248,250,252,0.8))] p-4 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.6)] dark:border-slate-700/70 dark:bg-[radial-gradient(circle_at_10%_10%,rgba(251,191,36,0.12),transparent_40%),radial-gradient(circle_at_88%_14%,rgba(20,184,166,0.12),transparent_40%),linear-gradient(180deg,rgba(2,6,23,0.9),rgba(2,6,23,0.78))]">
-        <div className="rounded-2xl border border-white/70 bg-white/60 p-4 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45">
-          <SectionHeader
-            icon="🧘"
-            title="Why Is My Home Cost Increasing?"
-            description="Plain-English breakdown of what’s driving higher taxes, insurance, and maintenance — tied to your state + ZIP."
-          />
-          <div className="mt-4">
-            <HomeToolsRail propertyId={propertyId} />
-          </div>
-        </div>
-      </div>
+    <MobilePageContainer className="space-y-5 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
+      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
+        <Link href={`/dashboard/properties/${propertyId}`}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to property
+        </Link>
+      </Button>
+
+      <MobilePageIntro
+        eyebrow="Home Tool"
+        title="Why Is My Home Cost Increasing?"
+        subtitle="Plain-English breakdown of higher taxes, insurance, and maintenance drivers."
+      />
+
+      <MobileFilterSurface>
+        <HomeToolsRail propertyId={propertyId} />
+      </MobileFilterSurface>
       {/* Top block */}
       <div className="rounded-[26px] border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/70 to-teal-50/45 p-4 sm:p-5 shadow-[0_20px_42px_-30px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/60 dark:via-slate-900/50 dark:to-teal-950/20">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -248,6 +259,6 @@ export default function CostExplainerClient() {
           </div>
         </div>
       </div>
-    </div>
+    </MobilePageContainer>
   );
 }

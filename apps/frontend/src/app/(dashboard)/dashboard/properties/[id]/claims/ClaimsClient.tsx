@@ -1,22 +1,29 @@
-// apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/claims/ClaimsClient.tsx
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
+import { ArrowLeft, Plus } from 'lucide-react';
 
-import { SectionHeader } from '../../../components/SectionHeader';
-import { ClaimDTO, listClaims } from './claimsApi';
+import { ClaimDTO, getClaimsSummary, listClaims } from './claimsApi';
 import ClaimStatusBadge from '@/app/(dashboard)/dashboard/components/claims/ClaimStatusBadge';
 import ClaimCreateModal from '@/app/(dashboard)/dashboard/components/claims/ClaimCreateModal';
-import { getClaimsSummary } from './claimsApi';
-import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  EmptyStateCard,
+  MobileActionRow,
+  MobileCard,
+  MobileFilterSurface,
+  MobileKpiStrip,
+  MobileKpiTile,
+  MobilePageContainer,
+  MobilePageIntro,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 export default function ClaimsClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
-  const router = useRouter();
   const [claims, setClaims] = useState<ClaimDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState('');
@@ -28,7 +35,7 @@ export default function ClaimsClient() {
     try {
       const claimsData = await listClaims(propertyId);
       setClaims(claimsData || []);
-  
+
       try {
         const summaryData = await getClaimsSummary(propertyId);
         setSummary(summaryData || null);
@@ -38,7 +45,7 @@ export default function ClaimsClient() {
     } finally {
       setLoading(false);
     }
-  }  
+  }
 
   useEffect(() => {
     refresh();
@@ -48,180 +55,144 @@ export default function ClaimsClient() {
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
     if (!query) return claims;
-  
+
     return claims.filter((c) => {
-      // FIX: Safely handle null values from the API response
-      const searchFields = [
-        c.title,
-        c.status,
-        c.type,
-        c.providerName,
-        c.claimNumber,
-        c.description
-      ];
-  
-      return searchFields.some(field => 
-        (field || '').toLowerCase().includes(query)
-      );
+      const searchFields = [c.title, c.status, c.type, c.providerName, c.claimNumber, c.description];
+      return searchFields.some((field) => (field || '').toLowerCase().includes(query));
     });
   }, [claims, q]);
 
   return (
-    <div className="space-y-4">
-      {/* Add Back Link */}
-      <Button 
-          variant="link" 
-          className="p-0 h-auto mb-2 text-sm text-muted-foreground"
-          onClick={() => router.back()}
-      >
-          <ArrowLeft className="h-4 w-4 mr-1" /> Back
+    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
+        <Link href={`/dashboard/properties/${propertyId}`}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to property
+        </Link>
       </Button>
-      <SectionHeader
-        icon="📋"
+
+      <MobilePageIntro
+        eyebrow="Claims"
         title="Claims"
-        description="Track claim checklists, documents, and status updates"
+        subtitle="Track claim checklists, documents, and status updates."
         action={
-          <div className="flex flex-col sm:flex-row gap-2">
-            <button
-              className="rounded-lg border px-3 py-2.5 sm:py-2 min-h-[44px] text-sm hover:bg-gray-50"
-              onClick={refresh}
-              disabled={loading}
-            >
-              Refresh
-            </button>
-            <button
-              className="rounded-lg bg-emerald-700 px-3 py-2.5 sm:py-2 min-h-[44px] text-sm text-white hover:bg-emerald-800"
-              onClick={() => setCreateOpen(true)}
-            >
-              New claim
-            </button>
-          </div>
+          <Button className="min-h-[44px] gap-1.5" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">New claim</span>
+            <span className="sm:hidden">New</span>
+          </Button>
         }
       />
-      {summary ? (
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border bg-white p-4">
-            <div className="text-xs text-gray-600">Open claims</div>
-            <div className="mt-1 text-2xl font-semibold text-gray-900">{summary.counts.open}</div>
-          </div>
-          <div className="rounded-xl border bg-white p-4">
-            <div className="text-xs text-gray-600">Overdue follow-ups</div>
-            <div className="mt-1 text-2xl font-semibold text-gray-900">{summary.counts.overdueFollowUps}</div>
-          </div>
-          <div className="rounded-xl border bg-white p-4">
-            <div className="text-xs text-gray-600">Avg aging (open)</div>
-            <div className="mt-1 text-2xl font-semibold text-gray-900">{summary.aging.avgAgingDaysOpen}d</div>
-          </div>
-          <div className="rounded-xl border bg-white p-4">
-            <div className="text-xs text-gray-600">Est. loss (open)</div>
-            <div className="mt-1 text-2xl font-semibold text-gray-900">
-              ${Number(summary.money.totalEstimatedLossOpen ?? 0).toLocaleString()}
-            </div>
-          </div>
+
+      <MobileFilterSurface>
+        <MobileActionRow>
+          <input
+            className="min-h-[44px] flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+            placeholder="Search title, status, provider, claim #"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          <Button variant="outline" className="min-h-[44px]" onClick={refresh} disabled={loading}>
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </Button>
+        </MobileActionRow>
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusChip tone="info">{filtered.length} shown</StatusChip>
+          <StatusChip tone="elevated">{claims.length} total</StatusChip>
         </div>
+      </MobileFilterSurface>
+
+      {summary ? (
+        <MobileKpiStrip>
+          <MobileKpiTile
+            label="Open claims"
+            value={summary.counts.open}
+            tone={summary.counts.open > 0 ? 'warning' : 'neutral'}
+          />
+          <MobileKpiTile
+            label="Overdue follow-ups"
+            value={summary.counts.overdueFollowUps}
+            tone={summary.counts.overdueFollowUps > 0 ? 'danger' : 'neutral'}
+          />
+          <MobileKpiTile label="Avg aging (open)" value={`${summary.aging.avgAgingDaysOpen}d`} tone="neutral" />
+          <MobileKpiTile
+            label="Est. loss (open)"
+            value={`$${Number(summary.money.totalEstimatedLossOpen ?? 0).toLocaleString()}`}
+            tone="neutral"
+          />
+        </MobileKpiStrip>
       ) : null}
 
-      <div className="flex items-center gap-2">
-        <input
-          className="w-full rounded-lg border px-3 py-2.5 sm:py-2 min-h-[44px] text-sm"
-          placeholder="Search claims (title, status, provider, claim #)"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
+      {loading ? (
+        <MobileCard variant="compact" className="text-sm text-slate-600">
+          Loading claims...
+        </MobileCard>
+      ) : null}
+
+      {!loading && filtered.length === 0 ? (
+        <EmptyStateCard
+          title="No claims yet"
+          description="Create a claim to start a guided checklist and timeline."
+          action={
+            <Button onClick={() => setCreateOpen(true)} className="min-h-[44px]">
+              New claim
+            </Button>
+          }
         />
-      </div>
-
-      {loading && <div className="text-sm text-gray-600">Loading…</div>}
-
-      {!loading && filtered.length === 0 && (
-        <div className="rounded-xl border bg-white p-6 text-sm text-gray-700">
-          No claims yet. Create one to get a guided checklist and timeline.
-        </div>
-      )}
+      ) : null}
 
       <div className="grid gap-3">
         {filtered.map((c) => (
-          <Link
-            key={c.id}
-            href={`/dashboard/properties/${propertyId}/claims/${c.id}`}
-            className="rounded-xl border bg-white p-4 hover:bg-gray-50"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                  <div className="truncate text-base font-semibold text-gray-900">
-                    {c.title}
+          <Link key={c.id} href={`/dashboard/properties/${propertyId}/claims/${c.id}`} className="no-brand-style block">
+            <MobileCard variant="compact" className="space-y-2 transition-colors hover:bg-slate-50/70">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                    <p className="truncate text-sm font-semibold text-slate-900">{c.title}</p>
+                    <ClaimStatusBadge status={c.status} />
                   </div>
-                  <ClaimStatusBadge status={c.status} />
+                  <p className="mt-0.5 text-xs text-slate-600">
+                    {[c.type, c.providerName, c.claimNumber ? `#${c.claimNumber}` : null].filter(Boolean).join(' • ')}
+                  </p>
                 </div>
-
-                <div className="mt-1 flex flex-col sm:flex-row sm:flex-wrap gap-0.5 sm:gap-0 text-sm text-gray-600">
-                  <span className="font-medium">{c.type}</span>
-                  {c.providerName ? (
-                    <>
-                      <span className="hidden sm:inline mx-2 text-gray-300">•</span>
-                      <span>{c.providerName}</span>
-                    </>
-                  ) : null}
-                  {c.claimNumber ? (
-                    <>
-                      <span className="hidden sm:inline mx-2 text-gray-300">•</span>
-                      <span>#{c.claimNumber}</span>
-                    </>
-                  ) : null}
-                </div>
+                <StatusChip tone="info">Checklist {c.checklistCompletionPct ?? 0}%</StatusChip>
               </div>
 
-              <div className="shrink-0 text-right">
-                <div className="text-xs text-gray-600">Checklist</div>
-                <div className="text-sm font-semibold text-gray-900">
-                  {c.checklistCompletionPct ?? 0}%
-                </div>
-              </div>
-            </div>
-
-            {c.description ? (
-              <div className="mt-2 line-clamp-2 text-sm text-gray-700">
-                {c.description}
-              </div>
-            ) : null}
+              {c.description ? <p className="line-clamp-2 text-sm text-slate-700">{c.description}</p> : null}
+            </MobileCard>
           </Link>
         ))}
       </div>
+
       <ClaimCreateModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         propertyId={propertyId}
         onCreated={(newClaim) => {
           try {
-            console.log('onCreated called with:', newClaim);
-            
             if (!newClaim || !newClaim.id) {
               console.error('Invalid claim:', newClaim);
               return;
             }
-            
+
             setClaims((prev) => {
-              console.log('Current claims:', prev);
               const safePrev = (prev ?? []).filter((c): c is any => !!c && !!c.id);
-              
+
               if (safePrev.some((c) => c.id === newClaim.id)) {
-                console.warn('Duplicate claim ID detected, skipping');
                 return safePrev;
               }
-              
-              const updated = [newClaim, ...safePrev];
-              console.log('Updated claims:', updated);
-              return updated;
+
+              return [newClaim, ...safePrev];
             });
-        
+
             setCreateOpen(false);
             setQ('');
           } catch (error) {
             console.error('Error in onCreated:', error);
-            throw error; // Re-throw so modal can handle it
+            throw error;
           }
         }}
       />
-    </div>
+    </MobilePageContainer>
   );
 }

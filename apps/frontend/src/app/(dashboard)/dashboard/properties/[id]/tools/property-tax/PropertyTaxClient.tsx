@@ -2,11 +2,18 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { SectionHeader } from '@/app/(dashboard)/dashboard/components/SectionHeader';
+import { ArrowLeft } from 'lucide-react';
 
 import { getPropertyTaxEstimate, PropertyTaxEstimateDTO } from './taxApi';
 import HomeToolsRail from '../../components/HomeToolsRail';
+import { Button } from '@/components/ui/button';
+import {
+  MobileFilterSurface,
+  MobilePageContainer,
+  MobilePageIntro,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 function money(n: number | null | undefined, currency = 'USD') {
   if (n === null || n === undefined) return '—';
   return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(n);
@@ -208,20 +215,23 @@ export default function PropertyTaxClient() {
   };
 
   return (
-    <div className="space-y-5 p-4 sm:p-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
-      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[radial-gradient(circle_at_10%_10%,rgba(251,191,36,0.14),transparent_40%),radial-gradient(circle_at_88%_14%,rgba(20,184,166,0.14),transparent_40%),linear-gradient(180deg,rgba(255,255,255,0.9),rgba(248,250,252,0.8))] p-4 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.6)] dark:border-slate-700/70 dark:bg-[radial-gradient(circle_at_10%_10%,rgba(251,191,36,0.12),transparent_40%),radial-gradient(circle_at_88%_14%,rgba(20,184,166,0.12),transparent_40%),linear-gradient(180deg,rgba(2,6,23,0.9),rgba(2,6,23,0.78))]">
-        <div className="rounded-2xl border border-white/70 bg-white/60 p-4 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45">
-          <SectionHeader
-            icon="🏷️"
-            title="Property Tax Intelligence"
-            description="Estimated property taxes, trend, projection, and what drives changes."
-          />
+    <MobilePageContainer className="space-y-5 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
+      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
+        <Link href={`/dashboard/properties/${propertyId}`}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to property
+        </Link>
+      </Button>
 
-          <div className="mt-4">
-            <HomeToolsRail propertyId={propertyId} />
-          </div>
-        </div>
-      </div>
+      <MobilePageIntro
+        eyebrow="Home Tool"
+        title="Property Tax Intelligence"
+        subtitle="Review tax estimates, trend projection, and key drivers behind changes."
+      />
+
+      <MobileFilterSurface>
+        <HomeToolsRail propertyId={propertyId} />
+      </MobileFilterSurface>
 
       {/* Controls */}
       <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
@@ -417,6 +427,6 @@ export default function PropertyTaxClient() {
           <div className="pt-2 text-slate-500 dark:text-slate-300">Generated: {estimate?.meta?.generatedAt || '—'}</div>
         </div>
       </div>
-    </div>
+    </MobilePageContainer>
   );
 }

@@ -2,10 +2,17 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
 
-import { SectionHeader } from '@/app/(dashboard)/dashboard/components/SectionHeader';
 import HomeToolsRail from '../../components/HomeToolsRail';
+import { Button } from '@/components/ui/button';
+import {
+  MobileFilterSurface,
+  MobilePageContainer,
+  MobilePageIntro,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 import { getCostVolatility, type CostVolatilityDTO } from './costVolatilityApi';
 import MiniLineChartPct from './MiniLineChartPct';
@@ -122,20 +129,23 @@ export default function CostVolatilityClient() {
   }, [recentEvents]);
 
   return (
-    <div className="space-y-5 p-4 sm:p-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
-      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[radial-gradient(circle_at_10%_10%,rgba(251,191,36,0.14),transparent_40%),radial-gradient(circle_at_88%_14%,rgba(20,184,166,0.14),transparent_40%),linear-gradient(180deg,rgba(255,255,255,0.9),rgba(248,250,252,0.8))] p-4 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.6)] dark:border-slate-700/70 dark:bg-[radial-gradient(circle_at_10%_10%,rgba(251,191,36,0.12),transparent_40%),radial-gradient(circle_at_88%_14%,rgba(20,184,166,0.12),transparent_40%),linear-gradient(180deg,rgba(2,6,23,0.9),rgba(2,6,23,0.78))]">
-        <div className="rounded-2xl border border-white/70 bg-white/60 p-4 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45">
-          <SectionHeader
-            icon="📉"
-            title="Cost Volatility Index"
-            description="Measures how unpredictable your ownership costs are year-to-year."
-          />
+    <MobilePageContainer className="space-y-5 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
+      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
+        <Link href={`/dashboard/properties/${propertyId}`}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to property
+        </Link>
+      </Button>
 
-          <div className="mt-4">
-            <HomeToolsRail propertyId={propertyId} />
-          </div>
-        </div>
-      </div>
+      <MobilePageIntro
+        eyebrow="Home Tool"
+        title="Cost Volatility Index"
+        subtitle="Measure how unpredictable your ownership costs are year to year."
+      />
+
+      <MobileFilterSurface>
+        <HomeToolsRail propertyId={propertyId} />
+      </MobileFilterSurface>
 
       {error && (
         <div className="flex items-start gap-3 rounded-2xl border border-red-200/70 bg-red-50/85 p-3 backdrop-blur">
@@ -375,6 +385,6 @@ export default function CostVolatilityClient() {
           ))}
         </div>
       </div>
-    </div>
+    </MobilePageContainer>
   );
 }
