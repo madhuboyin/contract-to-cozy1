@@ -25,8 +25,22 @@ import PortfolioIntelligenceStrip, {
 import CoverageHealthBanner from '../../../components/inventory/CoverageHealthBanner';
 import InventoryFilterBar, { type SmartFilterId } from '../../../components/inventory/InventoryFilterBar';
 import CoverageTab from '../../../components/inventory/CoverageTab';
+import {
+  CoverageOpportunityCard,
+  CoverageSnapshotCard,
+  InventoryFiltersPanel,
+  InventoryHeroCard,
+  MobileInventoryItemCard,
+} from '../../../components/inventory/MobileInventorySections';
 import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
 import ItemCard from '@/components/shared/ItemCard';
+import {
+  EmptyStateCard,
+  MobileCard,
+  MobilePageContainer,
+  MobileSection,
+  MobileSectionHeader,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 function getCoverageStatus(item: InventoryItem): 'uncovered' | 'partial' | 'covered' {
   const hasWarranty = Boolean(item.warrantyId);
@@ -319,148 +333,320 @@ export default function InventoryClient() {
 
   const hasItems = items.length > 0;
   const hasFilteredItems = filteredItems.length > 0;
+  const filteredGapCount = useMemo(
+    () => filteredItems.filter((item) => getCoverageStatus(item) !== 'covered').length,
+    [filteredItems],
+  );
 
   return (
-    <div className="mx-auto max-w-7xl space-y-4 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-6">
-      <OnboardingReturnBanner />
+    <>
+      <div className="md:hidden">
+        <MobilePageContainer className="mobile-stack-sections pb-[calc(8rem+env(safe-area-inset-bottom))]">
+          <MobileSection className="pt-1">
+            <OnboardingReturnBanner />
+          </MobileSection>
 
-      {from === 'status-board' ? (
-        <Link
-          href={`/dashboard/properties/${propertyId}/status-board`}
-          className="inline-flex items-center gap-2 rounded-xl border border-black/10 px-3 py-2 text-sm transition-colors hover:bg-black/5"
-        >
-          Back to Status Board
-        </Link>
-      ) : null}
-
-      <InventoryPageHeader
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        onManageRooms={() => router.push(`/dashboard/properties/${propertyId}/inventory/rooms`)}
-        onExportCsv={handleExportCsv}
-        onBulkUpload={() => setBulkOpen(true)}
-        onImportHistory={() => setHistoryOpen(true)}
-        onAddItem={onAdd}
-      />
-
-      <CoverageHealthBanner
-        gapCount={portfolioStats.gapCount}
-        exposedValue={exposedValue}
-        totalValue={portfolioStats.totalValue}
-        onReviewGaps={() => setActiveSmartFilter('gaps')}
-        onViewActions={() => router.push(`/dashboard/actions?propertyId=${propertyId}&filter=coverage-gaps`)}
-      />
-
-      <PortfolioIntelligenceStrip
-        stats={portfolioStats}
-        activeFilter={portfolioFilter}
-        onToggleFilter={togglePortfolioFilter}
-      />
-
-      <InventoryFilterBar
-        searchQuery={searchQuery}
-        onSearchQueryChange={setSearchQuery}
-        roomFilter={roomFilter}
-        onRoomFilterChange={setRoomFilter}
-        categoryFilter={categoryFilter}
-        onCategoryFilterChange={setCategoryFilter}
-        docsFilter={docsFilter}
-        onDocsFilterChange={setDocsFilter}
-        recallFilter={recallFilter}
-        onRecallFilterChange={setRecallFilter}
-        activeSmartFilter={activeSmartFilter}
-        onToggleSmartFilter={toggleSmartFilter}
-        rooms={rooms}
-        gapCount={portfolioStats.gapCount}
-        missingValueCount={portfolioStats.missingValueCount}
-        recallCount={recallCount}
-        activeFilterCount={activeFilterCount}
-        onClearAllFilters={clearAllFilters}
-      />
-
-      {activeSmartFilter ? (
-        <div className="mb-2 flex items-center gap-2">
-          <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-600">
-            Active filter: {activeSmartFilter === 'no-value' ? 'missing values' : activeSmartFilter}
-          </span>
-          <button
-            type="button"
-            onClick={() => setActiveSmartFilter(null)}
-            className="inline-flex items-center gap-1 text-xs text-gray-500 transition-colors hover:text-gray-700"
-          >
-            <X className="h-3 w-3" />
-            Clear filter
-          </button>
-        </div>
-      ) : null}
-
-      {loading ? (
-        <div className="text-sm opacity-70">Loading...</div>
-      ) : !hasItems ? (
-        <div className="rounded-2xl border border-black/10 p-6">
-          <div className="text-base font-medium">No inventory items yet</div>
-          <div className="mt-1 text-sm opacity-70">
-            Add your first item to start tracking replacement value, coverage, and documentation.
-          </div>
-          <button
-            type="button"
-            onClick={onAdd}
-            className="mt-4 rounded-xl border border-black/10 px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-black/5"
-          >
-            Add item
-          </button>
-        </div>
-      ) : activeTab === 'coverage' ? (
-        <CoverageTab
-          items={filteredItems}
-          rooms={rooms}
-          onOpenCoverage={(item) =>
-            router.push(
-              `/dashboard/properties/${propertyId}/inventory/items/${item.id}/coverage?returnTo=${encodeURIComponent(currentPathWithQuery)}`
-            )
-          }
-          onOpenActions={() => router.push(`/dashboard/actions?propertyId=${propertyId}&filter=coverage-gaps`)}
-        />
-      ) : !hasFilteredItems ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="mb-3 rounded-full bg-gray-100 p-4">
-            <Search className="h-6 w-6 text-gray-400" />
-          </div>
-          <p className="text-sm font-semibold text-gray-700">No items match your filters</p>
-          <p className="mt-1 text-xs text-gray-400">Try adjusting your search or filters</p>
-          <button
-            type="button"
-            onClick={clearAllFilters}
-            className="mt-3 text-sm text-teal-600 transition-colors hover:underline"
-          >
-            Clear all filters
-          </button>
-        </div>
-      ) : (
-        <div className="grid auto-rows-fr grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-5 xl:grid-cols-3">
-          <AnimatePresence mode="popLayout">
-            {filteredItems.map((item, index) => (
-              <motion.div
-                key={item.id}
-                layout
-                initial={{ opacity: 0, scale: 0.97 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.97 }}
-                transition={{ duration: 0.2, delay: index * 0.03 }}
-                className={highlightItemId === item.id ? 'rounded-2xl ring-2 ring-amber-300' : ''}
+          {from === 'status-board' ? (
+            <MobileSection>
+              <Link
+                href={`/dashboard/properties/${propertyId}/status-board`}
+                className="no-brand-style inline-flex min-h-[40px] items-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
               >
-                <ItemCard
-                  item={item}
-                  variant="inventory"
-                  onClick={onEdit}
-                  onAddValue={onSaveInlineValue}
-                  onAttachDocument={openItemById}
+                Back to Status Board
+              </Link>
+            </MobileSection>
+          ) : null}
+
+          <MobileSection>
+            <InventoryHeroCard
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              onManageRooms={() => router.push(`/dashboard/properties/${propertyId}/inventory/rooms`)}
+              onExportCsv={handleExportCsv}
+              onBulkUpload={() => setBulkOpen(true)}
+              onImportHistory={() => setHistoryOpen(true)}
+              onAddItem={onAdd}
+            />
+          </MobileSection>
+
+          <MobileSection>
+            <CoverageSnapshotCard
+              stats={portfolioStats}
+              activeFilter={portfolioFilter}
+              onToggleFilter={togglePortfolioFilter}
+            />
+          </MobileSection>
+
+          <MobileSection>
+            <CoverageOpportunityCard
+              gapCount={portfolioStats.gapCount}
+              exposedValue={exposedValue}
+              totalValue={portfolioStats.totalValue}
+              onReviewGaps={() => setActiveSmartFilter('gaps')}
+              onViewActions={() => router.push(`/dashboard/actions?propertyId=${propertyId}&filter=coverage-gaps`)}
+            />
+          </MobileSection>
+
+          <MobileSection>
+            <InventoryFiltersPanel
+              searchQuery={searchQuery}
+              onSearchQueryChange={setSearchQuery}
+              roomFilter={roomFilter}
+              onRoomFilterChange={setRoomFilter}
+              categoryFilter={categoryFilter}
+              onCategoryFilterChange={setCategoryFilter}
+              docsFilter={docsFilter}
+              onDocsFilterChange={setDocsFilter}
+              recallFilter={recallFilter}
+              onRecallFilterChange={setRecallFilter}
+              activeSmartFilter={activeSmartFilter}
+              onToggleSmartFilter={toggleSmartFilter}
+              rooms={rooms}
+              gapCount={portfolioStats.gapCount}
+              missingValueCount={portfolioStats.missingValueCount}
+              recallCount={recallCount}
+              activeFilterCount={activeFilterCount}
+              onClearAllFilters={clearAllFilters}
+            />
+          </MobileSection>
+
+          {activeSmartFilter ? (
+            <MobileSection>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-1 text-xs font-medium text-[hsl(var(--mobile-text-secondary))]">
+                  Active filter: {activeSmartFilter === 'no-value' ? 'missing values' : activeSmartFilter}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setActiveSmartFilter(null)}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-[hsl(var(--mobile-text-secondary))]"
+                >
+                  <X className="h-3 w-3" />
+                  Clear
+                </button>
+              </div>
+            </MobileSection>
+          ) : null}
+
+          <MobileSection>
+            {loading ? (
+              <MobileCard variant="compact">
+                <p className="mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">Loading inventory...</p>
+              </MobileCard>
+            ) : !hasItems ? (
+              <EmptyStateCard
+                title="No inventory items yet"
+                description="Add your first item to start tracking replacement value, coverage, and documentation."
+                action={
+                  <button
+                    type="button"
+                    onClick={onAdd}
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-4 py-2 text-sm font-semibold text-white"
+                  >
+                    Add item
+                  </button>
+                }
+              />
+            ) : activeTab === 'coverage' ? (
+              <CoverageTab
+                items={filteredItems}
+                rooms={rooms}
+                onOpenCoverage={(item) =>
+                  router.push(
+                    `/dashboard/properties/${propertyId}/inventory/items/${item.id}/coverage?returnTo=${encodeURIComponent(currentPathWithQuery)}`
+                  )
+                }
+                onOpenActions={() => router.push(`/dashboard/actions?propertyId=${propertyId}&filter=coverage-gaps`)}
+              />
+            ) : !hasFilteredItems ? (
+              <EmptyStateCard
+                title="No items match your filters"
+                description="Try adjusting search or filters to see more items."
+                action={
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+                  >
+                    Clear all filters
+                  </button>
+                }
+              />
+            ) : (
+              <div className="space-y-2.5">
+                <MobileSectionHeader
+                  title={filteredGapCount > 0 ? 'Needs Attention' : 'Inventory List'}
+                  subtitle={`${filteredItems.length} items`}
                 />
-              </motion.div>
-            ))}
-          </AnimatePresence>
+                <AnimatePresence mode="popLayout">
+                  {filteredItems.map((item, index) => (
+                    <motion.div
+                      key={item.id}
+                      layout
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.98 }}
+                      transition={{ duration: 0.18, delay: index * 0.02 }}
+                      className={highlightItemId === item.id ? 'rounded-[22px] ring-2 ring-amber-300' : ''}
+                    >
+                      <MobileInventoryItemCard
+                        item={item}
+                        onClick={onEdit}
+                        onAddValue={onSaveInlineValue}
+                        onAttachDocument={openItemById}
+                      />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            )}
+          </MobileSection>
+        </MobilePageContainer>
+      </div>
+
+      <div className="hidden md:block">
+        <div className="mx-auto max-w-7xl space-y-4 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-6">
+          <OnboardingReturnBanner />
+
+          {from === 'status-board' ? (
+            <Link
+              href={`/dashboard/properties/${propertyId}/status-board`}
+              className="inline-flex items-center gap-2 rounded-xl border border-black/10 px-3 py-2 text-sm transition-colors hover:bg-black/5"
+            >
+              Back to Status Board
+            </Link>
+          ) : null}
+
+          <InventoryPageHeader
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            onManageRooms={() => router.push(`/dashboard/properties/${propertyId}/inventory/rooms`)}
+            onExportCsv={handleExportCsv}
+            onBulkUpload={() => setBulkOpen(true)}
+            onImportHistory={() => setHistoryOpen(true)}
+            onAddItem={onAdd}
+          />
+
+          <CoverageHealthBanner
+            gapCount={portfolioStats.gapCount}
+            exposedValue={exposedValue}
+            totalValue={portfolioStats.totalValue}
+            onReviewGaps={() => setActiveSmartFilter('gaps')}
+            onViewActions={() => router.push(`/dashboard/actions?propertyId=${propertyId}&filter=coverage-gaps`)}
+          />
+
+          <PortfolioIntelligenceStrip
+            stats={portfolioStats}
+            activeFilter={portfolioFilter}
+            onToggleFilter={togglePortfolioFilter}
+          />
+
+          <InventoryFilterBar
+            searchQuery={searchQuery}
+            onSearchQueryChange={setSearchQuery}
+            roomFilter={roomFilter}
+            onRoomFilterChange={setRoomFilter}
+            categoryFilter={categoryFilter}
+            onCategoryFilterChange={setCategoryFilter}
+            docsFilter={docsFilter}
+            onDocsFilterChange={setDocsFilter}
+            recallFilter={recallFilter}
+            onRecallFilterChange={setRecallFilter}
+            activeSmartFilter={activeSmartFilter}
+            onToggleSmartFilter={toggleSmartFilter}
+            rooms={rooms}
+            gapCount={portfolioStats.gapCount}
+            missingValueCount={portfolioStats.missingValueCount}
+            recallCount={recallCount}
+            activeFilterCount={activeFilterCount}
+            onClearAllFilters={clearAllFilters}
+          />
+
+          {activeSmartFilter ? (
+            <div className="mb-2 flex items-center gap-2">
+              <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-600">
+                Active filter: {activeSmartFilter === 'no-value' ? 'missing values' : activeSmartFilter}
+              </span>
+              <button
+                type="button"
+                onClick={() => setActiveSmartFilter(null)}
+                className="inline-flex items-center gap-1 text-xs text-gray-500 transition-colors hover:text-gray-700"
+              >
+                <X className="h-3 w-3" />
+                Clear filter
+              </button>
+            </div>
+          ) : null}
+
+          {loading ? (
+            <div className="text-sm opacity-70">Loading...</div>
+          ) : !hasItems ? (
+            <div className="rounded-2xl border border-black/10 p-6">
+              <div className="text-base font-medium">No inventory items yet</div>
+              <div className="mt-1 text-sm opacity-70">
+                Add your first item to start tracking replacement value, coverage, and documentation.
+              </div>
+              <button
+                type="button"
+                onClick={onAdd}
+                className="mt-4 rounded-xl border border-black/10 px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-black/5"
+              >
+                Add item
+              </button>
+            </div>
+          ) : activeTab === 'coverage' ? (
+            <CoverageTab
+              items={filteredItems}
+              rooms={rooms}
+              onOpenCoverage={(item) =>
+                router.push(
+                  `/dashboard/properties/${propertyId}/inventory/items/${item.id}/coverage?returnTo=${encodeURIComponent(currentPathWithQuery)}`
+                )
+              }
+              onOpenActions={() => router.push(`/dashboard/actions?propertyId=${propertyId}&filter=coverage-gaps`)}
+            />
+          ) : !hasFilteredItems ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="mb-3 rounded-full bg-gray-100 p-4">
+                <Search className="h-6 w-6 text-gray-400" />
+              </div>
+              <p className="text-sm font-semibold text-gray-700">No items match your filters</p>
+              <p className="mt-1 text-xs text-gray-400">Try adjusting your search or filters</p>
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="mt-3 text-sm text-teal-600 transition-colors hover:underline"
+              >
+                Clear all filters
+              </button>
+            </div>
+          ) : (
+            <div className="grid auto-rows-fr grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-5 xl:grid-cols-3">
+              <AnimatePresence mode="popLayout">
+                {filteredItems.map((item, index) => (
+                  <motion.div
+                    key={item.id}
+                    layout
+                    initial={{ opacity: 0, scale: 0.97 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.97 }}
+                    transition={{ duration: 0.2, delay: index * 0.03 }}
+                    className={highlightItemId === item.id ? 'rounded-2xl ring-2 ring-amber-300' : ''}
+                  >
+                    <ItemCard
+                      item={item}
+                      variant="inventory"
+                      onClick={onEdit}
+                      onAddValue={onSaveInlineValue}
+                      onAttachDocument={openItemById}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       <InventoryItemDrawer
         open={drawerOpen}
@@ -494,6 +680,6 @@ export default function InventoryClient() {
           await refreshAll();
         }}
       />
-    </div>
+    </>
   );
 }
