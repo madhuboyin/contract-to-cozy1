@@ -45,15 +45,15 @@ export default function AIToolsPage() {
         <MobileSectionHeader title="AI Tools" subtitle="Smart decision support for your home" />
       </MobileSection>
 
-      {groupedTools.map((group, index) => (
+      {groupedTools.map((group) => (
         <MobileSection key={group.key}>
           <ExpandableSummaryCard
             title={group.title}
             summary={group.summary}
             metric={`${group.items.length} tools`}
-            defaultOpen={index === 0}
+            defaultOpen
           >
-            <QuickActionGrid>
+            <QuickActionGrid className="gap-2.5">
               {group.items.map((tool) => (
                 <QuickActionTile
                   key={tool.key}
@@ -63,6 +63,7 @@ export default function AIToolsPage() {
                   artworkSrc={tool.artworkSrc}
                   href={buildAiToolHref(resolvedPropertyId, tool.href)}
                   badgeLabel=""
+                  variant="compact"
                 />
               ))}
             </QuickActionGrid>
