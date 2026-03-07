@@ -87,7 +87,7 @@ export function ProfileHeroCard({
           <p className="mb-0 mt-1 truncate text-sm text-[hsl(var(--mobile-text-secondary))]">
             {formData.email || 'Email not available'}
           </p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+          <div className="mt-2 flex items-center gap-2">
             <StatusChip tone="info">{accountTypeLabel}</StatusChip>
             <StatusChip tone="good">Active</StatusChip>
           </div>
@@ -97,7 +97,7 @@ export function ProfileHeroCard({
           <button
             type="button"
             onClick={onStartEditing}
-            className="inline-flex min-h-[40px] items-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-1.5 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+            className="inline-flex min-h-[34px] items-center rounded-full border border-[hsl(var(--mobile-brand-border))] bg-[hsl(var(--mobile-brand-soft))] px-3 py-1 text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]"
           >
             Edit Profile
           </button>
