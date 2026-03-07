@@ -55,7 +55,7 @@ export default function Testimonials() {
 
               {/* Testimonial Text - Compact */}
               <p className="text-sm text-gray-700 leading-relaxed mb-4">
-                "{testimonial.text}"
+                &quot;{testimonial.text}&quot;
               </p>
 
               {/* Author - Compact */}

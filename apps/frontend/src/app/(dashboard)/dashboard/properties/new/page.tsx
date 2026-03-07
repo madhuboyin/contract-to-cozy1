@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
+import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
 
@@ -487,13 +488,12 @@ export default function NewPropertyPage() {
   );
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Add New Property</h1>
-        <p className="mt-2 text-gray-600">
-          Tell us about your property to get personalized maintenance insights and property health scores.
-        </p>
-      </div>
+    <div className="mx-auto max-w-4xl px-4 py-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+      <MobilePageIntro
+        title="Add New Property"
+        subtitle="Tell us about your property to unlock personalized insights, scores, and planning tools."
+        className="mb-6"
+      />
 
       {error && (
         <div className="mb-6 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">

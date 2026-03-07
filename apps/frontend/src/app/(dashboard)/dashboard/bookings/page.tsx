@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api/client';
 import { Booking, BookingStatus, CreateBookingInput } from '@/types';
@@ -12,6 +12,12 @@ import { housePulseAnimation } from '@/components/animations/lottieData';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import { cn } from '@/lib/utils';
 import { StatusBadge } from '@/components/bookings/StatusBadge';
+import {
+  MobileFilterSurface,
+  MobileKpiStrip,
+  MobileKpiTile,
+  MobilePageIntro,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 interface EditFormData {
   scheduledDate: string;
@@ -177,6 +183,14 @@ export default function HomeownerBookingsPage() {
   const filteredBookings = filter === 'all' ? bookings : bookings.filter((b) => b.status === filter);
   const groupedBookings = groupBookings(filteredBookings);
   const emptyStateTone = getEmptyStateTone(filter);
+  const bookingSummary = useMemo(() => {
+    const active = bookings.filter((b) => ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(b.status)).length;
+    const soon = bookings.filter((b) => isUpcomingSoon(b)).length;
+    const completed = bookings.filter((b) => b.status === 'COMPLETED').length;
+    const cancelled = bookings.filter((b) => b.status === 'CANCELLED').length;
+
+    return { active, soon, completed, cancelled };
+  }, [bookings]);
 
   const canEditBooking = (status: BookingStatus) => {
     return status === 'PENDING' || status === 'CONFIRMED';
@@ -349,35 +363,47 @@ export default function HomeownerBookingsPage() {
 
   return (
     <div className="space-y-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl lg:text-3xl">My Bookings</h1>
-        <p className="mt-2 text-muted-foreground">View and manage your service bookings</p>
-      </div>
+      <MobilePageIntro
+        title="My Bookings"
+        subtitle="View and manage your upcoming and past service bookings."
+      />
 
       {success && <div className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-800">{success}</div>}
 
       {error && <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800">{error}</div>}
 
+      <MobileKpiStrip className="sm:grid-cols-4">
+        <MobileKpiTile label="Active" value={bookingSummary.active} hint="Open bookings" tone={bookingSummary.active > 0 ? 'warning' : 'neutral'} />
+        <MobileKpiTile label="Soon" value={bookingSummary.soon} hint="Within 7 days" tone={bookingSummary.soon > 0 ? 'danger' : 'neutral'} />
+        <MobileKpiTile label="Completed" value={bookingSummary.completed} hint="Closed successfully" tone={bookingSummary.completed > 0 ? 'positive' : 'neutral'} />
+        <MobileKpiTile label="Cancelled" value={bookingSummary.cancelled} hint="No longer active" />
+      </MobileKpiStrip>
+
       <div className="sticky top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 -mx-2 bg-white/90 px-2 py-2 backdrop-blur-sm supports-[backdrop-filter]:bg-white/70 md:static md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none">
-        <div className="-mx-1 overflow-x-auto px-1 pb-1 scrollbar-none">
-          <div className="inline-flex gap-1.5 rounded-xl bg-gray-100 p-1">
-            {['all', 'DRAFT', 'PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].map((status) => {
-              const isActive = filter === status;
-              return (
-                <button
-                  key={status}
-                  onClick={() => setFilter(status as BookingStatus | 'all')}
-                  className={cn(
-                    'min-h-[36px] whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-all',
-                    isActive ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                  )}
-                >
-                  {status === 'all' ? 'All' : formatEnumLabel(status)}
-                </button>
-              );
-            })}
+        <MobileFilterSurface className="space-y-2 border border-slate-200/80 bg-white p-2.5">
+          <p className="px-1 text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500">
+            Filter Bookings
+          </p>
+          <div className="-mx-1 overflow-x-auto px-1 pb-1 scrollbar-none">
+            <div className="inline-flex gap-1.5 rounded-xl bg-gray-100 p-1">
+              {['all', 'DRAFT', 'PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].map((status) => {
+                const isActive = filter === status;
+                return (
+                  <button
+                    key={status}
+                    onClick={() => setFilter(status as BookingStatus | 'all')}
+                    className={cn(
+                      'min-h-[36px] whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-all',
+                      isActive ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    )}
+                  >
+                    {status === 'all' ? 'All' : formatEnumLabel(status)}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        </MobileFilterSurface>
       </div>
 
       {loading ? (
@@ -464,33 +490,37 @@ export default function HomeownerBookingsPage() {
                     <div className="flex items-center gap-2">
                       <Link
                         href={`/dashboard/bookings/${booking.id}`}
-                        className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-gray-50 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100"
+                        className="flex min-h-[40px] flex-1 items-center justify-center gap-1 rounded-lg bg-brand-primary px-3 py-2 text-xs font-semibold text-white hover:bg-brand-primary/90"
                       >
                         <Eye className="h-3.5 w-3.5" />
-                        View
+                        View Details
                       </Link>
 
-                      {canEditBooking(booking.status) && (
-                        <button
-                          type="button"
-                          onClick={() => handleEditClick(booking)}
-                          className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-blue-50 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100"
-                        >
-                          <Edit className="h-3.5 w-3.5" />
-                          Edit
-                        </button>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {canEditBooking(booking.status) && (
+                          <button
+                            type="button"
+                            onClick={() => handleEditClick(booking)}
+                            aria-label={`Edit booking ${booking.bookingNumber}`}
+                            title="Edit booking"
+                            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                        )}
 
-                      {canCancelBooking(booking.status) && (
-                        <button
-                          type="button"
-                          onClick={() => handleCancelClick(booking)}
-                          className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-red-50 py-2 text-xs font-medium text-red-600 hover:bg-red-100"
-                        >
-                          <XCircle className="h-3.5 w-3.5" />
-                          Cancel
-                        </button>
-                      )}
+                        {canCancelBooking(booking.status) && (
+                          <button
+                            type="button"
+                            onClick={() => handleCancelClick(booking)}
+                            aria-label={`Cancel booking ${booking.bookingNumber}`}
+                            title="Cancel booking"
+                            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition-colors hover:bg-red-100"
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

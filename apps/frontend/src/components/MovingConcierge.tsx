@@ -609,7 +609,7 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
       <CardHeader>
         <CardTitle>Generate Your Personalized Moving Plan</CardTitle>
         <p className="text-sm text-gray-600">
-          Tell us about your move and we'll create a comprehensive AI-powered plan
+          Tell us about your move and we&apos;ll create a comprehensive AI-powered plan
         </p>
       </CardHeader>
       <CardContent>

@@ -19,6 +19,7 @@ import { SeasonalChecklist } from '@/types/seasonal.types';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 export default function SeasonalMaintenancePage() {
   const router = useRouter();
@@ -119,7 +120,7 @@ export default function SeasonalMaintenancePage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
+    <div className="mx-auto max-w-6xl px-4 py-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
       {backLink && (
         <Link 
           href={backLink.href}
@@ -130,23 +131,20 @@ export default function SeasonalMaintenancePage() {
         </Link>
       )}
     {/* Page Content */}
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Seasonal Maintenance</h1>
-            <p className="text-gray-600">
-              Stay on top of seasonal home maintenance tasks tailored to your climate
-            </p>
-          </div>
-          <button
-            onClick={() => router.push(`/dashboard/seasonal/settings?propertyId=${propertyId}`)}
-            className="flex items-center space-x-2 px-3 sm:px-4 py-2.5 sm:py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors min-h-[44px] sm:min-h-0 touch-manipulation"
-          >
-            <Settings className="w-4 h-4" />
-            <span>Settings</span>
-          </button>
-        </div>
+      <div className="mb-6">
+        <MobilePageIntro
+          title="Seasonal Maintenance"
+          subtitle="Stay on top of climate-specific home maintenance tasks."
+          action={(
+            <button
+              onClick={() => router.push(`/dashboard/seasonal/settings?propertyId=${propertyId}`)}
+              className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50"
+            >
+              <Settings className="h-4 w-4" />
+              <span>Settings</span>
+            </button>
+          )}
+        />
       </div>
 
       {/* Climate Info Banner */}

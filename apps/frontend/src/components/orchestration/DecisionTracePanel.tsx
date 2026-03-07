@@ -68,14 +68,13 @@ export const DecisionTracePanel: React.FC<Props> = ({
   onOpenTrace,
 }) => {
   const [expanded, setExpanded] = useState(false);
-
-  // Nothing to show at all
-  if (!suppressed && reasons.length === 0 && steps.length === 0) return null;
-
   const checklistExplainOnly = useMemo(
     () => isChecklistExplainOnly({ suppressed, reasons, action, steps }),
     [suppressed, reasons, action, steps]
   );
+
+  // Nothing to show at all
+  if (!suppressed && reasons.length === 0 && steps.length === 0) return null;
 
   // Only suppressed actions should open the modal directly from the link
   const shouldOpenModalDirectly = suppressed;

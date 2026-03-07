@@ -29,10 +29,10 @@ export default function OfflinePage() {
           {/* Title */}
           <div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              You're Offline
+              You&apos;re Offline
             </h1>
             <p className="text-gray-600">
-              It looks like you've lost your internet connection. Some features may not be available.
+              It looks like you&apos;ve lost your internet connection. Some features may not be available.
             </p>
           </div>
 
@@ -48,7 +48,7 @@ export default function OfflinePage() {
               <li>• Browse saved documents</li>
             </ul>
             <p className="text-xs text-blue-700 mt-3">
-              Your changes will sync automatically when you're back online.
+              Your changes will sync automatically when you&apos;re back online.
             </p>
           </div>
 

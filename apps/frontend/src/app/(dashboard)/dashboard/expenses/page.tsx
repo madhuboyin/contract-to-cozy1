@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import DateField from '@/components/shared/DateField';
+import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 // Helper for Expense Category mapping (for display)
 const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
@@ -282,12 +283,11 @@ export default function ExpensesPage() {
 
 
   return (
-    <div className="space-y-6 pb-8">
-      <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <DollarSign className="w-7 h-7 text-indigo-600" /> Expense Tracker
-        </h2>
-        <div className="flex items-center gap-4">
+    <div className="space-y-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+      <MobilePageIntro
+        title="Expense Tracker"
+        subtitle="Track non-platform costs like property taxes, materials, and utility bills for accurate home budgeting."
+        action={
           <Dialog open={isModalOpen} onOpenChange={closeModal}>
             {/* FIX: Button directly opens the controlled dialog */}
             <Button onClick={() => openEditModal(undefined)}>
@@ -303,9 +303,8 @@ export default function ExpensesPage() {
               />
             </DialogContent>
           </Dialog>
-        </div>
-      </div>
-      <p className="text-muted-foreground">Track non-platform costs like property taxes, materials, and utility bills for accurate home budgeting.</p>
+        }
+      />
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="md:col-span-2">

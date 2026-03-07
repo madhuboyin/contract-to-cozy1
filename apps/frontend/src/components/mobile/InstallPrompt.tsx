@@ -116,8 +116,8 @@ export function InstallPrompt() {
               </p>
               <ol className="text-sm text-gray-700 space-y-1 ml-6 list-decimal">
                 <li>Tap the Share button in Safari</li>
-                <li>Scroll and tap "Add to Home Screen"</li>
-                <li>Tap "Add" to confirm</li>
+                <li>Scroll and tap &quot;Add to Home Screen&quot;</li>
+                <li>Tap &quot;Add&quot; to confirm</li>
               </ol>
             </div>
           ) : (

@@ -7,6 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { Property } from '@/types';
 import { useToast } from '@/components/ui/use-toast';
+import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 const PROPERTY_TYPE_LABELS: Record<string, string> = {
   SINGLE_FAMILY: 'Single Family',
@@ -136,43 +137,32 @@ export default function PropertiesPage() {
   const canAddMore = properties.length < MAX_PROPERTIES;
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8">
-      {/* Header */}
-      <div className="sm:flex sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Properties</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Manage your properties and service locations
-            {properties.length > 0 && (
-              <span className="ml-2 text-gray-400">
-                · {properties.length} of {MAX_PROPERTIES}
-              </span>
-            )}
-          </p>
-        </div>
-        {canAddMore && (
-          <div className="mt-4 sm:mt-0">
+    <div className="space-y-6 px-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:pb-8">
+      <MobilePageIntro
+        title="Properties"
+        subtitle={`Manage your properties and service locations${
+          properties.length > 0 ? ` · ${properties.length} of ${MAX_PROPERTIES}` : ''
+        }`}
+        action={
+          canAddMore ? (
             <Link
               href="/dashboard/properties/new"
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+              className="inline-flex min-h-[40px] items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
             >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
               Add Property
             </Link>
-          </div>
-        )}
-      </div>
+          ) : null
+        }
+      />
 
       {navTargetLabel && (
-        <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
           Select a property to continue to <span className="font-semibold">{navTargetLabel}</span>.
         </div>
       )}
 
       {/* Grid */}
-      <div className="mt-8">
+      <div>
         {properties.length === 0 ? (
           /* Empty state */
           <div className="text-center py-16 bg-white rounded-xl border border-dashed border-gray-300">

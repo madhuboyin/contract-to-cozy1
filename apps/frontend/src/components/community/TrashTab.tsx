@@ -164,7 +164,7 @@ export function TrashTab({ propertyId }: Props) {
       <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          Detailed schedules are not yet available. Visit your city's official website for more information.
+          Detailed schedules are not yet available. Visit your city&apos;s official website for more information.
         </AlertDescription>
       </Alert>
 

@@ -141,7 +141,7 @@ export const AIChatWindow = () => {
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground pt-10">
                 <Bot className="w-8 h-8 mb-2" />
-                <p>Hello! I'm your Contract-to-Cozy AI Assistant. How can I help with your property and maintenance questions today?</p>
+                <p>Hello! I&apos;m your Contract-to-Cozy AI Assistant. How can I help with your property and maintenance questions today?</p>
                 <p className="text-sm mt-1">Ask me about your homeowner checklist, maintenance plans, or general property advice.</p>
               </div>
             ) : (

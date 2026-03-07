@@ -161,7 +161,7 @@ export function ValueEstimatorCard({
             {hasRemaining && (
               <p className="text-xs opacity-90 mt-2">
                 Complete {remainingImprovements.length} remaining task
-                {remainingImprovements.length !== 1 ? "s" : ""} to maximize your home's value
+                {remainingImprovements.length !== 1 ? "s" : ""} to maximize your home&apos;s value
               </p>
             )}
           </div>

@@ -325,7 +325,7 @@ export default function ProviderServicesPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {services.length === 0 ? (
             <div className="col-span-2 text-center py-12 bg-gray-50 rounded-lg">
-              <p className="text-gray-600">No services added yet. Click "Add Service" to get started!</p>
+              <p className="text-gray-600">No services added yet. Click &quot;Add Service&quot; to get started!</p>
             </div>
           ) : (
             services.map(service => (
@@ -681,7 +681,7 @@ export default function ProviderServicesPage() {
                 <h3 className="text-lg font-medium text-gray-900">Delete Service</h3>
                 <div className="mt-2">
                   <p className="text-sm text-gray-500">
-                    Are you sure you want to delete <strong>"{deletingService.name}"</strong>? 
+                    Are you sure you want to delete <strong>&quot;{deletingService.name}&quot;</strong>? 
                     This action cannot be undone.
                   </p>
                 </div>

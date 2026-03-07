@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import HomeSavingsCheckPanel from '@/components/ai/HomeSavingsCheckPanel';
+import { MobileFilterSurface, MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 function HomeSavingsContent() {
   const router = useRouter();
@@ -58,7 +59,7 @@ function HomeSavingsContent() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
       {propertyIdFromUrl && (
         <Button
           variant="link"
@@ -69,20 +70,18 @@ function HomeSavingsContent() {
         </Button>
       )}
 
-      <div className="flex items-center gap-3 mb-2">
-        <div className="p-2 sm:p-3 bg-gradient-to-br from-teal-100 to-cyan-100 rounded-lg">
-          <PiggyBank className="w-6 h-6 sm:w-8 sm:h-8 text-teal-700" />
-        </div>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Home Savings Check</h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">
-            Find simple ways to lower recurring home bills.
-          </p>
-        </div>
-      </div>
+      <MobilePageIntro
+        title="Home Savings Check"
+        subtitle="Find simple ways to lower recurring home bills."
+        action={
+          <div className="rounded-xl border border-teal-200 bg-teal-50 p-2.5 text-teal-700">
+            <PiggyBank className="h-5 w-5" />
+          </div>
+        }
+      />
 
       {properties.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
+        <MobileFilterSurface className="border border-slate-200/80 bg-white">
           <Label className="text-sm font-medium text-gray-700 mb-2 block">Select Property</Label>
           <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
             <SelectTrigger className="w-full max-w-md">
@@ -96,7 +95,7 @@ function HomeSavingsContent() {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </MobileFilterSurface>
       )}
 
       {selectedPropertyId ? (
@@ -117,4 +116,3 @@ export default function HomeSavingsPage() {
     </Suspense>
   );
 }
-

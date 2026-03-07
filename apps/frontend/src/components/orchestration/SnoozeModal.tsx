@@ -102,7 +102,7 @@ export const SnoozeModal: React.FC<Props> = ({
           )}
           {!isExtending && (
             <p className="text-sm text-muted-foreground mt-1">
-              We'll remind you about this later
+              We&apos;ll remind you about this later
             </p>
           )}
         </DialogHeader>

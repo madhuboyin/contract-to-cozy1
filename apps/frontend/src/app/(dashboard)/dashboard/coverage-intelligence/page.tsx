@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import CoverageIntelligencePanel from '@/components/ai/CoverageIntelligencePanel';
 import { ToolTrustBanner } from '@/components/tools/ToolTrustBanner';
 import { ToolMethodologyAccordion } from '@/components/tools/ToolMethodologyAccordion';
+import { MobileFilterSurface, MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 function CoverageIntelligenceContent() {
   const router = useRouter();
@@ -60,7 +61,7 @@ function CoverageIntelligenceContent() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
       {propertyIdFromUrl && (
         <Button
           variant="link"
@@ -71,17 +72,15 @@ function CoverageIntelligenceContent() {
         </Button>
       )}
 
-      <div className="flex items-center gap-3 mb-2">
-        <div className="p-2 sm:p-3 bg-gradient-to-br from-teal-100 to-cyan-100 rounded-lg">
-          <ShieldCheck className="w-6 h-6 sm:w-8 sm:h-8 text-teal-700" />
-        </div>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Coverage Intelligence</h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">
-            Insurance + warranty coverage assessment for your home.
-          </p>
-        </div>
-      </div>
+      <MobilePageIntro
+        title="Coverage Intelligence"
+        subtitle="Insurance + warranty coverage assessment for your home."
+        action={
+          <div className="rounded-xl border border-teal-200 bg-teal-50 p-2.5 text-teal-700">
+            <ShieldCheck className="h-5 w-5" />
+          </div>
+        }
+      />
 
       <ToolTrustBanner
         tone="blue"
@@ -98,7 +97,7 @@ function CoverageIntelligenceContent() {
       />
 
       {properties.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
+        <MobileFilterSurface className="border border-slate-200/80 bg-white">
           <Label className="text-sm font-medium text-gray-700 mb-2 block">Select Property</Label>
           <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
             <SelectTrigger className="w-full max-w-md">
@@ -112,7 +111,7 @@ function CoverageIntelligenceContent() {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </MobileFilterSurface>
       )}
 
       {selectedPropertyId ? (

@@ -518,6 +518,114 @@ export function ExpandableSummaryCard({
   );
 }
 
+export function MobilePageIntro({
+  title,
+  subtitle,
+  eyebrow,
+  action,
+  className,
+}: {
+  title: string;
+  subtitle?: string;
+  eyebrow?: string;
+  action?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <MobileSection className={cn('space-y-2', className)}>
+      {eyebrow ? (
+        <p className="mb-0 text-[11px] font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
+          {eyebrow}
+        </p>
+      ) : null}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="mb-0 text-[1.55rem] leading-tight font-semibold tracking-tight text-[hsl(var(--mobile-text-primary))]">
+            {title}
+          </h1>
+          {subtitle ? (
+            <p className={cn('mb-0 mt-1.5 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>
+              {subtitle}
+            </p>
+          ) : null}
+        </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
+    </MobileSection>
+  );
+}
+
+export function MobileFilterSurface({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <MobileCard variant="compact" className={cn('space-y-3', className)}>
+      {children}
+    </MobileCard>
+  );
+}
+
+export function MobileActionRow({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <div className={cn('flex flex-wrap items-center gap-2', className)}>{children}</div>;
+}
+
+export function MobileKpiStrip({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <div className={cn('grid grid-cols-2 gap-2.5', className)}>{children}</div>;
+}
+
+export function MobileKpiTile({
+  label,
+  value,
+  hint,
+  tone = 'neutral',
+}: {
+  label: string;
+  value: React.ReactNode;
+  hint?: React.ReactNode;
+  tone?: 'neutral' | 'positive' | 'warning' | 'danger';
+}) {
+  const toneClass =
+    tone === 'positive'
+      ? 'border-emerald-200/90 bg-emerald-50/80'
+      : tone === 'warning'
+      ? 'border-amber-200/90 bg-amber-50/85'
+      : tone === 'danger'
+      ? 'border-rose-200/90 bg-rose-50/80'
+      : 'border-[hsl(var(--mobile-border-subtle))] bg-white';
+
+  return (
+    <div className={cn('rounded-2xl border p-3', toneClass)}>
+      <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>{label}</p>
+      <p className="mb-0 mt-1 text-lg font-semibold leading-tight text-[hsl(var(--mobile-text-primary))]">{value}</p>
+      {hint ? <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>{hint}</p> : null}
+    </div>
+  );
+}
+
+export function BottomSafeAreaGuard({
+  className,
+}: {
+  className?: string;
+}) {
+  return <div className={cn('h-[calc(5.5rem+env(safe-area-inset-bottom))]', className)} aria-hidden="true" />;
+}
+
 export function MobileHorizontalScroller({
   children,
   className,

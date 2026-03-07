@@ -41,6 +41,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 /**
  * Infer appliance type from InventoryItem for HomeAsset compatibility
@@ -1007,7 +1008,7 @@ const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
 
 
   return (
-    <div className="space-y-6 pb-8">
+    <div className="space-y-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
       <OnboardingReturnBanner />
       <Button 
         variant="link" 
@@ -1022,31 +1023,30 @@ const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
       >
         <ArrowLeft className="h-4 w-4 mr-1" /> Back
       </Button>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2 sm:text-3xl">
-          <Wrench className="w-6 h-6 text-blue-600 sm:w-7 sm:h-7" /> My Home Warranties
-        </h2>
-        
-        <Dialog open={isAddEditModalOpen} onOpenChange={handleAddEditDialogOpenChange}>
-          <Button onClick={() => openAddEditModal(undefined)}>
-            <Plus className="w-4 h-4 mr-2" /> Add Warranty
-          </Button>
-          {/* FIX: Increased max-width from sm:max-w-[500px] to sm:max-w-[700px] 
-             to accommodate the new dual-column dropdowns without overlap/overflow. */}
-          <DialogContent className="modal-container w-[calc(100vw-2rem)] sm:max-w-[700px] gap-0 overflow-hidden p-0 max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:max-h-[92vh] max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0"> 
-            <WarrantyForm 
-              initialData={editingWarranty}
-              properties={properties}
-              homeAssets={homeAssets} // PASSED NEW PROP
-              prefill={!editingWarranty ? createModalPrefill : undefined}
-              onSave={handleSave}
-              onClose={closeAddEditModal}
-              isSubmitting={isSubmitting}
-            />
-          </DialogContent>
-        </Dialog>
-      </div>
-      <p className="text-muted-foreground">Track all service, appliance, and home warranties in one place. Never miss an expiration date.</p>
+      <MobilePageIntro
+        title="My Home Warranties"
+        subtitle="Track all service, appliance, and home warranties in one place. Never miss an expiration date."
+        action={
+          <Dialog open={isAddEditModalOpen} onOpenChange={handleAddEditDialogOpenChange}>
+            <Button onClick={() => openAddEditModal(undefined)}>
+              <Plus className="w-4 h-4 mr-2" /> Add Warranty
+            </Button>
+            {/* FIX: Increased max-width from sm:max-w-[500px] to sm:max-w-[700px] 
+               to accommodate the new dual-column dropdowns without overlap/overflow. */}
+            <DialogContent className="modal-container w-[calc(100vw-2rem)] sm:max-w-[700px] gap-0 overflow-hidden p-0 max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:max-h-[92vh] max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0"> 
+              <WarrantyForm 
+                initialData={editingWarranty}
+                properties={properties}
+                homeAssets={homeAssets} // PASSED NEW PROP
+                prefill={!editingWarranty ? createModalPrefill : undefined}
+                onSave={handleSave}
+                onClose={closeAddEditModal}
+                isSubmitting={isSubmitting}
+              />
+            </DialogContent>
+          </Dialog>
+        }
+      />
 
       {isLoading && (
         <div className="text-center py-10">

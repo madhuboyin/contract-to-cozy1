@@ -41,7 +41,7 @@ export default function SavingsCalculator() {
             Calculate Your Savings
           </h2>
           <p className="text-base text-gray-600">
-            See how much time and money you'll save
+            See how much time and money you&apos;ll save
           </p>
         </div>
 

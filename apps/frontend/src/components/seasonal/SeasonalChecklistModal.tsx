@@ -217,7 +217,7 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
               }}
               className="rounded border-gray-300 text-green-600 focus:ring-green-500 h-4 w-4 shrink-0"
             />
-            <span className="hidden sm:inline">Don't show me this again this season</span>
+            <span className="hidden sm:inline">Don&apos;t show me this again this season</span>
             <span className="sm:hidden">Hide</span>
           </label>
           

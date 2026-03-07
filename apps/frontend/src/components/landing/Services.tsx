@@ -65,7 +65,7 @@ export default function Services() {
             Services We Cover
           </h2>
           <p className="text-base text-gray-600 max-w-2xl mx-auto">
-            From inspection to move-in and beyond, we've got you covered
+            From inspection to move-in and beyond, we&apos;ve got you covered
           </p>
         </div>
 

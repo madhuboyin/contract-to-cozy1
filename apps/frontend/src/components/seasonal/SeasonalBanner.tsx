@@ -12,13 +12,7 @@ interface SeasonalBannerProps {
   propertyId: string;
 }
 
-export function SeasonalBanner({ propertyId }: SeasonalBannerProps) {
-  const { data: segment } = useHomeownerSegment();
-  console.log('👤 Homeowner segment:', segment);
-  // Don't show for home buyers
-  if (segment !== 'EXISTING_OWNER') {
-    return null;
-  }
+function ExistingOwnerSeasonalBanner({ propertyId }: SeasonalBannerProps) {
   const [showModal, setShowModal] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [selectedChecklistId, setSelectedChecklistId] = useState<string | null>(null);
@@ -73,7 +67,7 @@ export function SeasonalBanner({ propertyId }: SeasonalBannerProps) {
                 {colors.name} is approaching in {formatDaysRemaining(climateInfo.data.daysUntilNextSeason)}
               </h3>
               <p className="text-gray-700 text-sm mb-3">
-                We've prepared {upcomingChecklist.totalTasks} maintenance tasks to get your home ready.
+                We&apos;ve prepared {upcomingChecklist.totalTasks} maintenance tasks to get your home ready.
               </p>
               <div className="flex space-x-3">
                 <button
@@ -112,4 +106,15 @@ export function SeasonalBanner({ propertyId }: SeasonalBannerProps) {
       )}
     </>
   );
+}
+
+export function SeasonalBanner({ propertyId }: SeasonalBannerProps) {
+  const { data: segment } = useHomeownerSegment();
+  console.log('👤 Homeowner segment:', segment);
+
+  if (segment !== 'EXISTING_OWNER') {
+    return null;
+  }
+
+  return <ExistingOwnerSeasonalBanner propertyId={propertyId} />;
 }

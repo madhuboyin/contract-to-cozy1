@@ -186,7 +186,7 @@ export default function SellerPrepPage() {
               Home Sale Preparation
             </PageHeaderHeading>
             <PageHeaderDescription>
-              Personalized action plan to maximize your home's resale value
+              Personalized action plan to maximize your home&apos;s resale value
             </PageHeaderDescription>
           </PageHeader>
           

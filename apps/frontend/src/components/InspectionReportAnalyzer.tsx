@@ -252,7 +252,7 @@ export default function InspectionReportAnalyzer({ propertyId }: Props) {
 
             {/* Info Box */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h4 className="font-semibold text-blue-900 mb-2">What You'll Get:</h4>
+              <h4 className="font-semibold text-blue-900 mb-2">What You&apos;ll Get:</h4>
               <ul className="space-y-1 text-sm text-blue-800">
                 <li>✓ AI extraction of all inspection issues</li>
                 <li>✓ Severity scoring (Critical vs Cosmetic)</li>

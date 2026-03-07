@@ -394,7 +394,7 @@ export default function SignupPage() {
                       className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
                     />
                     <span className="ml-3 text-sm font-medium text-gray-800">
-                      I'm buying a new home
+                      I&apos;m buying a new home
                     </span>
                   </label>
                   <label
@@ -411,7 +411,7 @@ export default function SignupPage() {
                       className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
                     />
                     <span className="ml-3 text-sm font-medium text-gray-800">
-                      I'm an existing homeowner
+                      I&apos;m an existing homeowner
                     </span>
                   </label>
                 </div>

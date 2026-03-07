@@ -125,7 +125,7 @@ export default function EmergencyTroubleshooter({ propertyId }: EmergencyTrouble
           <div className="text-center py-12 text-gray-500">
             <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-gray-400" />
             <p>Describe your emergency to get started</p>
-            <p className="text-sm mt-2">Examples: "Toilet overflowing", "Smell gas", "No hot water"</p>
+            <p className="text-sm mt-2">Examples: &quot;Toilet overflowing&quot;, &quot;Smell gas&quot;, &quot;No hot water&quot;</p>
           </div>
         ) : (
           messages.map((msg, i) => (

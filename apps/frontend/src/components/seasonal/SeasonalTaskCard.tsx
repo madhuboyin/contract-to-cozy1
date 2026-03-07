@@ -222,7 +222,7 @@ export function SeasonalTaskCard({
               {showDetails && (
                 <div className="mt-2 p-4 bg-gray-50 rounded space-y-2 text-sm">
                   <div>
-                    <span className="font-medium">Why it's important:</span>
+                    <span className="font-medium">Why it&apos;s important:</span>
                     <p className="text-gray-600 mt-1">{item.seasonalTaskTemplate.whyItMatters}</p>
                   </div>
 

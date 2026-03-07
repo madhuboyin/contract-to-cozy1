@@ -10,6 +10,7 @@ import { getClimateRegionName, getClimateRegionIcon } from '@/lib/utils/seasonHe
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
+import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 export default function SeasonalSettingsPage() {
   const router = useRouter();
   // FIX: Get propertyId from URL params first (for page reload), then fall back to context
@@ -84,7 +85,7 @@ export default function SeasonalSettingsPage() {
   const isAutoDetected = climateData?.data?.climateRegionSource === 'AUTO_DETECTED';
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="mx-auto max-w-4xl px-4 py-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
       <Button 
           variant="link" 
           className="p-0 h-auto mb-2 text-sm text-muted-foreground"
@@ -92,12 +93,11 @@ export default function SeasonalSettingsPage() {
       >
           <ArrowLeft className="h-4 w-4 mr-1" /> Back
       </Button>
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Seasonal Maintenance Settings</h1>
-        <p className="text-gray-600">
-          Customize how you receive seasonal maintenance recommendations
-        </p>
+      <div className="mb-6">
+        <MobilePageIntro
+          title="Seasonal Settings"
+          subtitle="Customize climate region and how seasonal reminders are delivered."
+        />
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">

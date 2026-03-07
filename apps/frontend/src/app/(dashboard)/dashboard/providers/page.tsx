@@ -15,6 +15,14 @@ import { Provider, ServiceCategory } from '@/types';
 import { cn } from '@/lib/utils';
 import { ServiceCategoryIcon } from '@/components/ServiceCategoryIcon';
 import { formatEnumLabel } from '@/lib/utils/formatters';
+import {
+  MobileFilterSurface,
+  MobileKpiStrip,
+  MobileKpiTile,
+  MobilePageIntro,
+  MobileSection,
+  MobileSectionHeader,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 const DEFAULT_RADIUS = 25;
 const CATEGORIES: { value: ServiceCategory; label: string; icon?: string }[] = [
@@ -78,20 +86,20 @@ const ServiceFilter = React.memo(
     }, [defaultZipCode, zipCode]);
 
     return (
-      <div className="relative isolate overflow-hidden rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-100 via-white to-emerald-100 p-6 shadow-md">
-        <div className="mb-4">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900 sm:text-xl">
-            <Search className="h-5 w-5 text-brand-primary" />
+      <MobileFilterSurface className="space-y-4 border border-slate-200/80 bg-white">
+        <div>
+          <h2 className="flex items-center gap-2 text-base font-semibold text-gray-900 sm:text-lg">
+            <Search className="h-4 w-4 text-brand-primary" />
             Find Local Providers
           </h2>
-          <p className="mt-1 text-sm text-gray-600">Search for trusted professionals based on service and location.</p>
+          <p className="mt-1 text-sm text-gray-600">Search by service category and location.</p>
         </div>
 
-        <form onSubmit={handleSearch} className="space-y-4 sm:grid sm:grid-cols-4 sm:gap-4 sm:space-y-0">
+        <form onSubmit={handleSearch} className="grid gap-3 sm:grid-cols-4 sm:items-end sm:gap-4">
           <div className="sm:col-span-2">
-            <label className="mb-1.5 block text-sm font-medium">Service Category</label>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Service Category</label>
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger className="min-h-[44px] w-full text-base">
+              <SelectTrigger className="min-h-[44px] w-full text-sm">
                 <SelectValue placeholder={isHomeBuyer ? 'Inspection (Required)' : 'Select a Category'} />
               </SelectTrigger>
               <SelectContent>
@@ -111,20 +119,19 @@ const ServiceFilter = React.memo(
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium">Zip Code</label>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Zip Code</label>
             <Input
               type="text"
               placeholder="e.g., 78701"
               value={zipCode}
               onChange={(e) => setZipCode(e.target.value)}
-              className="min-h-[44px] w-full text-base"
+              className="min-h-[44px] w-full text-sm"
             />
           </div>
 
-          <div className="flex items-end">
+          <div>
             <Button
               type="submit"
-              size="lg"
               disabled={isSearching}
               className="min-h-[44px] w-full bg-brand-primary text-white hover:bg-brand-primary/90"
             >
@@ -148,7 +155,7 @@ const ServiceFilter = React.memo(
                   'flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all',
                   selectedCategory === cat.value
                     ? 'border-brand-primary bg-brand-primary text-white shadow-sm'
-                    : 'border-gray-200 bg-white text-gray-600 hover:border-teal-300 hover:bg-teal-50'
+                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white'
                 )}
               >
                 <ServiceCategoryIcon icon={cat.value} className="h-3 w-3" />
@@ -159,12 +166,12 @@ const ServiceFilter = React.memo(
         </div>
 
         {isHomeBuyer && (
-          <div className="mt-4 rounded-lg border-l-4 border-brand-primary bg-teal-50 p-3 text-sm text-teal-700">
+          <div className="mt-1 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm text-sky-800">
             <ListChecks className="mr-1 inline h-4 w-4" />
             We recommend starting with a <span className="font-semibold">Home Inspection</span>.
           </div>
         )}
-      </div>
+      </MobileFilterSurface>
     );
   }
 );
@@ -397,8 +404,11 @@ export default function ProvidersPage() {
   }
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      <h1 className="text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl">Provider Search</h1>
+    <div className="space-y-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+      <MobilePageIntro
+        title="Provider Search"
+        subtitle="Find trusted local professionals by service and location."
+      />
 
       {insightContext && (
         <Card className="border-blue-200 bg-blue-50">
@@ -440,23 +450,35 @@ export default function ProvidersPage() {
         isSearching={dataLoading}
       />
 
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">
-            {dataLoading ? 'Searching Providers...' : `${providers.length} Provider${providers.length !== 1 ? 's' : ''} Found`}
-          </h2>
-          {insightContext && (
-            <p className="mt-0.5 text-sm text-teal-700">
-              Showing specialists for: <span className="font-medium">{formatEnumLabel(insightContext)}</span>
-            </p>
-          )}
-        </div>
-        <Select disabled>
-          <SelectTrigger className="w-40 text-sm">
-            <SelectValue placeholder="Sort: Top Rated" />
-          </SelectTrigger>
-        </Select>
-      </div>
+      <MobileKpiStrip className="sm:grid-cols-3">
+        <MobileKpiTile
+          label="Matches"
+          value={dataLoading ? '...' : providers.length}
+          hint={dataLoading ? 'Searching now' : providers.length === 1 ? 'Provider found' : 'Providers found'}
+          tone={providers.length > 0 ? 'positive' : 'neutral'}
+        />
+        <MobileKpiTile
+          label="ZIP"
+          value={filters.zipCode || 'Any'}
+          hint="Current location filter"
+        />
+        <MobileKpiTile
+          label="Category"
+          value={filters.category === 'ALL' ? 'All' : formatEnumLabel(filters.category)}
+          hint="Primary service filter"
+        />
+      </MobileKpiStrip>
+
+      <MobileSection>
+        <MobileSectionHeader
+          title={dataLoading ? 'Searching Providers...' : `${providers.length} Provider${providers.length !== 1 ? 's' : ''} Found`}
+          subtitle={
+            insightContext
+              ? `Showing specialists for ${formatEnumLabel(insightContext)}`
+              : 'Tap a provider to review profile details and ratings.'
+          }
+        />
+      </MobileSection>
 
       {dataLoading ? (
         <div className="flex h-48 items-center justify-center">

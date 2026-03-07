@@ -46,6 +46,18 @@ function formatWeeklyDelta(delta: number | null) {
 }
 
 export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardProps) {
+  const snapshotQuery = useQuery({
+    queryKey: ["property-score-snapshot", property?.id ?? "none", "HEALTH"],
+    queryFn: async () => {
+      if (!property?.id) {
+        return null;
+      }
+      return api.getPropertyScoreSnapshots(property.id, 16);
+    },
+    enabled: !!property?.id,
+    staleTime: 10 * 60 * 1000,
+  });
+
   if (!property) {
     return (
       <div className={`${CARD_SHELL} bg-white border-gray-200`}>
@@ -69,13 +81,6 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
     property.healthScore?.insights.filter((insight) =>
       HIGH_PRIORITY_STATUSES.includes(insight.status)
     ).length || 0;
-
-  const snapshotQuery = useQuery({
-    queryKey: ["property-score-snapshot", property.id, "HEALTH"],
-    queryFn: async () => api.getPropertyScoreSnapshots(property.id, 16),
-    enabled: !!property.id,
-    staleTime: 10 * 60 * 1000,
-  });
   const weeklyChange = formatWeeklyDelta(
     snapshotQuery.data?.scores?.HEALTH?.deltaFromPreviousWeek ?? null
   );

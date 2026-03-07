@@ -38,6 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 // Placeholder for "None" option, necessary to avoid Radix UI error on value=""
 const SELECT_NONE_VALUE = '__NONE__';
@@ -582,30 +583,29 @@ export default function InsurancePage() {
 
 
   return (
-    <div className="space-y-6 pb-8">
+    <div className="space-y-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
       <OnboardingReturnBanner />
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2 sm:text-3xl">
-          <Shield className="w-6 h-6 text-green-600 sm:w-7 sm:h-7" /> My Insurance Policies
-        </h2>
-        
-        <Dialog open={isAddEditModalOpen} onOpenChange={handleAddEditDialogOpenChange}>
-          <Button onClick={() => openAddEditModal(undefined)}>
-            <Plus className="w-4 h-4 mr-2" /> Add Policy
-          </Button>
-          <DialogContent className="modal-container w-[calc(100vw-2rem)] sm:max-w-[700px] gap-0 overflow-hidden p-0 max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:max-h-[92vh] max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0">
-            <PolicyForm 
-              initialData={editingPolicy}
-              properties={properties}
-              prefill={!editingPolicy ? createModalPrefill : undefined}
-              onSave={handleSave}
-              onClose={closeAddEditModal}
-              isSubmitting={isSubmitting}
-            />
-          </DialogContent>
-        </Dialog>
-      </div>
-      <p className="text-muted-foreground">Track policy details and renewal dates for all your properties.</p>
+      <MobilePageIntro
+        title="My Insurance Policies"
+        subtitle="Track policy details and renewal dates for all your properties."
+        action={
+          <Dialog open={isAddEditModalOpen} onOpenChange={handleAddEditDialogOpenChange}>
+            <Button onClick={() => openAddEditModal(undefined)}>
+              <Plus className="w-4 h-4 mr-2" /> Add Policy
+            </Button>
+            <DialogContent className="modal-container w-[calc(100vw-2rem)] sm:max-w-[700px] gap-0 overflow-hidden p-0 max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:max-h-[92vh] max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0">
+              <PolicyForm 
+                initialData={editingPolicy}
+                properties={properties}
+                prefill={!editingPolicy ? createModalPrefill : undefined}
+                onSave={handleSave}
+                onClose={closeAddEditModal}
+                isSubmitting={isSubmitting}
+              />
+            </DialogContent>
+          </Dialog>
+        }
+      />
       
       {isLoading && (
         <div className="text-center py-10">

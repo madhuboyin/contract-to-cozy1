@@ -135,7 +135,7 @@ export function SellerPrepIntakeForm({
         return (
           <div className="space-y-4">
             <Label className="text-base font-medium">
-              What's your improvement budget?
+              What&apos;s your improvement budget?
             </Label>
             <RadioGroup
               value={formData.budget}
@@ -223,7 +223,7 @@ export function SellerPrepIntakeForm({
         return (
           <div className="space-y-4">
             <Label className="text-base font-medium">
-              What's your priority?
+              What&apos;s your priority?
             </Label>
             <RadioGroup
               value={formData.priority}
@@ -313,7 +313,7 @@ export function SellerPrepIntakeForm({
         <DialogHeader>
           <DialogTitle>Tell us about your sale</DialogTitle>
           <DialogDescription>
-            We'll personalize recommendations based on your situation
+            We&apos;ll personalize recommendations based on your situation
           </DialogDescription>
         </DialogHeader>
 

@@ -21,6 +21,16 @@ import { SnoozeModal } from '@/components/orchestration/SnoozeModal';
 import { CompletionModal } from '@/components/orchestration/CompletionModal';
 import { useSearchParams } from 'next/navigation';
 import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
+import {
+  BottomSafeAreaGuard,
+  MobileActionRow,
+  MobileKpiStrip,
+  MobileKpiTile,
+  MobilePageContainer,
+  MobilePageIntro,
+  MobileSection,
+  MobileSectionHeader,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 export function ActionsClient() {
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
@@ -240,7 +250,7 @@ export function ActionsClient() {
         variant: 'destructive',
       });
     }
-  }, [traceAction, propertyId, toast]);
+  }, [traceAction, propertyId, loadActions, toast]);
   const handleSnoozeFromTrace = useCallback(() => {
     if (!traceAction) {
       return;
@@ -367,37 +377,45 @@ export function ActionsClient() {
 
   return (
     <>
-      <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+      <MobilePageContainer className="max-w-6xl space-y-6 pt-2">
         <OnboardingReturnBanner />
-        {/* Breadcrumb */}
-        <nav className="text-sm text-muted-foreground">
-          <ol className="flex items-center space-x-2">
-            <li>
-              <a href="/dashboard" className="hover:text-gray-900">
-                Dashboard
-              </a>
-            </li>
-            <li>/</li>
-            <li className="text-gray-900 font-medium">Actions</li>
-          </ol>
-        </nav>
-
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">
-            All Actions
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            A complete view of everything your home needs right now — including
-            suppressed items and decision reasoning.
-          </p>
-        </div>
+        <MobilePageIntro
+          eyebrow={propertyName || 'Action Center'}
+          title="All Actions"
+          subtitle="Everything your home needs right now, including suppressed and snoozed items."
+        />
+        <MobileKpiStrip className="sm:grid-cols-4">
+          <MobileKpiTile
+            label="Active"
+            value={actions.length}
+            hint={actions.length === 1 ? 'Needs attention' : 'Need attention'}
+            tone={actions.length > 0 ? 'warning' : 'neutral'}
+          />
+          <MobileKpiTile
+            label="Suppressed"
+            value={suppressedActions.length}
+            hint="Auto-hidden by system"
+            tone={suppressedActions.length > 0 ? 'positive' : 'neutral'}
+          />
+          <MobileKpiTile
+            label="Snoozed"
+            value={snoozedActions.length}
+            hint="Will return later"
+            tone={snoozedActions.length > 0 ? 'danger' : 'neutral'}
+          />
+          <MobileKpiTile
+            label="Total"
+            value={actions.length + suppressedActions.length + snoozedActions.length}
+            hint="Across all queues"
+          />
+        </MobileKpiStrip>
 
         {/* Active Actions */}
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">
-            Active Actions ({actions.length})
-          </h2>
+        <MobileSection className="space-y-4">
+          <MobileSectionHeader
+            title={`Active Actions (${actions.length})`}
+            subtitle="Highest-priority actions are shown first."
+          />
 
           {actions.length === 0 ? (
             <div className="rounded-lg border p-4 text-sm text-muted-foreground">
@@ -440,16 +458,17 @@ export function ActionsClient() {
 
             </div>
           )}
-        </section>
+        </MobileSection>
 
         {/* Suppressed Actions */}
         {suppressedActions.length > 0 && (
           <>
             <Separator />
-            <section className="space-y-4">
-              <h2 className="text-lg font-semibold text-gray-700">
-                Suppressed Actions ({suppressedActions.length})
-              </h2>
+            <MobileSection className="space-y-4">
+              <MobileSectionHeader
+                title={`Suppressed Actions (${suppressedActions.length})`}
+                subtitle="Actions already covered by recent activity."
+              />
               <div className="space-y-3">
               {suppressedActions.map(action => (
                 <OrchestrationActionCard 
@@ -460,25 +479,26 @@ export function ActionsClient() {
                 />
               ))}
               </div>
-            </section>
+            </MobileSection>
           </>
         )}
         {/* Snoozed Actions */}
         {snoozedActions.length > 0 && (
           <>
             <Separator />
-            <section className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-700">
-                  Snoozed Actions ({snoozedActions.length})
-                </h2>
-                <button
-                  onClick={() => setShowSnoozed(!showSnoozed)}
-                  className="text-sm text-blue-600 hover:underline min-h-[44px] px-3 py-2 touch-manipulation"
-                >
-                  {showSnoozed ? 'Hide' : 'Show'}
-                </button>
-              </div>
+            <MobileSection className="space-y-4">
+              <MobileSectionHeader
+                title={`Snoozed Actions (${snoozedActions.length})`}
+                subtitle="Hidden until their snooze period ends."
+                action={
+                  <button
+                    onClick={() => setShowSnoozed(!showSnoozed)}
+                    className="min-h-[40px] rounded-lg border border-slate-200 px-3 text-sm text-slate-700 transition-colors hover:bg-slate-50"
+                  >
+                    {showSnoozed ? 'Hide' : 'Show'}
+                  </button>
+                }
+              />
 
               {showSnoozed && (
                 <div className="space-y-3">
@@ -500,10 +520,10 @@ export function ActionsClient() {
                           ctaLabel={snoozeLabel}
                         />
                         
-                        <div className="flex gap-2">
+                        <MobileActionRow>
                           <button
                             onClick={() => handleUnsnooze(action)}
-                            className="text-xs text-blue-600 hover:underline min-h-[44px] px-3 py-2 touch-manipulation"
+                            className="min-h-[40px] rounded-md border border-slate-200 px-3 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
                           >
                             Un-snooze now
                           </button>
@@ -512,20 +532,21 @@ export function ActionsClient() {
                               setTraceAction(action);
                               setIsSnoozeModalOpen(true);
                             }}
-                            className="text-xs text-blue-600 hover:underline min-h-[44px] px-3 py-2 touch-manipulation"
+                            className="min-h-[40px] rounded-md border border-slate-200 px-3 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
                           >
                             Extend snooze
                           </button>
-                        </div>
+                        </MobileActionRow>
                       </div>
                     );
                   })}
                 </div>
               )}
-            </section>
+            </MobileSection>
           </>
         )}
-      </div>
+        <BottomSafeAreaGuard />
+      </MobilePageContainer>
       {/* Modal */}
       <MaintenanceConfigModal
         isOpen={isModalOpen}

@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { Button } from '@/components/ui/button';
+import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 /* ----------------------------- helpers ----------------------------- */
 
@@ -145,13 +146,11 @@ export default function CommunityPage() {
   /* ---------------- UI ---------------- */
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Community</h1>
-        <p className="text-sm text-muted-foreground">
-          Local events, city services, and municipal alerts
-        </p>
-      </div>
+    <div className="space-y-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+      <MobilePageIntro
+        title="Community"
+        subtitle="Local events, city services, and municipal alerts for your selected property."
+      />
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as 'events' | 'trash' | 'alerts')}>
         <TabsList>

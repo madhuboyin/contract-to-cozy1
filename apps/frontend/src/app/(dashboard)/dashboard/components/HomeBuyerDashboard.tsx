@@ -108,7 +108,7 @@ export const HomeBuyerDashboard = ({
               <div className="bg-green-100 border border-green-300 rounded p-4 text-center">
                 <CheckCircle2 className="h-8 w-8 text-green-600 mx-auto mb-2" />
                 <p className="font-semibold text-green-800">
-                  All tasks complete! You're ready to close! 🎉
+                  All tasks complete! You&apos;re ready to close! 🎉
                 </p>
               </div>
             ) : (

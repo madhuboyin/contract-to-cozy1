@@ -43,7 +43,7 @@ export default function ComingSoon() {
             Coming Soon
           </h2>
           <p className="text-xl text-white/90 mb-8">
-            We're building something special. Check back soon!
+            We&apos;re building something special. Check back soon!
           </p>
 
           {/* Simple Progress Indicator */}

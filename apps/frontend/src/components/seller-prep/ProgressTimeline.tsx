@@ -99,7 +99,7 @@ export function ProgressTimeline({ items, startDate }: ProgressTimelineProps) {
               </span>
             </div>
             <p className="text-sm text-blue-800">
-              At your current pace, you'll complete all tasks by{" "}
+              At your current pace, you&apos;ll complete all tasks by{" "}
               <strong>{format(estimatedCompletionDate, "MMMM d, yyyy")}</strong>
               {" "}({estimatedDaysRemaining} days remaining)
             </p>
@@ -166,7 +166,7 @@ export function ProgressTimeline({ items, startDate }: ProgressTimelineProps) {
         {doneItems > 0 && remainingItems > 0 && (
           <div className="border-t pt-4">
             <p className="text-sm text-gray-600">
-              🎯 Keep going! You've completed <strong>{doneItems}</strong> of{" "}
+              🎯 Keep going! You&apos;ve completed <strong>{doneItems}</strong> of{" "}
               <strong>{totalItems}</strong> tasks.{" "}
               {remainingItems === 1 
                 ? "Just 1 more to go!" 

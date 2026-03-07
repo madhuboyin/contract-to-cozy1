@@ -161,7 +161,7 @@ export function RoomRow({ propertyId, room, index, onRename, onDelete }: RoomRow
           </div>
 
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-red-700">Delete "{room.name}"?</p>
+            <p className="text-sm font-semibold text-red-700">Delete &quot;{room.name}&quot;?</p>
             <p className="mt-0.5 text-xs text-red-500">
               {room.itemCount > 0
                 ? `This will unlink ${room.itemCount} item${room.itemCount === 1 ? '' : 's'}. Items won't be deleted.`

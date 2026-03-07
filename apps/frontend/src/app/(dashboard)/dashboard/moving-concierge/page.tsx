@@ -72,7 +72,7 @@ function MovingConciergeContent() {
             </p>
             <p className="text-orange-700 text-sm">
               This feature helps with moving planning, utility setup, and transition tasks. 
-              Since you're an existing homeowner, you can explore our other property management features!
+              Since you&apos;re an existing homeowner, you can explore our other property management features!
             </p>
             <button
               onClick={() => router.push('/dashboard')}

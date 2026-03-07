@@ -70,12 +70,12 @@ export function BudgetTrackerCard({
             <div className="text-xs text-yellow-800">
               {percentSpent > 90 ? (
                 <p>
-                  <strong>Budget alert:</strong> You're approaching your budget limit.
+                  <strong>Budget alert:</strong> You&apos;re approaching your budget limit.
                   Consider prioritizing remaining tasks.
                 </p>
               ) : (
                 <p>
-                  <strong>Heads up:</strong> You've used over 75% of your budget.
+                  <strong>Heads up:</strong> You&apos;ve used over 75% of your budget.
                 </p>
               )}
             </div>

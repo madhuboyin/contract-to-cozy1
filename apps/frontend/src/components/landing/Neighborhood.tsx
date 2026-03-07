@@ -40,7 +40,7 @@ export default function Neighborhood() {
                   </h3>
                   {/* 6. Reduced feature description font size (implicit base to text-sm) */}
                   <p className="text-sm text-gray-600">
-                    See providers who've done great work on your street. Real photos, real reviews from real neighbors.
+                    See providers who&apos;ve done great work on your street. Real photos, real reviews from real neighbors.
                   </p>
                 </div>
               </div>
@@ -68,7 +68,7 @@ export default function Neighborhood() {
                   </h3>
                   {/* 6. Reduced feature description font size (implicit base to text-sm) */}
                   <p className="text-sm text-gray-600">
-                    Connect with homeowners nearby who've used these providers. Get the inside scoop before you book.
+                    Connect with homeowners nearby who&apos;ve used these providers. Get the inside scoop before you book.
                   </p>
                 </div>
               </div>

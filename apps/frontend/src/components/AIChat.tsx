@@ -33,11 +33,7 @@ interface ChatMessage {
     text: string;
 }
 
-export const AIChat: React.FC = () => {
-  if (!isChatEnabled) {
-      return null;
-  }
-    
+const AIChatInner: React.FC = () => {
   const { user } = useAuth();
   // [MODIFICATION] Get selectedPropertyId from context
   const { selectedPropertyId } = usePropertyContext();
@@ -300,4 +296,12 @@ export const AIChat: React.FC = () => {
       </div>
     </>
   );
+};
+
+export const AIChat: React.FC = () => {
+  if (!isChatEnabled) {
+    return null;
+  }
+
+  return <AIChatInner />;
 };

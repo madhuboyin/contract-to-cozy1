@@ -665,12 +665,12 @@ export function MaintenanceConfigModal({
             {/* Contextual description for FINANCE/ADMIN */}
             {isCurrentCategoryFinance && (
                 <p className="text-sm text-gray-500 font-medium mt-1">
-                    This task sets a **recurring reminder** for a financial event. After setup, you'll be directed to the Expenses page.
+                    This task sets a **recurring reminder** for a financial event. After setup, you&apos;ll be directed to the Expenses page.
                 </p>
             )}
             {isCurrentCategoryAdmin && (
                 <p className="text-sm text-gray-500 font-medium mt-1">
-                    This task sets a **one-time reminder** to review documents. After setup, you'll be directed to the Documents page.
+                    This task sets a **one-time reminder** to review documents. After setup, you&apos;ll be directed to the Documents page.
                 </p>
             )}
           </div>

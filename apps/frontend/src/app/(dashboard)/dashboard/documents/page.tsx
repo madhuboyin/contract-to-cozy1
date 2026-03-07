@@ -18,6 +18,7 @@ import { Document, DocumentType, Property, Warranty, InsurancePolicy, DocumentUp
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
+import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 // --- Document Type Constants for UI ---
 const DOCUMENT_TYPES: DocumentType[] = [
@@ -591,7 +592,7 @@ export default function DocumentsPage() {
   };
 
   return (
-    <div className="space-y-6 pb-8">
+    <div className="space-y-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
       <OnboardingReturnBanner />
       {propertyIdFromUrl && (
         <Button 
@@ -602,17 +603,15 @@ export default function DocumentsPage() {
             <ArrowLeft className="h-4 w-4 mr-1" /> Back
         </Button>
       )}      
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
-            <FileText className="w-6 h-6 sm:w-7 sm:h-7 text-purple-600" /> Document Vault
-          </h2>
-          <p className="text-muted-foreground mt-1">Centralized repository with AI-powered analysis</p>
-        </div>
-        <Button onClick={() => setIsUploadModalOpen(true)} className="w-full sm:w-auto">
-          <Plus className="w-4 h-4 mr-2" /> Upload New Document
-        </Button>
-      </div>
+      <MobilePageIntro
+        title="Document Vault"
+        subtitle="Centralized repository with AI-powered analysis"
+        action={
+          <Button onClick={() => setIsUploadModalOpen(true)} className="w-full sm:w-auto">
+            <Plus className="w-4 h-4 mr-2" /> Upload New Document
+          </Button>
+        }
+      />
 
       <Card>
         <CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -661,7 +660,7 @@ export default function DocumentsPage() {
         <Card className="text-center py-10">
           <FileText className="w-10 h-10 text-gray-400 mx-auto mb-3" />
           <CardTitle>No Documents Found</CardTitle>
-          <CardDescription>Click "Upload New Document" to add your first file.</CardDescription>
+          <CardDescription>Click &quot;Upload New Document&quot; to add your first file.</CardDescription>
         </Card>
       )}
 

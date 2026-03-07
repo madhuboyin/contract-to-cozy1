@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Circle, RotateCcw } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { Notification } from '@/lib/notifications/NotificationContext';
+import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 const SOURCE_BADGE_META: Record<string, { emoji: string; label: string }> = {
   SCHEDULED: { emoji: '⏱', label: 'Scheduled' },
@@ -68,15 +69,14 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-4 p-4">
+    <div className="mx-auto max-w-4xl space-y-4 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Notifications</h1>
-          <p className="text-muted-foreground text-sm">
-            Unread updates are shown first and persisted across sessions.
-          </p>
-        </div>
+      <div className="mb-6 flex items-center justify-between">
+        <MobilePageIntro
+          title="Notifications"
+          subtitle="Unread updates appear first and stay synced across sessions."
+          className="w-full"
+        />
 
         {notifications.some(n => !n.isRead) && (
           <button

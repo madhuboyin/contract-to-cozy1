@@ -581,7 +581,7 @@ export default function EnergyAuditor({ propertyId, squareFootage: propSquareFoo
           <div>
             <Label>Upload Sample Bills (Optional)</Label>
             <p className="text-xs text-gray-500 mb-2">
-              Upload 2-3 utility bills (PDF or image) for better seasonal analysis. We'll only extract key numbers.
+              Upload 2-3 utility bills (PDF or image) for better seasonal analysis. We&apos;ll only extract key numbers.
             </p>
             
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
