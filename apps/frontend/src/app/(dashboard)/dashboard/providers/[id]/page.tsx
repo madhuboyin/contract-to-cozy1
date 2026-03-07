@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/use-toast';
+import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 interface CompleteUser extends User {
   phone: string | null;
@@ -187,13 +188,19 @@ export default function ProviderDetailPage() {
   const showEmail = Boolean(provider.user.email && provider.user.email !== 'N/A');
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="mx-auto max-w-5xl px-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:px-6 lg:pb-8">
       <button
         onClick={() => router.back()}
         className="mb-4 min-h-[44px] text-sm text-gray-600 transition-colors hover:text-gray-900"
       >
         ← Back
       </button>
+
+      <MobilePageIntro
+        title="Provider Profile"
+        subtitle="Review provider details, services, and availability before booking."
+        className="mb-4"
+      />
 
       <div className="mb-6 rounded-2xl bg-gradient-to-r from-[#0d4f47] to-[#1a7a6e] p-6 text-white shadow-md">
         <div className="flex items-start gap-4">

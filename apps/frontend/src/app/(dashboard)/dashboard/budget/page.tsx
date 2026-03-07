@@ -11,6 +11,7 @@ import { api } from '@/lib/api/client';
 import { Property } from '@/types';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { MobileFilterSurface, MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 function BudgetContent() {
   const router = useRouter();
@@ -58,7 +59,7 @@ function BudgetContent() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
       {/* Back Navigation */}
       {propertyIdFromUrl && (
         <Button 
@@ -69,21 +70,18 @@ function BudgetContent() {
           <ArrowLeft className="h-4 w-4 mr-1" /> Back
         </Button>
       )}
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-lg">
-          <DollarSign className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
-        </div>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Maintenance Budget Forecaster</h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">
-            AI-powered 12-month budget predictions based on your property
-          </p>
-        </div>
-      </div>
+      <MobilePageIntro
+        title="Maintenance Budget Forecaster"
+        subtitle="AI-powered 12-month budget predictions based on your property."
+        action={
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-2.5 text-blue-700">
+            <DollarSign className="h-5 w-5" />
+          </div>
+        }
+      />
       {/* Property Selector */}
       {properties.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <MobileFilterSurface className="border border-slate-200/80 bg-white">
           <Label className="text-sm font-medium text-gray-700 mb-2 block">
             Select Property
           </Label>
@@ -99,7 +97,7 @@ function BudgetContent() {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </MobileFilterSurface>
       )}
 
       {/* Forecaster Component */}

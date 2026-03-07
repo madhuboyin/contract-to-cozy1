@@ -11,6 +11,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Calendar, Loader2 } from 'lucide-react';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import DateField from '@/components/shared/DateField';
+import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 function getInitials(firstName: string, lastName: string) {
   return (firstName?.[0] || '') + (lastName?.[0] || '');
@@ -225,7 +226,7 @@ export default function BookProviderPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-3xl px-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:pb-8">
       <div className="mb-6">
         <button
           onClick={() => router.back()}
@@ -237,7 +238,10 @@ export default function BookProviderPage() {
           Back
         </button>
 
-        <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">Book a Service</h1>
+        <MobilePageIntro
+          title="Book a Service"
+          subtitle="Choose a service, property, and schedule to complete your booking."
+        />
       </div>
 
       {error && (

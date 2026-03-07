@@ -11,6 +11,7 @@ import { api } from '@/lib/api/client';
 import { Property } from '@/types';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';  
+import { MobileFilterSurface, MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 function AppreciationContent() {
   const router = useRouter();
@@ -58,7 +59,7 @@ function AppreciationContent() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
       {/* Back Navigation */}
       {propertyIdFromUrl && (
         <Button 
@@ -69,22 +70,19 @@ function AppreciationContent() {
           <ArrowLeft className="h-4 w-4 mr-1" /> Back
         </Button>
       )}
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-3 bg-gradient-to-br from-green-100 to-emerald-100 rounded-lg">
-          <TrendingUp className="w-8 h-8 text-green-600" />
-        </div>
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Property Appreciation Tracker</h1>
-          <p className="text-gray-600 mt-1">
-            AI-powered property value analysis and market insights
-          </p>
-        </div>
-      </div>
+      <MobilePageIntro
+        title="Property Appreciation Tracker"
+        subtitle="AI-powered property value analysis and market insights."
+        action={
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 text-emerald-700">
+            <TrendingUp className="h-5 w-5" />
+          </div>
+        }
+      />
 
       {/* Property Selector */}
       {properties.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <MobileFilterSurface className="border border-slate-200/80 bg-white">
           <Label className="text-sm font-medium text-gray-700 mb-2 block">
             Select Property
           </Label>
@@ -100,7 +98,7 @@ function AppreciationContent() {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </MobileFilterSurface>
       )}
 
       {/* Appreciation Tracker Component */}

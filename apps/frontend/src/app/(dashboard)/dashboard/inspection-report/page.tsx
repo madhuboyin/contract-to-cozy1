@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { api } from '@/lib/api/client';
 import { Property } from '@/types';
+import { MobileFilterSurface, MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 function InspectionReportContent() {
   const searchParams = useSearchParams();
@@ -81,7 +82,7 @@ function InspectionReportContent() {
   // Show error for non-HOME_BUYER users
   if (userSegment !== 'HOME_BUYER') {
     return (
-      <div className="max-w-4xl mx-auto p-6">
+      <div className="mx-auto max-w-4xl p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
         <Alert variant="destructive">
           <AlertDescription>
             This feature is only available for home buyers actively closing on a property.
@@ -94,7 +95,7 @@ function InspectionReportContent() {
 
   if (error) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
+      <div className="mx-auto max-w-4xl p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
@@ -103,23 +104,20 @@ function InspectionReportContent() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 sm:p-3 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-lg">
-          <FileText className="w-6 h-6 sm:w-8 sm:h-8 text-indigo-600" />
-        </div>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Inspection Report Intelligence</h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">
-            AI-powered analysis of your home inspection report
-          </p>
-        </div>
-      </div>
+    <div className="mx-auto max-w-7xl space-y-6 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
+      <MobilePageIntro
+        title="Inspection Report Intelligence"
+        subtitle="AI-powered analysis of your home inspection report."
+        action={
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-2.5 text-indigo-700">
+            <FileText className="h-5 w-5" />
+          </div>
+        }
+      />
 
       {/* Property Selector */}
       {properties.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <MobileFilterSurface className="border border-slate-200/80 bg-white">
           <Label className="text-sm font-medium text-gray-700 mb-2 block">
             Select Property
           </Label>
@@ -138,7 +136,7 @@ function InspectionReportContent() {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </MobileFilterSurface>
       )}
 
       {/* Inspection Analyzer Component */}

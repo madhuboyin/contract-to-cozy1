@@ -10,6 +10,7 @@ import { listInventoryItems } from '../inventory/inventoryApi';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { MobileFilterSurface, MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 function ReplaceRepairContent() {
   const router = useRouter();
@@ -102,30 +103,28 @@ function ReplaceRepairContent() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
       {propertyIdFromUrl && (
         <Button variant="link" className="p-0 h-auto mb-2 text-sm text-muted-foreground" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4 mr-1" /> Back
         </Button>
       )}
 
-      <div className="flex items-center gap-3 mb-2">
-        <div className="p-2 sm:p-3 bg-gradient-to-br from-emerald-100 to-cyan-100 rounded-lg">
-          <Wrench className="w-6 h-6 sm:w-8 sm:h-8 text-teal-700" />
-        </div>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Replace or Repair</h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">
-            Educational estimate to help decide whether to repair now or replace soon.
-          </p>
-        </div>
-      </div>
+      <MobilePageIntro
+        title="Replace or Repair"
+        subtitle="Educational estimate to help decide whether to repair now or replace soon."
+        action={
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 text-emerald-700">
+            <Wrench className="h-5 w-5" />
+          </div>
+        }
+      />
 
       <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm text-sky-900">
         Educational decision support only. This estimate does not guarantee outcomes or vendor recommendations.
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4">
+      <MobileFilterSurface className="space-y-4 border border-slate-200/80 bg-white p-4">
         <div>
           <Label className="text-sm font-medium text-gray-700 mb-2 block">Select Property</Label>
           <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
@@ -191,7 +190,7 @@ function ReplaceRepairContent() {
             No inventory items found for this property. Add an item first to run Replace or Repair.
           </div>
         )}
-      </div>
+      </MobileFilterSurface>
     </div>
   );
 }

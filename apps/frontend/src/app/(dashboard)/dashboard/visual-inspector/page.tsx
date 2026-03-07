@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api/client';
 import { Property } from '@/types';
 import { Button } from '@/components/ui/button';
+import { MobileFilterSurface, MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 
 function VisualInspectorContent() {
@@ -58,7 +59,7 @@ function VisualInspectorContent() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
       {/* Back Navigation */}
       {propertyIdFromUrl && (
         <Button 
@@ -69,22 +70,19 @@ function VisualInspectorContent() {
           <ArrowLeft className="h-4 w-4 mr-1" /> Back
         </Button>
       )}
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-3 bg-gradient-to-br from-purple-100 to-pink-100 rounded-lg">
-          <Camera className="w-8 h-8 text-purple-600" />
-        </div>
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">AI Visual Property Inspector</h1>
-          <p className="text-gray-600 mt-1">
-            Upload photos to get AI-powered property condition analysis
-          </p>
-        </div>
-      </div>
+      <MobilePageIntro
+        title="AI Visual Property Inspector"
+        subtitle="Upload photos to get AI-powered property condition analysis."
+        action={
+          <div className="rounded-xl border border-purple-200 bg-purple-50 p-2.5 text-purple-700">
+            <Camera className="h-5 w-5" />
+          </div>
+        }
+      />
 
       {/* Property Selector */}
       {properties.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <MobileFilterSurface className="border border-slate-200/80 bg-white">
           <Label className="text-sm font-medium text-gray-700 mb-2 block">
             Select Property
           </Label>
@@ -100,7 +98,7 @@ function VisualInspectorContent() {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </MobileFilterSurface>
       )}
 
       {/* Visual Inspector Component */}

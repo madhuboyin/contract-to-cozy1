@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/bookings/StatusBadge';
 import { BookingTimeline } from '@/components/bookings/BookingTimeline';
 import { formatEnumLabel } from '@/lib/utils/formatters';
+import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 const formatDate = (dateString: string | null) => {
   if (!dateString) return 'Not scheduled';
@@ -126,7 +127,7 @@ export default function BookingDetailsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-4 sm:py-8">
+    <div className="min-h-screen bg-gray-50 py-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:py-8 lg:pb-8">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <button
           onClick={() => router.back()}
@@ -135,6 +136,12 @@ export default function BookingDetailsPage() {
           <ChevronLeft className="mr-1 h-4 w-4" />
           Back to bookings
         </button>
+
+        <MobilePageIntro
+          title="Booking Details"
+          subtitle="View full service, provider, status, and pricing details."
+          className="mb-4"
+        />
 
         <div className="mb-6 rounded-2xl bg-gradient-to-r from-teal-600 to-teal-700 p-4 text-white shadow-md">
           <div className="flex flex-wrap items-center justify-between gap-3">

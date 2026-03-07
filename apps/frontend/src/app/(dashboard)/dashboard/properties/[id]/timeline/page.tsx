@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import TimelineClient from './TimelineClient';
 import { listHomeEvents } from './homeEventsApi';
+import { MobileFilterSurface, MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 type Mode = 'LIST' | 'VISUAL';
 
@@ -325,46 +326,41 @@ export default function Page() {
   });
 
   return (
-    <div className="p-6 space-y-4">
-      {/* Header + Mode toggle */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Home Timeline</h1>
-          <p className="text-sm text-muted-foreground">
-            Your home’s story — purchases, repairs, claims, improvements, and key documents.
-          </p>
-        </div>
+    <div className="space-y-4 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
+      <MobilePageIntro
+        title="Home Timeline"
+        subtitle="Your home's story — purchases, repairs, claims, improvements, and key documents."
+      />
 
-        <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-md border p-1">
-            <button
-              className={clsx(
-                'px-3 py-1.5 text-sm rounded-md',
-                mode === 'LIST' ? 'bg-muted' : 'hover:bg-muted/50'
-              )}
-              onClick={() => setMode('LIST')}
-            >
-              List
-            </button>
-            <button
-              className={clsx(
-                'px-3 py-1.5 text-sm rounded-md',
-                mode === 'VISUAL' ? 'bg-muted' : 'hover:bg-muted/50'
-              )}
-              onClick={() => setMode('VISUAL')}
-            >
-              Visual
-            </button>
-          </div>
-
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex rounded-md border p-1">
           <button
-            className="rounded-md border px-3 py-2 text-sm"
-            onClick={() => refetch()}
-            disabled={isFetching}
+            className={clsx(
+              'px-3 py-1.5 text-sm rounded-md',
+              mode === 'LIST' ? 'bg-muted' : 'hover:bg-muted/50'
+            )}
+            onClick={() => setMode('LIST')}
           >
-            {isFetching ? 'Refreshing…' : 'Refresh'}
+            List
+          </button>
+          <button
+            className={clsx(
+              'px-3 py-1.5 text-sm rounded-md',
+              mode === 'VISUAL' ? 'bg-muted' : 'hover:bg-muted/50'
+            )}
+            onClick={() => setMode('VISUAL')}
+          >
+            Visual
           </button>
         </div>
+
+        <button
+          className="rounded-md border px-3 py-2 text-sm"
+          onClick={() => refetch()}
+          disabled={isFetching}
+        >
+          {isFetching ? 'Refreshing…' : 'Refresh'}
+        </button>
       </div>
 
       {/* Replay controls (visual only) */}
@@ -428,7 +424,7 @@ export default function Page() {
       ) : null}
 
       {/* Filters (shared) */}
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
+      <MobileFilterSurface className="flex flex-wrap items-center gap-2 p-3">
         <div className="text-sm text-muted-foreground">Filter:</div>
 
         <select
@@ -465,7 +461,7 @@ export default function Page() {
         <div className="ml-auto text-xs text-muted-foreground">
           {isFetching ? 'Updating…' : `${events.length} event(s)`}
         </div>
-      </div>
+      </MobileFilterSurface>
 
       {/* Body */}
       {isLoading ? (

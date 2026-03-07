@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { api } from '@/lib/api/client';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { MobileFilterSurface, MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 function MovingConciergeContent() {
   const searchParams = useSearchParams();
@@ -60,7 +61,7 @@ function MovingConciergeContent() {
   // Check if user is HOME_BUYER
   if (userSegment && userSegment !== 'HOME_BUYER') {
     return (
-      <div className="max-w-4xl mx-auto p-6">
+      <div className="mx-auto max-w-4xl p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
         <Card className="border-orange-200 bg-orange-50">
           <CardContent className="p-8 text-center">
             <AlertCircle className="w-16 h-16 text-orange-600 mx-auto mb-4" />
@@ -89,23 +90,20 @@ function MovingConciergeContent() {
   const selectedProperty = properties.find(p => p.id === selectedPropertyId);
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-3 bg-gradient-to-br from-green-100 to-emerald-100 rounded-lg">
-          <Truck className="w-8 h-8 text-green-600" />
-        </div>
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">AI Moving Concierge</h1>
-          <p className="text-gray-600 mt-1">
-            Your personalized moving assistant for a stress-free transition
-          </p>
-        </div>
-      </div>
+    <div className="mx-auto max-w-7xl space-y-6 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
+      <MobilePageIntro
+        title="AI Moving Concierge"
+        subtitle="Your personalized moving assistant for a stress-free transition."
+        action={
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 text-emerald-700">
+            <Truck className="h-5 w-5" />
+          </div>
+        }
+      />
 
       {/* Property Selector */}
       {properties.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <MobileFilterSurface className="border border-slate-200/80 bg-white">
           <Label className="text-sm font-medium text-gray-700 mb-2 block">
             Select Property (Closing Soon)
           </Label>
@@ -121,7 +119,7 @@ function MovingConciergeContent() {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </MobileFilterSurface>
       )}
 
       {/* Moving Concierge Component */}

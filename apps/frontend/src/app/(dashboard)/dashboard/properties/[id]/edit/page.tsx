@@ -39,6 +39,7 @@ import {
   PROPERTY_SECTION_ORDER,
   type PropertySectionId,
 } from "@/components/property/propertyEditPriority";
+import { MobilePageIntro } from "@/components/mobile/dashboard/MobilePrimitives";
 
 
 // --- Appliance Constants and Schemas ---
@@ -860,6 +861,12 @@ export default function EditPropertyPage() {
   return (
     <DashboardShell>
       <div className="property-edit-page mx-auto w-full max-w-[1200px] px-4 sm:px-6 lg:px-8">
+        <div className="mb-3 md:hidden">
+          <MobilePageIntro
+            title="Edit Property"
+            subtitle="Update home details for smarter recommendations and reminders."
+          />
+        </div>
         <div className="mb-4 rounded-xl border border-black/10 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-slate-950/40 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">

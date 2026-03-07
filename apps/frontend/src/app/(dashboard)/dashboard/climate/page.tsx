@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
+import { MobileFilterSurface, MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
 function ClimateContent() {
   const router = useRouter();
@@ -56,7 +57,7 @@ function ClimateContent() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
       {/* Back Navigation */}
       {propertyIdFromUrl && (
         <Button 
@@ -67,22 +68,19 @@ function ClimateContent() {
           <ArrowLeft className="h-4 w-4 mr-1" /> Back
         </Button>
       )}
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 sm:p-3 bg-gradient-to-br from-sky-100 to-blue-100 rounded-lg">
-          <Cloud className="w-6 h-6 sm:w-8 sm:h-8 text-sky-600" />
-        </div>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Climate Risk Analyzer</h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">
-            AI-powered climate risk assessment for your property
-          </p>
-        </div>
-      </div>
+      <MobilePageIntro
+        title="Climate Risk Analyzer"
+        subtitle="AI-powered climate risk assessment for your property."
+        action={
+          <div className="rounded-xl border border-sky-200 bg-sky-50 p-2.5 text-sky-700">
+            <Cloud className="h-5 w-5" />
+          </div>
+        }
+      />
 
       {/* Property Selector */}
       {properties.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <MobileFilterSurface className="border border-slate-200/80 bg-white">
           <Label className="text-sm font-medium text-gray-700 mb-2 block">
             Select Property
           </Label>
@@ -98,7 +96,7 @@ function ClimateContent() {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </MobileFilterSurface>
       )}
 
       {/* Climate Risk Component */}
