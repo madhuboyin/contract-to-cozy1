@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ScoreDeltaIndicator, ScoreTrendChart } from "@/components/scores/ScoreTrendChart";
 import { PropertyScoreSeries, PropertyScoreTrendPoint } from "@/types";
+import { MobilePageContainer, MobilePageIntro } from "@/components/mobile/dashboard/MobilePrimitives";
 
 const HIGH_PRIORITY_STATUSES = ["Needs Attention", "Needs Review", "Needs Inspection", "Missing Data"];
 
@@ -179,7 +180,25 @@ export default function PropertyHealthDetailPage() {
 
   return (
     <DashboardShell className="pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
-      <PageHeader className="pt-4 pb-4 md:pt-8 md:pb-8">
+      <div className="md:hidden mb-4 space-y-2">
+        <Button variant="ghost" className="min-h-[44px] px-0 text-sm text-muted-foreground" onClick={() => router.back()}>
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back
+        </Button>
+        <MobilePageContainer className="px-0">
+          <MobilePageIntro
+            eyebrow="Property Score"
+            title="Property Health Report"
+            subtitle={`Track weekly health movement for ${property?.name || "this property"}.`}
+            action={
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-2.5 text-blue-700">
+                <Activity className="h-5 w-5" />
+              </div>
+            }
+          />
+        </MobilePageContainer>
+      </div>
+
+      <PageHeader className="hidden md:block pt-4 pb-4 md:pt-8 md:pb-8">
         <Button variant="link" className="p-0 h-auto mb-2 text-sm text-muted-foreground" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4 mr-1" /> Back
         </Button>

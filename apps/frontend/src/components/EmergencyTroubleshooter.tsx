@@ -5,6 +5,14 @@ import React, { useState } from 'react';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api/client';
+import {
+  MobileCard,
+  MobileFilterSurface,
+  MobilePageContainer,
+  MobilePageIntro,
+  MobileSection,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -66,10 +74,10 @@ export default function EmergencyTroubleshooter({ propertyId }: EmergencyTrouble
 
   const getSeverityColor = () => {
     switch (severity) {
-      case 'CRITICAL': return 'bg-red-100 border-red-500 text-red-900';
-      case 'HIGH': return 'bg-orange-100 border-orange-500 text-orange-900';
-      case 'MEDIUM': return 'bg-yellow-100 border-yellow-500 text-yellow-900';
-      default: return 'bg-blue-100 border-blue-500 text-blue-900';
+      case 'CRITICAL': return 'danger' as const;
+      case 'HIGH': return 'danger' as const;
+      case 'MEDIUM': return 'elevated' as const;
+      default: return 'info' as const;
     }
   };
 
@@ -93,99 +101,107 @@ export default function EmergencyTroubleshooter({ propertyId }: EmergencyTrouble
   };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-6 w-6 text-red-600" />
-            <h3 className="text-xl font-semibold">Emergency Troubleshooter</h3>
+    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+      <MobilePageIntro
+        eyebrow="Emergency"
+        title="Emergency Troubleshooter"
+        subtitle="Step-by-step triage support to assess urgency and decide the next safest action."
+        action={
+          <div className="rounded-xl border border-red-200 bg-red-50 p-2.5 text-red-700">
+            <AlertTriangle className="h-5 w-5" />
           </div>
-          {getResolutionBadge()}
-        </div>
-        
-        {severity && (
-          <div className={`inline-block px-3 py-1 rounded-full border-2 text-sm font-semibold ${getSeverityColor()}`}>
-            Severity: {severity}
-          </div>
-        )}
-      </div>
+        }
+      />
 
-      {/* Error Message */}
-      {error && (
-        <div className="mb-4 p-3 bg-red-50 border-2 border-red-300 rounded-lg text-red-800">
-          <p className="font-semibold">Error</p>
-          <p className="text-sm">{error}</p>
+      <MobileSection className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {severity ? <StatusChip tone={getSeverityColor()}>Severity: {severity}</StatusChip> : null}
+          {resolution ? (
+            <StatusChip tone={resolution === 'IMMEDIATE_DANGER' ? 'danger' : resolution === 'CALL_PRO' ? 'elevated' : 'good'}>
+              {resolution === 'IMMEDIATE_DANGER'
+                ? 'Immediate Action Required'
+                : resolution === 'CALL_PRO'
+                ? 'Call Professional'
+                : 'DIY Candidate'}
+            </StatusChip>
+          ) : null}
         </div>
+        {getResolutionBadge()}
+      </MobileSection>
+
+      {error && (
+        <MobileCard className="border-red-200 bg-red-50">
+          <p className="text-sm font-semibold text-red-800">Error</p>
+          <p className="text-sm text-red-700">{error}</p>
+        </MobileCard>
       )}
 
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto space-y-3 mb-4 min-h-[300px] max-h-[500px]">
-        {messages.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-gray-400" />
-            <p>Describe your emergency to get started</p>
-            <p className="text-sm mt-2">Examples: &quot;Toilet overflowing&quot;, &quot;Smell gas&quot;, &quot;No hot water&quot;</p>
-          </div>
-        ) : (
-          messages.map((msg, i) => (
-            <div
-              key={i}
-              className={`p-4 rounded-lg ${
-                msg.role === 'user'
-                  ? 'bg-blue-100 border-2 border-blue-300 ml-12'
-                  : 'bg-white border-2 border-gray-300 mr-12'
-              }`}
-            >
-              <div className="flex items-start gap-2">
-                {msg.role === 'assistant' && (
-                  <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-                )}
-                <p className="whitespace-pre-wrap text-gray-900">{msg.content}</p>
-              </div>
+      <MobileSection>
+        <MobileCard className="space-y-3 max-h-[58vh] overflow-y-auto">
+          {messages.length === 0 ? (
+            <div className="py-10 text-center text-gray-500">
+              <AlertTriangle className="h-10 w-10 mx-auto mb-3 text-gray-400" />
+              <p className="text-sm font-medium">Describe your emergency to get started</p>
+              <p className="text-xs mt-2">
+                Examples: &quot;Toilet overflowing&quot;, &quot;Smell gas&quot;, &quot;No hot water&quot;
+              </p>
             </div>
-          ))
-        )}
-        
-        {loading && (
-          <div className="flex items-center gap-2 text-blue-600 bg-blue-50 p-4 rounded-lg">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span>AI is analyzing your emergency...</span>
-          </div>
-        )}
-      </div>
+          ) : (
+            messages.map((msg, i) => (
+              <div
+                key={i}
+                className={`rounded-xl border px-3 py-2.5 ${
+                  msg.role === 'user'
+                    ? 'ml-10 border-blue-200 bg-blue-50'
+                    : 'mr-10 border-slate-200 bg-white'
+                }`}
+              >
+                <div className="flex items-start gap-2">
+                  {msg.role === 'assistant' ? (
+                    <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
+                  ) : null}
+                  <p className="whitespace-pre-wrap text-sm text-gray-900">{msg.content}</p>
+                </div>
+              </div>
+            ))
+          )}
 
-      {/* Input Area */}
-      <div className="space-y-3 max-w-3xl mx-auto">
+          {loading && (
+            <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-blue-700">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>AI is analyzing your emergency...</span>
+            </div>
+          )}
+        </MobileCard>
+      </MobileSection>
+
+      <MobileFilterSurface>
         <div className="flex gap-2">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder={messages.length === 0 ? "Describe your emergency (e.g., 'toilet overflowing')" : "Answer the question or provide more details..."}
-            className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 text-lg"
+            placeholder={
+              messages.length === 0
+                ? "Describe your emergency (e.g., 'toilet overflowing')"
+                : 'Answer the question or provide more details...'
+            }
+            className="min-h-[44px] flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500"
             disabled={loading}
           />
           <Button
             onClick={sendMessage}
             disabled={loading || !input.trim()}
-            size="lg"
-            className="px-6"
+            className="min-h-[44px] px-4"
           >
-            {loading ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              'Send'
-            )}
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
           </Button>
         </div>
-
-        {/* Safety Disclaimer */}
-        <p className="text-xs text-gray-500 text-center">
-          ⚠️ For life-threatening emergencies, always call 911 immediately. This AI assistant provides guidance only and is not a substitute for professional help.
+        <p className="text-center text-xs text-gray-500">
+          For life-threatening emergencies, call 911 immediately. This AI guidance is not a substitute for professional help.
         </p>
-      </div>
-    </div>
+      </MobileFilterSurface>
+    </MobilePageContainer>
   );
 }

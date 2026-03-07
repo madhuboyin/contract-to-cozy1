@@ -6,9 +6,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import {
-  FileText,
   Loader2,
-  Wrench,
   Plus,
   Edit,
   CheckCircle,
@@ -55,6 +53,14 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  EmptyStateCard,
+  MobileFilterSurface,
+  MobilePageContainer,
+  MobilePageIntro,
+  MobileSection,
+  MobileSectionHeader,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 
 // --- Helper Functions ---
@@ -429,10 +435,10 @@ export default function MaintenancePage() {
 
   if (isBusy) {
     return (
-      <div className="space-y-6 pb-8">
+      <MobilePageContainer className="space-y-4 py-6">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mt-10" />
         <p className="text-center text-gray-500">Loading maintenance tasks...</p>
-      </div>
+      </MobilePageContainer>
     );
   }
 
@@ -458,7 +464,7 @@ export default function MaintenancePage() {
   );
 
   return (
-    <div className="space-y-6 pb-8 max-w-7xl mx-auto px-4 md:px-8">
+    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
       {backLink && (
         <Link href={backLink.href} className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 group">
           <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
@@ -466,22 +472,21 @@ export default function MaintenancePage() {
         </Link>
       )}
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Wrench className="w-7 h-7 text-blue-600" /> Home Tasks & Reminders
-        </h2>
+      <MobilePageIntro
+        eyebrow="Maintenance"
+        title="Home Tasks & Reminders"
+        subtitle="Manage your recurring maintenance schedule."
+        action={
+          <Button asChild size="sm">
+            <Link href={`/dashboard/maintenance-setup${selectedPropertyId ? `?propertyId=${selectedPropertyId}` : ''}`}>
+              <Plus className="w-4 h-4 mr-1.5" /> Add Task
+            </Link>
+          </Button>
+        }
+      />
 
-        <Button asChild>
-          <Link href={`/dashboard/maintenance-setup${selectedPropertyId ? `?propertyId=${selectedPropertyId}` : ''}`}>
-            <Plus className="w-4 h-4 mr-2" /> Add New Tasks
-          </Link>
-        </Button>
-      </div>
-
-      <p className="text-muted-foreground">Manage your scheduled maintenance tasks.</p>
-
-      <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-6">
-        <div className="flex items-center gap-2">
+      <MobileFilterSurface className="border border-slate-200/80 bg-white">
+        <div className="flex flex-wrap items-center gap-2">
           <SegButton active={view === 'open'} onClick={() => setViewMode('open')}>
             Open
           </SegButton>
@@ -509,38 +514,42 @@ export default function MaintenancePage() {
           </div>
         )}
 
-        <div className="flex items-center gap-2 md:ml-auto">
+        <div className="flex items-center gap-2">
           <Switch id="priority-mode" checked={priority} onCheckedChange={togglePriorityView} />
           <Label htmlFor="priority-mode" className="cursor-pointer">
             Show high priority tasks only
           </Label>
         </div>
-      </div>
+      </MobileFilterSurface>
 
       {view === 'open' && openTasks.length === 0 && (
-        <Card className="text-center py-10">
-          <FileText className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-          <CardTitle>No Active Tasks Found</CardTitle>
-          <CardDescription>
-            Visit{' '}
-            <Link href={`/dashboard/maintenance-setup${selectedPropertyId ? `?propertyId=${selectedPropertyId}` : ''}`} className="text-blue-600 hover:underline">
-              Task Setup
-            </Link>{' '}
-            to add maintenance tasks.
-          </CardDescription>
-        </Card>
+        <EmptyStateCard
+          title="No Active Tasks Found"
+          description="Visit task setup to add maintenance tasks."
+          action={
+            <Link
+              href={`/dashboard/maintenance-setup${selectedPropertyId ? `?propertyId=${selectedPropertyId}` : ''}`}
+              className="text-sm text-blue-600 hover:underline"
+            >
+              Go to Task Setup
+            </Link>
+          }
+        />
       )}
 
       {view === 'completed' && completedTasks.length === 0 && (
-        <Card className="text-center py-10">
-          <FileText className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-          <CardTitle>No Completed Tasks</CardTitle>
-          <CardDescription>Try expanding the completed time range.</CardDescription>
-        </Card>
+        <EmptyStateCard
+          title="No Completed Tasks"
+          description="Try expanding the completed time range."
+        />
       )}
 
       {view !== 'all' && maintenanceItems.length > 0 && (
-        <>
+        <MobileSection>
+          <MobileSectionHeader
+            title={view === 'completed' ? 'Completed Tasks' : 'Open Tasks'}
+            subtitle={`${maintenanceItems.length} task${maintenanceItems.length === 1 ? '' : 's'}`}
+          />
           <div className="hidden md:block rounded-md border">
             <Table>
               <TableHeader>
@@ -685,7 +694,7 @@ export default function MaintenancePage() {
             );
           })}
           </div>
-        </>
+        </MobileSection>
       )}
 
       {/* ALL view: show two sections (Open first, then Completed) */}
@@ -1109,6 +1118,6 @@ export default function MaintenancePage() {
         onSave={modalMode === 'view' ? () => toast({ title: 'View Only', description: 'Completed tasks are read-only.' }) : handleSaveTaskUpdate}
         onRemove={modalMode === 'view' ? () => toast({ title: 'View Only', description: 'Completed tasks cannot be removed here.' }) : handleRemoveTask}
       />
-    </div>
+    </MobilePageContainer>
   );
 }

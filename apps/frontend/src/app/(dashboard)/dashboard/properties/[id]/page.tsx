@@ -29,7 +29,6 @@ import {
   ArrowRight,
   TrendingUp,
   LayoutGrid,
-  Calculator,
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { FileDown } from "lucide-react";
@@ -52,6 +51,15 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  MetricRow,
+  MobileCard,
+  MobileFilterSurface,
+  MobilePageIntro,
+  MobileSection,
+  MobileSectionHeader,
+  StatusChip,
+} from "@/components/mobile/dashboard/MobilePrimitives";
 
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
@@ -239,224 +247,295 @@ function HealthInsightList({ property }: { property: ScoredProperty }) {
 
 // NEW: Compact Selling Prep Banner Component
 const SellingPrepBanner = ({ propertyId }: { propertyId: string }) => (
-  <div className="w-full bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-500 rounded-lg px-4 py-3 mb-4">
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        <div className="flex-shrink-0">
-          <TrendingUp className="h-5 w-5 text-green-600" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-heading text-sm sm:text-base font-semibold text-gray-900">
-            Ready to sell? Get your AI-powered preparation plan
-          </p>
-          <p className="font-body text-xs text-gray-600 hidden sm:block">
-            Personalized timeline • Value impact analysis • Market comparables
+  <>
+    <MobileCard className="space-y-3 border-emerald-200 bg-[linear-gradient(145deg,#ecfdf5,#eff6ff)] md:hidden">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-900">Ready to sell?</p>
+          <p className="text-xs text-slate-600">
+            AI-powered prep plan with timeline, value impact, and market comparables.
           </p>
         </div>
+        <StatusChip tone="good">Seller Prep</StatusChip>
       </div>
-      <div className="flex-shrink-0">
-        <Link href={`/dashboard/properties/${propertyId}/seller-prep`}>
-          <Button size="sm" className="font-semibold min-h-[44px] w-full sm:w-auto">
-            Start Now
-            <ArrowRight className="ml-1.5 h-4 w-4" />
-          </Button>
-        </Link>
+      <Link href={`/dashboard/properties/${propertyId}/seller-prep`}>
+        <Button className="w-full min-h-[44px]">
+          <TrendingUp className="mr-2 h-4 w-4" />
+          Start Seller Prep
+        </Button>
+      </Link>
+    </MobileCard>
+
+    <div className="hidden md:block w-full bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-500 rounded-lg px-4 py-3 mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="flex-shrink-0">
+            <TrendingUp className="h-5 w-5 text-green-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-heading text-sm sm:text-base font-semibold text-gray-900">
+              Ready to sell? Get your AI-powered preparation plan
+            </p>
+            <p className="font-body text-xs text-gray-600 hidden sm:block">
+              Personalized timeline • Value impact analysis • Market comparables
+            </p>
+          </div>
+        </div>
+        <div className="flex-shrink-0">
+          <Link href={`/dashboard/properties/${propertyId}/seller-prep`}>
+            <Button size="sm" className="font-semibold min-h-[44px] w-full sm:w-auto">
+              Start Now
+              <ArrowRight className="ml-1.5 h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
       </div>
     </div>
-  </div>
+  </>
 );
 
-// UPDATED: PropertyOverview with Card structure and Phase 2 typography
-const PropertyOverview = ({ property }: { property: Property }) => (
-  <div className="space-y-3">
-    {/* Basic Information Card */}
-    <Card>
-      <CardHeader className="p-4">
-        <CardTitle className="font-heading text-xl">Basic Information</CardTitle>
-        <CardDescription className="font-body text-sm">
-          Core property details and location
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="p-4 pt-0 space-y-3">
-        {/* Address Section */}
-        <div className="space-y-2">
-          <h4 className="font-heading text-sm font-medium text-gray-700 flex items-center gap-2">
-            <Home className="h-4 w-4 text-blue-600" />
-            Address
-          </h4>
-          <div className="font-body text-base text-gray-900 ml-6">
-            <p>{property.address}</p>
-            <p className="text-sm text-gray-600">
-              {property.city}, {property.state} {property.zipCode}
-            </p>
-          </div>
-        </div>
+// UPDATED: PropertyOverview with mobile summary-first structure
+const PropertyOverview = ({ property }: { property: Property }) => {
+  const propertyTypeLabel = property.propertyType ? property.propertyType.replace(/_/g, " ") : "N/A";
+  const heatingTypeLabel = property.heatingType ? property.heatingType.replace(/_/g, " ") : "Not specified";
+  const coolingTypeLabel = property.coolingType ? property.coolingType.replace(/_/g, " ") : "Not specified";
+  const waterHeaterTypeLabel = property.waterHeaterType ? property.waterHeaterType.replace(/_/g, " ") : "Not specified";
+  const roofTypeLabel = property.roofType ? property.roofType.replace(/_/g, " ") : "Not specified";
 
-        {/* Property Details Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t">
-          {/* Year Built */}
-          <div className="space-y-1">
-            <p className="font-body text-xs text-gray-500 flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              Year Built
-            </p>
-            <p className="font-heading text-lg font-semibold text-gray-900">
-              {property.yearBuilt || 'N/A'}
-            </p>
-          </div>
+  return (
+    <div className="space-y-3">
+      <div className="md:hidden space-y-3">
+        <MobileSection>
+          <MobileSectionHeader title="Home Snapshot" subtitle="Core property details at a glance" />
+          <MobileCard className="space-y-2.5 border-slate-200/80 bg-white">
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Address</p>
+              <p className="text-sm font-medium text-slate-900">{property.address}</p>
+              <p className="text-xs text-slate-600">
+                {property.city}, {property.state} {property.zipCode}
+              </p>
+            </div>
+            <div className="space-y-1 border-t border-slate-100 pt-2">
+              <MetricRow label="Year Built" value={property.yearBuilt || "N/A"} />
+              <MetricRow
+                label="Property Size"
+                value={property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : "N/A"}
+              />
+              <MetricRow label="Type" value={propertyTypeLabel} />
+              {property.bedrooms ? <MetricRow label="Bedrooms" value={property.bedrooms} /> : null}
+              {property.bathrooms ? <MetricRow label="Bathrooms" value={property.bathrooms} /> : null}
+            </div>
+          </MobileCard>
+        </MobileSection>
 
-          {/* Property Size */}
-          <div className="space-y-1">
-            <p className="font-body text-xs text-gray-500 flex items-center gap-1">
-              <Ruler className="h-3 w-3" />
-              Property Size
-            </p>
-            <p className="font-heading text-lg font-semibold text-gray-900">
-              {property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : 'N/A'}
-            </p>
-          </div>
+        <MobileSection>
+          <MobileSectionHeader title="Systems" subtitle="Critical systems for risk and maintenance planning" />
+          <MobileCard className="space-y-2 border-slate-200/80 bg-white">
+            <MetricRow label="Heating" value={heatingTypeLabel} />
+            <MetricRow label="Cooling" value={coolingTypeLabel} />
+            <MetricRow label="Water Heater" value={waterHeaterTypeLabel} />
+            <MetricRow label="Roof" value={roofTypeLabel} />
+            {property.hvacInstallYear ? (
+              <MetricRow label="HVAC Install Year" value={property.hvacInstallYear} />
+            ) : null}
+            {property.waterHeaterInstallYear ? (
+              <MetricRow label="Water Heater Install Year" value={property.waterHeaterInstallYear} />
+            ) : null}
+            {property.roofReplacementYear ? (
+              <MetricRow label="Roof Replacement Year" value={property.roofReplacementYear} />
+            ) : null}
+          </MobileCard>
+        </MobileSection>
 
-          {/* Property Type */}
-          <div className="space-y-1">
-            <p className="font-body text-xs text-gray-500 flex items-center gap-1">
-              <Home className="h-3 w-3" />
-              Property Type
-            </p>
-            <p className="font-heading text-lg font-semibold text-gray-900">
-              {property.propertyType ? property.propertyType.replace(/_/g, ' ') : 'N/A'}
-            </p>
-          </div>
-        </div>
+        {property.homeAssets && property.homeAssets.length > 0 ? (
+          <MobileSection>
+            <MobileSectionHeader
+              title="Major Appliances"
+              subtitle={`${property.homeAssets.length} tracked asset${property.homeAssets.length === 1 ? "" : "s"}`}
+            />
+            <MobileCard className="space-y-2.5 border-slate-200/80 bg-white">
+              {property.homeAssets.slice(0, 6).map((asset: any, index: number) => (
+                <div
+                  key={index}
+                  className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"
+                >
+                  <p className="text-xs uppercase tracking-wide text-slate-500">
+                    {asset.assetType.replace(/_/g, " ")}
+                  </p>
+                  <p className="mt-0.5 text-sm font-medium text-slate-900">Installed: {asset.installationYear}</p>
+                  <p className="text-xs text-slate-600">
+                    Age: {new Date().getFullYear() - asset.installationYear} years
+                  </p>
+                </div>
+              ))}
+            </MobileCard>
+          </MobileSection>
+        ) : null}
+      </div>
 
-        {/* Bedrooms & Bathrooms (if available) */}
-        {(property.bedrooms || property.bathrooms) && (
-          <div className="grid grid-cols-2 gap-4 pt-3 border-t">
-            {property.bedrooms && (
-              <div className="space-y-1">
-                <p className="font-body text-xs text-gray-500">Bedrooms</p>
-                <p className="font-heading text-lg font-semibold text-gray-900">
-                  {property.bedrooms}
-                </p>
-              </div>
-            )}
-            {property.bathrooms && (
-              <div className="space-y-1">
-                <p className="font-body text-xs text-gray-500">Bathrooms</p>
-                <p className="font-heading text-lg font-semibold text-gray-900">
-                  {property.bathrooms}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-
-    {/* Systems Information Card */}
-    <Card>
-      <CardHeader className="p-4">
-        <CardTitle className="font-heading text-xl">Home Systems</CardTitle>
-        <CardDescription className="font-body text-sm">
-          Critical system information for maintenance planning
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="p-4 pt-0 space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Heating Type */}
-          <div className="space-y-1">
-            <p className="font-body text-xs text-gray-500">Heating Type</p>
-            <p className="font-heading text-base font-medium text-gray-900">
-              {property.heatingType ? property.heatingType.replace(/_/g, ' ') : 'Not specified'}
-            </p>
-          </div>
-
-          {/* Cooling Type */}
-          <div className="space-y-1">
-            <p className="font-body text-xs text-gray-500">Cooling Type</p>
-            <p className="font-heading text-base font-medium text-gray-900">
-              {property.coolingType ? property.coolingType.replace(/_/g, ' ') : 'Not specified'}
-            </p>
-          </div>
-
-          {/* Water Heater Type */}
-          <div className="space-y-1">
-            <p className="font-body text-xs text-gray-500">Water Heater Type</p>
-            <p className="font-heading text-base font-medium text-gray-900">
-              {property.waterHeaterType ? property.waterHeaterType.replace(/_/g, ' ') : 'Not specified'}
-            </p>
-          </div>
-
-          {/* Roof Type */}
-          <div className="space-y-1">
-            <p className="font-body text-xs text-gray-500">Roof Type</p>
-            <p className="font-heading text-base font-medium text-gray-900">
-              {property.roofType ? property.roofType.replace(/_/g, ' ') : 'Not specified'}
-            </p>
-          </div>
-        </div>
-
-        {/* System Ages (if available) */}
-        {(property.hvacInstallYear || property.waterHeaterInstallYear || property.roofReplacementYear) && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t">
-            {property.hvacInstallYear && (
-              <div className="space-y-1">
-                <p className="font-body text-xs text-gray-500">HVAC Install Year</p>
-                <p className="font-heading text-base font-semibold text-gray-900">
-                  {property.hvacInstallYear}
-                </p>
-              </div>
-            )}
-            {property.waterHeaterInstallYear && (
-              <div className="space-y-1">
-                <p className="font-body text-xs text-gray-500">Water Heater Install Year</p>
-                <p className="font-heading text-base font-semibold text-gray-900">
-                  {property.waterHeaterInstallYear}
-                </p>
-              </div>
-            )}
-            {property.roofReplacementYear && (
-              <div className="space-y-1">
-                <p className="font-body text-xs text-gray-500">Roof Replacement Year</p>
-                <p className="font-heading text-base font-semibold text-gray-900">
-                  {property.roofReplacementYear}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-
-    {/* Major Appliances Card */}
-    {property.homeAssets && property.homeAssets.length > 0 && (
-      <Card>
-        <CardHeader className="p-4">
-          <CardTitle className="font-heading text-xl">Major Appliances</CardTitle>
-          <CardDescription className="font-body text-sm">
-            Installed appliances and their ages
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 pt-0">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {property.homeAssets.map((asset: any, index: number) => (
-              <div key={index} className="space-y-1 p-3 bg-gray-50 rounded-md border border-gray-200">
-                <p className="font-body text-xs text-gray-500 uppercase tracking-wide">
-                  {asset.assetType.replace(/_/g, ' ')}
-                </p>
-                <p className="font-heading text-base font-medium text-gray-900">
-                  Installed: {asset.installationYear}
-                </p>
+      <div className="hidden md:block space-y-3">
+        <Card>
+          <CardHeader className="p-4">
+            <CardTitle className="font-heading text-xl">Basic Information</CardTitle>
+            <CardDescription className="font-body text-sm">
+              Core property details and location
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 space-y-3">
+            <div className="space-y-2">
+              <h4 className="font-heading text-sm font-medium text-gray-700 flex items-center gap-2">
+                <Home className="h-4 w-4 text-blue-600" />
+                Address
+              </h4>
+              <div className="font-body text-base text-gray-900 ml-6">
+                <p>{property.address}</p>
                 <p className="text-sm text-gray-600">
-                  Age: {new Date().getFullYear() - asset.installationYear} years
+                  {property.city}, {property.state} {property.zipCode}
                 </p>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    )}
-  </div>
-);
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t">
+              <div className="space-y-1">
+                <p className="font-body text-xs text-gray-500 flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  Year Built
+                </p>
+                <p className="font-heading text-lg font-semibold text-gray-900">
+                  {property.yearBuilt || "N/A"}
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="font-body text-xs text-gray-500 flex items-center gap-1">
+                  <Ruler className="h-3 w-3" />
+                  Property Size
+                </p>
+                <p className="font-heading text-lg font-semibold text-gray-900">
+                  {property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : "N/A"}
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="font-body text-xs text-gray-500 flex items-center gap-1">
+                  <Home className="h-3 w-3" />
+                  Property Type
+                </p>
+                <p className="font-heading text-lg font-semibold text-gray-900">
+                  {propertyTypeLabel}
+                </p>
+              </div>
+            </div>
+
+            {(property.bedrooms || property.bathrooms) && (
+              <div className="grid grid-cols-2 gap-4 pt-3 border-t">
+                {property.bedrooms ? (
+                  <div className="space-y-1">
+                    <p className="font-body text-xs text-gray-500">Bedrooms</p>
+                    <p className="font-heading text-lg font-semibold text-gray-900">
+                      {property.bedrooms}
+                    </p>
+                  </div>
+                ) : null}
+                {property.bathrooms ? (
+                  <div className="space-y-1">
+                    <p className="font-body text-xs text-gray-500">Bathrooms</p>
+                    <p className="font-heading text-lg font-semibold text-gray-900">
+                      {property.bathrooms}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="p-4">
+            <CardTitle className="font-heading text-xl">Home Systems</CardTitle>
+            <CardDescription className="font-body text-sm">
+              Critical system information for maintenance planning
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <p className="font-body text-xs text-gray-500">Heating Type</p>
+                <p className="font-heading text-base font-medium text-gray-900">{heatingTypeLabel}</p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="font-body text-xs text-gray-500">Cooling Type</p>
+                <p className="font-heading text-base font-medium text-gray-900">{coolingTypeLabel}</p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="font-body text-xs text-gray-500">Water Heater Type</p>
+                <p className="font-heading text-base font-medium text-gray-900">{waterHeaterTypeLabel}</p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="font-body text-xs text-gray-500">Roof Type</p>
+                <p className="font-heading text-base font-medium text-gray-900">{roofTypeLabel}</p>
+              </div>
+            </div>
+
+            {(property.hvacInstallYear || property.waterHeaterInstallYear || property.roofReplacementYear) && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t">
+                {property.hvacInstallYear ? (
+                  <div className="space-y-1">
+                    <p className="font-body text-xs text-gray-500">HVAC Install Year</p>
+                    <p className="font-heading text-base font-semibold text-gray-900">{property.hvacInstallYear}</p>
+                  </div>
+                ) : null}
+                {property.waterHeaterInstallYear ? (
+                  <div className="space-y-1">
+                    <p className="font-body text-xs text-gray-500">Water Heater Install Year</p>
+                    <p className="font-heading text-base font-semibold text-gray-900">{property.waterHeaterInstallYear}</p>
+                  </div>
+                ) : null}
+                {property.roofReplacementYear ? (
+                  <div className="space-y-1">
+                    <p className="font-body text-xs text-gray-500">Roof Replacement Year</p>
+                    <p className="font-heading text-base font-semibold text-gray-900">{property.roofReplacementYear}</p>
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {property.homeAssets && property.homeAssets.length > 0 && (
+          <Card>
+            <CardHeader className="p-4">
+              <CardTitle className="font-heading text-xl">Major Appliances</CardTitle>
+              <CardDescription className="font-body text-sm">
+                Installed appliances and their ages
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {property.homeAssets.map((asset: any, index: number) => (
+                  <div key={index} className="space-y-1 p-3 bg-gray-50 rounded-md border border-gray-200">
+                    <p className="font-body text-xs text-gray-500 uppercase tracking-wide">
+                      {asset.assetType.replace(/_/g, " ")}
+                    </p>
+                    <p className="font-heading text-base font-medium text-gray-900">
+                      Installed: {asset.installationYear}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Age: {new Date().getFullYear() - asset.installationYear} years
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+};
 
 // UPDATED: MaintenancePlanTab to accept ScoredProperty and render insights
 const MaintenancePlanTab = ({ property }: { property: ScoredProperty }) => {
@@ -464,14 +543,55 @@ const MaintenancePlanTab = ({ property }: { property: ScoredProperty }) => {
   const searchParams = useSearchParams();
   const viewContext = searchParams.get('view');
   const showCriticalInsights = viewContext === 'insights';
+  const criticalInsightCount =
+    property.healthScore?.insights?.filter((insight) => HIGH_PRIORITY_STATUSES.includes(insight.status)).length || 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {showCriticalInsights && property.healthScore && (
-        <HealthInsightList property={property} />
+        <>
+          <div className="md:hidden">
+            <MobileCard className="space-y-2.5 border-blue-200 bg-blue-50">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-blue-900">Proactive Maintenance Recommended</p>
+                <StatusChip tone="needsAction">{criticalInsightCount} items</StatusChip>
+              </div>
+              <p className="text-xs text-blue-800">
+                Critical health insights were detected. Resolve them in maintenance to improve score and reduce risk.
+              </p>
+              <Link href={`/dashboard/maintenance?propertyId=${property.id}&view=open`}>
+                <Button className="w-full min-h-[44px]">
+                  <Zap className="mr-2 h-4 w-4" />
+                  Open Maintenance Queue
+                </Button>
+              </Link>
+            </MobileCard>
+          </div>
+          <div className="hidden md:block">
+            <HealthInsightList property={property} />
+          </div>
+        </>
       )}
 
-      <Card>
+      <div className="md:hidden">
+        <MobileCard className="space-y-3 border-slate-200/80 bg-white">
+          <MobileSectionHeader
+            title={showCriticalInsights ? "Proactive Maintenance Schedule" : "Property Maintenance Plan"}
+            subtitle="View and manage scheduled tasks for this property."
+          />
+          <p className="text-sm text-slate-700">
+            Review recurring tasks, upcoming due dates, and progress in one maintenance queue.
+          </p>
+          <Link href={`/dashboard/maintenance?propertyId=${property.id}`}>
+            <Button className="w-full min-h-[44px]">
+              <Zap className="mr-2 h-4 w-4" />
+              Manage Maintenance Tasks
+            </Button>
+          </Link>
+        </MobileCard>
+      </div>
+
+      <Card className="hidden md:block">
         <CardHeader className="p-4">
           <CardTitle className="font-heading text-xl flex items-center gap-2">
             <Zap className="h-5 w-5 text-red-600" />
@@ -499,145 +619,228 @@ const MaintenancePlanTab = ({ property }: { property: ScoredProperty }) => {
 
 // UPDATED: RiskProtectionTab with Phase 2 typography and compact spacing
 const RiskProtectionTab = ({ propertyId }: { propertyId: string }) => (
-  <Card>
-    <CardHeader className="p-4">
-      <CardTitle className="font-heading text-xl flex items-center gap-2">
-        <Shield className="h-5 w-5 text-primary" />
-        Property Risk & Protection Overview
-      </CardTitle>
-      <CardDescription className="font-body text-sm">
-        Access comprehensive risk assessment and financial exposure analysis
-      </CardDescription>
-    </CardHeader>
-    <CardContent className="p-4 pt-0 space-y-3">
-      <p className="font-body text-base text-gray-700">
-        Access the comprehensive risk report to view calculated risk scores, financial exposure,
-        and a detailed breakdown of your home&apos;s systems and structure health.
+  <>
+    <MobileCard className="space-y-3 border-slate-200/80 bg-white md:hidden">
+      <MobileSectionHeader
+        title="Risk & Protection"
+        subtitle="Comprehensive risk score, exposure, and protection actions."
+      />
+      <p className="text-sm text-slate-700">
+        Open the risk report to review critical systems, financial exposure, and mitigation priorities.
       </p>
       <Link href={`/dashboard/properties/${propertyId}/risk-assessment`}>
-        <Button variant="default">
+        <Button className="w-full min-h-[44px]">
           <Shield className="mr-2 h-4 w-4" />
           View Risk & Protection Report
         </Button>
       </Link>
-    </CardContent>
-  </Card>
+    </MobileCard>
+
+    <Card className="hidden md:block">
+      <CardHeader className="p-4">
+        <CardTitle className="font-heading text-xl flex items-center gap-2">
+          <Shield className="h-5 w-5 text-primary" />
+          Property Risk & Protection Overview
+        </CardTitle>
+        <CardDescription className="font-body text-sm">
+          Access comprehensive risk assessment and financial exposure analysis
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="p-4 pt-0 space-y-3">
+        <p className="font-body text-base text-gray-700">
+          Access the comprehensive risk report to view calculated risk scores, financial exposure,
+          and a detailed breakdown of your home&apos;s systems and structure health.
+        </p>
+        <Link href={`/dashboard/properties/${propertyId}/risk-assessment`}>
+          <Button variant="default">
+            <Shield className="mr-2 h-4 w-4" />
+            View Risk & Protection Report
+          </Button>
+        </Link>
+      </CardContent>
+    </Card>
+  </>
 );
 
 // NEW: FinancialEfficiencyTab
 const FinancialEfficiencyTab = ({ propertyId }: { propertyId: string }) => (
-  <Card>
-    <CardHeader className="p-4">
-      <CardTitle className="font-heading text-xl flex items-center gap-2">
-        <DollarSign className="h-5 w-5 text-green-600" />
-        Financial Efficiency Report
-      </CardTitle>
-      <CardDescription className="font-body text-sm">
-        View a detailed comparison of your annual home expenses against market benchmarks.
-      </CardDescription>
-    </CardHeader>
-    <CardContent className="p-4 pt-0 space-y-3">
-      <p className="font-body text-base text-gray-700">
-        Access the Financial Efficiency Score (FES) report to analyze your annual spending on insurance,
-        utilities, and warranties relative to market averages.
+  <>
+    <MobileCard className="space-y-3 border-slate-200/80 bg-white md:hidden">
+      <MobileSectionHeader
+        title="Financial Efficiency"
+        subtitle="Compare annual cost against neighborhood benchmarks."
+      />
+      <p className="text-sm text-slate-700">
+        Review insurance, utility, and warranty spend versus market expectations.
       </p>
       <Link href={`/dashboard/properties/${propertyId}/financial-efficiency`}>
-        <Button variant="default">
+        <Button className="w-full min-h-[44px]">
           <DollarSign className="mr-2 h-4 w-4" />
           View Financial Efficiency Report
         </Button>
       </Link>
-    </CardContent>
-  </Card>
+    </MobileCard>
+
+    <Card className="hidden md:block">
+      <CardHeader className="p-4">
+        <CardTitle className="font-heading text-xl flex items-center gap-2">
+          <DollarSign className="h-5 w-5 text-green-600" />
+          Financial Efficiency Report
+        </CardTitle>
+        <CardDescription className="font-body text-sm">
+          View a detailed comparison of your annual home expenses against market benchmarks.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="p-4 pt-0 space-y-3">
+        <p className="font-body text-base text-gray-700">
+          Access the Financial Efficiency Score (FES) report to analyze your annual spending on insurance,
+          utilities, and warranties relative to market averages.
+        </p>
+        <Link href={`/dashboard/properties/${propertyId}/financial-efficiency`}>
+          <Button variant="default">
+            <DollarSign className="mr-2 h-4 w-4" />
+            View Financial Efficiency Report
+          </Button>
+        </Link>
+      </CardContent>
+    </Card>
+  </>
 );
 
 
 // UPDATED: DocumentsTab with Phase 2 typography and compact spacing
 const DocumentsTab = ({ propertyId }: { propertyId: string }) => (
-  <Card>
-    <CardHeader className="p-4">
-      <CardTitle className="font-heading text-xl flex items-center gap-2">
-        <FileText className="h-5 w-5 text-blue-600" />
-        Property Documents
-      </CardTitle>
-      <CardDescription className="font-body text-sm">
-        Manage all documents associated with this property
-      </CardDescription>
-    </CardHeader>
-    <CardContent className="p-4 pt-0 space-y-3">
-      <p className="font-body text-base text-gray-700">
-        Documents associated with this property will be listed here, including warranties,
-        insurance policies, inspection reports, and more.
+  <>
+    <MobileCard className="space-y-3 border-slate-200/80 bg-white md:hidden">
+      <MobileSectionHeader title="Property Documents" subtitle="Warranties, insurance, inspections, and more." />
+      <p className="text-sm text-slate-700">
+        Open the shared document center filtered to this property.
       </p>
       <Link href={`/dashboard/documents?propertyId=${propertyId}`}>
-        <Button variant="outline">
+        <Button variant="outline" className="w-full min-h-[44px]">
           <FileText className="mr-2 h-4 w-4" />
           Manage Documents
         </Button>
       </Link>
-    </CardContent>
-  </Card>
+    </MobileCard>
+
+    <Card className="hidden md:block">
+      <CardHeader className="p-4">
+        <CardTitle className="font-heading text-xl flex items-center gap-2">
+          <FileText className="h-5 w-5 text-blue-600" />
+          Property Documents
+        </CardTitle>
+        <CardDescription className="font-body text-sm">
+          Manage all documents associated with this property
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="p-4 pt-0 space-y-3">
+        <p className="font-body text-base text-gray-700">
+          Documents associated with this property will be listed here, including warranties,
+          insurance policies, inspection reports, and more.
+        </p>
+        <Link href={`/dashboard/documents?propertyId=${propertyId}`}>
+          <Button variant="outline">
+            <FileText className="mr-2 h-4 w-4" />
+            Manage Documents
+          </Button>
+        </Link>
+      </CardContent>
+    </Card>
+  </>
 );
 
 const ReportsTab = ({ propertyId }: { propertyId: string }) => (
-  <Card>
-    <CardHeader className="p-4">
-      <CardTitle className="font-heading text-xl flex items-center gap-2">
-        <FileText className="h-5 w-5 text-blue-600" />
-        Home Reports (PDF)
-      </CardTitle>
-      <CardDescription className="font-body text-sm">
-        Generate printable/shareable PDFs for insurance, claims, resale, and lender/HOA requests.
-      </CardDescription>
-    </CardHeader>
-
-    <CardContent className="p-4 pt-0 space-y-3">
-      <p className="font-body text-base text-gray-700">
-        Create a Home Report Pack including summary, inventory replacement values, maintenance outlook, and coverage snapshot.
+  <>
+    <MobileCard className="space-y-3 border-slate-200/80 bg-white md:hidden">
+      <MobileSectionHeader title="Home Reports (PDF)" subtitle="Generate and share printable report packs." />
+      <p className="text-sm text-slate-700">
+        Open report generation for insurance, claims, resale, and lender/HOA needs.
       </p>
-
       <Link href={`/dashboard/properties/${propertyId}/reports`}>
-        <Button variant="default">
+        <Button className="w-full min-h-[44px]">
           <FileText className="mr-2 h-4 w-4" />
           Open Reports
         </Button>
       </Link>
-    </CardContent>
-  </Card>
+    </MobileCard>
+
+    <Card className="hidden md:block">
+      <CardHeader className="p-4">
+        <CardTitle className="font-heading text-xl flex items-center gap-2">
+          <FileText className="h-5 w-5 text-blue-600" />
+          Home Reports (PDF)
+        </CardTitle>
+        <CardDescription className="font-body text-sm">
+          Generate printable/shareable PDFs for insurance, claims, resale, and lender/HOA requests.
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent className="p-4 pt-0 space-y-3">
+        <p className="font-body text-base text-gray-700">
+          Create a Home Report Pack including summary, inventory replacement values, maintenance outlook, and coverage snapshot.
+        </p>
+
+        <Link href={`/dashboard/properties/${propertyId}/reports`}>
+          <Button variant="default">
+            <FileText className="mr-2 h-4 w-4" />
+            Open Reports
+          </Button>
+        </Link>
+      </CardContent>
+    </Card>
+  </>
 );
 
 const ClaimsTab = ({ propertyId }: { propertyId: string }) => (
-  <Card>
-    <CardHeader className="p-4">
-      <CardTitle className="font-heading text-xl flex items-center gap-2">
-        <ClipboardCheck className="h-5 w-5 text-amber-600" />
-        Claims
-      </CardTitle>
-      <CardDescription className="font-body text-sm">
-        Track insurance/warranty claims with checklist, timeline, and documents.
-      </CardDescription>
-    </CardHeader>
-
-    <CardContent className="p-4 pt-0 space-y-3">
-      <p className="font-body text-base text-gray-700">
-        Manage active claims, follow-ups, and required documentation—all tied to this property.
+  <>
+    <MobileCard className="space-y-3 border-slate-200/80 bg-white md:hidden">
+      <MobileSectionHeader title="Claims" subtitle="Track insurance and warranty claim workflows." />
+      <p className="text-sm text-slate-700">
+        Manage active claims, follow-ups, checklists, and documents tied to this property.
       </p>
-
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-2">
         <Link href={`/dashboard/properties/${propertyId}/claims`}>
-          <Button variant="default">
-            Open Claims
-          </Button>
+          <Button className="w-full min-h-[44px]">Open Claims</Button>
         </Link>
-
         <Link href={`/dashboard/properties/${propertyId}/claims?create=1`}>
-          <Button variant="outline">
-            Create Claim
-          </Button>
+          <Button variant="outline" className="w-full min-h-[44px]">Create Claim</Button>
         </Link>
       </div>
-    </CardContent>
-  </Card>
+    </MobileCard>
+
+    <Card className="hidden md:block">
+      <CardHeader className="p-4">
+        <CardTitle className="font-heading text-xl flex items-center gap-2">
+          <ClipboardCheck className="h-5 w-5 text-amber-600" />
+          Claims
+        </CardTitle>
+        <CardDescription className="font-body text-sm">
+          Track insurance/warranty claims with checklist, timeline, and documents.
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent className="p-4 pt-0 space-y-3">
+        <p className="font-body text-base text-gray-700">
+          Manage active claims, follow-ups, and required documentation—all tied to this property.
+        </p>
+
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/dashboard/properties/${propertyId}/claims`}>
+            <Button variant="default">
+              Open Claims
+            </Button>
+          </Link>
+
+          <Link href={`/dashboard/properties/${propertyId}/claims?create=1`}>
+            <Button variant="outline">
+              Create Claim
+            </Button>
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
+  </>
 );
 
 const NARRATIVE_NUDGE_CONFIG: Record<
@@ -826,42 +1029,64 @@ export default function PropertyDetailPage() {
         />
       )}
 
-      {/* Back Navigation */}
-      <div className="mb-2">
-        <button
+      <div className="md:hidden space-y-3">
+        <Button
+          variant="ghost"
+          className="min-h-[44px] px-0 text-sm text-muted-foreground"
           onClick={() => router.back()}
-          className="font-body text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center transition-colors bg-transparent border-none p-0 cursor-pointer min-h-[44px]"
         >
           <ArrowLeft className="h-4 w-4 mr-1.5" />
           Back
-        </button>
+        </Button>
+        <MobilePageIntro
+          eyebrow="Property Hub"
+          title={property.name || "My Property"}
+          subtitle={`${property.address}, ${property.city}`}
+          action={
+            <Link href={`/dashboard/properties/${property.id}/edit`}>
+              <Button size="sm" variant="outline" className="min-h-[44px] gap-1.5">
+                <Edit className="h-4 w-4" />
+                Edit
+              </Button>
+            </Link>
+          }
+        />
       </div>
 
-      {/* Header row */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 mb-3">
-        <PageHeader className="pt-2 pb-2 gap-1 flex-1 min-w-0">
-          <PageHeaderHeading className="truncate">{property.name || "My Property"}</PageHeaderHeading>
-          <PageHeaderDescription className="truncate">
-            {property.address}, {property.city}
-          </PageHeaderDescription>
-        </PageHeader>
+      <div className="hidden md:block">
+        <div className="mb-2">
+          <button
+            onClick={() => router.back()}
+            className="font-body text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center transition-colors bg-transparent border-none p-0 cursor-pointer min-h-[44px]"
+          >
+            <ArrowLeft className="h-4 w-4 mr-1.5" />
+            Back
+          </button>
+        </div>
 
-        <div className="flex-shrink-0 sm:pt-2">
-          <Link href={`/dashboard/properties/${property.id}/edit`}>
-            <Button variant="outline" size="sm" className="gap-2 min-h-[44px]">
-              <Edit className="h-4 w-4" />
-              Edit Details
-            </Button>
-          </Link>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 mb-3">
+          <PageHeader className="pt-2 pb-2 gap-1 flex-1 min-w-0">
+            <PageHeaderHeading className="truncate">{property.name || "My Property"}</PageHeaderHeading>
+            <PageHeaderDescription className="truncate">
+              {property.address}, {property.city}
+            </PageHeaderDescription>
+          </PageHeader>
+
+          <div className="flex-shrink-0 sm:pt-2">
+            <Link href={`/dashboard/properties/${property.id}/edit`}>
+              <Button variant="outline" size="sm" className="gap-2 min-h-[44px]">
+                <Edit className="h-4 w-4" />
+                Edit Details
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
 
-      {/* Home tools rail — just above banner (your desired placement) */}
       <div className="mb-4">
         <HomeToolsRail propertyId={property.id} />
       </div>
 
-      {/* Selling Prep Banner */}
       <SellingPrepBanner propertyId={property.id} />
 
       {onboardingStatus && onboardingStatus.status !== "COMPLETED" && (
@@ -869,15 +1094,18 @@ export default function PropertyDetailPage() {
       )}
 
       <Tabs defaultValue={defaultTab} className="w-full" id="home-snapshot">
-        {/* Scrollable tab container with fade indicators */}
-        <div className="relative -mx-4 px-4 sm:-mx-6 sm:px-6 md:mx-0 md:px-0">
+        <MobileFilterSurface className="border-slate-200/80 bg-white p-2 md:border-0 md:bg-transparent md:p-0 md:shadow-none">
+          <div className="md:hidden px-1">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Sections</p>
+          </div>
+          <div className="relative">
           {/* Left fade indicator (mobile only) */}
           <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none md:hidden" />
           {/* Right fade indicator (mobile only) */}
           <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none md:hidden" />
 
           <div className="overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-1">
-            <TabsList className="inline-flex w-max [&>*]:snap-start">
+            <TabsList className="inline-flex w-max [&>*]:snap-start rounded-xl border border-slate-200 bg-slate-50/80 p-1 md:border-transparent md:bg-transparent">
               <TabsTrigger value="overview" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
                 <Home className="h-4 w-4 shrink-0" />
                 <span className="hidden sm:inline">Overview</span>
@@ -945,7 +1173,8 @@ export default function PropertyDetailPage() {
               </TabsTrigger>
             </TabsList>
           </div>
-        </div>
+          </div>
+        </MobileFilterSurface>
 
         <TabsContent value="overview" className="mt-4">
           <PropertyOverview property={property} />
@@ -986,7 +1215,17 @@ export default function PropertyDetailPage() {
         </TabsContent>
         
         <TabsContent value="timeline" className="mt-4">
-          <Card>
+          <MobileCard className="space-y-3 border-slate-200/80 bg-white md:hidden">
+            <MobileSectionHeader
+              title="Home Timeline"
+              subtitle="Purchases, repairs, claims, improvements, and key documents."
+            />
+            <Link href={`/dashboard/properties/${property.id}/timeline`}>
+              <Button className="w-full min-h-[44px]">Open Timeline</Button>
+            </Link>
+          </MobileCard>
+
+          <Card className="hidden md:block">
             <CardHeader className="p-4">
               <CardTitle className="font-heading text-xl flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-blue-600" />

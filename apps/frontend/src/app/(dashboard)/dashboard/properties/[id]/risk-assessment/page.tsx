@@ -21,6 +21,7 @@ import { SEVERITY_CHIP } from "@/lib/utils/chipTokens";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { MaintenanceConfigModal } from "../../../maintenance-setup/MaintenanceConfigModal"; 
 import { ScoreDeltaIndicator, ScoreTrendChart } from "@/components/scores/ScoreTrendChart";
+import { MobilePageContainer, MobilePageIntro } from "@/components/mobile/dashboard/MobilePrimitives";
 
 // --- Types for Query Data ---
 type RiskReportFull = RiskAssessmentReport; 
@@ -1039,7 +1040,29 @@ export default function RiskAssessmentPage() {
 
     return (
         <DashboardShell>
-            <PageHeader>
+            <div className="md:hidden mb-4 space-y-2">
+                <Button
+                    variant="ghost"
+                    className="min-h-[44px] px-0 text-sm text-muted-foreground"
+                    onClick={() => router.back()}
+                >
+                    <ArrowLeft className="h-4 w-4 mr-1" /> Back
+                </Button>
+                <MobilePageContainer className="px-0">
+                    <MobilePageIntro
+                        eyebrow="Property Score"
+                        title="Property Risk Report"
+                        subtitle="Risk exposure, trend movement, and weekly change drivers."
+                        action={
+                            <div className="rounded-xl border border-orange-200 bg-orange-50 p-2.5 text-orange-700">
+                                <Zap className="h-5 w-5" />
+                            </div>
+                        }
+                    />
+                </MobilePageContainer>
+            </div>
+
+            <PageHeader className="hidden md:block">
                 <Button 
                     variant="link" 
                     className="p-0 h-auto mb-2 text-sm text-muted-foreground min-h-[44px] flex items-center"

@@ -7,15 +7,21 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query'; 
 import { api } from '@/lib/api/client';
 import { DashboardShell } from '@/components/DashboardShell';
-import { PageHeader, PageHeaderHeading, PageHeaderDescription } from '@/components/page-header';
 import { MaintenanceTaskTemplate, Property } from '@/types';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Zap, Wrench, ChevronRight, Home, Loader2 } from 'lucide-react';
+import { Zap, ChevronRight, Home, Loader2 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { MaintenanceConfigModal } from './MaintenanceConfigModal';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import {
+  EmptyStateCard,
+  MobileCard,
+  MobilePageContainer,
+  MobilePageIntro,
+  MobileSection,
+  MobileSectionHeader,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 export default function MaintenanceSetupPage() {
   const router = useRouter();
@@ -89,9 +95,11 @@ export default function MaintenanceSetupPage() {
   if (isLoading) {
     return (
       <DashboardShell>
-        <div className="flex justify-center items-center h-64">
-             <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-        </div>
+        <MobilePageContainer className="py-6">
+          <div className="flex justify-center items-center h-64">
+               <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+          </div>
+        </MobilePageContainer>
       </DashboardShell>
     );
   }
@@ -100,20 +108,27 @@ export default function MaintenanceSetupPage() {
   if (properties.length === 0) {
       return (
           <DashboardShell>
-              <PageHeader>
-                  <PageHeaderHeading>Maintenance Setup</PageHeaderHeading>
-                  <PageHeaderDescription>
-                      You must add a property before setting up maintenance tasks.
-                  </PageHeaderDescription>
-              </PageHeader>
-              <Card className="mt-8 p-6 text-center">
-                  <Home className="w-10 h-10 mx-auto text-gray-400 mb-4" />
-                  <p className="font-heading text-lg font-medium">No Properties Found</p>
-                  <p className="font-body text-sm text-gray-500 mb-4">Maintenance tasks must be linked to a home.</p>
-                  <Link href="/dashboard/properties/new">
+              <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+                <MobilePageIntro
+                  eyebrow="Maintenance"
+                  title="Maintenance Setup"
+                  subtitle="You must add a property before setting up maintenance tasks."
+                  action={
+                    <div className="rounded-xl border border-blue-200 bg-blue-50 p-2.5 text-blue-700">
+                      <Zap className="h-5 w-5" />
+                    </div>
+                  }
+                />
+                <EmptyStateCard
+                  title="No Properties Found"
+                  description="Maintenance tasks must be linked to a home."
+                  action={
+                    <Link href="/dashboard/properties/new">
                       <Button>Add Your First Property</Button>
-                  </Link>
-              </Card>
+                    </Link>
+                  }
+                />
+              </MobilePageContainer>
           </DashboardShell>
       );
   }
@@ -121,42 +136,39 @@ export default function MaintenanceSetupPage() {
 
   return (
     <DashboardShell>
-      <PageHeader>
-        {/* FIX: Updated icon color from text-yellow-500 to text-blue-600 */}
-        <PageHeaderHeading className="flex items-center gap-2">
-          <Zap className="w-8 h-8 text-blue-600" /> Maintenance Setup
-        </PageHeaderHeading>
-        <PageHeaderDescription>
-          Select from predefined templates or create custom tasks to build your home maintenance plan.
-        </PageHeaderDescription>
-      </PageHeader>
+      <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+        <MobilePageIntro
+          eyebrow="Maintenance"
+          title="Maintenance Setup"
+          subtitle="Select templates to build your recurring home maintenance plan."
+          action={
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-2.5 text-blue-700">
+              <Zap className="h-5 w-5" />
+            </div>
+          }
+        />
 
-      <div className="space-y-8">
-        
-        {/* Templates List */}
-        <Card>
-          <CardHeader>
-            {/* FIX: Updated from text-2xl to font-heading text-xl, icon from w-6 h-6 to w-5 h-5, color from text-indigo-600 to text-blue-600 */}
-            <CardTitle className="font-heading text-xl flex items-center gap-2">
-              <Wrench className="w-5 h-5 text-blue-600" /> Predefined Maintenance Templates
-            </CardTitle>
-            <CardDescription className="font-body text-sm">
-              Select recommended recurring tasks based on common property systems.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {templates.map(template => (
-              <div key={template.id} className="flex justify-between items-center p-3 border rounded-md hover:bg-gray-50 transition-colors">
-                <div>
-                  {/* FIX: Added font-heading class */}
-                  <h3 className="font-heading font-semibold text-gray-900">{template.title}</h3>
-                  {/* FIX: Added font-body class */}
-                  <p className="font-body text-sm text-gray-500">
-                    Frequency: {template.defaultFrequency.toLowerCase()} | Category: {template.serviceCategory || 'General'}
+        <MobileSection>
+          <MobileSectionHeader
+            title="Predefined Templates"
+            subtitle="Recommended recurring tasks by home system."
+          />
+
+          <MobileCard className="space-y-3 border-slate-200/80 bg-white">
+            {templates.map((template) => (
+              <div
+                key={template.id}
+                className="flex min-h-[52px] items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2.5"
+              >
+                <div className="min-w-0">
+                  <h3 className="truncate font-semibold text-gray-900">{template.title}</h3>
+                  <p className="text-xs text-gray-500">
+                    {template.defaultFrequency.toLowerCase()} • {template.serviceCategory || 'General'}
                   </p>
                 </div>
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
+                  className="shrink-0"
                   onClick={() => handleTemplateSelect(template)}
                   disabled={!selectedPropertyId}
                 >
@@ -164,16 +176,14 @@ export default function MaintenanceSetupPage() {
                 </Button>
               </div>
             ))}
-            {/* FIX: Added font-body class */}
             {!selectedPropertyId && (
-                <p className="font-body text-sm font-medium text-red-500 flex items-center gap-1">
-                    <Home className="w-4 h-4"/> Please wait for properties to load or add a property.
-                </p>
+              <p className="text-sm font-medium text-red-500 flex items-center gap-1">
+                <Home className="w-4 h-4" /> Please wait for properties to load or add a property.
+              </p>
             )}
-          </CardContent>
-        </Card>
-        
-        {/* Maintenance Config Modal - Only show if necessary data is available */}
+          </MobileCard>
+        </MobileSection>
+
         {selectedTemplate && (
           <MaintenanceConfigModal
             isOpen={isModalOpen}
@@ -185,8 +195,7 @@ export default function MaintenanceSetupPage() {
             onPropertyChange={setSelectedPropertyId}
           />
         )}
-      </div>
-      
+      </MobilePageContainer>
     </DashboardShell>
   );
 }

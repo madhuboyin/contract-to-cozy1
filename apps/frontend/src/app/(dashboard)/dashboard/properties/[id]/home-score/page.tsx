@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { MobilePageContainer, MobilePageIntro } from "@/components/mobile/dashboard/MobilePrimitives";
 import { api } from "@/lib/api/client";
 import { ScoreDeltaIndicator, ScoreTrendChart } from "@/components/scores/ScoreTrendChart";
 import { HomeScoreComponent, HomeScoreReason } from "@/types";
@@ -216,7 +217,29 @@ export default function HomeScoreReportPage() {
 
   return (
     <DashboardShell className="pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
-      <PageHeader className="pt-4 pb-4 md:pt-8 md:pb-8">
+      <div className="md:hidden mb-4 space-y-2">
+        <Button
+          variant="ghost"
+          className="min-h-[44px] px-0 text-sm text-muted-foreground"
+          onClick={() => router.back()}
+        >
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back
+        </Button>
+        <MobilePageContainer className="px-0">
+          <MobilePageIntro
+            eyebrow="Property Score"
+            title="HomeScore Report"
+            subtitle={`Trust-weighted health, risk, and financial posture for ${propertyQuery.data?.name || "this property"}.`}
+            action={
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-2.5 text-indigo-700">
+                <Gauge className="h-5 w-5" />
+              </div>
+            }
+          />
+        </MobilePageContainer>
+      </div>
+
+      <PageHeader className="hidden md:block pt-4 pb-4 md:pt-8 md:pb-8">
         <Button
           variant="link"
           className="p-0 h-auto mb-2 text-sm text-muted-foreground"
