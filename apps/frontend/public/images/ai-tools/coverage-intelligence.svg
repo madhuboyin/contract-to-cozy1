@@ -1,0 +1,42 @@
+<svg width="160" height="128" viewBox="0 0 160 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="cardBg" x1="10" y1="8" x2="150" y2="122" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F4FFF9"/>
+      <stop offset="0.55" stop-color="#EAFBF3"/>
+      <stop offset="1" stop-color="#DDF4EC"/>
+    </linearGradient>
+    <linearGradient id="person" x1="25" y1="40" x2="74" y2="80" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#B8ECD9"/>
+      <stop offset="1" stop-color="#7CC9A9"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="108" y1="24" x2="108" y2="90" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1EA893"/>
+      <stop offset="1" stop-color="#0E7566"/>
+    </linearGradient>
+    <filter id="drop" x="16" y="14" width="128" height="102" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feOffset dy="8"/>
+      <feGaussianBlur stdDeviation="6"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.055 0 0 0 0 0.196 0 0 0 0 0.169 0 0 0 0.2 0"/>
+    </filter>
+    <linearGradient id="gloss" x1="24" y1="18" x2="132" y2="70" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.78"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="4" y="4" width="152" height="120" rx="26" fill="url(#cardBg)"/>
+
+  <g filter="url(#drop)">
+    <rect x="24" y="22" width="112" height="84" rx="24" fill="#F9FFFC"/>
+  </g>
+
+  <rect x="24" y="40" width="52" height="40" rx="10" fill="#E8FAF1"/>
+  <circle cx="45" cy="49" r="9" fill="url(#person)"/>
+  <rect x="33" y="61" width="24" height="12" rx="6" fill="#46B88D"/>
+
+  <path d="M108 24L133 33V53C133 71 122 83 108 90C94 83 83 71 83 53V33L108 24Z" fill="url(#shield)"/>
+  <path d="M96 56L104 64L120 48" stroke="#D9FFF1" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <ellipse cx="80" cy="30" rx="54" ry="15" fill="url(#gloss)"/>
+  <rect x="20" y="98" width="120" height="10" rx="5" fill="#D5ECE5"/>
+</svg>

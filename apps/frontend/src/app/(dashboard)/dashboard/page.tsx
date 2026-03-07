@@ -15,8 +15,6 @@ import { DashboardShell } from '@/components/DashboardShell';
 import { PropertyHealthScoreCard } from './components/PropertyHealthScoreCard'; 
 import { PropertyRiskScoreCard } from './components/PropertyRiskScoreCard'; 
 import { FinancialEfficiencyScoreCard } from './components/FinancialEfficiencyScoreCard'; 
-// NEW IMPORTS FOR PROPERTY SELECTION
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { WelcomeModal } from './components/WelcomeModal';
 
@@ -40,6 +38,7 @@ import { ShareVaultButton } from './components/ShareVaultButton';
 import PriorityAlertBanner from '@/components/dashboard/PriorityAlertBanner';
 import { motion } from 'framer-motion';
 import { useToast } from '@/components/ui/use-toast';
+import MobileDashboardHome from './components/MobileDashboardHome';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -175,30 +174,13 @@ const formatAddress = (property: Property) => {
   return `${property.address}, ${property.city}, ${property.state}`;
 }
 
-// Helper to check if a checklist item could be asset-driven
-function isAssetDrivenForRouting(item: ChecklistItem): boolean {
-  if (
-    item.serviceCategory === 'ADMIN' ||
-    item.serviceCategory === 'FINANCE' ||
-    item.serviceCategory === 'INSURANCE' ||
-    item.serviceCategory === 'WARRANTY' ||
-    item.serviceCategory === 'ATTORNEY'
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: userLoading } = useAuth();
   const { toast } = useToast();
   const [redirectChecked, setRedirectChecked] = useState(false);
   const [showWelcomeScreen, setShowWelcomeScreen] = useState(false);
-  const [orchestrationSummary, setOrchestrationSummary] = useState<{
-    pendingActionCount: number;
-  } | null>(null);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [localUpdates, setLocalUpdates] = useState<LocalUpdate[]>([]);
   
   const [data, setData] = useState<DashboardData>({
@@ -295,21 +277,6 @@ export default function DashboardPage() {
       if (scoredProperties.length > 0 && !selectedPropertyId) {
         setSelectedPropertyId(scoredProperties[0].id);
       }
-      // Phase 2: Fetch orchestration summary for selected property
-      const propertyIdForOrchestration =
-      selectedPropertyId || scoredProperties[0]?.id;
-
-      if (propertyIdForOrchestration) {
-        try {
-          const orchestration = await api.getOrchestrationSummary(
-            propertyIdForOrchestration
-          );
-          setOrchestrationSummary(orchestration);
-        } catch (e) {
-          console.warn('Failed to fetch orchestration summary', e);
-          setOrchestrationSummary(null);
-        }
-      }      
 
     } catch (error) {
       console.error('❌ Dashboard: Error fetching data:', error);
@@ -370,6 +337,19 @@ export default function DashboardPage() {
       });
   }, [selectedPropertyId, user?.segment]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const media = window.matchMedia('(max-width: 767px)');
+    const syncViewport = () => setIsMobileViewport(media.matches);
+    syncViewport();
+    media.addEventListener('change', syncViewport);
+
+    return () => {
+      media.removeEventListener('change', syncViewport);
+    };
+  }, []);
+
   // --- CONDITIONAL RENDERING ---
   const loadingMessage = !redirectChecked
     ? 'Checking your account...'
@@ -404,7 +384,6 @@ export default function DashboardPage() {
   // Derived property values using the context state
   const properties = data.properties;
   const selectedProperty = properties.find(p => p.id === selectedPropertyId); 
-  const isMultiProperty = properties.length > 1;
   const sectionMotion = (index: number) => ({
     initial: { opacity: 0, y: 20 },
     animate: { opacity: 1, y: 0 },
@@ -418,6 +397,17 @@ export default function DashboardPage() {
         bookings={data.bookings}
         properties={data.properties}
         checklistItems={checklistItems}
+      />
+    );
+  }
+
+  if (userSegment === 'EXISTING_OWNER' && isMobileViewport) {
+    return (
+      <MobileDashboardHome
+        userFirstName={user.firstName}
+        properties={properties}
+        selectedPropertyId={selectedPropertyId}
+        onPropertyChange={setSelectedPropertyId}
       />
     );
   }
@@ -536,11 +526,6 @@ export default function DashboardPage() {
       {/* Filter data by selected property before passing to child components */}
       {/* This ensures the red banner and other components show data for the currently selected property only */}
       {(() => {
-        // Filter urgent actions to only those belonging to the selected property
-        const filteredUrgentActions = data.urgentActions.filter(
-          action => action.propertyId === selectedPropertyId
-        );
-        
         // Filter properties to only the selected one (for consistency)
         const filteredProperties = selectedProperty ? [selectedProperty] : [];
         
@@ -548,12 +533,6 @@ export default function DashboardPage() {
         const filteredChecklistItems = selectedPropertyId
             ? checklistItems.filter(item => item.propertyId === selectedPropertyId)
             : []; 
-
-        // Calculate if there are any asset-driven actions
-        const hasAssetDrivenActions = filteredChecklistItems.some(item =>
-          isAssetDrivenForRouting(item) &&
-          item.status === 'PENDING'
-        );
 
         return (
           <>

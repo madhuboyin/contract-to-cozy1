@@ -1,0 +1,45 @@
+<svg width="160" height="128" viewBox="0 0 160 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="cardBg" x1="10" y1="8" x2="150" y2="122" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF9EF"/>
+      <stop offset="0.58" stop-color="#FFF4E5"/>
+      <stop offset="1" stop-color="#FBE9D1"/>
+    </linearGradient>
+    <linearGradient id="sand" x1="41" y1="42" x2="43" y2="71" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F59E0B"/>
+      <stop offset="1" stop-color="#EA580C"/>
+    </linearGradient>
+    <linearGradient id="bars" x1="78" y1="78" x2="126" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F97316"/>
+      <stop offset="1" stop-color="#FDBA74"/>
+    </linearGradient>
+    <filter id="drop" x="16" y="14" width="128" height="102" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feOffset dy="8"/>
+      <feGaussianBlur stdDeviation="6"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.365 0 0 0 0 0.204 0 0 0 0 0.031 0 0 0 0.18 0"/>
+    </filter>
+    <linearGradient id="gloss" x1="26" y1="18" x2="132" y2="70" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.78"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="4" y="4" width="152" height="120" rx="26" fill="url(#cardBg)"/>
+
+  <g filter="url(#drop)">
+    <rect x="24" y="22" width="112" height="84" rx="24" fill="#FFFCF7"/>
+  </g>
+
+  <circle cx="42" cy="56" r="16" fill="#FEEFD9"/>
+  <path d="M42 44V56L49 63" stroke="#B45309" stroke-width="4" stroke-linecap="round"/>
+  <path d="M35 45H49" stroke="#B45309" stroke-width="3" stroke-linecap="round" opacity="0.4"/>
+  <path d="M36 66H48" stroke="#B45309" stroke-width="3" stroke-linecap="round" opacity="0.4"/>
+
+  <rect x="78" y="74" width="12" height="18" rx="3" fill="url(#bars)"/>
+  <rect x="96" y="64" width="12" height="28" rx="3" fill="url(#bars)"/>
+  <rect x="114" y="52" width="12" height="40" rx="3" fill="url(#bars)"/>
+  <path d="M76 44C85 44 92 50 99 50C108 50 112 40 120 40" stroke="#EA580C" stroke-width="4" stroke-linecap="round"/>
+
+  <ellipse cx="80" cy="30" rx="54" ry="15" fill="url(#gloss)"/>
+  <rect x="20" y="98" width="120" height="10" rx="5" fill="#F6E3CC"/>
+</svg>

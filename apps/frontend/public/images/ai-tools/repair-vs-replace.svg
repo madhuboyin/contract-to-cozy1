@@ -1,0 +1,41 @@
+<svg width="160" height="128" viewBox="0 0 160 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="cardBg" x1="12" y1="8" x2="148" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F6FFFD"/>
+      <stop offset="0.52" stop-color="#EBFBF8"/>
+      <stop offset="1" stop-color="#E1F5F1"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="37" y1="29" x2="108" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#DDE5EA"/>
+      <stop offset="0.45" stop-color="#AAB8C2"/>
+      <stop offset="1" stop-color="#8296A4"/>
+    </linearGradient>
+    <linearGradient id="handle" x1="53" y1="71" x2="77" y2="95" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#145E59"/>
+      <stop offset="1" stop-color="#0E7A73"/>
+    </linearGradient>
+    <filter id="softShadow" x="16" y="12" width="128" height="104" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feOffset dy="8"/>
+      <feGaussianBlur stdDeviation="6"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.071 0 0 0 0 0.208 0 0 0 0 0.19 0 0 0 0.22 0"/>
+    </filter>
+    <linearGradient id="gloss" x1="24" y1="16" x2="118" y2="76" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.78"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="4" y="4" width="152" height="120" rx="26" fill="url(#cardBg)"/>
+
+  <g filter="url(#softShadow)">
+    <rect x="24" y="22" width="112" height="84" rx="24" fill="#F8FFFE"/>
+  </g>
+
+  <path d="M48 75L67 56L75 64L56 83L46 85L48 75Z" fill="url(#handle)"/>
+  <path d="M66 55L80 41L92 53L78 67L66 55Z" fill="url(#steel)"/>
+  <path d="M89 34C95 28 104 27 111 31L105 37L108 40L114 34C118 41 117 50 111 56C105 62 96 63 89 59L74 74L68 68L83 53C79 46 81 39 89 34Z" fill="url(#steel)"/>
+  <path d="M49 74L67 56" stroke="#D7F8F2" stroke-width="2" stroke-linecap="round"/>
+
+  <ellipse cx="80" cy="30" rx="52" ry="16" fill="url(#gloss)"/>
+  <rect x="22" y="98" width="116" height="10" rx="5" fill="#D5ECE8"/>
+</svg>

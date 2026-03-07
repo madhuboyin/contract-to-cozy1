@@ -1,0 +1,46 @@
+<svg width="160" height="128" viewBox="0 0 160 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="cardBg" x1="10" y1="8" x2="150" y2="122" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFAF0"/>
+      <stop offset="0.56" stop-color="#FFF6E6"/>
+      <stop offset="1" stop-color="#FCEBC9"/>
+    </linearGradient>
+    <linearGradient id="cube1" x1="28" y1="28" x2="50" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFE08A"/>
+      <stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+    <linearGradient id="cube2" x1="58" y1="28" x2="80" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD26A"/>
+      <stop offset="1" stop-color="#D97706"/>
+    </linearGradient>
+    <filter id="drop" x="16" y="14" width="128" height="102" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feOffset dy="8"/>
+      <feGaussianBlur stdDeviation="6"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.412 0 0 0 0 0.286 0 0 0 0 0.074 0 0 0 0.2 0"/>
+    </filter>
+    <linearGradient id="gloss" x1="26" y1="18" x2="132" y2="70" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.78"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="4" y="4" width="152" height="120" rx="26" fill="url(#cardBg)"/>
+
+  <g filter="url(#drop)">
+    <rect x="24" y="22" width="112" height="84" rx="24" fill="#FFFDF8"/>
+  </g>
+
+  <rect x="28" y="28" width="22" height="22" rx="6" fill="url(#cube1)"/>
+  <rect x="58" y="28" width="22" height="22" rx="6" fill="url(#cube2)"/>
+  <rect x="88" y="28" width="22" height="22" rx="6" fill="url(#cube1)"/>
+  <rect x="28" y="58" width="22" height="22" rx="6" fill="url(#cube2)"/>
+  <rect x="58" y="58" width="22" height="22" rx="6" fill="url(#cube1)"/>
+  <rect x="88" y="58" width="22" height="22" rx="6" fill="url(#cube2)"/>
+
+  <path d="M118 52H134" stroke="#8A5A05" stroke-width="4" stroke-linecap="round"/>
+  <path d="M134 52L128 46" stroke="#8A5A05" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M134 52L128 58" stroke="#8A5A05" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <ellipse cx="80" cy="30" rx="54" ry="15" fill="url(#gloss)"/>
+  <rect x="20" y="98" width="120" height="10" rx="5" fill="#F2E3C6"/>
+</svg>

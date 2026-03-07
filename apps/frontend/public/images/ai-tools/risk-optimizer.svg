@@ -1,0 +1,45 @@
+<svg width="160" height="128" viewBox="0 0 160 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="cardBg" x1="10" y1="8" x2="150" y2="122" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F4FAFF"/>
+      <stop offset="0.58" stop-color="#EAF6FF"/>
+      <stop offset="1" stop-color="#DFEEFA"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="22" y1="30" x2="84" y2="80" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E8F6FF"/>
+      <stop offset="1" stop-color="#D8ECFA"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="108" y1="24" x2="108" y2="92" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2E9BC4"/>
+      <stop offset="0.6" stop-color="#0E7AA2"/>
+      <stop offset="1" stop-color="#0D658F"/>
+    </linearGradient>
+    <filter id="drop" x="16" y="14" width="128" height="102" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feOffset dy="8"/>
+      <feGaussianBlur stdDeviation="6"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.078 0 0 0 0 0.18 0 0 0 0 0.278 0 0 0 0.22 0"/>
+    </filter>
+    <linearGradient id="gloss" x1="28" y1="18" x2="132" y2="68" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="4" y="4" width="152" height="120" rx="26" fill="url(#cardBg)"/>
+
+  <g filter="url(#drop)">
+    <rect x="24" y="22" width="112" height="84" rx="24" fill="#FAFDFF"/>
+  </g>
+
+  <rect x="24" y="30" width="58" height="48" rx="10" fill="url(#panel)"/>
+  <path d="M32 66L42 55L51 60L60 47L73 66" stroke="#0A84B0" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="32" cy="66" r="2" fill="#0A84B0"/>
+  <circle cx="73" cy="66" r="2" fill="#0A84B0"/>
+
+  <path d="M108 24L133 33V53C133 71 122 85 108 92C94 85 83 71 83 53V33L108 24Z" fill="url(#shield)"/>
+  <path d="M95 56L103 64L120 47" stroke="#D7F4FF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M108 27L129 35V48C129 64 120 77 108 84C96 77 87 64 87 48V35L108 27Z" stroke="#5FD0F5" stroke-opacity="0.5"/>
+
+  <ellipse cx="82" cy="30" rx="56" ry="15" fill="url(#gloss)"/>
+  <rect x="20" y="98" width="120" height="10" rx="5" fill="#D5E8F5"/>
+</svg>

@@ -3,7 +3,7 @@
 'use client';
 
 import React from 'react';
-import { Home, AlertTriangle, LayoutGrid, Search, Ellipsis, Box, Sparkles, TrendingUp, Shield, FileText, Globe } from 'lucide-react';
+import { Home, AlertTriangle, LayoutGrid, Search, Ellipsis, Box, Sparkles, TrendingUp, Shield, FileText, Globe, Radar, CalendarClock } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -34,6 +34,12 @@ function buildAIToolHref(propertyId: string | undefined, toolHref: string): stri
   if (!propertyId) return toolHref;
   const separator = toolHref.includes('?') ? '&' : '?';
   return `${toolHref}${separator}propertyId=${encodeURIComponent(propertyId)}`;
+}
+
+function buildInsightHref(propertyId: string | undefined, hrefBase: string): string {
+  if (!propertyId) return hrefBase;
+  const separator = hrefBase.includes('?') ? '&' : '?';
+  return `${hrefBase}${separator}propertyId=${encodeURIComponent(propertyId)}`;
 }
 
 export function BottomNav() {
@@ -126,6 +132,21 @@ export function BottomNav() {
     { label: 'Status Board', href: buildPropertyAwareHref(resolvedPropertyId, 'status-board', 'status-board'), icon: TrendingUp, isActive: (path) => /\/status-board(\/|$)/.test(path) },
   ];
 
+  const insightItems: MoreItem[] = [
+    {
+      label: 'Daily Snapshot',
+      href: buildInsightHref(resolvedPropertyId, '/dashboard/daily-snapshot'),
+      icon: CalendarClock,
+      isActive: (path) => path.startsWith('/dashboard/daily-snapshot'),
+    },
+    {
+      label: 'Risk Radar',
+      href: buildInsightHref(resolvedPropertyId, '/dashboard/risk-radar'),
+      icon: Radar,
+      isActive: (path) => path.startsWith('/dashboard/risk-radar'),
+    },
+  ];
+
   const protectionItems: MoreItem[] = [
     {
       label: 'Incidents',
@@ -160,6 +181,7 @@ export function BottomNav() {
       group: 'Intelligence',
       buckets: [
         { label: 'AI Tools', items: aiToolItems },
+        { label: 'Insights', items: insightItems },
         { label: 'Home Tools', items: homeToolItems },
       ],
     },
