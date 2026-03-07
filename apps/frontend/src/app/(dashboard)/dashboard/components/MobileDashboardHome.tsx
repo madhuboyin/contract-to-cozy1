@@ -4,10 +4,13 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
+  AlertCircle,
   Bell,
   CircleUserRound,
+  FileText,
   Flame,
   LayoutGrid,
+  Package,
   Sparkles,
   Shield,
   TrendingUp,
@@ -18,7 +21,7 @@ import { api } from '@/lib/api/client';
 import { getDailySnapshot } from '@/lib/api/dailySnapshotApi';
 import { getHomeSavingsSummary } from '@/lib/api/homeSavingsApi';
 import { seasonalAPI } from '@/lib/api/seasonal.api';
-import { listInventoryRooms } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
+import { getRoomInsights, listInventoryRooms } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   CompactInsightStrip,
@@ -101,15 +104,6 @@ function roomEmoji(name: string): string {
   if (normalized.includes('office')) return '💻';
   if (normalized.includes('living')) return '🛋️';
   return '🏠';
-}
-
-function formatRoomFloorLabel(floorLevel: number | null | undefined): string {
-  if (floorLevel === null || floorLevel === undefined || Number.isNaN(floorLevel)) {
-    return 'Floor not set';
-  }
-  if (floorLevel === 0) return 'Ground floor';
-  if (floorLevel < 0) return `Basement ${Math.abs(floorLevel)}`;
-  return `Floor ${floorLevel}`;
 }
 
 export default function MobileDashboardHome({
@@ -291,6 +285,40 @@ export default function MobileDashboardHome({
     .slice(0, 2);
 
   const rooms = roomsQuery.data ?? [];
+  const previewRooms = rooms.slice(0, 6);
+  const previewRoomIds = React.useMemo(() => previewRooms.map((room) => room.id), [previewRooms]);
+  const roomInsightsQuery = useQuery({
+    queryKey: ['mobile-room-insights', propertyId, previewRoomIds.join(',')],
+    queryFn: async () => {
+      if (!propertyId || previewRoomIds.length === 0) return {} as Record<
+        string,
+        { itemCount: number; docsLinkedCount: number; coverageGapsCount: number }
+      >;
+
+      const settled = await Promise.allSettled(
+        previewRoomIds.map(async (roomId) => {
+          const insight = await getRoomInsights(propertyId, roomId);
+          const stats = (insight as any)?.stats ?? {};
+          return {
+            roomId,
+            itemCount: Number(stats.itemCount ?? 0),
+            docsLinkedCount: Number(stats.docsLinkedCount ?? 0),
+            coverageGapsCount: Number(stats.coverageGapsCount ?? 0),
+          };
+        })
+      );
+
+      const next: Record<string, { itemCount: number; docsLinkedCount: number; coverageGapsCount: number }> = {};
+      for (const result of settled) {
+        if (result.status !== 'fulfilled') continue;
+        const { roomId, itemCount, docsLinkedCount, coverageGapsCount } = result.value;
+        next[roomId] = { itemCount, docsLinkedCount, coverageGapsCount };
+      }
+      return next;
+    },
+    enabled: !!propertyId && previewRoomIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
   const roomsHref = buildPropertyAwareHref(propertyId, 'rooms', 'rooms');
   const dailySnapshotHref = `/dashboard/daily-snapshot?propertyId=${encodeURIComponent(propertyId || '')}`;
   const riskRadarHref = `/dashboard/risk-radar?propertyId=${encodeURIComponent(propertyId || '')}`;
@@ -626,7 +654,9 @@ export default function MobileDashboardHome({
               >
                 {rooms.length > 0 ? (
                   <MobileHorizontalScroller>
-                    {rooms.slice(0, 6).map((room) => (
+                    {previewRooms.map((room) => {
+                      const stats = roomInsightsQuery.data?.[room.id];
+                      return (
                       <Link
                         key={room.id}
                         href={roomsHref}
@@ -636,11 +666,23 @@ export default function MobileDashboardHome({
                         <p className="mb-0 truncate text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
                           {room.name}
                         </p>
-                        <p className="mb-0 mt-1 text-xs text-[hsl(var(--mobile-text-secondary))]">
-                          {formatRoomFloorLabel(room.floorLevel)}
-                        </p>
+                        <div className="mt-1 flex items-center gap-3 text-xs text-[hsl(var(--mobile-text-secondary))]">
+                          <span className="inline-flex items-center gap-1">
+                            <Package className="h-3.5 w-3.5" />
+                            {stats?.itemCount ?? 0}
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <FileText className="h-3.5 w-3.5" />
+                            {stats?.docsLinkedCount ?? 0}
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-rose-600">
+                            <AlertCircle className="h-3.5 w-3.5" />
+                            {stats?.coverageGapsCount ?? 0}
+                          </span>
+                        </div>
                       </Link>
-                    ))}
+                    );
+                    })}
                   </MobileHorizontalScroller>
                 ) : (
                   <EmptyStateCard
