@@ -312,6 +312,8 @@ export default function ProfilePage() {
               accountTypeLabel={accountTypeLabel}
               profileEditing={profileEditing}
               savingProfile={savingSection === 'profile'}
+              isSendingPasswordReset={isSendingPasswordReset}
+              onEditPassword={sendPasswordReset}
               onStartEditing={() => startEditing('profile')}
               onCancelEditing={() => cancelEditing('profile')}
               onSave={() => saveSection('profile')}
@@ -319,25 +321,41 @@ export default function ProfilePage() {
             />
           </MobileSection>
 
-          <MobileSection>
-            <SecuritySummaryCard
-              isSendingPasswordReset={isSendingPasswordReset}
-              onEditPassword={sendPasswordReset}
-            />
-          </MobileSection>
-
-          <MobileSection>
-            <AddressSummaryCard
-              formData={formData}
-              states={STATES}
-              addressEditing={addressEditing}
-              savingAddress={savingSection === 'address'}
-              onStartEditing={() => startEditing('address')}
-              onCancelEditing={() => cancelEditing('address')}
-              onSave={() => saveSection('address')}
-              onFieldChange={handleChange}
-            />
-          </MobileSection>
+          {!addressEditing ? (
+            <MobileSection>
+              <div className="grid grid-cols-2 gap-3">
+                <SecuritySummaryCard
+                  isSendingPasswordReset={isSendingPasswordReset}
+                  onEditPassword={sendPasswordReset}
+                  compact
+                />
+                <AddressSummaryCard
+                  formData={formData}
+                  states={STATES}
+                  addressEditing={addressEditing}
+                  savingAddress={savingSection === 'address'}
+                  compact
+                  onStartEditing={() => startEditing('address')}
+                  onCancelEditing={() => cancelEditing('address')}
+                  onSave={() => saveSection('address')}
+                  onFieldChange={handleChange}
+                />
+              </div>
+            </MobileSection>
+          ) : (
+            <MobileSection>
+              <AddressSummaryCard
+                formData={formData}
+                states={STATES}
+                addressEditing={addressEditing}
+                savingAddress={savingSection === 'address'}
+                onStartEditing={() => startEditing('address')}
+                onCancelEditing={() => cancelEditing('address')}
+                onSave={() => saveSection('address')}
+                onFieldChange={handleChange}
+              />
+            </MobileSection>
+          )}
 
           <MobileSection>
             <AccountSummaryCard

@@ -1,7 +1,7 @@
 'use client';
 
 import { Lock } from 'lucide-react';
-import { formatPhoneNumber, toTitleCase } from '@/lib/utils/formatters';
+import { toTitleCase } from '@/lib/utils/formatters';
 import {
   IconBadge,
   MetricRow,
@@ -52,6 +52,8 @@ export function ProfileHeroCard({
   profileEditing,
   savingProfile,
   messageEmailSupport = true,
+  isSendingPasswordReset,
+  onEditPassword,
   onStartEditing,
   onCancelEditing,
   onSave,
@@ -62,13 +64,14 @@ export function ProfileHeroCard({
   profileEditing: boolean;
   savingProfile: boolean;
   messageEmailSupport?: boolean;
+  isSendingPasswordReset: boolean;
+  onEditPassword: () => void;
   onStartEditing: () => void;
   onCancelEditing: () => void;
   onSave: () => void;
   onFieldChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }) {
   const fullName = `${formData.firstName} ${formData.lastName}`.trim() || 'Your name';
-  const phoneValue = formatPhoneNumber(formData.phone) || 'Add phone number';
 
   return (
     <MobileCard variant="hero" className="bg-[linear-gradient(145deg,#ffffff,hsl(var(--mobile-brand-soft)))]">
@@ -102,13 +105,37 @@ export function ProfileHeroCard({
       </div>
 
       {!profileEditing ? (
-        <div className="mt-3 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2">
-          <p className="mb-0 text-[11px] font-semibold uppercase tracking-wide text-[hsl(var(--mobile-text-muted))]">Phone</p>
-          <p className="mb-0 mt-1 text-sm text-[hsl(var(--mobile-text-primary))]">{phoneValue}</p>
+        <div className="mt-3 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white">
+          <div className="border-b border-[hsl(var(--mobile-border-subtle))] px-3 py-2.5">
+            <p className="mb-0 text-[1.05rem] font-semibold text-[hsl(var(--mobile-text-primary))]">Personal Info</p>
+          </div>
+
+          <div className="px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <IconBadge tone="info">
+                <Lock className="h-4 w-4" />
+              </IconBadge>
+              <div className="min-w-0 flex-1">
+                <p className="mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">Password</p>
+                <p className="mb-0 mt-0.5 text-sm tracking-[0.14em] text-[hsl(var(--mobile-text-primary))]">••••••••••••</p>
+              </div>
+              <button
+                type="button"
+                onClick={onEditPassword}
+                disabled={isSendingPasswordReset}
+                className="inline-flex min-h-[40px] items-center rounded-xl border border-[hsl(var(--mobile-brand-border))] bg-[hsl(var(--mobile-brand-soft))] px-3 py-1.5 text-sm font-semibold text-[hsl(var(--mobile-brand-strong))] disabled:opacity-60"
+              >
+                {isSendingPasswordReset ? 'Sending...' : 'Protected'}
+              </button>
+            </div>
+          </div>
+
           {messageEmailSupport ? (
-            <p className="mb-0 mt-1 text-xs text-[hsl(var(--mobile-text-secondary))]">
-              To update your email, contact support or sign in with a different account.
-            </p>
+            <div className="border-t border-[hsl(var(--mobile-border-subtle))] px-3 py-2.5">
+              <p className="mb-0 text-xs text-[hsl(var(--mobile-text-secondary))]">
+                We&apos;ll send a reset link to your registered email.
+              </p>
+            </div>
           ) : null}
         </div>
       ) : (
@@ -167,10 +194,34 @@ export function ProfileHeroCard({
 export function SecuritySummaryCard({
   isSendingPasswordReset,
   onEditPassword,
+  compact = false,
 }: {
   isSendingPasswordReset: boolean;
   onEditPassword: () => void;
+  compact?: boolean;
 }) {
+  if (compact) {
+    return (
+      <MobileCard variant="compact" className="h-full">
+        <p className="mb-0 text-[1.05rem] font-semibold text-[hsl(var(--mobile-text-primary))]">Security</p>
+        <div className="mt-3 border-t border-[hsl(var(--mobile-border-subtle))] pt-3">
+          <p className="mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">Password</p>
+          <p className="mb-0 mt-1 text-sm tracking-[0.14em] text-[hsl(var(--mobile-text-primary))]">••••••••••••</p>
+        </div>
+        <div className="mt-3 border-t border-[hsl(var(--mobile-border-subtle))] pt-3">
+          <button
+            type="button"
+            onClick={onEditPassword}
+            disabled={isSendingPasswordReset}
+            className="inline-flex min-h-[34px] items-center rounded-full border border-[hsl(var(--mobile-brand-border))] bg-[hsl(var(--mobile-brand-soft))] px-3 py-1 text-sm font-semibold text-[hsl(var(--mobile-brand-strong))] disabled:opacity-60"
+          >
+            {isSendingPasswordReset ? 'Sending...' : 'Protected'}
+          </button>
+        </div>
+      </MobileCard>
+    );
+  }
+
   return (
     <SummaryCard
       title="Security"
@@ -207,6 +258,7 @@ export function AddressSummaryCard({
   states,
   addressEditing,
   savingAddress,
+  compact = false,
   onStartEditing,
   onCancelEditing,
   onSave,
@@ -216,12 +268,34 @@ export function AddressSummaryCard({
   states: string[];
   addressEditing: boolean;
   savingAddress: boolean;
+  compact?: boolean;
   onStartEditing: () => void;
   onCancelEditing: () => void;
   onSave: () => void;
   onFieldChange: (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
 }) {
   const { line1, line2 } = formatAddressLines(formData);
+
+  if (compact && !addressEditing) {
+    return (
+      <MobileCard variant="compact" className="h-full">
+        <p className="mb-0 text-[1.05rem] font-semibold text-[hsl(var(--mobile-text-primary))]">Address</p>
+        <div className="mt-3 border-t border-[hsl(var(--mobile-border-subtle))] pt-3">
+          <p className="mb-0 text-sm font-medium text-[hsl(var(--mobile-text-primary))]">{line1}</p>
+          <p className="mb-0 mt-1 text-sm text-[hsl(var(--mobile-text-secondary))]">{line2}</p>
+        </div>
+        <div className="mt-3 border-t border-[hsl(var(--mobile-border-subtle))] pt-3">
+          <button
+            type="button"
+            onClick={onStartEditing}
+            className="inline-flex min-h-[34px] items-center rounded-full border border-[hsl(var(--mobile-brand-border))] bg-[hsl(var(--mobile-brand-soft))] px-3 py-1 text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]"
+          >
+            Edit Address
+          </button>
+        </div>
+      </MobileCard>
+    );
+  }
 
   return (
     <SummaryCard
@@ -318,10 +392,15 @@ export function AccountSummaryCard({
   memberSince: string;
 }) {
   return (
-    <SummaryCard title="Account" subtitle="Account metadata at a glance">
-      <MetricRow label="Account type" value={accountTypeLabel} />
-      <MetricRow label="Member since" value={memberSince || '—'} />
-      <MetricRow label="Status" value={<StatusChip tone="good">Active</StatusChip>} />
-    </SummaryCard>
+    <MobileCard variant="standard">
+      <div className="flex items-start justify-between gap-3">
+        <p className="mb-0 text-[1.05rem] font-semibold text-[hsl(var(--mobile-text-primary))]">Account</p>
+        <StatusChip tone="good">Active</StatusChip>
+      </div>
+      <div className="mt-3 border-t border-[hsl(var(--mobile-border-subtle))] pt-3">
+        <MetricRow label="Account type" value={accountTypeLabel} />
+        <MetricRow label="Member since" value={memberSince || '—'} />
+      </div>
+    </MobileCard>
   );
 }
