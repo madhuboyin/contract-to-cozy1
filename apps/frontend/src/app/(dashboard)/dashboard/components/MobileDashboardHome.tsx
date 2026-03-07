@@ -103,6 +103,15 @@ function roomEmoji(name: string): string {
   return '🏠';
 }
 
+function formatRoomFloorLabel(floorLevel: number | null | undefined): string {
+  if (floorLevel === null || floorLevel === undefined || Number.isNaN(floorLevel)) {
+    return 'Floor not set';
+  }
+  if (floorLevel === 0) return 'Ground floor';
+  if (floorLevel < 0) return `Basement ${Math.abs(floorLevel)}`;
+  return `Floor ${floorLevel}`;
+}
+
 export default function MobileDashboardHome({
   userFirstName,
   properties,
@@ -628,7 +637,7 @@ export default function MobileDashboardHome({
                           {room.name}
                         </p>
                         <p className="mb-0 mt-1 text-xs text-[hsl(var(--mobile-text-secondary))]">
-                          Floor {room.floorLevel ?? 0}
+                          {formatRoomFloorLabel(room.floorLevel)}
                         </p>
                       </Link>
                     ))}
