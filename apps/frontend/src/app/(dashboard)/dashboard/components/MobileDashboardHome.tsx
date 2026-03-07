@@ -42,6 +42,7 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import {
   MOBILE_AI_TOOL_CATALOG,
+  MOBILE_HOME_TOOL_LINKS,
 } from '@/components/mobile/dashboard/mobileToolCatalog';
 import { MoneyImpactTrackerCard } from '@/components/mobile/dashboard/MoneyImpactTrackerCard';
 import type { LocalUpdate } from '@/types';
@@ -338,6 +339,27 @@ export default function MobileDashboardHome({
   const riskRadarHref = `/dashboard/risk-radar?propertyId=${encodeURIComponent(propertyId || '')}`;
 
   const aiToolByKey = new Map(MOBILE_AI_TOOL_CATALOG.map((tool) => [tool.key, tool]));
+  const homeToolByKey = new Map(MOBILE_HOME_TOOL_LINKS.map((tool) => [tool.key, tool]));
+  const homeToolsPinnedKeys = ['property-tax', 'sell-hold-rent', 'seller-prep', 'home-timeline'] as const;
+  const homeToolsPageHref = `/dashboard/home-tools${propertyId ? `?propertyId=${encodeURIComponent(propertyId)}` : ''}`;
+  const homeToolsTileMeta: Record<string, { subtitle: string; icon: string }> = {
+    'property-tax': { subtitle: 'Forecast annual tax drag', icon: '🏛️' },
+    'sell-hold-rent': { subtitle: 'Model next property move', icon: '⚖️' },
+    'seller-prep': { subtitle: 'Prep high-ROI improvements', icon: '🧰' },
+    'home-timeline': { subtitle: 'Track milestones over time', icon: '🗓️' },
+  };
+  const homeToolTiles = homeToolsPinnedKeys
+    .map((key) => homeToolByKey.get(key))
+    .filter((tool): tool is (typeof MOBILE_HOME_TOOL_LINKS)[number] => Boolean(tool))
+    .map((tool) => ({
+      title: tool.name,
+      subtitle: homeToolsTileMeta[tool.key]?.subtitle || 'Open tool',
+      icon: homeToolsTileMeta[tool.key]?.icon || '🧩',
+      trailingIcon: homeToolsTileMeta[tool.key]?.icon || '🧩',
+      href: buildPropertyAwareHref(propertyId, tool.hrefSuffix, tool.navTarget),
+      tone: 'neutral' as const,
+      badgeLabel: '',
+    }));
   const homeEquityDollars = Number(homeEquityQuery.data?.totalEquityWithMaintenanceCents || 0) / 100;
   const climateHeadline = weatherInsight
     ? String(weatherInsight).split(/[.!?]/)[0]
@@ -807,6 +829,23 @@ export default function MobileDashboardHome({
                   </Link>
                 </div>
               </ExpandableSummaryCard>
+            </MobileSection>
+
+            <MobileSection>
+              <MobileSectionHeader
+                title="Home Tools"
+                subtitle="Ownership planning tools at a glance"
+                action={
+                  <Link href={homeToolsPageHref} className="no-brand-style text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]">
+                    View all
+                  </Link>
+                }
+              />
+              <QuickActionGrid className="gap-2.5">
+                {homeToolTiles.map((tile) => (
+                  <QuickActionTile key={tile.title} {...tile} variant="compact" />
+                ))}
+              </QuickActionGrid>
             </MobileSection>
           </>
         )}
