@@ -353,6 +353,7 @@ export default function MobileDashboardHome({
       artworkSrc: aiToolByKey.get('replace-repair')?.artworkSrc,
       href: buildAiToolHref(propertyId, '/dashboard/replace-repair'),
       tone: 'neutral' as const,
+      badgeLabel: '',
     },
     {
       title: 'Coverage Intelligence',
@@ -365,45 +366,27 @@ export default function MobileDashboardHome({
       artworkSrc: aiToolByKey.get('coverage-intelligence')?.artworkSrc,
       href: buildAiToolHref(propertyId, '/dashboard/coverage-intelligence'),
       tone: 'neutral' as const,
+      badgeLabel: '',
     },
     {
       title: 'Climate Risk',
       subtitle: climateHeadline || 'Weather risk monitored',
       icon: '🌧️',
       trailingIcon: '🌧️',
-      artworkSrc: undefined,
+      artworkSrc: aiToolByKey.get('climate')?.artworkSrc,
       href: buildAiToolHref(propertyId, '/dashboard/climate'),
       tone: 'neutral' as const,
+      badgeLabel: '',
     },
     {
       title: 'Home Equity',
       subtitle: homeEquityDollars > 0 ? `Equity: ${formatCurrency(homeEquityDollars)}` : 'Track equity growth',
       icon: '💼',
       trailingIcon: '💼',
-      artworkSrc: undefined,
+      artworkSrc: aiToolByKey.get('appreciation')?.artworkSrc,
       href: buildAiToolHref(propertyId, '/dashboard/appreciation'),
       tone: 'neutral' as const,
-    },
-    {
-      title: 'Maint. Forecast',
-      subtitle: overdueCount > 0 ? `${overdueCount} overdue task${overdueCount === 1 ? '' : 's'}` : 'Aged systems review',
-      icon: '⏳',
-      trailingIcon: '⏳',
-      artworkSrc: aiToolByKey.get('do-nothing-simulator')?.artworkSrc,
-      href: buildAiToolHref(propertyId, '/dashboard/maintenance'),
-      tone: 'neutral' as const,
-    },
-    {
-      title: 'Risk Optimizer',
-      subtitle:
-        riskScore > 0
-          ? `${Math.max(0, Math.round((100 - riskScore) / 20))} risks detected`
-          : 'Optimize premium strategy',
-      icon: '📉',
-      trailingIcon: '🛡️',
-      artworkSrc: aiToolByKey.get('risk-premium-optimizer')?.artworkSrc,
-      href: buildAiToolHref(propertyId, '/dashboard/risk-premium-optimizer'),
-      tone: 'neutral' as const,
+      badgeLabel: '',
     },
   ];
 

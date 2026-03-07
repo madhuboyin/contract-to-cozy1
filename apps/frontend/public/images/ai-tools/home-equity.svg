@@ -1,0 +1,44 @@
+<svg width="160" height="128" viewBox="0 0 160 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="cardBg" x1="10" y1="8" x2="150" y2="122" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF7EE"/>
+      <stop offset="0.56" stop-color="#FBEBDD"/>
+      <stop offset="1" stop-color="#F4DECD"/>
+    </linearGradient>
+    <linearGradient id="caseBody" x1="34" y1="44" x2="126" y2="92" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E58371"/>
+      <stop offset="1" stop-color="#C15B4F"/>
+    </linearGradient>
+    <linearGradient id="caseTop" x1="48" y1="30" x2="112" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F1AA9B"/>
+      <stop offset="1" stop-color="#D77667"/>
+    </linearGradient>
+    <filter id="drop" x="16" y="14" width="128" height="102" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feOffset dy="8"/>
+      <feGaussianBlur stdDeviation="6"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.24 0 0 0 0 0.12 0 0 0 0 0.1 0 0 0 0.25 0"/>
+    </filter>
+    <linearGradient id="gloss" x1="28" y1="18" x2="132" y2="68" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="4" y="4" width="152" height="120" rx="26" fill="url(#cardBg)"/>
+
+  <g filter="url(#drop)">
+    <rect x="24" y="22" width="112" height="84" rx="24" fill="#FFF9F6"/>
+  </g>
+
+  <rect x="46" y="36" width="68" height="12" rx="6" fill="url(#caseTop)"/>
+  <rect x="58" y="24" width="44" height="18" rx="8" fill="#A44D46"/>
+  <rect x="62" y="28" width="36" height="10" rx="5" fill="#C86A60"/>
+
+  <rect x="34" y="44" width="92" height="46" rx="10" fill="url(#caseBody)"/>
+  <rect x="34" y="56" width="92" height="5" fill="#A74D44" opacity="0.5"/>
+  <rect x="73" y="50" width="14" height="12" rx="2" fill="#F3E8C6"/>
+  <rect x="77" y="54" width="6" height="4" rx="1.5" fill="#CA9A4D"/>
+
+  <ellipse cx="82" cy="30" rx="56" ry="15" fill="url(#gloss)"/>
+  <rect x="20" y="98" width="120" height="10" rx="5" fill="#E4D1C2"/>
+</svg>

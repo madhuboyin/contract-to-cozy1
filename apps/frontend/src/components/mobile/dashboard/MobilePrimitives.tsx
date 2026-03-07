@@ -292,12 +292,16 @@ export function QuickActionTile({
   badgeLabel = 'AI',
   variant = 'default',
 }: QuickActionTileProps) {
+  const normalizedBadgeLabel =
+    typeof badgeLabel === 'string' ? badgeLabel.trim() : badgeLabel;
+  const showBadge = badgeLabel !== null;
+
   if (variant === 'compact') {
     return (
       <Link
         href={href}
         className={cn(
-          'no-brand-style block rounded-2xl border px-3 py-2.5 shadow-[0_6px_16px_rgba(15,23,42,0.05)] transition-transform active:scale-[0.99]',
+          'no-brand-style block rounded-[18px] border px-3 py-2.5 shadow-[0_6px_14px_rgba(15,23,42,0.05)] transition-transform active:scale-[0.99]',
           tone === 'brand'
             ? 'border-[hsl(var(--mobile-brand-border))] bg-[linear-gradient(145deg,hsl(var(--mobile-brand-soft)),#fff7e3)]'
             : 'border-[hsl(var(--mobile-border-subtle))] bg-white'
@@ -305,10 +309,12 @@ export function QuickActionTile({
       >
         <div className="flex items-start gap-2.5">
           <div className="min-w-0 flex-1">
-            <p className="mb-0 flex items-center gap-1 text-[11px] font-medium tracking-wide text-amber-700">
-              <Sparkles className="h-3.5 w-3.5" />
-              AI
-            </p>
+            {showBadge ? (
+              <p className="mb-0 flex items-center gap-1 text-[11px] font-medium tracking-wide text-amber-700">
+                <Sparkles className="h-3.5 w-3.5" />
+                {normalizedBadgeLabel ? <span>{normalizedBadgeLabel}</span> : null}
+              </p>
+            ) : null}
             <p className="mb-0 mt-0.5 line-clamp-2 text-[17px] font-semibold leading-5 text-[hsl(var(--mobile-text-primary))]">
               {title}
             </p>
@@ -319,14 +325,14 @@ export function QuickActionTile({
             ) : null}
           </div>
 
-          <div className="relative mt-1 h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))]">
+          <div className="relative mt-1 h-11 w-11 shrink-0 overflow-hidden rounded-lg">
             {artworkSrc ? (
               <Image
                 src={artworkSrc}
                 alt={artworkAlt || `${title} artwork`}
                 fill
                 sizes="44px"
-                className="object-contain p-1.5"
+                className="object-contain"
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-xl leading-none">
@@ -350,10 +356,14 @@ export function QuickActionTile({
       )}
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-1 text-[13px] font-medium text-amber-700">
-          <Sparkles className="h-3.5 w-3.5" />
-          {badgeLabel}
-        </span>
+        {showBadge ? (
+          <span className="inline-flex items-center gap-1 text-[13px] font-medium text-amber-700">
+            <Sparkles className="h-3.5 w-3.5" />
+            {normalizedBadgeLabel ? <span>{normalizedBadgeLabel}</span> : null}
+          </span>
+        ) : (
+          <span />
+        )}
         {trailingIcon ? <span className="text-2xl leading-none">{trailingIcon}</span> : null}
       </div>
       <div className="mb-2 flex min-h-14 items-center">

@@ -134,6 +134,7 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
     icon: Cloud,
     emoji: '🌧️',
     group: 'monitoring',
+    artworkKey: 'climate-risk',
     isActive: (pathname) => /^\/dashboard\/climate(\/|$)/.test(pathname),
   },
   {
@@ -164,6 +165,7 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
     icon: TrendingUp,
     emoji: '📈',
     group: 'monitoring',
+    artworkKey: 'home-equity',
     isActive: (pathname) => /^\/dashboard\/appreciation(\/|$)/.test(pathname),
   },
   {

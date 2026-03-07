@@ -4,6 +4,8 @@ export type AIToolArtworkKey =
   | 'coverage-intelligence'
   | 'do-nothing-simulator'
   | 'home-savings-check'
+  | 'climate-risk'
+  | 'home-equity'
   | 'view-all';
 
 export const AI_TOOL_ARTWORK: Record<AIToolArtworkKey, string> = {
@@ -12,5 +14,7 @@ export const AI_TOOL_ARTWORK: Record<AIToolArtworkKey, string> = {
   'coverage-intelligence': '/images/ai-tools/coverage-intelligence.svg',
   'do-nothing-simulator': '/images/ai-tools/do-nothing-simulator.svg',
   'home-savings-check': '/images/ai-tools/home-savings-check.svg',
+  'climate-risk': '/images/ai-tools/climate-risk.svg',
+  'home-equity': '/images/ai-tools/home-equity.svg',
   'view-all': '/images/ai-tools/view-all.svg',
 };

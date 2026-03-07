@@ -62,6 +62,7 @@ export default function AIToolsPage() {
                   icon={tool.emoji}
                   artworkSrc={tool.artworkSrc}
                   href={buildAiToolHref(resolvedPropertyId, tool.href)}
+                  badgeLabel=""
                 />
               ))}
             </QuickActionGrid>
