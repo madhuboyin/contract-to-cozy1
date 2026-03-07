@@ -11,6 +11,21 @@ import { SectionHeader } from '../../../components/SectionHeader';
 import RoomScanModal from '@/app/(dashboard)/dashboard/components/inventory/RoomScanModal';
 import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
 import RoomListCard from '@/components/rooms/RoomListCard';
+import {
+  buildRoomTip,
+  CompactRoomCard,
+  FocusRoomCard,
+  MobileRoomCardModel,
+  RoomsHealthSummaryCard,
+  RoomsHeroCard,
+} from '@/components/rooms/MobileRoomsCards';
+import {
+  EmptyStateCard,
+  MobileCard,
+  MobilePageContainer,
+  MobileSection,
+  MobileSectionHeader,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 function guessRoomType(name: string) {
   const t = (name || '').toLowerCase();
@@ -164,137 +179,245 @@ export default function RoomsHubClient() {
     return sorted.find((room) => room.id === lowest.id)?.name || null;
   }, [scoredRooms, sorted]);
 
-  return (
-    <div className="space-y-4 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-6">
-      <OnboardingReturnBanner />
+  const roomCards = useMemo<MobileRoomCardModel[]>(() => {
+    return sorted.map((room) => {
+      const roomWithType = room as InventoryRoom & { type?: string | null };
+      const inferredType = roomWithType.type ? null : guessRoomType(room.name);
+      const roomType = roomWithType.type || inferredType;
+      const showDetect = !roomWithType.type && inferredType !== 'OTHER';
+      const insights = roomInsights[room.id];
+      const stats = insights?.stats;
+      const backendScore = Number(insights?.healthScore?.score);
+      const score = insights
+        ? Number.isFinite(backendScore)
+          ? backendScore
+          : computeHealthScore(insights)
+        : 0;
+      const itemCount = Number(stats?.itemCount ?? 0);
+      const docCount = Number(stats?.docsLinkedCount ?? 0);
+      const gapCount = Number(stats?.coverageGapsCount ?? 0);
+      const hasValues = Number(stats?.replacementTotalCents ?? 0) > 0;
+      const completenessPercent = (itemCount > 0 ? 33 : 0) + (docCount > 0 ? 33 : 0) + (hasValues ? 34 : 0);
+      const tipText = buildRoomTip({ itemCount, docCount, gapCount });
 
-      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[radial-gradient(circle_at_8%_8%,rgba(251,191,36,0.14),transparent_40%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.14),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.82))] p-4 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.6)] dark:border-slate-700/70 dark:bg-[radial-gradient(circle_at_8%_8%,rgba(251,191,36,0.12),transparent_40%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.12),transparent_38%),linear-gradient(180deg,rgba(2,6,23,0.88),rgba(2,6,23,0.78))]">
-        <div className="sticky top-2 z-20 rounded-2xl border border-white/70 bg-white/55 p-3 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <SectionHeader
-              icon="✨"
-              title="Rooms"
-              description="Select a room to see health, value snapshot, and quick wins."
-            />
-            <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:items-center">
-              <Link
-                href={`/dashboard/properties/${propertyId}/inventory/rooms`}
-                className="inline-flex min-h-[46px] items-center justify-center rounded-xl border border-slate-300/70 bg-white/80 px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:hover:bg-slate-900"
-              >
-                Manage rooms
-              </Link>
-              <Link
-                href={`/dashboard/properties/${propertyId}/inventory`}
-                className="inline-flex min-h-[46px] items-center justify-center rounded-xl border border-slate-300/70 bg-white/80 px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:hover:bg-slate-900"
-              >
-                Back to inventory
-              </Link>
-            </div>
-          </div>
-        </div>
+      return {
+        room: roomWithType,
+        roomType: roomType || 'OTHER',
+        score,
+        itemCount,
+        docCount,
+        gapCount,
+        completenessPercent,
+        loading: !!insightsLoading[room.id],
+        hasInsights: !!insights,
+        showDetect,
+        tipText,
+      };
+    });
+  }, [sorted, roomInsights, insightsLoading]);
+
+  const focusRoom = useMemo(() => {
+    if (roomCards.length === 0) return null;
+    const cardsWithInsights = roomCards.filter((room) => room.hasInsights);
+    if (cardsWithInsights.length === 0) return roomCards[0];
+    return cardsWithInsights.reduce((min, room) => (room.score < min.score ? room : min), cardsWithInsights[0]);
+  }, [roomCards]);
+
+  const secondaryRooms = useMemo(
+    () => roomCards.filter((room) => room.room.id !== focusRoom?.room.id),
+    [roomCards, focusRoom]
+  );
+  const listRooms = useMemo(
+    () => (secondaryRooms.length > 0 ? secondaryRooms : roomCards),
+    [secondaryRooms, roomCards]
+  );
+
+  return (
+    <>
+      <div className="md:hidden">
+        <MobilePageContainer className="mobile-stack-sections pb-[calc(8rem+env(safe-area-inset-bottom))]">
+          <MobileSection className="pt-1">
+            <OnboardingReturnBanner />
+          </MobileSection>
+
+          <MobileSection>
+            <RoomsHeroCard propertyId={propertyId} />
+          </MobileSection>
+
+          <MobileSection>
+            <RoomsHealthSummaryCard overallHealth={overallHealth} lowestRoomName={lowestRoomName} />
+          </MobileSection>
+
+          {focusRoom ? (
+            <MobileSection>
+              <MobileSectionHeader title="Focus Room" subtitle="Start here first" />
+              <FocusRoomCard
+                propertyId={propertyId}
+                card={focusRoom}
+                scanLaunchingId={scanLaunchingId}
+                detectingId={detectingId}
+                onOpenScan={openScan}
+                onEnsureType={ensureType}
+                onLoadInsight={loadInsight}
+              />
+            </MobileSection>
+          ) : null}
+
+          <MobileSection>
+            <MobileSectionHeader title="All Rooms" subtitle={`${listRooms.length} rooms`} />
+
+            {loading ? (
+              <MobileCard variant="compact">
+                <p className="mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">Loading rooms...</p>
+              </MobileCard>
+            ) : null}
+
+            {!loading && roomCards.length === 0 ? (
+              <EmptyStateCard
+                title="No rooms yet"
+                description="Create rooms to unlock room-level health and AI insights."
+                action={
+                  <Link
+                    className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+                    href={`/dashboard/properties/${propertyId}/inventory/rooms`}
+                  >
+                    Manage Rooms
+                  </Link>
+                }
+              />
+            ) : (
+              <div className="space-y-2.5">
+                {listRooms.map((card) => (
+                  <CompactRoomCard
+                    key={card.room.id}
+                    propertyId={propertyId}
+                    card={card}
+                    scanLaunchingId={scanLaunchingId}
+                    detectingId={detectingId}
+                    onOpenScan={openScan}
+                    onEnsureType={ensureType}
+                    onLoadInsight={loadInsight}
+                  />
+                ))}
+              </div>
+            )}
+          </MobileSection>
+        </MobilePageContainer>
       </div>
 
-      {overallHealth !== null ? (
-        <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/75 via-amber-50/55 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-amber-950/20 dark:to-teal-950/20">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300">Home Rooms Health</p>
-              <p className="mt-1 text-3xl font-semibold text-slate-900 dark:text-slate-100">{overallHealth}% cozy</p>
+      <div className="hidden md:block">
+        <div className="space-y-4 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-6">
+          <OnboardingReturnBanner />
+
+          <div className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[radial-gradient(circle_at_8%_8%,rgba(251,191,36,0.14),transparent_40%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.14),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.82))] p-4 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.6)] dark:border-slate-700/70 dark:bg-[radial-gradient(circle_at_8%_8%,rgba(251,191,36,0.12),transparent_40%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.12),transparent_38%),linear-gradient(180deg,rgba(2,6,23,0.88),rgba(2,6,23,0.78))]">
+            <div className="sticky top-2 z-20 rounded-2xl border border-white/70 bg-white/55 p-3 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <SectionHeader
+                  icon="✨"
+                  title="Rooms"
+                  description="Select a room to see health, value snapshot, and quick wins."
+                />
+                <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:items-center">
+                  <Link
+                    href={`/dashboard/properties/${propertyId}/inventory/rooms`}
+                    className="inline-flex min-h-[46px] items-center justify-center rounded-xl border border-slate-300/70 bg-white/80 px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:hover:bg-slate-900"
+                  >
+                    Manage rooms
+                  </Link>
+                  <Link
+                    href={`/dashboard/properties/${propertyId}/inventory`}
+                    className="inline-flex min-h-[46px] items-center justify-center rounded-xl border border-slate-300/70 bg-white/80 px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:hover:bg-slate-900"
+                  >
+                    Back to inventory
+                  </Link>
+                </div>
+              </div>
             </div>
-            <p className="text-sm text-slate-600 dark:text-slate-300">
-              {lowestRoomName
-                ? `Focus next on ${lowestRoomName} to lift your overall room score.`
-                : 'Load room insights to see where quick wins are available.'}
-            </p>
+          </div>
+
+          {overallHealth !== null ? (
+            <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/75 via-amber-50/55 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-amber-950/20 dark:to-teal-950/20">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300">Home Rooms Health</p>
+                  <p className="mt-1 text-3xl font-semibold text-slate-900 dark:text-slate-100">{overallHealth}% cozy</p>
+                </div>
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                  {lowestRoomName
+                    ? `Focus next on ${lowestRoomName} to lift your overall room score.`
+                    : 'Load room insights to see where quick wins are available.'}
+                </p>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {loading ? (
+              <div className="rounded-2xl border border-white/70 bg-white/60 p-4 text-sm opacity-70 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45">
+                Loading rooms...
+              </div>
+            ) : null}
+
+            {!loading && sorted.length === 0 ? (
+              <div className="rounded-2xl border border-white/70 bg-white/60 p-4 text-sm opacity-70 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45">
+                No rooms yet. Create rooms in{' '}
+                <Link className="underline" href={`/dashboard/properties/${propertyId}/inventory/rooms`}>
+                  Manage rooms
+                </Link>
+                .
+              </div>
+            ) : null}
+
+            {roomCards.map((card) => {
+              const headerActions = (
+                <div className="flex flex-wrap items-center gap-2">
+                  {card.showDetect ? (
+                    <button
+                      type="button"
+                      onClick={() => ensureType(card.room)}
+                      disabled={detectingId === card.room.id}
+                      className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-700 transition-colors hover:border-gray-300 hover:text-gray-900 disabled:opacity-50"
+                      title="Auto-detect room template from name"
+                    >
+                      {detectingId === card.room.id ? 'Detecting...' : 'Apply type'}
+                    </button>
+                  ) : null}
+
+                  {!card.hasInsights && !card.loading ? (
+                    <button
+                      type="button"
+                      onClick={() => loadInsight(card.room.id)}
+                      className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-700 transition-colors hover:border-gray-300 hover:text-gray-900"
+                    >
+                      Load health score
+                    </button>
+                  ) : null}
+
+                  {card.loading ? <span className="text-xs text-gray-500">Loading insights...</span> : null}
+                </div>
+              );
+
+              return (
+                <RoomListCard
+                  key={card.room.id}
+                  propertyId={propertyId}
+                  roomId={card.room.id}
+                  roomName={card.room.name}
+                  roomType={card.roomType}
+                  healthScore={card.score}
+                  itemCount={card.itemCount}
+                  docCount={card.docCount}
+                  gapCount={card.gapCount}
+                  completenessPercent={card.completenessPercent}
+                  loading={card.loading}
+                  onScan={() => openScan(card.room)}
+                  scanLaunching={scanLaunchingId === card.room.id}
+                  headerAction={headerActions}
+                />
+              );
+            })}
           </div>
         </div>
-      ) : null}
-
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {loading ? (
-          <div className="rounded-2xl border border-white/70 bg-white/60 p-4 text-sm opacity-70 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45">
-            Loading rooms...
-          </div>
-        ) : null}
-
-        {!loading && sorted.length === 0 ? (
-          <div className="rounded-2xl border border-white/70 bg-white/60 p-4 text-sm opacity-70 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/45">
-            No rooms yet. Create rooms in{' '}
-            <Link className="underline" href={`/dashboard/properties/${propertyId}/inventory/rooms`}>
-              Manage rooms
-            </Link>
-            .
-          </div>
-        ) : null}
-
-        {sorted.map((room) => {
-          const roomWithType = room as InventoryRoom & { type?: string | null };
-          const inferredType = roomWithType.type ? null : guessRoomType(room.name);
-          const showDetect = !roomWithType.type && inferredType !== 'OTHER';
-
-          const insights = roomInsights[room.id];
-          const stats = insights?.stats;
-
-          const backendScore = Number(insights?.healthScore?.score);
-          const score = insights
-            ? Number.isFinite(backendScore)
-              ? backendScore
-              : computeHealthScore(insights)
-            : 0;
-
-          const itemCount = Number(stats?.itemCount ?? 0);
-          const docCount = Number(stats?.docsLinkedCount ?? 0);
-          const gapCount = Number(stats?.coverageGapsCount ?? 0);
-          const hasValues = Number(stats?.replacementTotalCents ?? 0) > 0;
-          const completenessPercent = (itemCount > 0 ? 33 : 0) + (docCount > 0 ? 33 : 0) + (hasValues ? 34 : 0);
-
-          const headerActions = (
-            <div className="flex flex-wrap items-center gap-2">
-              {showDetect ? (
-                <button
-                  type="button"
-                  onClick={() => ensureType(roomWithType)}
-                  disabled={detectingId === room.id}
-                  className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-700 transition-colors hover:border-gray-300 hover:text-gray-900 disabled:opacity-50"
-                  title="Auto-detect room template from name"
-                >
-                  {detectingId === room.id ? 'Detecting...' : 'Apply type'}
-                </button>
-              ) : null}
-
-              {!insights && !insightsLoading[room.id] ? (
-                <button
-                  type="button"
-                  onClick={() => loadInsight(room.id)}
-                  className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-700 transition-colors hover:border-gray-300 hover:text-gray-900"
-                >
-                  Load health score
-                </button>
-              ) : null}
-
-              {insightsLoading[room.id] ? <span className="text-xs text-gray-500">Loading insights...</span> : null}
-            </div>
-          );
-
-          return (
-            <RoomListCard
-              key={room.id}
-              propertyId={propertyId}
-              roomId={room.id}
-              roomName={room.name}
-              roomType={roomWithType.type || inferredType}
-              healthScore={score}
-              itemCount={itemCount}
-              docCount={docCount}
-              gapCount={gapCount}
-              completenessPercent={completenessPercent}
-              loading={insightsLoading[room.id]}
-              onScan={() => openScan(room)}
-              scanLaunching={scanLaunchingId === room.id}
-              headerAction={headerActions}
-            />
-          );
-        })}
       </div>
 
       {scanRoomId ? (
@@ -310,6 +433,6 @@ export default function RoomsHubClient() {
           roomName={scanRoomName}
         />
       ) : null}
-    </div>
+    </>
   );
 }
