@@ -4,6 +4,18 @@ import { useEffect, useRef, useState } from 'react';
 import { Lock } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { formatMemberSince, formatPhoneNumber, toTitleCase } from '@/lib/utils/formatters';
+import {
+  MobilePageContainer,
+  MobileSection,
+  MobileSectionHeader,
+  MobileCard,
+} from '@/components/mobile/dashboard/MobilePrimitives';
+import {
+  AccountSummaryCard,
+  AddressSummaryCard,
+  ProfileHeroCard,
+  SecuritySummaryCard,
+} from '@/components/profile/MobileProfileCards';
 
 type EditableSection = 'profile' | 'address';
 
@@ -265,290 +277,362 @@ export default function ProfilePage() {
 
   const inputClass =
     'w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-brand-primary';
+  const accountTypeLabel = user?.role ? toTitleCase(user.role.toLowerCase()) : 'Homeowner';
+  const memberSinceLabel = user?.createdAt ? formatMemberSince(user.createdAt) : '—';
 
   return (
-    <div className="mx-auto max-w-6xl pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Profile Settings</h1>
-        <p className="mt-2 text-gray-600">Manage your account information</p>
+    <>
+      <div className="md:hidden">
+        <MobilePageContainer className="mobile-stack-sections pb-[calc(8rem+env(safe-area-inset-bottom))] pt-2">
+          <MobileSection>
+            <MobileSectionHeader
+              title="Profile"
+              subtitle="Manage your account, security, and contact details."
+            />
+          </MobileSection>
+
+          {message ? (
+            <MobileSection>
+              <MobileCard
+                variant="compact"
+                className={
+                  message.type === 'success'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                    : 'border-rose-200 bg-rose-50 text-rose-800'
+                }
+              >
+                <p className="mb-0 text-sm">{message.text}</p>
+              </MobileCard>
+            </MobileSection>
+          ) : null}
+
+          <MobileSection>
+            <ProfileHeroCard
+              formData={formData}
+              accountTypeLabel={accountTypeLabel}
+              profileEditing={profileEditing}
+              savingProfile={savingSection === 'profile'}
+              onStartEditing={() => startEditing('profile')}
+              onCancelEditing={() => cancelEditing('profile')}
+              onSave={() => saveSection('profile')}
+              onFieldChange={handleChange}
+            />
+          </MobileSection>
+
+          <MobileSection>
+            <SecuritySummaryCard
+              isSendingPasswordReset={isSendingPasswordReset}
+              onEditPassword={sendPasswordReset}
+            />
+          </MobileSection>
+
+          <MobileSection>
+            <AddressSummaryCard
+              formData={formData}
+              states={STATES}
+              addressEditing={addressEditing}
+              savingAddress={savingSection === 'address'}
+              onStartEditing={() => startEditing('address')}
+              onCancelEditing={() => cancelEditing('address')}
+              onSave={() => saveSection('address')}
+              onFieldChange={handleChange}
+            />
+          </MobileSection>
+
+          <MobileSection>
+            <AccountSummaryCard
+              accountTypeLabel={accountTypeLabel}
+              memberSince={memberSinceLabel}
+            />
+          </MobileSection>
+        </MobilePageContainer>
       </div>
 
-      {message && (
-        <div
-          className={`mb-6 rounded-lg border p-4 ${
-            message.type === 'success'
-              ? 'border-green-200 bg-green-50 text-green-800'
-              : 'border-red-200 bg-red-50 text-red-800'
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <SectionCard
-          className="h-full"
-          title="Profile"
-          action={
-            !profileEditing ? (
-              <button
-                onClick={() => startEditing('profile')}
-                className={actionLinkClass}
-              >
-                Edit Profile
-              </button>
-            ) : undefined
-          }
-          footer={
-            profileEditing ? (
-              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
-                <button
-                  onClick={() => cancelEditing('profile')}
-                  disabled={savingSection === 'profile'}
-                  className="min-h-[44px] w-full rounded-lg border border-gray-300 px-6 py-2.5 text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50 sm:w-auto"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => saveSection('profile')}
-                  disabled={savingSection === 'profile'}
-                  className="min-h-[44px] w-full rounded-lg bg-brand-primary px-6 py-2.5 text-white transition-colors hover:bg-brand-primary-light disabled:opacity-50 sm:w-auto"
-                >
-                  {savingSection === 'profile' ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-            ) : undefined
-          }
-        >
-          <div className="mb-4 flex justify-start">
-            <ProfileAvatar firstName={formData.firstName} lastName={formData.lastName} />
+      <div className="hidden md:block">
+        <div className="mx-auto max-w-6xl pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold text-gray-900">Profile Settings</h1>
+            <p className="mt-2 text-gray-600">Manage your account information</p>
           </div>
-          <hr className="mb-4 border-0 border-t border-gray-200" />
 
-          <FieldRow
-            label="First name"
-            value={
-              profileEditing ? (
-                <input
-                  type="text"
-                  name="firstName"
-                  value={formData.firstName}
-                  onChange={handleChange}
-                  className={inputClass}
-                />
-              ) : (
-                formData.firstName || '—'
-              )
-            }
-          />
-          <FieldRow
-            label="Last name"
-            value={
-              profileEditing ? (
-                <input
-                  type="text"
-                  name="lastName"
-                  value={formData.lastName}
-                  onChange={handleChange}
-                  className={inputClass}
-                />
-              ) : (
-                formData.lastName || '—'
-              )
-            }
-          />
-          <FieldRow
-            label="Phone number"
-            value={
-              profileEditing ? (
-                <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  placeholder="(555) 123-4567"
-                  className={inputClass}
-                />
-              ) : (
-                formatPhoneNumber(formData.phone) || '—'
-              )
-            }
-          />
-        </SectionCard>
-
-        <SectionCard className="h-full" title="Email">
-          <FieldRow label="Email" value={formData.email || '—'} />
-          <p className="mt-2 text-sm text-gray-500">
-            To update your email, contact support or sign in with a different account.
-          </p>
-        </SectionCard>
-
-        <SectionCard
-          className="h-full"
-          title="Password"
-          action={
-            <button
-              onClick={sendPasswordReset}
-              disabled={isSendingPasswordReset}
-              className={actionLinkClass}
+          {message && (
+            <div
+              className={`mb-6 rounded-lg border p-4 ${
+                message.type === 'success'
+                  ? 'border-green-200 bg-green-50 text-green-800'
+                  : 'border-red-200 bg-red-50 text-red-800'
+              }`}
             >
-              {isSendingPasswordReset ? 'Sending...' : 'Edit Password'}
-            </button>
-          }
-        >
-          <div className="mb-2 flex items-center gap-3 border-b border-gray-50 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-50">
-              <Lock className="h-4 w-4 text-teal-600" />
+              {message.text}
             </div>
-            <div className="flex flex-1 flex-col gap-0.5">
-              <span className="text-[11px] text-gray-500">Password</span>
-              <span className="text-sm tracking-[0.15em] text-gray-900">••••••••••••</span>
-            </div>
-            <span className="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 px-2.5 py-0.5 text-[11px] font-semibold text-teal-700">
-              Protected
-            </span>
-          </div>
-          <p className="m-0 text-xs text-gray-500">
-            We&apos;ll send a secure reset link to your registered email.
-          </p>
-        </SectionCard>
+          )}
 
-        <SectionCard
-          className="h-full"
-          title="Address"
-          action={
-            !addressEditing ? (
-              <button
-                onClick={() => startEditing('address')}
-                className={actionLinkClass}
-              >
-                Edit Address
-              </button>
-            ) : undefined
-          }
-          footer={
-            addressEditing ? (
-              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
-                <button
-                  onClick={() => cancelEditing('address')}
-                  disabled={savingSection === 'address'}
-                  className="min-h-[44px] w-full rounded-lg border border-gray-300 px-6 py-2.5 text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50 sm:w-auto"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => saveSection('address')}
-                  disabled={savingSection === 'address'}
-                  className="min-h-[44px] w-full rounded-lg bg-brand-primary px-6 py-2.5 text-white transition-colors hover:bg-brand-primary-light disabled:opacity-50 sm:w-auto"
-                >
-                  {savingSection === 'address' ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-            ) : undefined
-          }
-        >
-          <FieldRow
-            label="Street address"
-            value={
-              addressEditing ? (
-                <input
-                  type="text"
-                  name="address"
-                  value={formData.address}
-                  onChange={handleChange}
-                  placeholder="123 Main Street"
-                  className={inputClass}
-                />
-              ) : (
-                toTitleCase(formData.address) || '—'
-              )
-            }
-          />
-
-          <FieldRow
-            label="City"
-            value={
-              addressEditing ? (
-                <input
-                  type="text"
-                  name="city"
-                  value={formData.city}
-                  onChange={handleChange}
-                  className={inputClass}
-                  placeholder="City"
-                />
-              ) : (
-                toTitleCase(formData.city) || '—'
-              )
-            }
-          />
-          <FieldRow
-            label="State"
-            value={
-              addressEditing ? (
-                <select
-                  name="state"
-                  value={formData.state}
-                  onChange={handleChange}
-                  className={inputClass}
-                >
-                  <option value="">Select State</option>
-                  {STATES.map((state) => (
-                    <option key={state} value={state}>
-                      {state}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                formData.state || '—'
-              )
-            }
-          />
-          <FieldRow
-            label="ZIP code"
-            value={
-              addressEditing ? (
-                <input
-                  type="text"
-                  name="zipCode"
-                  value={formData.zipCode}
-                  onChange={handleChange}
-                  maxLength={5}
-                  className={inputClass}
-                  placeholder="10001"
-                />
-              ) : (
-                formData.zipCode || '—'
-              )
-            }
-          />
-        </SectionCard>
-
-        <SectionCard className="h-full xl:col-span-2" title="Account">
-          <div className="grid grid-cols-1 md:grid-cols-3 md:divide-x md:divide-gray-200">
-            <FieldRow
-              className="md:border-b-0 md:px-5 md:py-3"
-              label="Account type"
-              value={<span className="capitalize">{user?.role?.toLowerCase() || 'Homeowner'}</span>}
-            />
-            <FieldRow
-              className="md:border-b-0 md:px-5 md:py-3"
-              label="Member since"
-              value={user?.createdAt ? formatMemberSince(user.createdAt) : '—'}
-            />
-            <FieldRow
-              className="md:border-b-0 md:px-5 md:py-3"
-              label="Account status"
-              value={
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-600" />
-                  Active
-                </span>
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <SectionCard
+              className="h-full"
+              title="Profile"
+              action={
+                !profileEditing ? (
+                  <button
+                    onClick={() => startEditing('profile')}
+                    className={actionLinkClass}
+                  >
+                    Edit Profile
+                  </button>
+                ) : undefined
               }
-            />
+              footer={
+                profileEditing ? (
+                  <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+                    <button
+                      onClick={() => cancelEditing('profile')}
+                      disabled={savingSection === 'profile'}
+                      className="min-h-[44px] w-full rounded-lg border border-gray-300 px-6 py-2.5 text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50 sm:w-auto"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => saveSection('profile')}
+                      disabled={savingSection === 'profile'}
+                      className="min-h-[44px] w-full rounded-lg bg-brand-primary px-6 py-2.5 text-white transition-colors hover:bg-brand-primary-light disabled:opacity-50 sm:w-auto"
+                    >
+                      {savingSection === 'profile' ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                ) : undefined
+              }
+            >
+              <div className="mb-4 flex justify-start">
+                <ProfileAvatar firstName={formData.firstName} lastName={formData.lastName} />
+              </div>
+              <hr className="mb-4 border-0 border-t border-gray-200" />
+
+              <FieldRow
+                label="First name"
+                value={
+                  profileEditing ? (
+                    <input
+                      type="text"
+                      name="firstName"
+                      value={formData.firstName}
+                      onChange={handleChange}
+                      className={inputClass}
+                    />
+                  ) : (
+                    formData.firstName || '—'
+                  )
+                }
+              />
+              <FieldRow
+                label="Last name"
+                value={
+                  profileEditing ? (
+                    <input
+                      type="text"
+                      name="lastName"
+                      value={formData.lastName}
+                      onChange={handleChange}
+                      className={inputClass}
+                    />
+                  ) : (
+                    formData.lastName || '—'
+                  )
+                }
+              />
+              <FieldRow
+                label="Phone number"
+                value={
+                  profileEditing ? (
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleChange}
+                      placeholder="(555) 123-4567"
+                      className={inputClass}
+                    />
+                  ) : (
+                    formatPhoneNumber(formData.phone) || '—'
+                  )
+                }
+              />
+            </SectionCard>
+
+            <SectionCard className="h-full" title="Email">
+              <FieldRow label="Email" value={formData.email || '—'} />
+              <p className="mt-2 text-sm text-gray-500">
+                To update your email, contact support or sign in with a different account.
+              </p>
+            </SectionCard>
+
+            <SectionCard
+              className="h-full"
+              title="Password"
+              action={
+                <button
+                  onClick={sendPasswordReset}
+                  disabled={isSendingPasswordReset}
+                  className={actionLinkClass}
+                >
+                  {isSendingPasswordReset ? 'Sending...' : 'Edit Password'}
+                </button>
+              }
+            >
+              <div className="mb-2 flex items-center gap-3 border-b border-gray-50 py-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-50">
+                  <Lock className="h-4 w-4 text-teal-600" />
+                </div>
+                <div className="flex flex-1 flex-col gap-0.5">
+                  <span className="text-[11px] text-gray-500">Password</span>
+                  <span className="text-sm tracking-[0.15em] text-gray-900">••••••••••••</span>
+                </div>
+                <span className="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 px-2.5 py-0.5 text-[11px] font-semibold text-teal-700">
+                  Protected
+                </span>
+              </div>
+              <p className="m-0 text-xs text-gray-500">
+                We&apos;ll send a secure reset link to your registered email.
+              </p>
+            </SectionCard>
+
+            <SectionCard
+              className="h-full"
+              title="Address"
+              action={
+                !addressEditing ? (
+                  <button
+                    onClick={() => startEditing('address')}
+                    className={actionLinkClass}
+                  >
+                    Edit Address
+                  </button>
+                ) : undefined
+              }
+              footer={
+                addressEditing ? (
+                  <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+                    <button
+                      onClick={() => cancelEditing('address')}
+                      disabled={savingSection === 'address'}
+                      className="min-h-[44px] w-full rounded-lg border border-gray-300 px-6 py-2.5 text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50 sm:w-auto"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => saveSection('address')}
+                      disabled={savingSection === 'address'}
+                      className="min-h-[44px] w-full rounded-lg bg-brand-primary px-6 py-2.5 text-white transition-colors hover:bg-brand-primary-light disabled:opacity-50 sm:w-auto"
+                    >
+                      {savingSection === 'address' ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                ) : undefined
+              }
+            >
+              <FieldRow
+                label="Street address"
+                value={
+                  addressEditing ? (
+                    <input
+                      type="text"
+                      name="address"
+                      value={formData.address}
+                      onChange={handleChange}
+                      placeholder="123 Main Street"
+                      className={inputClass}
+                    />
+                  ) : (
+                    toTitleCase(formData.address) || '—'
+                  )
+                }
+              />
+
+              <FieldRow
+                label="City"
+                value={
+                  addressEditing ? (
+                    <input
+                      type="text"
+                      name="city"
+                      value={formData.city}
+                      onChange={handleChange}
+                      className={inputClass}
+                      placeholder="City"
+                    />
+                  ) : (
+                    toTitleCase(formData.city) || '—'
+                  )
+                }
+              />
+              <FieldRow
+                label="State"
+                value={
+                  addressEditing ? (
+                    <select
+                      name="state"
+                      value={formData.state}
+                      onChange={handleChange}
+                      className={inputClass}
+                    >
+                      <option value="">Select State</option>
+                      {STATES.map((state) => (
+                        <option key={state} value={state}>
+                          {state}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    formData.state || '—'
+                  )
+                }
+              />
+              <FieldRow
+                label="ZIP code"
+                value={
+                  addressEditing ? (
+                    <input
+                      type="text"
+                      name="zipCode"
+                      value={formData.zipCode}
+                      onChange={handleChange}
+                      maxLength={5}
+                      className={inputClass}
+                      placeholder="10001"
+                    />
+                  ) : (
+                    formData.zipCode || '—'
+                  )
+                }
+              />
+            </SectionCard>
+
+            <SectionCard className="h-full xl:col-span-2" title="Account">
+              <div className="grid grid-cols-1 md:grid-cols-3 md:divide-x md:divide-gray-200">
+                <FieldRow
+                  className="md:border-b-0 md:px-5 md:py-3"
+                  label="Account type"
+                  value={<span className="capitalize">{user?.role?.toLowerCase() || 'Homeowner'}</span>}
+                />
+                <FieldRow
+                  className="md:border-b-0 md:px-5 md:py-3"
+                  label="Member since"
+                  value={user?.createdAt ? formatMemberSince(user.createdAt) : '—'}
+                />
+                <FieldRow
+                  className="md:border-b-0 md:px-5 md:py-3"
+                  label="Account status"
+                  value={
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-600" />
+                      Active
+                    </span>
+                  }
+                />
+              </div>
+            </SectionCard>
           </div>
-        </SectionCard>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
