@@ -39,6 +39,7 @@ import PriorityAlertBanner from '@/components/dashboard/PriorityAlertBanner';
 import { motion } from 'framer-motion';
 import { useToast } from '@/components/ui/use-toast';
 import MobileDashboardHome from './components/MobileDashboardHome';
+import MobileHomeBuyerDashboard from './components/MobileHomeBuyerDashboard';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -391,6 +392,20 @@ export default function DashboardPage() {
   });
   
   if (userSegment === 'HOME_BUYER') {
+    if (isMobileViewport) {
+      return (
+        <MobileHomeBuyerDashboard
+          userFirstName={user.firstName}
+          properties={data.properties}
+          selectedPropertyId={selectedPropertyId}
+          onPropertyChange={setSelectedPropertyId}
+          bookings={data.bookings}
+          checklistItems={checklistItems}
+          localUpdates={localUpdates}
+        />
+      );
+    }
+
     return (
       <HomeBuyerDashboard 
         userFirstName={user.firstName}
@@ -408,6 +423,7 @@ export default function DashboardPage() {
         properties={properties}
         selectedPropertyId={selectedPropertyId}
         onPropertyChange={setSelectedPropertyId}
+        localUpdates={localUpdates}
       />
     );
   }

@@ -8,6 +8,7 @@ import {
   CircleUserRound,
   Flame,
   LayoutGrid,
+  Sparkles,
   Shield,
   TrendingUp,
   Wallet,
@@ -38,6 +39,7 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { AI_TOOL_ARTWORK } from '@/components/mobile/dashboard/aiToolArtwork';
 import { MoneyImpactTrackerCard } from '@/components/mobile/dashboard/MoneyImpactTrackerCard';
+import type { LocalUpdate } from '@/types';
 import type { ScoredProperty } from '../types';
 
 type MobileDashboardHomeProps = {
@@ -45,6 +47,7 @@ type MobileDashboardHomeProps = {
   properties: ScoredProperty[];
   selectedPropertyId: string | undefined;
   onPropertyChange: (propertyId: string) => void;
+  localUpdates?: LocalUpdate[];
 };
 
 function buildPropertyAwareHref(
@@ -102,6 +105,7 @@ export default function MobileDashboardHome({
   properties,
   selectedPropertyId,
   onPropertyChange,
+  localUpdates = [],
 }: MobileDashboardHomeProps) {
   const selectedProperty = properties.find((property) => property.id === selectedPropertyId);
   const propertyId = selectedProperty?.id;
@@ -410,6 +414,28 @@ export default function MobileDashboardHome({
                 }
               />
             </MobileSection>
+
+            {localUpdates.length > 0 ? (
+              <MobileSection>
+                <ExpandableSummaryCard
+                  title="What's New"
+                  summary={`${localUpdates.length} local updates available`}
+                  metric={`${localUpdates.length} new`}
+                >
+                  <div className="space-y-2">
+                    {localUpdates.slice(0, 3).map((update) => (
+                      <PreviewListRow
+                        key={update.id}
+                        title={update.title}
+                        subtitle={update.shortDescription}
+                        href={update.ctaUrl || '/dashboard'}
+                        icon={<Sparkles className="h-4 w-4 text-[hsl(var(--mobile-brand-strong))]" />}
+                      />
+                    ))}
+                  </div>
+                </ExpandableSummaryCard>
+              </MobileSection>
+            ) : null}
 
             <MobileSection>
               <MobileSectionHeader
