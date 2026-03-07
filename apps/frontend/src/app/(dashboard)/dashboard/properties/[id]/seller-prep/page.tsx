@@ -16,6 +16,11 @@ import {
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, TrendingUp, AlertCircle, Settings } from "lucide-react";
+import {
+  MobileCard,
+  MobilePageContainer,
+  MobilePageIntro,
+} from "@/components/mobile/dashboard/MobilePrimitives";
 
 import SellerPrepOverview from "@/components/seller-prep/SellerPrepOverview";
 import { SellerPrepIntakeForm } from "@/components/seller-prep/SellerPrepIntakeForm";
@@ -118,14 +123,14 @@ export default function SellerPrepPage() {
   if (isLoading) {
     return (
       <DashboardShell>
-        <div className="space-y-4">
+        <MobilePageContainer className="space-y-4 py-6">
           <div className="h-10 w-48 rounded bg-gray-100 animate-pulse" />
           <div className="h-24 rounded-lg bg-gray-100 animate-pulse" />
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <div className="lg:col-span-8 h-96 rounded-lg bg-gray-100 animate-pulse" />
             <div className="lg:col-span-4 h-64 rounded-lg bg-gray-100 animate-pulse" />
           </div>
-        </div>
+        </MobilePageContainer>
       </DashboardShell>
     );
   }
@@ -133,32 +138,35 @@ export default function SellerPrepPage() {
   if (error || !data) {
     return (
       <DashboardShell>
-        <Card className="p-6">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
-            <div>
-              <p className="font-medium text-red-600">
-                Failed to load Seller Preparation insights
-              </p>
-              <p className="text-sm text-gray-600 mt-1">
-                {error instanceof Error ? error.message : 'An unexpected error occurred'}
-              </p>
-              <Button
-                variant="link"
-                onClick={() => window.location.reload()}
-                className="p-0 h-auto text-blue-600 mt-2"
-              >
-                Try again
-              </Button>
+        <MobilePageContainer className="py-6">
+          <MobileCard className="space-y-2.5">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+              <div>
+                <p className="font-medium text-red-600">
+                  Failed to load Seller Preparation insights
+                </p>
+                <p className="text-sm text-gray-600 mt-1">
+                  {error instanceof Error ? error.message : 'An unexpected error occurred'}
+                </p>
+                <Button
+                  variant="link"
+                  onClick={() => window.location.reload()}
+                  className="p-0 h-auto text-blue-600 mt-2"
+                >
+                  Try again
+                </Button>
+              </div>
             </div>
-          </div>
-        </Card>
+          </MobileCard>
+        </MobilePageContainer>
       </DashboardShell>
     );
   }
 
   return (
     <DashboardShell className="max-w-7xl mx-auto gap-4">
+      <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
       {/* Intake Form Modal */}
       {propertyId && (
         <SellerPrepIntakeForm
@@ -170,7 +178,34 @@ export default function SellerPrepPage() {
       )}
 
       {/* Navigation & Header Section */}
-      <div className="space-y-2">
+      <div className="space-y-2 md:hidden">
+        <Link
+          href={`/dashboard/properties/${propertyId}`}
+          className="text-xs font-medium text-muted-foreground hover:text-blue-600 inline-flex items-center transition-colors min-h-[44px]"
+        >
+          <ArrowLeft className="h-3 w-3 mr-1" />
+          Back to Property
+        </Link>
+
+        <MobilePageIntro
+          eyebrow="Seller Prep"
+          title="Home Sale Preparation"
+          subtitle="Personalized action plan to maximize resale value."
+          action={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleEditPreferences}
+              className="min-h-[44px] gap-1.5"
+            >
+              <Settings className="h-4 w-4" />
+              {data.overview.preferences ? "Edit" : "Setup"}
+            </Button>
+          }
+        />
+      </div>
+
+      <div className="hidden md:block space-y-2">
         <Link
           href={`/dashboard/properties/${propertyId}`}
           className="text-xs font-medium text-muted-foreground hover:text-blue-600 inline-flex items-center transition-colors"
@@ -220,6 +255,7 @@ export default function SellerPrepPage() {
           <FeedbackWidget propertyId={propertyId} />
         </div>
       )}
+      </MobilePageContainer>
     </DashboardShell>
   );
 }

@@ -11,13 +11,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -25,7 +18,6 @@ import {
   ArrowLeft,
   Check,
   Loader2,
-  AlertCircle,
   Search,
   X,
   MoreVertical,
@@ -40,6 +32,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { CheckedState } from '@radix-ui/react-checkbox';
 import { useQueryClient } from '@tanstack/react-query';
+import {
+  EmptyStateCard,
+  MobileCard,
+  MobilePageContainer,
+  MobilePageIntro,
+  MobileSection,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 // --- Types ---
 type ChecklistItemStatus = 'PENDING' | 'COMPLETED' | 'NOT_NEEDED';
@@ -164,41 +163,49 @@ export default function ChecklistPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full w-full items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-      </div>
+      <MobilePageContainer className="py-8">
+        <div className="flex h-full w-full items-center justify-center p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        </div>
+      </MobilePageContainer>
     );
   }
 
   if (error) {
     return (
-      <div className="flex h-full w-full flex-col items-center justify-center p-8 text-center">
-        <AlertCircle className="h-8 w-8 text-red-600" />
-        <h2 className="mt-4 text-xl font-semibold text-red-700">
-          Oops, something went wrong.
-        </h2>
-        <p className="mt-2 text-muted-foreground">{error}</p>
-        <Button asChild className="mt-6" variant="outline">
-          <Link href="/dashboard">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Dashboard
-          </Link>
-        </Button>
-      </div>
+      <MobilePageContainer className="py-6">
+        <EmptyStateCard
+          title="Oops, something went wrong."
+          description={error}
+          action={
+            <Button asChild variant="outline">
+              <Link href="/dashboard">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Dashboard
+              </Link>
+            </Button>
+          }
+        />
+      </MobilePageContainer>
     );
   }
 
   if (!checklist) {
     return (
-      <div className="flex h-full w-full flex-col items-center justify-center p-8 text-center">
-        <h2 className="mt-4 text-xl font-semibold">No checklist found.</h2>
-        <Button asChild className="mt-6" variant="outline">
-          <Link href="/dashboard">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Dashboard
-          </Link>
-        </Button>
-      </div>
+      <MobilePageContainer className="py-6">
+        <EmptyStateCard
+          title="No checklist found."
+          description="Return to dashboard and try again."
+          action={
+            <Button asChild variant="outline">
+              <Link href="/dashboard">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Dashboard
+              </Link>
+            </Button>
+          }
+        />
+      </MobilePageContainer>
     );
   }
 
@@ -210,37 +217,35 @@ export default function ChecklistPage() {
   const progressPercent = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <Button asChild variant="link" className="pl-0 text-blue-600">
+    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+      <Button asChild variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground">
         <Link href="/dashboard">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Dashboard
         </Link>
       </Button>
 
-      <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-        Your Home Closure Journey
-      </h2>
-      <p className="text-lg text-muted-foreground">
-        Track your progress and connect with trusted providers for each step.
-      </p>
+      <MobilePageIntro
+        eyebrow="Checklist"
+        title="Your Home Closure Journey"
+        subtitle="Track progress and connect with trusted providers for each step."
+      />
 
-      {/* Progress Card */}
-      <Card className="my-6">
-        <CardHeader>
-          <CardTitle>Your Progress</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <MobileSection>
+        <MobileCard className="space-y-3 border-slate-200/80 bg-white">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-slate-900">Your Progress</p>
+            <p className="text-xs text-slate-600">{Math.round(progressPercent)}%</p>
+          </div>
           <p className="text-sm font-medium text-gray-700">
             {completedItems} / {totalItems} items completed
           </p>
           <Progress value={progressPercent} className="w-full" />
-        </CardContent>
-      </Card>
+        </MobileCard>
+      </MobileSection>
 
-      {/* Checklist Items */}
-      <Card>
-        <CardContent className="p-0">
+      <MobileSection>
+        <MobileCard className="p-0 border-slate-200/80 bg-white">
           <ul className="divide-y divide-gray-200">
             {checklist.items.map((item) => (
               <ChecklistItemRow
@@ -250,9 +255,9 @@ export default function ChecklistPage() {
               />
             ))}
           </ul>
-        </CardContent>
-      </Card>
-    </div>
+        </MobileCard>
+      </MobileSection>
+    </MobilePageContainer>
   );
 }
 

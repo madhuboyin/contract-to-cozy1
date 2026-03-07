@@ -9,6 +9,13 @@ import { DashboardShell } from '@/components/DashboardShell';
 import { PageHeader, PageHeaderDescription, PageHeaderHeading } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  MobileCard,
+  MobileFilterSurface,
+  MobilePageContainer,
+  MobilePageIntro,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 import type { OnboardingStep, OnboardingStatusDTO } from '@/lib/api/onboardingApi';
 import {
   completeOnboardingStep,
@@ -123,7 +130,9 @@ export default function OnboardingClient() {
   if (statusQuery.isLoading) {
     return (
       <DashboardShell>
-        <div className="h-48 rounded-2xl bg-gray-100 animate-pulse" />
+        <MobilePageContainer className="py-6">
+          <div className="h-48 rounded-2xl bg-gray-100 animate-pulse" />
+        </MobilePageContainer>
       </DashboardShell>
     );
   }
@@ -131,12 +140,12 @@ export default function OnboardingClient() {
   if (statusQuery.isError || !status) {
     return (
       <DashboardShell>
-        <Card className="rounded-2xl">
-          <CardContent className="p-6 space-y-3">
+        <MobilePageContainer className="py-6">
+          <MobileCard className="space-y-3">
             <p className="text-sm text-red-600">Failed to load onboarding status.</p>
             <Button onClick={() => statusQuery.refetch()}>Retry</Button>
-          </CardContent>
-        </Card>
+          </MobileCard>
+        </MobilePageContainer>
       </DashboardShell>
     );
   }
@@ -144,8 +153,8 @@ export default function OnboardingClient() {
   if (status.status === 'COMPLETED' || status.setupScore === 100) {
     return (
       <DashboardShell>
-        <Card className="rounded-2xl">
-          <CardContent className="p-6 space-y-4">
+        <MobilePageContainer className="py-6">
+          <MobileCard className="space-y-4">
             <div className="flex items-center gap-2 text-green-700">
               <CheckCircle2 className="h-5 w-5" />
               <p className="font-semibold">Setup completed</p>
@@ -156,118 +165,161 @@ export default function OnboardingClient() {
             <Link href={`/dashboard/properties/${propertyId}`}>
               <Button>Go to property dashboard</Button>
             </Link>
-          </CardContent>
-        </Card>
+          </MobileCard>
+        </MobilePageContainer>
       </DashboardShell>
     );
   }
 
   return (
     <DashboardShell className="gap-4">
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" asChild>
+      <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+        <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
           <Link href={`/dashboard/properties/${propertyId}`}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to property
           </Link>
         </Button>
-      </div>
 
-      <PageHeader className="gap-2">
-        <PageHeaderHeading>Property setup checklist</PageHeaderHeading>
-        <PageHeaderDescription>
-          Complete these five steps to unlock full insights and automation for this property.
-        </PageHeaderDescription>
-      </PageHeader>
+        <div className="md:hidden">
+          <MobilePageIntro
+            eyebrow="Onboarding"
+            title="Property Setup Checklist"
+            subtitle="Complete five steps to unlock full insights and automation."
+          />
+        </div>
 
-      <Card className="rounded-2xl">
-        <CardContent className="p-4 sm:p-6 space-y-3">
+        <PageHeader className="hidden md:block gap-2">
+          <PageHeaderHeading>Property setup checklist</PageHeaderHeading>
+          <PageHeaderDescription>
+            Complete these five steps to unlock full insights and automation for this property.
+          </PageHeaderDescription>
+        </PageHeader>
+
+        <MobileFilterSurface className="rounded-2xl md:hidden">
           <div className="flex items-center justify-between text-sm text-gray-600">
             <span>{completedCount}/5 completed</span>
-            <div className="flex items-center gap-2">
-              <span>{remaining} remaining</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs"
-                onClick={() => statusQuery.refetch()}
-              >
-                Refresh
-              </Button>
-            </div>
+            <StatusChip tone={remaining === 0 ? 'good' : 'elevated'}>{remaining} remaining</StatusChip>
           </div>
           <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-            <div
-              className="h-full bg-blue-600 transition-all"
-              style={{ width: `${status.setupScore}%` }}
-            />
+            <div className="h-full bg-blue-600 transition-all" style={{ width: `${status.setupScore}%` }} />
           </div>
-        </CardContent>
-      </Card>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 w-fit px-2 text-xs"
+            onClick={() => statusQuery.refetch()}
+          >
+            Refresh
+          </Button>
+        </MobileFilterSurface>
 
-      <div className="grid gap-4 md:grid-cols-[240px_1fr]">
-        <Card className="rounded-2xl">
-          <CardContent className="p-3">
-            <div className="space-y-1">
-              {steps.map((step) => (
-                <button
-                  key={step.step}
+        <Card className="hidden md:block rounded-2xl">
+          <CardContent className="p-4 sm:p-6 space-y-3">
+            <div className="flex items-center justify-between text-sm text-gray-600">
+              <span>{completedCount}/5 completed</span>
+              <div className="flex items-center gap-2">
+                <span>{remaining} remaining</span>
+                <Button
                   type="button"
-                  onClick={() => setAndPersistStep(step.step)}
-                  className={`w-full text-left rounded-xl px-3 py-2 transition ${
-                    activeStep === step.step
-                      ? 'bg-blue-50 border border-blue-200'
-                      : 'hover:bg-gray-50 border border-transparent'
-                  }`}
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => statusQuery.refetch()}
                 >
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium">Step {step.step}</p>
-                    {step.complete ? (
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    ) : null}
-                  </div>
-                  <p className="text-xs text-gray-600 mt-1">{step.title}</p>
-                </button>
-              ))}
+                  Refresh
+                </Button>
+              </div>
+            </div>
+            <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+              <div className="h-full bg-blue-600 transition-all" style={{ width: `${status.setupScore}%` }} />
             </div>
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
-          {ActiveStepComponent && activeStepData ? (
-            <ActiveStepComponent
-              step={activeStepData}
-              onMarkComplete={() => completeStepMutation.mutate(activeStepData.step)}
-              isMarking={isStepMarking}
-            />
-          ) : null}
+        <div className="grid gap-4 md:grid-cols-[240px_1fr]">
+          <Card className="hidden md:block rounded-2xl">
+            <CardContent className="p-3">
+              <div className="space-y-1">
+                {steps.map((step) => (
+                  <button
+                    key={step.step}
+                    type="button"
+                    onClick={() => setAndPersistStep(step.step)}
+                    className={`w-full text-left rounded-xl px-3 py-2 transition ${
+                      activeStep === step.step
+                        ? 'bg-blue-50 border border-blue-200'
+                        : 'hover:bg-gray-50 border border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">Step {step.step}</p>
+                      {step.complete ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : null}
+                    </div>
+                    <p className="text-xs text-gray-600 mt-1">{step.title}</p>
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
 
-          <div className="flex flex-wrap items-center gap-2 justify-between">
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={handleBack} disabled={!canGoBack || setStepMutation.isPending}>
-                Back
-              </Button>
-              <Button variant="outline" onClick={handleNext} disabled={!canGoNext || setStepMutation.isPending}>
-                Next
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
+          <div className="space-y-4">
+            <div className="md:hidden">
+              <MobileFilterSurface>
+                <div className="grid grid-cols-1 gap-1.5">
+                  {steps.map((step) => (
+                    <button
+                      key={step.step}
+                      type="button"
+                      onClick={() => setAndPersistStep(step.step)}
+                      className={`w-full text-left rounded-xl px-3 py-2 transition ${
+                        activeStep === step.step
+                          ? 'bg-blue-50 border border-blue-200'
+                          : 'hover:bg-gray-50 border border-transparent'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium">Step {step.step}: {step.title}</p>
+                        {step.complete ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : null}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </MobileFilterSurface>
             </div>
 
-            <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => skipMutation.mutate()} disabled={skipMutation.isPending}>
-                {skipMutation.isPending ? 'Skipping…' : 'Skip for now'}
-              </Button>
-              <Button
-                onClick={() => finishMutation.mutate()}
-                disabled={completedCount < 5 || finishMutation.isPending}
-              >
-                {finishMutation.isPending ? 'Finishing…' : 'Finish setup'}
-              </Button>
+            {ActiveStepComponent && activeStepData ? (
+              <ActiveStepComponent
+                step={activeStepData}
+                onMarkComplete={() => completeStepMutation.mutate(activeStepData.step)}
+                isMarking={isStepMarking}
+              />
+            ) : null}
+
+            <div className="flex flex-wrap items-center gap-2 justify-between">
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={handleBack} disabled={!canGoBack || setStepMutation.isPending}>
+                  Back
+                </Button>
+                <Button variant="outline" onClick={handleNext} disabled={!canGoNext || setStepMutation.isPending}>
+                  Next
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              </div>
+
+              <div className="flex gap-2">
+                <Button variant="ghost" onClick={() => skipMutation.mutate()} disabled={skipMutation.isPending}>
+                  {skipMutation.isPending ? 'Skipping…' : 'Skip for now'}
+                </Button>
+                <Button onClick={() => finishMutation.mutate()} disabled={completedCount < 5 || finishMutation.isPending}>
+                  {finishMutation.isPending ? 'Finishing…' : 'Finish setup'}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </MobilePageContainer>
     </DashboardShell>
   );
 }
