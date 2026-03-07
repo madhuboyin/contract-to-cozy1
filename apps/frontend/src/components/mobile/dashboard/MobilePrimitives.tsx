@@ -450,7 +450,7 @@ export function HeroSummaryCard({
       <p className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
         {eyebrow}
       </p>
-      <h2 className="mb-0 text-[1.7rem] leading-tight font-semibold text-[hsl(var(--mobile-text-primary))]">
+      <h2 className="mb-0 text-[1.5rem] leading-[1.15] font-semibold text-[hsl(var(--mobile-text-primary))]">
         {title}
       </h2>
       <div className="mt-3 flex items-end justify-between gap-3">

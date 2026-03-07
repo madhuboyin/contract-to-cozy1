@@ -11,6 +11,7 @@ import {
   StatusChip,
   SummaryCard,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { MOBILE_TYPE_TOKENS } from '@/components/mobile/dashboard/mobileDesignTokens';
 
 export type MobileRoomCardModel = {
   room: InventoryRoom & { type?: string | null };
@@ -126,7 +127,7 @@ export function RoomsHealthSummaryCard({
           : 'Load room insights to see room health trends'
       }
     >
-      <p className="mb-0 text-[40px] font-semibold leading-none text-[hsl(var(--mobile-text-primary))]">
+      <p className={`mb-0 text-[hsl(var(--mobile-text-primary))] ${MOBILE_TYPE_TOKENS.heroMetric}`}>
         {overallHealth !== null ? `${overallHealth}% Cozy` : '—'}
       </p>
     </SummaryCard>
