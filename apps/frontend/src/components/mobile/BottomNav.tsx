@@ -3,13 +3,32 @@
 'use client';
 
 import React from 'react';
-import { Home, AlertTriangle, LayoutGrid, Search, Ellipsis, Box, Sparkles, TrendingUp, Shield, FileText, Globe, Radar, CalendarClock } from 'lucide-react';
+import {
+  Home,
+  AlertTriangle,
+  LayoutGrid,
+  Search,
+  Ellipsis,
+  Box,
+  Shield,
+  FileText,
+  Globe,
+  Radar,
+  CalendarClock,
+  Building,
+  Calendar,
+  Wrench,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
+import {
+  MOBILE_AI_TOOL_CATALOG,
+  MOBILE_HOME_TOOL_LINKS,
+} from '@/components/mobile/dashboard/mobileToolCatalog';
 
 const PROPERTY_ID_IN_PATH = /\/dashboard\/properties\/([^/]+)/;
 
@@ -84,52 +103,59 @@ export function BottomNav() {
     isActive: (path: string) => boolean;
   };
 
-  const aiToolItems: MoreItem[] = [
-    {
-      label: 'Coverage Intelligence',
-      href: buildAIToolHref(resolvedPropertyId, '/dashboard/coverage-intelligence'),
-      icon: Sparkles,
-      isActive: (path) => path.startsWith('/dashboard/coverage-intelligence'),
-    },
-    {
-      label: 'Risk-to-Premium Optimizer',
-      href: buildAIToolHref(resolvedPropertyId, '/dashboard/risk-premium-optimizer'),
-      icon: Sparkles,
-      isActive: (path) => path.startsWith('/dashboard/risk-premium-optimizer'),
-    },
-    {
-      label: 'Replace or Repair',
-      href: buildAIToolHref(resolvedPropertyId, '/dashboard/replace-repair'),
-      icon: Sparkles,
-      isActive: (path) => path.startsWith('/dashboard/replace-repair'),
-    },
-    {
-      label: 'Do-Nothing Simulator',
-      href: buildAIToolHref(resolvedPropertyId, '/dashboard/do-nothing-simulator'),
-      icon: Sparkles,
-      isActive: (path) => path.startsWith('/dashboard/do-nothing-simulator'),
-    },
-    {
-      label: 'Home Savings Check',
-      href: buildAIToolHref(resolvedPropertyId, '/dashboard/home-savings'),
-      icon: Sparkles,
-      isActive: (path) => path.startsWith('/dashboard/home-savings'),
-    },
-  ];
+  const aiToolItems: MoreItem[] = MOBILE_AI_TOOL_CATALOG
+    .filter((tool) => tool.key !== 'view-all')
+    .map((tool) => ({
+      label: tool.title,
+      href: buildAIToolHref(resolvedPropertyId, tool.href),
+      icon: tool.icon,
+      isActive: tool.isActive,
+    }));
 
-  const homeToolItems: MoreItem[] = [
-    { label: 'Property Tax', href: buildPropertyAwareHref(resolvedPropertyId, 'tools/property-tax', 'tool:property-tax'), icon: TrendingUp, isActive: (path) => /\/tools\/property-tax(\/|$)/.test(path) },
-    { label: 'Cost Growth', href: buildPropertyAwareHref(resolvedPropertyId, 'tools/cost-growth', 'tool:cost-growth'), icon: TrendingUp, isActive: (path) => /\/tools\/cost-growth(\/|$)/.test(path) },
-    { label: 'Insurance Trend', href: buildPropertyAwareHref(resolvedPropertyId, 'tools/insurance-trend', 'tool:insurance-trend'), icon: TrendingUp, isActive: (path) => /\/tools\/insurance-trend(\/|$)/.test(path) },
-    { label: 'Cost Explainer', href: buildPropertyAwareHref(resolvedPropertyId, 'tools/cost-explainer', 'tool:cost-explainer'), icon: TrendingUp, isActive: (path) => /\/tools\/cost-explainer(\/|$)/.test(path) },
-    { label: 'True Cost', href: buildPropertyAwareHref(resolvedPropertyId, 'tools/true-cost', 'tool:true-cost'), icon: TrendingUp, isActive: (path) => /\/tools\/true-cost(\/|$)/.test(path) },
-    { label: 'Sell / Hold / Rent', href: buildPropertyAwareHref(resolvedPropertyId, 'tools/sell-hold-rent', 'tool:sell-hold-rent'), icon: TrendingUp, isActive: (path) => /\/tools\/sell-hold-rent(\/|$)/.test(path) },
-    { label: 'Volatility', href: buildPropertyAwareHref(resolvedPropertyId, 'tools/cost-volatility', 'tool:cost-volatility'), icon: TrendingUp, isActive: (path) => /\/tools\/cost-volatility(\/|$)/.test(path) },
-    { label: 'Break-Even', href: buildPropertyAwareHref(resolvedPropertyId, 'tools/break-even', 'tool:break-even'), icon: TrendingUp, isActive: (path) => /\/tools\/break-even(\/|$)/.test(path) },
-    { label: 'Home Capital Timeline', href: buildPropertyAwareHref(resolvedPropertyId, 'tools/capital-timeline', 'tool:capital-timeline'), icon: TrendingUp, isActive: (path) => /\/tools\/capital-timeline(\/|$)/.test(path) },
-    { label: 'Seller Prep', href: buildPropertyAwareHref(resolvedPropertyId, 'seller-prep', 'seller-prep'), icon: TrendingUp, isActive: (path) => /\/seller-prep(\/|$)/.test(path) },
-    { label: 'Home Timeline', href: buildPropertyAwareHref(resolvedPropertyId, 'timeline', 'home-timeline'), icon: TrendingUp, isActive: (path) => /\/timeline(\/|$)/.test(path) },
-    { label: 'Status Board', href: buildPropertyAwareHref(resolvedPropertyId, 'status-board', 'status-board'), icon: TrendingUp, isActive: (path) => /\/status-board(\/|$)/.test(path) },
+  const homeToolItems: MoreItem[] = MOBILE_HOME_TOOL_LINKS.map((tool) => ({
+    label: tool.name,
+    href: buildPropertyAwareHref(resolvedPropertyId, tool.hrefSuffix, tool.navTarget),
+    icon: tool.icon,
+    isActive: tool.isActive,
+  }));
+
+  const corePageItems: MoreItem[] = [
+    {
+      label: 'Properties',
+      href: '/dashboard/properties',
+      icon: Building,
+      isActive: (path) => path.startsWith('/dashboard/properties'),
+    },
+    {
+      label: 'Bookings',
+      href: '/dashboard/bookings',
+      icon: Calendar,
+      isActive: (path) => path.startsWith('/dashboard/bookings'),
+    },
+    {
+      label: 'Inventory',
+      href: '/dashboard/inventory',
+      icon: Box,
+      isActive: (path) => path.startsWith('/dashboard/inventory'),
+    },
+    {
+      label: 'Maintenance',
+      href: '/dashboard/maintenance',
+      icon: Wrench,
+      isActive: (path) => path.startsWith('/dashboard/maintenance'),
+    },
+    {
+      label: 'Checklist',
+      href: '/dashboard/checklist',
+      icon: FileText,
+      isActive: (path) => path.startsWith('/dashboard/checklist'),
+    },
+    {
+      label: 'Seasonal',
+      href: '/dashboard/seasonal',
+      icon: CalendarClock,
+      isActive: (path) => path.startsWith('/dashboard/seasonal'),
+    },
   ];
 
   const insightItems: MoreItem[] = [
@@ -188,17 +214,7 @@ export function BottomNav() {
     {
       group: 'Management',
       buckets: [
-        {
-          label: 'Inventory',
-          items: [
-            {
-              label: 'Inventory',
-              href: '/dashboard/inventory',
-              icon: Box,
-              isActive: (path: string) => path.startsWith('/dashboard/inventory'),
-            },
-          ],
-        },
+        { label: 'Core Pages', items: corePageItems },
         { label: 'Home Admin', items: homeAdminItems },
       ],
     },
@@ -252,6 +268,17 @@ export function BottomNav() {
     )
   );
 
+  React.useEffect(() => {
+    setMoreOpen(false);
+    setQuery('');
+  }, [pathname]);
+
+  React.useEffect(() => {
+    if (!moreOpen) {
+      setQuery('');
+    }
+  }, [moreOpen]);
+
   return (
     <>
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
@@ -277,7 +304,13 @@ export function BottomNav() {
             );
           })}
 
-          <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
+          <Sheet
+            open={moreOpen}
+            onOpenChange={(open) => {
+              setMoreOpen(open);
+              if (!open) setQuery('');
+            }}
+          >
             <SheetTrigger asChild>
               <button
                 type="button"
@@ -292,7 +325,7 @@ export function BottomNav() {
                 <span className={cn('font-medium', moreActive && 'font-semibold')}>More</span>
               </button>
             </SheetTrigger>
-            <SheetContent side="bottom" className="max-h-[80vh] rounded-t-2xl">
+            <SheetContent side="bottom" className="flex h-[82vh] max-h-[82vh] flex-col rounded-t-2xl">
               <SheetHeader>
                 <SheetTitle>More</SheetTitle>
               </SheetHeader>
@@ -304,7 +337,7 @@ export function BottomNav() {
                   className="h-10"
                 />
               </div>
-              <div className="mt-4 space-y-4 overflow-y-auto pb-4">
+              <div className="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto pb-4">
                 {filteredMoreItems.map((section) => {
                   if (!section.buckets.length) return null;
                   return (

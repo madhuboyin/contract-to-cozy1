@@ -37,7 +37,10 @@ import {
   StatusChip,
   SummaryCard,
 } from '@/components/mobile/dashboard/MobilePrimitives';
-import { AI_TOOL_ARTWORK } from '@/components/mobile/dashboard/aiToolArtwork';
+import {
+  MOBILE_AI_TOOL_CATALOG,
+  MOBILE_HOME_AI_TILE_KEYS,
+} from '@/components/mobile/dashboard/mobileToolCatalog';
 import { MoneyImpactTrackerCard } from '@/components/mobile/dashboard/MoneyImpactTrackerCard';
 import type { LocalUpdate } from '@/types';
 import type { ScoredProperty } from '../types';
@@ -283,45 +286,42 @@ export default function MobileDashboardHome({
   const dailySnapshotHref = `/dashboard/daily-snapshot?propertyId=${encodeURIComponent(propertyId || '')}`;
   const riskRadarHref = `/dashboard/risk-radar?propertyId=${encodeURIComponent(propertyId || '')}`;
 
-  const aiToolTiles = [
-    {
-      title: 'Repair vs Replace',
-      subtitle: monthlySavings > 0 ? `Save ${formatCurrency(monthlySavings)}` : 'Smart fix decisions',
-      icon: '🛠️',
-      trailingIcon: '🔧',
-      artworkSrc: AI_TOOL_ARTWORK['repair-vs-replace'],
-      href: buildAiToolHref(propertyId, '/dashboard/replace-repair'),
-      tone: 'neutral' as const,
-    },
-    {
-      title: 'Risk Optimizer',
-      subtitle:
-        riskScore > 0 ? `${Math.max(0, Math.round((100 - riskScore) / 20))} risks detected` : 'Optimize premium strategy',
-      icon: '📉',
-      trailingIcon: '🛡️',
-      artworkSrc: AI_TOOL_ARTWORK['risk-optimizer'],
-      href: buildAiToolHref(propertyId, '/dashboard/risk-premium-optimizer'),
-      tone: 'neutral' as const,
-    },
-    {
-      title: 'Coverage Intelligence',
-      subtitle: riskExposure > 0 ? `Protect ${formatCurrency(riskExposure)}` : 'Maximize protection',
-      icon: '🧾',
-      trailingIcon: '✅',
-      artworkSrc: AI_TOOL_ARTWORK['coverage-intelligence'],
-      href: buildAiToolHref(propertyId, '/dashboard/coverage-intelligence'),
-      tone: 'neutral' as const,
-    },
-    {
-      title: 'View All',
-      subtitle: 'Explore all tools',
-      icon: '🧰',
-      trailingIcon: '›',
-      artworkSrc: AI_TOOL_ARTWORK['view-all'],
-      href: buildAiToolHref(propertyId, '/dashboard/ai-tools'),
-      tone: 'brand' as const,
-    },
-  ];
+  const aiToolByKey = new Map(MOBILE_AI_TOOL_CATALOG.map((tool) => [tool.key, tool]));
+  const aiToolTiles = MOBILE_HOME_AI_TILE_KEYS
+    .map((key) => aiToolByKey.get(key))
+    .filter((tool): tool is (typeof MOBILE_AI_TOOL_CATALOG)[number] => Boolean(tool))
+    .map((tool) => {
+      let subtitle = tool.description;
+      if (tool.key === 'replace-repair') {
+        subtitle = monthlySavings > 0 ? `Save ${formatCurrency(monthlySavings)}` : 'Smart fix decisions';
+      } else if (tool.key === 'risk-premium-optimizer') {
+        subtitle =
+          riskScore > 0
+            ? `${Math.max(0, Math.round((100 - riskScore) / 20))} risks detected`
+            : 'Optimize premium strategy';
+      } else if (tool.key === 'coverage-intelligence') {
+        subtitle = riskExposure > 0 ? `Protect ${formatCurrency(riskExposure)}` : 'Maximize protection';
+      }
+
+      return {
+        title: tool.title,
+        subtitle,
+        icon: tool.emoji,
+        trailingIcon:
+          tool.key === 'replace-repair'
+            ? '🔧'
+            : tool.key === 'risk-premium-optimizer'
+              ? '🛡️'
+              : tool.key === 'coverage-intelligence'
+                ? '✅'
+                : tool.key === 'view-all'
+                  ? '›'
+                  : undefined,
+        artworkSrc: tool.artworkSrc,
+        href: buildAiToolHref(propertyId, tool.href),
+        tone: tool.key === 'view-all' ? ('brand' as const) : ('neutral' as const),
+      };
+    });
 
   return (
     <div className="md:hidden">

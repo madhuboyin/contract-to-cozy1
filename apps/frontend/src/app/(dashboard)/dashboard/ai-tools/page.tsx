@@ -13,7 +13,10 @@ import {
   QuickActionTile,
   SummaryCard,
 } from '@/components/mobile/dashboard/MobilePrimitives';
-import { AI_TOOL_ARTWORK } from '@/components/mobile/dashboard/aiToolArtwork';
+import {
+  MOBILE_AI_TOOL_CATALOG,
+  MOBILE_AI_TOOL_GROUPS,
+} from '@/components/mobile/dashboard/mobileToolCatalog';
 
 function buildAiToolHref(propertyId: string | undefined, toolHref: string): string {
   if (!propertyId) return toolHref;
@@ -27,48 +30,11 @@ export default function AIToolsPage() {
   const propertyIdFromQuery = searchParams.get('propertyId') || undefined;
   const resolvedPropertyId = selectedPropertyId || propertyIdFromQuery;
 
-  const tools = [
-    {
-      title: 'Repair vs Replace',
-      subtitle: 'Decision support for repairs',
-      icon: '🛠️',
-      trailingIcon: '🔧',
-      artworkSrc: AI_TOOL_ARTWORK['repair-vs-replace'],
-      href: buildAiToolHref(resolvedPropertyId, '/dashboard/replace-repair'),
-    },
-    {
-      title: 'Coverage Intelligence',
-      subtitle: 'Coverage gap analysis',
-      icon: '🧾',
-      trailingIcon: '✅',
-      artworkSrc: AI_TOOL_ARTWORK['coverage-intelligence'],
-      href: buildAiToolHref(resolvedPropertyId, '/dashboard/coverage-intelligence'),
-    },
-    {
-      title: 'Risk Optimizer',
-      subtitle: 'Premium pressure reduction',
-      icon: '📉',
-      trailingIcon: '🛡️',
-      artworkSrc: AI_TOOL_ARTWORK['risk-optimizer'],
-      href: buildAiToolHref(resolvedPropertyId, '/dashboard/risk-premium-optimizer'),
-    },
-    {
-      title: 'Do-Nothing Simulator',
-      subtitle: 'Cost of delayed action',
-      icon: '⏳',
-      trailingIcon: '📈',
-      artworkSrc: AI_TOOL_ARTWORK['do-nothing-simulator'],
-      href: buildAiToolHref(resolvedPropertyId, '/dashboard/do-nothing-simulator'),
-    },
-    {
-      title: 'Home Savings Check',
-      subtitle: 'Find recurring bill savings',
-      icon: '💸',
-      trailingIcon: '🏦',
-      artworkSrc: AI_TOOL_ARTWORK['home-savings-check'],
-      href: buildAiToolHref(resolvedPropertyId, '/dashboard/home-savings'),
-    },
-  ];
+  const tools = MOBILE_AI_TOOL_CATALOG.filter((tool) => tool.key !== 'view-all');
+  const groupedTools = MOBILE_AI_TOOL_GROUPS.map((group) => ({
+    ...group,
+    items: tools.filter((tool) => tool.group === group.key),
+  })).filter((group) => group.items.length > 0);
 
   const dailySnapshotHref = `/dashboard/daily-snapshot${resolvedPropertyId ? `?propertyId=${encodeURIComponent(resolvedPropertyId)}` : ''}`;
   const riskRadarHref = `/dashboard/risk-radar${resolvedPropertyId ? `?propertyId=${encodeURIComponent(resolvedPropertyId)}` : ''}`;
@@ -79,35 +45,29 @@ export default function AIToolsPage() {
         <MobileSectionHeader title="AI Tools" subtitle="Smart decision support for your home" />
       </MobileSection>
 
-      <MobileSection>
-        <ExpandableSummaryCard
-          title="Insurance + Risk Tools"
-          summary="Coverage and premium intelligence"
-          metric="3 tools"
-          defaultOpen
-        >
-          <QuickActionGrid>
-            {tools.slice(0, 3).map((tool) => (
-              <QuickActionTile key={tool.title} {...tool} />
-            ))}
-          </QuickActionGrid>
-        </ExpandableSummaryCard>
-      </MobileSection>
-
-      <MobileSection>
-        <ExpandableSummaryCard
-          title="Savings + Inaction Tools"
-          summary="Budget and delay-impact simulations"
-          metric="2 tools"
-          defaultOpen
-        >
-          <QuickActionGrid>
-            {tools.slice(3).map((tool) => (
-              <QuickActionTile key={tool.title} {...tool} />
-            ))}
-          </QuickActionGrid>
-        </ExpandableSummaryCard>
-      </MobileSection>
+      {groupedTools.map((group, index) => (
+        <MobileSection key={group.key}>
+          <ExpandableSummaryCard
+            title={group.title}
+            summary={group.summary}
+            metric={`${group.items.length} tools`}
+            defaultOpen={index === 0}
+          >
+            <QuickActionGrid>
+              {group.items.map((tool) => (
+                <QuickActionTile
+                  key={tool.key}
+                  title={tool.title}
+                  subtitle={tool.description}
+                  icon={tool.emoji}
+                  artworkSrc={tool.artworkSrc}
+                  href={buildAiToolHref(resolvedPropertyId, tool.href)}
+                />
+              ))}
+            </QuickActionGrid>
+          </ExpandableSummaryCard>
+        </MobileSection>
+      ))}
 
       <MobileSection>
         <SummaryCard title="Intelligence Details" subtitle="Deep-dive pages from mobile home intelligence">
