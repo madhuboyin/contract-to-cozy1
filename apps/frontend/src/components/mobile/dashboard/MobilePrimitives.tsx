@@ -315,11 +315,11 @@ export function QuickActionTile({
                 {normalizedBadgeLabel ? <span>{normalizedBadgeLabel}</span> : null}
               </p>
             ) : null}
-            <p className="mb-0 mt-0.5 line-clamp-2 text-[17px] font-semibold leading-5 text-[hsl(var(--mobile-text-primary))]">
+            <p className="mb-0 mt-0.5 line-clamp-2 text-[14px] font-semibold leading-[1.22] text-[hsl(var(--mobile-text-primary))]">
               {title}
             </p>
             {subtitle ? (
-              <p className="mb-0 mt-1 line-clamp-1 text-[13px] text-[hsl(var(--mobile-text-secondary))]">
+              <p className="mb-0 mt-1 line-clamp-1 text-[12px] text-[hsl(var(--mobile-text-secondary))]">
                 {subtitle}
               </p>
             ) : null}
@@ -450,7 +450,7 @@ export function HeroSummaryCard({
       <p className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
         {eyebrow}
       </p>
-      <h2 className="mb-0 text-[1.5rem] leading-[1.15] font-semibold text-[hsl(var(--mobile-text-primary))]">
+      <h2 className="mb-0 text-[1.375rem] leading-[1.2] font-semibold text-[hsl(var(--mobile-text-primary))]">
         {title}
       </h2>
       <div className="mt-3 flex items-end justify-between gap-3">

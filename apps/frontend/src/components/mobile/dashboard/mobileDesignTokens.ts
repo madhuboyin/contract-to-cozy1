@@ -8,7 +8,7 @@ export const MOBILE_LAYOUT_TOKENS = {
 } as const;
 
 export const MOBILE_TYPE_TOKENS = {
-  heroMetric: 'text-[1.875rem] leading-[1.1] font-semibold tracking-tight',
+  heroMetric: 'text-[1.625rem] leading-[1.14] font-semibold tracking-tight',
   sectionTitle: 'text-[1.375rem] leading-tight font-semibold tracking-tight',
   cardTitle: 'text-base leading-tight font-semibold',
   body: 'text-sm leading-[1.45]',
