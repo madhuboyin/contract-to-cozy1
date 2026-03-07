@@ -42,7 +42,6 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import {
   MOBILE_AI_TOOL_CATALOG,
-  MOBILE_HOME_AI_TILE_KEYS,
 } from '@/components/mobile/dashboard/mobileToolCatalog';
 import { MoneyImpactTrackerCard } from '@/components/mobile/dashboard/MoneyImpactTrackerCard';
 import type { LocalUpdate } from '@/types';
@@ -221,6 +220,17 @@ export default function MobileDashboardHome({
     staleTime: 5 * 60 * 1000,
   });
 
+  const homeEquityQuery = useQuery({
+    queryKey: ['mobile-home-equity-summary', propertyId],
+    queryFn: async () => {
+      if (!propertyId) return null;
+      const response = await api.getHomeEquitySummary(propertyId);
+      return (response as any)?.data ?? response;
+    },
+    enabled: !!propertyId,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const homeScore = Math.round(homeScoreQuery.data?.homeScore ?? 0);
   const healthScore = Math.round(selectedProperty?.healthScore?.totalScore ?? 0);
   const riskScore = Math.round(riskSummaryQuery.data?.riskScore ?? 0);
@@ -319,46 +329,83 @@ export default function MobileDashboardHome({
     enabled: !!propertyId && previewRoomIds.length > 0,
     staleTime: 5 * 60 * 1000,
   });
+  const totalCoverageGaps = Object.values(roomInsightsQuery.data || {}).reduce(
+    (sum, stats) => sum + Number(stats.coverageGapsCount || 0),
+    0
+  );
   const roomsHref = buildPropertyAwareHref(propertyId, 'rooms', 'rooms');
   const dailySnapshotHref = `/dashboard/daily-snapshot?propertyId=${encodeURIComponent(propertyId || '')}`;
   const riskRadarHref = `/dashboard/risk-radar?propertyId=${encodeURIComponent(propertyId || '')}`;
 
   const aiToolByKey = new Map(MOBILE_AI_TOOL_CATALOG.map((tool) => [tool.key, tool]));
-  const aiToolTiles = MOBILE_HOME_AI_TILE_KEYS
-    .map((key) => aiToolByKey.get(key))
-    .filter((tool): tool is (typeof MOBILE_AI_TOOL_CATALOG)[number] => Boolean(tool))
-    .map((tool) => {
-      let subtitle = tool.description;
-      if (tool.key === 'replace-repair') {
-        subtitle = monthlySavings > 0 ? `Save ${formatCurrency(monthlySavings)}` : 'Smart fix decisions';
-      } else if (tool.key === 'risk-premium-optimizer') {
-        subtitle =
-          riskScore > 0
-            ? `${Math.max(0, Math.round((100 - riskScore) / 20))} risks detected`
-            : 'Optimize premium strategy';
-      } else if (tool.key === 'coverage-intelligence') {
-        subtitle = riskExposure > 0 ? `Protect ${formatCurrency(riskExposure)}` : 'Maximize protection';
-      }
-
-      return {
-        title: tool.title,
-        subtitle,
-        icon: tool.emoji,
-        trailingIcon:
-          tool.key === 'replace-repair'
-            ? '🔧'
-            : tool.key === 'risk-premium-optimizer'
-              ? '🛡️'
-              : tool.key === 'coverage-intelligence'
-                ? '✅'
-                : tool.key === 'view-all'
-                  ? '›'
-                  : undefined,
-        artworkSrc: tool.artworkSrc,
-        href: buildAiToolHref(propertyId, tool.href),
-        tone: tool.key === 'view-all' ? ('brand' as const) : ('neutral' as const),
-      };
-    });
+  const homeEquityDollars = Number(homeEquityQuery.data?.totalEquityWithMaintenanceCents || 0) / 100;
+  const climateHeadline = weatherInsight
+    ? String(weatherInsight).split(/[.!?]/)[0]
+    : riskScore >= 80
+      ? 'Low weather risk'
+      : 'Weather risk monitored';
+  const aiToolTiles = [
+    {
+      title: 'Repair vs Replace',
+      subtitle: monthlySavings > 0 ? `${formatCurrency(monthlySavings)}+ save` : 'Smart fix decisions',
+      icon: '🛠️',
+      trailingIcon: '🔧',
+      artworkSrc: aiToolByKey.get('replace-repair')?.artworkSrc,
+      href: buildAiToolHref(propertyId, '/dashboard/replace-repair'),
+      tone: 'neutral' as const,
+    },
+    {
+      title: 'Coverage Intelligence',
+      subtitle:
+        totalCoverageGaps > 0
+          ? `${totalCoverageGaps} gap${totalCoverageGaps === 1 ? '' : 's'} detected`
+          : 'No gaps detected',
+      icon: '🧾',
+      trailingIcon: '✅',
+      artworkSrc: aiToolByKey.get('coverage-intelligence')?.artworkSrc,
+      href: buildAiToolHref(propertyId, '/dashboard/coverage-intelligence'),
+      tone: 'neutral' as const,
+    },
+    {
+      title: 'Climate Risk',
+      subtitle: climateHeadline || 'Weather risk monitored',
+      icon: '🌧️',
+      trailingIcon: '🌧️',
+      artworkSrc: undefined,
+      href: buildAiToolHref(propertyId, '/dashboard/climate'),
+      tone: 'neutral' as const,
+    },
+    {
+      title: 'Home Equity',
+      subtitle: homeEquityDollars > 0 ? `Equity: ${formatCurrency(homeEquityDollars)}` : 'Track equity growth',
+      icon: '💼',
+      trailingIcon: '💼',
+      artworkSrc: undefined,
+      href: buildAiToolHref(propertyId, '/dashboard/appreciation'),
+      tone: 'neutral' as const,
+    },
+    {
+      title: 'Maint. Forecast',
+      subtitle: overdueCount > 0 ? `${overdueCount} overdue task${overdueCount === 1 ? '' : 's'}` : 'Aged systems review',
+      icon: '⏳',
+      trailingIcon: '⏳',
+      artworkSrc: aiToolByKey.get('do-nothing-simulator')?.artworkSrc,
+      href: buildAiToolHref(propertyId, '/dashboard/maintenance'),
+      tone: 'neutral' as const,
+    },
+    {
+      title: 'Risk Optimizer',
+      subtitle:
+        riskScore > 0
+          ? `${Math.max(0, Math.round((100 - riskScore) / 20))} risks detected`
+          : 'Optimize premium strategy',
+      icon: '📉',
+      trailingIcon: '🛡️',
+      artworkSrc: aiToolByKey.get('risk-premium-optimizer')?.artworkSrc,
+      href: buildAiToolHref(propertyId, '/dashboard/risk-premium-optimizer'),
+      tone: 'neutral' as const,
+    },
+  ];
 
   return (
     <div className="md:hidden">
@@ -484,9 +531,9 @@ export default function MobileDashboardHome({
                   </Link>
                 }
               />
-              <QuickActionGrid>
+              <QuickActionGrid className="gap-2.5">
                 {aiToolTiles.map((tile) => (
-                  <QuickActionTile key={tile.title} {...tile} />
+                  <QuickActionTile key={tile.title} {...tile} variant="compact" />
                 ))}
               </QuickActionGrid>
             </MobileSection>

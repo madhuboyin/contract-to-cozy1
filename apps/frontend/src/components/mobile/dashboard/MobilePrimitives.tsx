@@ -277,6 +277,7 @@ type QuickActionTileProps = {
   href: string;
   tone?: 'neutral' | 'brand';
   badgeLabel?: string;
+  variant?: 'default' | 'compact';
 };
 
 export function QuickActionTile({
@@ -289,7 +290,55 @@ export function QuickActionTile({
   href,
   tone = 'neutral',
   badgeLabel = 'AI',
+  variant = 'default',
 }: QuickActionTileProps) {
+  if (variant === 'compact') {
+    return (
+      <Link
+        href={href}
+        className={cn(
+          'no-brand-style block rounded-2xl border px-3 py-2.5 shadow-[0_6px_16px_rgba(15,23,42,0.05)] transition-transform active:scale-[0.99]',
+          tone === 'brand'
+            ? 'border-[hsl(var(--mobile-brand-border))] bg-[linear-gradient(145deg,hsl(var(--mobile-brand-soft)),#fff7e3)]'
+            : 'border-[hsl(var(--mobile-border-subtle))] bg-white'
+        )}
+      >
+        <div className="flex items-start gap-2.5">
+          <div className="min-w-0 flex-1">
+            <p className="mb-0 flex items-center gap-1 text-[11px] font-medium tracking-wide text-amber-700">
+              <Sparkles className="h-3.5 w-3.5" />
+              AI
+            </p>
+            <p className="mb-0 mt-0.5 line-clamp-2 text-[17px] font-semibold leading-5 text-[hsl(var(--mobile-text-primary))]">
+              {title}
+            </p>
+            {subtitle ? (
+              <p className="mb-0 mt-1 line-clamp-1 text-[13px] text-[hsl(var(--mobile-text-secondary))]">
+                {subtitle}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="relative mt-1 h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))]">
+            {artworkSrc ? (
+              <Image
+                src={artworkSrc}
+                alt={artworkAlt || `${title} artwork`}
+                fill
+                sizes="44px"
+                className="object-contain p-1.5"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-xl leading-none">
+                {trailingIcon || icon}
+              </div>
+            )}
+          </div>
+        </div>
+      </Link>
+    );
+  }
+
   return (
     <Link
       href={href}
@@ -332,10 +381,12 @@ export function QuickActionTile({
 
 export function QuickActionGrid({
   children,
+  className,
 }: {
   children: React.ReactNode;
+  className?: string;
 }) {
-  return <div className="grid grid-cols-2 gap-3">{children}</div>;
+  return <div className={cn('grid grid-cols-2 gap-3', className)}>{children}</div>;
 }
 
 export function SummaryCard({
