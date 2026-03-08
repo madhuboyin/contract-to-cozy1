@@ -162,6 +162,7 @@ export const createPropertySchema = z.object({
   lastAppraisedValue: z.number().int().nonnegative().nullable().optional(),
   lastAppraisalDate: z.coerce.date().nullable().optional(),
   isEquityVerified: z.boolean().optional(),
+  coverPhotoDocumentId: z.string().uuid().nullable().optional(),
   
   // FIX: REMOVED applianceAges and ADDED homeAssets array
   homeAssets: z.array(HomeAssetInputSchema).optional(), // NEW STRUCTURED FIELD

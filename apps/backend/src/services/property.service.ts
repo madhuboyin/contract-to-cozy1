@@ -1,6 +1,6 @@
 // apps/backend/src/services/property.service.ts
 
-import { Property, PropertyType, OwnershipType, HeatingType, CoolingType, WaterHeaterType, RoofType, Prisma, ChecklistItem, Warranty } from '@prisma/client';
+import { Property, PropertyType, OwnershipType, HeatingType, CoolingType, WaterHeaterType, RoofType, Prisma, ChecklistItem, Warranty, DocumentType } from '@prisma/client';
 import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.util'; 
 import JobQueueService from './JobQueue.service';
 import type { HomeAssetDTO } from './propertyApplianceInventory.service';
@@ -70,6 +70,7 @@ interface CreatePropertyData {
   lastAppraisedValue?: number | null;
   lastAppraisalDate?: Date | null;
   isEquityVerified?: boolean;
+  coverPhotoDocumentId?: string | null;
   
   homeAssets?: HomeAssetInput[];
 }
@@ -325,6 +326,46 @@ async function getHomeownerProfileId(userId: string): Promise<string> {
   return profile.id;
 }
 
+async function resolveCoverPhotoDocumentIdForProperty(args: {
+  homeownerProfileId: string;
+  propertyId: string;
+  coverPhotoDocumentId?: string | null;
+}): Promise<string | null | undefined> {
+  const { homeownerProfileId, propertyId, coverPhotoDocumentId } = args;
+
+  if (coverPhotoDocumentId === undefined) return undefined;
+  if (coverPhotoDocumentId === null) return null;
+
+  const photoDoc = await prisma.document.findFirst({
+    where: {
+      id: coverPhotoDocumentId,
+      uploadedBy: homeownerProfileId,
+      type: DocumentType.PHOTO,
+    },
+    select: {
+      id: true,
+      propertyId: true,
+    },
+  });
+
+  if (!photoDoc) {
+    throw new Error('Cover photo not found or not accessible');
+  }
+
+  if (photoDoc.propertyId && photoDoc.propertyId !== propertyId) {
+    throw new Error('Cover photo is already linked to another property');
+  }
+
+  if (photoDoc.propertyId !== propertyId) {
+    await prisma.document.update({
+      where: { id: photoDoc.id },
+      data: { propertyId },
+    });
+  }
+
+  return photoDoc.id;
+}
+
 // --- CRUD OPERATIONS ---
 
 /**
@@ -344,6 +385,7 @@ export async function getUserProperties(userId: string): Promise<ScoredProperty[
       //homeAssets: true, 
       // FIX 3: Include warranties in the fetch query
       warranties: true, 
+      coverPhoto: true,
     }
   });
   
@@ -425,6 +467,19 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
     },
   });
 
+  const resolvedCoverPhotoDocumentId = await resolveCoverPhotoDocumentIdForProperty({
+    homeownerProfileId,
+    propertyId: property.id,
+    coverPhotoDocumentId: data.coverPhotoDocumentId,
+  });
+
+  if (resolvedCoverPhotoDocumentId !== undefined && resolvedCoverPhotoDocumentId !== null) {
+    await prisma.property.update({
+      where: { id: property.id },
+      data: { coverPhotoDocumentId: resolvedCoverPhotoDocumentId },
+    });
+  }
+
   // NEW STEP: Handle assets AFTER property creation
   if (data.homeAssets !== undefined) {
     await syncPropertyApplianceInventoryItems(property.id, data.homeAssets || []);
@@ -442,6 +497,7 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
           //homeAssets: true, 
           // FIX 4: Include warranties
           warranties: true,
+          coverPhoto: true,
       }
   });
 
@@ -466,6 +522,7 @@ export async function getPropertyById(propertyId: string, userId: string): Promi
       //homeAssets: true, 
       // FIX 5: Include warranties in the fetch query
       warranties: true, 
+      coverPhoto: true,
     }
   });
 
@@ -1029,6 +1086,14 @@ export async function updateProperty(
   } else if (data.purchasePriceCents !== undefined || data.purchaseDate !== undefined) {
     updatePayload.isEquityVerified = nextPurchasePriceCents !== null && nextPurchaseDate !== null;
   }
+  if (data.coverPhotoDocumentId !== undefined) {
+    const resolvedCoverPhotoDocumentId = await resolveCoverPhotoDocumentIdForProperty({
+      homeownerProfileId,
+      propertyId,
+      coverPhotoDocumentId: data.coverPhotoDocumentId,
+    });
+    updatePayload.coverPhotoDocumentId = resolvedCoverPhotoDocumentId ?? null;
+  }
 
   const property = await prisma.property.update({
     where: { id: propertyId },
@@ -1051,6 +1116,7 @@ export async function updateProperty(
           //homeAssets: true,
           // FIX 6: Include warranties
           warranties: true,
+          coverPhoto: true,
       }
   });
 

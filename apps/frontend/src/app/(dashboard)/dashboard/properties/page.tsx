@@ -244,6 +244,7 @@ export default function PropertiesPage() {
                 const typeLabel = property.propertyType ? PROPERTY_TYPE_LABELS[property.propertyType] : null;
                 const metadata = formatPropertyMetadata(property);
                 const { lineOne, lineTwo } = getPropertyAddressLines(property);
+                const coverPhotoUrl = property.coverPhoto?.fileUrl || null;
 
                 return (
                   <article key={property.id} className="relative">
@@ -260,7 +261,15 @@ export default function PropertiesPage() {
                               : 'border-slate-200 bg-slate-50'
                           )}
                         >
-                          <Home className="h-7 w-7" />
+                          {coverPhotoUrl ? (
+                            <img
+                              src={coverPhotoUrl}
+                              alt={property.name || lineOne}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <Home className="h-7 w-7" />
+                          )}
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2 pr-2">
@@ -369,6 +378,7 @@ export default function PropertiesPage() {
               const isDeleting = deleting === property.id;
               const typeLabel = property.propertyType ? PROPERTY_TYPE_LABELS[property.propertyType] : null;
               const hasMeta = property.bedrooms || property.bathrooms || property.yearBuilt;
+              const coverPhotoUrl = property.coverPhoto?.fileUrl || null;
 
               return (
                 <div
@@ -384,6 +394,15 @@ export default function PropertiesPage() {
                     href={resolvePropertyHref(property.id)}
                     className="block p-6 pb-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset rounded-t-xl"
                   >
+                    {coverPhotoUrl ? (
+                      <div className="mb-4 overflow-hidden rounded-lg border border-slate-200">
+                        <img
+                          src={coverPhotoUrl}
+                          alt={property.name || property.address}
+                          className="h-36 w-full object-cover"
+                        />
+                      </div>
+                    ) : null}
                     {/* Top row: badge + property type */}
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">

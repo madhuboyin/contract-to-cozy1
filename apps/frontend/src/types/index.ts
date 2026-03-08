@@ -909,7 +909,9 @@ export interface Property {
   lastAppraisalDate: string | null;
   estimatedMaintenancePremiumCents: number;
   isEquityVerified: boolean;
+  coverPhotoDocumentId: string | null;
   applianceAges: any;
+  coverPhoto?: Document | null;
   
   // Home Assets relation
   homeAssets?: HomeAsset[];

@@ -823,6 +823,7 @@ class APIClient {
     state: string;
     zipCode: string;
     isPrimary?: boolean;
+    coverPhotoDocumentId?: string | null;
   }): Promise<APIResponse<Property>> {
     return this.request('/api/properties', {
       method: 'POST',
@@ -880,6 +881,7 @@ class APIClient {
       lastAppraisedValue?: number | null;
       lastAppraisalDate?: string | null;
       isEquityVerified?: boolean;
+      coverPhotoDocumentId?: string | null;
       applianceAges?: any;
     }
   ): Promise<APIResponse<Property>> {

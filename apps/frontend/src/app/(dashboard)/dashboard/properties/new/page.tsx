@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/new/page.tsx
 'use client';
 
-import { useState, FormEvent, ChangeEvent } from 'react';
+import { useState, useEffect, useRef, FormEvent, ChangeEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
@@ -68,6 +68,8 @@ const MAJOR_APPLIANCE_OPTIONS = [
     'MICROWAVE_HOOD',
     'WATER_SOFTENER',
 ];
+const MAX_PROPERTY_PHOTO_SIZE_MB = 10;
+const ALLOWED_PROPERTY_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 
 function openCozyChat() {
   if (typeof window === 'undefined') return;
@@ -83,6 +85,9 @@ export default function NewPropertyPage() {
 
   // NEW STATE: Structured input for appliances (empty array initially)
   const [majorAppliances, setMajorAppliances] = useState<ApplianceInput[]>([]);
+  const [propertyPhotoFile, setPropertyPhotoFile] = useState<File | null>(null);
+  const [propertyPhotoPreviewUrl, setPropertyPhotoPreviewUrl] = useState<string | null>(null);
+  const propertyPhotoInputRef = useRef<HTMLInputElement | null>(null);
 
   const [formData, setFormData] = useState<PropertyFormData>({
     name: '',
@@ -111,6 +116,12 @@ export default function NewPropertyPage() {
     hasDrainageIssues: false,
     // REMOVED: applianceAges: '',
   });
+
+  useEffect(() => {
+    return () => {
+      if (propertyPhotoPreviewUrl) URL.revokeObjectURL(propertyPhotoPreviewUrl);
+    };
+  }, [propertyPhotoPreviewUrl]);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -146,6 +157,37 @@ export default function NewPropertyPage() {
     setMajorAppliances(prev => prev.map(app => 
         app.id === id ? { ...app, [field]: value } : app
     ));
+  };
+
+  const clearPropertyPhoto = () => {
+    if (propertyPhotoPreviewUrl) URL.revokeObjectURL(propertyPhotoPreviewUrl);
+    setPropertyPhotoPreviewUrl(null);
+    setPropertyPhotoFile(null);
+    if (propertyPhotoInputRef.current) {
+      propertyPhotoInputRef.current.value = '';
+    }
+  };
+
+  const handlePropertyPhotoChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!ALLOWED_PROPERTY_PHOTO_TYPES.includes(file.type)) {
+      setError('Invalid photo type. Upload JPG, PNG, WEBP, or HEIC.');
+      if (propertyPhotoInputRef.current) propertyPhotoInputRef.current.value = '';
+      return;
+    }
+
+    if (file.size > MAX_PROPERTY_PHOTO_SIZE_MB * 1024 * 1024) {
+      setError(`Photo must be under ${MAX_PROPERTY_PHOTO_SIZE_MB}MB.`);
+      if (propertyPhotoInputRef.current) propertyPhotoInputRef.current.value = '';
+      return;
+    }
+
+    setError('');
+    if (propertyPhotoPreviewUrl) URL.revokeObjectURL(propertyPhotoPreviewUrl);
+    setPropertyPhotoFile(file);
+    setPropertyPhotoPreviewUrl(URL.createObjectURL(file));
   };
 
 
@@ -225,12 +267,33 @@ export default function NewPropertyPage() {
 
       if (response.success) {
         localStorage.removeItem(PROPERTY_SETUP_SKIPPED_KEY);
-        toast({ title: 'Property created successfully!' });
-        if (response.data?.id) {
-          router.push(`/dashboard/properties/${response.data.id}`);
-        } else {
-          router.push('/dashboard/properties');
+        const createdPropertyId = response.data?.id;
+
+        if (createdPropertyId && propertyPhotoFile) {
+          try {
+            const uploadResponse = await api.uploadDocument(propertyPhotoFile, {
+              type: 'PHOTO',
+              name: propertyPhotoFile.name || 'Property Photo',
+              propertyId: createdPropertyId,
+            });
+
+            if (uploadResponse.success && uploadResponse.data?.id) {
+              await api.updateProperty(createdPropertyId, {
+                coverPhotoDocumentId: uploadResponse.data.id,
+              });
+            }
+          } catch (uploadError: unknown) {
+            console.error('Property photo upload failed:', uploadError);
+            toast({
+              title: 'Property saved, photo upload failed',
+              description: 'You can add a property photo later from Documents.',
+              variant: 'destructive',
+            });
+          }
         }
+
+        toast({ title: 'Property created successfully!' });
+        router.push(createdPropertyId ? `/dashboard/properties/${createdPropertyId}` : '/dashboard/properties');
       } else {
         setError(response.message || 'Failed to create property');
       }
@@ -436,6 +499,54 @@ export default function NewPropertyPage() {
           <span className="text-sm font-medium text-slate-800">This is my primary residence</span>
         </label>
       </div>
+
+      <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Property Photo</p>
+            <p className="text-xs text-slate-500">Optional. Used as the property cover image.</p>
+          </div>
+          {propertyPhotoFile ? <StatusChip tone="good">Ready</StatusChip> : <StatusChip tone="info">Optional</StatusChip>}
+        </div>
+
+        {propertyPhotoPreviewUrl ? (
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <img
+              src={propertyPhotoPreviewUrl}
+              alt="Property photo preview"
+              className="h-40 w-full object-cover"
+            />
+          </div>
+        ) : null}
+
+        <input
+          ref={propertyPhotoInputRef}
+          type="file"
+          accept={ALLOWED_PROPERTY_PHOTO_TYPES.join(',')}
+          className="hidden"
+          onChange={handlePropertyPhotoChange}
+        />
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => propertyPhotoInputRef.current?.click()}
+            className="min-h-[40px] rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            {propertyPhotoFile ? 'Change Photo' : 'Upload Photo'}
+          </button>
+          {propertyPhotoFile ? (
+            <button
+              type="button"
+              onClick={clearPropertyPhoto}
+              className="min-h-[40px] rounded-lg border border-rose-200 bg-white px-3.5 py-2 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-50"
+            >
+              Remove
+            </button>
+          ) : null}
+        </div>
+        <p className="text-xs text-slate-500">JPG, PNG, WEBP, or HEIC (max {MAX_PROPERTY_PHOTO_SIZE_MB}MB).</p>
+      </div>
     </div>
   );
 
@@ -528,6 +639,7 @@ export default function NewPropertyPage() {
     formData.hvacInstallYear,
     formData.waterHeaterInstallYear,
     formData.roofReplacementYear,
+    propertyPhotoFile ? 'PHOTO' : null,
   ].filter(Boolean).length + completedApplianceCount;
   const requiredCompletionRatio = completedRequired / requiredProgress.length;
   const requiredRemaining = requiredProgress.length - completedRequired;
