@@ -27,13 +27,13 @@ import {
   ArrowRight,
   TrendingUp,
   LayoutGrid,
+  MapPin,
+  Sparkles,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { FileDown } from "lucide-react";
-import ReportsClient from "./reports/ReportsClient";
-import ClaimsClient from "./claims/ClaimsClient";
 import { ClipboardCheck, LayoutDashboard } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import IncidentsClient from "./incidents/IncidentsClient";
 
 import RoomsHubClient from "./rooms/RoomsHubClient";
@@ -50,14 +50,13 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
+  BottomSafeAreaReserve,
   CompactEntityRow,
   ExpandableSummaryCard,
   MobileCard,
   MobileFilterSurface,
   MobilePageIntro,
   MobileSectionHeader,
-  ReadOnlySummaryBlock,
-  ResultHeroCard,
   StatusChip,
 } from "@/components/mobile/dashboard/MobilePrimitives";
 
@@ -245,21 +244,89 @@ function HealthInsightList({ property }: { property: ScoredProperty }) {
 
 // --- END INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
 
+const formatEnumLabel = (value: string | null | undefined, fallback = "—") =>
+  value
+    ? value
+        .toLowerCase()
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (char) => char.toUpperCase())
+    : fallback;
+
+function openCozyChat() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event("cozy-chat-open"));
+}
+
+const HeroMetaPill = ({ label }: { label: string }) => (
+  <span className="inline-flex items-center rounded-full border border-slate-200 bg-white/90 px-2.5 py-1 text-xs font-medium text-slate-700">
+    {label}
+  </span>
+);
+
+const PropertyHeroCard = ({ property }: { property: Property }) => {
+  const propertyTypeLabel = formatEnumLabel(property.propertyType, "Home");
+  const heroLocation = [property.city, property.state].filter(Boolean).join(", ");
+  const heroMeta = [
+    property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : null,
+    property.yearBuilt ? `Built ${property.yearBuilt}` : null,
+    property.bedrooms != null || property.bathrooms != null
+      ? `${property.bedrooms ?? "—"} bd · ${property.bathrooms ?? "—"} ba`
+      : null,
+  ].filter(Boolean) as string[];
+
+  return (
+    <MobileCard
+      variant="hero"
+      className="space-y-3 border-slate-200/90 bg-[linear-gradient(145deg,#ffffff,#eef7ff)] shadow-[0_20px_48px_-30px_rgba(15,23,42,0.45)] md:hidden"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700">
+          <Home className="h-5 w-5" />
+        </div>
+        <StatusChip tone={property.isPrimary ? "good" : "info"}>
+          {property.isPrimary ? "Primary" : propertyTypeLabel}
+        </StatusChip>
+      </div>
+
+      <div className="space-y-1.5">
+        <h2 className="text-[1.35rem] font-semibold leading-tight tracking-tight text-slate-900">
+          {property.name || "My Home"}
+        </h2>
+        <p className="flex items-center gap-1.5 text-[0.95rem] font-medium text-slate-800">
+          <MapPin className="h-4 w-4 text-slate-500" />
+          {heroLocation || "Location unavailable"}
+        </p>
+        <p className="line-clamp-2 text-sm text-slate-600">
+          {property.address}, {property.city}, {property.state} {property.zipCode}
+        </p>
+      </div>
+
+      {heroMeta.length ? (
+        <div className="flex flex-wrap gap-2">
+          {heroMeta.map((meta) => (
+            <HeroMetaPill key={meta} label={meta} />
+          ))}
+        </div>
+      ) : null}
+    </MobileCard>
+  );
+};
+
 // NEW: Compact Selling Prep Banner Component
 const SellingPrepBanner = ({ propertyId }: { propertyId: string }) => (
   <>
-    <MobileCard className="space-y-3 border-emerald-200 bg-[linear-gradient(145deg,#ecfdf5,#eff6ff)] md:hidden">
+    <MobileCard className="space-y-3.5 border-emerald-200/80 bg-[linear-gradient(145deg,#ecfdf5,#eef6ff)] shadow-[0_16px_36px_-28px_rgba(16,185,129,0.45)] md:hidden">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-900">Ready to sell?</p>
-          <p className="text-xs text-slate-600">
-            AI-powered prep plan with timeline, value impact, and market comparables.
+          <p className="text-[1.08rem] font-semibold text-slate-900">Ready to sell?</p>
+          <p className="mt-1 text-sm text-slate-600">
+            AI prep plan with timeline, value impact, and nearby comps.
           </p>
         </div>
-        <StatusChip tone="good">Seller Prep</StatusChip>
+        <StatusChip tone="good">Cozy Insight</StatusChip>
       </div>
       <Link href={`/dashboard/properties/${propertyId}/seller-prep`}>
-        <Button className="w-full min-h-[44px]">
+        <Button className="w-full min-h-[44px] bg-emerald-700 hover:bg-emerald-800">
           <TrendingUp className="mr-2 h-4 w-4" />
           Start Seller Prep
         </Button>
@@ -296,46 +363,55 @@ const SellingPrepBanner = ({ propertyId }: { propertyId: string }) => (
 
 // UPDATED: PropertyOverview with mobile summary-first structure
 const PropertyOverview = ({ property }: { property: Property }) => {
-  const propertyTypeLabel = property.propertyType ? property.propertyType.replace(/_/g, " ") : "N/A";
-  const heatingTypeLabel = property.heatingType ? property.heatingType.replace(/_/g, " ") : "Not specified";
-  const coolingTypeLabel = property.coolingType ? property.coolingType.replace(/_/g, " ") : "Not specified";
-  const waterHeaterTypeLabel = property.waterHeaterType ? property.waterHeaterType.replace(/_/g, " ") : "Not specified";
-  const roofTypeLabel = property.roofType ? property.roofType.replace(/_/g, " ") : "Not specified";
+  const propertyTypeLabel = formatEnumLabel(property.propertyType);
+  const heatingTypeLabel = formatEnumLabel(property.heatingType, "Not specified");
+  const coolingTypeLabel = formatEnumLabel(property.coolingType, "Not specified");
+  const waterHeaterTypeLabel = formatEnumLabel(property.waterHeaterType, "Not specified");
+  const roofTypeLabel = formatEnumLabel(property.roofType, "Not specified");
   const trackedSystems = [property.hvacInstallYear, property.waterHeaterInstallYear, property.roofReplacementYear].filter(Boolean).length;
+  const occupancyLabel =
+    property.bedrooms != null || property.bathrooms != null
+      ? `${property.bedrooms ?? "—"} bd · ${property.bathrooms ?? "—"} ba`
+      : "—";
+  const appliancePreview = property.homeAssets
+    ? property.homeAssets
+        .slice(0, 2)
+        .map((asset: any) => formatEnumLabel(asset.assetType, "Appliance"))
+        .join(" • ")
+    : "";
 
   return (
     <div className="space-y-3">
       <div className="md:hidden space-y-3">
-        <ResultHeroCard
-          eyebrow="Property Overview"
-          title={property.name || property.address}
-          value={`${property.city}, ${property.state}`}
-          status={
-            property.isPrimary ? (
-              <StatusChip tone="good">Primary</StatusChip>
-            ) : (
-              <StatusChip tone="info">{propertyTypeLabel}</StatusChip>
-            )
-          }
-          summary={`${property.address}, ${property.city}, ${property.state} ${property.zipCode}`}
-          highlights={[
-            property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : "",
-            property.yearBuilt ? `Built ${property.yearBuilt}` : "",
-            property.bedrooms ? `${property.bedrooms} bedrooms` : "",
-            property.bathrooms ? `${property.bathrooms} bathrooms` : "",
-          ].filter(Boolean)}
-        />
-
-        <ReadOnlySummaryBlock
-          title="Snapshot"
-          columns={2}
-          items={[
-            { label: "Type", value: propertyTypeLabel, emphasize: true },
-            { label: "Year Built", value: property.yearBuilt || "N/A" },
-            { label: "Property Size", value: property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : "N/A" },
-            { label: "Occupancy", value: `${property.bedrooms || "N/A"} bd · ${property.bathrooms || "N/A"} ba` },
-          ]}
-        />
+        <MobileCard variant="compact" className="space-y-3 border-slate-200/80 bg-white">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-base font-semibold text-slate-900">Overview Snapshot</p>
+              <p className="text-xs text-slate-500">Key property facts at a glance</p>
+            </div>
+            <StatusChip tone="info">{propertyTypeLabel}</StatusChip>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Built</p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">{property.yearBuilt ?? "—"}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Size</p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">
+                {property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : "—"}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Occupancy</p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">{occupancyLabel}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Type</p>
+              <p className="mt-1 line-clamp-1 text-sm font-semibold text-slate-900">{propertyTypeLabel}</p>
+            </div>
+          </div>
+        </MobileCard>
 
         <ExpandableSummaryCard
           title="Systems"
@@ -343,24 +419,34 @@ const PropertyOverview = ({ property }: { property: Property }) => {
           metric={`${trackedSystems} tracked`}
           defaultOpen={false}
         >
-          <ReadOnlySummaryBlock
-            className="border-slate-200 bg-white"
-            items={[
-              { label: "Heating", value: heatingTypeLabel },
-              { label: "Cooling", value: coolingTypeLabel },
-              { label: "Water Heater", value: waterHeaterTypeLabel },
-              { label: "Roof", value: roofTypeLabel },
-              { label: "HVAC Install Year", value: property.hvacInstallYear || "N/A" },
-              { label: "Water Heater Install Year", value: property.waterHeaterInstallYear || "N/A" },
-              { label: "Roof Replacement Year", value: property.roofReplacementYear || "N/A" },
-            ]}
-          />
+          <div className="space-y-2">
+            <CompactEntityRow
+              title="HVAC"
+              subtitle={heatingTypeLabel}
+              meta={property.hvacInstallYear ? `Installed ${property.hvacInstallYear}` : undefined}
+            />
+            <CompactEntityRow title="Cooling" subtitle={coolingTypeLabel} />
+            <CompactEntityRow
+              title="Water Heater"
+              subtitle={waterHeaterTypeLabel}
+              meta={property.waterHeaterInstallYear ? `Installed ${property.waterHeaterInstallYear}` : undefined}
+            />
+            <CompactEntityRow
+              title="Roof"
+              subtitle={roofTypeLabel}
+              meta={property.roofReplacementYear ? `Replaced ${property.roofReplacementYear}` : undefined}
+            />
+          </div>
         </ExpandableSummaryCard>
 
         {property.homeAssets && property.homeAssets.length > 0 ? (
           <ExpandableSummaryCard
             title="Major Appliances"
-            summary={`${property.homeAssets.length} tracked asset${property.homeAssets.length === 1 ? "" : "s"}`}
+            summary={
+              appliancePreview
+                ? `${appliancePreview}${property.homeAssets.length > 2 ? " +" : ""}`
+                : `${property.homeAssets.length} tracked asset${property.homeAssets.length === 1 ? "" : "s"}`
+            }
             metric={`${property.homeAssets.length} items`}
             defaultOpen={false}
           >
@@ -368,14 +454,28 @@ const PropertyOverview = ({ property }: { property: Property }) => {
               {property.homeAssets.slice(0, 6).map((asset: any, index: number) => (
                 <CompactEntityRow
                   key={`${asset.assetType}-${index}`}
-                  title={asset.assetType.replace(/_/g, " ")}
+                  title={formatEnumLabel(asset.assetType, "Appliance")}
                   subtitle={`Installed ${asset.installationYear}`}
                   meta={`Age ${new Date().getFullYear() - asset.installationYear} yrs`}
                 />
               ))}
             </div>
           </ExpandableSummaryCard>
-        ) : null}
+        ) : (
+          <MobileCard variant="compact" className="space-y-2 border-slate-200/80 bg-white">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-base font-semibold text-slate-900">Major Appliances</p>
+              <StatusChip tone="info">0 items</StatusChip>
+            </div>
+            <p className="text-sm text-slate-600">Add appliances to track age and replacement planning.</p>
+            <Link href={`/dashboard/properties/${property.id}/edit`}>
+              <Button variant="outline" className="w-full min-h-[44px]">
+                <Edit className="mr-2 h-4 w-4" />
+                Add Appliances
+              </Button>
+            </Link>
+          </MobileCard>
+        )}
       </div>
 
       <div className="hidden md:block space-y-3">
@@ -878,6 +978,9 @@ export default function PropertyDetailPage() {
   const [nudgeFieldKey, setNudgeFieldKey] = useState<string | null>(null);
   const [nudgeFieldValue, setNudgeFieldValue] = useState('');
   const [isSavingNudge, setIsSavingNudge] = useState(false);
+  const askCozyDockVisible = !nudgeFieldKey;
+  const tabTriggerClassName =
+    "flex min-h-[40px] items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-slate-600 data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:shadow-none";
 
   const defaultTab =
     initialTab &&
@@ -1008,8 +1111,10 @@ export default function PropertyDetailPage() {
     );
   }
 
+  const propertyHubSubtitle = [property.city, property.state].filter(Boolean).join(", ");
+
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-4 py-4 sm:px-6 lg:px-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-4 sm:px-6 lg:px-8">
       {FEATURE_FLAGS.PROPERTY_NARRATIVE_ENGINE && narrativeRun?.status === "ACTIVE" && (
         <NarrativeRevealOverlay
           run={narrativeRun}
@@ -1041,12 +1146,11 @@ export default function PropertyDetailPage() {
           Back
         </Button>
         <MobilePageIntro
-          eyebrow="Property Hub"
-          title={property.name || "My Property"}
-          subtitle={`${property.address}, ${property.city}`}
+          title="My Property"
+          subtitle={propertyHubSubtitle || "Property hub"}
           action={
             <Link href={`/dashboard/properties/${property.id}/edit`}>
-              <Button size="sm" variant="outline" className="min-h-[44px] gap-1.5">
+              <Button size="sm" variant="outline" className="min-h-[40px] gap-1.5 border-slate-300">
                 <Edit className="h-4 w-4" />
                 Edit
               </Button>
@@ -1055,20 +1159,26 @@ export default function PropertyDetailPage() {
         />
       </div>
 
-      <div className="mb-4">
+      <PropertyHeroCard property={property} />
+
+      <SellingPrepBanner propertyId={property.id} />
+
+      <div className="md:hidden">
         <HomeToolsRail propertyId={property.id} />
       </div>
 
-      <SellingPrepBanner propertyId={property.id} />
+      <div className="hidden md:block">
+        <HomeToolsRail propertyId={property.id} />
+      </div>
 
       {onboardingStatus && onboardingStatus.status !== "COMPLETED" && (
         <SetupChecklistPanel propertyId={property.id} status={onboardingStatus} />
       )}
 
       <Tabs defaultValue={defaultTab} className="w-full" id="home-snapshot">
-        <MobileFilterSurface className="border-slate-200/80 bg-white p-2 md:border-0 md:bg-transparent md:p-0 md:shadow-none">
+        <MobileFilterSurface className="border-slate-200/80 bg-white/95 p-2.5 shadow-[0_12px_30px_-24px_rgba(15,23,42,0.5)] md:border-0 md:bg-transparent md:p-0 md:shadow-none">
           <div className="md:hidden px-1">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Sections</p>
+            <p className="text-xs uppercase tracking-[0.09em] text-slate-500">Sections</p>
           </div>
           <div className="relative">
           {/* Left fade indicator (mobile only) */}
@@ -1077,14 +1187,14 @@ export default function PropertyDetailPage() {
           <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none md:hidden" />
 
           <div className="overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-1">
-            <TabsList className="inline-flex w-max [&>*]:snap-start rounded-xl border border-slate-200 bg-slate-50/80 p-1 md:border-transparent md:bg-transparent">
-              <TabsTrigger value="overview" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
+            <TabsList className="inline-flex w-max [&>*]:snap-start rounded-full border border-slate-200 bg-slate-50/80 p-1 md:border-transparent md:bg-transparent">
+              <TabsTrigger value="overview" className={tabTriggerClassName}>
                 <Home className="h-4 w-4 shrink-0" />
                 <span className="hidden sm:inline">Overview</span>
                 <span className="sm:hidden">Info</span>
               </TabsTrigger>
 
-              <TabsTrigger value="maintenance" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
+              <TabsTrigger value="maintenance" className={tabTriggerClassName}>
                 <Zap className="h-4 w-4 shrink-0" />
                 <span className="hidden sm:inline">Maintenance Plan</span>
                 <span className="sm:hidden">Maint.</span>
@@ -1092,7 +1202,7 @@ export default function PropertyDetailPage() {
 
               <TabsTrigger
                 value="timeline"
-                className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]"
+                className={tabTriggerClassName}
                 onClick={() => router.push(`/dashboard/properties/${property.id}/timeline`)}
               >
                 <Calendar className="h-4 w-4 shrink-0" />
@@ -1100,45 +1210,45 @@ export default function PropertyDetailPage() {
                 <span className="sm:hidden">Time</span>
               </TabsTrigger>
 
-              <TabsTrigger value="rooms" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
+              <TabsTrigger value="rooms" className={tabTriggerClassName}>
                 <LayoutGrid className="h-4 w-4 shrink-0" />
                 Rooms
               </TabsTrigger>
 
-              <TabsTrigger value="incidents" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
+              <TabsTrigger value="incidents" className={tabTriggerClassName}>
                 <ShieldAlert className="h-4 w-4 shrink-0" />
                 <span className="hidden sm:inline">Incidents</span>
                 <span className="sm:hidden">Alerts</span>
               </TabsTrigger>
 
-              <TabsTrigger value="risk-protection" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
+              <TabsTrigger value="risk-protection" className={tabTriggerClassName}>
                 <Shield className="h-4 w-4 shrink-0" />
                 <span className="hidden sm:inline">Risk & Protection</span>
                 <span className="sm:hidden">Risk</span>
               </TabsTrigger>
 
-              <TabsTrigger value="financial-efficiency" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
+              <TabsTrigger value="financial-efficiency" className={tabTriggerClassName}>
                 <DollarSign className="h-4 w-4 shrink-0" />
                 <span className="hidden sm:inline">Financial Efficiency</span>
                 <span className="sm:hidden">Finance</span>
               </TabsTrigger>
 
-              <TabsTrigger value="documents" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
+              <TabsTrigger value="documents" className={tabTriggerClassName}>
                 <FileText className="h-4 w-4 shrink-0" />
                 Docs
               </TabsTrigger>
 
-              <TabsTrigger value="reports" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
+              <TabsTrigger value="reports" className={tabTriggerClassName}>
                 <FileDown className="h-4 w-4 shrink-0" />
                 Reports
               </TabsTrigger>
 
-              <TabsTrigger value="claims" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]">
+              <TabsTrigger value="claims" className={tabTriggerClassName}>
                 <ClipboardCheck className="h-4 w-4 shrink-0" />
                 Claims
               </TabsTrigger>
 
-              <TabsTrigger value="status-board" className="flex items-center gap-1.5 whitespace-nowrap min-h-[40px]" onClick={() => router.push(`/dashboard/properties/${property.id}/status-board`)}>
+              <TabsTrigger value="status-board" className={tabTriggerClassName} onClick={() => router.push(`/dashboard/properties/${property.id}/status-board`)}>
                 <LayoutDashboard className="h-4 w-4 shrink-0" />
                 <span className="hidden sm:inline">Status Board</span>
                 <span className="sm:hidden">Status</span>
@@ -1216,6 +1326,32 @@ export default function PropertyDetailPage() {
         </TabsContent>
 
       </Tabs>
+
+      {askCozyDockVisible && (
+        <div
+          data-chat-collision-zone="true"
+          className="fixed inset-x-4 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-30 md:hidden"
+        >
+          <button
+            type="button"
+            onClick={openCozyChat}
+            className="flex w-full items-center justify-between rounded-2xl border border-white/15 bg-[radial-gradient(circle_at_20%_0%,rgba(20,184,166,0.22),transparent_45%),linear-gradient(120deg,#0f172a,#111827)] px-4 py-3 text-left text-white shadow-[0_22px_48px_-30px_rgba(15,23,42,0.95)]"
+            aria-label="Ask Cozy about this property"
+          >
+            <span className="inline-flex items-center gap-2.5">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/10">
+                <Sparkles className="h-4 w-4" />
+              </span>
+              <span className="text-base font-medium">Ask Cozy about this home</span>
+            </span>
+            <ChevronRight className="h-5 w-5 text-white/80" />
+          </button>
+        </div>
+      )}
+
+      <div className="md:hidden">
+        <BottomSafeAreaReserve size="floatingAction" />
+      </div>
 
       <Sheet open={Boolean(nudgeFieldKey)} onOpenChange={(open) => !open && setNudgeFieldKey(null)}>
         <SheetContent side="right">
