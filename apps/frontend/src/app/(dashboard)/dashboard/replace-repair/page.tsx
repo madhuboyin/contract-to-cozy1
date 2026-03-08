@@ -10,7 +10,12 @@ import { listInventoryItems } from '../inventory/inventoryApi';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MobileFilterSurface, MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
+import {
+  BottomSafeAreaGuard,
+  EmptyStateCard,
+  MobileFilterSurface,
+  MobilePageIntro,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 function ReplaceRepairContent() {
   const router = useRouter();
@@ -103,7 +108,7 @@ function ReplaceRepairContent() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
+    <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
       {propertyIdFromUrl && (
         <Button variant="link" className="p-0 h-auto mb-2 text-sm text-muted-foreground" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4 mr-1" /> Back
@@ -186,11 +191,21 @@ function ReplaceRepairContent() {
         </div>
 
         {!loadingItems && selectedPropertyId && items.length === 0 && (
-          <div className="rounded-xl border border-black/10 bg-black/[0.02] p-4 text-sm text-gray-700">
-            No inventory items found for this property. Add an item first to run Replace or Repair.
-          </div>
+          <EmptyStateCard
+            title="No inventory items found"
+            description="Add an item first to run Replace or Repair for this property."
+          />
         )}
       </MobileFilterSurface>
+
+      {!selectedPropertyId && properties.length === 0 && (
+        <EmptyStateCard
+          title="No properties available"
+          description="Add a property before using Replace or Repair."
+        />
+      )}
+
+      <BottomSafeAreaGuard />
     </div>
   );
 }

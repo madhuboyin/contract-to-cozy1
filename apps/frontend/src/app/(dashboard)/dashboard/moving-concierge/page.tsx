@@ -1,16 +1,21 @@
 // apps/frontend/src/app/(dashboard)/dashboard/moving-concierge/page.tsx
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import MovingConcierge from '@/components/MovingConcierge';
-import { Truck, Loader2, AlertCircle } from 'lucide-react';
+import { Truck, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api/client';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { MobileFilterSurface, MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
+import {
+  BottomSafeAreaGuard,
+  EmptyStateCard,
+  MobileFilterSurface,
+  MobilePageIntro,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 function MovingConciergeContent() {
   const searchParams = useSearchParams();
@@ -22,25 +27,15 @@ function MovingConciergeContent() {
   const [selectedPropertyId, setSelectedPropertyId] = useState(propertyIdFromUrl || '');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadProperties();
-  }, []);
-
-  useEffect(() => {
-    if (propertyIdFromUrl && !selectedPropertyId) {
-      setSelectedPropertyId(propertyIdFromUrl);
-    }
-  }, [propertyIdFromUrl]);
-
-  const loadProperties = async () => {
+  const loadProperties = useCallback(async () => {
     try {
       const response = await api.getProperties();
       if (response.success && response.data) {
         const props = response.data.properties || response.data;
         setProperties(props);
         
-        if (!selectedPropertyId && props.length > 0) {
-          setSelectedPropertyId(props[0].id);
+        if (props.length > 0) {
+          setSelectedPropertyId((prev) => prev || props[0].id);
         }
       }
     } catch (error) {
@@ -48,7 +43,17 @@ function MovingConciergeContent() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    void loadProperties();
+  }, [loadProperties]);
+
+  useEffect(() => {
+    if (propertyIdFromUrl && !selectedPropertyId) {
+      setSelectedPropertyId(propertyIdFromUrl);
+    }
+  }, [propertyIdFromUrl, selectedPropertyId]);
 
   if (loading) {
     return (
@@ -61,28 +66,17 @@ function MovingConciergeContent() {
   // Check if user is HOME_BUYER
   if (userSegment && userSegment !== 'HOME_BUYER') {
     return (
-      <div className="mx-auto max-w-4xl p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
-        <Card className="border-orange-200 bg-orange-50">
-          <CardContent className="p-8 text-center">
-            <AlertCircle className="w-16 h-16 text-orange-600 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-orange-900 mb-2">
-              Moving Concierge Not Available
-            </h2>
-            <p className="text-orange-800 mb-4">
-              The Moving Concierge feature is exclusively for home buyers who are in the process of closing on a new home.
-            </p>
-            <p className="text-orange-700 text-sm">
-              This feature helps with moving planning, utility setup, and transition tasks. 
-              Since you&apos;re an existing homeowner, you can explore our other property management features!
-            </p>
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="mt-6 px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition"
-            >
+      <div className="mx-auto max-w-4xl space-y-4 p-4 sm:p-6">
+        <EmptyStateCard
+          title="Moving Concierge not available"
+          description="This feature is for home buyers in a closing journey. Explore your other property management tools instead."
+          action={
+            <Button onClick={() => router.push('/dashboard')}>
               Return to Dashboard
-            </button>
-          </CardContent>
-        </Card>
+            </Button>
+          }
+        />
+        <BottomSafeAreaGuard />
       </div>
     );
   }
@@ -90,7 +84,7 @@ function MovingConciergeContent() {
   const selectedProperty = properties.find(p => p.id === selectedPropertyId);
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
+    <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
       <MobilePageIntro
         title="AI Moving Concierge"
         subtitle="Your personalized moving assistant for a stress-free transition."
@@ -130,11 +124,12 @@ function MovingConciergeContent() {
           squareFootage={selectedProperty?.squareFootage}
         />
       ) : (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <Truck className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600">Select a property to start your moving plan</p>
-        </div>
+        <EmptyStateCard
+          title="Select a property"
+          description="Choose a property to start your moving plan."
+        />
       )}
+      <BottomSafeAreaGuard />
     </div>
   );
 }

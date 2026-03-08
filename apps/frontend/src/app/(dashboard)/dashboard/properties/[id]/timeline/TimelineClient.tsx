@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 
 import { listHomeEvents, HomeEvent } from './homeEventsApi';
+import { EmptyStateCard } from '@/components/mobile/dashboard/MobilePrimitives';
 
 // Optional: if you have shared UI components already, feel free to swap these out.
 // Keeping it plain + drop-in.
@@ -158,18 +159,29 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
 
       {/* Body */}
       {isLoading ? (
-        <div className="rounded-lg border p-4 text-sm text-muted-foreground">Loading timeline…</div>
+        <EmptyStateCard
+          title="Loading timeline"
+          description="Fetching your home events now."
+        />
       ) : error ? (
-        <div className="rounded-lg border p-4 text-sm">
-          Failed to load timeline.
-          <div className="mt-2 text-xs text-muted-foreground">
-            {error instanceof Error ? error.message : 'Unknown error'}
-          </div>
-        </div>
+        <EmptyStateCard
+          title="Failed to load timeline"
+          description={error instanceof Error ? error.message : 'Unknown error'}
+          action={
+            <button
+              className="rounded-md border px-3 py-2 text-sm"
+              onClick={onRefresh}
+              disabled={isFetching}
+            >
+              Try again
+            </button>
+          }
+        />
       ) : events.length === 0 ? (
-        <div className="rounded-lg border p-4 text-sm text-muted-foreground">
-          No timeline events yet. Create an item, add an expense, upload a document, or open a claim — and your story will appear here.
-        </div>
+        <EmptyStateCard
+          title="No timeline events yet"
+          description="Create an item, add an expense, upload a document, or open a claim and your story will appear here."
+        />
       ) : (
         <div className="space-y-3">
           {events.map((e) => (

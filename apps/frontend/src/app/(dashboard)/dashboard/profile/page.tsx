@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Lock } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { formatMemberSince, formatPhoneNumber, toTitleCase } from '@/lib/utils/formatters';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   MobilePageContainer,
   MobileSection,
@@ -150,6 +152,13 @@ export default function ProfilePage() {
     setFormData((prev) => ({
       ...prev,
       [e.target.name]: e.target.value,
+    }));
+  };
+
+  const setFieldValue = (name: keyof ProfileFormData, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
     }));
   };
 
@@ -405,7 +414,7 @@ export default function ProfilePage() {
                 label="First name"
                 value={
                   profileEditing ? (
-                    <input
+                    <Input
                       type="text"
                       name="firstName"
                       value={formData.firstName}
@@ -421,7 +430,7 @@ export default function ProfilePage() {
                 label="Last name"
                 value={
                   profileEditing ? (
-                    <input
+                    <Input
                       type="text"
                       name="lastName"
                       value={formData.lastName}
@@ -437,7 +446,7 @@ export default function ProfilePage() {
                 label="Phone number"
                 value={
                   profileEditing ? (
-                    <input
+                    <Input
                       type="tel"
                       name="phone"
                       value={formData.phone}
@@ -527,7 +536,7 @@ export default function ProfilePage() {
                 label="Street address"
                 value={
                   addressEditing ? (
-                    <input
+                    <Input
                       type="text"
                       name="address"
                       value={formData.address}
@@ -545,7 +554,7 @@ export default function ProfilePage() {
                 label="City"
                 value={
                   addressEditing ? (
-                    <input
+                    <Input
                       type="text"
                       name="city"
                       value={formData.city}
@@ -562,19 +571,21 @@ export default function ProfilePage() {
                 label="State"
                 value={
                   addressEditing ? (
-                    <select
-                      name="state"
+                    <Select
                       value={formData.state}
-                      onChange={handleChange}
-                      className={inputClass}
+                      onValueChange={(value) => setFieldValue('state', value)}
                     >
-                      <option value="">Select State</option>
-                      {STATES.map((state) => (
-                        <option key={state} value={state}>
-                          {state}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger className={inputClass}>
+                        <SelectValue placeholder="Select State" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STATES.map((state) => (
+                          <SelectItem key={state} value={state}>
+                            {state}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   ) : (
                     formData.state || '—'
                   )
@@ -584,7 +595,7 @@ export default function ProfilePage() {
                 label="ZIP code"
                 value={
                   addressEditing ? (
-                    <input
+                    <Input
                       type="text"
                       name="zipCode"
                       value={formData.zipCode}
