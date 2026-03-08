@@ -4,16 +4,17 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { Building2, ChevronRight, Home, MoreHorizontal, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { Property } from '@/types';
 import { useToast } from '@/components/ui/use-toast';
 import {
-  CompactEntityRow,
+  BottomSafeAreaReserve,
   MobileCard,
   MobilePageIntro,
-  ReadOnlySummaryBlock,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { cn } from '@/lib/utils';
 
 const PROPERTY_TYPE_LABELS: Record<string, string> = {
   SINGLE_FAMILY: 'Single Family',
@@ -25,6 +26,28 @@ const PROPERTY_TYPE_LABELS: Record<string, string> = {
 };
 
 const MAX_PROPERTIES = 10;
+
+function openCozyChat() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event('cozy-chat-open'));
+}
+
+function formatPropertyMetadata(property: Property): string {
+  const pieces = [
+    property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : null,
+    property.bedrooms != null ? `${property.bedrooms} bd` : null,
+    property.bathrooms != null ? `${property.bathrooms} ba` : null,
+    property.yearBuilt != null ? `Built ${property.yearBuilt}` : null,
+  ].filter(Boolean);
+
+  return pieces.join(' • ');
+}
+
+function getPropertyAddressLines(property: Property): { lineOne: string; lineTwo: string } {
+  const lineOne = property.address;
+  const lineTwo = [property.city, property.state].filter(Boolean).join(', ');
+  return { lineOne, lineTwo };
+}
 
 export default function PropertiesPage() {
   const searchParams = useSearchParams();
@@ -141,20 +164,22 @@ export default function PropertiesPage() {
   }
 
   const canAddMore = properties.length < MAX_PROPERTIES;
+  const primaryHomesCount = properties.filter((property) => property.isPrimary).length;
+  const slotsAvailable = Math.max(MAX_PROPERTIES - properties.length, 0);
+  const askCozyDockVisible = !menuOpenId;
 
   return (
-    <div className="space-y-6 px-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:pb-8">
+    <div className="space-y-5 px-4 pb-6 sm:px-6 lg:px-8 lg:pb-8">
       <MobilePageIntro
         title="Properties"
-        subtitle={`Manage your properties and service locations${
-          properties.length > 0 ? ` · ${properties.length} of ${MAX_PROPERTIES}` : ''
-        }`}
+        subtitle={`${properties.length} of ${MAX_PROPERTIES} properties added`}
         action={
           canAddMore ? (
             <Link
               href="/dashboard/properties/new"
-              className="inline-flex min-h-[40px] items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              className="inline-flex min-h-[40px] items-center rounded-xl bg-[#0D9488] px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-[#0F766E]"
             >
+              <Plus className="mr-2 h-4 w-4" />
               Add Property
             </Link>
           ) : null
@@ -171,84 +196,105 @@ export default function PropertiesPage() {
 
       <div className="md:hidden">
         {properties.length === 0 ? (
-          <MobileCard className="border-dashed border-slate-300 bg-white py-10 text-center">
-            <svg className="mx-auto h-10 w-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-            </svg>
-            <h3 className="mt-3 text-sm font-semibold text-slate-900">No properties yet</h3>
-            <p className="mt-1 text-sm text-slate-600">Add your first property to get started.</p>
+          <MobileCard className="border-dashed border-slate-300/90 bg-white py-10 text-center">
+            <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400">
+              <Building2 className="h-6 w-6" />
+            </div>
+            <h3 className="mt-3 text-base font-semibold text-slate-900">No properties yet</h3>
+            <p className="mt-1 text-sm text-slate-600">Add your first property to track systems, warranties, and maintenance.</p>
             <div className="mt-5">
               <Link
                 href="/dashboard/properties/new"
-                className="inline-flex min-h-[44px] items-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                className="inline-flex min-h-[44px] items-center rounded-xl bg-[#0D9488] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#0F766E]"
               >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
+                <Plus className="mr-2 h-4 w-4" />
                 Add Property
               </Link>
             </div>
           </MobileCard>
         ) : (
           <div className="space-y-3">
-            <ReadOnlySummaryBlock
-              title="Portfolio Snapshot"
-              columns={2}
-              items={[
-                { label: 'Properties', value: `${properties.length} / ${MAX_PROPERTIES}`, emphasize: true },
-                { label: 'Primary homes', value: properties.filter((property) => property.isPrimary).length },
-                { label: 'With profile name', value: properties.filter((property) => Boolean(property.name)).length },
-                { label: 'Can add more', value: canAddMore ? 'Yes' : 'Limit reached' },
-              ]}
-            />
+            <MobileCard variant="compact" className="space-y-3 border-slate-200/90 bg-white shadow-[0_16px_36px_-28px_rgba(15,23,42,0.5)]">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-base font-semibold text-slate-900">Portfolio Snapshot</p>
+                <StatusChip tone={canAddMore ? 'good' : 'elevated'}>
+                  {slotsAvailable} slots
+                </StatusChip>
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-slate-200 rounded-2xl border border-slate-200/90 bg-[linear-gradient(145deg,#f8fafc,#eef2ff)]">
+                <div className="px-3 py-2.5">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Properties</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-900">{properties.length} / {MAX_PROPERTIES}</p>
+                </div>
+                <div className="px-3 py-2.5">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Primary</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-900">{primaryHomesCount}</p>
+                </div>
+                <div className="px-3 py-2.5">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Available</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-900">{slotsAvailable}</p>
+                </div>
+              </div>
+            </MobileCard>
 
-            <MobileCard variant="compact" className="space-y-2 border-slate-200/80 bg-white p-2.5">
+            <div className="space-y-3">
               {properties.map((property) => {
                 const isMenuOpen = menuOpenId === property.id;
                 const isDeleting = deleting === property.id;
                 const typeLabel = property.propertyType ? PROPERTY_TYPE_LABELS[property.propertyType] : null;
-                const metadata = [
-                  property.bedrooms != null ? `${property.bedrooms} bd` : null,
-                  property.bathrooms != null ? `${property.bathrooms} ba` : null,
-                  property.yearBuilt != null ? `Built ${property.yearBuilt}` : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ');
+                const metadata = formatPropertyMetadata(property);
+                const { lineOne, lineTwo } = getPropertyAddressLines(property);
 
                 return (
-                  <div key={property.id} className="relative">
-                    <CompactEntityRow
-                      title={property.name || property.address}
-                      subtitle={
-                        property.name
-                          ? `${property.address}, ${property.city}, ${property.state} ${property.zipCode}`
-                          : `${property.city}, ${property.state} ${property.zipCode}`
-                      }
-                      meta={metadata || undefined}
+                  <article key={property.id} className="relative">
+                    <Link
                       href={resolvePropertyHref(property.id)}
-                      className="pr-12"
-                      status={
-                        property.isPrimary ? (
-                          <StatusChip tone="good">Primary</StatusChip>
-                        ) : typeLabel ? (
-                          <StatusChip tone="info">{typeLabel}</StatusChip>
-                        ) : undefined
-                      }
-                    />
+                      className="group no-brand-style block rounded-[22px] border border-slate-200/90 bg-white p-3.5 pr-14 shadow-[0_14px_34px_-28px_rgba(15,23,42,0.45)]"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={cn(
+                            'inline-flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border text-slate-600',
+                            property.isPrimary
+                              ? 'border-emerald-200 bg-emerald-50'
+                              : 'border-slate-200 bg-slate-50'
+                          )}
+                        >
+                          <Home className="h-7 w-7" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2 pr-2">
+                            <p className="line-clamp-1 text-[1.1rem] font-semibold leading-tight text-slate-900">
+                              {property.name || lineOne}
+                            </p>
+                            {property.isPrimary ? (
+                              <StatusChip tone="good" className="shrink-0">Primary</StatusChip>
+                            ) : typeLabel ? (
+                              <StatusChip tone="info" className="shrink-0">{typeLabel}</StatusChip>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 line-clamp-1 text-sm text-slate-700">{lineOne}</p>
+                          <p className="line-clamp-1 text-sm text-slate-500">{lineTwo} {property.zipCode}</p>
+                          {metadata ? (
+                            <p className="mt-1.5 line-clamp-1 text-[0.95rem] font-medium text-slate-600">
+                              {metadata}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                      <ChevronRight className="pointer-events-none absolute bottom-4 right-4 h-5 w-5 text-slate-400 transition-colors group-hover:text-slate-600" />
+                    </Link>
 
-                    <div className="absolute right-2 top-2.5" ref={isMenuOpen ? menuRef : undefined}>
+                    <div className="absolute right-3 top-3" ref={isMenuOpen ? menuRef : undefined}>
                       <button
                         aria-label="More options"
                         onClick={(e) => {
                           e.stopPropagation();
                           setMenuOpenId(isMenuOpen ? null : property.id);
                         }}
-                        className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                        className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
                       >
-                        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                        </svg>
+                        <MoreHorizontal className="h-4 w-4" />
                       </button>
 
                       {isMenuOpen && (
@@ -258,10 +304,7 @@ export default function PropertiesPage() {
                             className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-50"
                             onClick={() => setMenuOpenId(null)}
                           >
-                            <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
+                            <Pencil className="h-4 w-4 text-slate-400" />
                             Edit
                           </Link>
                           <button
@@ -269,27 +312,29 @@ export default function PropertiesPage() {
                             disabled={isDeleting}
                             className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
                           >
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
+                            <Trash2 className="h-4 w-4" />
                             {isDeleting ? 'Deleting…' : 'Delete'}
                           </button>
                         </div>
                       )}
                     </div>
-                  </div>
+                  </article>
                 );
               })}
-            </MobileCard>
+            </div>
 
             {canAddMore ? (
-              <Link href="/dashboard/properties/new" className="no-brand-style block">
-                <CompactEntityRow
-                  title="Add a property"
-                  subtitle="Connect another home or service location"
-                  meta="Takes about a minute"
-                />
+              <Link href="/dashboard/properties/new" className="group no-brand-style block">
+                <div className="flex items-center gap-3 rounded-[22px] border border-slate-200/90 bg-white p-3.5 shadow-[0_14px_34px_-28px_rgba(15,23,42,0.45)]">
+                  <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-teal-200 bg-teal-50 text-teal-700">
+                    <Plus className="h-8 w-8" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[1.1rem] font-semibold leading-tight text-slate-900">Add Property</p>
+                    <p className="mt-1 text-sm text-slate-600">Track systems, warranties, and maintenance.</p>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-slate-400 transition-colors group-hover:text-slate-600" />
+                </div>
               </Link>
             ) : null}
           </div>
@@ -474,6 +519,32 @@ export default function PropertiesPage() {
             )}
           </div>
         )}
+      </div>
+
+      {askCozyDockVisible && (
+        <div
+          data-chat-collision-zone="true"
+          className="fixed inset-x-4 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-30 md:hidden"
+        >
+          <button
+            type="button"
+            onClick={openCozyChat}
+            className="flex w-full items-center justify-between rounded-2xl border border-white/15 bg-[radial-gradient(circle_at_20%_0%,rgba(20,184,166,0.22),transparent_45%),linear-gradient(120deg,#0f172a,#111827)] px-4 py-3 text-left text-white shadow-[0_22px_48px_-30px_rgba(15,23,42,0.95)]"
+            aria-label="Ask Cozy about your properties"
+          >
+            <span className="inline-flex items-center gap-2.5">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/10">
+                <Sparkles className="h-4 w-4" />
+              </span>
+              <span className="text-base font-medium">Ask Cozy about your homes</span>
+            </span>
+            <ChevronRight className="h-5 w-5 text-white/80" />
+          </button>
+        </div>
+      )}
+
+      <div className="md:hidden">
+        <BottomSafeAreaReserve size="floatingAction" />
       </div>
     </div>
   );
