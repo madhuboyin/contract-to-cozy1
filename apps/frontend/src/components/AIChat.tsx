@@ -3,6 +3,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { X, Send, Sparkles } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
 import { User } from '@/types';
@@ -35,6 +36,7 @@ interface ChatMessage {
 
 const AIChatInner: React.FC = () => {
   const { user } = useAuth();
+  const pathname = usePathname();
   // [MODIFICATION] Get selectedPropertyId from context
   const { selectedPropertyId } = usePropertyContext();
   
@@ -43,9 +45,13 @@ const AIChatInner: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [showPulse, setShowPulse] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
+  const [isFormInputFocused, setIsFormInputFocused] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [isCollisionZoneVisible, setIsCollisionZoneVisible] = useState(false);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const launcherRef = useRef<HTMLDivElement>(null);
   
   // Memoize welcome message so it only changes when user.segment changes
   const welcomeMessage = useMemo(() => getWelcomeMessage(user), [user]);
@@ -71,7 +77,7 @@ const AIChatInner: React.FC = () => {
     setShowPulse(true);
     const timer = window.setTimeout(() => setShowPulse(false), 30000);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [pathname]);
 
   useEffect(() => {
     return () => {
@@ -80,6 +86,97 @@ const AIChatInner: React.FC = () => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const isMobileViewport = () => window.innerWidth < 1024;
+    const isFocusableField = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false;
+      if (launcherRef.current?.contains(target)) return false;
+      return Boolean(target.closest('input, textarea, select, [contenteditable="true"], [role="textbox"]'));
+    };
+
+    const handleFocusIn = (event: FocusEvent) => {
+      if (!isMobileViewport()) return;
+      if (!isFocusableField(event.target)) return;
+      setIsFormInputFocused(true);
+      setIsOpen((prev) => (prev ? false : prev));
+    };
+
+    const handleFocusOut = () => {
+      if (!isMobileViewport()) return;
+      const activeElement = document.activeElement;
+      if (isFocusableField(activeElement)) return;
+      setIsFormInputFocused(false);
+    };
+
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('focusout', handleFocusOut);
+
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('focusout', handleFocusOut);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return;
+
+    const viewport = window.visualViewport;
+
+    const handleViewportChange = () => {
+      if (window.innerWidth >= 1024) {
+        setIsKeyboardVisible(false);
+        return;
+      }
+
+      const keyboardOpen = window.innerHeight - viewport.height > 120;
+      setIsKeyboardVisible(keyboardOpen);
+    };
+
+    handleViewportChange();
+    viewport.addEventListener('resize', handleViewportChange);
+    viewport.addEventListener('scroll', handleViewportChange);
+
+    return () => {
+      viewport.removeEventListener('resize', handleViewportChange);
+      viewport.removeEventListener('scroll', handleViewportChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const collisionNodes = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-chat-collision-zone="true"]')
+    );
+
+    if (!collisionNodes.length) {
+      setIsCollisionZoneVisible(false);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const hasVisibleCollisionZone = entries.some((entry) => entry.isIntersecting);
+        setIsCollisionZoneVisible(hasVisibleCollisionZone);
+      },
+      { threshold: 0.2 }
+    );
+
+    collisionNodes.forEach((node) => observer.observe(node));
+
+    return () => observer.disconnect();
+  }, []);
+
+  const shouldHideLauncher = !isOpen && (isFormInputFocused || isKeyboardVisible || isCollisionZoneVisible);
+
+  useEffect(() => {
+    if (shouldHideLauncher) {
+      setShowTooltip(false);
+    }
+  }, [shouldHideLauncher]);
 
   // Update welcome message when user changes, but only if conversation hasn't started
   useEffect(() => {
@@ -191,7 +288,14 @@ const AIChatInner: React.FC = () => {
           aria-label="Close Cozy chat"
         />
       )}
-      <div className="fixed right-3 z-50 font-sans bottom-20 sm:right-4 md:bottom-6 md:right-6">
+      <div
+        ref={launcherRef}
+        className={cn(
+          'fixed right-3 font-sans transition-all duration-200 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] sm:right-4 md:bottom-6 md:right-6',
+          isOpen ? 'z-[70]' : 'z-40',
+          shouldHideLauncher && 'pointer-events-none translate-y-2 opacity-0'
+        )}
+      >
         <div className="relative flex justify-end">
           {showTooltip && !isOpen && (
             <div className="absolute -top-10 right-0 hidden rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 shadow-sm lg:block">

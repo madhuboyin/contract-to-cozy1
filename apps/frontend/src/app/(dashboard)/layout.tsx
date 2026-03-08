@@ -567,7 +567,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
           {/* Main content with pull-to-refresh */}
           <main className="dashboard-bg flex-1 pb-16 md:pb-0">
             <PullToRefresh onRefresh={handleRefresh}>
-              <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
+              <div className="mx-auto w-full max-w-7xl px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] md:p-8">
                 <div key={refreshKey}>
                   {children}
                 </div>

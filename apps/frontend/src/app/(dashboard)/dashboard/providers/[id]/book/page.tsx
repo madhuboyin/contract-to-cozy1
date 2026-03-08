@@ -8,7 +8,7 @@ import { api } from '@/lib/api/client';
 import { Provider, Service, Property, CreateBookingInput } from '@/types';
 import { useToast } from '@/components/ui/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
-import { Calendar, Loader2 } from 'lucide-react';
+import { AlertCircle, Calendar, Clock3, Loader2 } from 'lucide-react';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import DateField from '@/components/shared/DateField';
 import {
@@ -56,6 +56,8 @@ export default function BookProviderPage() {
   const [description, setDescription] = useState('');
   const [specialRequests, setSpecialRequests] = useState('');
   const [estimatedPrice, setEstimatedPrice] = useState<number>(0);
+  const [descriptionTouched, setDescriptionTouched] = useState(false);
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -126,6 +128,7 @@ export default function BookProviderPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setHasAttemptedSubmit(true);
     setError('');
 
     if (!provider) {
@@ -238,6 +241,8 @@ export default function BookProviderPage() {
   };
 
   const selectedService = services.find((service) => service.id === selectedServiceId);
+  const descriptionLength = description.trim().length;
+  const showDescriptionError = (descriptionTouched || hasAttemptedSubmit) && descriptionLength < 10;
 
   return (
     <MobileToolWorkspace
@@ -254,7 +259,7 @@ export default function BookProviderPage() {
           </button>
           <MobilePageIntro
             title="Book a Service"
-            subtitle="Choose service, property, schedule, and request details."
+            subtitle="Choose a service, property, schedule, and request details."
           />
         </div>
       }
@@ -283,7 +288,7 @@ export default function BookProviderPage() {
         </div>
       ) : null}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4 pb-2">
         <ScenarioInputCard title="Service & Property" subtitle="Select what you need and where the work should happen.">
           <ReadOnlySummaryBlock
             items={[
@@ -309,14 +314,15 @@ export default function BookProviderPage() {
               >
                 {services.map((service) => (
                   <option key={service.id} value={service.id}>
-                    {service.name} - ${service.basePrice}/{service.priceUnit}
+                    {service.name}
                   </option>
                 ))}
               </select>
             )}
             {estimatedPrice > 0 ? (
               <p className="mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">
-                Estimated: ${estimatedPrice.toFixed(2)}. Final price is set by the provider.
+                Estimated: ${estimatedPrice.toFixed(2)} ({selectedService ? formatEnumLabel(selectedService.priceUnit) : 'Service'}).
+                Final price is set by the provider.
               </p>
             ) : null}
           </div>
@@ -371,24 +377,38 @@ export default function BookProviderPage() {
             />
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-[hsl(var(--mobile-text-primary))]">Start Time *</label>
-              <input
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className="min-h-[44px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                required
-              />
+              <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
+                <Clock3 className="h-4 w-4 text-[hsl(var(--mobile-text-muted))]" /> Start Time *
+              </label>
+              <div className="relative">
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="min-h-[44px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                  required
+                  aria-label="Select start time"
+                />
+                <Clock3 className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(var(--mobile-text-muted))]" />
+              </div>
+              <p className="mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">Select a preferred start time.</p>
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-[hsl(var(--mobile-text-primary))]">End Time (Optional)</label>
-              <input
-                type="time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="min-h-[44px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
-              />
+              <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
+                <Clock3 className="h-4 w-4 text-[hsl(var(--mobile-text-muted))]" /> End Time (Optional)
+              </label>
+              <div className="relative">
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  className="min-h-[44px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                  aria-label="Select optional end time"
+                />
+                <Clock3 className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(var(--mobile-text-muted))]" />
+              </div>
+              <p className="mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">Add an end time if you have a hard stop.</p>
             </div>
           </div>
         </ScenarioInputCard>
@@ -401,13 +421,23 @@ export default function BookProviderPage() {
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              onBlur={() => setDescriptionTouched(true)}
               rows={4}
               placeholder="Please describe the work needed in detail (at least 10 characters)..."
-              className="min-h-[44px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
+              className={`min-h-[44px] w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary ${
+                showDescriptionError ? 'border-rose-300 focus:ring-rose-200' : 'border-[hsl(var(--mobile-border-subtle))]'
+              }`}
               required
               minLength={10}
             />
-            <p className="mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">{description.length}/10 characters minimum</p>
+            <p
+              className={`mt-1 flex items-center gap-1 text-xs ${
+                showDescriptionError ? 'text-rose-700' : 'text-[hsl(var(--mobile-text-muted))]'
+              }`}
+            >
+              {showDescriptionError ? <AlertCircle className="h-3.5 w-3.5" /> : null}
+              {showDescriptionError ? 'Please enter at least 10 characters.' : `Minimum 10 characters (${descriptionLength}/10)`}
+            </p>
           </div>
 
           <div>
@@ -422,36 +452,41 @@ export default function BookProviderPage() {
           </div>
         </ScenarioInputCard>
 
-        <ActionPriorityRow
-          primaryAction={
-            <button
-              type="submit"
-              disabled={isSubmitting || services.length === 0 || properties.length === 0}
-              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-brand-primary py-3 text-base font-semibold text-white transition-opacity disabled:opacity-60"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Creating Booking...
-                </>
-              ) : (
-                <>
-                  <Calendar className="h-4 w-4" /> Create Booking
-                </>
-              )}
-            </button>
-          }
-          secondaryActions={
-            <button
-              type="button"
-              onClick={() => router.back()}
-              className="min-h-[40px] rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
-            >
-              Cancel
-            </button>
-          }
-        />
+        <div
+          data-chat-collision-zone="true"
+          className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 -mx-1 rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white/95 p-2 backdrop-blur supports-[backdrop-filter]:bg-white/85"
+        >
+          <ActionPriorityRow
+            primaryAction={
+              <button
+                type="submit"
+                disabled={isSubmitting || services.length === 0 || properties.length === 0}
+                className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-brand-primary py-3 text-base font-semibold text-white transition-opacity disabled:opacity-60"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Creating Booking...
+                  </>
+                ) : (
+                  <>
+                    <Calendar className="h-4 w-4" /> Create Booking
+                  </>
+                )}
+              </button>
+            }
+            secondaryActions={
+              <button
+                type="button"
+                onClick={() => router.back()}
+                className="min-h-[44px] w-full rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
+              >
+                Cancel
+              </button>
+            }
+          />
+        </div>
       </form>
-      <BottomSafeAreaReserve size="chatAware" />
+      <BottomSafeAreaReserve size="floatingAction" />
     </MobileToolWorkspace>
   );
 }
