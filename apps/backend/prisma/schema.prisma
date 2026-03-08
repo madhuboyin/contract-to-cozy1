@@ -1466,6 +1466,7 @@ model PropertyMaintenanceTask {
 model Property {
   id                 String   @id @default(uuid())
   homeownerProfileId String
+  coverPhotoDocumentId String?
   
   // Address Details (Existing Fields)
   name         String? // e.g., "Main Home", "Investment Property"
@@ -1550,7 +1551,8 @@ model Property {
   expenses         Expense[]
   checklistItems   ChecklistItem[]
   maintenanceTasks PropertyMaintenanceTask[] 
-  documents        Document[]
+  documents        Document[] @relation("PropertyDocuments")
+  coverPhoto       Document?  @relation("PropertyCoverPhoto", fields: [coverPhotoDocumentId], references: [id], onDelete: SetNull)
 
   // NEW RELATION FOR RISK ASSESSMENT (Phase 1): ***FIX APPLIED: Added @relation(name: "PropertyRiskReport")***
   riskReport       RiskAssessmentReport? @relation(name: "PropertyRiskReport")
@@ -1616,6 +1618,7 @@ model Property {
   updatedAt DateTime @updatedAt
   
   @@index([homeownerProfileId])
+  @@index([coverPhotoDocumentId])
   @@map("properties")
 }
 
@@ -1975,7 +1978,8 @@ model Document {
   
   // Relations
   booking          Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  property         Property? @relation(fields: [propertyId], references: [id])
+  property         Property? @relation("PropertyDocuments", fields: [propertyId], references: [id])
+  coverForProperties Property[] @relation("PropertyCoverPhoto")
   warranty         Warranty? @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
   insurancePolicy  InsurancePolicy? @relation(fields: [policyId], references: [id], onDelete: Cascade)
   inventoryItemId  String? // NEW: Link to an InventoryItem record
@@ -2001,6 +2005,7 @@ model Document {
   @@index([bookingId])
   @@index([type])
   @@index([propertyId]) // NEW INDEX
+  @@index([propertyId, type, createdAt(sort: Desc)])
   @@index([warrantyId]) // NEW INDEX
   @@index([policyId])   // NEW INDEX
   @@index([inventoryItemId]) // NEW INDEX
