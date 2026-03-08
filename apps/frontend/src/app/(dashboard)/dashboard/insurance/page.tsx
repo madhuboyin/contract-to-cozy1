@@ -2,8 +2,8 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { FileText, Plus, Loader2, Shield, Trash2, Edit, X, Upload, CalendarDays } from 'lucide-react';
-import { format, parseISO, isPast } from 'date-fns';
+import { FileText, Plus, Loader2, Shield, Trash2, Edit, X, Upload, CalendarDays, ChevronDown, MoreHorizontal, Sparkles, ShieldCheck } from 'lucide-react';
+import { differenceInCalendarDays, format, isPast, isValid, parseISO } from 'date-fns';
 import { api } from '@/lib/api/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,13 +39,19 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
-  ActionPriorityRow,
+  BottomSafeAreaReserve,
   EmptyStateCard,
   MobileCard,
   MobilePageIntro,
-  ReadOnlySummaryBlock,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 // Placeholder for "None" option, necessary to avoid Radix UI error on value=""
 const SELECT_NONE_VALUE = '__NONE__';
@@ -59,6 +65,75 @@ function propertyIdFromDashboardPath(path: string | null): string | undefined {
   if (!path) return undefined;
   const match = path.match(/\/dashboard\/properties\/([^/?]+)/);
   return match?.[1];
+}
+
+const POLICY_EXPIRING_SOON_DAYS = 60;
+
+type PolicyStatusLevel = 'active' | 'expiringSoon' | 'expired';
+
+function getPolicyStatusMeta(expiryDateISO: string): {
+  status: PolicyStatusLevel;
+  tone: 'good' | 'elevated' | 'danger' | 'info';
+  label: string;
+  daysRemaining: number | null;
+  expiryDate: Date | null;
+  expiryLine: string;
+  helperLine: string;
+} {
+  const expiryDate = parseISO(expiryDateISO);
+  if (!isValid(expiryDate)) {
+    return {
+      status: 'active',
+      tone: 'info',
+      label: 'Unknown',
+      daysRemaining: null,
+      expiryDate: null,
+      expiryLine: 'Renewal unavailable',
+      helperLine: 'Check policy details.',
+    };
+  }
+
+  const daysRemaining = differenceInCalendarDays(expiryDate, new Date());
+
+  if (daysRemaining < 0) {
+    const daysAgo = Math.abs(daysRemaining);
+    return {
+      status: 'expired',
+      tone: 'danger',
+      label: 'Expired',
+      daysRemaining,
+      expiryDate,
+      expiryLine: `Expired ${format(expiryDate, 'MMM dd, yyyy')}`,
+      helperLine: `${daysAgo} day${daysAgo === 1 ? '' : 's'} ago`,
+    };
+  }
+
+  if (daysRemaining <= POLICY_EXPIRING_SOON_DAYS) {
+    return {
+      status: 'expiringSoon',
+      tone: 'elevated',
+      label: 'Renewing Soon',
+      daysRemaining,
+      expiryDate,
+      expiryLine: `Renews ${format(expiryDate, 'MMM dd, yyyy')}`,
+      helperLine: daysRemaining === 0 ? 'Renews today' : `${daysRemaining} day${daysRemaining === 1 ? '' : 's'} remaining`,
+    };
+  }
+
+  return {
+    status: 'active',
+    tone: 'good',
+    label: 'Active',
+    daysRemaining,
+    expiryDate,
+    expiryLine: `Renews ${format(expiryDate, 'MMM dd, yyyy')}`,
+    helperLine: `${daysRemaining} day${daysRemaining === 1 ? '' : 's'} remaining`,
+  };
+}
+
+function openCozyChat() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event('cozy-chat-open'));
 }
 
 // --- Document Type Constants for UI ---
@@ -410,6 +485,7 @@ export default function InsurancePage() {
   // NEW STATE for Document Upload Modal
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [uploadingToPolicyId, setUploadingToPolicyId] = useState<string | null>(null);
+  const [expandedPolicyIds, setExpandedPolicyIds] = useState<Record<string, boolean>>({});
 
   const { toast } = useToast();
   
@@ -470,6 +546,7 @@ export default function InsurancePage() {
             setOpenedFromSetup(true);
         }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchDependencies, searchParams, createPrefill, isAddEditModalOpen]);
 
   const handleSave = async (data: CreateInsurancePolicyInput | UpdateInsurancePolicyInput) => {
@@ -573,6 +650,15 @@ export default function InsurancePage() {
     closeUploadModal();
   };
 
+  const togglePolicyDetails = (policyId: string) => {
+    setExpandedPolicyIds((prev) => ({
+      ...prev,
+      [policyId]: !prev[policyId],
+    }));
+  };
+
+  const askCozyDockVisible = !isAddEditModalOpen && !isUploadModalOpen;
+
 
   const sortedPolicies = useMemo(() => {
     return [...policies].sort((a, b) => {
@@ -582,11 +668,31 @@ export default function InsurancePage() {
     });
   }, [policies]);
 
-  const expiredPolicyCount = useMemo(
-    () => sortedPolicies.filter((policy) => isPast(parseISO(policy.expiryDate))).length,
+  const policyStatusMeta = useMemo(
+    () =>
+      sortedPolicies.map((policy) => ({
+        policy,
+        meta: getPolicyStatusMeta(policy.expiryDate),
+      })),
     [sortedPolicies]
   );
-  const activePolicyCount = sortedPolicies.length - expiredPolicyCount;
+
+  const expiredPolicyCount = useMemo(
+    () => policyStatusMeta.filter(({ meta }) => meta.status === 'expired').length,
+    [policyStatusMeta]
+  );
+  const expiringSoonPolicyCount = useMemo(
+    () => policyStatusMeta.filter(({ meta }) => meta.status === 'expiringSoon').length,
+    [policyStatusMeta]
+  );
+  const activePolicyCount = useMemo(
+    () => policyStatusMeta.filter(({ meta }) => meta.status === 'active').length,
+    [policyStatusMeta]
+  );
+  const nextRenewal = useMemo(() => {
+    const nextUpcoming = policyStatusMeta.find(({ meta }) => meta.expiryDate && meta.daysRemaining !== null && meta.daysRemaining >= 0);
+    return nextUpcoming?.meta.expiryDate ?? policyStatusMeta[0]?.meta.expiryDate ?? null;
+  }, [policyStatusMeta]);
   
   const getPropertyInfo = useCallback((propertyId: string | null) => {
       if (!propertyId) return 'General';
@@ -596,14 +702,14 @@ export default function InsurancePage() {
 
 
   return (
-    <div className="space-y-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+    <div className="space-y-5 pb-6 lg:pb-8">
       <OnboardingReturnBanner />
       <MobilePageIntro
-        title="My Insurance Policies"
-        subtitle="Track policy details and renewal dates for all your properties."
+        title="My Insurance"
+        subtitle="Track policy coverage, renewal timing, and documents in one place."
         action={
           <Dialog open={isAddEditModalOpen} onOpenChange={handleAddEditDialogOpenChange}>
-            <Button onClick={() => openAddEditModal(undefined)}>
+            <Button size="sm" className="min-h-[40px] px-3.5" onClick={() => openAddEditModal(undefined)}>
               <Plus className="w-4 h-4 mr-2" /> Add Policy
             </Button>
             <DialogContent className="modal-container w-[calc(100vw-2rem)] sm:max-w-[700px] gap-0 overflow-hidden p-0 max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:max-h-[92vh] max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0">
@@ -631,8 +737,14 @@ export default function InsurancePage() {
         <>
           <div className="md:hidden">
             <EmptyStateCard
-              title="No policies found"
-              description='Tap "Add Policy" to create your first insurance record.'
+              title="No policies yet"
+              description="Add your first policy to track renewals, premiums, and insurance documents."
+              action={
+                <Button className="min-h-[40px]" onClick={() => openAddEditModal(undefined)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add first policy
+                </Button>
+              }
             />
           </div>
           <Card className="hidden py-10 text-center md:block">
@@ -646,75 +758,175 @@ export default function InsurancePage() {
       {!isLoading && sortedPolicies.length > 0 && (
         <>
           <div className="space-y-3 md:hidden">
-            <ReadOnlySummaryBlock
-              title="Coverage Snapshot"
-              columns={2}
-              items={[
-                { label: 'Policies', value: sortedPolicies.length, emphasize: true },
-                { label: 'Active', value: activePolicyCount },
-                { label: 'Expired', value: expiredPolicyCount },
-                {
-                  label: 'Nearest renewal',
-                  value: sortedPolicies[0] ? format(parseISO(sortedPolicies[0].expiryDate), 'MMM dd, yyyy') : 'N/A',
-                },
-              ]}
-            />
+            <MobileCard variant="compact" className="space-y-3 border-slate-200/80 bg-white shadow-sm">
+              <div className="flex items-center gap-2">
+                <div className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-700">
+                  <ShieldCheck className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-base font-semibold text-slate-900">Coverage Health</p>
+                  <p className="text-xs text-slate-500">60-day renewal watch</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-slate-200 rounded-2xl border border-slate-200/90 bg-[linear-gradient(135deg,rgba(37,99,235,0.06),rgba(245,158,11,0.08),rgba(239,68,68,0.06))]">
+                <div className="px-3 py-2.5">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-indigo-700">Active</p>
+                  <p className="text-lg font-semibold text-slate-900">{activePolicyCount}</p>
+                </div>
+                <div className="px-3 py-2.5">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-amber-700">Renewing</p>
+                  <p className="text-lg font-semibold text-slate-900">{expiringSoonPolicyCount}</p>
+                </div>
+                <div className="px-3 py-2.5">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-rose-700">Expired</p>
+                  <p className="text-lg font-semibold text-slate-900">{expiredPolicyCount}</p>
+                </div>
+              </div>
+              <p className="text-sm text-slate-600">
+                Next renewal: <span className="font-medium text-slate-900">{nextRenewal ? format(nextRenewal, 'MMM dd, yyyy') : 'N/A'}</span>
+              </p>
+            </MobileCard>
 
-            {sortedPolicies.map((policy) => {
-              const expired = isPast(parseISO(policy.expiryDate));
+            {policyStatusMeta.map(({ policy, meta }) => {
+              const propertyInfo = getPropertyInfo(policy.propertyId);
+              const coverageLine = policy.coverageType || 'General Coverage';
+              const metadataLine = `${policy.policyNumber ? `Policy #${policy.policyNumber}` : 'Policy unlisted'} • ${propertyInfo}`;
+              const expanded = Boolean(expandedPolicyIds[policy.id]);
 
               return (
-                <MobileCard key={policy.id} variant="compact" className={cn('space-y-3 bg-white', expired && 'border-red-200')}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-900">{policy.carrierName}</p>
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        Started {format(parseISO(policy.startDate), 'MMM dd, yyyy')}
-                      </p>
+                <Collapsible
+                  key={policy.id}
+                  open={expanded}
+                  onOpenChange={() => togglePolicyDetails(policy.id)}
+                >
+                  <MobileCard
+                    variant="compact"
+                    className={cn(
+                      'overflow-hidden border-slate-200/80 bg-white p-0 shadow-[0_16px_36px_-28px_rgba(15,23,42,0.45)]',
+                      meta.status === 'expired' && 'border-rose-200/90',
+                      meta.status === 'expiringSoon' && 'border-amber-200/90'
+                    )}
+                  >
+                    <div className="space-y-2.5 px-4 pt-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-semibold uppercase tracking-[0.06em] text-slate-800">
+                            {policy.carrierName}
+                          </p>
+                          <p className="mt-1 line-clamp-2 text-xl font-semibold leading-tight text-slate-900">
+                            {coverageLine}
+                          </p>
+                        </div>
+                        <StatusChip tone={meta.tone}>{meta.label}</StatusChip>
+                      </div>
+
+                      <div className="space-y-0.5">
+                        <p
+                          className={cn(
+                            'text-sm font-medium',
+                            meta.status === 'expired'
+                              ? 'text-rose-700'
+                              : meta.status === 'expiringSoon'
+                              ? 'text-amber-700'
+                              : 'text-emerald-700'
+                          )}
+                        >
+                          {meta.expiryLine}
+                        </p>
+                        <p className="text-xs text-slate-500">{meta.helperLine}</p>
+                      </div>
+
+                      <p className="truncate text-sm text-slate-600">{metadataLine}</p>
                     </div>
-                    <StatusChip tone={expired ? 'danger' : 'good'}>{expired ? 'Expired' : 'Active'}</StatusChip>
-                  </div>
 
-                  <ReadOnlySummaryBlock
-                    className="border-slate-200 bg-slate-50"
-                    items={[
-                      { label: 'Policy #', value: policy.policyNumber || 'N/A' },
-                      { label: 'Coverage', value: policy.coverageType || 'N/A' },
-                      { label: 'Property', value: getPropertyInfo(policy.propertyId) },
-                      { label: 'Premium', value: `$${policy.premiumAmount.toFixed(2)}` },
-                      { label: 'Expires', value: format(parseISO(policy.expiryDate), 'MMM dd, yyyy') },
-                    ]}
-                  />
-
-                  <ActionPriorityRow
-                    primaryAction={
-                      <Button className="w-full min-h-[40px]" onClick={() => openAddEditModal(policy)}>
-                        <Edit className="w-4 h-4 mr-2" />
-                        Edit Policy
+                    <div className="mt-3 grid grid-cols-[1fr_1fr_auto_auto] items-center border-t border-slate-200/80 px-1.5 py-1">
+                      <Button
+                        variant="ghost"
+                        className="min-h-[40px] justify-start gap-1.5 px-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                        onClick={() => openAddEditModal(policy)}
+                      >
+                        <Edit className="h-4 w-4" />
+                        Edit
                       </Button>
-                    }
-                    secondaryActions={
-                      <>
+                      <Button
+                        variant="ghost"
+                        className="min-h-[40px] justify-start gap-1.5 px-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                        onClick={() => openUploadModal(policy.id)}
+                      >
+                        <Upload className="h-4 w-4" />
+                        Docs
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                            aria-label="More policy actions"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem onClick={() => openUploadModal(policy.id)}>
+                            <Upload className="h-4 w-4" />
+                            Upload document
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-rose-700 focus:text-rose-700"
+                            onClick={() => handleDelete(policy.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete policy
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <CollapsibleTrigger asChild>
                         <Button
-                          variant="outline"
-                          className="min-h-[40px]"
-                          onClick={() => openUploadModal(policy.id)}
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                          aria-label={expanded ? 'Collapse policy details' : 'Expand policy details'}
                         >
-                          <Upload className="w-4 h-4 mr-2" />
-                          Upload Doc
+                          <ChevronDown className={cn('h-4 w-4 transition-transform', expanded && 'rotate-180')} />
                         </Button>
-                        <Button
-                          variant="outline"
-                          className="min-h-[40px] border-red-200 text-red-700 hover:bg-red-50"
-                          onClick={() => handleDelete(policy.id)}
-                        >
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Delete
-                        </Button>
-                      </>
-                    }
-                  />
-                </MobileCard>
+                      </CollapsibleTrigger>
+                    </div>
+
+                    <CollapsibleContent className="border-t border-slate-200/80 bg-slate-50/70">
+                      <div className="space-y-2.5 px-4 py-3">
+                        <div className="grid grid-cols-[108px_1fr] gap-2 text-sm">
+                          <p className="text-slate-500">Policy #</p>
+                          <p className="font-medium text-slate-800">{policy.policyNumber || 'N/A'}</p>
+                        </div>
+                        <div className="grid grid-cols-[108px_1fr] gap-2 text-sm">
+                          <p className="text-slate-500">Property</p>
+                          <p className="font-medium text-slate-800">{propertyInfo}</p>
+                        </div>
+                        <div className="grid grid-cols-[108px_1fr] gap-2 text-sm">
+                          <p className="text-slate-500">Premium</p>
+                          <p className="font-medium text-slate-800">${policy.premiumAmount.toFixed(2)}</p>
+                        </div>
+                        <div className="grid grid-cols-[108px_1fr] gap-2 text-sm">
+                          <p className="text-slate-500">Started</p>
+                          <p className="font-medium text-slate-800">
+                            {isValid(parseISO(policy.startDate)) ? format(parseISO(policy.startDate), 'MMM dd, yyyy') : 'N/A'}
+                          </p>
+                        </div>
+                        {meta.status !== 'active' ? (
+                          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                            <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Cozy Insight</p>
+                            <p className="mt-1 text-sm text-slate-700">
+                              {meta.status === 'expired'
+                                ? 'This policy appears lapsed. Add a replacement policy to keep protection current.'
+                                : 'Renewal is coming up soon. Review premium and coverage before the renewal date.'}
+                            </p>
+                          </div>
+                        ) : null}
+                      </div>
+                    </CollapsibleContent>
+                  </MobileCard>
+                </Collapsible>
               );
             })}
           </div>
@@ -810,6 +1022,32 @@ export default function InsurancePage() {
           </div>
         </>
       )}
+
+      {askCozyDockVisible && (
+        <div
+          data-chat-collision-zone="true"
+          className="fixed inset-x-4 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-30 md:hidden"
+        >
+          <button
+            type="button"
+            onClick={openCozyChat}
+            className="flex w-full items-center justify-between rounded-2xl border border-white/15 bg-[radial-gradient(circle_at_20%_0%,rgba(34,197,94,0.2),transparent_45%),linear-gradient(120deg,#0f172a,#111827)] px-4 py-3 text-left text-white shadow-[0_22px_48px_-30px_rgba(15,23,42,0.95)]"
+            aria-label="Ask Cozy about your insurance"
+          >
+            <span className="inline-flex items-center gap-2.5">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/10">
+                <Sparkles className="h-4 w-4" />
+              </span>
+              <span className="text-base font-medium">Ask Cozy about your insurance</span>
+            </span>
+            <ChevronDown className="-rotate-90 h-5 w-5 text-white/80" />
+          </button>
+        </div>
+      )}
+
+      <div className="md:hidden">
+        <BottomSafeAreaReserve size="floatingAction" />
+      </div>
       
       {/* Document Upload Dialog (for Insurance Policies) */}
       <Dialog open={isUploadModalOpen} onOpenChange={handleUploadDialogOpenChange}>
