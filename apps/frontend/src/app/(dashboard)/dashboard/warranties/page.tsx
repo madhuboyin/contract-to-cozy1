@@ -2,8 +2,8 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { FileText, Plus, Loader2, Trash2, Edit, Upload, AlertCircle, ArrowLeft, BadgeCheck, CalendarDays } from 'lucide-react';
-import { format, parseISO, isPast } from 'date-fns';
+import { FileText, Plus, Loader2, Trash2, Edit, Upload, AlertCircle, ArrowLeft, BadgeCheck, CalendarDays, ChevronDown, MoreHorizontal, Sparkles, ShieldCheck } from 'lucide-react';
+import { differenceInCalendarDays, format, isPast, isValid, parseISO } from 'date-fns';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { listInventoryItems } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
@@ -42,13 +42,19 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
-  ActionPriorityRow,
+  BottomSafeAreaReserve,
   EmptyStateCard,
   MobileCard,
   MobilePageIntro,
-  ReadOnlySummaryBlock,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 /**
  * Infer appliance type from InventoryItem for HomeAsset compatibility
@@ -662,6 +668,84 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
   );
 };
 
+const EXPIRING_SOON_DAYS = 60;
+
+type WarrantyStatusLevel = 'active' | 'expiringSoon' | 'expired';
+
+function getWarrantyStatusMeta(expiryDateISO: string): {
+  status: WarrantyStatusLevel;
+  tone: 'good' | 'elevated' | 'danger' | 'info';
+  label: string;
+  daysRemaining: number | null;
+  expiryDate: Date | null;
+  expiryLine: string;
+  helperLine: string;
+} {
+  const expiryDate = parseISO(expiryDateISO);
+  if (!isValid(expiryDate)) {
+    return {
+      status: 'active',
+      tone: 'info',
+      label: 'Unknown',
+      daysRemaining: null,
+      expiryDate: null,
+      expiryLine: 'Expiry unavailable',
+      helperLine: 'Check warranty details.',
+    };
+  }
+
+  const daysRemaining = differenceInCalendarDays(expiryDate, new Date());
+
+  if (daysRemaining < 0) {
+    const daysAgo = Math.abs(daysRemaining);
+    return {
+      status: 'expired',
+      tone: 'danger',
+      label: 'Expired',
+      daysRemaining,
+      expiryDate,
+      expiryLine: `Expired ${format(expiryDate, 'MMM dd, yyyy')}`,
+      helperLine: `${daysAgo} day${daysAgo === 1 ? '' : 's'} ago`,
+    };
+  }
+
+  if (daysRemaining <= EXPIRING_SOON_DAYS) {
+    return {
+      status: 'expiringSoon',
+      tone: 'elevated',
+      label: 'Expiring Soon',
+      daysRemaining,
+      expiryDate,
+      expiryLine: `Expires ${format(expiryDate, 'MMM dd, yyyy')}`,
+      helperLine: daysRemaining === 0 ? 'Expires today' : `${daysRemaining} day${daysRemaining === 1 ? '' : 's'} remaining`,
+    };
+  }
+
+  return {
+    status: 'active',
+    tone: 'good',
+    label: 'Active',
+    daysRemaining,
+    expiryDate,
+    expiryLine: `Expires ${format(expiryDate, 'MMM dd, yyyy')}`,
+    helperLine: `${daysRemaining} day${daysRemaining === 1 ? '' : 's'} remaining`,
+  };
+}
+
+function openCozyChat() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event('cozy-chat-open'));
+}
+
+const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
+  'HVAC',
+  'PLUMBING',
+  'ELECTRICAL',
+  'ROOFING',
+  'STRUCTURAL',
+  'HOME_WARRANTY_PLAN',
+];
+
 // --- Main Page Component ---
 export default function WarrantiesPage() {
   // Use local Warranty interface
@@ -680,6 +764,7 @@ export default function WarrantiesPage() {
   // NEW STATE for Document Upload Modal
   const [isUploadModalOpen, setIsUploadModal] = useState(false);
   const [uploadingToWarrantyId, setUploadingToWarrantyId] = useState<string | null>(null);
+  const [expandedWarrantyIds, setExpandedWarrantyIds] = useState<Record<string, boolean>>({});
 
   const { toast } = useToast();
   
@@ -793,6 +878,7 @@ export default function WarrantiesPage() {
           }
       }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchDependencies, searchParams, createPrefill, isAddEditModalOpen]);
 
   // Use local Create/UpdateWarrantyInput interface
@@ -936,6 +1022,15 @@ export default function WarrantiesPage() {
     closeUploadModal();
   };
 
+  const toggleWarrantyDetails = (warrantyId: string) => {
+    setExpandedWarrantyIds((prev) => ({
+      ...prev,
+      [warrantyId]: !prev[warrantyId],
+    }));
+  };
+
+  const askCozyDockVisible = !isAddEditModalOpen && !isUploadModalOpen;
+
 
   const sortedWarranties = useMemo(() => {
     return [...warranties].sort((a, b) => {
@@ -945,11 +1040,31 @@ export default function WarrantiesPage() {
     });
   }, [warranties]);
 
-  const expiredWarrantyCount = useMemo(
-    () => sortedWarranties.filter((warranty) => isPast(parseISO(warranty.expiryDate))).length,
+  const warrantyStatusMeta = useMemo(
+    () =>
+      sortedWarranties.map((warranty) => ({
+        warranty,
+        meta: getWarrantyStatusMeta(warranty.expiryDate),
+      })),
     [sortedWarranties]
   );
-  const activeWarrantyCount = sortedWarranties.length - expiredWarrantyCount;
+
+  const expiredWarrantyCount = useMemo(
+    () => warrantyStatusMeta.filter(({ meta }) => meta.status === 'expired').length,
+    [warrantyStatusMeta]
+  );
+  const expiringSoonWarrantyCount = useMemo(
+    () => warrantyStatusMeta.filter(({ meta }) => meta.status === 'expiringSoon').length,
+    [warrantyStatusMeta]
+  );
+  const activeWarrantyCount = useMemo(
+    () => warrantyStatusMeta.filter(({ meta }) => meta.status === 'active').length,
+    [warrantyStatusMeta]
+  );
+  const nextExpiry = useMemo(() => {
+    const nextUpcoming = warrantyStatusMeta.find(({ meta }) => meta.expiryDate && meta.daysRemaining !== null && meta.daysRemaining >= 0);
+    return nextUpcoming?.meta.expiryDate ?? warrantyStatusMeta[0]?.meta.expiryDate ?? null;
+  }, [warrantyStatusMeta]);
   
   // UPDATED: Get Property Info to handle asset-based linkage
   const getPropertyInfo = useCallback((warranty: Warranty): string => {
@@ -970,16 +1085,6 @@ export default function WarrantiesPage() {
       return property ? property.name || property.address : 'N/A';
   }, [properties, homeAssets]);
   
-// Categories that represent system-wide coverage (not tied to specific appliances)
-const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
-  'HVAC',
-  'PLUMBING', 
-  'ELECTRICAL',
-  'ROOFING',
-  'STRUCTURAL',
-  'HOME_WARRANTY_PLAN',
-];
-
   // Helper to get Asset Info - now accepts the full warranty object
   const getAssetInfo = useCallback((warranty: Warranty): string => {
       const { homeAssetId, category } = warranty;
@@ -1021,7 +1126,7 @@ const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
 
 
   return (
-    <div className="space-y-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+    <div className="space-y-5 pb-6 lg:pb-8">
       <OnboardingReturnBanner />
       <Button 
         variant="link" 
@@ -1037,15 +1142,13 @@ const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
         <ArrowLeft className="h-4 w-4 mr-1" /> Back
       </Button>
       <MobilePageIntro
-        title="My Home Warranties"
-        subtitle="Track all service, appliance, and home warranties in one place. Never miss an expiration date."
+        title="My Warranties"
+        subtitle="Track service, appliance, and home warranties in one clean timeline."
         action={
           <Dialog open={isAddEditModalOpen} onOpenChange={handleAddEditDialogOpenChange}>
-            <Button onClick={() => openAddEditModal(undefined)}>
+            <Button size="sm" className="min-h-[40px] px-3.5" onClick={() => openAddEditModal(undefined)}>
               <Plus className="w-4 h-4 mr-2" /> Add Warranty
             </Button>
-            {/* FIX: Increased max-width from sm:max-w-[500px] to sm:max-w-[700px] 
-               to accommodate the new dual-column dropdowns without overlap/overflow. */}
             <DialogContent className="modal-container w-[calc(100vw-2rem)] sm:max-w-[700px] gap-0 overflow-hidden p-0 max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:max-h-[92vh] max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-2xl max-sm:border-x-0 max-sm:border-b-0"> 
               <WarrantyForm 
                 initialData={editingWarranty}
@@ -1072,8 +1175,14 @@ const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
         <>
           <div className="md:hidden">
             <EmptyStateCard
-              title="No warranties found"
-              description='Tap "Add Warranty" to create your first coverage record.'
+              title="No warranties yet"
+              description="Add your first warranty to track expirations, coverage details, and documents."
+              action={
+                <Button className="min-h-[40px]" onClick={() => openAddEditModal(undefined)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add first warranty
+                </Button>
+              }
             />
           </div>
           <Card className="hidden py-10 text-center md:block">
@@ -1087,79 +1196,182 @@ const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
       {!isLoading && sortedWarranties.length > 0 && (
         <>
           <div className="space-y-3 md:hidden">
-            <ReadOnlySummaryBlock
-              title="Warranty Snapshot"
-              columns={2}
-              items={[
-                { label: 'Warranties', value: sortedWarranties.length, emphasize: true },
-                { label: 'Active', value: activeWarrantyCount },
-                { label: 'Expired', value: expiredWarrantyCount },
-                {
-                  label: 'Nearest expiry',
-                  value: sortedWarranties[0] ? format(parseISO(sortedWarranties[0].expiryDate), 'MMM dd, yyyy') : 'N/A',
-                },
-              ]}
-            />
+            <MobileCard variant="compact" className="space-y-3 border-slate-200/80 bg-white shadow-sm">
+              <div className="flex items-center gap-2">
+                <div className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-teal-700">
+                  <ShieldCheck className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-base font-semibold text-slate-900">Warranty Health</p>
+                  <p className="text-xs text-slate-500">60-day expiry watch</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-slate-200 rounded-2xl border border-slate-200/90 bg-[linear-gradient(135deg,rgba(15,118,110,0.06),rgba(245,158,11,0.08),rgba(239,68,68,0.06))]">
+                <div className="px-3 py-2.5">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-teal-700">Active</p>
+                  <p className="text-lg font-semibold text-slate-900">{activeWarrantyCount}</p>
+                </div>
+                <div className="px-3 py-2.5">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-amber-700">Expiring</p>
+                  <p className="text-lg font-semibold text-slate-900">{expiringSoonWarrantyCount}</p>
+                </div>
+                <div className="px-3 py-2.5">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-rose-700">Expired</p>
+                  <p className="text-lg font-semibold text-slate-900">{expiredWarrantyCount}</p>
+                </div>
+              </div>
+              <p className="text-sm text-slate-600">
+                Next expiry: <span className="font-medium text-slate-900">{nextExpiry ? format(nextExpiry, 'MMM dd, yyyy') : 'N/A'}</span>
+              </p>
+            </MobileCard>
 
-            {sortedWarranties.map((warranty) => {
-              const expired = isPast(parseISO(warranty.expiryDate));
+            {warrantyStatusMeta.map(({ warranty, meta }) => {
+              const propertyInfo = getPropertyInfo(warranty);
+              const assetInfo = getAssetInfo(warranty);
+              const headline =
+                assetInfo === 'N/A' || assetInfo === 'Linked Asset'
+                  ? `${WARRANTY_CATEGORIES[warranty.category] || warranty.category} Coverage`
+                  : assetInfo;
+              const metadataLine = `${warranty.policyNumber ? `Policy #${warranty.policyNumber}` : 'Policy unlisted'} • ${propertyInfo}`;
+              const expanded = Boolean(expandedWarrantyIds[warranty.id]);
+              const coveragePreview = warranty.coverageDetails?.trim();
 
               return (
-                <MobileCard key={warranty.id} variant="compact" className={cn('space-y-3 bg-white', expired && 'border-red-200')}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-900">{warranty.providerName}</p>
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        Started {format(parseISO(warranty.startDate), 'MMM dd, yyyy')}
-                      </p>
+                <Collapsible
+                  key={warranty.id}
+                  open={expanded}
+                  onOpenChange={() => toggleWarrantyDetails(warranty.id)}
+                >
+                  <MobileCard
+                    variant="compact"
+                    className={cn(
+                      'overflow-hidden border-slate-200/80 bg-white p-0 shadow-[0_16px_36px_-28px_rgba(15,23,42,0.45)]',
+                      meta.status === 'expired' && 'border-rose-200/90',
+                      meta.status === 'expiringSoon' && 'border-amber-200/90'
+                    )}
+                  >
+                    <div className="space-y-2.5 px-4 pt-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-semibold uppercase tracking-[0.06em] text-slate-800">
+                            {warranty.providerName}
+                          </p>
+                          <p className="mt-1 line-clamp-2 text-xl font-semibold leading-tight text-slate-900">
+                            {headline}
+                          </p>
+                        </div>
+                        <StatusChip tone={meta.tone}>{meta.label}</StatusChip>
+                      </div>
+
+                      <div className="space-y-0.5">
+                        <p
+                          className={cn(
+                            'text-sm font-medium',
+                            meta.status === 'expired'
+                              ? 'text-rose-700'
+                              : meta.status === 'expiringSoon'
+                              ? 'text-amber-700'
+                              : 'text-emerald-700'
+                          )}
+                        >
+                          {meta.expiryLine}
+                        </p>
+                        <p className="text-xs text-slate-500">{meta.helperLine}</p>
+                      </div>
+
+                      <p className="truncate text-sm text-slate-600">{metadataLine}</p>
                     </div>
-                    <StatusChip tone={expired ? 'danger' : 'good'}>{expired ? 'Expired' : 'Active'}</StatusChip>
-                  </div>
 
-                  <ReadOnlySummaryBlock
-                    className="border-slate-200 bg-slate-50"
-                    items={[
-                      {
-                        label: 'Category',
-                        value: WARRANTY_CATEGORIES[warranty.category] || warranty.category,
-                      },
-                      { label: 'Policy #', value: warranty.policyNumber || 'N/A' },
-                      { label: 'Property', value: getPropertyInfo(warranty) },
-                      { label: 'Asset', value: getAssetInfo(warranty) },
-                      { label: 'Expires', value: format(parseISO(warranty.expiryDate), 'MMM dd, yyyy') },
-                      { label: 'Coverage', value: warranty.coverageDetails || 'No details provided' },
-                    ]}
-                  />
-
-                  <ActionPriorityRow
-                    primaryAction={
-                      <Button className="w-full min-h-[40px]" onClick={() => openAddEditModal(warranty)}>
-                        <Edit className="w-4 h-4 mr-2" />
-                        Edit Warranty
+                    <div className="mt-3 grid grid-cols-[1fr_1fr_auto_auto] items-center border-t border-slate-200/80 px-1.5 py-1">
+                      <Button
+                        variant="ghost"
+                        className="min-h-[40px] justify-start gap-1.5 px-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                        onClick={() => openAddEditModal(warranty)}
+                      >
+                        <Edit className="h-4 w-4" />
+                        Edit
                       </Button>
-                    }
-                    secondaryActions={
-                      <>
+                      <Button
+                        variant="ghost"
+                        className="min-h-[40px] justify-start gap-1.5 px-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                        onClick={() => openUploadModal(warranty.id)}
+                      >
+                        <Upload className="h-4 w-4" />
+                        Docs
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                            aria-label="More warranty actions"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem onClick={() => openUploadModal(warranty.id)}>
+                            <Upload className="h-4 w-4" />
+                            Upload document
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-rose-700 focus:text-rose-700"
+                            onClick={() => handleDelete(warranty.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete warranty
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <CollapsibleTrigger asChild>
                         <Button
-                          variant="outline"
-                          className="min-h-[40px]"
-                          onClick={() => openUploadModal(warranty.id)}
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                          aria-label={expanded ? 'Collapse warranty details' : 'Expand warranty details'}
                         >
-                          <Upload className="w-4 h-4 mr-2" />
-                          Upload Doc
+                          <ChevronDown className={cn('h-4 w-4 transition-transform', expanded && 'rotate-180')} />
                         </Button>
-                        <Button
-                          variant="outline"
-                          className="min-h-[40px] border-red-200 text-red-700 hover:bg-red-50"
-                          onClick={() => handleDelete(warranty.id)}
-                        >
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Delete
-                        </Button>
-                      </>
-                    }
-                  />
-                </MobileCard>
+                      </CollapsibleTrigger>
+                    </div>
+
+                    <CollapsibleContent className="border-t border-slate-200/80 bg-slate-50/70">
+                      <div className="space-y-2.5 px-4 py-3">
+                        <div className="grid grid-cols-[108px_1fr] gap-2 text-sm">
+                          <p className="text-slate-500">Category</p>
+                          <p className="font-medium text-slate-800">{WARRANTY_CATEGORIES[warranty.category] || warranty.category}</p>
+                        </div>
+                        <div className="grid grid-cols-[108px_1fr] gap-2 text-sm">
+                          <p className="text-slate-500">Asset</p>
+                          <p className="font-medium text-slate-800">{assetInfo}</p>
+                        </div>
+                        <div className="grid grid-cols-[108px_1fr] gap-2 text-sm">
+                          <p className="text-slate-500">Started</p>
+                          <p className="font-medium text-slate-800">
+                            {isValid(parseISO(warranty.startDate)) ? format(parseISO(warranty.startDate), 'MMM dd, yyyy') : 'N/A'}
+                          </p>
+                        </div>
+                        {coveragePreview ? (
+                          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                            <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Coverage Details</p>
+                            <p className="mt-1 text-sm text-slate-700">{coveragePreview}</p>
+                          </div>
+                        ) : null}
+                        {meta.status !== 'active' ? (
+                          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                            <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Cozy Insight</p>
+                            <p className="mt-1 text-sm text-slate-700">
+                              {meta.status === 'expired'
+                                ? 'Coverage has lapsed. Review this plan and upload any replacement policy.'
+                                : 'This warranty is nearing expiry. Consider renewal options and document updates now.'}
+                            </p>
+                          </div>
+                        ) : null}
+                      </div>
+                    </CollapsibleContent>
+                  </MobileCard>
+                </Collapsible>
               );
             })}
           </div>
@@ -1262,6 +1474,32 @@ const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
           </div>
         </>
       )}
+
+      {askCozyDockVisible && (
+        <div
+          data-chat-collision-zone="true"
+          className="fixed inset-x-4 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-30 md:hidden"
+        >
+          <button
+            type="button"
+            onClick={openCozyChat}
+            className="flex w-full items-center justify-between rounded-2xl border border-white/15 bg-[radial-gradient(circle_at_20%_0%,rgba(251,191,36,0.18),transparent_45%),linear-gradient(120deg,#0f172a,#111827)] px-4 py-3 text-left text-white shadow-[0_22px_48px_-30px_rgba(15,23,42,0.95)]"
+            aria-label="Ask Cozy about your warranties"
+          >
+            <span className="inline-flex items-center gap-2.5">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/10">
+                <Sparkles className="h-4 w-4" />
+              </span>
+              <span className="text-base font-medium">Ask Cozy about your warranties</span>
+            </span>
+            <ChevronDown className="-rotate-90 h-5 w-5 text-white/80" />
+          </button>
+        </div>
+      )}
+
+      <div className="md:hidden">
+        <BottomSafeAreaReserve size="floatingAction" />
+      </div>
       
       {/* Document Upload Dialog (for Warranties) */}
       <Dialog open={isUploadModalOpen} onOpenChange={handleUploadDialogOpenChange}>

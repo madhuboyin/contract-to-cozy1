@@ -253,13 +253,13 @@ const AIChatInner: React.FC = () => {
     }
   };
 
-  const openChat = () => {
+  const openChat = useCallback(() => {
     setIsOpen(true);
     setShowPulse(false);
     if (typeof window !== 'undefined') {
       window.localStorage.setItem('cozy_chat_interacted', '1');
     }
-  };
+  }, []);
 
   const closeChat = () => {
     setIsOpen(false);
@@ -276,6 +276,19 @@ const AIChatInner: React.FC = () => {
     if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
     setShowTooltip(false);
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleOpenRequest = () => {
+      openChat();
+    };
+
+    window.addEventListener('cozy-chat-open', handleOpenRequest);
+    return () => {
+      window.removeEventListener('cozy-chat-open', handleOpenRequest);
+    };
+  }, [openChat]);
 
 
   return (
@@ -309,6 +322,8 @@ const AIChatInner: React.FC = () => {
             onClick={isOpen ? closeChat : openChat}
             onMouseEnter={showTooltipWithDelay}
             onMouseLeave={hideTooltip}
+            data-cozy-chat-launcher="true"
+            aria-label={isOpen ? 'Close Cozy chat' : 'Open Cozy chat'}
             className={cn(
               'group relative z-10 flex min-h-12 items-center text-white shadow-2xl transition-all duration-200',
               isOpen
